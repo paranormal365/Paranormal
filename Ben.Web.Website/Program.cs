@@ -61,6 +61,12 @@ builder.Services.AddBenVideoEditor(options =>
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
+// BenMediaLibraryProvider answers the scope question too (item 91). The editor's own registration
+// resolves IMediaLibraryScopeSource by casting whatever IMediaLibraryProvider is registered, so
+// this line is what makes that cast land on the site's provider rather than the editor's default.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryScopeSource>(sp =>
+    (Ben.Video.Editor.Services.IMediaLibraryScopeSource)
+        sp.GetRequiredService<Ben.Video.Editor.Services.IMediaLibraryProvider>());
 // Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
 // first when it has never been saved (the publish endpoint attaches to an existing project row).
 builder.Services.AddScoped<VideoExportPublisher>();

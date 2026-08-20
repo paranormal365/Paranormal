@@ -284,6 +284,52 @@
     private readonly HashSet<Guid>            _libraryDownloading      = [];
     private readonly Dictionary<Guid, double> _libraryDownloadProgress = [];
 
+    // ── Server-tab scope (item 91) ───────────────────────────────────────────
+    // The tab lists everything the person can reach, which is fine with a handful of demo clips
+    // and unusable once a real investigation has produced dozens of files per visit. The scope
+    // narrows the list server-side; it can never widen it, because the server intersects a scope
+    // against the audience set it computed first.
+    private MediaLibraryScopeKind _scopeKind = MediaLibraryScopeKind.All;
+    private Guid? _scopeCaseId;
+    private Guid? _scopeInvestigationId;
+    private IReadOnlyList<MediaLibraryScopeGroup> _scopeGroups = [];
+    private bool _scopeGroupsLoaded;
+
+    /// <summary>
+    /// The scope source, when the host registered one. Null means All and Personal only.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from the service provider rather than with <c>[Inject]</c>, because <c>[Inject]</c>
+    /// calls <c>GetRequiredService</c> — a nullable property does not make it optional, and a host
+    /// that registered no scope source would get an exception on render instead of the two scopes
+    /// that work without one.
+    /// </remarks>
+    [Inject] private IServiceProvider Services { get; set; } = default!;
+
+    private IMediaLibraryScopeSource? ScopeSource
+        => _scopeSource ??= Services.GetService(typeof(IMediaLibraryScopeSource)) as IMediaLibraryScopeSource;
+
+    private IMediaLibraryScopeSource? _scopeSource;
+
+    /// <summary>
+    /// Which load is the current one.
+    /// </summary>
+    /// <remarks>
+    /// Changing scope starts a fetch and does not wait for the one already in flight. Without a
+    /// generation counter the older, slower response wins simply by arriving last — the list then
+    /// shows the previous scope's files under a selector describing the new one. Found by a test
+    /// that switched scope twice quickly, which is exactly what a person hunting for a file does.
+    /// </remarks>
+    private int _libraryLoadGeneration;
+
+    private MediaLibraryScope CurrentScope =>
+        new(_scopeKind,
+            _scopeKind == MediaLibraryScopeKind.Case ? _scopeCaseId : null,
+            _scopeKind == MediaLibraryScopeKind.Case ? _scopeInvestigationId : null);
+
+    private IReadOnlyList<MediaLibraryScopeItem> InvestigationsForChosenCase =>
+        _scopeGroups.FirstOrDefault(g => g.Id == _scopeCaseId)?.Items ?? [];
+
     // ── Server-tab preview thumbnails (separate from the real import flow —
     // these are one-off frame grabs for the browsing list, nothing is added to
     // the timeline and any temp MEMFS file is cleaned up immediately after) ───
@@ -651,9 +697,113 @@
         }
     };
 
+    /// <summary>
+    /// The Server tab's scope selector.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rendered above every state of the list — loading, error, empty and populated alike.
+    /// That matters most in the empty case: a scope that matches nothing must still be
+    /// changeable, or picking the wrong case leaves the tab with no way out of it.</para>
+    ///
+    /// <para>Native selects rather than Telerik dropdowns, matching the site's own reasoning for
+    /// BenSelect: no popup layer to fight the editor's stacking contexts, no JavaScript, and the
+    /// browser handles keyboard, touch and mobile pickers by itself.</para>
+    /// </remarks>
+    private RenderFragment LibraryScopeBar => __builder =>
+    {
+        int seq = 0;
+        var hasGroups = _scopeGroups.Count > 0;
+
+        __builder.OpenElement(seq++, "div");
+        __builder.AddAttribute(seq++, CssScope, "");
+        __builder.AddAttribute(seq++, "class", "bv-browser__scope");
+
+        // Which slice.
+        __builder.OpenElement(seq++, "select");
+        __builder.AddAttribute(seq++, CssScope, "");
+        __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
+        __builder.AddAttribute(seq++, "title", "Which files to show");
+        __builder.AddAttribute(seq++, "aria-label", "Media scope");
+        __builder.AddAttribute(seq++, "value", CurrentScope.Wire);
+        __builder.AddAttribute(seq++, "onchange",
+            Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, OnScopeKindChangedAsync));
+        foreach (var (value, label) in new[] { ("all", "All media"), ("personal", "My files") })
+        {
+            __builder.OpenElement(seq++, "option");
+            __builder.AddAttribute(seq++, "value", value);
+            __builder.AddContent(seq++, label);
+            __builder.CloseElement();
+        }
+        // Offered only when the host can say what the groups are — otherwise choosing it would
+        // lead to a second dropdown with nothing in it.
+        if (hasGroups)
+        {
+            __builder.OpenElement(seq++, "option");
+            __builder.AddAttribute(seq++, "value", "case");
+            __builder.AddContent(seq++, "By case");
+            __builder.CloseElement();
+        }
+        __builder.CloseElement(); // scope select
+
+        if (_scopeKind == MediaLibraryScopeKind.Case && hasGroups)
+        {
+            // Which case.
+            __builder.OpenElement(seq++, "select");
+            __builder.AddAttribute(seq++, CssScope, "");
+            __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
+            __builder.AddAttribute(seq++, "title", "Which case");
+            __builder.AddAttribute(seq++, "aria-label", "Case");
+            __builder.AddAttribute(seq++, "value", _scopeCaseId?.ToString() ?? "");
+            __builder.AddAttribute(seq++, "onchange",
+                Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, OnScopeCaseChangedAsync));
+            __builder.OpenElement(seq++, "option");
+            __builder.AddAttribute(seq++, "value", "");
+            __builder.AddContent(seq++, "Choose a case…");
+            __builder.CloseElement();
+            foreach (var group in _scopeGroups)
+            {
+                __builder.OpenElement(seq++, "option");
+                __builder.AddAttribute(seq++, "value", group.Id.ToString());
+                __builder.AddContent(seq++, group.Label);
+                __builder.CloseElement();
+            }
+            __builder.CloseElement(); // case select
+
+            // Which visit — only once a case is chosen, and only if it has any.
+            var visits = InvestigationsForChosenCase;
+            if (_scopeCaseId is not null && visits.Count > 0)
+            {
+                __builder.OpenElement(seq++, "select");
+                __builder.AddAttribute(seq++, CssScope, "");
+                __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
+                __builder.AddAttribute(seq++, "title", "Narrow to one visit");
+                __builder.AddAttribute(seq++, "aria-label", "Investigation");
+                __builder.AddAttribute(seq++, "value", _scopeInvestigationId?.ToString() ?? "");
+                __builder.AddAttribute(seq++, "onchange",
+                    Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, OnScopeInvestigationChangedAsync));
+                __builder.OpenElement(seq++, "option");
+                __builder.AddAttribute(seq++, "value", "");
+                __builder.AddContent(seq++, "The whole case");
+                __builder.CloseElement();
+                foreach (var visit in visits)
+                {
+                    __builder.OpenElement(seq++, "option");
+                    __builder.AddAttribute(seq++, "value", visit.Id.ToString());
+                    __builder.AddContent(seq++, visit.Label);
+                    __builder.CloseElement();
+                }
+                __builder.CloseElement(); // investigation select
+            }
+        }
+
+        __builder.CloseElement(); // scope bar
+    };
+
     private RenderFragment LibraryFileGrid => __builder =>
     {
         int seq = 0;
+        __builder.AddContent(seq++, LibraryScopeBar);
+
         if (_libraryLoading)
         {
             __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading");
@@ -673,7 +823,16 @@
         else if (!_libraryFiles.Any())
         {
             __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty");
-            __builder.OpenElement(seq++, "p"); __builder.AddContent(seq++, "No files in the media library."); __builder.CloseElement();
+            // Naming the scope matters: "no files in the media library" is alarming and wrong when
+            // the person has simply narrowed to a case that has none yet.
+            var emptyText = _scopeKind switch
+            {
+                MediaLibraryScopeKind.Case when _scopeCaseId is null => "Choose a case to see its media.",
+                MediaLibraryScopeKind.Case     => "Nothing here for that selection.",
+                MediaLibraryScopeKind.Personal => "You have not uploaded any media yet.",
+                _                              => "No files in the media library.",
+            };
+            __builder.OpenElement(seq++, "p"); __builder.AddContent(seq++, emptyText); __builder.CloseElement();
             __builder.CloseElement();
         }
         else
@@ -908,18 +1067,112 @@
 
     private async Task OnTabStateChanged(TabStripStateEventArgs _)
     {
-        if (_activeLocalTab == "server" && !_libraryFiles.Any() && !_libraryLoading)
+        if (_activeLocalTab != "server") return;
+
+        await EnsureScopeGroupsAsync();
+
+        if (!_libraryFiles.Any() && !_libraryLoading)
             await LoadLibraryAsync();
+    }
+
+    /// <summary>
+    /// Fetches the cases and visits the scope selector offers, once.
+    /// </summary>
+    /// <remarks>
+    /// Failures are swallowed on purpose and leave the list empty: All and Personal still work
+    /// without it, and a media tab that refuses to open because a dropdown could not be populated
+    /// would be a much worse outcome than a dropdown that is not offered.
+    /// </remarks>
+    private async Task EnsureScopeGroupsAsync()
+    {
+        if (_scopeGroupsLoaded || ScopeSource is null) return;
+        _scopeGroupsLoaded = true;
+
+        try { _scopeGroups = await ScopeSource.GetScopeGroupsAsync(); }
+        catch (Exception ex) { ErrorLog.Log("ClipBrowser.EnsureScopeGroupsAsync", ex); }
+
+        StateHasChanged();
+    }
+
+    // ── Scope changes ────────────────────────────────────────────────────────
+    // Each of these reloads the list, because the filtering happens on the server. Selecting a
+    // case with no visit chosen means the whole case, which is why changing case clears the visit
+    // rather than trying to keep it — a visit from the previous case belongs to nothing here.
+
+    private async Task OnScopeKindChangedAsync(ChangeEventArgs e)
+    {
+        _scopeKind = e.Value?.ToString() switch
+        {
+            "personal" => MediaLibraryScopeKind.Personal,
+            "case"     => MediaLibraryScopeKind.Case,
+            _          => MediaLibraryScopeKind.All,
+        };
+
+        if (_scopeKind != MediaLibraryScopeKind.Case)
+        {
+            _scopeCaseId = null;
+            _scopeInvestigationId = null;
+        }
+
+        // A case scope with no case picked yet has nothing to ask the server for. Clear the list
+        // rather than leaving the previous scope's results under a selector that no longer
+        // describes them — the empty state says "Choose a case to see its media", which is both
+        // true and the next thing to do.
+        if (_scopeKind == MediaLibraryScopeKind.Case && _scopeCaseId is null)
+        {
+            _libraryLoadGeneration++;   // supersede anything still in flight
+            _libraryFiles = [];
+            _libraryLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        await LoadLibraryAsync();
+    }
+
+    private async Task OnScopeCaseChangedAsync(ChangeEventArgs e)
+    {
+        _scopeCaseId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _scopeInvestigationId = null;
+
+        if (_scopeCaseId is null)
+        {
+            _libraryLoadGeneration++;   // supersede anything still in flight
+            _libraryFiles = [];
+            _libraryLoading = false;
+            StateHasChanged();
+            return;
+        }
+        await LoadLibraryAsync();
+    }
+
+    private async Task OnScopeInvestigationChangedAsync(ChangeEventArgs e)
+    {
+        _scopeInvestigationId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadLibraryAsync();
     }
 
     private async Task LoadLibraryAsync()
     {
+        var generation = ++_libraryLoadGeneration;
+
         _libraryLoading = true;
         _libraryError   = null;
         StateHasChanged();
-        try   { _libraryFiles = await MediaLib.GetFilesAsync(); }
-        catch (Exception ex) { _libraryError = ex.Message; ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex); }
-        finally { _libraryLoading = false; StateHasChanged(); }
+
+        IReadOnlyList<MediaLibraryFile> files = [];
+        string? error = null;
+        try   { files = await MediaLib.GetFilesAsync(CurrentScope); }
+        catch (Exception ex) { error = ex.Message; ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex); }
+
+        // A newer scope was chosen while this was in flight. Its results are the answer to a
+        // question nobody is asking any more, and writing them would undo the newer selection.
+        if (generation != _libraryLoadGeneration) return;
+
+        _libraryFiles   = files;
+        _libraryError   = error;
+        _libraryLoading = false;
+        StateHasChanged();
 
         // Phase 150 — seed the "downloaded locally" badge from a real OPFS check so it survives a
         // reload, instead of only reflecting downloads from the current session. Best-effort: an

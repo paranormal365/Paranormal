@@ -4676,7 +4676,7 @@ prettier dead end is still a dead end.
 
 ---
 
-## 91. Video editor — scope the Server media tab (raised 2026-08-19)
+## 91. Video editor — scope the Server media tab (CLOSED 2026-08-20 — phase 7)
 
 The editor's **Server** tab lists every media file the signed-in person can reach, in one flat
 list. That is fine with four demo clips and unusable with four hundred: a real investigation
@@ -4702,6 +4702,38 @@ aggregates across ownership, org membership, shares and case links —
 `MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
 editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
 is the client side. Keep the content-type filter as-is.
+
+### How it shipped (2026-08-20)
+
+A selector above the Server tab: **All media / My files / By case**, with a case list appearing for
+the third and a visit list appearing under that when the chosen case has more than one.
+
+**The scope narrows and cannot widen**, and that is a property of where the filtering happens
+rather than a promise. `MediaLibraryController` computes the full audience union first, exactly as
+it always did, and applies a scope as an *intersection* over the result — so naming a case you have
+no part in returns nothing rather than its contents. A test asserts precisely that, and fails if
+the intersection is ever "optimised" into the union.
+
+**The editor still does not know what a case is.** A second, optional interface —
+`IMediaLibraryScopeSource` — hands it groups with labels and ids; it renders them and sends an id
+back. A host that registers none simply gets All and Personal. Optional in the real sense: it is
+resolved through the service provider rather than with `[Inject]`, because `[Inject]` calls
+`GetRequiredService` and a nullable property does not make it optional.
+
+**Two things this turned up:**
+
+1. **The two hosts were listing different things.** The WASM host's Server tab called
+   `/api/upload-files`, which is *owner-only*, while the Blazor Server site called
+   `/api/media-library/files`, which aggregates. So the same tab in the same editor showed a
+   narrower list on one host than the other, and the WASM host silently omitted images as well.
+   Both now use the aggregating endpoint and both show images; anyone who wants the old behaviour
+   picks **My files**.
+2. **A stale-response race** — found by a test that changed scope twice quickly, which is exactly
+   what somebody hunting for a file does. The first fetch was still in flight when the second
+   scope was chosen, and whichever landed last won: the list would show the previous scope's files
+   under a selector describing the new one. A generation counter now discards superseded results.
+   The failing test went from a 17-second timeout to two seconds once it was fixed, which is how
+   the race announced itself.
 
 ---
 
@@ -4871,7 +4903,7 @@ mapping defects above — but neither was the stall.
 
 ---
 
-## 95. Editor toolbar — reclaim the space (raised 2026-08-19)
+## 95. Editor toolbar — reclaim the space (CLOSED 2026-08-20 — was already done)
 
 Three changes to the same row, all about making room for the buttons that matter:
 
@@ -4884,7 +4916,17 @@ Three changes to the same row, all about making room for the buttons that matter
 - Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
   into the overflow where they need text labels (item 93).
 
-## 96. Diagnostics and logs are visible to everyone (site half DONE 2026-08-19 — WASM host remains)
+**Closed 2026-08-20 on inspection: all three were already shipped**, as part of item 93's toolbar
+work, and only this header was left stale — the same trap items 9, 55, 92 and 96 set. Verified in
+the running editor rather than by reading: the Initialize button is rendered only in the Idle and
+Error states, undo and redo are direct toolbar buttons rather than overflow entries, and the mark
+sits at the end of the bar.
+
+One detail worth recording because it is better than what was asked for. The mark is **not** two
+images chosen by theme — it is a single mask painted with `--bv-text-muted`, so it follows the
+theme by construction and there is no second asset that can drift out of step with the first.
+
+## 96. Diagnostics and logs are visible to everyone (CLOSED 2026-08-20 — phase 7)
 
 The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
 operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
@@ -4894,10 +4936,20 @@ Show them only to platform and group administrators. The editor itself has no no
 is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
 identity it already has: the site from its user state, the WASM host from the signed-in account.
 
-**Status:** the site host gates all three editor pages on `IsSuperAdmin || IsAdmin`. The WASM
-host still leaves `ShowDiagnostics` unset (off for everyone) — safe, but administrators lose the
-panel there until it reads the signed-in account's role.
-Default it to off, so a host that forgets is safe rather than exposed.
+**Status: closed 2026-08-20.** The site host gates all three editor pages on
+`IsSuperAdmin || IsAdmin`. The WASM host now asks `GET /api/me` after sign-in and sets
+`ShowDiagnostics` from the answer — it has no claims to read, because sign-in there goes through
+`MapIdentityApi` and yields tokens rather than a principal. It re-asks when the signed-in account
+changes, which matters most in the sign-out direction.
+
+The default stays **off**, and every failure resolves to off: signed out, no API configured, or the
+call throwing. This is a display decision and not a security boundary — every endpoint those tools
+reach authorises itself, so somebody who forced the answer would reveal a panel to themselves and
+gain nothing. That is written next to the code, because the next reader will wonder.
+
+Both directions are tested against the live WASM host. A test that only checked the panel was
+hidden would have passed against the previous behaviour, which hid it from everybody — including
+the people it exists for.
 
 ---
 

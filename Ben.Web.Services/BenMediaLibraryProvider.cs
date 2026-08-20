@@ -15,7 +15,7 @@ namespace Ben.Web.Services;
 /// Registered after AddBenVideoEditor() in Program.cs to override the default
 /// HttpMediaLibraryProvider (ASP.NET Core DI resolves the last registration).
 /// </summary>
-public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
+public sealed class BenMediaLibraryProvider : IMediaLibraryProvider, IMediaLibraryScopeSource
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IWebApiTokenStore _tokenStore;
@@ -38,13 +38,14 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
     }
 
     public async Task<IReadOnlyList<MediaLibraryFile>> GetFilesAsync(
-        CancellationToken cancellationToken = default)
+        MediaLibraryScope? scope = null, CancellationToken cancellationToken = default)
     {
         // Explicitly scoped to video/audio/image — the aggregation endpoint now also returns
         // documents and other file types for the general-purpose media library, so this keeps
         // Ben.Video's picker payload the same size it always was (the .Where below is a
         // belt-and-suspenders client-side filter, not the primary mechanism).
-        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/files?contentTypePrefixes=video/,audio/,image/";
+        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/files?contentTypePrefixes=video/,audio/,image/"
+                     + ScopeQuery(scope);
         var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -115,6 +116,49 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
         return await client.SendAsync(request, completionOption, ct);
     }
 
+    /// <summary>
+    /// The cases and visits this person's media can be scoped to.
+    /// </summary>
+    /// <remarks>
+    /// The editor gets labels and ids and nothing else — it renders them and hands an id back. That
+    /// is deliberate: a general-purpose editor component should not learn what a case is.
+    /// </remarks>
+    public async Task<IReadOnlyList<MediaLibraryScopeGroup>> GetScopeGroupsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/scopes";
+        var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
+
+        // No groups leaves All and Personal working, which is a far smaller loss than a media tab
+        // that will not load.
+        if (!response.IsSuccessStatusCode) return [];
+
+        var groups = await response.Content.ReadFromJsonAsync<List<ScopeGroupDto>>(
+            _jsonOptions, cancellationToken) ?? [];
+
+        return groups
+            .Select(g => new MediaLibraryScopeGroup(
+                g.Id,
+                g.Title ?? "Untitled",
+                (g.Investigations ?? []).Select(i => new MediaLibraryScopeItem(i.Id, i.Label ?? "Untitled")).ToList()))
+            .ToList()
+            .AsReadOnly();
+    }
+
+    /// <summary>The scope as a query string, or empty for no scope.</summary>
+    private static string ScopeQuery(MediaLibraryScope? scope)
+    {
+        if (scope is null || scope.Kind == MediaLibraryScopeKind.All) return string.Empty;
+
+        var query = $"&scope={scope.Wire}";
+        if (scope.CaseId is { } caseId)
+            query += $"&caseId={Uri.EscapeDataString(caseId.ToString())}";
+        if (scope.InvestigationId is { } investigationId)
+            query += $"&investigationId={Uri.EscapeDataString(investigationId.ToString())}";
+
+        return query;
+    }
+
     // ── Private DTO matching the UploadFileRecord fields we need ─────────────
 
     private sealed class UploadFileDto
@@ -125,5 +169,18 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
         public long     FileSize    { get; set; }
         public string?  Description { get; set; }
         public DateTime DateCreated { get; set; }
+    }
+
+    private sealed class ScopeGroupDto
+    {
+        public Guid Id { get; set; }
+        public string? Title { get; set; }
+        public List<ScopeItemDto>? Investigations { get; set; }
+    }
+
+    private sealed class ScopeItemDto
+    {
+        public Guid Id { get; set; }
+        public string? Label { get; set; }
     }
 }

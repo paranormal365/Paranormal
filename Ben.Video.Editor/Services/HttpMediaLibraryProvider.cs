@@ -12,8 +12,17 @@ namespace Ben.Video.Editor.Services;
 /// AverageBen WebAPI at <c>VideoEditorOptions.MediaLibraryBaseUrl</c>.
 ///
 /// API surface used:
-///   GET  {base}/api/upload-files               → IEnumerable of UploadFileRecord-compatible JSON
+///   GET  {base}/api/media-library/files        → IEnumerable of UploadFileRecord-compatible JSON
+///   GET  {base}/api/media-library/scopes       → the cases and visits the library can be scoped by
 ///   GET  {base}/api/upload-files/{id}/download → raw file bytes
+///
+/// The listing endpoint changed with backlog item 91, and the change is worth knowing about:
+/// <c>/api/upload-files</c> returns only files the caller <i>owns</i>, while
+/// <c>/api/media-library/files</c> returns the full set they may see — owned, shared with them,
+/// shared with their group, and attached to a case they can reach. This host's Server tab was
+/// therefore silently narrower than the same tab on the Blazor Server site, which has always used
+/// the aggregating endpoint. They now agree, and anyone who wants the old behaviour picks the
+/// Personal scope.
 ///
 /// Auth is intentionally NOT handled here. The provider resolves the named
 /// <see cref="System.Net.Http.HttpClient"/> (<c>"BenVideo.MediaLibrary"</c>) which the
@@ -21,7 +30,7 @@ namespace Ben.Video.Editor.Services;
 /// <c>configureHttpClient</c> parameter of <c>AddBenVideoEditor()</c>. The WebAPI
 /// then determines which files to return based on the supplied credentials.
 /// </summary>
-public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider
+public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibraryScopeSource
 {
     private readonly HttpClient              _http;
     private readonly VideoEditorOptions      _options;
@@ -42,18 +51,25 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MediaLibraryFile>> GetFilesAsync(
-        CancellationToken cancellationToken = default)
+        MediaLibraryScope? scope = null, CancellationToken cancellationToken = default)
     {
         var baseUrl = _options.MediaLibraryBaseUrl?.TrimEnd('/') ?? string.Empty;
-        var url     = $"{baseUrl}/api/upload-files";
+        // Narrowed server-side as well as below: the aggregating endpoint also serves documents
+        // and everything else the library holds, and there is no reason to ship a case's PDFs to
+        // the browser so that the filter on the next line can drop them.
+        var url     = $"{baseUrl}/api/media-library/files?contentTypePrefixes=video/,audio/,image/"
+                    + ScopeQuery(scope);
 
         var records = await _http.GetFromJsonAsync<List<UploadFileDto>>(
             url, _jsonOptions, cancellationToken) ?? [];
 
         return records
+            // Images included, matching the site host. The editor places stills as overlays, and
+            // this host used to be the only one where they were missing from the tab.
             .Where(r => r.ContentType != null &&
                         (r.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
-                         r.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)))
+                         r.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
+                         r.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)))
             .Select(r => new MediaLibraryFile
             {
                 Id          = r.Id,
@@ -97,6 +113,54 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider
         return buffer.ToArray();
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MediaLibraryScopeGroup>> GetScopeGroupsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var baseUrl = _options.MediaLibraryBaseUrl?.TrimEnd('/') ?? string.Empty;
+
+        try
+        {
+            var groups = await _http.GetFromJsonAsync<List<ScopeGroupDto>>(
+                $"{baseUrl}/api/media-library/scopes", _jsonOptions, cancellationToken) ?? [];
+
+            return groups
+                .Select(g => new MediaLibraryScopeGroup(
+                    g.Id,
+                    g.Title ?? "Untitled",
+                    (g.Investigations ?? []).Select(i => new MediaLibraryScopeItem(i.Id, i.Label ?? "Untitled")).ToList()))
+                .ToList()
+                .AsReadOnly();
+        }
+        catch (HttpRequestException)
+        {
+            // Signed out, or an API that predates this endpoint. Offering no groups leaves All and
+            // Personal working, which is a smaller loss than a tab that refuses to load.
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// The scope as a query string, or empty for no scope.
+    /// </summary>
+    /// <remarks>
+    /// Ids go through <c>Uri.EscapeDataString</c> even though a Guid cannot contain a character
+    /// that needs escaping — the habit is what matters, since the day one of these stops being a
+    /// Guid is not the day anybody remembers to add it.
+    /// </remarks>
+    private static string ScopeQuery(MediaLibraryScope? scope)
+    {
+        if (scope is null || scope.Kind == MediaLibraryScopeKind.All) return string.Empty;
+
+        var query = $"&scope={scope.Wire}";
+        if (scope.CaseId is { } caseId)
+            query += $"&caseId={Uri.EscapeDataString(caseId.ToString())}";
+        if (scope.InvestigationId is { } investigationId)
+            query += $"&investigationId={Uri.EscapeDataString(investigationId.ToString())}";
+
+        return query;
+    }
+
     // ── Private DTO (matches UploadFileRecord JSON shape) ─────────────────────
 
     private sealed class UploadFileDto
@@ -107,5 +171,18 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider
         public long     FileSize    { get; set; }
         public string?  Description { get; set; }
         public DateTime DateCreated { get; set; }
+    }
+
+    private sealed class ScopeGroupDto
+    {
+        public Guid Id { get; set; }
+        public string? Title { get; set; }
+        public List<ScopeItemDto>? Investigations { get; set; }
+    }
+
+    private sealed class ScopeItemDto
+    {
+        public Guid Id { get; set; }
+        public string? Label { get; set; }
     }
 }
