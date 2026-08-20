@@ -32,6 +32,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
                 attempt.WasRateLimited          ? LoginFailure.RateLimited
               : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
               : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
+              : attempt.Detail == "LockedOut"   ? LoginFailure.LockedOut
               :                                   LoginFailure.InvalidCredentials;
             return false;
         }

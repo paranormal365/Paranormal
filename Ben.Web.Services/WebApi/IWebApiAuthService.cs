@@ -45,4 +45,12 @@ public enum LoginFailure
     /// always right.
     /// </summary>
     EmailNotConfirmed,
+
+    /// <summary>
+    /// Identity has locked the account after too many failed attempts. Distinct from
+    /// <see cref="RateLimited"/>, which is the server refusing the request rather than the
+    /// account: this one is about this account specifically, and waiting is the only cure —
+    /// retyping the right password does not help until the lockout expires.
+    /// </summary>
+    LockedOut,
 }

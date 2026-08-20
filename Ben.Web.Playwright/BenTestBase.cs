@@ -166,10 +166,39 @@ public abstract class BenTestBase : PageTest
     /// like an account problem rather than a typing one.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Puts the credentials in the form, having first established that the page is interactive.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Matching DOM values is not enough, and this used to check only that.</b> A Blazor
+    /// Server page renders long before its circuit connects, and an <c>InputText</c> that is not
+    /// yet wired accepts characters that never reach the server model. The box then reads back
+    /// exactly what was typed while the server still holds something else.</para>
+    ///
+    /// <para>What makes that dangerous rather than merely flaky is the sign-in page's developer
+    /// pre-fill: in Development it writes <c>DevLogin:Email</c> and <c>DevLogin:Password</c> into
+    /// the model. So a submit landing in that window does not fail — it <b>succeeds as the
+    /// developer account</b>, navigates away, and every caller believes it signed in as whoever it
+    /// asked for. Tests then fail much later, somewhere unrelated, because they are looking at the
+    /// wrong person's data.</para>
+    ///
+    /// <para>Waiting for that pre-fill to appear is the cure and the proof at once: it is written
+    /// from a component lifecycle method, so it cannot show up before the circuit is live. Outside
+    /// Development there is nothing to wait for, hence best-effort with a short bound.</para>
+    /// </remarks>
     private async Task FillCredentialsAsync(string email, string password)
     {
         var emailBox    = Page.Locator(EmailSelector).First;
         var passwordBox = Page.Locator("input[type='password']").First;
+
+        try
+        {
+            await Expect(emailBox).Not.ToHaveValueAsync(string.Empty, new() { Timeout = 15_000 });
+        }
+        catch (Exception)
+        {
+            // No developer pre-fill configured — nothing to wait for. The retry below still applies.
+        }
 
         for (var attempt = 0; attempt < 3; attempt++)
         {

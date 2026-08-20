@@ -5456,7 +5456,7 @@ decision as much as a build, and it should not be made in the middle of somethin
 
 ---
 
-## 112. The 2FA enrolment panel hangs on "Starting…" (raised 2026-08-20 — OPEN)
+## 112. The 2FA enrolment panel hangs on "Starting…" (CLOSED 2026-08-20)
 
 Pressing **Turn on two-step sign-in** on the profile's Security tab leaves the button reading
 "Starting…" indefinitely. The QR never appears and no error is shown.
@@ -5486,6 +5486,81 @@ nothing. `GET /api/me/2fa` on the same page works — the panel renders "Off" fr
 pressing the button. `AccountTests.EnrollingWithARealCodeTurnsItOn` is written, is currently
 `Assert.Ignore`d pointing at this item, and will pass once the panel does — it should not be
 deleted.
+
+### The cause (found 2026-08-20)
+
+**`TelerikMaskedTextBox` does not splat unmatched attributes — it throws.**
+
+```
+System.InvalidOperationException: Object of type
+'Telerik.Blazor.Components.TelerikMaskedTextBox' does not have a property
+matching the name 'aria-label'.
+```
+
+The `aria-label` had been added to that component the day before, as the fix for a *different*
+finding: `LabelAssociationTests` had caught a `<label for>` pointing at nothing, because Telerik
+renders no `id` on its inner input — only a `data-id` GUID. The attribute was added on the
+assumption that Telerik splats what it does not recognise. It does not.
+
+The exception is thrown **during render**, not during the call, which is why every symptom pointed
+away from the truth: the API had already answered, the `finally` never took effect, the
+cancellation token never fired, and clicking a different tab did nothing either. **The circuit was
+dead.** It froze displaying the last frame it had successfully rendered — the one with the button
+reading "Starting…".
+
+What actually found it: reading the **browser console** through Playwright. Nothing server-side
+showed it. The diagnostic that split the problem in two — a `Console.WriteLine` at the top of the
+API action, proving the request arrived, was resolved and answered in milliseconds — is what
+justified looking at the client at all.
+
+### The fix
+
+Both code boxes — the enrolment panel and the sign-in page — are now **plain inputs** rather than
+`TelerikMaskedTextBox`. This is not a retreat from the house preference for Telerik components; the
+component genuinely cannot do what is needed here:
+
+- no `id`, so no `<label for>` can ever name it, and it has no accessible name at all;
+- it throws on an unmatched attribute, **during render**, killing the circuit;
+- no `inputmode="numeric"` and no `autocomplete="one-time-code"`, so a phone offers neither a
+  numeric keypad nor the code it has just received.
+
+A plain input gives all three, and a real label. A test asserts the accessible name comes from a
+label pointing at a real id.
+
+### Guarded against recurrence
+
+`TelerikAttributeSplattingTests` scans every `.razor` file in the site, the library, the editor and
+the WASM host, and fails on any Telerik tag carrying a plain HTML attribute. Verified by
+reintroducing the bug: it reports the offending file, tag and attribute by name.
+
+The next person will make the same assumption — that Telerik splats what it does not recognise — and
+this is how they find out in a second rather than an afternoon.
+
+### Two things fixed alongside
+
+- **`LockedOut` was being reported as "invalid email or password".** Found because a run of probes
+  locked the SuperAdmin account and the page said the password was wrong — sending somebody to
+  reset a password that was right, when only waiting helps. The sign-in page now distinguishes five
+  refusals.
+- **`SigningInWithTwoStepAsksForTheCodeAndAcceptsIt` was lying twice.** It shared the fixture's
+  account, so its result depended on what the previous test left behind; and the sign-in page
+  **pre-fills developer credentials in Development**, so a submit landing before the test's own
+  values reached the server model signed in as the developer, navigated to the home page, and
+  looked exactly like a two-step account being let through without a code. It now creates its own
+  throwaway account, and waits for the pre-fill to appear — which is itself proof the circuit is
+  live — before replacing it.
+
+### The misdiagnosis, recorded because it cost the most
+
+Several failing tests were read as a slow cold start, and timeouts were raised to 60, then 90, then
+120 seconds. **Measured, the page is interactive about 450ms after navigation on a cold host**, and
+server render is 9ms. The real fault: a character typed before the circuit connects is not merely
+ignored — the first interactive render overwrites the input from the server's empty value, so the
+keystroke is *erased*. The cure is to type again, not to wait longer. Those tests now run in about
+two seconds; they were taking ninety.
+
+A generous timeout on a fast page buys nothing and hides the next real regression behind a minute
+and a half of silence. Ben spotted it: *"It was almost instantaneous before these changes."*
 
 
 ---
@@ -5579,3 +5654,38 @@ codes. Do not read item 112 as "2FA does not work"; read it as "the enrolment pa
   types as soon as an input appears triggers no handler at all and then waits out its timeout. It
   passes or fails depending on how warm the host is, which reads as flakiness. The account tests
   wait on the page's own echo to prove interactivity first.
+
+---
+
+## 114. Every page waits on a CDN for fabric.js (raised 2026-08-20)
+
+`App.razor` loads Fabric from an external CDN on **every page of the site**:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/fabric@6/dist/index.min.js" defer></script>
+```
+
+It is only needed by the image editor, and it is pre-existing — it came in with the original
+SmartAdmin shell — but it is paid for by every visitor on every page, including the sign-in page and
+the public microsite.
+
+**How it surfaced.** The first navigation of a Playwright run times out on
+`waiting until "load"` at 30 seconds, intermittently. Measured with a warm connection the fetch is
+352ms; cold, with DNS and a TLS handshake to an external host, it is the slowest thing on the page
+by a wide margin, and `load` does not fire until it finishes. Every test context is fresh, so there
+is no browser cache to help.
+
+**Why it matters beyond the tests:**
+
+- **A visitor's first page view pays for it too**, and they have no warm connection either.
+- **It is a third party on the critical path.** If jsdelivr is slow, blocked by a corporate proxy,
+  or unreachable — which is the normal state of an air-gapped or restricted network — every page on
+  the site waits, on a script only the image editor uses.
+- It is a privacy leak of sorts: every page view tells a CDN a visitor was here.
+
+**The fix is one already used here.** ApexCharts was vendored under
+`wwwroot/plugins/apexcharts/` with its licence and a `VENDORED.md` recording where it came from and
+why. Fabric should be vendored the same way — and, better, loaded **only by the image editor**
+rather than from the shell, since nothing else touches it.
+
+Small, self-contained, and it removes an external dependency from every page load.

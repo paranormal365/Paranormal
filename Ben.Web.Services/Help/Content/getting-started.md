@@ -119,8 +119,9 @@ If the link has expired, sign up again.
 
 ## Two-step sign-in
 
-You can ask us to want a code from your phone as well as your password. It is **entirely optional**
-and off unless you turn it on, under **Security** on your profile.
+You can ask us for a code from your phone as well as your password. It is **entirely optional** and
+off unless you turn it on, under **Security** on your profile. Nobody else can turn it on or off for
+you — not an administrator either, because only you have the app that makes the codes.
 
 Any authenticator app works — **Duo Mobile**, **Okta Verify**, Google Authenticator, Microsoft
 Authenticator, 1Password. Scan the square code with the app, type the six digits it shows, and it is
@@ -132,6 +133,28 @@ time if you lose your phone. Print them, or put them somewhere that is not the p
 
 Turning it off again needs a current code from your app, which is what stops somebody at your
 unlocked computer removing it.
+
+### Signing in once it is on
+
+Enter your email and password as usual. We then ask for the six-digit code — on a phone the keyboard
+offers it straight from the notification, so you rarely have to read it across.
+
+If you have lost your phone, choose **I can't use my app** and enter one of your recovery codes
+instead. Each one works once.
+
+## When sign-in will not let you in
+
+The message says which of these it is, because the answer is different every time:
+
+| What it says | What to do |
+|---|---|
+| Invalid email or password | Check both. This is the only one where the password is actually wrong. |
+| Confirm your email address first | Open the link we emailed you when you signed up. |
+| This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
+| Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
+
+If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
+simply the second step.
 
 ## Finding help
 

@@ -10,6 +10,22 @@
     Standard TOTP, so any authenticator app works — Duo Mobile, Okta Verify, Google Authenticator,
     Microsoft Authenticator, 1Password. They all scan the same code. (Duo's push approval and Okta
     single sign-on are different products and are not what this is.)
+
+    The code boxes are plain inputs rather than TelerikMaskedTextBox, and that is not a style
+    preference:
+
+      - Telerik's box renders no `id` on its inner input — only a `data-id` GUID — so a <label for>
+        can never point at it, and it has no accessible name at all.
+      - It does not splat unmatched attributes. Adding `aria-label` to it throws
+        "does not have a property matching the name", **during render**, which kills the circuit —
+        the page freezes mid-update with no error on screen. That was item #112, and it is a
+        severe enough failure mode to be worth avoiding rather than working around.
+      - A plain input also gets `inputmode="numeric"` for a phone keypad and
+        `autocomplete="one-time-code"`, so a phone can offer the code it just received. Telerik's
+        box offers neither.
+
+    @oninput rather than @bind, because the buttons beside it act on the value immediately and
+    binding on blur would leave them acting on an empty string.
 *@
 
 <div class="card">
@@ -89,9 +105,14 @@
                     </ol>
 
                     <div class="d-flex align-items-start gap-2">
-                        <TelerikMaskedTextBox @bind-Value="@_code" Mask="000000"
-                                              aria-label="Six-digit code from your authenticator app"
-                                              Placeholder="000000" Width="9rem" />
+                        <label class="visually-hidden" for="twofa-enable-code">
+                            Six-digit code from your authenticator app
+                        </label>
+                        <input id="twofa-enable-code" class="form-control" style="width:9rem;"
+                               type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                               autocomplete="one-time-code" placeholder="000000"
+                               value="@_code"
+                               @oninput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
                         <button type="button" class="btn btn-primary" @onclick="EnableAsync" disabled="@_busy">
                             @(_busy ? "Checking…" : "Turn on")
                         </button>
@@ -117,9 +138,14 @@
             </p>
 
             <div class="d-flex align-items-center gap-2 flex-wrap">
-                <TelerikMaskedTextBox @bind-Value="@_code" Mask="000000"
-                                      aria-label="Six-digit code from your authenticator app"
-                                      Placeholder="000000" Width="9rem" />
+                <label class="visually-hidden" for="twofa-manage-code">
+                    Six-digit code from your authenticator app
+                </label>
+                <input id="twofa-manage-code" class="form-control" style="width:9rem;"
+                       type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                       autocomplete="one-time-code" placeholder="000000"
+                       value="@_code"
+                       @oninput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RegenerateAsync" disabled="@_busy">
                     New recovery codes
                 </button>
