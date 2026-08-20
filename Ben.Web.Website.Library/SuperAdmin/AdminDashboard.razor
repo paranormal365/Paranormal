@@ -1,0 +1,259 @@
+@page "/admin/dashboard"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Dashboard</PageTitle>
+
+@*
+    The administrator's overview: the template's dashboard idiom — a row of stat cards over a grid
+    of chart panels.
+
+    Every panel here answers a question an administrator would act on. That is the bar, and it is
+    worth defending: a dashboard grows decoration faster than it grows insight, and the cure is to
+    remove panels nobody reads rather than to add more.
+
+    What is deliberately absent is anonymous traffic — "new versus returning visitors". Nothing in
+    this platform records people who are not signed in, so that question cannot be answered
+    honestly here; answering it would mean building page-view tracking, which is a decision about
+    privacy and retention rather than a chart. The numbers below are all about accounts, which is
+    the half the platform genuinely knows.
+*@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Dashboard<HelpLink Slug="site-administration" Anchor="the-dashboard" /></h3>
+            <p class="text-secondary small mb-0">
+                How the site is being used. Everything here counts accounts and their activity —
+                visitors who never sign in are not recorded anywhere.
+            </p>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+                @foreach (var option in RangeOptions)
+                {
+                    <button type="button"
+                            class="btn @(_days == option.Days ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="@(() => ChangeRangeAsync(option.Days))"
+                            disabled="@_loading">
+                        @option.Label
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_summary is not null)
+    {
+        <div class="row g-2 mb-3">
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="People" Icon="users" Value="@_summary.People.ToString("N0")"
+                          Delta="@_summary.NewPeopleThisWeek" DeltaCaption="new this week" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="In a group" Icon="user-check"
+                          Value="@_summary.PeopleInAGroup.ToString("N0")"
+                          Caption="@InAGroupCaption" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Cases" Icon="folder" Value="@_summary.Cases.ToString("N0")"
+                          Delta="@_summary.NewCasesThisWeek" DeltaCaption="opened this week" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Signed in this week" Icon="log-in"
+                          Value="@_summary.ActivePeopleThisWeek.ToString("N0")"
+                          Caption="@ActiveCaption"
+                          Sparkline="@RecentSignIns" />
+            </div>
+        </div>
+    }
+
+    @if (!_loading && _charts is not null)
+    {
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Sign-ins and registrations</div>
+                    <ApexChart Type="area" Height="280"
+                               Categories="@DayLabels(_charts.SignInsPerDay)"
+                               Series="@ActivitySeries"
+                               NoDataText="Nobody has signed in during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Cases by status</div>
+                    <ApexChart Type="donut" Height="280"
+                               Categories="@Labels(_charts.CasesByStatus)"
+                               Values="@Counts(_charts.CasesByStatus)"
+                               NoDataText="No cases yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Busiest groups</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Cases and investigations started in this period.
+                    </p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@Labels(_charts.TopGroupsByActivity)"
+                               Series="@Single("Cases and investigations", _charts.TopGroupsByActivity)"
+                               NoDataText="No group started anything in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Largest groups</div>
+                    <p class="text-secondary" style="font-size:.78rem;">By active membership.</p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@Labels(_charts.TopGroupsByMembers)"
+                               Series="@Single("Members", _charts.TopGroupsByMembers)"
+                               NoDataText="No group has members yet." />
+                </div></div>
+            </div>
+
+            @*
+                Three cuts of the same question — where is this happening. Kept as bars rather
+                than a map: the query behind a choropleth is the same GROUP BY, but the map itself
+                is a build of its own, and bars answer "which states lead" without one. Revisit
+                when the answer stops fitting in eight rows.
+            *@
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">People by state</div>
+                    <ApexChart Type="bar" Height="240"
+                               Categories="@Labels(_charts.TopStatesByUser)"
+                               Series="@Single("People", _charts.TopStatesByUser)"
+                               NoDataText="Nobody has recorded an address yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Cases by state</div>
+                    <ApexChart Type="bar" Height="240"
+                               Categories="@Labels(_charts.TopStatesByCase)"
+                               Series="@Single("Cases", _charts.TopStatesByCase)"
+                               NoDataText="No cases with an address yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Investigations by state</div>
+                    <ApexChart Type="bar" Height="240"
+                               Categories="@Labels(_charts.TopStatesByInvestigation)"
+                               Series="@Single("Investigations", _charts.TopStatesByInvestigation)"
+                               NoDataText="No investigations at a recorded place yet." />
+                </div></div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private sealed record RangeOption(string Label, int Days);
+
+    private static readonly RangeOption[] RangeOptions =
+    [
+        new("7 days", 7),
+        new("30 days", 30),
+        new("90 days", 90),
+    ];
+
+    private AdminStatsSummary? _summary;
+    private AdminStatsCharts? _charts;
+    private int _days = 30;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task ChangeRangeAsync(int days)
+    {
+        if (days == _days) return;
+        _days = days;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            // The summary's own week-based numbers do not move with the range picker, so it is
+            // only fetched once; the charts are what the range applies to.
+            _summary ??= await AdminClient.GetAdminStatsSummaryAsync();
+            _charts = await AdminClient.GetAdminStatsChartsAsync(_days);
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't load the dashboard figures.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Shaping helpers ───────────────────────────────────────────────────────
+
+    private static List<string> Labels(IReadOnlyList<StatSlice> slices)
+        => slices.Select(s => s.Label).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatSlice> slices)
+        => slices.Select(s => (double)s.Count).ToList();
+
+    private static List<ApexChart.ChartSeries> Single(string name, IReadOnlyList<StatSlice> slices)
+        => [new(name, Counts(slices))];
+
+    /// <summary>Short day labels — a 90-day axis cannot carry full dates.</summary>
+    private static List<string> DayLabels(IReadOnlyList<StatPoint> points)
+        => points.Select(p => p.Day.ToString("d MMM")).ToList();
+
+    private List<ApexChart.ChartSeries> ActivitySeries =>
+    [
+        new("Sign-ins", _charts!.SignInsPerDay.Select(p => (double)p.Count).ToList()),
+        new("Registrations", _charts!.RegistrationsPerDay.Select(p => (double)p.Count).ToList()),
+    ];
+
+    /// <summary>The last fortnight of sign-ins, for the stat card's sparkline.</summary>
+    private List<double>? RecentSignIns =>
+        _charts?.SignInsPerDay.TakeLast(14).Select(p => (double)p.Count).ToList();
+
+    private string? InAGroupCaption => _summary is { People: > 0 }
+        ? $"of {_summary.People:N0} — {(double)_summary.PeopleInAGroup / _summary.People:P0} joined one"
+        : null;
+
+    private string? ActiveCaption => _summary is not null
+        ? $"{_summary.SignInsThisWeek:N0} sign-in{(_summary.SignInsThisWeek == 1 ? "" : "s")} in total"
+        : null;
+}

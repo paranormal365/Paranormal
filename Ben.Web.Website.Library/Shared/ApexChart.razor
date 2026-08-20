@@ -14,7 +14,15 @@
     light-mode colours.
 *@
 
-<div id="@_containerId" style="min-height:@(Height)px;"></div>
+@*
+    Two divs, and the outer one is load-bearing. ApexCharts writes its own inline width onto the
+    element it renders into, so a width set on that element is not ours to keep — measured: a
+    sparkline in a 258px card took a 300px container and hung 119px into the card beside it. The
+    wrapper is never touched by the library, so clipping there holds whatever the library decides.
+*@
+<div style="width:100%;overflow:hidden;">
+    <div id="@_containerId" style="min-height:@(Height)px;"></div>
+</div>
 
 @code {
     /// <summary>line, area, bar, donut, pie — or sparkline for the inline kind.</summary>

@@ -194,6 +194,9 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        })
        .AddRoles<IdentityRole<Guid>>()
        .AddEntityFrameworkStores<BenDataContext>()
+       // Every password check funnels through this, which is the only place both outcomes pass —
+       // /login is mapped by MapIdentityApi and has no action of ours to add a line to.
+       .AddSignInManager<Ben.Data.WebApi.Services.RecordingSignInManager>()
        .AddDefaultTokenProviders();
 
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──

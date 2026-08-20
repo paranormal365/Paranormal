@@ -196,6 +196,9 @@
     /// </summary>
     private static IReadOnlyList<NavItem> AdminGroups => new List<NavItem>
     {
+        // Top and ungrouped: it is the overview the rest of this menu drills into, so burying it
+        // in a group would put the summary below the detail.
+        new NavItem("Dashboard", "bar-chart-2", "/admin/dashboard"),
         new NavItem("Users", "users", children: new[]
         {
             new NavItem("Manage Users", "user", "/admin/users"),

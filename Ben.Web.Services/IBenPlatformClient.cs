@@ -78,6 +78,17 @@ public interface IBenPlatformClient
     /// </summary>
     Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default);
 
+    // ── Dashboard statistics ──────────────────────────────────────────────────
+
+    /// <summary>Headline counts for the administrator's dashboard. SuperAdmin.</summary>
+    Task<AdminStatsSummary?> GetAdminStatsSummaryAsync(CancellationToken token = default);
+
+    /// <summary>The dashboard's charts over a window of days. SuperAdmin.</summary>
+    Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default);
+
+    /// <summary>One group's own numbers. Visible to that group's active members.</summary>
+    Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
+
     /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
     Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
 

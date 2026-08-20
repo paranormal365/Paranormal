@@ -8,6 +8,31 @@ order: 70
 
 Visible to app administrators only.
 
+## The dashboard
+
+**Administration → Dashboard** is the overview the rest of this menu drills into: four headline
+numbers over a grid of charts, with a 7 / 30 / 90-day range picker.
+
+The numbers worth knowing how to read:
+
+- **People** and **In a group** — the second is the funnel. Someone who registers and never joins
+  a group is the person the site has not finished convincing, and the percentage under the number
+  says how large that group is.
+- **Signed in this week** counts *people*, not sign-ins; the caption below it gives the raw
+  attempt count. Someone signing in from a laptop and a phone is one person, two sign-ins.
+- **Busiest groups** counts cases and investigations started inside the chosen range, so it moves
+  with the range picker. **Largest groups** counts active membership and does not.
+- The three **by state** charts come from addresses already on record: people from their profile
+  addresses, cases from the address the case is about, investigations from the place visited.
+
+### What the dashboard cannot tell you
+
+There is no count of visitors who never sign in, and no "new versus returning" split. Nothing on
+this platform records anonymous visitors — a page view by someone with no account leaves no trace
+anywhere in the database. Answering that would mean adding visitor tracking, which is a decision
+about privacy and data retention rather than a chart, and it has not been made. Every number on
+this page is about accounts and what they did.
+
 ## Site settings
 
 ![The site settings screen](help-media:site-administration/site-settings.png)

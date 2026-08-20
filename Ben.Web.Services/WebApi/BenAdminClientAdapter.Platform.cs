@@ -79,6 +79,17 @@ public sealed partial class BenAdminClientAdapter
     public Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SiteFeaturesInfo>("/api/public/site-features", token);
 
+    // ── Dashboard statistics ──────────────────────────────────────────────────
+
+    public Task<AdminStatsSummary?> GetAdminStatsSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<AdminStatsSummary>("/api/admin/stats/summary", token);
+
+    public Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default)
+        => _api.GetAsync<AdminStatsCharts>($"/api/admin/stats/charts?days={days}", token);
+
+    public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
+
     public Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SupportFormTokenResponse>("/api/public/support-tickets/form-token", token);
 

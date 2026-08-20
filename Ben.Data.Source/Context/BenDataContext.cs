@@ -20,6 +20,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SupportTicket> SupportTickets { get; set; }
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
+        public virtual DbSet<SignInEvent> SignInEvents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
@@ -533,6 +534,23 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.Key).IsUnique();
             modelBuilder.Entity<SiteSetting>()
                 .Property(e => e.Description).HasMaxLength(512);
+
+            // ── SignInEvent ──────────────────────────────────────────────────
+            // NoAction on the user FK, and the column is nullable: deleting an account must not
+            // silently delete the record that it once signed in, and a failed attempt against an
+            // address matching no account has no user to point at in the first place.
+            modelBuilder.Entity<SignInEvent>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SignInEvent>()
+                .Property(e => e.Method).HasMaxLength(32).IsRequired();
+            // Every dashboard query is "attempts between these dates", so the date leads. The
+            // covering columns let the common counts be answered from the index alone.
+            modelBuilder.Entity<SignInEvent>()
+                .HasIndex(e => new { e.Utc, e.Succeeded });
+            // "Who has signed in lately" — distinct users within a window.
+            modelBuilder.Entity<SignInEvent>()
+                .HasIndex(e => new { e.AppUserId, e.Utc });
 
             // ── AppUserPhoto ─────────────────────────────────────────────────
             // The subject FK cascades: deleting a user takes their photo rows. The

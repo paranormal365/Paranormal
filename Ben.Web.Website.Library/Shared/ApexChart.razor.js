@@ -14,6 +14,21 @@
  */
 
 const _charts = new Map()
+/**
+ * Creates in flight, keyed by container id.
+ *
+ * `create` is async, and its first await — loading the library — is a yield point. Two calls for
+ * the same container (Blazor's prerender and interactive passes, or a re-render arriving while
+ * the first is still awaiting) both got past the destroy at the top before either had registered
+ * anything to destroy, and both then rendered into the same element. ApexCharts APPENDS its SVG,
+ * so the result was two complete charts stacked inside one card — visible immediately on the
+ * admin dashboard, invisible on any page with a single chart, which is why the first test of this
+ * module passed.
+ *
+ * Serialising per container makes the second call wait for the first, so its destroy finds a
+ * chart to remove.
+ */
+const _pending = new Map()
 let _apexPromise = null
 
 /** The vendored MIT build. See wwwroot/plugins/apexcharts/VENDORED.md for why it is 4.7.0. */
@@ -57,6 +72,20 @@ function paletteFrom(el) {
     return { text, muted, border, series }
 }
 
+/**
+ * The width the chart should draw at: the container's own, or its parent's when the container has
+ * not been laid out yet (which is the case on the render where the chart is created). Falls back
+ * to the library's default only when neither is known.
+ */
+function measuredWidth(el) {
+    const own = el.clientWidth
+    if (own > 0) return own
+
+    const parent = el.parentElement
+    const inherited = parent ? parent.clientWidth : 0
+    return inherited > 0 ? inherited : '100%'
+}
+
 /** Shared config: the parts every chart on this site should agree about. */
 function baseOptions(el, spec) {
     const p = paletteFrom(el)
@@ -67,6 +96,12 @@ function baseOptions(el, spec) {
         chart: {
             type,
             height: spec.height || 320,
+            // Measured, not '100%'. A percentage is resolved by ApexCharts against whatever it
+            // thinks the parent is, and for a sparkline it fell back to its own 300px default —
+            // measured at 300px inside a 258px card, hanging 119px into the card beside it. The
+            // wrapper element clips that, but a clipped chart is a cut-off chart; giving the
+            // library the real number makes it draw one that fits.
+            width: measuredWidth(el),
             // The library's own toolbar duplicates things the page does better, and its animations
             // re-run on every Blazor re-render, which reads as flicker rather than polish.
             toolbar: { show: false },
@@ -125,17 +160,31 @@ function baseOptions(el, spec) {
 }
 
 export async function create(containerId, spec) {
-    const el = document.getElementById(containerId)
-    if (!el) return
+    // Wait for any create already running for this container, so the destroy below has something
+    // to find. Failures are swallowed: a previous attempt that threw must not stop this one.
+    const inFlight = _pending.get(containerId)
+    if (inFlight) await inFlight.catch(() => {})
 
-    // Blazor can re-run first-render work (prerender then interactive). Replacing rather than
-    // stacking keeps one chart per container.
-    destroy(containerId)
+    const run = (async () => {
+        const el = document.getElementById(containerId)
+        if (!el) return
 
-    const ApexCharts = await loadApex()
-    const chart = new ApexCharts(el, baseOptions(el, spec))
-    await chart.render()
-    _charts.set(containerId, { chart, spec })
+        // Blazor can re-run first-render work (prerender then interactive). Replacing rather than
+        // stacking keeps one chart per container.
+        destroy(containerId)
+
+        const ApexCharts = await loadApex()
+        const chart = new ApexCharts(el, baseOptions(el, spec))
+        await chart.render()
+        _charts.set(containerId, { chart, spec })
+    })()
+
+    _pending.set(containerId, run)
+    try {
+        await run
+    } finally {
+        if (_pending.get(containerId) === run) _pending.delete(containerId)
+    }
 }
 
 /** New numbers, same chart — avoids the flash of a full teardown. */
@@ -182,4 +231,10 @@ export function destroy(containerId) {
     if (!entry) return
     try { entry.chart.destroy() } catch { /* already gone with its DOM */ }
     _charts.delete(containerId)
+
+    // Belt and braces: if a chart ever did get appended without being registered — the exact
+    // failure this module now serialises to prevent — destroy() would leave it on screen forever
+    // because it is not in the Map. Clearing the container makes recovery possible.
+    const el = document.getElementById(containerId)
+    if (el) el.replaceChildren()
 }

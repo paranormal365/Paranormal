@@ -5001,7 +5001,7 @@ Sequence this after item 99 — they are the same kind of work and share the car
 
 ---
 
-## 101. Administrator dashboard — the template's stat-card bar (raised 2026-08-19)
+## 101. Administrator dashboard — the template's stat-card bar (CLOSED 2026-08-20 — phase 3)
 
 For administrators and site administrators, Ben wants the row of cards the template's project
 dashboard opens with:
@@ -5145,3 +5145,38 @@ Guards: five xUnit tests (key parity across the two projects, default parity, ad
 boolean rendering, and that the unbuilt features stay off) — the parity test verified to fail
 against a deliberately drifted key. One Playwright test throws the switch through the real admin
 UI and asserts the URL dies and returns.
+
+### How it shipped (2026-08-20)
+
+**Sign-ins get their own table, not audit rows.** `SignInEvent` is `AppUserId?`, `Utc`,
+`Succeeded`, `Method` and nothing else — the dashboard's question is a `GROUP BY` over an indexed
+date, and answering it from `AuditLogs` would mean string-matching action names across a mixed
+free-text stream forever. A unit test pins the column set, because the temptation later is "just
+an IP address", and that turns a counting table into a tracking one.
+
+**Where the hook goes.** `/login` is mapped by `MapIdentityApi`, so there is no action of ours to
+add a line to; recording lives in a `SignInManager` subclass, which every password check funnels
+through. Writing the row is wrapped in a swallow-and-log: losing a data point beats locking people
+out of the site. Verified live — three attempts produced two rows, the third being an address
+matching no account, which never reaches a password check and has no user to attribute.
+
+**Ben's chart ideas, costed and built:** busiest groups, largest groups, cases by status,
+sign-ins and registrations over time, and the three geographic cuts (people, cases, investigations
+by state) — all from `State` columns already on the entities. The registered-in-a-group funnel is a
+stat card with the percentage stated, since the raw pair invites the reader to divide it wrong.
+**Not built: anonymous visitor counts.** Nothing records people who are not signed in, so "new vs
+returning" would mean building page-view tracking — a privacy and retention decision, not a chart.
+The dashboard and its help doc both say so out loud rather than leaving the absence to be noticed.
+
+**Two bugs found by looking at the page, not by tests passing.** Every chart rendered *twice*:
+`create` is async, its library-load is a yield point, and two calls both cleared the container
+before either registered anything to clear — ApexCharts appends, so the dashboard stacked two
+complete charts per card. Serialised per container now, and the regression test counts canvases
+against containers: it reports "8 containers produced 16 charts" against the unfixed code. Second,
+a sparkline drew 300px wide inside a 258px card and hung 119px into its neighbour, because
+ApexCharts overwrites the inline width of the element it owns; the width is measured from the DOM
+now, with a wrapper the library cannot touch as backstop.
+
+Two pre-existing e2e locators broke on the new org stats panel — `GetByText("Cases")` had always
+meant "any text saying Cases" and only now had competition. Tightened to `GetByRole(Tab)`, which is
+what they meant.
