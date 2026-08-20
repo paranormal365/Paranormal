@@ -21,9 +21,6 @@ public class MessagingTests : BenTestBase
 {
     private const string OrgName = "BenCo";
 
-    /// <summary>An ordinary member — deliberately not the owner. See the remarks above.</summary>
-    private static string MemberEmail    => Environment.GetEnvironmentVariable("BEN_USER2_EMAIL")    ?? "james.thornton@benco.dev";
-    private static string MemberPassword => Environment.GetEnvironmentVariable("BEN_USER2_PASSWORD") ?? "J@mes!Thornton26";
 
     private ILocator Compose => Main.GetByRole(AriaRole.Button, new() { Name = "Compose" });
 

@@ -14,8 +14,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("CaseMessages")]
 public class CaseMessageBoardTests : BenTestBase
 {
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Helper ────────────────────────────────────────────────────────────────
 

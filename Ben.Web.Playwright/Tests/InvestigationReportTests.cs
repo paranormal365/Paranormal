@@ -12,8 +12,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("CaseReports")]
 public class InvestigationReportTests : BenTestBase
 {
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Client-side: published reports card ────────────────────────────────────
 

@@ -61,11 +61,20 @@ public class ProfileLayoutTests : BenTestBase
     [Test]
     public async Task TheContactTabStillCarriesAllFourKindsOfDetail()
     {
-        await Page.GetByRole(AriaRole.Tab, new() { Name = "Contact" }).ClickAsync();
+        // ClickUntilAsync, not a bare click: the tab strip renders during SSR, well before the
+        // circuit is live, and a click in that window simply evaporates — the page then sits on
+        // About while the test waits for Contact's content. Retrying against the first heading
+        // is the standard cure for the interactivity race.
+        // Substring matches, because each heading now ends in a HelpLink's "?" — the h6's text
+        // is "Email addresses?", so an exact match on "Email addresses" finds nothing. The
+        // locator went stale when the help pass added the links; the cards never moved.
+        await ClickUntilAsync(
+            Page.GetByRole(AriaRole.Tab, new() { Name = "Contact" }),
+            Main.GetByText("Email addresses", new() { Exact = false }).First);
 
         foreach (var heading in new[] { "Email addresses", "Phone numbers", "Addresses", "Web links" })
         {
-            await Expect(Page.GetByText(heading, new() { Exact = true }).First)
+            await Expect(Main.GetByText(heading, new() { Exact = false }).First)
                 .ToBeVisibleAsync(new() { Timeout = 10_000 });
         }
     }
@@ -83,7 +92,10 @@ public class ProfileLayoutTests : BenTestBase
     [Test]
     public async Task TheMapTabDrawsTheMap()
     {
-        await Page.GetByRole(AriaRole.Tab, new() { Name = "Where you've been" }).ClickAsync();
+        // Retried for the same interactivity race as the Contact tab above.
+        await ClickUntilAsync(
+            Page.GetByRole(AriaRole.Tab, new() { Name = "Where you've been" }),
+            Page.Locator(".k-map").First);
 
         // Sarah has attended investigations with coordinates in the seed data. An empty state here
         // means either the seed changed or the endpoint is failing again.

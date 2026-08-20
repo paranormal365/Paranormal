@@ -24,10 +24,9 @@ public class MediaLibraryTests : BenTestBase
     private async Task NavigateToMediaLibraryAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
-                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
-                       .First;
-        await ClickUntilUrlAsync(link, "/media-library");
+        // Through the sidebar filter: the link lives inside the collapsed Media group now, so a
+        // bare role lookup finds nothing. See FindSidebarLinkAsync for why the filter is the path.
+        await OpenSidebarLinkAsync("Media Library", "/media-library");
         await WaitUntilLoadedAsync();
     }
 
@@ -103,9 +102,9 @@ public class MediaLibraryTests : BenTestBase
     public async Task NavDrawer_MediaLibraryLinkNavigates()
     {
         await LoginAsync(UserEmail, UserPassword);
-        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
-                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
-                       .First;
+        // The entry sits inside the collapsed Media group; the filter is how it is reached, and
+        // this test doubles as the filter's own e2e coverage.
+        var link = await FindSidebarLinkAsync("Media Library");
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 8_000 });
         // Retried: an unretried click here left the browser on the page it started from, which
         // read as the media library rendering the home page's content.
