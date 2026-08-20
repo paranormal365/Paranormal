@@ -57,12 +57,31 @@ public sealed class OrganizationFileController : ControllerBase
         var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Reading the list is open to any active member of the group; the writes below stay
+        // permission-gated.
+        //
+        // It used to require OrganizationFiles/Read through the security service, which returns
+        // false for a plain Member on every table — so the Files tab, which the hub shows to every
+        // member, was refused for everyone below Administrator. And because the website's API
+        // client turns a non-2xx into an empty list, the refusal rendered as "No records
+        // available": a member with a group handbook sitting on the server was told their group
+        // had no files at all. Item 109; the same shape as the phase 5 messaging faults, and
+        // invisible from every seat the test suite used to sign in from.
         if (!isSuperAdmin)
         {
-            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
-            if (!ok) return Forbid();
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId.Value && m.IsActive, ct);
+
+            if (!isActiveMember)
+            {
+                var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
+                if (!ok) return Forbid();
+            }
         }
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         var files = await WithIncludes(db.OrganizationFiles)
             .Where(f => f.OrganizationId == orgId)
             .OrderBy(f => f.SortOrder).ThenBy(f => f.FileName)

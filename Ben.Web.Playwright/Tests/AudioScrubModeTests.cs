@@ -21,29 +21,21 @@ public class AudioScrubModeTests : BenTestBase
 
     private async Task<bool> NavigateToTghCaseFilesTabAsync()
     {
-        await LoginAsync(UserEmail, UserPassword); // Sarah — TGH org member
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await LoginAsync(UserEmail, UserPassword); // Sarah — TGH administrator
 
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) return false;
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Through the maintained helpers, not a hand-rolled walk: the old version clicked the
+        // organisation's *name*, which is a plain grid cell on this site and navigates nowhere —
+        // the exact trap OpenOrganizationAsync exists to avoid. The walk then stalled waiting for
+        // a Cases tab on a page it had never left.
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters")) return false;
 
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Cases", Main.GetByRole(AriaRole.Button, new() { Name = "New Case" }));
 
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         if (!await caseItem.IsVisibleAsync()) return false;
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
 
-        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true })
-                           .Or(Main.GetByText("Files", new() { Exact = true })).First;
-        await filesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Files", Page.Locator("#case-file-upload"));
         return true;
     }
 

@@ -91,3 +91,4 @@ artifacts/
 # scripts/publish-editor.sh copies them from Ben.Video.Sidecar/installer/dist.
 Ben.Wasm.Video/wwwroot/downloads/*.zip
 Ben.Wasm.Video/wwwroot/downloads/checksums.txt
+TestResults/

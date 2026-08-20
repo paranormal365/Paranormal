@@ -335,11 +335,78 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         return Ok(entries);
     }
 
+    /// <summary>
+    /// The group's roster — who belongs, in what role — readable by anybody who belongs to it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists next to the near-identical <c>user-directory</c>:</b> that one
+    /// answers "what are these people called", for name pickers. This one answers "who is in this
+    /// group", which is what the hub's Members tab shows, and it needs the role and the active
+    /// flag that a name directory has no business carrying.</para>
+    ///
+    /// <para><b>What it replaces.</b> The Members tab used to read
+    /// <c>organizations/{id}/security/users</c>, whose service method requires Owner or
+    /// Administrator — it is the endpoint behind *managing* access. So an ordinary member's own
+    /// roster was refused, and since the website's API client turns a non-2xx into an empty list,
+    /// the tab told them their group had no members at all while the Details tab beside it
+    /// counted three. Item 109, and the same fault phase 5 found in messaging.</para>
+    ///
+    /// <para>The manage endpoint keeps its stricter gate; it is still the one used to change
+    /// anybody's role. Reading a roster and editing one are different questions.</para>
+    ///
+    /// <para>Inactive memberships are included, because the tab shows an Active column — a
+    /// roster that silently omitted lapsed members would misrepresent the group.</para>
+    /// </remarks>
+    [HttpGet("{organizationId:guid}/roster")]
+    public async Task<ActionResult<IEnumerable<OrgRosterEntry>>> GetRoster(
+        Guid organizationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+            if (!isActiveMember) return Forbid();
+        }
+
+        var roster = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId)
+            .OrderBy(m => m.Role).ThenBy(m => m.DateCreated)
+            .Join(db.AppUsers.AsNoTracking(), m => m.AppUserId, u => u.Id,
+                (m, u) => new OrgRosterEntry(
+                    m.Id, m.OrganizationId, m.AppUserId,
+                    u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString(),
+                    m.Role, m.IsActive, m.DateCreated, m.DateUpdated))
+            .ToListAsync(ct);
+
+        return Ok(roster);
+    }
+
 }
 
 /// <summary>Minimal name-resolution entry for <see cref="OrganizationController.GetUserDirectory"/> —
 /// deliberately excludes everything <c>AppUserRecord</c> carries beyond Id/DisplayName.</summary>
 public sealed record OrgUserDirectoryEntry(Guid Id, string DisplayName);
+
+/// <summary>
+/// One line of a group's roster: who, in what role, still active or not.
+/// </summary>
+/// <remarks>
+/// Carries no email, phone or account flags. A member may see who else is in their group and what
+/// each of them does; that is not a reason to hand out contact details, which live behind the
+/// consent rules on a person's own profile.
+/// </remarks>
+public sealed record OrgRosterEntry(
+    Guid MembershipId,
+    Guid OrganizationId,
+    Guid AppUserId,
+    string DisplayName,
+    OrganizationMemberRole Role,
+    bool IsActive,
+    DateTime DateCreated,
+    DateTime? DateUpdated);
 
 public sealed record OrganizationListItemResponse(
     Guid Id,

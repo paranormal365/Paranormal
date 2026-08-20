@@ -13,8 +13,6 @@ namespace Ben.Web.Playwright.Tests;
 public class MyCaseDashboardTests : BenTestBase
 {
     // Daniel Park is seeded with an accepted case; use his creds for client-perspective tests
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -24,9 +22,10 @@ public class MyCaseDashboardTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var myCasesLink = Page.GetByRole(AriaRole.Link, new() { Name = "My Cases" })
-                              .Or(Page.GetByText("My Cases", new() { Exact = true }));
-        await Expect(myCasesLink.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        // "Visible" now means reachable: the entry lives inside the collapsed My Work group, and
+        // FindSidebarLinkAsync surfaces it through the nav filter the way a person would.
+        var myCasesLink = await FindSidebarLinkAsync("My Cases");
+        await Expect(myCasesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
     [Test]
