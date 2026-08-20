@@ -27,8 +27,17 @@ public sealed record FeedPostRecord(
     /// <summary>True when the reader has already reported this post. Hides the report control.</summary>
     bool ReportedByCurrentUser);
 
-/// <summary>An account named in a post, with the name as it stands now.</summary>
-public sealed record FeedMentionRecord(Guid AppUserId, string DisplayName);
+/// <summary>
+/// An account named in a post: the id it resolved to, the <c>@name</c> that was typed, and the
+/// display name as it stands now.
+/// </summary>
+/// <remarks>
+/// All three are needed. The <b>id</b> is what the link points at, so it survives a rename. The
+/// <b>handle</b> is how the reader's text is matched back to this record, since that is what
+/// appears in the body. The <b>display name</b> is what a reader would rather see in a tooltip or
+/// a profile card than a handle.
+/// </remarks>
+public sealed record FeedMentionRecord(Guid AppUserId, string Handle, string DisplayName);
 
 /// <summary>A page of the feed, with the cursor that continues it.</summary>
 /// <remarks>

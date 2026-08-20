@@ -1,0 +1,110 @@
+@using Ben.Data.Common.Helpers
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenAdminClient Feed
+
+@*
+    Writing a post.
+
+    A plain textarea, not a rich-text editor. Short-form is the whole point of the feed, and an
+    editor with bold and lists invites the thing this is not for — a long piece belongs in a
+    publication. It also keeps the body plain text, which is what makes it safe to render.
+
+    The character count only appears once it is worth knowing about. A counter sitting at 0/1000
+    from the moment the page loads reads as a demand rather than a limit.
+*@
+
+<div class="card mb-3">
+    <div class="card-body">
+        <label class="visually-hidden" for="feed-composer">@Placeholder</label>
+        <textarea id="feed-composer" class="form-control border-0 px-0"
+                  rows="@(_body.Length > 120 ? 4 : 2)"
+                  maxlength="@MaxLength"
+                  placeholder="@Placeholder"
+                  value="@_body"
+                  @oninput="OnBodyInput"></textarea>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 mt-2 mb-0">@_error</div>
+        }
+
+        <div class="d-flex align-items-center gap-2 mt-2">
+            @if (Remaining <= WarnBelow)
+            {
+                <span class="small @(Remaining < 0 ? "text-danger" : "text-secondary")">@Remaining</span>
+            }
+
+            <span class="small text-secondary">
+                Use <code>@@name</code> to mention somebody and <code>#tag</code> to tag a post.
+            </span>
+
+            <button type="button" class="btn btn-primary btn-sm ms-auto"
+                    disabled="@(_busy || !CanPost)" @onclick="PostAsync">
+                @(_busy ? "Posting…" : ButtonText)
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Matches the server's own limit, so the box refuses what the API would.</summary>
+    private const int MaxLength = 1000;
+
+    /// <summary>How close to the limit before the count is worth showing.</summary>
+    private const int WarnBelow = 100;
+
+    /// <summary>Set to reply to a post rather than start one.</summary>
+    [Parameter] public Guid? ParentPostId { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "What did you find?";
+    [Parameter] public string ButtonText { get; set; } = "Post";
+
+    /// <summary>Raised with the new post, so the caller can put it straight on the page.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnPosted { get; set; }
+
+    private string _body = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private int Remaining => MaxLength - _body.Length;
+
+    private bool CanPost => !string.IsNullOrWhiteSpace(_body) && Remaining >= 0;
+
+    // @oninput rather than @bind: the Post button is gated on this value, and binding on blur would
+    // leave the button dead for anyone who types and clicks straight through.
+    private void OnBodyInput(ChangeEventArgs e)
+    {
+        _body = e.Value?.ToString() ?? string.Empty;
+        _error = null;
+    }
+
+    private async Task PostAsync()
+    {
+        if (!CanPost) return;
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var (post, error) = await Feed.CreatePostAsync(_body.Trim(), ParentPostId);
+
+            if (error is not null || post is null)
+            {
+                // The server's own words where it gave them — "a post can be at most 1000
+                // characters" is something to act on, unlike "something went wrong".
+                _error = error ?? "Couldn't post that. Try again in a moment.";
+                return;
+            }
+
+            _body = string.Empty;
+            await OnPosted.InvokeAsync(post);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

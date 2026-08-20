@@ -1,0 +1,159 @@
+@page "/feed/people/{AppUserId:guid}"
+@namespace Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(_profile?.DisplayName ?? "Profile")</PageTitle>
+
+@*
+    Somebody's feed presence: their counts, a follow button, and their posts.
+
+    Deliberately separate from /profile, which is your own account — contact details, photos,
+    consent, security. This is the public face: what somebody who read one of your posts is allowed
+    to see about you, which is your name and what you have written.
+*@
+
+<FeatureGate Flag="@SiteFeatures.PublicFeed">
+    <div class="container py-3" style="max-width: 680px;">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_profile is null)
+        {
+            <div class="text-center text-secondary py-5">
+                <p class="mb-0">No such person.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card mb-3">
+                <div class="card-body d-flex align-items-start gap-3 flex-wrap">
+                    <div class="flex-grow-1">
+                        <h4 class="mb-1">@_profile.DisplayName</h4>
+                        <div class="text-secondary small">
+                            <strong>@_profile.PostCount.ToString("N0")</strong> post@(_profile.PostCount == 1 ? "" : "s")
+                            · <strong>@_profile.FollowerCount.ToString("N0")</strong> follower@(_profile.FollowerCount == 1 ? "" : "s")
+                            · <strong>@_profile.FollowingCount.ToString("N0")</strong> following
+                        </div>
+                    </div>
+
+                    @if (!_profile.IsSelf)
+                    {
+                        <button type="button"
+                                class="btn btn-sm @(_profile.IsFollowedByCurrentUser ? "btn-outline-secondary" : "btn-primary")"
+                                disabled="@_busy" @onclick="ToggleFollowAsync">
+                            @(_profile.IsFollowedByCurrentUser ? "Following" : "Follow")
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            @if (_posts.Count == 0)
+            {
+                <p class="text-secondary text-center py-4 mb-0">
+                    @(_profile.IsSelf ? "You haven't posted yet." : "Nothing posted yet.")
+                </p>
+            }
+            else
+            {
+                @* ShowFollow is off: the button at the top of the page already says it, and one
+                   per post would be three answers to the same question on one screen. *@
+                @foreach (var post in _posts)
+                {
+                    <FeedPostCard Post="@post" ShowFollow="false" OnReportRequested="ReportAsync" />
+                }
+            }
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid AppUserId { get; set; }
+
+    private FeedProfileRecord? _profile;
+    private readonly List<FeedPostRecord> _posts = [];
+    private string? _error;
+    private bool _loading = true;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _posts.Clear();
+        StateHasChanged();
+
+        try
+        {
+            _profile = await Feed.GetFeedProfileAsync(AppUserId);
+            if (_profile is null) return;
+
+            // There is no per-person feed endpoint: the feed is filtered by mode and tag, not by
+            // author. Rather than add one, this reads a page and keeps this person's posts — which
+            // is honest for a profile with recent activity and thin for one without. A dedicated
+            // endpoint is the fix if profiles turn out to be somewhere people actually browse.
+            var page = await Feed.GetFeedAsync();
+            if (page is not null)
+                _posts.AddRange(page.Posts.Where(p => p.AuthorAppUserId == AppUserId));
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleFollowAsync()
+    {
+        if (_profile is null) return;
+
+        _busy = true;
+        try
+        {
+            var nowFollowing = !_profile.IsFollowedByCurrentUser;
+
+            var ok = nowFollowing
+                ? await Feed.FollowAsync(AppUserId)
+                : await Feed.UnfollowAsync(AppUserId);
+
+            if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+            _profile = _profile with
+            {
+                IsFollowedByCurrentUser = nowFollowing,
+                FollowerCount = Math.Max(0, _profile.FollowerCount + (nowFollowing ? 1 : -1)),
+            };
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReportAsync(FeedPostRecord post)
+    {
+        if (!await Feed.ReportPostAsync(post.Id, null))
+        {
+            _error = "Couldn't report that. Try again in a moment.";
+            return;
+        }
+
+        var index = _posts.IndexOf(post);
+        if (index >= 0) _posts[index] = post with { ReportedByCurrentUser = true };
+    }
+}

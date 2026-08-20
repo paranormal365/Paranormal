@@ -1,0 +1,244 @@
+@page "/feed"
+@page "/feed/tags/{Tag}"
+@namespace Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(Tag is null ? "Feed" : $"#{Tag}")</PageTitle>
+
+@*
+    The feed.
+
+    Two modes — everybody, or the people you follow — and an optional tag. The tag arrives as a
+    route rather than a query string so a tag page is a link somebody can share, which is most of
+    what tags are for.
+
+    Paging is "load more" rather than infinite scroll: this is a records system for people doing
+    real work, and a page that grows for ever is one you cannot get to the bottom of to reach
+    anything else.
+*@
+
+<FeatureGate Flag="@SiteFeatures.PublicFeed">
+    <div class="container py-3" style="max-width: 680px;">
+
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="mb-0">
+                @if (Tag is null)
+                {
+                    <text>Feed</text>
+                }
+                else
+                {
+                    <text>#@Tag</text>
+                }
+                <HelpLink Slug="the-feed" />
+            </h3>
+
+            @if (Tag is not null)
+            {
+                <a class="btn btn-outline-secondary btn-sm" href="/feed">All posts</a>
+            }
+        </div>
+
+        @if (Tag is null)
+        {
+            <ul class="nav nav-tabs mb-3">
+                @foreach (var (mode, label) in Modes)
+                {
+                    <li class="nav-item">
+                        <button type="button" class="nav-link @(_mode == mode ? "active" : null)"
+                                @onclick="() => SwitchModeAsync(mode)">
+                            @label
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+
+        @* No composer on a tag page. A post written there would not carry the tag unless the
+           author typed it, and a composer that silently does not do what its context implies is
+           worse than no composer. *@
+        @if (Tag is null)
+        {
+            <FeedComposer OnPosted="OnPosted" />
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_posts.Count == 0)
+        {
+            <div class="text-center text-secondary py-5">
+                @if (Tag is not null)
+                {
+                    <p class="mb-0">Nothing tagged <strong>#@Tag</strong> yet.</p>
+                }
+                else if (_mode == "following")
+                {
+                    <p class="mb-1">Nothing from the people you follow.</p>
+                    <p class="mb-0 small">Follow somebody from their name on a post, or read
+                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline"
+                                @onclick="@(() => SwitchModeAsync("all"))">all posts</button>.</p>
+                }
+                else
+                {
+                    <p class="mb-0">Nothing here yet. Be the first.</p>
+                }
+            </div>
+        }
+        else
+        {
+            @foreach (var post in _posts)
+            {
+                <FeedPostCard Post="@post"
+                              OnFollowToggled="ToggleFollowAsync"
+                              OnReportRequested="ReportAsync" />
+            }
+
+            @if (_nextCursor is not null)
+            {
+                <div class="text-center my-3">
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_loadingMore"
+                            @onclick="LoadMoreAsync">
+                        @(_loadingMore ? "Loading…" : "Load more")
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    /// <summary>Set when the page is a tag page.</summary>
+    [Parameter] public string? Tag { get; set; }
+
+    private static readonly (string Mode, string Label)[] Modes =
+    [
+        ("all", "All posts"),
+        ("following", "Following"),
+    ];
+
+    private readonly List<FeedPostRecord> _posts = [];
+    private string _mode = "all";
+    private string? _nextCursor;
+    private string? _error;
+    private bool _loading = true;
+    private bool _loadingMore;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Runs again when the tag in the route changes — navigating from one tag page to another
+        // keeps the component, so reloading here is what makes the second tag show its own posts.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task SwitchModeAsync(string mode)
+    {
+        if (_mode == mode) return;
+        _mode = mode;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _posts.Clear();
+        _nextCursor = null;
+        StateHasChanged();
+
+        try
+        {
+            var page = await Feed.GetFeedAsync(_mode, Tag);
+            if (page is null)
+            {
+                _error = "Couldn't load the feed.";
+                return;
+            }
+
+            _posts.AddRange(page.Posts);
+            _nextCursor = page.NextCursor;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_nextCursor is null || _loadingMore) return;
+
+        _loadingMore = true;
+        try
+        {
+            var page = await Feed.GetFeedAsync(_mode, Tag, _nextCursor);
+            if (page is null) return;
+
+            _posts.AddRange(page.Posts);
+            _nextCursor = page.NextCursor;
+        }
+        finally
+        {
+            _loadingMore = false;
+        }
+    }
+
+    /// <summary>
+    /// Puts a new post straight on the page.
+    /// </summary>
+    /// <remarks>
+    /// Rather than reloading: the post is already in hand, a reload costs a round trip, and — the
+    /// part that matters — a reload of the "following" feed would drop the post the person just
+    /// wrote if they follow nobody, which reads as the post having failed.
+    /// </remarks>
+    private void OnPosted(FeedPostRecord post) => _posts.Insert(0, post);
+
+    private async Task ToggleFollowAsync(FeedPostRecord post)
+    {
+        var nowFollowing = !post.AuthorIsFollowedByCurrentUser;
+
+        var ok = nowFollowing
+            ? await Feed.FollowAsync(post.AuthorAppUserId)
+            : await Feed.UnfollowAsync(post.AuthorAppUserId);
+
+        if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+        // Every post by that author, not just the one clicked — otherwise the same person reads
+        // "Follow" on one post and "Following" on the next, which looks broken.
+        for (var i = 0; i < _posts.Count; i++)
+        {
+            if (_posts[i].AuthorAppUserId == post.AuthorAppUserId)
+                _posts[i] = _posts[i] with { AuthorIsFollowedByCurrentUser = nowFollowing };
+        }
+    }
+
+    private async Task ReportAsync(FeedPostRecord post)
+    {
+        // No reason prompt yet: the endpoint takes one, and a dialog asking for it is worth adding
+        // once there is evidence administrators need more than "somebody objected". Reporting is
+        // one press, and pressing it twice changes nothing.
+        if (!await Feed.ReportPostAsync(post.Id, null))
+        {
+            _error = "Couldn't report that. Try again in a moment.";
+            return;
+        }
+
+        var index = _posts.IndexOf(post);
+        if (index >= 0) _posts[index] = post with { ReportedByCurrentUser = true };
+    }
+}

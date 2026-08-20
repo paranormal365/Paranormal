@@ -125,6 +125,8 @@ public sealed class FeedController : BenControllerBase
             .OrderBy(m => m.DateCreated).ThenBy(m => m.Id)
             .ToListAsync(ct);
 
+        await MarkSeenAsync(db, id, userId, ct);
+
         return Ok(await ToRecordsAsync(db, [root, .. replies], userId, ct));
     }
 
@@ -307,6 +309,45 @@ public sealed class FeedController : BenControllerBase
     // ── Shared ───────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Records that this reader has opened a post, which is what clears a mention from their bell.
+    /// </summary>
+    /// <remarks>
+    /// <para>Reuses <c>OrgMessageView</c>, the marker the rest of the messaging system already
+    /// uses. A read flag on the mention itself would be a second record of one fact, and the two
+    /// would drift the first time a post was read by some other route.</para>
+    ///
+    /// <para>Opening a thread is the read signal rather than the post scrolling past in the feed.
+    /// A feed post glimpsed on the way down the page has not been read in any sense worth clearing
+    /// a notification for, and "you were mentioned" is exactly the notification somebody would be
+    /// annoyed to lose without seeing.</para>
+    ///
+    /// <para>Best-effort: a failure here must not take down the read that succeeded. The mention
+    /// simply stays unread and clears next time.</para>
+    /// </remarks>
+    private static async Task MarkSeenAsync(BenDataContext db, Guid postId, Guid readerId, CancellationToken ct)
+    {
+        try
+        {
+            var already = await db.OrgMessageViews
+                .AnyAsync(v => v.OrgMessageId == postId && v.ViewerAppUserId == readerId, ct);
+            if (already) return;
+
+            db.OrgMessageViews.Add(new OrgMessageView
+            {
+                OrgMessageId = postId,
+                ViewerAppUserId = readerId,
+                DateViewed = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Two tabs opening the same post at once; the composite key refuses the second. The
+            // post is marked seen either way, which is the whole point.
+        }
+    }
+
+    /// <summary>
     /// Whether the feed is switched on for this site.
     /// </summary>
     /// <remarks>
@@ -330,47 +371,36 @@ public sealed class FeedController : BenControllerBase
     /// The accounts a post's <c>@names</c> refer to.
     /// </summary>
     /// <remarks>
-    /// <para><b>Ambiguity is a refusal, not a guess.</b> Display names are not unique in this
-    /// product and a mention token cannot contain spaces, so "@sarahmitchell" is matched against
-    /// display names with their spaces and punctuation removed. When two accounts normalise alike,
-    /// neither is mentioned: notifying the wrong Sarah Mitchell is worse than notifying neither,
-    /// and the text stays as plain text so the author can see it did not take.</para>
+    /// <para>Resolved against <c>AppUser.Handle</c>, exactly. A handle is unique and permanent, so
+    /// <c>@sarahmitchell</c> means one account and goes on meaning that account after she changes
+    /// her display name.</para>
     ///
-    /// <para>Whether this product should have real handles — unique, chosen, part of a profile URL
-    /// — is a decision for Ben rather than something to introduce as a side effect of building a
-    /// feed. Logged as a backlog item. Until then this is the honest approximation.</para>
+    /// <para>This used to match a normalised display name, because handles did not exist yet — and
+    /// it had to refuse whenever two accounts normalised alike, since notifying the wrong Sarah
+    /// Mitchell is worse than notifying neither. Worse, the answer could <i>change</i> as accounts
+    /// were added: a mention that resolved today would stop resolving the day a second Sarah signed
+    /// up. Handles removed the ambiguity rather than managing it.</para>
+    ///
+    /// <para>An <c>@name</c> nobody holds resolves to nothing and stays plain text, which is what
+    /// the author should see: their typo reached no one.</para>
     /// </remarks>
     private static async Task<IReadOnlyList<Guid>> ResolveMentionsAsync(
         BenDataContext db, string body, CancellationToken ct)
     {
-        var tokens = FeedTextParser.FindMentions(body);
+        var tokens = FeedTextParser.FindMentions(body)
+            .Select(UserHandle.Normalize)
+            .Where(h => h.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
         if (tokens.Count == 0) return [];
 
-        // Every account is loaded because the comparison is over a normalised form the database
-        // cannot index. Acceptable at this size and honestly not beyond it either — but if the
-        // user table ever gets large, this is the query to revisit, and handles are the fix.
-        var candidates = await db.AppUsers.AsNoTracking()
-            .Select(u => new { u.Id, u.DisplayName })
+        // One indexed lookup over the handles actually typed, rather than reading every account
+        // and comparing in memory as the display-name version had to.
+        return await db.AppUsers.AsNoTracking()
+            .Where(u => u.Handle != null && tokens.Contains(u.Handle))
+            .Select(u => u.Id)
             .ToListAsync(ct);
-
-        var byNormalised = candidates
-            .Select(u => new { u.Id, Key = FeedTextParser.NormalizeName(u.DisplayName) })
-            .Where(u => u.Key.Length > 0)
-            .GroupBy(u => u.Key, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Select(u => u.Id).ToList(), StringComparer.Ordinal);
-
-        var resolved = new List<Guid>();
-        foreach (var token in tokens)
-        {
-            var key = FeedTextParser.NormalizeName(token);
-            if (key.Length == 0) continue;
-
-            // Exactly one, or nobody. See the remarks.
-            if (byNormalised.TryGetValue(key, out var ids) && ids.Count == 1 && !resolved.Contains(ids[0]))
-                resolved.Add(ids[0]);
-        }
-
-        return resolved;
     }
 
     /// <summary>Turns posts into records, resolving names, counts and the reader's own state.</summary>
@@ -397,6 +427,7 @@ public sealed class FeedController : BenControllerBase
             {
                 m.OrgMessageId,
                 m.MentionedAppUserId,
+                m.MentionedAppUser.Handle,
                 Name = m.MentionedAppUser.DisplayName ?? m.MentionedAppUser.Email,
             })
             .ToListAsync(ct);
@@ -434,7 +465,8 @@ public sealed class FeedController : BenControllerBase
             p.DateCreated,
             replyCounts.GetValueOrDefault(p.Id),
             mentions.Where(m => m.OrgMessageId == p.Id)
-                    .Select(m => new FeedMentionRecord(m.MentionedAppUserId, m.Name ?? "Unknown"))
+                    .Select(m => new FeedMentionRecord(
+                        m.MentionedAppUserId, m.Handle ?? string.Empty, m.Name ?? "Unknown"))
                     .ToList(),
             hashtags.Where(h => h.OrgMessageId == p.Id).Select(h => h.Tag).ToList(),
             followed.Contains(p.AuthorAppUserId),
