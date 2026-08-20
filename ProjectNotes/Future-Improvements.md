@@ -5918,3 +5918,68 @@ and would have shown nothing.
 Six, four of them load-bearing and each verified against deliberately broken code: the rule
 disabled, cancelled subscriptions excluded from the count, and the cascade removed so posts would
 have been orphaned.
+
+---
+
+## 119. Ordinary-member seats in the test suite, and the two bugs the first walk found (SHIPPED 2026-08-20 — closes item 109)
+
+Item 109 predicted that walking the member-facing surfaces as an actual member would find more of
+the phase-5 shape — `HasAccessAsync` false on every table for a plain Member, refusals rendered as
+empty lists. The very first walk found two.
+
+### The seats
+
+`BenTestBase` now names four: SuperAdmin, `UserEmail` (Sarah — administrator, the default and the
+trap), **`MemberEmail` (James — plain Member, no grants, no named role)**, and `ClientEmail`
+(Daniel — account, no memberships). Member/Client were previously re-declared in seven fixtures;
+all local copies are gone, and the six hardcoded Daniel logins in RequestStatusProgressionTests
+point at the seat. CoClientAccessTests' "stranger" is documented as the member seat wearing a
+different hat.
+
+### The fixture
+
+`OrdinaryMemberSurfaceTests` (Category=OrdinaryMember) walks every tab the hub shows a member —
+and asserts **real content, never a page merely loading**, because the failure it hunts renders as
+"No records available", not as an error. It also asserts the admin tabs are absent, so "fix the
+member" cannot be satisfied by giving members everything.
+
+### Bug 1: the Files tab
+
+`GET /api/organizations/{id}/files` required OrganizationFiles/Read through the security service —
+false for every plain member. The tab rendered the 403 as an empty grid; a member with a group
+handbook on the server was told the group had no files. Fixed: reading the list needs active
+membership; the writes keep their permission gates. Same fix the org record itself got in phase 5.
+
+### Bug 2: the Members tab
+
+The roster was read from `/security/users` — the *manage-access* endpoint, Owner/Administrator
+only. Details said "Members: 3"; the Members tab told James there were none. Fixed with a new
+member-readable `GET /api/organizations/{id}/roster` (same shape, no contact details — display
+name and role only, matching the user-directory precedent); the manage endpoint keeps its gate.
+
+### What made both invisible
+
+136 sites in the client adapter turn any non-2xx into `[]` — a refusal and an empty group are the
+same value on screen. Too systemic to fix inline; raised as item 120.
+
+### Verified
+
+The fixture ran against the unfixed code first: Files and Members failed exactly as predicted
+(Cases/Investigations failures were my locators, corrected and noted in the test). Green after the
+fixes. Tabs confirmed working from James's seat live: Details, Members, Cases, Investigations,
+Calendar, Messages, Files, Equipment.
+
+---
+
+## 120. The client adapter cannot tell "refused" from "empty" (raised 2026-08-20)
+
+`WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
+`BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
+as "No records available". This is the mechanism that hid both item-119 bugs and the phase-5
+messaging faults: the server refuses correctly, the page reports an empty world, nobody sees an
+error anywhere.
+
+Worth designing once rather than patching per-site: likely a `GetExpectingReasonAsync` sibling
+(the Delete/Send variants exist) plus a component-level convention for "couldn't load" vs
+"nothing here". Until then, any new list surface should assert real content in its tests, per
+the OrdinaryMemberSurfaceTests pattern.

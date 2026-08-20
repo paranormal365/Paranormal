@@ -125,7 +125,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_SubmittedTo_ShowsProgressionSteps()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -147,7 +147,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_AssignedRequest_ShowsViewMyCaseLink()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -169,7 +169,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_AssignedRequest_ViewMyCaseLinkNavigatesToCase()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -198,7 +198,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_EditOccurrence_DialogPreFilled()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
@@ -219,7 +219,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_StatusBadge_Visible()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
@@ -236,7 +236,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_CaseManager_ShownWhenAssigned()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;

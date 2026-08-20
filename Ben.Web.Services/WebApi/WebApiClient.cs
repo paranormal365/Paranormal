@@ -233,9 +233,22 @@ public sealed class WebApiClient : IWebApiClient
         return PostAsync<CheckOrganizationAccessRequest, bool?>(relativeUrl, request, token);
     }
 
+    /// <summary>
+    /// The group's roster — who belongs and in what role.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Reads <c>/roster</c>, not <c>/security/users</c>.</b> They return the same shape,
+    /// but the security one is the endpoint behind *managing* access and requires Owner or
+    /// Administrator. Every caller of this method wants the list — the Members tab, the case and
+    /// investigation team pickers, the role editor — and only the last of those is an
+    /// administrator's screen.</para>
+    ///
+    /// <para>Pointed at the manage endpoint, an ordinary member's own roster came back refused,
+    /// and the <c>?? []</c> below turned that into "this group has no members". Item 109.</para>
+    /// </remarks>
     public async Task<IReadOnlyList<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default)
     {
-        var relativeUrl = $"/api/organizations/{organizationId}/security/users";
+        var relativeUrl = $"/api/organizations/{organizationId}/roster";
         var users = await GetAsync<List<OrganizationUserMembershipResponse>>(relativeUrl, token);
         return users ?? [];
     }

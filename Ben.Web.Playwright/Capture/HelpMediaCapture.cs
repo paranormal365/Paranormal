@@ -273,7 +273,7 @@ public sealed class HelpMediaCapture : BenTestBase
 
             // James writes the post, so that Sarah — capturing below — is not its author and the
             // Follow and Report controls are visible in the shot.
-            await LoginAsync("james.thornton@benco.dev", "J@mes!Thornton26");
+            await LoginAsync(MemberEmail, MemberPassword);
             await GoToFeedForCaptureAsync();
             await ComposeForCaptureAsync(
                 "Clear #EVP in the upstairs hall around 2am — three separate responses to direct "
@@ -499,9 +499,6 @@ public sealed class HelpMediaCapture : BenTestBase
     /// The seeded client. The requests and cases the client documents describe belong to Daniel,
     /// not to the suite's default user — capturing them as Sarah produced screenshots of empty
     /// lists, which is what the <c>proves</c> assertions now catch.
-    /// </summary>
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     [Test]
     [Description("requesting-an-investigation: the request wizard, as a client sees it.")]

@@ -49,10 +49,51 @@ public abstract class BenTestBase : PageTest
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
 
+    // ── The seats ─────────────────────────────────────────────────────────────
+    //
+    // Four of them, named by what they can do rather than who they are, because which seat a test
+    // sits in is the single most load-bearing decision it makes.
+    //
+    // The suite spent its life in the top two. Phase 5 then found three separate faults in group
+    // messaging that were TOTAL for ordinary members and completely invisible from an owner
+    // account — all three caught within minutes of signing in as James instead of Sarah. Reaching
+    // for a less privileged seat has to be the easy path, or nobody does it: MemberEmail and
+    // ClientEmail were previously re-declared in seven different fixtures, which is what happens
+    // when the base class only offers the powerful ones.
+    //
+    // See item 109. Any new fixture should ask which of these four it means, and say so.
+
+    /// <summary>Runs the site. Passes every permission check by role, everywhere.</summary>
     protected static string SuperAdminEmail    => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_EMAIL")    ?? "haveben@msn.com";
     protected static string SuperAdminPassword => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_PASSWORD") ?? "Y@ung615";
+
+    /// <summary>
+    /// Sarah — Administrator of Tennessee Ghost Hunters and owner of BenCo. The default seat, and
+    /// the reason to think twice: an administrator passes <c>HasAccessAsync</c> on every table by
+    /// role, so a surface broken for everyone else looks perfect from here.
+    /// </summary>
     protected static string UserEmail          => Environment.GetEnvironmentVariable("BEN_USER_EMAIL")          ?? "sarah.mitchell@benco.dev";
     protected static string UserPassword       => Environment.GetEnvironmentVariable("BEN_USER_PASSWORD")       ?? "S@rah!Mitchell26";
+
+    /// <summary>
+    /// James — a plain <c>Member</c> of Tennessee Ghost Hunters, and the most useful seat in the
+    /// suite.
+    /// </summary>
+    /// <remarks>
+    /// He belongs to the group and holds no grants and no named role, which is what an ordinary
+    /// member is. That combination makes <c>HasAccessAsync</c> return <b>false on every table</b>,
+    /// so anything gated on it that members are meant to reach is broken from here and nowhere
+    /// else. Use this seat for any surface a member is shown.
+    /// </remarks>
+    protected static string MemberEmail        => Environment.GetEnvironmentVariable("BEN_MEMBER_EMAIL")        ?? "james.thornton@benco.dev";
+    protected static string MemberPassword     => Environment.GetEnvironmentVariable("BEN_MEMBER_PASSWORD")     ?? "J@mes!Thornton26";
+
+    /// <summary>
+    /// Daniel — has an account and belongs to no group. The client seat: cases of his own, and no
+    /// membership anywhere.
+    /// </summary>
+    protected static string ClientEmail        => Environment.GetEnvironmentVariable("BEN_CLIENT_EMAIL")        ?? "daniel.park@benco.dev";
+    protected static string ClientPassword     => Environment.GetEnvironmentVariable("BEN_CLIENT_PASSWORD")     ?? "D@niel!Park2026";
 
     /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.

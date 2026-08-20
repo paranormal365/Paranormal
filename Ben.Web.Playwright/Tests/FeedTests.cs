@@ -211,8 +211,6 @@ public class FeedTests : BenTestBase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static string MemberEmail    => Environment.GetEnvironmentVariable("BEN_USER2_EMAIL")    ?? "james.thornton@benco.dev";
-    private static string MemberPassword => Environment.GetEnvironmentVariable("BEN_USER2_PASSWORD") ?? "J@mes!Thornton26";
 
     private async Task GoToFeedAsync()
     {

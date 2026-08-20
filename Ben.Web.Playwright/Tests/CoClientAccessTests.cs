@@ -23,8 +23,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("CoClient")]
 public class CoClientAccessTests : BenTestBase
 {
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // Genuinely unrelated to Daniel's case: the API answers 404 for him, which is the behaviour
     // this fixture is here to hold on to.
@@ -33,8 +31,11 @@ public class CoClientAccessTests : BenTestBase
     // that case, so pointing the test at her reported a security hole that did not exist. Worth
     // checking against the API before believing a leak: an account that *should* have access is
     // indistinguishable on screen from one that should not.
-    private const string StrangerEmail    = "james.thornton@benco.dev";
-    private const string StrangerPassword = "J@mes!Thornton26";
+    // The "stranger" here is the ordinary-member seat wearing a different hat: James has an
+    // account and belongs to a group, and is simply nothing to do with this case. That is the
+    // interesting negative — not somebody with no account at all.
+    private static string StrangerEmail    => MemberEmail;
+    private static string StrangerPassword => MemberPassword;
 
     /// <summary>Opens Daniel's managed case and returns its URL.</summary>
     private async Task<string> OpenDanielsCaseAsync()

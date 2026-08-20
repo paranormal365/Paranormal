@@ -13,8 +13,6 @@ namespace Ben.Web.Playwright.Tests;
 public class MyCaseDashboardTests : BenTestBase
 {
     // Daniel Park is seeded with an accepted case; use his creds for client-perspective tests
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Navigation ─────────────────────────────────────────────────────────────
 
