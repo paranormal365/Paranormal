@@ -56,6 +56,13 @@
     <Content Include="ffmpeg/$(BundledFfmpegRid)/**" Condition="Exists('ffmpeg/$(BundledFfmpegRid)')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <!-- On a single-file publish (the Windows profile) the bundler classifies these executables
+           as native binaries and swallows them INTO the host — measured: a 375 MB
+           Ben.Video.Sidecar.exe with no ffmpeg/ folder beside it, while the json manifest, not
+           being a binary, still copied loose. FfmpegLocator wants them at ffmpeg/<rid>/ next to
+           the app, and the manifest hash-check re-reads them from disk at startup. This keeps
+           them as ordinary files. Harmless on the non-single-file macOS publish. -->
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>
 
