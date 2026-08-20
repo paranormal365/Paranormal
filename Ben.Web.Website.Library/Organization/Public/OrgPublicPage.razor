@@ -31,7 +31,7 @@ else
         <div class="d-flex align-items-center gap-3 mb-3">
             @if (_page.Logos.Any())
             {
-                <img src="@AdminClient.GetFileDownloadUrl(_page.Logos.First().UploadFileId)"
+                <img src="@AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId)"
                      alt="@(_page.Logos.First().AltText ?? _page.OrgName)"
                      style="max-height:48px; max-width:96px; object-fit:contain;" />
             }

@@ -45,6 +45,13 @@
         @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
 
         @* ── Files grid ──────────────────────────────────────────────────── *@
+        @* Wrapped so a refused fetch says so. Before this the grid rendered "No records
+           available" whether the group had no files or the server had turned the reader away —
+           and for every ordinary member it was the latter. *@
+        <BenListState TItem="OrganizationFileRecord" Result="@_filesResult" Loading="@_loading"
+                      LoadingText="Loading the group's files…"
+                      EmptyText="This group hasn't shared any files yet"
+                      OnRetry="@ReloadAsync">
         <TelerikGrid Data="@_files" Pageable="true" PageSize="20" Sortable="true" Class="mb-4">
             <GridColumns>
                 <GridColumn Field="@nameof(OrganizationFileRecord.FileName)" Title="File Name" />
@@ -80,7 +87,13 @@
                 </GridColumn>
                 <GridColumn Title="Source" Width="70px">
                     <Template>
-                        @((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload"
+                        @* The parens wrap the whole ternary. Without the outer pair the expression
+                           ends at the cast, so Razor rendered the record's ToString() — the cell
+                           printed "OrganizationFileRecord { Id = … }" and the rest as text. It
+                           compiled, and nobody saw it because a populated row in this grid was
+                           unreachable: every ordinary member was refused (item 119) and the page
+                           itself loaded before auth (item 122). *@
+                        @(((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload")
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
@@ -107,6 +120,7 @@
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
+        </BenListState>
 
         @* ── Delete log (expandable) ─────────────────────────────────────── *@
         @if (_showDeleteLog)
@@ -295,6 +309,7 @@
     private string? _error;
     private string  _orgName = string.Empty;
     private List<OrganizationFileRecord>          _files      = [];
+    private LoadResult<OrganizationFileRecord>   _filesResult;
     private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
     private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
     private bool _showDeleteLog;
@@ -348,14 +363,26 @@
     private OrganizationFileRecord? _pendingDelete;
     private bool _deleting;
 
-    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        // Same race OrganizationMembers had (item 122): this page has its own route, so a hard
+        // navigation renders it before the circuit is live and every call comes back
+        // unauthorised. It now shows "Couldn't load this" rather than claiming the group has no
+        // files — but not failing at all is better than failing honestly.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
         _loading = true;
         try
         {
-            _files      = (await AdminClient.GetOrgFilesAsync(OrgId)).ToList();
+            // LoadOrgFiles, not GetOrgFiles: this is the tab where a 403 rendered as "the group
+            // has no files" to every ordinary member (item 119). The grid below is wrapped in
+            // BenListState so the difference is on screen rather than only in the type.
+            _filesResult = await AdminClient.LoadOrgFilesAsync(OrgId);
+            _files      = _filesResult.Items.ToList();
             _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).ToList();
             _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
             var orgs    = await AdminClient.GetOrganizationsAsync();

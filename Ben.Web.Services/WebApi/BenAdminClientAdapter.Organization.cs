@@ -204,6 +204,9 @@ public sealed partial class BenAdminClientAdapter
 
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
+
+    public string GetFileThumbnailUrl(Guid uploadFileId)
+        => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/thumbnail";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
         => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 
@@ -229,6 +232,23 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The group's roster, saying so when it could not be fetched.
+    /// </summary>
+    /// <remarks>
+    /// The second surface where a refusal rendered as an empty list — the Members tab told an
+    /// ordinary member their group had nobody in it while Details counted three (items 119, 122).
+    /// </remarks>
+    public async Task<LoadResult<OrgMembershipItem>> LoadOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetListAsync<OrganizationUserMembershipResponse>($"/api/organizations/{orgId}/roster", token);
+        if (result.Failed) return LoadResult<OrgMembershipItem>.Failure(result.Reason);
+
+        return LoadResult<OrgMembershipItem>.Ok(result.Items
+            .Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName))
+            .ToList());
+    }
+
     public async Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
     {
         var result = await _api.GetOrganizationUsersAsync(orgId, token);
@@ -248,6 +268,19 @@ public sealed partial class BenAdminClientAdapter
         var result = await _api.GetAsync<IReadOnlyList<OrganizationFileRecord>>($"/api/organizations/{orgId}/files", token);
         return result ?? [];
     }
+
+    /// <summary>
+    /// The group's files, saying so when the list could not be fetched.
+    /// </summary>
+    /// <remarks>
+    /// Sits beside <see cref="GetOrgFilesAsync"/> rather than replacing it: this is the surface
+    /// where the refused-reads-as-empty bug was actually found (item 119 — a member with a group
+    /// handbook on the server was told the group had no files), so it is the first to get the
+    /// honest answer. Other callers move over as they are touched; see item 120 for why this is
+    /// not one 136-site rewrite.
+    /// </remarks>
+    public Task<LoadResult<OrganizationFileRecord>> LoadOrgFilesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrganizationFileRecord>($"/api/organizations/{orgId}/files", token);
 
     public async Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default)
     {

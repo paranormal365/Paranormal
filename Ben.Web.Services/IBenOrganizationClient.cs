@@ -104,6 +104,16 @@ public interface IBenOrganizationClient
     /// </summary>
     Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+
+    /// <summary>
+    /// Where to fetch a small copy of an image file — use this for anything a person looks at.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetFileDownloadUrl</c> serves the original bytes, so an <c>&lt;img&gt;</c> pointed at it
+    /// pulls a whole upload down the wire to draw a 40px avatar. Same access rules either way; a
+    /// non-image falls through to the real file.
+    /// </remarks>
+    string GetFileThumbnailUrl(Guid uploadFileId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     /// <summary>
@@ -145,12 +155,31 @@ public interface IBenOrganizationClient
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The group's roster, distinguishing "could not load" from "nobody is in it".
+    /// </summary>
+    /// <remarks>
+    /// Prefer this for anything a person sees. The Members surfaces told readers their group was
+    /// empty when the truth was a refusal, twice (items 119, 122).
+    /// </remarks>
+    Task<WebApi.LoadResult<OrgMembershipItem>> LoadOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
     Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────
 
     /// <summary>Returns all files owned by the organization.</summary>
     Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The group's files, distinguishing "could not load" from "there are none".
+    /// </summary>
+    /// <remarks>
+    /// Prefer this over <see cref="GetOrgFilesAsync"/> for anything a person sees. This is the
+    /// surface where a refusal rendering as an empty list was actually caught — a member with a
+    /// group handbook on the server was told the group had no files (items 119 and 120).
+    /// </remarks>
+    Task<WebApi.LoadResult<OrganizationFileRecord>> LoadOrgFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Returns the deletion audit log for organization files.</summary>
     Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);

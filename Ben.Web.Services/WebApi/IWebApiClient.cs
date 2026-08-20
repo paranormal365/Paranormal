@@ -56,6 +56,21 @@ public interface IWebApiClient
         string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
+    /// <summary>
+    /// Fetches a list, distinguishing "the server said no" from "there is nothing here".
+    /// </summary>
+    /// <remarks>
+    /// <para>The counterpart to <c>GetAsync</c> for list endpoints. <c>GetAsync</c> answers any
+    /// non-2xx with <c>default</c>, which the adapters turn into an empty list — so a 403 renders
+    /// as "No records available" and the page tells somebody their group is empty when in fact
+    /// they were refused. Item 120, and the shared cause of three bugs on 2026-08-20.</para>
+    ///
+    /// <para>Prefer this for any list a person could be refused. <see cref="LoadResult{T}.Items"/>
+    /// is always safe to enumerate, so adopting it never makes a call site worse; rendering the
+    /// difference is a separate, opt-in step.</para>
+    /// </remarks>
+    Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default);
+
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
 
     /// <summary>

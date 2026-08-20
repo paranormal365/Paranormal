@@ -35,6 +35,11 @@
         }
 
         @* ── Active Members ────────────────────────────────────────────────── *@
+        @* A refused roster used to render as "No records available", which told a member their
+           group had nobody in it while the Details tab beside it counted three. *@
+        <BenListState TItem="OrgMembershipItem" Result="@_result" Loading="@_loading"
+                      LoadingText="Loading the roster…"
+                      EmptyText="Nobody is in this group yet">
         <TelerikGrid Data="@_members"
                      Pageable="true"
                      PageSize="25"
@@ -56,6 +61,7 @@
                 <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
             </GridColumns>
         </TelerikGrid>
+        </BenListState>
 
         @* ── Membership Requests section (if accepting applications) ─────── *@
         <OrganizationMembershipRequests OrgId="@OrgId" />
@@ -70,6 +76,7 @@
     private string? _error;
     private string _orgName = string.Empty;
     private IReadOnlyList<OrgMembershipItem> _members = [];
+    private LoadResult<OrgMembershipItem>   _result;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -87,7 +94,8 @@
         _loading = true;
         try
         {
-            _members  = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            _result   = await AdminClient.LoadOrganizationMembersAsync(OrgId);
+            _members  = _result.Items;
             var orgs  = await AdminClient.GetOrganizationsAsync();
 
             // Still falls back to the id when the name genuinely cannot be resolved — a member of

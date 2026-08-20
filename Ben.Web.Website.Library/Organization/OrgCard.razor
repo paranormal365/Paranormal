@@ -12,7 +12,7 @@
         @if (LogoFileId.HasValue)
         {
             <div class="mb-2">
-                <img src="@AdminClient.GetFileDownloadUrl(LogoFileId.Value)"
+                <img src="@AdminClient.GetFileThumbnailUrl(LogoFileId.Value)"
                      alt="@Name"
                      style="max-height:40px; max-width:80px; object-fit:contain;" />
             </div>
