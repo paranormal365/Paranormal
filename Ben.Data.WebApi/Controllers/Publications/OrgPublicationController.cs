@@ -157,6 +157,102 @@ public sealed class OrgPublicationController : OrgCmsControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Deletes a publication — an empty one for a group administrator, any one for a SuperAdmin.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two tiers, because deleting a publication is two different acts.</b> Removing one
+    /// that was created by mistake — wrong title, and the address never moves once set — costs
+    /// nothing and nobody: no posts, nobody subscribed, nothing published. Removing one that
+    /// people have written in and subscribed to destroys work and breaks links somebody shared,
+    /// which is not a thing a group should be able to do with one click.</para>
+    ///
+    /// <para>So a group administrator may delete a publication that is <b>completely empty</b>,
+    /// and a SuperAdmin may delete any of them — the escape hatch for the cases the first rule
+    /// deliberately will not cover.</para>
+    ///
+    /// <para><b>The refusal names what is in the way</b> rather than answering 403. "It still has
+    /// two posts in it" is something the person can act on; a bare refusal leaves them clicking
+    /// the same button again. Subscriptions count even when cancelled: a cancelled subscription is
+    /// still a record of somebody having read this, and the empty case is meant to mean nothing
+    /// ever happened here.</para>
+    ///
+    /// <para>A SuperAdmin's delete takes the posts and subscriptions with it. That is what
+    /// deleting a publication means, and leaving orphaned posts pointing at nothing would be
+    /// worse than either outcome.</para>
+    /// </remarks>
+    [HttpDelete("{publicationId:guid}")]
+    public async Task<IActionResult> Delete(
+        Guid organizationId, Guid publicationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await PublicationsEnabledAsync(db, ct)) return NotFound();
+
+        if (!await IsCmsAuthorizedAsync(userId.Value, organizationId,
+                OrganizationSecurityTable.Organization, OrganizationSecurityAction.Delete, ct))
+            return Forbid();
+
+        var publication = await db.Publications
+            .FirstOrDefaultAsync(p => p.Id == publicationId && p.OrganizationId == organizationId, ct);
+        if (publication is null) return NotFound();
+
+        var posts = await db.PublicationPosts
+            .Where(p => p.PublicationId == publicationId).ToListAsync(ct);
+
+        // Cancelled ones included — see the note above on what "empty" is meant to mean.
+        var subscriptions = await db.PublicationSubscriptions
+            .Where(s => s.PublicationId == publicationId).ToListAsync(ct);
+
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+
+        if (!isSuperAdmin && (posts.Count > 0 || subscriptions.Count > 0))
+            return Conflict(EmptinessRefusal(posts.Count, subscriptions.Count));
+
+        db.PublicationPosts.RemoveRange(posts);
+        db.PublicationSubscriptions.RemoveRange(subscriptions);
+        db.Publications.Remove(publication);
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Says what is standing in the way, and what to do about it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The advice follows the blocker rather than being one fixed sentence. Telling somebody
+    /// to delete the posts first when what stopped them was a subscriber sends them to look at an
+    /// empty list and conclude the site is broken — and there is nothing they could do about a
+    /// subscriber anyway, since the count includes people who have already unsubscribed.</para>
+    ///
+    /// <para>That case is not hypothetical: it is the only refusal a group administrator can
+    /// actually reach, because the group's own listing counts live subscribers and the rule counts
+    /// every subscription ever made. The publication looks empty on screen, the button is offered,
+    /// and this sentence is the only explanation they will get.</para>
+    /// </remarks>
+    private static string EmptinessRefusal(int postCount, int subscriberCount)
+    {
+        var parts = new List<string>();
+        if (postCount > 0)
+            parts.Add(postCount == 1 ? "one post" : $"{postCount} posts");
+        if (subscriberCount > 0)
+            parts.Add(subscriberCount == 1
+                ? "one person who has subscribed to it"
+                : $"{subscriberCount} people who have subscribed to it");
+
+        var advice = subscriberCount > 0
+            // Nothing the group can do — a subscription is somebody else's, and it counts even
+            // once cancelled.
+            ? "Only a site administrator can remove it now."
+            : "Delete the posts first, or ask a site administrator.";
+
+        return $"This publication still has {string.Join(" and ", parts)}, "
+             + $"and only a completely empty publication can be deleted here. {advice}";
+    }
+
     // ── Posts ────────────────────────────────────────────────────────────────
 
     /// <summary>Every post in the publication, drafts included, newest first.</summary>

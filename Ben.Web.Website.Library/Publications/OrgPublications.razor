@@ -2,6 +2,7 @@
 @using Ben.Service.Models.Publications
 
 @inject IBenAdminClient Client
+@inject IBenUserState UserState
 @inject NavigationManager NavManager
 
 @*
@@ -129,6 +130,32 @@ else
                                 @onclick="() => ToggleVisibilityAsync(publication)">
                             @(publication.IsPublic ? "Make private" : "Make public")
                         </button>
+
+                        @* Offered when the publication is empty, or to a site administrator who can
+                           delete regardless. The server decides either way — this only keeps a
+                           button off screen that would always refuse. *@
+                        @if (IsEmpty(publication) || UserState.IsSuperAdmin)
+                        {
+                            if (_confirmingDelete == publication.Id)
+                            {
+                                <button type="button" class="btn btn-danger btn-sm" disabled="@_working"
+                                        @onclick="() => DeleteAsync(publication)">
+                                    @(IsEmpty(publication) ? "Really delete" : "Delete it and everything in it")
+                                </button>
+                                <button type="button" class="btn btn-link btn-sm"
+                                        @onclick="() => _confirmingDelete = null">
+                                    Cancel
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        @onclick="() => _confirmingDelete = publication.Id">
+                                    Delete
+                                </button>
+                            }
+                        }
+
                         <a class="btn btn-primary btn-sm"
                            href="/organizations/@OrgId/publications/@publication.Id">
                             Posts
@@ -147,7 +174,20 @@ else
     private bool _loading = true;
     private bool _creating;
     private bool _working;
+    private Guid? _confirmingDelete;
     private string? _error;
+
+    /// <summary>
+    /// Nothing written and nobody subscribed — the "created it by mistake" case.
+    /// </summary>
+    /// <remarks>
+    /// The counts here are what the group's own listing carries, and its subscriber count leaves
+    /// out cancelled subscriptions while the server's rule does not. So this can offer a Delete
+    /// the server then refuses, which is the right way round: the refusal explains itself, and the
+    /// alternative — hiding the button on a guess — leaves somebody with no way to find out why.
+    /// </remarks>
+    private static bool IsEmpty(PublicationRecord p)
+        => p.PublishedPostCount == 0 && p.DraftPostCount == 0 && p.SubscriberCount == 0;
 
     private string _newTitle = string.Empty;
     private string _newDescription = string.Empty;
@@ -158,6 +198,7 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
+        _confirmingDelete = null;
         try
         {
             _publications = await Client.GetOrgPublicationsAsync(OrgId);
@@ -197,6 +238,26 @@ else
             if (created is null) { _error = error ?? "Couldn't create that publication."; return; }
 
             _creating = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task DeleteAsync(PublicationRecord publication)
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            var (deleted, error) = await Client.DeletePublicationAsync(OrgId, publication.Id);
+
+            // The server's own sentence — "it still has two posts in it" is something to act on.
+            if (!deleted) { _error = error ?? "Couldn't delete that publication."; return; }
+
+            _confirmingDelete = null;
             await LoadAsync();
         }
         finally

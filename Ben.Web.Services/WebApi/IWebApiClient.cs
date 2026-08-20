@@ -58,6 +58,18 @@ public interface IWebApiClient
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
 
+    /// <summary>
+    /// Deletes, and recovers the server's sentence when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// The same argument as <see cref="SendExpectingReasonAsync"/>, for the verb that has no body
+    /// to send. A delete refused because the thing still has posts in it is a rule the person can
+    /// act on — "Couldn't delete that" is not, and a guard whose reason the UI throws away is
+    /// barely better than no guard.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteExpectingReasonAsync(
+        string relativeUrl, CancellationToken token = default);
+
     /// <summary>Downloads raw bytes from any authenticated endpoint (e.g. PDF export).</summary>
     Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default);
 

@@ -39,6 +39,13 @@ public sealed partial class BenAdminClientAdapter
         CancellationToken token = default)
         => _api.PutVoidAsync($"{OrgPublications(organizationId)}/{publicationId}", request, token);
 
+    public Task<(bool Deleted, string? Error)> DeletePublicationAsync(
+        Guid organizationId, Guid publicationId, CancellationToken token = default)
+        // DeleteExpectingReason, not Delete: "it still has two posts in it" is a rule the person
+        // can act on, and the plain helper would flatten it into a false that reads as a breakage.
+        => _api.DeleteExpectingReasonAsync(
+            $"{OrgPublications(organizationId)}/{publicationId}", token);
+
     public async Task<IReadOnlyList<PublicationPostRecord>> GetOrgPublicationPostsAsync(
         Guid organizationId, Guid publicationId, CancellationToken token = default)
         => await _api.GetAsync<List<PublicationPostRecord>>(
