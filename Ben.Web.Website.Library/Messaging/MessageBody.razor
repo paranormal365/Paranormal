@@ -1,0 +1,68 @@
+@*
+    Every message body on the site renders through here.
+
+    Before this, three surfaces each did their own thing: the org message view dropped raw HTML in
+    with MarkupString, the message list ran a private regex to strip tags for its snippet, and the
+    case thread printed plain text. Three renderers means three places to change when the way a
+    message is written changes — and the next change is exactly that: @mentions and #hashtags need
+    linkifying, once, everywhere, rather than three times with three sets of edge cases.
+
+    So this is deliberately the only place that decides what a message body looks like.
+
+    On sanitisation: org message bodies are authored in a rich-text editor and stored as HTML, and
+    are rendered here as HTML. That is not new — it is what the message view already did — but it
+    is worth naming, because this component is where a sanitiser belongs when one is added rather
+    than at each call site.
+*@
+
+@if (Snippet)
+{
+    <text>@PlainText()</text>
+}
+else if (Html)
+{
+    @((MarkupString)Body)
+}
+else
+{
+    @* Plain text, with line breaks honoured. A case message typed across three lines should read
+       as three lines rather than one run-on paragraph. *@
+    <div style="white-space:pre-wrap;">@Body</div>
+}
+
+@code {
+    /// <summary>The message body as stored.</summary>
+    [Parameter, EditorRequired] public string Body { get; set; } = string.Empty;
+
+    /// <summary>True when <see cref="Body"/> holds HTML rather than plain text.</summary>
+    [Parameter] public bool Html { get; set; }
+
+    /// <summary>Render as a one-line preview: tags removed, whitespace collapsed.</summary>
+    [Parameter] public bool Snippet { get; set; }
+
+    /// <summary>How many characters a snippet keeps before it is cut.</summary>
+    [Parameter] public int SnippetLength { get; set; } = 200;
+
+    /// <summary>
+    /// The body as readable text, for previews.
+    /// </summary>
+    /// <remarks>
+    /// Tag-stripping by regex, which is wrong in general and adequate here: the input is our own
+    /// editor's output, the result is truncated to a line of preview text, and it is never
+    /// rendered as markup — it goes into the DOM as a string. A parser would be the right tool if
+    /// this answer were ever trusted for anything.
+    /// </remarks>
+    private string PlainText()
+    {
+        if (string.IsNullOrWhiteSpace(Body)) return string.Empty;
+
+        var text = Html
+            ? System.Text.RegularExpressions.Regex.Replace(Body, "<[^>]+>", " ")
+            : Body;
+
+        text = System.Net.WebUtility.HtmlDecode(text);
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+
+        return text.Length <= SnippetLength ? text : text[..SnippetLength].TrimEnd() + "…";
+    }
+}

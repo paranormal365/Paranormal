@@ -4981,7 +4981,7 @@ thing — and whether the investigation map belongs on the profile at all or beh
 
 ---
 
-## 100. Internal messages — adopt the template's mail layout (raised 2026-08-19)
+## 100. Internal messages — adopt the template's mail layout (CLOSED 2026-08-20 — phase 5)
 
 Ben likes the SmartAdmin system-mail demo for our internal messaging:
 <https://getwebora.com/smartadmin/demo/systemmail.html>
@@ -4998,6 +4998,51 @@ is the part our version cannot borrow: case messages carry visibility rules and 
 carry an audience, so the layout has to leave room to say so on each row.
 
 Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
+
+**Closed 2026-08-20.** The group's Messages tab is now the template's mail idiom: a folder rail
+(Inbox / Sent / Broadcasts / Direct / Case teams / Public, each with its unread count), a list of
+`MailRow`s inside the template's own `<ul class="notification">`, and a reading pane under the list
+in place of the modal. Platform messages on the notifications page use the same rows and the same
+reading pane. The case thread stays a chat — bubbles are right for it — but its body now renders
+through the shared `MessageBody`, and its received bubble no longer uses a fixed light fill that
+turned white in night mode.
+
+`MessageBody` is the point of the exercise beyond appearance: three surfaces each rendered a
+message body their own way, and @mention/#hashtag linkification (phase 8) needs one place to land.
+`MessageList.razor` is gone; nothing else consumed it.
+
+**Deviation from the plan:** compose stayed a dialog rather than becoming a route. A composer with
+bold/italic/lists is the "small formatting" exception to the pages-over-modals rule, and every mail
+client in the world overlays it. The *read* view did move out of its modal, which is the half that
+mattered.
+
+**Three bugs found while building it, all invisible to an owner account:**
+
+1. **Ordinary members could not open their own group at all** (fixed here). `GET
+   /api/organizations/{id}` required Read access through the org security service, which returns
+   true for Owners and Administrators and otherwise falls through to explicit grants and named
+   roles. A plain Member had none, so the hub — whose first call this is — said "Organization not
+   found or you do not have access" about a group they belong to and can post messages in. Three of
+   BenCo's four seeded members were locked out. Active membership is now sufficient to read the
+   organisation's own record; the check sits in the controller, not in `HasAccessAsync`, because
+   members are emphatically not entitled to read every table.
+2. **The recipient picker used an org-admin-only endpoint** (fixed here).
+   `GetOrganizationMembersAsync` goes through the security service and throws for anyone who is not
+   an org admin — that is, for exactly the person most likely to be sending a direct message. The
+   catch around it turned the refusal into "this group has no other active members to write to."
+   Now `GetOrgUserDirectoryAsync`, which asks only that the caller be an active member.
+3. **The channel dropdown never called its own change handler** (fixed here). `ChannelChangedAsync`
+   was written, correct, and unreferenced: the `BenSelect` had `@bind-Value` but no `OnChange`, so
+   the member fetch never ran and the picker sat on "Loading members…" indefinitely.
+
+The direct-message fix this item was partly about — compose sent `RecipientUserIds: []` while
+offering Direct Message and Case Team — is also done, and is covered by a test that reads the
+message as the recipient rather than trusting the composer.
+
+All six tests in the new `Messaging` Playwright category sign in as **James, an ordinary member**,
+not as Sarah, who owns BenCo. All three bugs above were owner-invisible. That is the lesson worth
+keeping from this phase, and it generalises past messaging: a suite that only ever authenticates as
+the most privileged account cannot see the product most people use.
 
 ---
 
@@ -5206,3 +5251,71 @@ distinguishes "nothing to show" from "the call failed" would have said so.
 they meant the Cases *tab*. They only broke once the org stats panel gave the word competition, and
 Playwright's strict mode failed on the ambiguity rather than silently clicking the wrong element —
 the good outcome. All now `GetByRole(AriaRole.Tab)`.
+
+---
+
+## 109. The test suite only ever signs in as privileged accounts (raised 2026-08-20)
+
+Phase 5 found three separate faults in group messaging that were **completely invisible to an owner
+account** and total for everyone else: the organisation page refusing ordinary members outright, the
+recipient list being fetched from an org-admin-only endpoint, and that fetch never being triggered
+at all. See item 100 for the detail.
+
+None of them were subtle. All three were caught within minutes of signing in as James — an ordinary
+BenCo member — instead of Sarah, who owns it. The rest of the Playwright suite uses `UserEmail`,
+which is Sarah, or the SuperAdmin. So the whole product is currently exercised from the two most
+privileged seats in it.
+
+BenCo's seed gives us four members at three levels (owner, active member, and Daniel, who is not an
+active member and is refused by design), which is enough to test this properly without new fixtures.
+
+What to do:
+
+- Give `BenTestBase` a named ordinary-member account alongside `UserEmail`, so reaching for it is
+  the easy path rather than a thing each test invents. `MessagingTests` defines its own today.
+- Walk the surfaces an ordinary member is supposed to reach — the org hub's tabs, cases,
+  investigations, calendar, files, equipment — as that member, and record what breaks. Expect more
+  of the same shape: `HasAccessAsync` returns false for a plain Member on *every* table, so any
+  surface gated on it that members are meant to use is broken right now.
+- Where a surface genuinely is admin-only, the failure should say so rather than claiming the thing
+  does not exist. "Organization not found or you do not have access" for a group you belong to is
+  the wrong sentence even when the refusal is right.
+
+This is adjacent to the standing "a server guard needs a UI path" rule, but the failure mode is the
+mirror image: there the server refused and the UI discarded the refusal; here the server refuses
+and the UI reports it faithfully, and nobody ever looked because nobody ever signed in as the
+person it happens to.
+
+---
+
+## 110. Merge two groups into one (raised 2026-08-20 by Ben — low priority, logic still to work out)
+
+An **admin-level** function: take two organisations and end up with one.
+
+Ben's framing, which is the starting point rather than a spec:
+
+- Someone has to choose **which group is the base** and which is merged into it. The distinction
+  matters because everything that cannot be duplicated — the URL name, the settings, the identity —
+  comes from the base.
+- Someone has to choose **the name after the merge**. It is not necessarily either group's current
+  name, so it is a decision, not a consequence of picking the base.
+- It is **low priority**, and **the logic needs working through with Ben** before anything is
+  built. Do not design this alone.
+
+Things that will need answering when it comes up, noted now so the conversation starts further
+along — none of these are decisions, just the questions the schema will ask:
+
+- **Members.** Someone in both groups has two memberships with two roles; the merged group can only
+  give them one. Higher role wins, base group's role wins, or ask?
+- **The URL name that goes away.** Item 89 established that a released URL name can capture another
+  group's traffic. A merged-away group's URL name should almost certainly become a permanent alias
+  pointing at the survivor rather than being freed.
+- **Cases, investigations, places, equipment, files, messages.** These reparent, but each carries
+  its own visibility and ownership rules, and case visibility in particular is set per case with the
+  original group as the audience.
+- **Clients.** A client of the merged-away group did not agree to work with the survivor. Whether
+  that needs telling them, or their consent, is a product question and not a data one.
+- **Reversibility.** A merge that cannot be undone is a destructive admin action on other people's
+  records, which argues for either a dry-run preview or a soft merge that can be unwound.
+
+Sequence: after the current nine-phase plan. Nothing depends on it.

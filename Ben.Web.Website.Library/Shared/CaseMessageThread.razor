@@ -1,6 +1,7 @@
 @* Reusable chat-style message thread for case client↔org dialogue. *@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Messaging
 @inject IBenUserState UserState
 
 @* ── Thread display ──────────────────────────────────────────────────────────── *@
@@ -29,13 +30,17 @@ else
         {
             var isOwn = msg.SenderSide == CurrentSide;
             <div class="d-flex @(isOwn ? "justify-content-end" : "justify-content-start")">
-                <div class="rounded-3 px-3 py-2 @(isOwn ? "bg-primary text-white" : "bg-light border")"
+                @* `bg-body-tertiary` rather than `bg-light`: the received bubble has to follow the
+                   theme, and a fixed light fill turns into a white block in night mode. *@
+                <div class="rounded-3 px-3 py-2 @(isOwn ? "bg-primary text-white" : "bg-body-tertiary border")"
                      style="max-width:80%; word-break:break-word;">
                     @if (!isOwn)
                     {
                         <div class="fw-semibold small mb-1">@msg.AuthorDisplayName</div>
                     }
-                    <div>@msg.Body</div>
+                    @* Case messages are plain text, and were being rendered into a plain div — a
+                       message typed across several lines arrived as one run-on paragraph. *@
+                    <MessageBody Body="@msg.Body" />
                     <div class="@(isOwn ? "text-white-50" : "text-muted") mt-1" style="font-size:.7rem;">
                         @msg.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         @if (isOwn && CurrentSide == CaseMessageSide.Client && !msg.IsReadByOrg)

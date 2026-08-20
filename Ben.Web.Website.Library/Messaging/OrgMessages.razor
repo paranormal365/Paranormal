@@ -8,11 +8,11 @@
 <FeatureGate Flag="@SiteFeatures.OrgMessaging">
     @if (!EmbeddedMode) { <PageTitle>Messages</PageTitle> }
 
-    <div class="container-fluid py-3" style="max-width:900px;">
+    <div class="container-fluid py-3">
         @if (!EmbeddedMode)
         {
             <div class="d-flex align-items-center justify-content-between mb-3">
-                <h3 class="mb-0">Messages</h3>
+                <h3 class="mb-0">Messages<HelpLink Slug="working-a-case" Anchor="group-messages" /></h3>
                 <button type="button" class="btn btn-primary" @onclick="OpenCompose"><BenIcon Name="edit-2" Class="me-1" />Compose</button>
             </div>
         }
@@ -22,54 +22,118 @@
             <div class="alert alert-danger" role="alert">@_loadError</div>
         }
 
-        @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
-        <BenTabs ActiveId="@_activeTabId"
-                 ActiveIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
+        @*
+            The template's mail shape: folders down the left, the list beside them, and the open
+            message under the list rather than in a dialog. A message is a page's worth of content
+            — pages over modals — and reading one should not blank the list you found it in.
+        *@
+        <div class="row g-3">
 
-            <BenTab Title="Inbox" Id="inbox">
-                <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
-            </BenTab>
-
-            <BenTab Title="Sent" Id="sent">
-                <MessageList Messages="@_sent" OnOpen="OpenMessage" />
-            </BenTab>
-
-        </BenTabs>
-    </div>
-
-    @* ── Message view dialog ──────────────────────────────────────────────────── *@
-    <BenModal @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Size="lg">
-        <ChildContent>
-            @if (_openMessage is not null)
-            {
-                <div class="mb-2 d-flex align-items-center gap-2 text-secondary small">
-                    <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
-                    <span>·</span>
-                    @_openMessage.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                    @if (_openMessage.IsEncrypted)
-                    {
-                        <span class="badge bg-secondary ms-1">🔒 Encrypted</span>
-                    }
-                    <span class="ms-auto text-secondary">
-                        @_openMessage.ViewCount views
-                    </span>
-                </div>
-                <div class="border-top pt-3">
-                    @((MarkupString)_openMessage.Body)
-                </div>
-                @if (_openMessage.ReplyCount > 0)
+            @* ── Folder rail ────────────────────────────────────────────────── *@
+            <div class="col-lg-3 col-xl-2">
+                @if (EmbeddedMode)
                 {
-                    <div class="mt-3 text-secondary small">@_openMessage.ReplyCount replies</div>
+                    <button type="button" class="btn btn-primary w-100 mb-3" @onclick="OpenCompose">
+                        <BenIcon Name="edit-2" Class="me-1" />Compose
+                    </button>
                 }
-            }
-                <div class="dialog-footer-actions">
-                <span class="dialog-footer-spacer"></span>
 
-                <button type="button" class="btn btn-secondary" @onclick="@(() => _showMessage = false)">Close</button>
-                <button type="button" class="btn btn-secondary" @onclick="OpenReply"><BenIcon Name="rotate-ccw" Class="me-1" />Reply</button>
+                <div class="list-group">
+                    @foreach (var folder in Folders)
+                    {
+                        var unread = UnreadIn(folder.Id);
+                        <button type="button"
+                                class="list-group-item list-group-item-action d-flex align-items-center gap-2 @(_activeTabId == folder.Id ? "active" : null)"
+                                @onclick="@(() => SwitchFolderAsync(folder.Id))">
+                            <BenIcon Name="@folder.Icon" />
+                            <span class="flex-grow-1 text-start">@folder.Label</span>
+                            @if (unread > 0)
+                            {
+                                @* The count is the reason a folder rail beats a tab strip: it says
+                                   where the unread things are without opening anything. *@
+                                <span class="badge rounded-pill bg-primary">@unread</span>
+                            }
+                        </button>
+                    }
+                </div>
             </div>
-        </ChildContent>
-    </BenModal>
+
+            @* ── List, and the message under it ─────────────────────────────── *@
+            <div class="col-lg-9 col-xl-10">
+                <div class="card">
+                    <div class="card-body p-0">
+                        @if (_visible.Count == 0)
+                        {
+                            <p class="text-secondary small m-3 mb-3">@EmptyMessage</p>
+                        }
+                        else
+                        {
+                            @* `notification` is the template's own mail-list class: it removes the
+                               markers, tints unread rows and draws the separator under each row.
+                               MailRow's markup is written to sit inside it. *@
+                            <ul class="notification">
+                                @foreach (var m in _visible)
+                                {
+                                    var message = m;
+                                    <MailRow Sender="@(message.AuthorDisplayName ?? "Unknown")"
+                                             Subject="@message.Subject"
+                                             Body="@message.Body"
+                                             BodyIsHtml="true"
+                                             When="@message.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()"
+                                             Unread="@(!message.IsReadByCurrentUser)"
+                                             Selected="@(_openMessage?.Id == message.Id)"
+                                             OnOpen="@(() => OpenMessage(message))">
+                                        <Badge>
+                                            <span class="badge @MessageChannelDisplay.Badge(message.ChannelType)">@MessageChannelDisplay.Label(message.ChannelType)</span>
+                                        </Badge>
+                                    </MailRow>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+
+                @if (_openMessage is not null)
+                {
+                    <div class="card mt-3">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start gap-2 mb-2">
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">@(_openMessage.Subject ?? "(no subject)")</h5>
+                                    <div class="text-secondary small">
+                                        <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
+                                        · @_openMessage.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                        · <span class="badge @MessageChannelDisplay.Badge(_openMessage.ChannelType)">@MessageChannelDisplay.Label(_openMessage.ChannelType)</span>
+                                        @if (_openMessage.IsEncrypted)
+                                        {
+                                            <span class="badge bg-secondary ms-1">🔒 Encrypted</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 flex-shrink-0">
+                                    <button type="button" class="btn btn-sm btn-primary" @onclick="OpenReply">
+                                        <BenIcon Name="rotate-ccw" Class="me-1" />Reply
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => _openMessage = null)">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="border-top pt-3">
+                                <MessageBody Body="@_openMessage.Body" Html="true" />
+                            </div>
+
+                            @if (_openMessage.ReplyCount > 0)
+                            {
+                                <div class="mt-3 text-secondary small">@_openMessage.ReplyCount replies</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
 
     @* ── Compose / Reply dialog ───────────────────────────────────────────────── *@
     <BenModal @bind-Visible="@_showCompose" Title="@(_replyTo is not null ? "Reply" : "New Message")" Size="lg">
@@ -79,7 +143,13 @@
                 {
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Channel</label>
-                        <BenSelect Data="@_channelOptions" @bind-Value="@_composeChannel" TextField="@nameof(ChannelOption.Label)" ValueField="@nameof(ChannelOption.Value)" Width="100%" />
+                        @* OnChange, not just @bind-Value: choosing a channel is what triggers the
+                           member fetch. Without it the picker below sits on "Loading members…"
+                           forever, because nothing ever asks for the list. *@
+                        <BenSelect Data="@_channelOptions" @bind-Value="@_composeChannel"
+                                   TextField="@nameof(ChannelOption.Label)" ValueField="@nameof(ChannelOption.Value)"
+                                   OnChange="@(async (OrgMessageChannel c) => await ChannelChangedAsync(c))"
+                                   Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold" for="orgmessages-subject-optional-bdfe">Subject (optional)</label>
@@ -92,6 +162,48 @@
                         Replying to: <strong>@(_replyTo.Subject ?? "message")</strong> from @_replyTo.AuthorDisplayName
                     </div>
                 }
+                @*
+                    The recipient picker. Direct Message and Case Team were both offered by the
+                    channel list while the request was sent with RecipientUserIds: [] hardcoded —
+                    so a direct message went to nobody, silently, and looked sent. This closes it.
+                *@
+                @if (MessageChannelDisplay.NeedsRecipients(_composeChannel))
+                {
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            To <span class="text-danger">*</span>
+                            <span class="fw-normal text-secondary small ms-1">— members of this group</span>
+                        </label>
+
+                        @if (_members is null)
+                        {
+                            <p class="text-secondary small mb-0">Loading members…</p>
+                        }
+                        else if (_members.Count == 0)
+                        {
+                            <p class="text-secondary small mb-0">
+                                This group has no other active members to write to.
+                            </p>
+                        }
+                        else
+                        {
+                            <div class="border rounded p-2" style="max-height:180px;overflow-y:auto;">
+                                @foreach (var member in _members)
+                                {
+                                    var id = member.Id;
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="@($"rcpt-{id}")"
+                                               checked="@_composeRecipients.Contains(id)"
+                                               @onchange="@(e => ToggleRecipient(id, (bool)(e.Value ?? false)))" />
+                                        <label class="form-check-label" for="@($"rcpt-{id}")">@member.DisplayName</label>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
                 <div class="col-12">
                     <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
                     <TelerikEditor @bind-Value="@_composeBody" Height="200px"
@@ -125,6 +237,124 @@
     private string _activeTabId = "inbox";
     private List<OrgMessageRecord>? _inbox;
     private List<OrgMessageRecord>? _sent;
+
+    // ── Folder rail ───────────────────────────────────────────────────────────
+
+    private sealed record Folder(string Id, string Label, string Icon);
+
+    /// <summary>
+    /// Inbox and Sent, then one folder per channel.
+    /// </summary>
+    /// <remarks>
+    /// The channel folders filter the inbox rather than fetching anything: the server already
+    /// returns the channel on every row, and a folder that means "the inbox, narrowed" is both
+    /// cheaper and more honest than one that looks like a separate mailbox.
+    /// </remarks>
+    private static readonly Folder[] Folders =
+    [
+        new("inbox",     "Inbox",       "inbox"),
+        new("sent",      "Sent",        "send"),
+        new("broadcast", "Broadcasts",  "radio"),
+        new("direct",    "Direct",      "user"),
+        new("case",      "Case teams",  "folder"),
+        new("public",    "Public",      "globe"),
+    ];
+
+    /// <summary>The rows the current folder shows.</summary>
+    private List<OrgMessageRecord> _visible = [];
+
+    // ── Recipients ────────────────────────────────────────────────────────────
+
+    /// <summary>Active members of this group, for the picker. Null until first needed.</summary>
+    private List<OrgUserDirectoryItem>? _members;
+
+    private readonly HashSet<Guid> _composeRecipients = [];
+
+    /// <summary>
+    /// Loads the member list the first time a channel that needs recipients is chosen.
+    /// </summary>
+    /// <remarks>
+    /// Lazily, because most messages are broadcasts and fetching a member list to compose one is
+    /// work nobody asked for.
+    ///
+    /// <para>The DIRECTORY endpoint, not the membership one. GetOrganizationMembersAsync goes
+    /// through the org security service, which requires org-admin rights — it exists to manage
+    /// access, not to answer "who is in this group". Using it here 500'd for every ordinary
+    /// member, which is precisely the person who needs to send a direct message, and the catch
+    /// below turned that into "this group has no other active members to write to". The directory
+    /// asks only that the caller be an active member themselves, which is the right bar for
+    /// choosing who to write to.</para>
+    /// </remarks>
+    private async Task ChannelChangedAsync(OrgMessageChannel channel)
+    {
+        _composeChannel = channel;
+
+        if (!MessageChannelDisplay.NeedsRecipients(channel) || _members is not null) return;
+
+        try
+        {
+            var directory = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            _members = directory
+                .Where(m => m.Id != UserState.UserId)   // not yourself
+                .OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+        catch
+        {
+            _members = [];
+        }
+    }
+
+    private void ToggleRecipient(Guid appUserId, bool selected)
+    {
+        if (selected) _composeRecipients.Add(appUserId);
+        else _composeRecipients.Remove(appUserId);
+    }
+
+    /// <summary>Unread count for a folder's badge, from whatever is already loaded.</summary>
+    private int UnreadIn(string folderId)
+    {
+        if (folderId == "sent") return 0;   // your own messages are not news to you
+        var source = _inbox ?? [];
+        return FilterFor(folderId, source).Count(m => !m.IsReadByCurrentUser);
+    }
+
+    private static IEnumerable<OrgMessageRecord> FilterFor(string folderId, List<OrgMessageRecord> source)
+        => folderId switch
+        {
+            "broadcast" => source.Where(m => m.ChannelType == OrgMessageChannel.OrgBroadcast),
+            "direct"    => source.Where(m => m.ChannelType == OrgMessageChannel.DirectMessage),
+            "case"      => source.Where(m => m.ChannelType == OrgMessageChannel.CaseTeam),
+            "public"    => source.Where(m => m.ChannelType == OrgMessageChannel.PublicFeed),
+            _           => source,
+        };
+
+    private async Task SwitchFolderAsync(string folderId)
+    {
+        _activeTabId = folderId;
+        _openMessage = null;      // the open message belongs to the folder you left
+        await LoadActiveTabAsync();
+    }
+
+    /// <summary>Recomputes <see cref="_visible"/> from whichever list the folder reads.</summary>
+    private void ApplyFolder()
+    {
+        _visible = _activeTabId == "sent"
+            ? _sent ?? []
+            : FilterFor(_activeTabId, _inbox ?? []).ToList();
+    }
+
+    /// <summary>Says why a folder is empty. "No messages" reads as broken when it is a filter.</summary>
+    private string EmptyMessage => _activeTabId switch
+    {
+        "sent"      => "You haven't sent anything to this group yet.",
+        "inbox"     => "No messages yet.",
+        "broadcast" => "No broadcasts to the whole group yet.",
+        "direct"    => "No direct messages yet.",
+        "case"      => "No messages to a case team yet.",
+        "public"    => "Nothing has been posted publicly yet.",
+        _           => "Nothing here.",
+    };
 
     // View
     private bool _showMessage;
@@ -175,10 +405,15 @@
         _loadError = null;
         try
         {
-            if (_activeTabId == "inbox")
-                _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
-            else
+            // Sent has its own endpoint; every other folder is a view of the inbox, so the inbox
+            // is what gets fetched — and it is fetched even when a channel folder is open, so the
+            // other folders' unread badges stay right.
+            if (_activeTabId == "sent")
                 _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();
+            else
+                _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
+
+            ApplyFolder();
         }
         catch (Exception ex)
         {
@@ -205,6 +440,8 @@
         _composeBody     = "";
         _composeEncrypted = false;
         _composeError    = null;
+        // Left over, the previous message's recipients would silently address this one.
+        _composeRecipients.Clear();
         _showCompose     = true;
     }
 
@@ -224,6 +461,16 @@
         _isBusy = true; _composeError = null;
         try
         {
+            // The whole point of the picker: a channel that means "to these people" must not be
+            // sendable with nobody chosen. Without this the form is honest and the send is not.
+            if (MessageChannelDisplay.NeedsRecipients(_composeChannel)
+                && _replyTo is null
+                && _composeRecipients.Count == 0)
+            {
+                _composeError = "Choose at least one person to send this to.";
+                return;
+            }
+
             var req = new SendOrgMessageRequest(
                 ChannelType:       _replyTo is null ? _composeChannel : _replyTo.ChannelType,
                 Subject:           string.IsNullOrWhiteSpace(_composeSubject) ? null : _composeSubject.Trim(),
@@ -231,7 +478,9 @@
                 IsEncrypted:       _composeEncrypted,
                 ParentMessageId:   _replyTo?.Id,
                 CaseId:            _replyTo?.CaseId,
-                RecipientUserIds:  []);
+                // Was hardcoded to an empty list, which made Direct Message and Case Team
+                // unaddressable while both were offered in the channel picker.
+                RecipientUserIds:  _composeRecipients.ToList());
 
             var result = await AdminClient.SendOrgMessageAsync(OrgId, req);
             if (result is null) { _composeError = "Send failed. Please try again."; }

@@ -149,7 +149,25 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         return Ok(result);
     }
 
-    /// <summary>Returns a single organization for the edit form. Requires Read access or SuperAdmin.</summary>
+    /// <summary>
+    /// Returns a single organization. Any active member may read it; everyone else needs explicit
+    /// Read access or SuperAdmin.
+    /// </summary>
+    /// <remarks>
+    /// <para>Membership alone used to be insufficient here, and that made a group's own page
+    /// unreachable for most of its members. <c>HasAccessAsync</c> returns true for Owners and
+    /// Administrators and then falls through to explicit grants and named roles — a plain Member
+    /// with neither is refused for every table, including this one. Three of BenCo's four seeded
+    /// members got a 403 from this endpoint, and the organisation hub, whose very first call this
+    /// is, told them "Organization not found or you do not have access" about a group they belong
+    /// to and can already post messages in.</para>
+    ///
+    /// <para>The record returned here is the group's own name, URL name and whether it is
+    /// accepting applications — nothing a member does not already know by being one. So membership
+    /// is the right bar for reading it, and the check is written here rather than inside
+    /// <c>HasAccessAsync</c> deliberately: that method answers for every table, and members are
+    /// emphatically not entitled to read all of them.</para>
+    /// </remarks>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrganizationAdminRecord>> GetByIdWithPermissions(Guid id, CancellationToken ct)
     {
@@ -157,13 +175,20 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         if (!isSuperAdmin)
         {
-            var canRead = await _security.HasAccessAsync(userId.Value, id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Read, ct);
-            if (!canRead) return Forbid();
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == id && m.AppUserId == userId.Value && m.IsActive, ct);
+
+            if (!isActiveMember)
+            {
+                var canRead = await _security.HasAccessAsync(userId.Value, id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Read, ct);
+                if (!canRead) return Forbid();
+            }
         }
 
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
