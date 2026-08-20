@@ -107,6 +107,28 @@ They are for staff talking among themselves, and adding one does not mark the ti
 Contact details shown beside the form — postal address, phone, email, when we reply — are site
 settings, so they are corrected on the Site Settings page rather than in a deploy.
 
+## Sidecar installs
+
+![The sidecar installs screen](help-media:site-administration/sidecar-telemetry.png)
+*Which builds of the native helper are actually in use.*
+
+**Administration → Sidecar Installs** shows the optional native helper people install to make the
+video editor faster. The sidecar runs on someone's own machine and talks only to their browser, so
+these records are the only way to see which builds are in the wild — useful before changing
+anything about it, and the answer to "can we stop supporting that version yet?".
+
+Three numbers and a chart:
+
+- **Installations seen** — distinct machines that have reported in.
+- **Paired to an account** — how many of those got as far as pairing with a signed-in person. A
+  gap between the two means people are installing it and not finishing setup.
+- **People** — distinct accounts, which is lower than installs when someone uses two computers.
+- **Installations by version** — the distribution. Watch this after releasing a new build; a
+  version that never grows suggests people are not being told an update exists.
+
+The table below lists the individual events. Nothing here identifies a machine beyond the
+installation id the sidecar generates for itself.
+
 ## Audit log
 
 ![The audit log with its filters](help-media:site-administration/audit-log.png)

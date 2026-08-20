@@ -4899,7 +4899,7 @@ the topmost element is now a sidebar link.
 
 ---
 
-## 98. Charts — the template already styles ApexCharts, we just never shipped it (raised 2026-08-19)
+## 98. Charts — the template already styles ApexCharts, we just never shipped it (CLOSED 2026-08-20 — phase 2)
 
 Ben likes the look of the ApexCharts in the SmartAdmin demos and asked whether they come with the
 template. They effectively do: `smartapp.min.css` carries **190 `.apexcharts-*` rules** — the whole
@@ -4927,6 +4927,40 @@ dashboards end up with either unreadable thumbnails or oversized decorations.
 
 **Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
 reaches Kendo's; if not, the same bridge trick used for the video editor applies.
+
+### How it shipped (2026-08-20)
+
+**The licence turned out to be the real decision.** ApexCharts went dual-licensed at v5: free only
+under $2M annual revenue, payable above it. For a site with monetisation on the roadmap that is a
+dependency whose terms change exactly when it succeeds, so the vendored build is **4.7.0, the last
+MIT release** — MIT cannot be revoked from a version already published. Recorded in
+`wwwroot/plugins/apexcharts/VENDORED.md`, including the warning to read a future version's LICENSE
+file rather than npm's `license` field, which said "SEE LICENSE IN LICENSE" for precisely the
+releases where the terms changed.
+
+**The check this item asked for, answered:** `smartapp.min.css` carries all 190 `.apexcharts-*`
+rules and every one is light-theme; `themes/night.min.css` carries none. So `ben-charts.css` bridges
+the dark half off `--bs-*` properties — but only for what the library renders as real DOM. Series
+and axis-label colours are drawn from config, not CSS, so the JS module reads the palette at build
+time and re-reads it on a theme change.
+
+**Peity is not vendored.** It needs jQuery, which this site does not load; ApexCharts' sparkline
+mode covers the same job. One library for both roles — recorded because Ben asked for Peity by name.
+
+Built: `ApexChart.razor(.js)` (module-level Map keyed by container id — the multi-instance pattern
+a dashboard requires) and `StatCard.razor`, generalised from the sidecar page's three hand-rolled
+tiles, which were the only stat cards in the app and about to be copied. That page is the first
+consumer: its "Installations by version" badge row was a bar chart with the bars left out, and is
+now a bar chart.
+
+One thing looking at it caught that no assertion would have: with a single category ApexCharts
+stretches a bar across most of the panel, reading as a filled progress bar. Column width now scales
+with category count.
+
+Guards: three Playwright tests — renders with real geometry, one canvas per container (the
+multi-instance regression), and the canvas paints no background of its own in dark mode. The
+sidecar admin page also gained help documentation, which it had never had — found because the
+orphaned-screenshot guard refused the new image.
 
 ---
 
