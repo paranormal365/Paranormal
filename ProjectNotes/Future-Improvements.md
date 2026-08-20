@@ -5986,7 +5986,7 @@ the OrdinaryMemberSurfaceTests pattern.
 
 ---
 
-## 121. No seeded org Owner who is not also SuperAdmin (raised 2026-08-20, persona walk)
+## 121. No seeded org Owner who is not also SuperAdmin (CLOSED 2026-08-20 — see below)
 
 Both seeded groups are owned by the SuperAdmin account: `DevelopmentDataSeeder` takes `owner`
 from `SeedData:SuperAdmin:Email`, and BenCo's roster is AverageBen (Owner), Sarah
@@ -6001,3 +6001,39 @@ display rule in OrganizationView already distinguishes them, and anything else t
 Cheap fix when wanted: seed a third small group owned by Emma, or promote Sarah to Owner of BenCo
 in the seeder (she is its Administrator today; MessagingTests' comment already believes she owns
 it, which is how stale that assumption is).
+
+### Closed same day, by DevelopmentRosterSeeder
+
+A new seeder (`SeedData/DevelopmentRosterSeeder.cs`, running after DevelopmentDataSeeder, same
+`DevData:Enabled` flag) widens the world rather than patching the one gap:
+
+**Eleven new accounts.** Investigators Marcus Webb, Olivia Chen, Tyler Brooks, Rachel Kim, David
+Okafor, Priya Sharma, Nathan Cole, Grace Delgado (@benco.dev); clients Linda Maxwell, Robert
+Hayes, Karen Foster (@example.com — clients arrive from anywhere, so their addresses look like
+it). Passwords follow the existing seed pattern (e.g. `M@rcus!Webb2026`); handles arrive via the
+normal backfill service.
+
+**The rosters.** TGH grows to eight (Rachel is a second Administrator, so "the admin" stops being
+one person); NPS gains Priya and Nathan. **Music City Spirit Seekers** (`mcss`) is the third
+group, **owned by Emma** — the first Owner who is not SuperAdmin, which is what closes this item.
+Grace administers it; Olivia and Nathan belong to two groups each, so cross-group membership stops
+being hypothetical.
+
+**Three client stories, one per state that matters.** Linda → accepted, Active at TGH (manager
+Rachel). Robert → accepted, Summarized at MCSS (manager Emma). Karen → Submitted, still sitting
+in TGH's Requests queue, so decline/resubmit has something real to act on by hand.
+
+**Three investigations with full rosters** — two completed (32 and 60 days back, so the dashboard
+time charts have shape), one scheduled 9 days out (so reminder surfaces have a subject). RSVP
+states are mixed on purpose: a roster where everyone accepted exercises none of the RSVP
+rendering.
+
+**Three real brands** (Panasonic, K-II Enterprises, Tascam) with era-appropriate models, and
+items owned by Marcus, Olivia and Priya — including one shared into two groups and one
+deliberately unloanable and unlisted.
+
+Verified live from Emma's seat: the full owner strip (Settings, Roles, Requests, Edit) renders
+through membership role alone. The first run crashed on Investigation's direct `OrganizationId`
+FK (an investigation can exist without a case, so the org is its own required column); the retry
+after the fix found everything the crashed run had created and duplicated nothing, which is the
+idempotency doing its job.

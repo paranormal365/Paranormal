@@ -365,9 +365,12 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.EquipmentTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
-    // DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
+    // DevelopmentDataSeeder runs late — depends on all users/orgs above being present.
     // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
     await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
+    // ...and the roster seeder widens what it built: more people, the third group, more cases,
+    // investigations and gear. Same flag, must run after DevelopmentDataSeeder.
+    await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
 }
 else
 {
