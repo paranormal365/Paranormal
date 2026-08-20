@@ -49,7 +49,7 @@ public sealed class FeedTextSegmenterTests
     {
         var segments = FeedTextSegmenter.Segment("thanks @SarahMitchell for the tip");
 
-        var mention = Assert.Single(segments.Where(s => s.Kind == FeedSegmentKind.Mention));
+        var mention = Assert.Single(segments, s => s.Kind == FeedSegmentKind.Mention);
         Assert.Equal("@SarahMitchell", mention.Text);      // as typed
         Assert.Equal("sarahmitchell", mention.Value);      // normalised, for lookup
     }
@@ -98,7 +98,7 @@ public sealed class FeedTextSegmenterTests
     {
         var segments = FeedTextSegmenter.Segment("ask @sarah.");
 
-        var mention = Assert.Single(segments.Where(s => s.Kind == FeedSegmentKind.Mention));
+        var mention = Assert.Single(segments, s => s.Kind == FeedSegmentKind.Mention);
         Assert.Equal("@sarah", mention.Text);
         Assert.Equal("ask @sarah.", Rebuilt("ask @sarah."));
     }
@@ -109,7 +109,7 @@ public sealed class FeedTextSegmenterTests
     public void A_tag_carries_its_lower_cased_value_and_the_text_as_typed()
     {
         var tag = Assert.Single(
-            FeedTextSegmenter.Segment("a clear #EVP").Where(s => s.Kind == FeedSegmentKind.Hashtag));
+            FeedTextSegmenter.Segment("a clear #EVP"), s => s.Kind == FeedSegmentKind.Hashtag);
 
         Assert.Equal("#EVP", tag.Text);
         Assert.Equal("evp", tag.Value);

@@ -156,6 +156,30 @@ The message says which of these it is, because the answer is different every tim
 If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
 simply the second step.
 
+## Notifications
+
+The **bell** in the top bar counts everything waiting on you, and the number is a total across
+several different kinds of thing. Open it, or the **Notifications** page, to see which.
+
+| | |
+|---|---|
+| Replies on your cases | A group has written back about a case of yours. |
+| Client messages awaiting a reply | Somebody has written to a group you belong to. |
+| Unread group messages | Internal mail at one of your groups. |
+| File permission requests | Somebody wants access to a file you own, and is waiting on your answer. |
+| Equipment requests & overdue gear | Waiting on your decision, or late back. |
+| Posts that mention you | Somebody named you with an **@name** in the feed. |
+| Unread messages | Sent to you through the platform. |
+
+Buckets with nothing in them are not shown. The page is a list of things to do, not a dashboard of
+zeroes.
+
+**The colour means age, not importance.** A single item from last week is coloured more urgently
+than five from this morning, because the old one is the one somebody is still waiting on.
+
+Opening something is what clears it — a message you have read, a post you have opened, a request you
+have answered. Nothing disappears before you have seen it.
+
 ## Finding help
 
 ![The help index, grouped into sections](/help/media/getting-started/help-index.png)
