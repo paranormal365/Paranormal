@@ -31,3 +31,24 @@
     background-color: var(--bs-tertiary-bg);
     box-shadow: inset 3px 0 0 0 var(--bs-primary);
 }
+
+/* ── Feed ────────────────────────────────────────────────────────────────────
+   Mentions and tags are links inside a run of prose, so they take their colour from the theme's
+   own link colour rather than a fixed one — the feed is read in both palettes. */
+.bv-feed-mention,
+.bv-feed-tag {
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.bv-feed-mention:hover,
+.bv-feed-tag:hover {
+    text-decoration: underline;
+}
+
+/* Line breaks the author typed are line breaks the reader sees. Without this a post written as
+   three short lines arrives as one run-on paragraph, which is not what they wrote. */
+.bv-feed-post__body {
+    white-space: pre-wrap;
+    word-break: break-word;
+}

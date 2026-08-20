@@ -24,6 +24,11 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// <para>Resolved reports are kept too. A dismissed report is the evidence that somebody looked,
 /// and the pattern across reports — one author reported repeatedly, or one reporter reporting
 /// everybody — is exactly what an administrator needs and what deleting them would destroy.</para>
+///
+/// <para><b>Not gated on <c>features.public-feed</c>,</b> unlike every reader-facing feed route.
+/// Switching the feed off does not un-report anything: a site that turns it off may still have
+/// complaints nobody got to, and stranding them behind the switch would leave the only record of
+/// them unreachable. The flag governs the feature; this is the record of decisions about it.</para>
 /// </remarks>
 [ApiController]
 [Route("api/admin/feed")]
@@ -51,7 +56,6 @@ public sealed class AdminFeedController : BenControllerBase
         [FromQuery] FeedReportOutcome? outcome, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await FeedController.FeedEnabledAsync(db, ct)) return NotFound();
 
         var wanted = outcome ?? FeedReportOutcome.Pending;
 
@@ -118,7 +122,6 @@ public sealed class AdminFeedController : BenControllerBase
 
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await FeedController.FeedEnabledAsync(db, ct)) return NotFound();
 
         var report = await db.OrgMessageReports.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (report is null) return NotFound();

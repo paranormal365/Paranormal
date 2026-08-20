@@ -166,6 +166,13 @@
                 main.Add(new NavItem("Upload Files",      "upload",      "/upload-files"));
                 if (Features.IsOn(SiteFeatures.MediaLibrary))
                     main.Add(new NavItem("Media Library", "image",       "/media-library"));
+
+                // The badge is mentions specifically, not feed activity: being named is
+                // addressed to you and worth a number, while "there are new posts" is a feed
+                // doing what a feed does and would make the badge meaningless within a day.
+                if (Features.IsOn(SiteFeatures.PublicFeed))
+                    main.Add(new NavItem("Feed",          "message-circle", "/feed", s.FeedMentions,
+                                         badgeNoun: "posts that mention you"));
             }
 
             // No Login entry here: the header carries a Sign In control on every page, and a
@@ -216,6 +223,10 @@
             new NavItem("Clipart Library",      "image",  "/admin/video-assets"),
             new NavItem("Experience Taxonomy",  "layers", "/admin/experience-taxonomy"),
             new NavItem("Equipment Taxonomy",   "tool",   "/admin/equipment-taxonomy"),
+            // Left in place when the feed is switched off, unlike the reader-facing entries: a
+            // feed that has been turned off may still have reports somebody never got to, and
+            // hiding the only way to see them would strand them.
+            new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
         }),
         new NavItem("System", "settings", children: new[]
         {

@@ -5689,3 +5689,81 @@ why. Fabric should be vendored the same way — and, better, loaded **only by th
 rather than from the shell, since nothing else touches it.
 
 Small, self-contained, and it removes an external dependency from every page load.
+
+
+---
+
+## 115. The public feed (SHIPPED 2026-08-20 — phase 8)
+
+Short-form public posts: anyone signed in can post, follow people, mention them with `@name` and tag
+posts with `#tag`. **Off by default** behind `features.public-feed`, and the API 404s wholesale when
+it is off — not 403, because a disabled feature should not be discoverable by the shape of its
+refusal.
+
+### What it is
+
+`/feed` with two modes (everybody, or the people you follow), `/feed/tags/{tag}`, `/feed/{postId}`
+for a thread, and `/feed/people/{userId}` for somebody's feed presence. Posts are plain text, at
+most 1,000 characters — short-form is the point, and a wall of text belongs in a publication.
+
+Storage reuses **`OrgMessage` with `ChannelType.PublicFeed`**. That table already had a nullable
+`OrganizationId` and parent-based threading, which is exactly a feed post and its replies; a second
+near-identical table would have meant two places to fix every time the way a message is written
+changes.
+
+### Decisions worth keeping
+
+- **Anyone signed in may post**, Ben's call — which is what makes moderation part of the feature
+  rather than an optional extra.
+- **Reports hide nothing, and no number of them does.** There is no threshold, deliberately: an
+  automatic one removes whatever is least popular rather than whatever breaks the rules, and the
+  people worst served by that are the ones with unusual things to say — which is most of this
+  site's subject matter. Hiding is a person's decision, recorded against their name.
+- **Hidden, not deleted.** A deleted post takes its replies, its reports and the record of the
+  decision with it. One decision resolves *every* pending report against that post, because five
+  people reporting one post is one decision.
+- **The moderation queue is not behind the feature flag**, unlike every reader-facing page.
+  Switching the feed off does not un-report anything, and stranding those complaints behind the
+  switch would leave the only record of them unreachable.
+- **A mention is read when the post carrying it is opened** — reusing `OrgMessageView` rather than
+  inventing a second read marker. A post scrolling past in the feed does not count: "you were
+  mentioned" is the notification somebody would most resent losing unseen.
+
+### Two things this fixed on the way
+
+**Mentions now resolve on the `@name`, exactly.** They were written before handles existed and
+matched a normalised display name, which had to refuse whenever two accounts normalised alike —
+and worse, its answer could *change* as accounts were added, so a mention that resolved today would
+stop resolving the day a second Sarah signed up. It is also one indexed lookup now instead of
+reading every account into memory.
+
+**`FeedTextSegmenter` is separate from `FeedTextParser`, and that is not duplication.** The parser
+answers "which names does this post contain", returning each once — so a renderer driven by it would
+linkify the first mention of somebody and leave the second as plain text. The segmenter answers
+"where are they". Both call the parser to decide what a token *is*, including the rule that earns
+its keep most: an email address is not a mention.
+
+### Deliberately not built
+
+Likes, reposts, images, and any ranking beyond chronological. Following is one-directional and
+unacknowledged — it changes what you are shown, not what you may see, and a mutual-consent model
+would imply a privacy guarantee the feed does not make. No report-reason prompt yet: the endpoint
+takes one, and a dialog for it is worth adding once there is evidence administrators need more than
+"somebody objected". No per-person feed endpoint — a profile filters a page of the feed, which is
+honest for recent activity and thin for an old account; that is the fix if profiles turn out to be
+somewhere people browse.
+
+Authors are told nothing when a post is hidden. Whether they should be is a decision about wording
+more than mechanism, and worth making deliberately rather than adding quietly.
+
+### Tests
+
+16 on the controller, 22 on the segmenter, 25 on the parser, 6 in the browser. The three properties
+worth naming each have their own test — the feed 404s wholesale when off, a hidden post disappears
+from every read path, and a report never hides anything by itself — and each was verified by
+breaking the code it names.
+
+The browser tests turn the flag on and put it back as they found it, and check the switched-off case
+by **navigating repeatedly rather than waiting**: the website reads its flags from a snapshot
+refreshed on a timer, so a page that has already rendered will never change its mind. Polling the
+DOM of one page waits for something that cannot happen.
