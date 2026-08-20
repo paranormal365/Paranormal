@@ -169,6 +169,15 @@ builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configu
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
+
+// ── Scheduled background work ────────────────────────────────────────────────
+// Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
+// scoped dependencies exactly as a controller does, and nothing holds a database connection open
+// between passes. Registering a job here is all it takes to have it run — see IScheduledJob.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventReminderJob>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
+
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 

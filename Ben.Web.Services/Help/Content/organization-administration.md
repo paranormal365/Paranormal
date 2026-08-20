@@ -361,3 +361,20 @@ properly, but they don't have to — it exists so you have somebody you can reac
 what they've said they're going to.
 
 You'll see them in the attendee list like anybody else.
+
+### The reminder the day before
+
+Anyone who has said they are coming is emailed a reminder about a day beforehand, automatically.
+You do not send it and there is nothing to switch on.
+
+Somebody who signed up three weeks ago has had three weeks to forget, and a stranger who does not
+turn up is worse for you than one who never signed up at all — so the reminder repeats the time and
+place, carries the link to your event page, and gives them a way to say they can no longer come
+while you can still offer the place to somebody else.
+
+It goes only to people whose answer was **yes**. Somebody invited who never replied, or who said
+maybe, is not written to: they did not agree to come, and a reminder about a thing you never agreed
+to is just mail you did not ask for.
+
+Everyone is reminded once. If the site cannot reach somebody's address, it tries again on the next
+run rather than giving up quietly.

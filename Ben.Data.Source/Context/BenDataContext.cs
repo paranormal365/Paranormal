@@ -21,6 +21,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
         public virtual DbSet<SignInEvent> SignInEvents { get; set; }
+        public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
@@ -551,6 +552,24 @@ namespace Ben.Data.Source.Context
             // "Who has signed in lately" — distinct users within a window.
             modelBuilder.Entity<SignInEvent>()
                 .HasIndex(e => new { e.AppUserId, e.Utc });
+
+            // ── EventReminderSent ────────────────────────────────────────────
+            // The unique index IS the idempotency: the reminder job runs every few minutes and
+            // would otherwise find the same event, and the same attendee, on every pass. Enforcing
+            // it in the database rather than in the query means it still holds if two instances
+            // ever run at once.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
+            // Cascade from the event: a deleted event's reminder markers are meaningless, and the
+            // job will never look for them again.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany()
+                .HasForeignKey(e => e.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the user, matching every other user FK here: deleting an account must
+            // not cascade into unrelated tables.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── AppUserPhoto ─────────────────────────────────────────────────
             // The subject FK cascades: deleting a user takes their photo rows. The

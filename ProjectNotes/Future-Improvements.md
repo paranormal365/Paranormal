@@ -3948,7 +3948,7 @@ Admin view is complete; only the stripping half waits.
 
 ---
 
-## 87. Open events — public investigations and open meetings (mostly built 2026-08-17 — the pre-event reminder remains, and needs a scheduler)
+## 87. Open events — public investigations and open meetings (CLOSED 2026-08-20 — the reminder and its scheduler shipped in phase 6)
 
 Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
 know they are coming they have to be a site user. The information to attend and information about
@@ -4178,6 +4178,41 @@ to invent a password.
 A reminder before the date belongs here too. Ben's *"I base this off my experience"* is the argument
 for it: somebody who signed up three weeks ago needs telling again, and a stranger who does not turn
 up is worse for the organization than one who never signed up.
+
+### The reminder, and the scheduler under it — ✅ built 2026-08-20 (phase 6)
+
+Anyone whose RSVP is **Accepted** is emailed roughly a day before the event: time, place, the link
+to the event page, and a way to say they can no longer come while the place can still be offered to
+somebody else. Not the merely invited and not the tentative — an invitation nobody answered is not a
+commitment, and mail about a thing somebody never agreed to is mail they did not ask for. Widening
+that is one enum value, and should be a decision rather than a drift.
+
+**This is the platform's first background worker.** `ScheduledWorkService` is a `BackgroundService`
+that wakes every five minutes and runs each registered `IScheduledJob` in its own scope and its own
+try/catch. **No Hangfire, no Quartz** — the work is a handful of jobs on a timer with no cron
+expressions, no backoff, no dashboard and no persisted queue, and the one guarantee that matters is
+provided by a unique index rather than by anything a job framework would supply. Adding a job is one
+`AddScoped<IScheduledJob, …>` line.
+
+Three decisions in it worth keeping:
+
+- **The first pass waits 30 seconds.** Jobs that fire the instant the process starts run while
+  migrations may still be applying, and turn a crash-restart loop into a job loop.
+- **Resolution happens inside the guard, not before it.** An exception escaping `ExecuteAsync` stops
+  the entire host by default, so a job whose constructor threw would have turned "reminders are
+  broken" into "the API is down". Caught while writing the tests, not by them.
+- **The marker is written after the send, never before.** Writing it first would make a failed send
+  permanent silence; writing it after means the worst case is a duplicate — much the better of the
+  two for somebody who is expected somewhere tomorrow.
+
+`EventReminderSent`'s unique index across (event, user) **is** the idempotency, not a tidiness
+constraint: the loop would otherwise find the same event on every pass and send the same person the
+same email a dozen times before the evening. The in-memory provider the tests use does not enforce
+unique indexes, so the tests exercise the query — the layer that operates on every normal pass — and
+assert the index structurally, with the reasoning next to the assertion.
+
+Turning **events off sitewide stops the mail**, not just the pages. A disabled section that carries
+on writing to people is worse than one that merely hides itself.
 
 ### Smaller things to settle when it is picked up
 
