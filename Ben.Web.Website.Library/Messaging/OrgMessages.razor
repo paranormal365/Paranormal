@@ -357,7 +357,6 @@
     };
 
     // View
-    private bool _showMessage;
     private OrgMessageRecord? _openMessage;
 
     // Compose
@@ -428,7 +427,6 @@
     private async Task OpenMessage(OrgMessageRecord msg)
     {
         _openMessage = await AdminClient.GetOrgMessageAsync(OrgId, msg.Id) ?? msg;
-        _showMessage = true;
         await LoadActiveTabAsync(); // refresh read state
     }
 
@@ -451,7 +449,6 @@
         _composeBody    = "";
         _composeEncrypted = _openMessage?.IsEncrypted ?? false;
         _composeError   = null;
-        _showMessage    = false;
         _showCompose    = true;
     }
 
