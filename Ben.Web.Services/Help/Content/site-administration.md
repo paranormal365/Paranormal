@@ -70,9 +70,18 @@ Two things worth knowing:
   established sections on, unreleased features off. A connection problem will never make the site
   appear to have lost half its features.
 
-Two switches start **off** because their features are still being built: **Public feed** and
-**Publications**. Leave them off until they are finished; turning them on early shows visitors an
-unfinished section.
+Two switches start **off**: **Public feed** and **Publications**. Both features are built, but
+neither is something a site should acquire by accident — each one adds a public surface that
+members and visitors will start using the moment it appears, so switching it on is a decision
+somebody makes deliberately rather than a default they inherit.
+
+- **Public feed** — short public posts from anyone signed in. Turning it on means signing up to
+  moderate it; see [Moderating the Feed](/help/moderating-the-feed).
+- **Publications** — long-form writing by groups, readable by visitors with no account. Turning it
+  on adds the **Publications** entry to the menu for everyone, and a **Publications** tab to each
+  group's page for its administrators. Nothing appears in the public directory until a group
+  actually publishes something, so switching it on shows visitors an empty directory at worst, not
+  an unfinished one.
 
 ## The clipart library
 

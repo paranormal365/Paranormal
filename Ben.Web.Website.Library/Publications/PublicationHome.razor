@@ -1,0 +1,201 @@
+@page "/publications/{UrlName}"
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+
+<PageTitle>@(_detail?.Publication.Title ?? "Publication")</PageTitle>
+
+@*
+    One publication: what it is, who writes it, and everything it has published.
+
+    Two loads, in this order and deliberately not merged:
+
+      1. The publication and its posts, anonymously. This is the page. It renders for a visitor
+         with no account and no circuit, and nothing about it waits on auth.
+      2. Whether this reader subscribes — only once the circuit is interactive and auth is ready.
+
+    Merging them would put the whole article list behind an auth wait that a visitor can never
+    satisfy, which is precisely the failure this codebase keeps re-learning: the author, already
+    signed in, never sees it.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Publications">
+    <div class="container py-4" style="max-width: 820px;">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_detail is null)
+        {
+            <div class="text-center py-5">
+                <h1 class="fs-3">Publication not found</h1>
+                <p class="text-secondary mb-4">There is nothing published at this address.</p>
+                <a class="btn btn-outline-secondary" href="/publications">All publications</a>
+            </div>
+        }
+        else
+        {
+            <nav class="small text-secondary mb-2">
+                <a href="/publications" class="text-decoration-none">Publications</a>
+            </nav>
+
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                    <h1 class="fs-2 fw-bold mb-1">@_detail.Publication.Title</h1>
+                    <div class="text-secondary">
+                        @if (!string.IsNullOrWhiteSpace(_detail.Publication.OrganizationUrlName))
+                        {
+                            <a class="text-decoration-none" href="/o/@_detail.Publication.OrganizationUrlName">
+                                @_detail.Publication.OrganizationName
+                            </a>
+                        }
+                        else
+                        {
+                            @_detail.Publication.OrganizationName
+                        }
+                    </div>
+                </div>
+
+                @* The subscribe control is the one part of this page that needs an account. It
+                   appears only once auth is known, so a visitor never sees a button flicker from
+                   "Subscribe" to "Sign in to subscribe" as the circuit connects. *@
+                @if (_authKnown)
+                {
+                    if (!UserState.IsAuthenticated)
+                    {
+                        <a class="btn btn-outline-primary" href="/login?returnUrl=@Uri.EscapeDataString($"/publications/{UrlName}")">
+                            Sign in to subscribe
+                        </a>
+                    }
+                    else if (_subscribed)
+                    {
+                        <button type="button" class="btn btn-outline-secondary" disabled="@_working"
+                                @onclick="UnsubscribeAsync">
+                            @(_working ? "…" : "Subscribed")
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-primary" disabled="@_working"
+                                @onclick="SubscribeAsync">
+                            @(_working ? "…" : "Subscribe")
+                        </button>
+                    }
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_detail.Publication.Description))
+            {
+                <p class="lead text-body mb-4">@_detail.Publication.Description</p>
+            }
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <hr class="my-4" />
+
+            @if (_detail.Posts.Count == 0)
+            {
+                <p class="text-secondary">Nothing published here yet.</p>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-0">
+                    @foreach (var post in _detail.Posts)
+                    {
+                        <li class="pb-4 mb-4 border-bottom">
+                            <div class="small text-secondary mb-1">
+                                @post.PublishedUtc.ToLocalTime().ToString("d MMMM yyyy")
+                                @if (post.RequiresSubscription)
+                                {
+                                    <span class="badge bg-secondary ms-2">Subscribers</span>
+                                }
+                            </div>
+                            <h2 class="fs-4 fw-bold mb-2">
+                                <a class="text-decoration-none"
+                                   href="/publications/@_detail.Publication.UrlName/@post.UrlName">
+                                    @post.Title
+                                </a>
+                            </h2>
+                            @if (!string.IsNullOrWhiteSpace(post.Excerpt))
+                            {
+                                <p class="mb-0 text-body">@post.Excerpt</p>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public string UrlName { get; set; } = default!;
+
+    private PublicPublicationDetailRecord? _detail;
+    private bool _loading = true;
+    private bool _authKnown;
+    private bool _subscribed;
+    private bool _working;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _authKnown = false;
+        _subscribed = false;
+
+        try
+        {
+            _detail = await Client.GetPublicPublicationAsync(UrlName);
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        // Everything above renders without an account. Only the subscribe control waits.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        if (UserState.IsAuthenticated && _detail is not null)
+            _subscribed = await Client.IsSubscribedAsync(UrlName);
+
+        _authKnown = true;
+        StateHasChanged();
+    }
+
+    private async Task SubscribeAsync()
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            if (await Client.SubscribeAsync(UrlName)) _subscribed = true;
+            else _error = "Couldn't subscribe. Try again in a moment.";
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task UnsubscribeAsync()
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            if (await Client.UnsubscribeAsync(UrlName)) _subscribed = false;
+            else _error = "Couldn't unsubscribe. Try again in a moment.";
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+}

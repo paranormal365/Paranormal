@@ -1,0 +1,94 @@
+/*
+    Article typography for a published post's body.
+
+    Every rule is ::deep. The body arrives as a MarkupString, so its elements are written straight
+    into the DOM without Blazor's CSS-isolation attribute on them — a plain `.ben-article-body p`
+    would compile to a scoped selector no <p> in that body ever matches. This is the same
+    isolation trap the sliders and the transition editor hit; it is silent, and the page simply
+    looks unstyled.
+
+    Colours come from the Bootstrap palette variables so both themes follow the site.
+*/
+
+.ben-article-body {
+    font-size: 1.05rem;
+    line-height: 1.7;
+}
+
+.ben-article-body ::deep p {
+    margin-bottom: 1.1rem;
+}
+
+.ben-article-body ::deep h1,
+.ben-article-body ::deep h2,
+.ben-article-body ::deep h3,
+.ben-article-body ::deep h4 {
+    font-weight: 700;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.25;
+}
+
+.ben-article-body ::deep h1 { font-size: 1.75rem; }
+.ben-article-body ::deep h2 { font-size: 1.5rem; }
+.ben-article-body ::deep h3 { font-size: 1.25rem; }
+.ben-article-body ::deep h4 { font-size: 1.1rem; }
+
+.ben-article-body ::deep ul,
+.ben-article-body ::deep ol {
+    margin-bottom: 1.1rem;
+    padding-left: 1.5rem;
+}
+
+.ben-article-body ::deep li {
+    margin-bottom: 0.35rem;
+}
+
+.ben-article-body ::deep blockquote {
+    border-left: 3px solid var(--bs-border-color);
+    padding: 0.25rem 0 0.25rem 1rem;
+    margin: 1.5rem 0;
+    color: var(--bs-secondary-color);
+    font-style: italic;
+}
+
+/* Images are constrained rather than trusted: an author pasting a 4000px photo should not be
+   able to push the article's column sideways on a phone. */
+.ben-article-body ::deep img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+}
+
+.ben-article-body ::deep table {
+    width: 100%;
+    margin-bottom: 1.1rem;
+    border-collapse: collapse;
+}
+
+.ben-article-body ::deep th,
+.ben-article-body ::deep td {
+    border: 1px solid var(--bs-border-color);
+    padding: 0.5rem 0.65rem;
+}
+
+.ben-article-body ::deep pre {
+    background: var(--bs-tertiary-bg);
+    border-radius: 0.375rem;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    margin-bottom: 1.1rem;
+}
+
+.ben-article-body ::deep code {
+    font-size: 0.9em;
+}
+
+.ben-article-body ::deep a {
+    text-decoration: underline;
+}
+
+.ben-article-body ::deep hr {
+    margin: 2rem 0;
+}

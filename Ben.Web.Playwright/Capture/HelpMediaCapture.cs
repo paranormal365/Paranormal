@@ -428,7 +428,17 @@ public sealed class HelpMediaCapture : BenTestBase
         Assert.Fail("The composer never accepted the post.");
     }
 
-    private async Task<bool> FeedFlagAsync()
+    private Task<bool> FeedFlagAsync() => FlagAsync("features.public-feed");
+
+    private Task SetFeedFlagAsync(bool on) => SetFlagAsync("features.public-feed", on);
+
+    /// <summary>Reads one feature switch. Anything but an explicit "true" reads as off.</summary>
+    /// <remarks>
+    /// Read before a capture and written back afterwards, so a run leaves the developer's site the
+    /// way it found it. A capture that silently turned a feature on would be found weeks later by
+    /// somebody wondering why their local site had grown a section.
+    /// </remarks>
+    private async Task<bool> FlagAsync(string key)
     {
         var token = await AdminTokenForCaptureAsync();
         if (token is null) return false;
@@ -440,7 +450,7 @@ public sealed class HelpMediaCapture : BenTestBase
         var settings = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
         foreach (var setting in settings.EnumerateArray())
         {
-            if (setting.GetProperty("key").GetString() != "features.public-feed") continue;
+            if (setting.GetProperty("key").GetString() != key) continue;
             return setting.TryGetProperty("value", out var value)
                 && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
         }
@@ -448,7 +458,7 @@ public sealed class HelpMediaCapture : BenTestBase
         return false;
     }
 
-    private async Task SetFeedFlagAsync(bool on)
+    private async Task SetFlagAsync(string key, bool on)
     {
         var token = await AdminTokenForCaptureAsync();
         if (token is null) return;
@@ -458,7 +468,12 @@ public sealed class HelpMediaCapture : BenTestBase
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         using var _ = await http.PutAsJsonAsync(
-            "/api/admin/site-settings/features.public-feed", new { value = on ? "true" : "false" });
+            $"/api/admin/site-settings/{key}", new { value = on ? "true" : "false" });
+
+        // The site caches the answer for up to 30 seconds, so a page opened immediately after the
+        // switch would render the old one. Waiting here is the difference between capturing the
+        // feature and capturing "page not found".
+        await Task.Delay(35_000);
     }
 
     private static async Task<string?> AdminTokenForCaptureAsync()
@@ -967,5 +982,205 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/admin/equipment-taxonomy");
         await ShootAsync("site-administration", "equipment-taxonomy.png", gated: true);
+    }
+
+    // ── Publications ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The publications directory, a publication, the group's authoring tab, and the writing page.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two audiences in one run.</b> The two reading shots are captured <i>signed out</i>,
+    /// because that is who the document is for and because a signed-in capture would not prove the
+    /// page works for a visitor. The two authoring shots are gated, and taken as an administrator.
+    /// </para>
+    ///
+    /// <para><b>The content is seeded through the API, idempotently.</b> Driving the UI to write a
+    /// post would make this capture a second, worse copy of the authoring tests; and creating a new
+    /// publication on every run would leave a dev site with field-notes, field-notes-2,
+    /// field-notes-3 — the slug de-duplication working exactly as designed, producing junk. So it
+    /// reuses the publication if it is already there.</para>
+    ///
+    /// <para>Publications are off by default, so the switch is read first and put back afterwards.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Description("reading-publications and publishing-with-publications: the directory, a publication, and authoring.")]
+    public async Task Capture_Publications()
+    {
+        var wasOn = await FlagAsync(PublicationsFlag);
+        await SetFlagAsync(PublicationsFlag, true);
+
+        try
+        {
+            var seeded = await EnsurePublicationForCaptureAsync();
+            if (seeded is null)
+                Assert.Ignore("Could not seed a publication — is the API up and the seed org present?");
+
+            var (orgId, publicationId, urlName, postId) = seeded.Value;
+
+            // ── As a visitor ──────────────────────────────────────────────────
+            await LogoutAsync();
+
+            await GoAsync("/publications");
+            await ShootAsync("publications", "directory.png", proves: PublicationTitle);
+
+            await GoAsync($"/publications/{urlName}");
+            await ShootAsync("publications", "publication.png", proves: PostTitle);
+
+            // ── As an administrator ───────────────────────────────────────────
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+            await GoAsync($"/organizations/{orgId}");
+            await OpenTabAsync("Publications", Main.GetByText(PublicationTitle).First);
+            await ShootAsync("publications", "org-tab.png", gated: true, proves: PublicationTitle);
+
+            await GoAsync($"/organizations/{orgId}/publications/{publicationId}/posts/{postId}");
+
+            // The title is in an input, so its text is a value rather than page text and
+            // ShootAsync's `proves` cannot see it. Assert the value directly — the point of the
+            // check either way is that the shot is not of an empty editor.
+            await Expect(Page.Locator("#post-title")).ToHaveValueAsync(
+                PostTitle, new() { Timeout = 20_000 });
+
+            await ShootAsync("publications", "post-editor.png", gated: true, proves: "Excerpt");
+        }
+        finally
+        {
+            await SetFlagAsync(PublicationsFlag, wasOn);
+        }
+    }
+
+    /// <summary>
+    /// The feature key, spelled out rather than referenced.
+    /// </summary>
+    /// <remarks>
+    /// This project has no reference to the site's assemblies on purpose — it drives the running
+    /// site over HTTP, the way a browser does. The string is the API's contract here, same as the
+    /// URLs above it.
+    /// </remarks>
+    private const string PublicationsFlag = "features.publications";
+
+    private const string PublicationTitle = "Field Notes";
+    private const string PostTitle        = "A quiet night at the Belmont house";
+
+    /// <summary>
+    /// Makes sure the demo publication and its published post exist, and returns their ids.
+    /// </summary>
+    /// <remarks>
+    /// Everything here is find-or-create. Run it ten times and the site has one publication with
+    /// one post, which is what the screenshots need and what a developer's dev site can live with.
+    /// </remarks>
+    private async Task<(string OrgId, string PublicationId, string UrlName, string PostId)?>
+        EnsurePublicationForCaptureAsync()
+    {
+        var token = await AdminTokenForCaptureAsync();
+        if (token is null) return null;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var orgs = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/organizations");
+        string? orgId = null;
+        foreach (var org in orgs.EnumerateArray())
+        {
+            var name = org.TryGetProperty("name", out var n) ? n.GetString() : null;
+            if (name is null || !name.Contains("Tennessee Ghost Hunters", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            orgId = org.GetProperty("id").GetString();
+            break;
+        }
+
+        if (orgId is null) return null;
+
+        // ── The publication ───────────────────────────────────────────────────
+        var existing = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/organizations/{orgId}/publications");
+
+        string? publicationId = null, urlName = null;
+        foreach (var publication in existing.EnumerateArray())
+        {
+            if (publication.GetProperty("title").GetString() != PublicationTitle) continue;
+            publicationId = publication.GetProperty("id").GetString();
+            urlName       = publication.GetProperty("urlName").GetString();
+            break;
+        }
+
+        if (publicationId is null)
+        {
+            using var created = await http.PostAsJsonAsync(
+                $"/api/organizations/{orgId}/publications",
+                new
+                {
+                    title = PublicationTitle,
+                    description = "What we found, written up properly — one case at a time.",
+                    isPublic = true,
+                });
+
+            if (!created.IsSuccessStatusCode) return null;
+
+            var record = await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            publicationId = record.GetProperty("id").GetString();
+            urlName       = record.GetProperty("urlName").GetString();
+        }
+
+        // ── The post ──────────────────────────────────────────────────────────
+        var posts = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/organizations/{orgId}/publications/{publicationId}/posts");
+
+        string? postId = null;
+        var alreadyPublished = false;
+        foreach (var post in posts.EnumerateArray())
+        {
+            if (post.GetProperty("title").GetString() != PostTitle) continue;
+            postId = post.GetProperty("id").GetString();
+            alreadyPublished = post.TryGetProperty("publishedUtc", out var published)
+                            && published.ValueKind != System.Text.Json.JsonValueKind.Null;
+            break;
+        }
+
+        if (postId is null)
+        {
+            using var created = await http.PostAsJsonAsync(
+                $"/api/organizations/{orgId}/publications/{publicationId}/posts",
+                new
+                {
+                    title = PostTitle,
+                    excerpt = "Four hours, two recorders and one thing none of us can explain — "
+                            + "and three that turned out to be the boiler.",
+                    bodyHtml =
+                        "<p>We arrived at the Belmont house a little after nine. The owners had "
+                        + "described footsteps on the landing, always between two and three in the "
+                        + "morning, always moving away from the stairs.</p>"
+                        + "<h2>What we set up</h2>"
+                        + "<p>Two static cameras — one at the foot of the stairs, one at the far "
+                        + "end of the landing — and a recorder in the box room, which is where the "
+                        + "owners said the sound seemed to end.</p>"
+                        + "<h2>What we heard</h2>"
+                        + "<p>Three of the four events we logged have ordinary explanations. The "
+                        + "boiler cycles at ten past the hour and the pipes under the landing "
+                        + "floor knock as it does. That accounts for the timing, and very nearly "
+                        + "for the direction.</p>"
+                        + "<p>The fourth does not, and we are not going to pretend otherwise "
+                        + "here. It is on both recorders, eleven seconds apart, which is roughly "
+                        + "the walk between them.</p>",
+                });
+
+            if (!created.IsSuccessStatusCode) return null;
+
+            var record = await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            postId = record.GetProperty("id").GetString();
+        }
+
+        if (!alreadyPublished)
+        {
+            using var _ = await http.PostAsJsonAsync(
+                $"/api/organizations/{orgId}/publications/{publicationId}/posts/{postId}/publish?published=true",
+                new { });
+        }
+
+        return (orgId, publicationId!, urlName!, postId!);
     }
 }

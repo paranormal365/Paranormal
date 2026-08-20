@@ -1,0 +1,114 @@
+@page "/publications/{UrlName}/{PostUrlName}"
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+
+<PageTitle>@(_post?.Title ?? "Post")</PageTitle>
+
+@*
+    The reader — one article, in the template's article idiom.
+
+    The body arrives as HTML that was sanitised when the author saved it, not now. Sanitising at
+    save time means the stored markup is the safe markup: every read renders the same bytes, and
+    there is no path where a change to the sanitiser quietly alters what a thousand published
+    articles look like.
+
+    When the reader does not hold the post's tier the server sends no body at all — the excerpt and
+    a prompt are all there is to render. Nothing is hidden with CSS here because nothing arrived.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Publications">
+    <div class="container py-4" style="max-width: 760px;">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_post is null)
+        {
+            <div class="text-center py-5">
+                <h1 class="fs-3">Post not found</h1>
+                <p class="text-secondary mb-4">
+                    There is nothing published at this address. It may have been withdrawn.
+                </p>
+                <a class="btn btn-outline-secondary" href="/publications">All publications</a>
+            </div>
+        }
+        else
+        {
+            <nav class="small text-secondary mb-3">
+                <a href="/publications" class="text-decoration-none">Publications</a>
+                <span class="mx-1">/</span>
+                <a href="/publications/@_post.PublicationUrlName" class="text-decoration-none">
+                    @_post.PublicationTitle
+                </a>
+            </nav>
+
+            <article>
+                <header class="mb-4">
+                    <h1 class="fs-1 fw-bold mb-2">@_post.Title</h1>
+                    <div class="text-secondary">
+                        @_post.PublishedUtc.ToLocalTime().ToString("d MMMM yyyy")
+                    </div>
+                </header>
+
+                @if (_post.RequiresSubscription)
+                {
+                    @if (!string.IsNullOrWhiteSpace(_post.Excerpt))
+                    {
+                        <p class="lead">@_post.Excerpt</p>
+                    }
+
+                    <div class="card border-primary my-4">
+                        <div class="card-body text-center">
+                            <h2 class="fs-5 fw-bold mb-2">This one is for subscribers</h2>
+                            <p class="text-secondary mb-3">
+                                Subscribe to <strong>@_post.PublicationTitle</strong> to read it in full.
+                            </p>
+                            <a class="btn btn-primary" href="/publications/@_post.PublicationUrlName">
+                                Go to @_post.PublicationTitle
+                            </a>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @* Pre-sanitised at save. See the note at the top of this file. *@
+                    <div class="ben-article-body">
+                        @((MarkupString)(_post.BodyHtml ?? string.Empty))
+                    </div>
+                }
+            </article>
+
+            <hr class="my-4" />
+
+            <a class="btn btn-outline-secondary" href="/publications/@_post.PublicationUrlName">
+                ← More from @_post.PublicationTitle
+            </a>
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public string UrlName { get; set; } = default!;
+    [Parameter] public string PostUrlName { get; set; } = default!;
+
+    private PublicPublicationPostRecord? _post;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Anonymous throughout. A reader who arrived from a shared link has no account, and this
+        // page is what decides whether they want one.
+        _loading = true;
+        try
+        {
+            _post = await Client.GetPublicPublicationPostAsync(UrlName, PostUrlName);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

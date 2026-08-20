@@ -135,6 +135,12 @@
             if (Features.IsOn(SiteFeatures.Equipment))
                 main.Add(new NavItem("Equipment", "tool", "/equipment-catalog"));
 
+            // Above the sign-in check on purpose: publications are written to be read by people
+            // who have no account, and a reading surface only signed-in people can find is a
+            // newsletter with no readers.
+            if (Features.IsOn(SiteFeatures.Publications))
+                main.Add(new NavItem("Publications", "book-open", "/publications"));
+
             if (IsAuthenticated && !IsImpersonating)
             {
                 var s = Notifications.Current;
