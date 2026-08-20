@@ -5456,7 +5456,7 @@ decision as much as a build, and it should not be made in the middle of somethin
 
 ---
 
-## 112. The 2FA enrolment panel hangs on "Starting…" (raised 2026-08-20 — OPEN)
+## 112. The 2FA enrolment panel hangs on "Starting…" (CLOSED 2026-08-20)
 
 Pressing **Turn on two-step sign-in** on the profile's Security tab leaves the button reading
 "Starting…" indefinitely. The QR never appears and no error is shown.
@@ -5486,6 +5486,60 @@ nothing. `GET /api/me/2fa` on the same page works — the panel renders "Off" fr
 pressing the button. `AccountTests.EnrollingWithARealCodeTurnsItOn` is written, is currently
 `Assert.Ignore`d pointing at this item, and will pass once the panel does — it should not be
 deleted.
+
+### The cause (found 2026-08-20)
+
+**`TelerikMaskedTextBox` does not splat unmatched attributes — it throws.**
+
+```
+System.InvalidOperationException: Object of type
+'Telerik.Blazor.Components.TelerikMaskedTextBox' does not have a property
+matching the name 'aria-label'.
+```
+
+The `aria-label` had been added to that component the day before, as the fix for a *different*
+finding: `LabelAssociationTests` had caught a `<label for>` pointing at nothing, because Telerik
+renders no `id` on its inner input — only a `data-id` GUID. The attribute was added on the
+assumption that Telerik splats what it does not recognise. It does not.
+
+The exception is thrown **during render**, not during the call, which is why every symptom pointed
+away from the truth: the API had already answered, the `finally` never took effect, the
+cancellation token never fired, and clicking a different tab did nothing either. **The circuit was
+dead.** It froze displaying the last frame it had successfully rendered — the one with the button
+reading "Starting…".
+
+What actually found it: reading the **browser console** through Playwright. Nothing server-side
+showed it. The diagnostic that split the problem in two — a `Console.WriteLine` at the top of the
+API action, proving the request arrived, was resolved and answered in milliseconds — is what
+justified looking at the client at all.
+
+### The fix
+
+Both code boxes — the enrolment panel and the sign-in page — are now **plain inputs** rather than
+`TelerikMaskedTextBox`. This is not a retreat from the house preference for Telerik components; the
+component genuinely cannot do what is needed here:
+
+- no `id`, so no `<label for>` can ever name it, and it has no accessible name at all;
+- it throws on an unmatched attribute, **during render**, killing the circuit;
+- no `inputmode="numeric"` and no `autocomplete="one-time-code"`, so a phone offers neither a
+  numeric keypad nor the code it has just received.
+
+A plain input gives all three, and a real label. A test asserts the accessible name comes from a
+label pointing at a real id.
+
+### Two things fixed alongside
+
+- **`LockedOut` was being reported as "invalid email or password".** Found because a run of probes
+  locked the SuperAdmin account and the page said the password was wrong — sending somebody to
+  reset a password that was right, when only waiting helps. The sign-in page now distinguishes five
+  refusals.
+- **`SigningInWithTwoStepAsksForTheCodeAndAcceptsIt` was lying twice.** It shared the fixture's
+  account, so its result depended on what the previous test left behind; and the sign-in page
+  **pre-fills developer credentials in Development**, so a submit landing before the test's own
+  values reached the server model signed in as the developer, navigated to the home page, and
+  looked exactly like a two-step account being let through without a code. It now creates its own
+  throwaway account, and waits for the pre-fill to appear — which is itself proof the circuit is
+  live — before replacing it.
 
 
 ---

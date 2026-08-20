@@ -207,14 +207,6 @@ public class AccountTests : BenTestBase
     [Description("Enrolling with a real code turns it on and issues recovery codes.")]
     public async Task EnrollingWithARealCodeTurnsItOn()
     {
-        Assert.Ignore(
-            "Blocked by backlog item 112: pressing 'Turn on two-step sign-in' leaves the button on "
-            + "'Starting…' for ever. The circuit stops re-rendering — a 20-second cancellation token "
-            + "around the call does not surface either, which is why the cause is not the HTTP "
-            + "request. The API underneath is complete and verified end to end with real TOTP codes "
-            + "(setup, enable, sign-in, recovery code, disable); it is the panel that hangs. This "
-            + "test is written and will pass once the panel does — do not delete it.");
-
         await LoginAsync(UserEmail, UserPassword);
         await OpenSecurityTabAsync();
 
@@ -223,12 +215,12 @@ public class AccountTests : BenTestBase
         // this test uses, because it is the same secret in a form a test can read.
         await Expect(Page.Locator(".k-qrcode")).ToBeVisibleAsync(new() { Timeout = 60_000 });
 
-        // The code box must have an accessible name. Telerik renders no id on its inner input —
-        // only a data-id GUID — so a label pointing at the component's Id names nothing, and a
-        // screen reader announces an unlabelled textbox. aria-label is what carries it, and this
-        // asserts the attribute actually reaches the input rather than being dropped.
-        await Expect(Page.Locator("input.k-input-inner").Last)
-            .ToHaveAttributeAsync("aria-label", new System.Text.RegularExpressions.Regex("code"));
+        // The code box must have an accessible name, and it must come from a real label pointing at
+        // a real id. This is what the Telerik component could not give: it renders no id, so no
+        // label could ever name it — and adding aria-label to it threw during render and killed
+        // the circuit, which was item #112.
+        await Expect(Page.GetByLabel("Six-digit code from your authenticator app").Last)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
         var sharedKey = await Page.Locator("code").First.InnerTextAsync();
         var secret = sharedKey.Replace(" ", string.Empty).ToUpperInvariant();
@@ -256,6 +248,181 @@ public class AccountTests : BenTestBase
         // real code on every run.
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Turn off" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    /// <summary>
+    /// Signing in with a code, through the sign-in page.
+    /// </summary>
+    /// <remarks>
+    /// <para>The other half of what item #112 broke. The sign-in page's code box had the same
+    /// unmatched-attribute crash as the enrolment panel, so this path was equally dead and equally
+    /// untested from a browser — the API accepted codes all along.</para>
+    ///
+    /// <para><b>It enrols a throwaway account of its own</b>, not the shared one. Enrolling the
+    /// account the rest of the fixture signs in with meant this test's result depended on what the
+    /// test before it had left behind: it passed alone and failed in the suite, reporting "invalid
+    /// email or password" because two-step was not on at the moment the page tried. A test whose
+    /// answer depends on its neighbours is worse than no test.</para>
+    ///
+    /// <para>Enrolment goes through the API rather than the UI — this test is about sign-in, and
+    /// driving the enrolment page again would only give it a second way to fail.</para>
+    /// </remarks>
+    [Test]
+    [Description("A password alone is refused, and the code completes the sign-in.")]
+    public async Task SigningInWithTwoStepAsksForTheCodeAndAcceptsIt()
+    {
+        const string password = "Str0ngPass!";
+        var email = $"twostep{Unique}@example.com";
+
+        var admin = await AdminApiAsync();
+        Assert.That(admin, Is.Not.Null,
+            "Could not sign in as SuperAdmin to create a test account. If a run has just hammered "
+            + "sign-in, Identity may have locked that account — it clears itself after a few "
+            + "minutes. Check with: curl -s -XPOST $BEN_API_URL/login -H 'Content-Type: "
+            + "application/json' -d '{\"email\":\"...\",\"password\":\"...\"}'");
+
+        var created = await admin!.PostAsync("/api/admin/app-users", new()
+        {
+            DataObject = new Dictionary<string, object?>
+            {
+                ["email"] = email, ["password"] = password, ["displayName"] = "Two Step",
+                ["userName"] = email, ["isEmailConfirmed"] = true, ["isSuperAdmin"] = false,
+            },
+        });
+        Assert.That(created.Ok, Is.True, $"Could not create the test account: {created.Status}");
+
+        var secret = await EnrolViaApiAsync(email, password);
+        Assert.That(secret, Is.Not.Null, "Could not enrol the test account through the API.");
+
+        await SignInExpectingSecondStepAsync(email, password);
+
+        // The password was right, so this is a next step rather than a failure — and the page must
+        // not say the password was wrong, which is what it did before the refusals were separated.
+        var codeBox = Page.Locator("#login-2fa-code");
+        await codeBox.ClickAsync();
+        await codeBox.PressSequentiallyAsync(Totp(secret!), new() { Delay = 30 });
+        await Page.ClickAsync("button[type='submit']");
+
+        // Signed in: the sign-in form is gone.
+        await Expect(Page.Locator("#login-password")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+    }
+
+    /// <summary>
+    /// Signs in on the sign-in page, expecting to be asked for a code rather than let through.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two traps here, both of which produced convincing wrong answers before this existed.</para>
+    ///
+    /// <para><b>The page pre-fills developer credentials.</b> In Development it puts
+    /// <c>DevLogin:Email</c> and <c>DevLogin:Password</c> into the form, so a submit that lands
+    /// before this test's own values reach the server model signs in <i>as the developer account</i>
+    /// — which succeeds, navigates to the home page, and looks exactly like a two-step account being
+    /// let through without a code. That is a test reporting a fault in the product that is really a
+    /// fault in itself, and it is what this one did twice.</para>
+    ///
+    /// <para><b>Filling the DOM is not filling the model.</b> A Blazor Server page renders long
+    /// before its circuit connects; until then an <c>InputText</c> accepts characters that never
+    /// reach the server. Waiting for the pre-fill to <i>appear</i> is what proves the circuit is up,
+    /// because the pre-fill is written from a component lifecycle method and cannot show up before
+    /// the page is interactive.</para>
+    /// </remarks>
+    private async Task SignInExpectingSecondStepAsync(string email, string password)
+    {
+        await Page.GotoAsync($"{BaseUrl}/login");
+
+        var emailBox = Page.Locator("#login-email");
+        await Expect(emailBox).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        // The developer pre-fill is written from OnInitializedAsync, so its arrival means the
+        // circuit is live. Best-effort: outside Development there is nothing to wait for, and the
+        // retry below is the real safety net.
+        try
+        {
+            await Expect(emailBox).Not.ToHaveValueAsync(string.Empty, new() { Timeout = 20_000 });
+        }
+        catch (Exception)
+        {
+            // No pre-fill configured.
+        }
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await emailBox.FillAsync(email);
+            await Page.FillAsync("#login-password", password);
+            await Page.ClickAsync("form button[type='submit']");
+
+            try
+            {
+                await Expect(Page.Locator("#login-2fa-code")).ToBeVisibleAsync(new() { Timeout = 6_000 });
+                return;
+            }
+            catch (Exception)
+            {
+                if (!Page.Url.Contains("/login"))
+                {
+                    Assert.Fail(
+                        "Signing in succeeded without asking for a code. Either two-step is not on "
+                        + "for this account, or the form submitted the developer pre-fill instead of "
+                        + $"the credentials under test ({email}).");
+                }
+            }
+        }
+
+        var shown = await Page.Locator(".card-body").First.InnerTextAsync();
+        Assert.Fail($"The code box never appeared. The sign-in page said: {shown.Replace("\n", " / ")}");
+    }
+
+    /// <summary>A SuperAdmin API context, or null when sign-in failed.</summary>
+    private async Task<IAPIRequestContext?> AdminApiAsync()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var signIn = await api.PostAsync("/login", new()
+        {
+            DataObject = new Dictionary<string, object>
+            {
+                ["email"] = SuperAdminEmail, ["password"] = SuperAdminPassword,
+            },
+        });
+        if (!signIn.Ok) return null;
+
+        var token = (await signIn.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        return await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+    }
+
+    /// <summary>Enrols an account through the API and returns its authenticator secret.</summary>
+    private async Task<string?> EnrolViaApiAsync(string email, string password)
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var signIn = await api.PostAsync("/login", new()
+        {
+            DataObject = new Dictionary<string, object> { ["email"] = email, ["password"] = password },
+        });
+        if (!signIn.Ok) return null;
+
+        var token = (await signIn.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var authed = await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+
+        var setup = await authed.PostAsync("/api/me/2fa/setup", new() { DataObject = new Dictionary<string, object>() });
+        if (!setup.Ok) return null;
+
+        var uri = (await setup.JsonAsync())!.Value.GetProperty("authenticatorUri").GetString()!;
+        var secret = System.Web.HttpUtility.ParseQueryString(new Uri(uri).Query)["secret"]!;
+
+        var enable = await authed.PostAsync("/api/me/2fa/enable", new()
+        {
+            DataObject = new Dictionary<string, object> { ["code"] = Totp(secret) },
+        });
+
+        return enable.Ok ? secret : null;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -315,16 +482,14 @@ public class AccountTests : BenTestBase
     /// </remarks>
     private async Task EnterCodeAsync(string code)
     {
-        var box = Page.Locator("input.k-input-inner").Last;
+        var box = Page.Locator("input[id$='-code']").Last;
         await box.ClickAsync();
         await box.PressSequentiallyAsync(code, new() { Delay = 30 });
 
-        // A Telerik input commits on blur, and under Blazor Server that commit is a round trip
-        // over the circuit. Pressing the button before it lands sends an empty code and the server
-        // rightly refuses it — which reads as "the code was wrong" and is nothing of the sort.
+        // The box binds on @oninput rather than on blur, so the value reaches the server as it is
+        // typed and there is no commit to wait for. Asserting the DOM value still guards against
+        // a maxlength or an input filter quietly dropping characters.
         await Expect(box).ToHaveValueAsync(code, new() { Timeout = 10_000 });
-        await box.BlurAsync();
-        await Task.Delay(750);
     }
 
     /// <summary>
