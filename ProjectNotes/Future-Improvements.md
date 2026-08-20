@@ -5983,3 +5983,21 @@ Worth designing once rather than patching per-site: likely a `GetExpectingReason
 (the Delete/Send variants exist) plus a component-level convention for "couldn't load" vs
 "nothing here". Until then, any new list surface should assert real content in its tests, per
 the OrdinaryMemberSurfaceTests pattern.
+
+---
+
+## 121. No seeded org Owner who is not also SuperAdmin (raised 2026-08-20, persona walk)
+
+Both seeded groups are owned by the SuperAdmin account: `DevelopmentDataSeeder` takes `owner`
+from `SeedData:SuperAdmin:Email`, and BenCo's roster is AverageBen (Owner), Sarah
+(Administrator), James and Emma (Members). So the **Owner role tier cannot be exercised
+separately from SuperAdmin** — every check an Owner should pass by membership role, the seeded
+owner passes earlier by app role, which is precisely the masking item 109 was about, one tier up.
+
+Item 109's fixture covers Member vs Administrator; Owner vs Administrator differences (the org-id
+display rule in OrganizationView already distinguishes them, and anything else that keys on
+`OrganizationMemberRole.Owner`) are invisible until a seeded org has a plain-account owner.
+
+Cheap fix when wanted: seed a third small group owned by Emma, or promote Sarah to Owner of BenCo
+in the seeder (she is its Administrator today; MessagingTests' comment already believes she owns
+it, which is how stale that assumption is).
