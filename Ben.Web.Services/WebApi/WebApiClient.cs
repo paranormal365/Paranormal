@@ -39,6 +39,45 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    /// <inheritdoc />
+    public async Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get, relativeUrl);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(req, token);
+        }
+        catch (HttpRequestException)
+        {
+            // The API is unreachable. Emphatically not "there is nothing here" — this is the case
+            // that used to render as an empty group.
+            return LoadResult<T>.Failure();
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(token);
+
+                // Same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence,
+                // a framework error is a ProblemDetails blob or an HTML page, and showing either
+                // to a person is worse than saying nothing useful.
+                var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                                  && body.Length < 400
+                                  && !body.TrimStart().StartsWith('{')
+                                  && !body.TrimStart().StartsWith('<');
+
+                return LoadResult<T>.Failure(looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+            }
+
+            var items = await response.Content.ReadFromJsonAsync<List<T>>(cancellationToken: token);
+            return LoadResult<T>.Ok(items);
+        }
+    }
+
     public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);

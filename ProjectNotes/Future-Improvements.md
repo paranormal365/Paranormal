@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (raised 2026-08-20)
+## 120. The client adapter cannot tell "refused" from "empty" (FOUNDATION SHIPPED 2026-08-20)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -6068,3 +6068,84 @@ checked rather than assumed — the catalogue endpoint answers 200 with no token
 anyone may browse it, and `/attending/{Token}` is an emailed link whose token is the credential —
 so both are exemptions, not bugs. Verified to discriminate by removing the fix and watching the
 test name the file.
+
+### The foundation, shipped 2026-08-20
+
+Not the 136-site rewrite — a way to tell the truth, plus adoption on the two surfaces that
+actually carried the bug.
+
+**`LoadResult<T>`** (`Ben.Web.Services/WebApi/LoadResult.cs`) — a readonly struct carrying
+`Items`, `Failed` and an optional `Reason`. `Items` is safe to enumerate in **every** state
+including `default`, which is what makes adoption non-breaking: a call site that ignores `Failed`
+behaves exactly as it does today.
+
+**`IWebApiClient.GetListAsync<T>`** derives the distinction from the status code, treats an
+unreachable API as a failure rather than an empty list, and carries the server's sentence through
+when it is prose (a ProblemDetails blob or HTML page is dropped — same rule as
+`SendExpectingReasonAsync`).
+
+**`BenListState`** (`Kit/`) renders the three states a list actually has: loading, could not load,
+nothing here. The failure state deliberately does **not** say "you do not have permission" — the
+client cannot know that, and a 500 and a dropped connection arrive identically; guessing would be
+the page's second untruth.
+
+**Adopted** on the org Files tab and the Members roster — the two surfaces where refusals were
+found rendering as empty lists (item 119). Everything else keeps the old path until touched.
+
+15 tests on the type and client, including a theory that 403/401/404/500 are all failures.
+
+### Two more bugs found while doing it
+
+**`OrganizationFiles` had the same auth race as `OrganizationMembers`** (item 122). The guard
+written for that missed it, because its lifecycle method is `=> await ReloadAsync()` and the scan
+only read lifecycle *bodies* — one level of indirection. Found by loading the page by hand and
+seeing the new "Couldn't load this" state appear when the API was up. The guard now treats any
+routable page with a load-time lifecycle method that calls the API anywhere as in scope; it
+over-triggers on API calls in button handlers, which costs one unnecessary await against a live
+bug for the miss. Two more pages surfaced and both check out as genuinely anonymous
+(`OrgDiscovery`, `SupportTicketTrackingPage`).
+
+**A Razor paren bug in the Files grid's Source column.** `@((OrganizationFileRecord)context).X ? …`
+ends the expression at the cast, so the cell rendered the record's `ToString()` —
+`OrganizationFileRecord { Id = … }` — and the ternary as text. It compiled. Nobody saw it because
+**a populated row in that grid was unreachable**: ordinary members were refused, and the page
+loaded before auth. Fixing two access bugs is what made the third visible. One instance in the
+codebase; grepped for the pattern.
+
+---
+
+## 123. Images fetched the whole upload to draw a thumbnail (SHIPPED 2026-08-20, Ben's request)
+
+Every `<img>` on the site pointed at `/api/upload-files/{id}/download`, which serves the original
+bytes. A group logo drawn in a 40px box pulled the entire upload down the wire at whatever size it
+was uploaded, and the browser discarded nearly all of it. `/find` lists every group, so that was
+one full-size image per card — on the page a first-time visitor is most likely to open, quite
+possibly on a phone.
+
+Invisible in development: the seeded logos are a few kilobytes and the API is on localhost. It
+would have shown up as "the site is slow" once real groups uploaded real photographs.
+
+### What shipped
+
+`GET /api/upload-files/{id}/thumbnail`, beside the download route, reusing the thumbnail pipeline
+that already existed for equipment photos and video assets (`MediaIngestService`, 400px long
+edge, generated on first request so nothing needs backfilling).
+
+**The access check is literally the same call as the download's.** A thumbnail is still the
+picture; making it cheaper to fetch than the file it shrinks would be a way around the audience
+rules. Verified: anonymous gets 401 on both, a signed-in non-viewer gets 403 on both.
+
+**Non-images fall through to the real file** rather than 404 — the sanitiser returns nothing for a
+PDF, and the equipment route had already settled this question the same way.
+
+Six components moved over — org cards, the two public page headers, the CMS preview, the home
+hero, and the user menu avatar. All were 36–120px boxes.
+
+Measured on the seeded site photo: **960×540 / 14,709 bytes → 400×225 / 4,265 bytes**, a 71%
+reduction on a file small enough to be a rounding error. On a phone photograph it is the
+difference between a page and a download.
+
+Guarded by `ImagesUseThumbnailsTests`, which fails on any `src=` bound to `GetFileDownloadUrl` —
+and, in a second test, on the thumbnail helper falling out of use entirely.
+
+`<a href>` download links are untouched: that is somebody asking for the file.
