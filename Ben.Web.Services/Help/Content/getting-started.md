@@ -85,6 +85,9 @@ and the **arrows** expand the page to fill the screen. Both are remembered on th
 You need an account to request an investigation or join a group. Accounts are free, and the
 address you sign in with is never shown publicly.
 
+![The sign-up form](/help/media/getting-started/signup.png)
+*The @name is checked as you type, so you find out it is taken before you fill in the rest.*
+
 **Create one** from the sign-in page — *New here? Create an account* — or go straight to
 `/signup`. You'll be asked for four things:
 
@@ -122,6 +125,9 @@ If the link has expired, sign up again.
 You can ask us for a code from your phone as well as your password. It is **entirely optional** and
 off unless you turn it on, under **Security** on your profile. Nobody else can turn it on or off for
 you — not an administrator either, because only you have the app that makes the codes.
+
+![Turning on two-step sign-in](/help/media/getting-started/two-step.png)
+*Scan the square with your app, or type the key beside it in by hand.*
 
 Any authenticator app works — **Duo Mobile**, **Okta Verify**, Google Authenticator, Microsoft
 Authenticator, 1Password. Scan the square code with the app, type the six digits it shows, and it is
@@ -170,6 +176,9 @@ several different kinds of thing. Open it, or the **Notifications** page, to see
 | Equipment requests & overdue gear | Waiting on your decision, or late back. |
 | Posts that mention you | Somebody named you with an **@name** in the feed. |
 | Unread messages | Sent to you through the platform. |
+
+![The notifications page](/help/media/getting-started/notifications.png)
+*Everything waiting on you, grouped by what it is.*
 
 Buckets with nothing in them are not shown. The page is a list of things to do, not a dashboard of
 zeroes.

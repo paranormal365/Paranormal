@@ -11,6 +11,9 @@ signed in can read. It is where you say what you found last night, rather than w
 
 Long pieces do not belong here — a post is at most 1,000 characters on purpose.
 
+![The feed, with a post carrying a tag and a mention](/help/media/the-feed/feed.png)
+*A post. **#EVP** and **@sarahmitchell** became links on their own — you only typed them.*
+
 ## Writing a post
 
 Type in the box at the top of the feed and press **Post**. Plain text, no formatting: the point is
@@ -32,6 +35,9 @@ An email address in a post is not a mention. `ben@example.com` stays an email ad
 
 Write **#** followed by a word — `#evp`, `#bellwitch`. The tag becomes a link to everything else
 carrying it.
+
+![A tag page](/help/media/the-feed/tag-page.png)
+*Clicking a tag opens everything carrying it. The address is shareable.*
 
 Capitals do not matter: `#EVP`, `#evp` and `#Evp` are one tag, so they all gather in the same place.
 Tags cannot start with a number, because `#1` and `#2026` are almost always a list or a year rather
