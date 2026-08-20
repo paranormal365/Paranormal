@@ -66,5 +66,7 @@ public sealed class AdminSiteSettingController : BenControllerBase
 
     private static SiteSettingRecord ToRecord(SiteSetting s)
         => new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
-               s.DateUpdated ?? s.DateCreated, SiteSettingKeys.MultiLineKeys.Contains(s.Key));
+               s.DateUpdated ?? s.DateCreated,
+               SiteSettingKeys.MultiLineKeys.Contains(s.Key),
+               SiteSettingKeys.BooleanKeys.Contains(s.Key));
 }

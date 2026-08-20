@@ -12,24 +12,47 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
     }
 
     public async Task<WebApiTokenResponse?> LoginAsync(string email, string password, CancellationToken token = default)
-        => (await TryLoginAsync(email, password, token)).Token;
+        => (await TryLoginAsync(email, password, token: token)).Token;
 
-    public async Task<LoginAttempt> TryLoginAsync(string email, string password, CancellationToken token = default)
+    public async Task<LoginAttempt> TryLoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default)
     {
         using var response = await _httpClient.PostAsJsonAsync(
             "/login",
-            new WebApiLoginRequest(email, password),
+            new WebApiLoginRequest(email, password, twoFactorCode, recoveryCode),
             token);
 
         if (!response.IsSuccessStatusCode)
         {
-            return new LoginAttempt(null, (int)response.StatusCode);
+            // The problem-detail carries the reason, and "RequiresTwoFactor" arrives as a 401 —
+            // the same status as a wrong password. Reading it is what lets the sign-in page ask
+            // for a code instead of telling somebody their password is wrong.
+            return new LoginAttempt(null, (int)response.StatusCode, await ReadDetailAsync(response, token));
         }
 
         return new LoginAttempt(
             await response.Content.ReadFromJsonAsync<WebApiTokenResponse>(cancellationToken: token),
             (int)response.StatusCode);
     }
+
+    private static async Task<string?> ReadDetailAsync(HttpResponseMessage response, CancellationToken token)
+    {
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetail>(cancellationToken: token);
+            return problem?.Detail;
+        }
+        catch
+        {
+            // Not every refusal is a problem-details document — a rate-limit response, a proxy
+            // page. No detail simply means no special case applies.
+            return null;
+        }
+    }
+
+    private sealed record ProblemDetail(string? Detail);
 
     public async Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default)
     {

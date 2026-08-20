@@ -7,101 +7,104 @@
 @inject IJSRuntime JSRuntime
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
+@using Ben.Web.Services
 
-<PageTitle>My Videos</PageTitle>
+<FeatureGate Flag="@SiteFeatures.VideoEditor">
+    <PageTitle>My Videos</PageTitle>
 
-@if (!_authReady)
-{
-    <BenLoaderOverlay Visible="true" Text="Loading…" />
-    return;
-}
+    @if (!_authReady)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+        return;
+    }
 
-@if (!UserState.IsAuthenticated)
-{
-    <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
-    return;
-}
+    @if (!UserState.IsAuthenticated)
+    {
+        <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
+        return;
+    }
 
-<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
+    <div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
 
-    @* ── Header bar ──────────────────────────────────────────────────────── *@
-    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
-        <h5 class="mb-0 me-auto">My Videos<HelpLink Slug="using-the-video-editor" /></h5>
+        @* ── Header bar ──────────────────────────────────────────────────────── *@
+        <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+            <h5 class="mb-0 me-auto">My Videos<HelpLink Slug="using-the-video-editor" /></h5>
 
-        @if (_projects.Count > 0)
-        {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
-        }
+            @if (_projects.Count > 0)
+            {
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
+            }
 
-        @if (_saving)
-        {
-            <span class="text-muted small">Saving…</span>
-        }
-        else
-        {
-            <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Server</button>
-        }
-    </div>
-
-    @* ── Editor (full remaining height) ─────────────────────────────────── *@
-    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor OnPublishExport="OnPublishExportAsync"
-                     ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
-    </div>
-</div>
-
-@* ── Saved Projects dialog ──────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
-    <ChildContent>
-        @if (_loadingList)
-        {
-            <BenLoaderOverlay Visible="true" Text="Loading…" />
-        }
-        else if (_projects.Count == 0)
-        {
-            <p class="text-muted">No projects saved to server yet.</p>
-        }
-        else
-        {
-            <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
-                         Height="360px">
-                <GridColumns>
-                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
-                    <GridColumn Title="Saved" Width="170px">
-                        <Template>
-                            @{ var proj = (VideoProjectRecord)context; }
-                            @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Width="160px">
-                        <Template>
-                            @{ var row = (VideoProjectRecord)context; }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row))">Open</button>
-                            <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row))" disabled="@(!(!_publishing))" title="Publish rendered video"><BenIcon Name="upload" /></button>
-                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDeleteAsync(row))"><BenIcon Name="trash-2" /></button>
-                        </Template>
-                    </GridColumn>
-                </GridColumns>
-            </TelerikGrid>
-        }
-    </ChildContent>
-</BenModal>
-
-@* ── Delete confirm dialog ──────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
-    <ChildContent>
-        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
-            <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            @if (_saving)
+            {
+                <span class="text-muted small">Saving…</span>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Server</button>
+            }
         </div>
-    </ChildContent>
-</BenModal>
 
-@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
-<InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+        @* ── Editor (full remaining height) ─────────────────────────────────── *@
+        <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+            <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+        </div>
+    </div>
+
+    @* ── Saved Projects dialog ──────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
+        <ChildContent>
+            @if (_loadingList)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else if (_projects.Count == 0)
+            {
+                <p class="text-muted">No projects saved to server yet.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
+                             Height="360px">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                        <GridColumn Title="Saved" Width="170px">
+                            <Template>
+                                @{ var proj = (VideoProjectRecord)context; }
+                                @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Width="160px">
+                            <Template>
+                                @{ var row = (VideoProjectRecord)context; }
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row))">Open</button>
+                                <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row))" disabled="@(!(!_publishing))" title="Publish rendered video"><BenIcon Name="upload" /></button>
+                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDeleteAsync(row))"><BenIcon Name="trash-2" /></button>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </ChildContent>
+    </BenModal>
+
+    @* ── Delete confirm dialog ──────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
+        <ChildContent>
+            <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+                <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            </div>
+        </ChildContent>
+    </BenModal>
+
+    @* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
+    <InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+</FeatureGate>
 
 @code {
     private List<VideoProjectRecord> _projects = [];

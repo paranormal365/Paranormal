@@ -80,6 +80,38 @@
     padding: 1rem;
 }
 
+/* ── Server-tab scope selector (item 91) ────────────────────────────────── */
+/* Sits above every state of the list — including the empty one, so a scope that matches nothing
+   can still be changed. Wraps rather than scrolls: the panel is often narrow, and a selector that
+   scrolls sideways is a selector nobody finds the third dropdown in. */
+.bv-browser__scope {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    padding: .4rem .5rem;
+    border-bottom: 1px solid var(--bv-border);
+    background: var(--bv-panel-bg);
+}
+
+.bv-browser__scope-select {
+    flex: 1 1 8rem;
+    min-width: 0;          /* or a long case title stretches the row instead of truncating */
+    max-width: 100%;
+    padding: .2rem .35rem;
+    font-size: .75rem;
+    color: var(--bv-text);
+    background: var(--bv-surface-1);
+    border: 1px solid var(--bv-border);
+    border-radius: 3px;
+}
+
+/* The editor's own accent first, the host's Kendo primary as the fallback — the other order paints
+   navy text on the dark ground, which is why a test enforces it. */
+.bv-browser__scope-select:focus-visible {
+    outline: 2px solid var(--bv-accent, var(--kendo-color-primary));
+    outline-offset: -1px;
+}
+
 /* ── Empty state ────────────────────────────────────────────────────────── */
 .bv-browser__empty {
     display: flex;

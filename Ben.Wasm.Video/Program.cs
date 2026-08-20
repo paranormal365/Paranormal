@@ -67,6 +67,14 @@ builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExte
 builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExtensions.ProjectPersistenceHttpClientName)
     .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
 
+// Tells the editor page whether the signed-in account administers anything, which is what decides
+// whether the diagnostics panel is drawn. See AccountInfoService — it is a display decision, not a
+// security boundary; the endpoints behind those tools authorise themselves.
+builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.AccountInfoService(
+    sp.GetRequiredService<IHttpClientFactory>(),
+    sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>(),
+    apiBaseUrl));
+
 // Records a successful sidecar pairing against the signed-in account, so the site can tell who is
 // running a native sidecar and which build. Optional by design — the editor calls it only if a
 // host registers one.

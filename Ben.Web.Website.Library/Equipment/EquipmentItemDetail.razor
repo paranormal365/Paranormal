@@ -2,165 +2,168 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services
 
-<PageTitle>@(_item?.DisplayName ?? "Equipment")</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>@(_item?.DisplayName ?? "Equipment")</PageTitle>
 
-@* One piece of gear, showing whatever this viewer is entitled to. The server decides that — the
-   sections below are absent from the payload rather than hidden here, so this page renders what it
-   is given and never works out permissions for itself. *@
+    @* One piece of gear, showing whatever this viewer is entitled to. The server decides that — the
+       sections below are absent from the payload rather than hidden here, so this page renders what it
+       is given and never works out permissions for itself. *@
 
-<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="container-fluid py-3" style="max-width:900px;">
 
-    @if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading…" />
-    }
-    else if (_item is null)
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-2">That equipment could not be found</h6>
-                <p class="text-secondary small mb-0">It may have been retired, or it may not be yours to see.</p>
-            </div>
-        </div>
-    }
-    else
-    {
-        <div class="mb-3">
-            <a href="@($"/equipment-models/{_item.EquipmentModelId}")" class="text-decoration-none small">
-                &larr; All @_item.BrandName @_item.ModelName
-            </a>
-        </div>
-
-        <div class="d-flex justify-content-between align-items-start mb-1">
-            <h3 class="mb-0">@_item.DisplayName</h3>
-            @if (_item.IsRetired)
-            {
-                <span class="badge bg-secondary">Retired</span>
-            }
-        </div>
-        <p class="text-secondary small mb-3">
-            @_item.BrandName · @_item.ModelName · @_item.CategoryName
-            @if (_item.Ownership is not null)
-            {
-                <span> · @(_item.Ownership.OwningOrganizationName ?? _item.Ownership.OwnerDisplayName ?? "a member")</span>
-            }
-        </p>
-
-        @if (!string.IsNullOrWhiteSpace(_item.Notes))
+        @if (_loading)
         {
-            <p>@_item.Notes</p>
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
         }
-
-        @* The click is recorded after the link opens, never before — a counter must not cost the
-           reader the thing they actually asked for. *@
-        @if (!string.IsNullOrWhiteSpace(_item.WebsiteUrl))
+        else if (_item is null)
         {
-            <p>
-                <a href="@_item.WebsiteUrl" target="_blank" rel="noopener noreferrer"
-                   @onclick="RecordLinkClickAsync" @onclick:preventDefault="false">Visit the product page</a>
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h6 class="mb-2">That equipment could not be found</h6>
+                    <p class="text-secondary small mb-0">It may have been retired, or it may not be yours to see.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="mb-3">
+                <a href="@($"/equipment-models/{_item.EquipmentModelId}")" class="text-decoration-none small">
+                    &larr; All @_item.BrandName @_item.ModelName
+                </a>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <h3 class="mb-0">@_item.DisplayName</h3>
+                @if (_item.IsRetired)
+                {
+                    <span class="badge bg-secondary">Retired</span>
+                }
+            </div>
+            <p class="text-secondary small mb-3">
+                @_item.BrandName · @_item.ModelName · @_item.CategoryName
+                @if (_item.Ownership is not null)
+                {
+                    <span> · @(_item.Ownership.OwningOrganizationName ?? _item.Ownership.OwnerDisplayName ?? "a member")</span>
+                }
             </p>
-        }
 
-        @* Shown to a custodian even when empty — otherwise there is nowhere to add the first one. *@
-        @if (_item.Photos.Count > 0 || _item.Flags.CanManagePhotos)
-        {
-            <div class="mb-4">
-                <EquipmentPhotoStrip ItemId="@_item.Id"
-                                     OrgId="@_item.Ownership?.OwningOrganizationId"
-                                     Photos="@_item.Photos"
-                                     CanEdit="@_item.Flags.CanManagePhotos"
-                                     OnChanged="LoadAsync" />
-            </div>
-        }
+            @if (!string.IsNullOrWhiteSpace(_item.Notes))
+            {
+                <p>@_item.Notes</p>
+            }
 
-        @* ── Custodians only: serial, condition, who has it ─────────────────── *@
-        @if (_item.Management is not null)
-        {
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h6 class="mb-3">Details</h6>
-                    <dl class="row mb-0 small">
-                        @if (!string.IsNullOrWhiteSpace(_item.Management.SerialNumber))
-                        {
-                            <dt class="col-sm-4">Serial number</dt>
-                            <dd class="col-sm-8"><code>@_item.Management.SerialNumber</code></dd>
-                        }
-                        <dt class="col-sm-4">Currently held by</dt>
-                        <dd class="col-sm-8">@(_item.Management.CurrentHolderDisplayName ?? "In storage")</dd>
-                        @if (_item.Management.LastServicedDate is not null)
-                        {
-                            <dt class="col-sm-4">Last serviced</dt>
-                            <dd class="col-sm-8">@_item.Management.LastServicedDate.Value.ToDisplayDate()</dd>
-                        }
-                        @if (_item.AcquisitionDate is not null)
-                        {
-                            <dt class="col-sm-4">Acquired</dt>
-                            <dd class="col-sm-8">@_item.AcquisitionDate.Value.ToDisplayDate()</dd>
-                        }
-                    </dl>
+            @* The click is recorded after the link opens, never before — a counter must not cost the
+               reader the thing they actually asked for. *@
+            @if (!string.IsNullOrWhiteSpace(_item.WebsiteUrl))
+            {
+                <p>
+                    <a href="@_item.WebsiteUrl" target="_blank" rel="noopener noreferrer"
+                       @onclick="RecordLinkClickAsync" @onclick:preventDefault="false">Visit the product page</a>
+                </p>
+            }
 
-                    @if (!string.IsNullOrWhiteSpace(_item.Management.DefectNotes))
-                    {
-                        <div class="alert alert-warning py-2 mt-3 mb-0">
-                            <strong>Currently faulty:</strong> @_item.Management.DefectNotes
-                        </div>
-                    }
+            @* Shown to a custodian even when empty — otherwise there is nowhere to add the first one. *@
+            @if (_item.Photos.Count > 0 || _item.Flags.CanManagePhotos)
+            {
+                <div class="mb-4">
+                    <EquipmentPhotoStrip ItemId="@_item.Id"
+                                         OrgId="@_item.Ownership?.OwningOrganizationId"
+                                         Photos="@_item.Photos"
+                                         CanEdit="@_item.Flags.CanManagePhotos"
+                                         OnChanged="LoadAsync" />
                 </div>
-            </div>
-        }
+            }
 
-        @* ── Administrators only ────────────────────────────────────────────── *@
-        @if (_item.Counters is not null)
-        {
-            <div class="card mb-3">
-                <div class="card-body py-3">
-                    <h6 class="mb-2">Interest</h6>
-                    <span class="me-4"><strong>@_item.Counters.ViewCount</strong> <span class="text-secondary small">views</span></span>
-                    <span><strong>@_item.Counters.LinkClickCount</strong> <span class="text-secondary small">link clicks</span></span>
+            @* ── Custodians only: serial, condition, who has it ─────────────────── *@
+            @if (_item.Management is not null)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">Details</h6>
+                        <dl class="row mb-0 small">
+                            @if (!string.IsNullOrWhiteSpace(_item.Management.SerialNumber))
+                            {
+                                <dt class="col-sm-4">Serial number</dt>
+                                <dd class="col-sm-8"><code>@_item.Management.SerialNumber</code></dd>
+                            }
+                            <dt class="col-sm-4">Currently held by</dt>
+                            <dd class="col-sm-8">@(_item.Management.CurrentHolderDisplayName ?? "In storage")</dd>
+                            @if (_item.Management.LastServicedDate is not null)
+                            {
+                                <dt class="col-sm-4">Last serviced</dt>
+                                <dd class="col-sm-8">@_item.Management.LastServicedDate.Value.ToDisplayDate()</dd>
+                            }
+                            @if (_item.AcquisitionDate is not null)
+                            {
+                                <dt class="col-sm-4">Acquired</dt>
+                                <dd class="col-sm-8">@_item.AcquisitionDate.Value.ToDisplayDate()</dd>
+                            }
+                        </dl>
+
+                        @if (!string.IsNullOrWhiteSpace(_item.Management.DefectNotes))
+                        {
+                            <div class="alert alert-warning py-2 mt-3 mb-0">
+                                <strong>Currently faulty:</strong> @_item.Management.DefectNotes
+                            </div>
+                        }
+                    </div>
                 </div>
-            </div>
+            }
+
+            @* ── Administrators only ────────────────────────────────────────────── *@
+            @if (_item.Counters is not null)
+            {
+                <div class="card mb-3">
+                    <div class="card-body py-3">
+                        <h6 class="mb-2">Interest</h6>
+                        <span class="me-4"><strong>@_item.Counters.ViewCount</strong> <span class="text-secondary small">views</span></span>
+                        <span><strong>@_item.Counters.LinkClickCount</strong> <span class="text-secondary small">link clicks</span></span>
+                    </div>
+                </div>
+            }
+
+            @* ── What the owner has written down, and what anyone can ask ───────── *@
+            <EquipmentFaqSection ItemId="@_item.Id" CanEdit="@_item.Flags.CanEdit" />
+
+            @* Absent for whoever lends this piece — they do not get to read their own file. *@
+            @if (_isAuthenticated)
+            {
+                <LenderHistoryPanel ItemId="@_item.Id" />
+            }
+
+            @* ── Borrowing ──────────────────────────────────────────────────────── *@
+            @if (!_item.IsRetired && _item.LoanAudience != EquipmentLoanAudience.NotLoanable && _isAuthenticated)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => _borrowVisible = true)">Ask to borrow</button>
+            }
+
+            @* Asking is offered to anyone signed in who does not look after the piece — including
+               people who cannot borrow it, since "can I borrow this?" is itself a fair question. *@
+            @if (!_item.IsRetired && _isAuthenticated && !_item.Flags.CanEdit)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _askVisible = true)">Ask a question</button>
+            }
+
+            @if (_item.Flags.CanEdit && _item.Ownership?.OwningOrganizationId is Guid manageOrgId)
+            {
+                <a class="btn btn-outline-secondary ms-2"
+                   href="@($"/organizations/{manageOrgId}/equipment/{_item.Id}")">History &amp; service log</a>
+            }
         }
+    </div>
 
-        @* ── What the owner has written down, and what anyone can ask ───────── *@
-        <EquipmentFaqSection ItemId="@_item.Id" CanEdit="@_item.Flags.CanEdit" />
+    <EquipmentCheckoutRequestDialog Visible="@_borrowVisible"
+                                    VisibleChanged="@(v => _borrowVisible = v)"
+                                    ItemId="@ItemId"
+                                    ItemDisplayName="@_item?.DisplayName" />
 
-        @* Absent for whoever lends this piece — they do not get to read their own file. *@
-        @if (_isAuthenticated)
-        {
-            <LenderHistoryPanel ItemId="@_item.Id" />
-        }
-
-        @* ── Borrowing ──────────────────────────────────────────────────────── *@
-        @if (!_item.IsRetired && _item.LoanAudience != EquipmentLoanAudience.NotLoanable && _isAuthenticated)
-        {
-            <button type="button" class="btn btn-primary" @onclick="@(() => _borrowVisible = true)">Ask to borrow</button>
-        }
-
-        @* Asking is offered to anyone signed in who does not look after the piece — including
-           people who cannot borrow it, since "can I borrow this?" is itself a fair question. *@
-        @if (!_item.IsRetired && _isAuthenticated && !_item.Flags.CanEdit)
-        {
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _askVisible = true)">Ask a question</button>
-        }
-
-        @if (_item.Flags.CanEdit && _item.Ownership?.OwningOrganizationId is Guid manageOrgId)
-        {
-            <a class="btn btn-outline-secondary ms-2"
-               href="@($"/organizations/{manageOrgId}/equipment/{_item.Id}")">History &amp; service log</a>
-        }
-    }
-</div>
-
-<EquipmentCheckoutRequestDialog Visible="@_borrowVisible"
-                                VisibleChanged="@(v => _borrowVisible = v)"
-                                ItemId="@ItemId"
-                                ItemDisplayName="@_item?.DisplayName" />
-
-<AskOwnerDialog Visible="@_askVisible"
-                VisibleChanged="@(v => _askVisible = v)"
-                ItemId="@ItemId"
-                ItemDisplayName="@_item?.DisplayName" />
+    <AskOwnerDialog Visible="@_askVisible"
+                    VisibleChanged="@(v => _askVisible = v)"
+                    ItemId="@ItemId"
+                    ItemDisplayName="@_item?.DisplayName" />
+</FeatureGate>
 
 @code {
     [Parameter] public Guid ItemId { get; set; }

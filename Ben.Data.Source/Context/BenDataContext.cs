@@ -20,6 +20,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SupportTicket> SupportTickets { get; set; }
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
+        public virtual DbSet<SignInEvent> SignInEvents { get; set; }
+        public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
@@ -80,6 +82,10 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgMessage> OrgMessages { get; set; }
         public virtual DbSet<OrgMessageRecipient> OrgMessageRecipients { get; set; }
         public virtual DbSet<OrgMessageView> OrgMessageViews { get; set; }
+        public virtual DbSet<OrgMessageMention> OrgMessageMentions { get; set; }
+        public virtual DbSet<OrgMessageHashtag> OrgMessageHashtags { get; set; }
+        public virtual DbSet<OrgMessageReport> OrgMessageReports { get; set; }
+        public virtual DbSet<UserFollow> UserFollows { get; set; }
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
@@ -533,6 +539,41 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.Key).IsUnique();
             modelBuilder.Entity<SiteSetting>()
                 .Property(e => e.Description).HasMaxLength(512);
+
+            // ── SignInEvent ──────────────────────────────────────────────────
+            // NoAction on the user FK, and the column is nullable: deleting an account must not
+            // silently delete the record that it once signed in, and a failed attempt against an
+            // address matching no account has no user to point at in the first place.
+            modelBuilder.Entity<SignInEvent>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SignInEvent>()
+                .Property(e => e.Method).HasMaxLength(32).IsRequired();
+            // Every dashboard query is "attempts between these dates", so the date leads. The
+            // covering columns let the common counts be answered from the index alone.
+            modelBuilder.Entity<SignInEvent>()
+                .HasIndex(e => new { e.Utc, e.Succeeded });
+            // "Who has signed in lately" — distinct users within a window.
+            modelBuilder.Entity<SignInEvent>()
+                .HasIndex(e => new { e.AppUserId, e.Utc });
+
+            // ── EventReminderSent ────────────────────────────────────────────
+            // The unique index IS the idempotency: the reminder job runs every few minutes and
+            // would otherwise find the same event, and the same attendee, on every pass. Enforcing
+            // it in the database rather than in the query means it still holds if two instances
+            // ever run at once.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
+            // Cascade from the event: a deleted event's reminder markers are meaningless, and the
+            // job will never look for them again.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany()
+                .HasForeignKey(e => e.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the user, matching every other user FK here: deleting an account must
+            // not cascade into unrelated tables.
+            modelBuilder.Entity<EventReminderSent>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── AppUserPhoto ─────────────────────────────────────────────────
             // The subject FK cascades: deleting a user takes their photo rows. The
@@ -1463,6 +1504,77 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Body).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<OrgMessage>()
                 .Property(e => e.Subject).HasMaxLength(256);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.HiddenByAppUser).WithMany()
+                .HasForeignKey(e => e.HiddenByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The feed's own query: newest first, within one channel, excluding hidden posts.
+            // HiddenUtc is in the key rather than in a filtered index because "hidden" is a normal
+            // state the moderation queue reads too, not an exceptional one.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.ChannelType, e.HiddenUtc, e.DateCreated });
+
+            // ── OrgMessageMention ─────────────────────────────────────────────
+            modelBuilder.Entity<OrgMessageMention>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Mentions)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageMention>()
+                .HasOne(e => e.MentionedAppUser).WithMany()
+                .HasForeignKey(e => e.MentionedAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // Naming somebody twice in one post is one mention, not two notifications.
+            modelBuilder.Entity<OrgMessageMention>()
+                .HasIndex(e => new { e.OrgMessageId, e.MentionedAppUserId }).IsUnique();
+            // "Which posts mentioned me, newest first" — the notification bucket's query.
+            modelBuilder.Entity<OrgMessageMention>()
+                .HasIndex(e => new { e.MentionedAppUserId, e.DateCreated });
+
+            // ── OrgMessageHashtag ─────────────────────────────────────────────
+            modelBuilder.Entity<OrgMessageHashtag>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Hashtags)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageHashtag>()
+                .Property(e => e.Tag).HasMaxLength(64).IsRequired();
+            // Using the same tag twice in one post is one tag.
+            modelBuilder.Entity<OrgMessageHashtag>()
+                .HasIndex(e => new { e.OrgMessageId, e.Tag }).IsUnique();
+            // The tag page. Tag leads, because that is what is being looked up; the date orders
+            // what comes back without a sort.
+            modelBuilder.Entity<OrgMessageHashtag>()
+                .HasIndex(e => new { e.Tag, e.DateCreated });
+
+            // ── OrgMessageReport ──────────────────────────────────────────────
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Reports)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasOne(e => e.ReportedByAppUser).WithMany()
+                .HasForeignKey(e => e.ReportedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasOne(e => e.ResolvedByAppUser).WithMany()
+                .HasForeignKey(e => e.ResolvedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessageReport>()
+                .Property(e => e.Reason).HasMaxLength(1000);
+            // One report per person per post. Reporting a thing twice is not twice the signal, and
+            // without this a single objector could make a post look like a pile-on.
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasIndex(e => new { e.OrgMessageId, e.ReportedByAppUserId }).IsUnique();
+            // The moderation queue: everything still pending, oldest first.
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasIndex(e => new { e.Outcome, e.DateCreated });
+
+            // ── UserFollow ────────────────────────────────────────────────────
+            modelBuilder.Entity<UserFollow>()
+                .HasOne(e => e.FollowerAppUser).WithMany()
+                .HasForeignKey(e => e.FollowerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserFollow>()
+                .HasOne(e => e.FollowedAppUser).WithMany()
+                .HasForeignKey(e => e.FollowedAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // Following somebody twice is following them once. The unique index is what makes
+            // Follow idempotent without a read-then-write race.
+            modelBuilder.Entity<UserFollow>()
+                .HasIndex(e => new { e.FollowerAppUserId, e.FollowedAppUserId }).IsUnique();
+            // "Who follows this person" — the follower count, and the other direction of the feed.
+            modelBuilder.Entity<UserFollow>()
+                .HasIndex(e => e.FollowedAppUserId);
 
             // ── OrgMessageRecipient ───────────────────────────────────────────
             modelBuilder.Entity<OrgMessageRecipient>()
@@ -1913,6 +2025,13 @@ namespace Ben.Data.Source.Context
             // an unrequested schema change.
 
             modelBuilder.Entity<AppUser>().Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<AppUser>().Property(e => e.Handle).HasMaxLength(30);
+            // Unique, and filtered so that NULL does not collide with NULL. The filter is not a
+            // way of tolerating accounts without a handle — every account has one, and the
+            // backfill service fills any that predate the column — it is what let the column be
+            // added to a populated table before that service had run.
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(e => e.Handle).IsUnique().HasFilter("[Handle] IS NOT NULL");
 
             modelBuilder.Entity<Organization>().Property(e => e.Name).HasMaxLength(200);
             modelBuilder.Entity<Organization>().Property(e => e.UrlName).HasMaxLength(100);

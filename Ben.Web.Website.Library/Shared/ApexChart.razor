@@ -1,0 +1,112 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    A chart, themed to match the site.
+
+    The SmartAdmin stylesheet already carries ApexCharts' chrome — 190 rules covering tooltips,
+    legends and grid lines — which is why this wrapper exists rather than a bare div plus config:
+    the styling was already paid for, only the library and the palette bridge were missing.
+
+    Series colours and axis text are NOT covered by that stylesheet (they are drawn from config,
+    not CSS), so the module reads the Bootstrap custom properties at build time and re-reads them
+    when the theme changes. Without that a chart is the one element on a dark page still wearing
+    light-mode colours.
+*@
+
+@*
+    Two divs, and the outer one is load-bearing. ApexCharts writes its own inline width onto the
+    element it renders into, so a width set on that element is not ours to keep — measured: a
+    sparkline in a 258px card took a 300px container and hung 119px into the card beside it. The
+    wrapper is never touched by the library, so clipping there holds whatever the library decides.
+*@
+<div style="width:100%;overflow:hidden;">
+    <div id="@_containerId" style="min-height:@(Height)px;"></div>
+</div>
+
+@code {
+    /// <summary>line, area, bar, donut, pie — or sparkline for the inline kind.</summary>
+    [Parameter, EditorRequired] public string Type { get; set; } = "line";
+
+    /// <summary>Named series: <c>[{ name, data[] }]</c>. Ignored by donut and pie.</summary>
+    [Parameter] public IReadOnlyList<ChartSeries>? Series { get; set; }
+
+    /// <summary>Flat values for donut and pie, paired with <see cref="Categories"/>.</summary>
+    [Parameter] public IReadOnlyList<double>? Values { get; set; }
+
+    /// <summary>X-axis categories, or the slice labels for donut and pie.</summary>
+    [Parameter] public IReadOnlyList<string>? Categories { get; set; }
+
+    [Parameter] public int Height { get; set; } = 320;
+
+    /// <summary>Which shape a sparkline draws. Ignored unless <see cref="Type"/> is sparkline.</summary>
+    [Parameter] public string SparklineType { get; set; } = "line";
+
+    /// <summary>Shown in place of an empty chart. Say what is missing, not "no data".</summary>
+    [Parameter] public string? NoDataText { get; set; }
+
+    // Per-instance, because several charts share a dashboard and the module keys everything by
+    // this id. See the note at the top of ApexChart.razor.js.
+    private readonly string _containerId = $"apex-{Guid.NewGuid():N}";
+
+    private IJSObjectReference? _module;
+    private bool _created;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Nothing here can run during prerender: there is no DOM to measure and no JS to call.
+        if (!RendererInfo.IsInteractive) return;
+
+        _module ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./_content/Ben.Web.Website.Library/Shared/ApexChart.razor.js");
+
+        if (!_created)
+        {
+            await _module.InvokeVoidAsync("create", _containerId, Spec());
+            _created = true;
+        }
+        else
+        {
+            // Parameters changed: new numbers into the existing chart rather than a teardown,
+            // which would flash the panel on every refresh.
+            await _module.InvokeVoidAsync("update", _containerId, Spec());
+        }
+    }
+
+    /// <summary>Re-reads the palette after a theme change. Call from whoever owns the toggle.</summary>
+    public async Task RethemeAsync()
+    {
+        if (_module is null || !_created) return;
+        try { await _module.InvokeVoidAsync("retheme", _containerId); }
+        catch (JSDisconnectedException) { /* circuit went away mid-call */ }
+    }
+
+    private object Spec() => new
+    {
+        type = Type,
+        sparklineType = SparklineType,
+        height = Height,
+        series = Series?.Select(s => new { name = s.Name, data = s.Data }).ToArray(),
+        values = Values?.ToArray(),
+        categories = Categories?.ToArray(),
+        noDataText = NoDataText,
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("destroy", _containerId);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is already gone — on Blazor Server this is the normal way a component
+            // is disposed when someone closes the tab, not an error worth surfacing.
+        }
+    }
+
+    /// <summary>One named line, area or bar series.</summary>
+    public sealed record ChartSeries(string Name, IReadOnlyList<double> Data);
+}

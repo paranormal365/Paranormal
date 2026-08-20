@@ -47,6 +47,48 @@ public static class SiteSettingKeys
     /// <summary>Requests per minute, per caller, allowed against everything else.</summary>
     public const string RateLimitGlobalPerMinute = "ratelimit.global-per-minute";
 
+    // ── Feature flags ─────────────────────────────────────────────────────────
+    //
+    // One switch per major section of the site, so a SuperAdmin can turn a whole area off without
+    // a deployment. Two rules make these safe to add:
+    //
+    //   * The DEFAULT is stated at the read site, not here — a key with no row reads as unset, and
+    //     every consumer passes its own `whenUnset`. Sections that already exist default ON, so
+    //     adding a flag never silently removes a working feature; the two unbuilt features default
+    //     OFF so they cannot appear before they are finished.
+    //   * Turning one off must kill the URLs, not just the navigation links. Hiding a link while
+    //     the page still answers is the failure this codebase has already learned to distrust.
+
+    /// <summary>Video editor pages (My Videos, the case editor, the standalone host's site links).</summary>
+    public const string FeatureVideoEditor = "features.video-editor";
+
+    /// <summary>Equipment: personal inventory, group catalogues, checkouts, loans.</summary>
+    public const string FeatureEquipment = "features.equipment";
+
+    /// <summary>Group calendars, public events, RSVPs — and the reminder emails that go with them.</summary>
+    public const string FeatureEvents = "features.events";
+
+    /// <summary>"What's near me" search and the public maps on the home page.</summary>
+    public const string FeatureDiscovery = "features.discovery";
+
+    /// <summary>Group-authored public pages at /o/{group}. Gates the anonymous read path too.</summary>
+    public const string FeatureCmsPages = "features.cms-pages";
+
+    /// <summary>The media library and its browse/attach surfaces.</summary>
+    public const string FeatureMediaLibrary = "features.media-library";
+
+    /// <summary>Group messaging — inbox, sent, compose.</summary>
+    public const string FeatureOrgMessaging = "features.org-messaging";
+
+    /// <summary>Voting on cases, evidence and files.</summary>
+    public const string FeatureVoting = "features.voting";
+
+    /// <summary>The public feed. Off until the feature ships.</summary>
+    public const string FeaturePublicFeed = "features.public-feed";
+
+    /// <summary>Group publications and subscriptions. Off until the feature ships.</summary>
+    public const string FeaturePublications = "features.publications";
+
     /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
@@ -62,7 +104,7 @@ public static class SiteSettingKeys
         (DefaultAvatarUploadFileId, "Default profile picture",
             "Image shown in place of initials when someone has no profile photo the viewer is allowed to see. Upload it as a public file first, then paste its file id here."),
         (AllowOrganizationSelfRegistration, "Allow groups to self-register",
-            "When on, any signed-in user can register a new group. When off, only a SuperAdmin can create one. Accepts true or false."),
+            "When on, any signed-in user can register a new group. When off, only a SuperAdmin can create one."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -79,6 +121,27 @@ public static class SiteSettingKeys
             "How many sign-in or registration attempts one caller may make each minute. Low enough to stop password guessing, high enough that a person mistyping their password never notices. Leave empty for the default."),
         (RateLimitGlobalPerMinute, "Rate limit — everything else (per minute)",
             "A ceiling on all other requests from one caller each minute, so a runaway client cannot saturate the server. Generous by design — normal use should never reach it. Leave empty for the default."),
+
+        (FeatureVideoEditor, "Feature — Video editor",
+            "The video editor: My Videos, the editor on a case, and the links to the standalone editor. Turning this off hides those pages and makes their addresses stop working. Anything already exported or saved is untouched."),
+        (FeatureEquipment, "Feature — Equipment",
+            "Personal equipment lists, group catalogues, checkouts and loans. Off hides the whole section; the records stay in the database."),
+        (FeatureEvents, "Feature — Events and calendars",
+            "Group calendars, public events and RSVPs, including the reminder emails sent before an event. Off stops the reminders as well as the pages."),
+        (FeatureDiscovery, "Feature — Local discovery and maps",
+            "\"What's near me\" search and the public maps on the home page. Off leaves the rest of the home page intact."),
+        (FeatureCmsPages, "Feature — Group public pages",
+            "The pages groups author for visitors, at /o/{group}. Off takes them down for anonymous visitors too, not just signed-in users."),
+        (FeatureMediaLibrary, "Feature — Media library",
+            "The media library and the screens that browse or attach from it. Files themselves are not affected."),
+        (FeatureOrgMessaging, "Feature — Group messaging",
+            "Group inbox, sent messages and compose. Case message boards between a client and their group are separate and stay on."),
+        (FeatureVoting, "Feature — Voting",
+            "Voting on cases, evidence and files. Off hides the vote controls; existing votes are kept and counted if you turn it back on."),
+        (FeaturePublicFeed, "Feature — Public feed",
+            "The site-wide feed any signed-in member can post to, with mentions, hashtags and following. Off by default. Turning it on also turns on the moderation queue, which is where reported posts arrive."),
+        (FeaturePublications, "Feature — Publications",
+            "Long-form publications a group writes and readers subscribe to. Off by default. Subscriptions are free; nothing here charges anyone."),
     ];
 
     /// <summary>
@@ -91,6 +154,58 @@ public static class SiteSettingKeys
     /// </remarks>
     public static readonly IReadOnlySet<string> MultiLineKeys =
         new HashSet<string> { ContactPostalAddress, SiteAnnouncement };
+
+    /// <summary>
+    /// The feature switches, paired with what each reads when no-one has ever set it.
+    /// </summary>
+    /// <remarks>
+    /// This list is the contract between the admin page, the public features endpoint and the
+    /// website's gate. Adding a switch here is all it takes for it to appear in all three, which
+    /// is also why the default lives here: a flag whose default is written separately at each
+    /// read site is a flag that eventually disagrees with itself.
+    /// </remarks>
+    public static readonly IReadOnlyList<(string Key, bool DefaultWhenUnset)> FeatureDefaults =
+    [
+        (FeatureVideoEditor,  true),
+        (FeatureEquipment,    true),
+        (FeatureEvents,       true),
+        (FeatureDiscovery,    true),
+        (FeatureCmsPages,     true),
+        (FeatureMediaLibrary, true),
+        (FeatureOrgMessaging, true),
+        (FeatureVoting,       true),
+        (FeaturePublicFeed,   false),
+        (FeaturePublications, false),
+    ];
+
+    /// <summary>Just the feature keys, in declaration order.</summary>
+    public static IEnumerable<string> FeatureFlags => FeatureDefaults.Select(f => f.Key);
+
+    /// <summary>What a feature reads when nobody has set it. Unknown keys are off.</summary>
+    public static bool DefaultFor(string key)
+        => FeatureDefaults.FirstOrDefault(f => f.Key == key).DefaultWhenUnset;
+
+    /// <summary>
+    /// Settings that are on/off, so the admin page gives them a switch instead of a text box.
+    /// </summary>
+    /// <remarks>
+    /// Before this existed, the only boolean-shaped setting was
+    /// <see cref="AllowOrganizationSelfRegistration"/>, whose description had to end with
+    /// "Accepts true or false" — an instruction that exists only because the control was wrong.
+    /// It is in this set now too.
+    /// </remarks>
+    /// <remarks>
+    /// Built from <see cref="FeatureDefaults"/> lazily rather than in a field initializer. Static
+    /// fields initialize in declaration order, and this one used to run before
+    /// <see cref="FeatureDefaults"/> existed — so it enumerated null and every request that
+    /// touched this class died in a TypeInitializationException. A property has no such ordering
+    /// to get wrong.
+    /// </remarks>
+    public static IReadOnlySet<string> BooleanKeys { get; } =
+        new HashSet<string>(
+            FeatureDefaults.Select(f => f.Key).Append(AllowOrganizationSelfRegistration),
+            StringComparer.Ordinal);
+
 }
 
 /// <summary>

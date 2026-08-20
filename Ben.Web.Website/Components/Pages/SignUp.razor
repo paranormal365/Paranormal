@@ -1,0 +1,228 @@
+@page "/signup"
+@using Ben.Data.Common.Helpers
+@using Ben.Web.Services
+@implements IDisposable
+
+@inject IBenAdminClient AccountClient
+@inject NavigationManager NavManager
+
+<PageTitle>Create an account</PageTitle>
+
+@*
+    Signing up.
+
+    Four fields, and the @name is the one that needs explaining rather than merely labelling: it is
+    permanent, it is public, and it is how other people write to you in the feed. Everything about
+    this form is arranged so somebody understands that before they pick one.
+
+    The availability check runs as they type, debounced. It is advisory — the unique index in the
+    database is what actually decides — so the form still handles being told "taken" on submit.
+*@
+
+<div class="container py-4" style="max-width: 520px;">
+    <div class="card">
+        <div class="card-body p-4">
+
+            <h1 class="h4 mb-1">Create an account</h1>
+            <p class="text-secondary small mb-4">
+                Already have one? <a href="/login">Sign in</a>.
+            </p>
+
+            @if (_done)
+            {
+                @* Deliberately the same message whether or not the address was already registered.
+                   See the WebApi's registration controller. *@
+                <div class="alert alert-success mb-0">
+                    <p class="mb-2"><strong>Check your email.</strong></p>
+                    <p class="mb-0 small">@_message</p>
+                </div>
+            }
+            else
+            {
+                <EditForm Model="@_form" OnValidSubmit="SubmitAsync" FormName="signup">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label class="form-label" for="signup-name">Your name</label>
+                        <InputText id="signup-name" class="form-control" @bind-Value="_form.DisplayName"
+                                   autocomplete="name" placeholder="Sarah Mitchell" />
+                        <div class="form-text">What people see on your posts and your profile. You can change this later.</div>
+                        <ValidationMessage For="@(() => _form.DisplayName)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="signup-handle">Your @@name</label>
+                        <div class="input-group">
+                            <span class="input-group-text">@@</span>
+                            <input id="signup-handle" class="form-control @HandleFieldClass"
+                                   value="@_form.Handle"
+                                   @oninput="OnHandleInput"
+                                   autocomplete="off" spellcheck="false"
+                                   maxlength="@UserHandle.MaxLength"
+                                   placeholder="sarahmitchell" />
+                        </div>
+                        <div class="form-text">
+                            How people mention you — <code>@@@(string.IsNullOrEmpty(_form.Handle) ? "yourname" : _form.Handle)</code>.
+                            Letters, numbers and underscores. <strong>This cannot be changed later.</strong>
+                        </div>
+                        @if (_handleMessage is not null)
+                        {
+                            <div class="small @(_handleAvailable ? "text-success" : "text-danger")">@_handleMessage</div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="signup-email">Email</label>
+                        <InputText id="signup-email" type="email" class="form-control" @bind-Value="_form.Email"
+                                   autocomplete="email" />
+                        <div class="form-text">We'll send a link to confirm it. You can't sign in until you have.</div>
+                        <ValidationMessage For="@(() => _form.Email)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label" for="signup-password">Password</label>
+                        <InputText id="signup-password" type="password" class="form-control" @bind-Value="_form.Password"
+                                   autocomplete="new-password" />
+                        <div class="form-text">At least 8 characters, with an upper-case letter, a lower-case letter and a digit.</div>
+                        <ValidationMessage For="@(() => _form.Password)" class="text-danger small" />
+                    </div>
+
+                    @if (_error is not null)
+                    {
+                        <div class="alert alert-danger">@_error</div>
+                    }
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@(_busy || _handleAvailable == false)">
+                        @(_busy ? "Creating your account…" : "Create account")
+                    </button>
+                </EditForm>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly SignUpForm _form = new();
+
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+    private string? _message;
+
+    private bool _handleAvailable;
+    private string? _handleMessage;
+
+    /// <summary>
+    /// Debounces the availability check.
+    /// </summary>
+    /// <remarks>
+    /// Without this every keystroke is a request, so typing a ten-character name is ten round trips
+    /// and the answers can arrive out of order — leaving "taken" on screen for a name that is free
+    /// because an earlier reply landed last. The token is cancelled on each keystroke, so only the
+    /// last one survives the delay.
+    /// </remarks>
+    private CancellationTokenSource? _handleCheck;
+
+    private string HandleFieldClass => _handleMessage switch
+    {
+        null => string.Empty,
+        _ when _handleAvailable => "is-valid",
+        _ => "is-invalid",
+    };
+
+    private async Task OnHandleInput(ChangeEventArgs e)
+    {
+        // Normalised as they type, so what is shown is what will be stored — somebody typing
+        // "Sarah Mitchell" sees at once that spaces and capitals are not part of a name.
+        _form.Handle = UserHandle.Normalize(e.Value?.ToString());
+        _handleMessage = null;
+
+        _handleCheck?.Cancel();
+        _handleCheck?.Dispose();
+        _handleCheck = new CancellationTokenSource();
+        var ct = _handleCheck.Token;
+
+        if (_form.Handle.Length == 0) { StateHasChanged(); return; }
+
+        // The rules that need no server are answered immediately; only "is it taken" waits.
+        if (!UserHandle.IsValid(_form.Handle, out var localError))
+        {
+            _handleAvailable = false;
+            _handleMessage = localError;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(400, ct);
+            var result = await AccountClient.CheckHandleAsync(_form.Handle, ct);
+            if (ct.IsCancellationRequested || result is null) return;
+
+            _handleAvailable = result.Available;
+            _handleMessage = result.Available ? $"@{result.Handle} is free." : result.Reason;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var result = await AccountClient.RegisterAsync(
+                new RegisterAccount(_form.Email, _form.Password, _form.DisplayName, _form.Handle));
+
+            if (result.Succeeded)
+            {
+                _done = true;
+                _message = result.Message;
+                return;
+            }
+
+            _error = result.Message;
+
+            // When the server named the field, reflect it where the person is looking rather than
+            // only at the bottom of the form.
+            if (result.Field == nameof(RegisterAccount.Handle))
+            {
+                _handleAvailable = false;
+                _handleMessage = result.Message;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _handleCheck?.Cancel();
+        _handleCheck?.Dispose();
+    }
+
+    private sealed class SignUpForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter the name you want people to see.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 2)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        public string Handle { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter your email address.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "That doesn't look like an email address.")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Choose a password.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 8,
+            ErrorMessage = "Passwords are at least 8 characters.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

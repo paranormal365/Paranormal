@@ -1,0 +1,77 @@
+/*
+ * ben-charts.css — the dark half of ApexCharts' theming.
+ *
+ * The template's smartapp.min.css carries all 190 .apexcharts-* rules, and every one of them is
+ * written for the light theme; themes/night.min.css contains none at all (measured — grep returns
+ * zero). So on a dark page the chart chrome — tooltip panels, legend text, axis labels, the
+ * crosshair — keeps its light-mode colours and a chart becomes the one white rectangle on the
+ * screen.
+ *
+ * Series colours and axis label colours are NOT set here: those are drawn by the library from its
+ * own config, not from CSS, so ApexChart.razor.js reads the Bootstrap custom properties at build
+ * time and re-reads them on a theme change. This file covers only what the library renders as
+ * real DOM and therefore what CSS can reach.
+ *
+ * Everything resolves through --bs-* custom properties rather than literal colours, so the charts
+ * follow the palette rather than pinning a second copy of it. Same approach as the video editor's
+ * ben-video-theme.css.
+ */
+
+[data-bs-theme="dark"] .apexcharts-tooltip,
+[data-bs-theme="dark"] .apexcharts-tooltip.apexcharts-theme-light {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .4);
+}
+
+[data-bs-theme="dark"] .apexcharts-tooltip-title {
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .apexcharts-xaxistooltip,
+[data-bs-theme="dark"] .apexcharts-yaxistooltip {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+/* The little arrow joining an axis tooltip to its axis is drawn as a border triangle, so it needs
+   the same treatment or it stays light-mode grey against the dark panel. */
+[data-bs-theme="dark"] .apexcharts-xaxistooltip-bottom::before,
+[data-bs-theme="dark"] .apexcharts-xaxistooltip-bottom::after {
+    border-bottom-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .apexcharts-legend-text {
+    color: var(--bs-body-color) !important;   /* the library writes this one inline */
+}
+
+[data-bs-theme="dark"] .apexcharts-menu {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .apexcharts-menu-item:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+/* The "no data" message and the tooltip's crosshair line, both near-black by default. */
+[data-bs-theme="dark"] .apexcharts-text.apexcharts-nodata-text {
+    fill: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .apexcharts-xcrosshairs,
+[data-bs-theme="dark"] .apexcharts-ycrosshairs {
+    stroke: var(--bs-border-color);
+}
+
+/* A chart panel should never paint its own ground — the card behind it already did, and an
+   opaque background here is what produces a pale rectangle inside a dark card. */
+.apexcharts-canvas,
+.apexcharts-canvas .apexcharts-inner {
+    background: transparent;
+}

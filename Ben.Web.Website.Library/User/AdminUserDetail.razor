@@ -63,7 +63,14 @@ else
                     </div>
                     <div class="col-12 d-flex flex-wrap gap-4 mt-1">
                         <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsEmailConfirmed" /> Email Confirmed</label>
-                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsTwoFactorEnabled" /> 2FA Enabled</label>
+                        @* Two-step sign-in is the account holder's own choice and is not editable
+                           here — see AdminAppUserController. Shown as status because it is worth
+                           knowing when somebody writes in unable to sign in. *@
+                        <span class="d-flex align-items-center gap-2 text-secondary">
+                            <BenIcon Name="@(_edit.IsTwoFactorEnabled ? "shield" : "shield-off")" />
+                            Two-step sign-in: <strong>@(_edit.IsTwoFactorEnabled ? "on" : "off")</strong>
+                            <span class="small">(theirs to change)</span>
+                        </span>
                         <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsLockoutEnabled" /> Lockout Enabled</label>
                     </div>
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>

@@ -169,6 +169,22 @@ builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configu
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
+
+// ── @names ───────────────────────────────────────────────────────────────────
+// Every account has one, and it is what makes an @mention in the feed resolve to exactly one
+// person. The backfill service gives one to any account that predates the column and then does
+// nothing on every subsequent start.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
+
+// ── Scheduled background work ────────────────────────────────────────────────
+// Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
+// scoped dependencies exactly as a controller does, and nothing holds a database connection open
+// between passes. Registering a job here is all it takes to have it run — see IScheduledJob.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventReminderJob>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
+
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
@@ -194,6 +210,9 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        })
        .AddRoles<IdentityRole<Guid>>()
        .AddEntityFrameworkStores<BenDataContext>()
+       // Every password check funnels through this, which is the only place both outcomes pass —
+       // /login is mapped by MapIdentityApi and has no action of ours to add a line to.
+       .AddSignInManager<Ben.Data.WebApi.Services.RecordingSignInManager>()
        .AddDefaultTokenProviders();
 
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──

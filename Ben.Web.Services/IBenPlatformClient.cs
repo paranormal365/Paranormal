@@ -71,6 +71,24 @@ public interface IBenPlatformClient
     /// <summary>The site's published contact details, for the contact page. Anonymous.</summary>
     Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// Which sections of the site are switched on. Anonymous, because the navigation and the
+    /// route guards need the answer before anyone has signed in. Read through
+    /// <c>SiteFeaturesProvider</c> rather than called directly — it caches.
+    /// </summary>
+    Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default);
+
+    // ── Dashboard statistics ──────────────────────────────────────────────────
+
+    /// <summary>Headline counts for the administrator's dashboard. SuperAdmin.</summary>
+    Task<AdminStatsSummary?> GetAdminStatsSummaryAsync(CancellationToken token = default);
+
+    /// <summary>The dashboard's charts over a window of days. SuperAdmin.</summary>
+    Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default);
+
+    /// <summary>One group's own numbers. Visible to that group's active members.</summary>
+    Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
+
     /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
     Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
 

@@ -24,7 +24,7 @@ public class CaseTransferTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Main.GetByText("Cases", new() { Exact = false });
+        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
         if (!await casesTab.IsVisibleAsync()) return null;
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

@@ -16,6 +16,18 @@ public interface IWebApiClient
     /// response, which is what <c>PostAnonymousAsync</c> would do.
     /// </summary>
     Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Anonymous POST that returns the body <b>whatever the status</b>.
+    /// </summary>
+    /// <remarks>
+    /// For endpoints whose refusal is the answer rather than an error — sign-up, where "that name
+    /// is taken" arrives as a 400 carrying a typed result with the message and the field to point
+    /// at. <c>PostAnonymousAsync</c> would turn all of that into <c>null</c>, and the form would
+    /// have nothing to say but "something went wrong".
+    /// </remarks>
+    Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
 

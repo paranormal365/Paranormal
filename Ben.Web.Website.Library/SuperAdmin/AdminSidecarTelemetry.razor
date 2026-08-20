@@ -33,33 +33,31 @@
     {
         <div class="row g-2 mb-3">
             <div class="col-sm-4">
-                <div class="card"><div class="card-body py-2">
-                    <div class="small text-secondary">Installations seen</div>
-                    <div class="fs-4">@_summary.DistinctInstalls</div>
-                </div></div>
+                <StatCard Label="Installations seen" Icon="download"
+                          Value="@_summary.DistinctInstalls.ToString("N0")" />
             </div>
             <div class="col-sm-4">
-                <div class="card"><div class="card-body py-2">
-                    <div class="small text-secondary">Paired to an account</div>
-                    <div class="fs-4">@_summary.InstallsPairedToAnAccount</div>
-                </div></div>
+                <StatCard Label="Paired to an account" Icon="link"
+                          Value="@_summary.InstallsPairedToAnAccount.ToString("N0")"
+                          Caption="@PairedCaption" />
             </div>
             <div class="col-sm-4">
-                <div class="card"><div class="card-body py-2">
-                    <div class="small text-secondary">People</div>
-                    <div class="fs-4">@_summary.DistinctPeople</div>
-                </div></div>
+                <StatCard Label="People" Icon="users"
+                          Value="@_summary.DistinctPeople.ToString("N0")" />
             </div>
         </div>
 
         @if (_summary.ByVersion.Count > 0)
         {
-            <div class="card mb-3"><div class="card-body py-2">
-                <div class="small text-secondary mb-1">Installations by version</div>
-                @foreach (var v in _summary.ByVersion)
-                {
-                    <span class="badge bg-secondary me-2">@v.Version — @v.Installs</span>
-                }
+            @* These were a row of badges reading "1.2.0 — 7", which is a bar chart with the bars
+               left out: the numbers were all there and the shape of the distribution was not.
+               Which version most installs are on is the actual question this panel answers. *@
+            <div class="card mb-3"><div class="card-body">
+                <div class="small text-secondary mb-2">Installations by version</div>
+                <ApexChart Type="bar" Height="220"
+                           Categories="@_summary.ByVersion.Select(v => v.Version).ToList()"
+                           Series="@VersionSeries"
+                           NoDataText="No sidecar has reported in yet." />
             </div></div>
         }
     }
@@ -104,6 +102,20 @@
 </div>
 
 @code {
+    /// <summary>The version bars, as the one series this chart draws.</summary>
+    private List<ApexChart.ChartSeries> VersionSeries =>
+    [
+        new("Installations", _summary!.ByVersion.Select(v => (double)v.Installs).ToList())
+    ];
+
+    /// <summary>
+    /// How many of the installs seen are tied to an account. Stated as a share because the raw
+    /// pair of numbers invites the reader to do the division themselves and get it wrong.
+    /// </summary>
+    private string? PairedCaption => _summary is { DistinctInstalls: > 0 }
+        ? $"of {_summary.DistinctInstalls:N0} seen"
+        : null;
+
     private IReadOnlyList<SidecarInstallLogRecord> _rows = [];
     private SidecarTelemetrySummaryRecord? _summary;
     private bool _loading = true;

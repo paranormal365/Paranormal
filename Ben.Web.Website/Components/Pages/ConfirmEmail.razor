@@ -1,0 +1,86 @@
+@page "/confirm-email"
+@using Ben.Web.Services
+
+@inject IBenAdminClient AccountClient
+@inject NavigationManager NavManager
+
+<PageTitle>Confirm your email</PageTitle>
+
+@*
+    Where the link in the confirmation email lands.
+
+    It confirms on a button press, not on load, and that is the whole design of this page. Mail
+    scanners, link previewers and corporate security gateways fetch every URL they find in a
+    message; a confirmation that happens on page load is one those tools can complete on somebody's
+    behalf, which defeats the point of proving the address is reachable by a person.
+*@
+
+<div class="container py-5" style="max-width: 480px;">
+    <div class="card">
+        <div class="card-body p-4 text-center">
+
+            @if (_result is null)
+            {
+                <h1 class="h4 mb-3">Confirm your email</h1>
+
+                @if (!_hasLink)
+                {
+                    <p class="text-secondary mb-0">
+                        This page is opened from the link in your confirmation email.
+                    </p>
+                }
+                else
+                {
+                    <p class="text-secondary mb-4">
+                        Press the button to confirm this address and finish setting up your account.
+                    </p>
+                    <button type="button" class="btn btn-primary w-100"
+                            @onclick="ConfirmAsync" disabled="@_busy">
+                        @(_busy ? "Confirming…" : "Confirm my email")
+                    </button>
+                }
+            }
+            else if (_result.Succeeded)
+            {
+                <div class="mb-3" style="font-size:2rem;">✓</div>
+                <h1 class="h4 mb-3">You're all set</h1>
+                <p class="text-secondary mb-4">@_result.Message</p>
+                <a class="btn btn-primary w-100" href="/login">Sign in</a>
+            }
+            else
+            {
+                <h1 class="h4 mb-3">That link didn't work</h1>
+                <p class="text-secondary mb-4">@_result.Message</p>
+                @* No "resend" here yet: it would need its own anonymous, rate-limited endpoint, and
+                   an expired link is rare enough that signing up again is a workable answer. *@
+                <a class="btn btn-outline-secondary w-100" href="/login">Go to sign in</a>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "userId")] private string? UserIdParam { get; set; }
+    [SupplyParameterFromQuery(Name = "code")]   private string? CodeParam { get; set; }
+
+    private ConfirmEmailOutcome? _result;
+    private bool _busy;
+
+    private bool _hasLink =>
+        Guid.TryParse(UserIdParam, out _) && !string.IsNullOrWhiteSpace(CodeParam);
+
+    private async Task ConfirmAsync()
+    {
+        if (!Guid.TryParse(UserIdParam, out var userId) || string.IsNullOrWhiteSpace(CodeParam)) return;
+
+        _busy = true;
+        try
+        {
+            _result = await AccountClient.ConfirmEmailAsync(userId, CodeParam);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

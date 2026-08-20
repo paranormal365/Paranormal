@@ -89,7 +89,11 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var membersTab = Main.GetByText("Members", new() { Exact = false });
+        // The tab itself, by role. A loose GetByText matched the stats panel's "Members"
+        // label the moment the Details tab gained one, and Playwright's strict mode
+        // failed on the ambiguity rather than picking the wrong one — which is the good
+        // outcome, but the locator was always too vague to mean "the tab".
+        var membersTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Members" });
         await Expect(membersTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await membersTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -108,7 +112,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var casesTab = Main.GetByText("Cases", new() { Exact = false });
+        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

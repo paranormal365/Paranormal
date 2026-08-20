@@ -16,15 +16,23 @@ public sealed class WebApiAuthService : IWebApiAuthService
     /// <inheritdoc />
     public LoginFailure? LastLoginFailure { get; private set; }
 
-    public async Task<bool> LoginAsync(string email, string password, CancellationToken token = default)
+    public async Task<bool> LoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default)
     {
-        var attempt = await _identityClient.TryLoginAsync(email, password, token);
+        var attempt = await _identityClient.TryLoginAsync(email, password, twoFactorCode, recoveryCode, token);
         var response = attempt.Token;
         if (response is null || string.IsNullOrWhiteSpace(response.AccessToken))
         {
-            LastLoginFailure = attempt.WasRateLimited
-                ? LoginFailure.RateLimited
-                : LoginFailure.InvalidCredentials;
+            // Three refusals arrive as the same status and mean entirely different things to the
+            // person: wait, enter your code, or go and confirm your email. Collapsing them into
+            // "invalid email or password" sends two of those three somewhere useless.
+            LastLoginFailure =
+                attempt.WasRateLimited          ? LoginFailure.RateLimited
+              : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
+              : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
+              :                                   LoginFailure.InvalidCredentials;
             return false;
         }
 
