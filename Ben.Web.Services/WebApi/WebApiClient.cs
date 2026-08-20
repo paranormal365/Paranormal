@@ -47,6 +47,26 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    /// <inheritdoc />
+    public async Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
+        string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        }
+        catch (Exception)
+        {
+            // A 500 or a proxy error page is not the typed body this expects. Null leaves the
+            // caller to show its own generic message, which is the right outcome for a failure
+            // the server did not describe.
+            return default;
+        }
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);

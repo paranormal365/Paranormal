@@ -170,6 +170,13 @@ builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.G
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
+// ── @names ───────────────────────────────────────────────────────────────────
+// Every account has one, and it is what makes an @mention in the feed resolve to exactly one
+// person. The backfill service gives one to any account that predates the column and then does
+// nothing on every subsequent start.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
+
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
 // scoped dependencies exactly as a controller does, and nothing holds a database connection open

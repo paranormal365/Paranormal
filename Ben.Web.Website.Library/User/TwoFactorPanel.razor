@@ -1,0 +1,248 @@
+@using Ben.Web.Services
+@inject IBenAdminClient AccountClient
+
+@*
+    Two-factor authentication, on the profile's Security tab.
+
+    Opt-in, per account, and nothing here nags: the panel states what it is, offers it, and says
+    plainly what happens if the phone is lost. Somebody who never opens this tab is unaffected.
+
+    Standard TOTP, so any authenticator app works — Duo Mobile, Okta Verify, Google Authenticator,
+    Microsoft Authenticator, 1Password. They all scan the same code. (Duo's push approval and Okta
+    single sign-on are different products and are not what this is.)
+*@
+
+<div class="card">
+    <div class="card-body">
+
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-2">
+            <div>
+                <h5 class="mb-1">Two-step sign-in</h5>
+                <p class="text-secondary small mb-0">
+                    Ask for a code from your phone as well as your password. Optional, and off unless
+                    you turn it on.
+                </p>
+            </div>
+            @if (_status is not null)
+            {
+                <span class="badge @(_status.Enabled ? "bg-success" : "bg-secondary-subtle text-secondary-emphasis")">
+                    @(_status.Enabled ? "On" : "Off")
+                </span>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        @if (_status is null)
+        {
+            <p class="text-secondary small mb-0">Loading…</p>
+        }
+        else if (_recoveryCodes is not null)
+        {
+            @* Shown once. The server stores them hashed and genuinely cannot produce them again. *@
+            <div class="alert alert-warning">
+                <p class="mb-2"><strong>Save these recovery codes now.</strong></p>
+                <p class="small mb-2">
+                    Each one signs you in once if you lose your phone. They are not shown again —
+                    we keep only a scrambled copy and cannot read them back to you.
+                </p>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    @* `recoveryCode` rather than `code`: `@code` inside markup is parsed as the
+                       @code directive, not as a variable. *@
+                    @foreach (var recoveryCode in _recoveryCodes)
+                    {
+                        <code class="border rounded px-2 py-1">@recoveryCode</code>
+                    }
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="DismissCodesAsync">
+                    I've saved them
+                </button>
+            </div>
+        }
+        else if (_setup is not null)
+        {
+            <div class="row g-3">
+                <div class="col-md-auto text-center">
+                    @*
+                        TelerikQRCode renders the otpauth:// URI the app scans. Native rather than a
+                        generated image: no round trip, and the secret never becomes a file on the
+                        server that could be cached or logged.
+                    *@
+                    <div class="d-inline-block bg-white p-2 rounded border">
+                        <TelerikQRCode Value="@_setup.AuthenticatorUri" Size="180px"
+                                       ErrorCorrection="@QRCodeErrorCorrectionLevel.M" />
+                    </div>
+                </div>
+                <div class="col-md">
+                    <ol class="small ps-3 mb-3">
+                        <li class="mb-2">
+                            Open your authenticator app — Duo Mobile, Okta Verify, Google
+                            Authenticator, Microsoft Authenticator and 1Password all work.
+                        </li>
+                        <li class="mb-2">Scan this code, or type the key in by hand:
+                            <div><code>@_setup.SharedKey</code></div>
+                        </li>
+                        <li>Enter the six-digit code it shows.</li>
+                    </ol>
+
+                    <div class="d-flex align-items-start gap-2">
+                        <TelerikMaskedTextBox @bind-Value="@_code" Mask="000000"
+                                              aria-label="Six-digit code from your authenticator app"
+                                              Placeholder="000000" Width="9rem" />
+                        <button type="button" class="btn btn-primary" @onclick="EnableAsync" disabled="@_busy">
+                            @(_busy ? "Checking…" : "Turn on")
+                        </button>
+                        <button type="button" class="btn btn-link" @onclick="CancelSetup" disabled="@_busy">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_status.Enabled)
+        {
+            <p class="small mb-3">
+                On. You'll be asked for a code when you sign in.
+                @if (_status.RecoveryCodesRemaining > 0)
+                {
+                    <text>You have <strong>@_status.RecoveryCodesRemaining</strong> unused recovery code@(_status.RecoveryCodesRemaining == 1 ? "" : "s").</text>
+                }
+                else
+                {
+                    <span class="text-danger">You have no recovery codes left — make new ones now, or losing your phone will lock you out.</span>
+                }
+            </p>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <TelerikMaskedTextBox @bind-Value="@_code" Mask="000000"
+                                      aria-label="Six-digit code from your authenticator app"
+                                      Placeholder="000000" Width="9rem" />
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RegenerateAsync" disabled="@_busy">
+                    New recovery codes
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DisableAsync" disabled="@_busy">
+                    Turn off
+                </button>
+            </div>
+            <div class="form-text">
+                Both need a current code from your app — otherwise anyone at your unlocked computer
+                could switch this off.
+            </div>
+        }
+        else
+        {
+            <button type="button" class="btn btn-primary" @onclick="BeginSetupAsync" disabled="@_busy">
+                @(_busy ? "Starting…" : "Turn on two-step sign-in")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private TwoFactorStatus? _status;
+    private TwoFactorSetup? _setup;
+    private string[]? _recoveryCodes;
+    private string _code = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _status = await AccountClient.GetTwoFactorStatusAsync();
+        StateHasChanged();
+    }
+
+    private async Task BeginSetupAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            // Bounded on purpose. Without it a call that never comes back leaves the button on
+            // "Starting…" for ever, with nothing on screen to say anything is wrong and no way
+            // forward — the worst failure a page can have, because it looks like it is working.
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+            _setup = await AccountClient.BeginTwoFactorSetupAsync(timeout.Token);
+            if (_setup is null) _error = "Couldn't start setup. Try again in a moment.";
+            _code = string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            _error = "Setting up timed out. Try again in a moment.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't start setup: {ex.GetType().Name}.";
+        }
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private void CancelSetup()
+    {
+        // The key stays reset on the server. That is deliberate: an abandoned setup leaves no
+        // half-configured secret, and starting again issues a fresh one.
+        _setup = null;
+        _code = string.Empty;
+        _error = null;
+    }
+
+    private async Task EnableAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (codes, error) = await AccountClient.EnableTwoFactorAsync(_code);
+            if (error is not null) { _error = error; return; }
+
+            _recoveryCodes = codes;
+            _setup = null;
+            _code = string.Empty;
+            await RefreshAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RegenerateAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (codes, error) = await AccountClient.RegenerateRecoveryCodesAsync(_code);
+            if (error is not null) { _error = error; return; }
+
+            _recoveryCodes = codes;
+            _code = string.Empty;
+            await RefreshAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DisableAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var error = await AccountClient.DisableTwoFactorAsync(_code);
+            if (error is not null) { _error = error; return; }
+
+            _code = string.Empty;
+            await RefreshAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DismissCodesAsync()
+    {
+        _recoveryCodes = null;
+        await RefreshAsync();
+    }
+}

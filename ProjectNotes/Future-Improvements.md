@@ -5406,3 +5406,176 @@ along — none of these are decisions, just the questions the schema will ask:
   records, which argues for either a dry-run preview or a soft merge that can be unwound.
 
 Sequence: after the current nine-phase plan. Nothing depends on it.
+
+---
+
+## 111. Evidence at a public investigation — who may add it, and is it all public? (raised 2026-08-20 by Ben)
+
+Ben, while the accounts work was in flight: *"When we complete this, we need to address who and how
+people who attend a group's public investigations are able to add evidence and if public events have
+only public evidence and documentation."*
+
+Two questions, and they are not the same one.
+
+### Who may add evidence, and how
+
+A public event brings **strangers** — that is the whole point of item 87, and it is what makes this
+hard. The people who turn up are not group members, have no role, and in some cases have a
+passwordless account created by clicking a link in an email. Today only the group's own members can
+attach anything to an investigation.
+
+The shapes worth weighing when we get here:
+
+- **Nobody but members.** Simplest, and wastes the fact that thirty people were there with phones.
+- **Attendees may submit, a member must accept.** A queue, like the file-permission requests already
+  built. Keeps the group's record theirs while letting visitors contribute.
+- **Attendees may add directly.** Fastest, and makes the group's evidence trail something outsiders
+  can write to — which is a lot to hand somebody who signed up with an email address a fortnight ago.
+
+The middle one is almost certainly right, and it has a precedent in this codebase to copy rather
+than invent.
+
+### Is everything at a public event necessarily public?
+
+Item 87 already recorded the bargain: *"All collected evidence and data is public and cannot be made
+private for an open investigation. The location can be scrubbed and hidden to the public not
+attending, but evidence is not."* That settles the **group's own** findings.
+
+What it does not settle, and what needs deciding:
+
+- **A visitor's own recording of themselves or their friends.** Publishing it because they attended
+  a public event is a different promise from the group publishing its own findings.
+- **Other attendees appearing in someone's footage.** Thirty strangers in a dark building, and any
+  of them may be identifiable. There is already a two-key consent rule for member photos; this is
+  the same question with more people and less warning.
+- **Documentation** — reports, notes, timelines — as distinct from raw evidence. The quoted rule
+  says "evidence"; whether a group's written write-up is equally locked open is not stated.
+
+Sequence: after the feed and publications. It depends on nothing in them, but it is a policy
+decision as much as a build, and it should not be made in the middle of something else.
+
+---
+
+## 112. The 2FA enrolment panel hangs on "Starting…" (raised 2026-08-20 — OPEN)
+
+Pressing **Turn on two-step sign-in** on the profile's Security tab leaves the button reading
+"Starting…" indefinitely. The QR never appears and no error is shown.
+
+**What is and is not broken.** The API underneath is complete and verified end to end against a
+live server with real TOTP codes computed from the secret it issues: setup, enable, sign-in with an
+app code, sign-in with a recovery code, single-use enforcement on recovery codes, and disable. It
+also rendered correctly through the browser once, early in the same session, before the panel was
+finished. It is the **panel** that hangs, not two-factor authentication.
+
+**What the evidence rules out.** A twenty-second `CancellationTokenSource` around the call does not
+surface either — no timeout message, no error, no re-render — and `finally` sets `_busy = false` and
+calls `StateHasChanged`. So the await is not simply slow: **the circuit stops re-rendering
+altogether**. That also rules out the HTTP call itself, and swapping `PostAsync` for
+`SendExpectingReasonAsync` (the helper every other POST on this page uses successfully) changed
+nothing. `GET /api/me/2fa` on the same page works — the panel renders "Off" from it.
+
+**Where to look next**, roughly in order of suspicion:
+
+- Something in the chain doing sync-over-async and deadlocking the circuit's synchronisation
+  context. A blocked circuit fits every symptom, including cancellation appearing to do nothing.
+- `TelerikQRCode`'s first render — it is the one component on this page never used anywhere else in
+  the product, and it is what the successful branch renders.
+- The interaction between the panel's `StateHasChanged` and Telerik's masked textboxes.
+
+**Reproduce it** by signing in as any account with 2FA off, opening `/profile` → Security, and
+pressing the button. `AccountTests.EnrollingWithARealCodeTurnsItOn` is written, is currently
+`Assert.Ignore`d pointing at this item, and will pass once the panel does — it should not be
+deleted.
+
+
+---
+
+## 113. Accounts: sign-up, @names, email confirmation and two-step sign-in (2026-08-20 — mostly shipped)
+
+Four things Ben asked for in one stretch, all of them account identity and all of them prerequisites
+for the public feed rather than part of it.
+
+### @names — shipped
+
+Ben: *"Lets let people choose a unique name to use for the @name when they create their account. We
+verify it is not already taken."* and *"For now, we will not let them change their @name but in the
+future we might... but super low priority."*
+
+`AppUser.Handle`, unique, lower-cased, 3–30 characters of letters, digits and underscores, starting
+with a letter. Reserved words are refused — route words that would make a profile URL read like a
+section of the site, and names somebody would trust in a mention (`support`, `admin`, `ishaunted`).
+Checked live as it is typed on the sign-up page; the unique index is what actually decides, and
+registration reports a collision that lands between the check and the insert.
+
+**Why a handle at all**, rather than matching display names: names here are neither unique nor free
+of spaces, so `@sarahmitchell` could only be matched by stripping punctuation and hoping exactly one
+account came back. Two people called Sarah Mitchell would then have meant notifying both or neither
+— and the answer would change as accounts were added, so a post's meaning would depend on who else
+had signed up since.
+
+Every account has one. `UserHandleBackfillService` gives one to anything created before the column
+existed and does nothing on every start after that; the other creation paths (Entra, event magic
+links, the seeders, an administrator) get one derived from the display name or email and uniquified.
+
+**Follow-up, explicitly low priority per Ben:** letting somebody change their @name later. It is not
+free — the handle appears in other people's posts — but the mention tables already store the
+account's id rather than the text, so old mentions would keep pointing at the right person.
+
+### Sign-up and email confirmation — shipped
+
+There was **no self-service sign-up at all** before this: accounts arrived through Entra, an invite,
+or an administrator. `/signup` now creates one, and `/confirm-email` is where the link lands.
+
+`MapIdentityApi`'s own `/register` could not be used — it takes an email and a password and nothing
+else, so an account made through it has no display name and no @name, and a handle cannot be added
+afterwards without letting people change it. Registration is therefore our own endpoint, generating
+the same token type and pointing at the same confirmation flow.
+
+Two decisions worth keeping:
+
+- **The answer is identical whether or not the address is already registered.** An endpoint that
+  says "that email is taken" is a way of testing who has an account here — worth more care on a site
+  about people's homes than a precise error is worth. The real account holder gets an email saying
+  somebody tried, which is the only party entitled to know. The @name is reported precisely, because
+  it is public by nature.
+- **Confirming happens on a button press, not on page load.** Mail scanners and security gateways
+  fetch every link in a message; a confirmation that happened on load is one they can complete on
+  somebody's behalf, which proves nothing about the address reaching a person.
+
+### Two-step sign-in — API shipped, panel blocked
+
+Standard TOTP, so **Duo Mobile and Okta Verify both work**, along with Google Authenticator,
+Microsoft Authenticator and 1Password — they scan the same code. (Duo's push approval and Okta as a
+single-sign-on provider are separate integrations and are not this. Okta as an identity provider
+would sit beside the existing Entra OIDC path.)
+
+**Opt-in, per account, and never required** — Ben: *"Let the end user determine if they want 2FA or
+not. It is not an administrator-related setting."* The administrator screen previously had a
+`TwoFactorEnabled` checkbox with no enrolment behind it, which would have switched on a second
+factor nobody could satisfy and locked that person out of their own account. The control is gone and
+the field is no longer written there; it shows as read-only status, because it is worth knowing when
+somebody writes in unable to sign in.
+
+Sign-in needed no new endpoint: `MapIdentityApi`'s `/login` already takes `twoFactorCode` and
+`twoFactorRecoveryCode` and answers `RequiresTwoFactor`. Reading that detail also fixed a separate
+long-standing lie — an unconfirmed account was being told "invalid email or password", which sends
+somebody off to reset a password that was always right. Four refusals now say four different things.
+
+**Telerik 14.1.0 has no OTP input component**, so the code boxes are `TelerikMaskedTextBox` with a
+`000000` mask. It does have `TelerikQRCode`, which is what renders the enrolment code.
+
+**The panel hangs — see item 112.** The API is complete and verified end to end with real TOTP
+codes. Do not read item 112 as "2FA does not work"; read it as "the enrolment page does not".
+
+### Found along the way
+
+- A **captive dependency** — a hosted service holding a scoped service — which the container refuses
+  to build, at startup, before anything else runs. Second instance of that class this month.
+- **`TelerikMaskedTextBox` renders no `id`**, only a `data-id` GUID, so a label pointing at the
+  component's `Id` names nothing: clicking it does nothing and a screen reader announces an
+  unlabelled box. `LabelAssociationTests` caught it; the accessible name comes from `aria-label`
+  instead, and a test now asserts the attribute reaches the input.
+- **Blazor Server pages are server-rendered long before their circuit connects**, so a test that
+  types as soon as an input appears triggers no handler at all and then waits out its timeout. It
+  passes or fails depending on how warm the host is, which reads as flakiness. The account tests
+  wait on the page's own echo to prove interactivity first.

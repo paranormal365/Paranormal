@@ -193,6 +193,17 @@
                     </div>
                 </div>
             </BenTab>
+
+            @* Security is its own tab rather than a card under About: it is where somebody goes
+               deliberately, and mixing "your photo" with "how you sign in" makes both harder to
+               find. *@
+            <BenTab Title="Security">
+                <div class="row g-3">
+                    <div class="col-lg-8">
+                        <TwoFactorPanel />
+                    </div>
+                </div>
+            </BenTab>
         </BenTabs>
     }
 </div>

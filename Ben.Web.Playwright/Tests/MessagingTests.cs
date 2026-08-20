@@ -158,6 +158,12 @@ public class MessagingTests : BenTestBase
         await Expect(recipient).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await recipient.ClickAsync();   // the label, because the checkbox is a form-check input
 
+        // Wait for the tick to actually land. Ticking a box is a round trip over the circuit, and
+        // pressing Send before it completes sends a direct message addressed to nobody — which is
+        // precisely the bug this test exists to catch, so racing it here would make the test lie
+        // about the very thing it is checking.
+        await Expect(Main.Locator("input[id^='rcpt-']:checked")).ToHaveCountAsync(1, new() { Timeout = 15_000 });
+
         await Main.Locator("input[id^='orgmessages-subject']").FillAsync(subject);
         await TypeIntoEditorAsync("Sent by an automated test.");
 
@@ -325,5 +331,12 @@ public class MessagingTests : BenTestBase
 
         // The binding updates on blur, so move focus off the editor before pressing Send.
         await Main.Locator("input[id^='orgmessages-subject']").ClickAsync();
+
+        // And then wait for the blur to actually land. Under Blazor Server that commit is a round
+        // trip over the circuit, and Send is disabled until the body reaches the server — so the
+        // button's own state is the signal that the message is ready to send. Without this the
+        // test races the circuit and fails intermittently, more often when the host is busy.
+        await Expect(Main.GetByRole(AriaRole.Button, new() { Name = "Send" }))
+            .ToBeEnabledAsync(new() { Timeout = 20_000 });
     }
 }

@@ -48,15 +48,64 @@
                     <ValidationMessage For="@(() => _model.Password)" class="text-danger small" />
                 </div>
 
+                @*
+                    The second factor, shown only once the server has said this account needs one.
+                    Asking everybody up front would be asking most people for something they do not
+                    have — 2FA is opt-in, per account.
+                *@
+                @if (_needsTwoFactor)
+                {
+                    <div class="mb-3">
+                        @*
+                            This label deliberately has no target attribute. TelerikMaskedTextBox
+                            does not render an id on its inner input — only a data-id GUID — so
+                            pointing a label at the component's Id matched nothing: clicking the
+                            label did nothing, and a screen reader announced an unlabelled box.
+                            LabelAssociationTests caught it. The accessible name comes from
+                            aria-label instead, which Telerik splats onto the input.
+
+                            (That guard scans raw file text, so writing the broken attribute out in
+                            a comment trips it too — which is why this paragraph describes it in
+                            words.)
+                        *@
+                        <label class="form-label">
+                            @(_useRecoveryCode ? "Recovery code" : "Authentication code")
+                        </label>
+                        <TelerikMaskedTextBox @bind-Value="@_twoFactorCode"
+                                              Mask="@(_useRecoveryCode ? null : "000000")"
+                                              Class="w-100"
+                                              aria-label="@(_useRecoveryCode ? "Recovery code" : "Authentication code")"
+                                              Placeholder="@(_useRecoveryCode ? "xxxxx-xxxxx" : "000000")" />
+                        <div class="form-text">
+                            @if (_useRecoveryCode)
+                            {
+                                <text>One of the codes you saved when you turned this on. Each works once.</text>
+                            }
+                            else
+                            {
+                                <text>The six-digit code from your authenticator app.</text>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm px-0"
+                                @onclick="@(() => { _useRecoveryCode = !_useRecoveryCode; _twoFactorCode = string.Empty; })">
+                            @(_useRecoveryCode ? "Use my authenticator app instead" : "I can't use my app — use a recovery code")
+                        </button>
+                    </div>
+                }
+
                 @if (_errorMessage is not null)
                 {
                     <div class="alert alert-danger py-2 mb-3">@_errorMessage</div>
                 }
 
                 <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
-                    @(_isLoading ? "Signing in..." : "Sign In")
+                    @(_isLoading ? "Signing in..." : _needsTwoFactor ? "Verify" : "Sign In")
                 </button>
             </EditForm>
+
+            <p class="text-center text-secondary small mt-3 mb-0">
+                New here? <a href="/signup">Create an account</a>.
+            </p>
 
             @if (_entraEnabled)
             {
@@ -110,26 +159,55 @@
             NavManager.NavigateTo(RedirectTarget);
     }
 
+    private bool _needsTwoFactor;
+    private bool _useRecoveryCode;
+    private string _twoFactorCode = string.Empty;
+
     private async Task HandleLogin()
     {
         _isLoading = true;
         _errorMessage = null;
 
-        var success = await AuthService.LoginAsync(_model.Email, _model.Password);
+        var code = string.IsNullOrWhiteSpace(_twoFactorCode) ? null : _twoFactorCode.Trim();
+
+        var success = await AuthService.LoginAsync(
+            _model.Email,
+            _model.Password,
+            twoFactorCode: _useRecoveryCode ? null : code,
+            recoveryCode:  _useRecoveryCode ? code : null);
 
         if (success)
         {
             NavManager.NavigateTo(RedirectTarget);
+            return;
         }
-        else
+
+        _isLoading = false;
+
+        // Four refusals, four different things to do about them. Reporting them all as "invalid
+        // email or password" sends three of the four somewhere useless — to reset a password that
+        // was right, or to retype credentials the server never even looked at.
+        switch (AuthService.LastLoginFailure)
         {
-            // Not always the password. The API rate-limits sign-in attempts, and reporting that
-            // refusal as "Invalid email or password" sends someone off to reset a password that
-            // was never wrong.
-            _errorMessage = AuthService.LastLoginFailure == LoginFailure.RateLimited
-                ? "Too many sign-in attempts. Please wait a minute and try again."
-                : "Invalid email or password.";
-            _isLoading = false;
+            case LoginFailure.RequiresTwoFactor:
+                _needsTwoFactor = true;
+                // Not an error the first time: the password was correct and this is the next step.
+                _errorMessage = code is null
+                    ? null
+                    : "That code wasn't right. Try the current one from your app.";
+                break;
+
+            case LoginFailure.RateLimited:
+                _errorMessage = "Too many sign-in attempts. Please wait a minute and try again.";
+                break;
+
+            case LoginFailure.EmailNotConfirmed:
+                _errorMessage = "Confirm your email address first — check your inbox for the link we sent.";
+                break;
+
+            default:
+                _errorMessage = "Invalid email or password.";
+                break;
         }
     }
 

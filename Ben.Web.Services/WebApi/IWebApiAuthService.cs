@@ -2,7 +2,15 @@ namespace Ben.Web.Services.WebApi;
 
 public interface IWebApiAuthService
 {
-    Task<bool> LoginAsync(string email, string password, CancellationToken token = default);
+    /// <summary>
+    /// Signs in. Two-factor authentication is <b>opt-in per account</b>: leave both code
+    /// parameters null for the ordinary case, and supply one only after a previous attempt
+    /// reported <see cref="LoginFailure.RequiresTwoFactor"/>.
+    /// </summary>
+    Task<bool> LoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default);
 
     /// <summary>
     /// Why the last <see cref="LoginAsync"/> returned false, or null when it succeeded. Lets a
@@ -24,4 +32,17 @@ public enum LoginFailure
 
     /// <summary>Too many attempts in the window; the caller should wait, not re-type.</summary>
     RateLimited,
+
+    /// <summary>
+    /// The password was right; this account has two-factor authentication switched on and a code
+    /// is needed. Not a failure to report as one — the caller should ask for the code.
+    /// </summary>
+    RequiresTwoFactor,
+
+    /// <summary>
+    /// The account exists but its email address has never been confirmed, so it cannot sign in
+    /// yet. Telling somebody their password is wrong here sends them to reset a password that was
+    /// always right.
+    /// </summary>
+    EmailNotConfirmed,
 }
