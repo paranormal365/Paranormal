@@ -1,6 +1,6 @@
-# The remaining-work plan — phases 1 to 5
+# The remaining-work plan — phases 1 to 7
 
-One branch carrying the first five phases of the nine-phase plan agreed on 2026-08-20. Each phase is
+One branch carrying the first seven phases of the nine-phase plan agreed on 2026-08-20. Each phase is
 its own commit and closes its own backlog item; the branch exists so they land together after being
 exercised against one another.
 
@@ -11,9 +11,10 @@ exercised against one another.
 | 3 | Sign-in events, the administrator dashboard, and per-group stats | #101 |
 | 4 | The profile page, in the template's hero-and-tabs layout | #99 |
 | 5 | Internal messages, in the template's mail layout | #100 |
+| 6 | The first background scheduler, and event reminders | #87 |
+| 7 | Editor Server-tab scoping, toolbar space, WASM diagnostics | #91, #95, #96 |
 
-Phases 6 to 9 — the background scheduler, the small editor items, the public feed and publications —
-are not on this branch.
+Phases 8 and 9 — the public feed and publications — are not on this branch.
 
 ## The shape of the plan
 
@@ -32,7 +33,7 @@ the site carries one charting library rather than two.
 
 ## What each phase found
 
-The pattern across all five is the same, and it is worth stating once: **almost every real bug on
+The pattern across all seven is the same, and it is worth stating once: **almost every real bug on
 this branch was found by looking at the running page or by signing in as somebody else, not by
 reading the code.**
 
@@ -81,6 +82,49 @@ two most privileged seats — logged as backlog item **#109**.
 The direct-message bug this item was partly about — compose sending `RecipientUserIds: []` while
 offering Direct Message and Case Team — is fixed, and is covered by a test that goes and reads the
 message **as the recipient** rather than trusting the composer.
+
+## Phase 6, and the first background worker
+
+`ScheduledWorkService` wakes every five minutes and runs each registered `IScheduledJob` in its own
+scope and its own try/catch. **No Hangfire, no Quartz** — the work is a handful of jobs on a timer
+with no cron expressions, no backoff, no dashboard and no persisted queue, and the one guarantee
+that matters is a unique index rather than anything a job framework supplies. Adding a job is one
+`AddScoped` line.
+
+The job on it emails anyone who said they are coming to an event, about a day beforehand. Not the
+merely invited and not the tentative: an invitation nobody answered is not a commitment, and mail
+about a thing somebody never agreed to is mail they did not ask for.
+
+Three decisions worth keeping:
+
+- **The first pass waits 30 seconds.** Jobs that fire the instant the process starts run while
+  migrations may still be applying, and turn a crash-restart loop into a job loop.
+- **Job resolution happens inside the guard, not before it.** An exception escaping `ExecuteAsync`
+  stops the whole host by default, so a job whose constructor threw would have turned "reminders
+  are broken" into "the API is down". Found while writing the tests rather than by them.
+- **The marker is written after the send, never before.** Writing it first would make a failed send
+  permanent silence; writing it after means the worst case is a duplicate, which is much the better
+  of the two for somebody expected somewhere tomorrow.
+
+## Phase 7, and two hosts that disagreed
+
+The editor's Server tab gets a scope selector — All media / My files / By case, cascading to a
+single visit. The scope **narrows and cannot widen**: the server computes the full audience union
+first and intersects, so naming a case you have no part in returns nothing.
+
+Building it surfaced that **the two hosts had been listing different things**. The WASM host called
+`/api/upload-files`, which is owner-only; the Blazor Server site called `/api/media-library/files`,
+which aggregates. The same tab in the same editor showed a narrower list on one host than the other
+and omitted images there too. Both now use the aggregating endpoint.
+
+It also surfaced a **stale-response race**, found by a test that changed scope twice quickly —
+which is what somebody hunting for a file actually does. The older fetch landed last and
+repopulated the list under a selector that no longer described it. The failing test went from a
+17-second timeout to two seconds once a generation counter was added, which is how the race
+announced itself.
+
+Item **#95** turned out to be already done, with only its header left stale — the same trap items
+9, 55, 92 and 96 set here. Verified in the running editor rather than by reading the code.
 
 ## Deviations from the plan as written
 
