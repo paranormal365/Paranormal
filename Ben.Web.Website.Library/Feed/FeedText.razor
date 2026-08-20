@@ -1,0 +1,64 @@
+@using Ben.Data.Common.Helpers
+@using Ben.Service.Models.Feed
+
+@*
+    A feed post's body, with its @names and #tags turned into links.
+
+    The splitting lives in FeedTextSegmenter, in Common, so it can be tested directly rather than
+    through a component. This file is the rendering half and nothing else.
+
+    Two things it deliberately does not do:
+
+      - It never renders the body as HTML. A feed post is plain text typed by anybody signed in.
+        Emitting each run as Razor content means the framework HTML-encodes it; assembling a string
+        and casting it to MarkupString would not, and would hand every poster an injection point.
+
+      - It never decides for itself who was mentioned. The post's mention records carry the account
+        id the server actually resolved and notified, so a link points at that person even after
+        they change their display name — and an @name that reached nobody stays plain text, which
+        is what its author should see.
+*@
+
+@foreach (var segment in FeedTextSegmenter.Segment(Body))
+{
+    @switch (segment.Kind)
+    {
+        case FeedSegmentKind.Mention when Resolve(segment.Value) is { } appUserId:
+            <a href="@($"/feed/people/{appUserId}")" class="bv-feed-mention">@segment.Text</a>
+            break;
+
+        case FeedSegmentKind.Hashtag:
+            <a href="@($"/feed/tags/{Uri.EscapeDataString(segment.Value)}")" class="bv-feed-tag">@segment.Text</a>
+            break;
+
+        default:
+            @segment.Text
+            break;
+    }
+}
+
+@code {
+    /// <summary>The post's text, exactly as it was written.</summary>
+    [Parameter, EditorRequired] public string Body { get; set; } = string.Empty;
+
+    /// <summary>The accounts the server resolved when the post was written.</summary>
+    [Parameter] public IReadOnlyList<FeedMentionRecord> Mentions { get; set; } = [];
+
+    /// <summary>
+    /// The account a handle refers to, or null when the server resolved nobody.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the <b>handle</b>, which is what appears in the body and is unique and permanent.
+    /// Matching on display name would break the moment somebody renamed themselves, and could never
+    /// have been unambiguous in the first place — which is why handles exist.
+    /// </remarks>
+    private Guid? Resolve(string handle)
+    {
+        foreach (var mention in Mentions)
+        {
+            if (string.Equals(mention.Handle, handle, StringComparison.Ordinal)) return mention.AppUserId;
+        }
+
+        return null;
+    }
+}

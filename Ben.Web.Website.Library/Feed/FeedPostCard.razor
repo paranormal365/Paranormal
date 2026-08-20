@@ -1,0 +1,72 @@
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenUserState UserState
+
+@*
+    One post in the feed.
+
+    The author's name links to their feed profile, the body is linkified by FeedText, and the
+    footer carries the actions a reader has: reply, follow, report.
+
+    Report is offered once. After that the control says so rather than disappearing — a control
+    that vanishes leaves somebody wondering whether their report registered, and inviting a second
+    one would only be refused.
+*@
+
+<article class="card mb-2 bv-feed-post">
+    <div class="card-body py-3">
+
+        <div class="d-flex align-items-baseline gap-2 mb-1 flex-wrap">
+            <a href="@($"/feed/people/{Post.AuthorAppUserId}")" class="fw-semibold text-decoration-none">
+                @Post.AuthorDisplayName
+            </a>
+            <span class="text-secondary small">
+                @Post.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+            </span>
+
+            @if (!Post.IsOwnPost && ShowFollow)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0 ms-auto"
+                        @onclick="() => OnFollowToggled.InvokeAsync(Post)">
+                    @(Post.AuthorIsFollowedByCurrentUser ? "Following" : "Follow")
+                </button>
+            }
+        </div>
+
+        <div class="bv-feed-post__body">
+            <FeedText Body="@Post.Body" Mentions="@Post.Mentions" />
+        </div>
+
+        <div class="d-flex align-items-center gap-3 mt-2 small">
+            <a href="@($"/feed/{Post.Id}")" class="text-decoration-none text-secondary">
+                @(Post.ReplyCount == 1 ? "1 reply" : $"{Post.ReplyCount} replies")
+            </a>
+
+            @if (!Post.IsOwnPost)
+            {
+                @if (Post.ReportedByCurrentUser)
+                {
+                    <span class="text-secondary">Reported</span>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-link btn-sm p-0 text-secondary"
+                            @onclick="() => OnReportRequested.InvokeAsync(Post)">
+                        Report
+                    </button>
+                }
+            }
+        </div>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public FeedPostRecord Post { get; set; } = default!;
+
+    /// <summary>Hidden on a profile page, where one follow button at the top says it better.</summary>
+    [Parameter] public bool ShowFollow { get; set; } = true;
+
+    [Parameter] public EventCallback<FeedPostRecord> OnFollowToggled { get; set; }
+    [Parameter] public EventCallback<FeedPostRecord> OnReportRequested { get; set; }
+}

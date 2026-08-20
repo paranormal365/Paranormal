@@ -1,0 +1,157 @@
+@page "/feed/{PostId:guid}"
+@namespace Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Post</PageTitle>
+
+@*
+    One post and its replies.
+
+    Opening this is what marks the post read, which is how a mention stops appearing on the bell —
+    the server records it, this page only has to be visited. A post scrolling past in the feed does
+    not count, deliberately: "you were mentioned" is the notification somebody would most resent
+    losing without seeing it.
+
+    Replies read oldest first. A conversation is read in the order it happened; only the feed
+    itself is newest-first, because that is a list of separate things rather than one thread.
+*@
+
+<FeatureGate Flag="@SiteFeatures.PublicFeed">
+    <div class="container py-3" style="max-width: 680px;">
+
+        <div class="mb-3">
+            <a href="/feed" class="btn btn-outline-secondary btn-sm">
+                <BenIcon Name="arrow-left" Class="me-1" />Feed
+            </a>
+        </div>
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_root is null)
+        {
+            @* Deleted, hidden, or never existed — all the same to a reader, and saying which
+               would tell somebody their post was hidden by a route that is not the way to tell
+               them. *@
+            <div class="text-center text-secondary py-5">
+                <p class="mb-0">That post isn't here.</p>
+            </div>
+        }
+        else
+        {
+            <FeedPostCard Post="@_root" OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync" />
+
+            <div class="ms-3 ps-3 border-start">
+                <FeedComposer ParentPostId="@PostId" Placeholder="Write a reply…" ButtonText="Reply"
+                              OnPosted="OnReplied" />
+
+                @if (_replies.Count == 0)
+                {
+                    <p class="text-secondary small">No replies yet.</p>
+                }
+                else
+                {
+                    @foreach (var reply in _replies)
+                    {
+                        <FeedPostCard Post="@reply" OnFollowToggled="ToggleFollowAsync"
+                                      OnReportRequested="ReportAsync" />
+                    }
+                }
+            </div>
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-3">@_error</div>
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid PostId { get; set; }
+
+    private FeedPostRecord? _root;
+    private readonly List<FeedPostRecord> _replies = [];
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _root = null;
+        _replies.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // The endpoint returns the root first, then its replies in order.
+            var thread = await Feed.GetThreadAsync(PostId);
+            if (thread.Count == 0) return;
+
+            _root = thread[0];
+            _replies.AddRange(thread.Skip(1));
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnReplied(FeedPostRecord reply)
+    {
+        _replies.Add(reply);
+
+        // Keep the count on the root card honest without a round trip — it is displayed right
+        // above, and a reply that appears while the count still says none looks like a bug.
+        if (_root is not null) _root = _root with { ReplyCount = _root.ReplyCount + 1 };
+    }
+
+    private async Task ToggleFollowAsync(FeedPostRecord post)
+    {
+        var nowFollowing = !post.AuthorIsFollowedByCurrentUser;
+
+        var ok = nowFollowing
+            ? await Feed.FollowAsync(post.AuthorAppUserId)
+            : await Feed.UnfollowAsync(post.AuthorAppUserId);
+
+        if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+        if (_root?.AuthorAppUserId == post.AuthorAppUserId)
+            _root = _root with { AuthorIsFollowedByCurrentUser = nowFollowing };
+
+        for (var i = 0; i < _replies.Count; i++)
+        {
+            if (_replies[i].AuthorAppUserId == post.AuthorAppUserId)
+                _replies[i] = _replies[i] with { AuthorIsFollowedByCurrentUser = nowFollowing };
+        }
+    }
+
+    private async Task ReportAsync(FeedPostRecord post)
+    {
+        if (!await Feed.ReportPostAsync(post.Id, null))
+        {
+            _error = "Couldn't report that. Try again in a moment.";
+            return;
+        }
+
+        if (_root?.Id == post.Id) _root = _root with { ReportedByCurrentUser = true };
+
+        var index = _replies.FindIndex(r => r.Id == post.Id);
+        if (index >= 0) _replies[index] = _replies[index] with { ReportedByCurrentUser = true };
+    }
+}

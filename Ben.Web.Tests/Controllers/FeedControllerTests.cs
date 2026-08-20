@@ -1,0 +1,416 @@
+using Ben.Data.Common.Enums;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Controllers;
+using Ben.Data.WebApi.Services;
+using Ben.Service.Models.Feed;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Xunit;
+
+namespace Ben.Web.Tests.Controllers;
+
+/// <summary>
+/// The public feed: who can see what, what a mention resolves to, and what a report does.
+/// </summary>
+/// <remarks>
+/// <para>Three properties here are the ones that would matter if this were got wrong, and each has
+/// its own test rather than being implied by another: <b>the feed 404s wholesale when switched
+/// off</b>, <b>a hidden post disappears from every read path</b>, and <b>a report never hides
+/// anything by itself</b>.</para>
+///
+/// <para>The parser's own behaviour lives in <c>FeedTextParserTests</c>; this covers what the
+/// controller does with what the parser found — which accounts a mention actually resolves to, and
+/// what happens when it resolves to nobody.</para>
+/// </remarks>
+public sealed class FeedControllerTests
+{
+    private sealed class SimpleFactory(DbContextOptions<BenDataContext> opts) : IDbContextFactory<BenDataContext>
+    {
+        public BenDataContext CreateDbContext() => new(opts);
+        public Task<BenDataContext> CreateDbContextAsync(CancellationToken ct = default) => Task.FromResult(new BenDataContext(opts));
+    }
+
+    private static IDbContextFactory<BenDataContext> CreateFactory()
+        => new SimpleFactory(new DbContextOptionsBuilder<BenDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+    private static FeedController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
+        => new(factory)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+    private static AppUser MakeUser(string handle, string? displayName = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserName = $"{handle}@test.com", NormalizedUserName = $"{handle}@TEST.COM",
+        Email = $"{handle}@test.com", NormalizedEmail = $"{handle}@TEST.COM",
+        DisplayName = displayName ?? handle, Handle = handle, DateCreated = DateTime.UtcNow,
+    };
+
+    /// <summary>A database with the feed switched on and the given people in it.</summary>
+    private static async Task<IDbContextFactory<BenDataContext>> SeedAsync(
+        bool feedOn = true, params AppUser[] users)
+    {
+        var factory = CreateFactory();
+        await using var db = factory.CreateDbContext();
+
+        db.Users.AddRange(users);
+
+        // The flag defaults to OFF when no row exists, so switching it on is an explicit row —
+        // which is also what production looks like once a SuperAdmin has turned it on.
+        db.SiteSettings.Add(new SiteSetting
+        {
+            Id = Guid.NewGuid(),
+            Key = SiteSettingKeys.FeaturePublicFeed,
+            Value = feedOn ? "true" : "false",
+            DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = users.FirstOrDefault()?.Id ?? Guid.NewGuid(),
+        });
+
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    private static async Task<Guid> PostAsync(FeedController controller, string body, Guid? parent = null)
+    {
+        var result = await controller.CreatePost(new CreateFeedPostRequest(body, parent), CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return ((FeedPostRecord)ok.Value!).Id;
+    }
+
+    private static async Task<List<FeedPostRecord>> ReadFeedAsync(
+        FeedController controller, string? mode = null, string? hashtag = null)
+    {
+        var result = await controller.GetFeed(mode, hashtag, null, CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return ((FeedPageRecord)ok.Value!).Posts.ToList();
+    }
+
+    // ── The switch ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every route is 404 when the feed is off — not 403.
+    /// </summary>
+    /// <remarks>
+    /// A disabled feature should not be discoverable by the shape of its refusal. "This does not
+    /// exist here" is the truthful answer for a site whose administrator has not turned the feed
+    /// on, and 403 would confirm it exists and is merely barred.
+    /// </remarks>
+    [Fact]
+    public async Task With_the_feed_switched_off_every_route_is_not_found()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(feedOn: false, sarah);
+        var controller = Build(factory, sarah.Id);
+
+        Assert.IsType<NotFoundResult>((await controller.GetFeed(null, null, null, default)).Result);
+        Assert.IsType<NotFoundResult>((await controller.GetThread(Guid.NewGuid(), default)).Result);
+        Assert.IsType<NotFoundResult>((await controller.GetProfile(sarah.Id, default)).Result);
+        Assert.IsType<NotFoundResult>((await controller.CreatePost(new CreateFeedPostRequest("hello"), default)).Result);
+        Assert.IsType<NotFoundResult>(await controller.Follow(Guid.NewGuid(), default));
+    }
+
+    [Fact]
+    public async Task With_no_setting_row_at_all_the_feed_is_off()
+    {
+        // The default matters: a feature nobody has switched on should not be running.
+        var sarah = MakeUser("sarahmitchell");
+        var factory = CreateFactory();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Users.Add(sarah);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>((await Build(factory, sarah.Id).GetFeed(null, null, null, default)).Result);
+    }
+
+    // ── Posting, mentions and tags ────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_post_records_its_tags_and_the_accounts_it_mentions()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(true, sarah, james);
+
+        var id = await PostAsync(Build(factory, sarah.Id), "clear #EVP with @jamesthornton at the #bellwitch cave");
+
+        await using var db = factory.CreateDbContext();
+
+        var tags = await db.OrgMessageHashtags.Where(h => h.OrgMessageId == id).Select(h => h.Tag).ToListAsync();
+        Assert.Equal(["evp", "bellwitch"], tags);
+
+        var mentioned = await db.OrgMessageMentions.Where(m => m.OrgMessageId == id)
+            .Select(m => m.MentionedAppUserId).ToListAsync();
+        Assert.Equal([james.Id], mentioned);
+    }
+
+    /// <summary>
+    /// An <c>@name</c> nobody answers to mentions nobody, and does not fail the post.
+    /// </summary>
+    /// <remarks>
+    /// A typo is a typo. Refusing the post would be a strange way to report one, and inventing a
+    /// recipient would be worse.
+    /// </remarks>
+    [Fact]
+    public async Task A_mention_of_nobody_is_left_as_text()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+
+        var id = await PostAsync(Build(factory, sarah.Id), "thanks @nobodyhere");
+
+        await using var db = factory.CreateDbContext();
+        Assert.Empty(await db.OrgMessageMentions.Where(m => m.OrgMessageId == id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task An_empty_post_is_refused()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+
+        var result = await Build(factory, sarah.Id).CreatePost(new CreateFeedPostRequest("   "), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_post_longer_than_the_limit_is_refused()
+    {
+        // Short-form is the point. A wall of text belongs in a publication.
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+
+        var result = await Build(factory, sarah.Id)
+            .CreatePost(new CreateFeedPostRequest(new string('a', FeedController.MaxBodyLength + 1)), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ── Following ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_following_feed_shows_followed_people_and_yourself()
+    {
+        // Own posts included: a feed of people you follow that does not contain the thing you just
+        // wrote reads as a bug every single time.
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var emma = MakeUser("emmarodriguez");
+        var factory = await SeedAsync(true, sarah, james, emma);
+
+        await PostAsync(Build(factory, james.Id), "james posts");
+        await PostAsync(Build(factory, emma.Id), "emma posts");
+        await PostAsync(Build(factory, sarah.Id), "sarah posts");
+
+        await Build(factory, sarah.Id).Follow(james.Id, default);
+
+        var bodies = (await ReadFeedAsync(Build(factory, sarah.Id), mode: "following"))
+            .Select(p => p.Body).ToList();
+
+        Assert.Contains("james posts", bodies);
+        Assert.Contains("sarah posts", bodies);
+        Assert.DoesNotContain("emma posts", bodies);
+    }
+
+    [Fact]
+    public async Task Following_twice_follows_once_and_unfollowing_is_forgiving()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(true, sarah, james);
+        var controller = Build(factory, sarah.Id);
+
+        await controller.Follow(james.Id, default);
+        await controller.Follow(james.Id, default);
+
+        await using (var db = factory.CreateDbContext())
+            Assert.Equal(1, await db.UserFollows.CountAsync());
+
+        await controller.Unfollow(james.Id, default);
+        await controller.Unfollow(james.Id, default);   // already gone; must not throw
+
+        await using (var db = factory.CreateDbContext())
+            Assert.Equal(0, await db.UserFollows.CountAsync());
+    }
+
+    [Fact]
+    public async Task You_cannot_follow_yourself()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+
+        Assert.IsType<BadRequestObjectResult>(await Build(factory, sarah.Id).Follow(sarah.Id, default));
+    }
+
+    // ── Reporting and hiding ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reports do not hide anything, however many of them there are.
+    /// </summary>
+    /// <remarks>
+    /// The property this feature rests on. A threshold would moderate whoever is least popular
+    /// rather than whatever breaks the rules.
+    /// </remarks>
+    [Fact]
+    public async Task Reporting_a_post_does_not_hide_it()
+    {
+        var author = MakeUser("author");
+        var a = MakeUser("reportera");
+        var b = MakeUser("reporterb");
+        var c = MakeUser("reporterc");
+        var factory = await SeedAsync(true, author, a, b, c);
+
+        var id = await PostAsync(Build(factory, author.Id), "something people dislike");
+
+        foreach (var reporter in new[] { a, b, c })
+            await Build(factory, reporter.Id).ReportPost(id, new ReportFeedPostRequest("no"), default);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            Assert.Equal(3, await db.OrgMessageReports.CountAsync());
+            Assert.Null((await db.OrgMessages.FirstAsync(m => m.Id == id)).HiddenUtc);
+        }
+
+        Assert.Single(await ReadFeedAsync(Build(factory, a.Id)));
+    }
+
+    [Fact]
+    public async Task One_person_reporting_twice_is_one_report()
+    {
+        // Otherwise a single objector could make a post look like a pile-on.
+        var author = MakeUser("author");
+        var reporter = MakeUser("reporter");
+        var factory = await SeedAsync(true, author, reporter);
+
+        var id = await PostAsync(Build(factory, author.Id), "a post");
+        var controller = Build(factory, reporter.Id);
+
+        await controller.ReportPost(id, new ReportFeedPostRequest("first"), default);
+        await controller.ReportPost(id, new ReportFeedPostRequest("second"), default);
+
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(1, await db.OrgMessageReports.CountAsync());
+    }
+
+    /// <summary>
+    /// A hidden post is gone from every read path, not just the main feed.
+    /// </summary>
+    /// <remarks>
+    /// The one that would be got wrong: hiding the post from the feed while its thread, its
+    /// author's profile count, or the reply endpoint still served it would make "hidden" a
+    /// half-measure that leaks through whichever route was forgotten.
+    /// </remarks>
+    [Fact]
+    public async Task A_hidden_post_disappears_from_every_read_path()
+    {
+        var author = MakeUser("author");
+        var reader = MakeUser("reader");
+        var factory = await SeedAsync(true, author, reader);
+
+        var id = await PostAsync(Build(factory, author.Id), "to be hidden");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.FirstAsync(m => m.Id == id);
+            post.HiddenUtc = DateTime.UtcNow;
+            post.HiddenByAppUserId = reader.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var controller = Build(factory, reader.Id);
+
+        Assert.Empty(await ReadFeedAsync(controller));
+        Assert.IsType<NotFoundResult>((await controller.GetThread(id, default)).Result);
+
+        var profile = Assert.IsType<OkObjectResult>((await controller.GetProfile(author.Id, default)).Result);
+        Assert.Equal(0, ((FeedProfileRecord)profile.Value!).PostCount);
+
+        // And it cannot grow a thread nobody can see the top of.
+        Assert.IsType<NotFoundObjectResult>(
+            (await controller.CreatePost(new CreateFeedPostRequest("reply", id), default)).Result);
+    }
+
+    // ── Reading ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_feed_lists_top_level_posts_only()
+    {
+        // Replies are read with the post they answer; a feed that interleaved them would show
+        // half a conversation in date order.
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+        var controller = Build(factory, sarah.Id);
+
+        var root = await PostAsync(controller, "the post");
+        await PostAsync(controller, "the reply", root);
+
+        var feed = await ReadFeedAsync(controller);
+
+        Assert.Single(feed);
+        Assert.Equal("the post", feed[0].Body);
+        Assert.Equal(1, feed[0].ReplyCount);
+    }
+
+    [Fact]
+    public async Task A_tag_filter_narrows_to_that_tag_however_it_was_typed()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(true, sarah);
+        var controller = Build(factory, sarah.Id);
+
+        await PostAsync(controller, "an #EVP night");
+        await PostAsync(controller, "some #orbs");
+
+        Assert.Single(await ReadFeedAsync(controller, hashtag: "evp"));
+        Assert.Single(await ReadFeedAsync(controller, hashtag: "#EVP"));
+        Assert.Empty(await ReadFeedAsync(controller, hashtag: "nothing"));
+    }
+
+    [Fact]
+    public async Task Opening_a_thread_marks_the_post_seen_so_a_mention_stops_nagging()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(true, sarah, james);
+
+        var id = await PostAsync(Build(factory, sarah.Id), "over to you @jamesthornton");
+
+        await Build(factory, james.Id).GetThread(id, default);
+
+        await using var db = factory.CreateDbContext();
+        Assert.True(await db.OrgMessageViews.AnyAsync(v => v.OrgMessageId == id && v.ViewerAppUserId == james.Id));
+    }
+
+    [Fact]
+    public async Task A_reader_sees_whether_they_already_reported_a_post()
+    {
+        // Drives whether the report control is offered, and stops somebody wondering if their
+        // first report registered.
+        var author = MakeUser("author");
+        var reader = MakeUser("reader");
+        var factory = await SeedAsync(true, author, reader);
+
+        var id = await PostAsync(Build(factory, author.Id), "a post");
+
+        Assert.False((await ReadFeedAsync(Build(factory, reader.Id)))[0].ReportedByCurrentUser);
+
+        await Build(factory, reader.Id).ReportPost(id, new ReportFeedPostRequest(null), default);
+
+        Assert.True((await ReadFeedAsync(Build(factory, reader.Id)))[0].ReportedByCurrentUser);
+    }
+}

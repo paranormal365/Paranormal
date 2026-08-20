@@ -30,6 +30,14 @@ public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc)
 /// to the shared age classifier would read as negative age and colour Fresh forever. A soon-but-
 /// recently-sent invite is therefore not escalated by colour; the row text carries the date.
 /// </param>
+/// <param name="FeedMentions">
+/// Public-feed posts that named the caller with an <c>@name</c> and that they have not opened.
+/// <para>"Not opened" is an <c>OrgMessageView</c> row, the same marker the rest of the messaging
+/// system uses, rather than a read flag on the mention itself: a mention is read exactly when the
+/// post carrying it has been read, and two markers for one fact would drift apart.</para>
+/// <para>Empty whenever the feed is switched off, so a site that has never turned it on shows no
+/// trace of it on the bell.</para>
+/// </param>
 public sealed record NotificationSummaryResponse(
     NotificationBucket OrgMessages,
     NotificationBucket CaseMessagesAsOrgMember,
@@ -37,18 +45,19 @@ public sealed record NotificationSummaryResponse(
     NotificationBucket SystemMessages,
     NotificationBucket PendingPermissionRequests,
     NotificationBucket InvestigationInvites,
-    NotificationBucket EquipmentCheckouts)
+    NotificationBucket EquipmentCheckouts,
+    NotificationBucket FeedMentions)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
-        NotificationBucket.Empty);
+        NotificationBucket.Empty, NotificationBucket.Empty);
 
     /// <summary>All buckets, for callers that want to iterate rather than name each one.</summary>
     [JsonIgnore]
     public IReadOnlyList<NotificationBucket> AllBuckets =>
         [OrgMessages, CaseMessagesAsOrgMember, CaseMessagesAsClient, SystemMessages,
-         PendingPermissionRequests, InvestigationInvites, EquipmentCheckouts];
+         PendingPermissionRequests, InvestigationInvites, EquipmentCheckouts, FeedMentions];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

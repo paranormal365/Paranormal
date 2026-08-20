@@ -149,9 +149,27 @@ public sealed class NotificationSummaryController : BenControllerBase
                               && checkoutOrgIds.Contains(c.EquipmentItem.OwningOrganizationId.Value)))))
               .Select(c => (DateTime?)c.DateCreated), ct);
 
+        // ── Public-feed mentions ─────────────────────────────────────────────
+        // Only asked for when the feed is switched on. A site that has never turned it on should
+        // show no trace of it on the bell, and should not pay for the query either.
+        var feedMentions = await FeedController.FeedEnabledAsync(db, ct)
+            ? await BucketAsync(
+                db.OrgMessageMentions.AsNoTracking()
+                    .Where(m => m.MentionedAppUserId == userId
+                             // Their own post naming themselves is not a notification.
+                             && m.OrgMessage.AuthorAppUserId != userId
+                             // A hidden post's mention is withdrawn with it.
+                             && m.OrgMessage.HiddenUtc == null
+                             // Read exactly when the post carrying it has been opened. The same
+                             // marker the rest of messaging uses — a second one would drift.
+                             && !db.OrgMessageViews.Any(v =>
+                                    v.OrgMessageId == m.OrgMessageId && v.ViewerAppUserId == userId))
+                    .Select(m => (DateTime?)m.DateCreated), ct)
+            : NotificationBucket.Empty;
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
-            investigationInvites, equipmentCheckouts));
+            investigationInvites, equipmentCheckouts, feedMentions));
     }
 
     /// <summary>

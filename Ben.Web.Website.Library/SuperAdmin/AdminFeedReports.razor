@@ -1,0 +1,226 @@
+@page "/admin/feed-reports"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Feed
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Reported posts</PageTitle>
+
+@*
+    The moderation queue.
+
+    Oldest first, because a queue worked newest-first leaves the oldest complaint unanswered for
+    ever — and that is the one somebody is waiting on.
+
+    Each row shows the post as written, who reported it and why, and how many people reported the
+    same post. That last number is context, not a threshold: nothing here is automatic, and a
+    decision is made by a person with their name recorded against it.
+*@
+
+@* Deliberately not behind a FeatureGate, unlike every reader-facing feed page. Switching the feed
+   off does not un-report anything, and a site that turns it off may still have complaints nobody
+   got to — hiding the only way to see them would strand them. See AdminFeedController. *@
+<div class="container-fluid px-3 py-3">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h3 class="mb-0">Reported posts<HelpLink Slug="moderating-the-feed" /></h3>
+            <p class="text-secondary small mb-0">
+                Reports never hide anything on their own, however many there are. Hiding is your
+                decision, and it is recorded against your name.
+            </p>
+        </div>
+
+        <div class="btn-group btn-group-sm" role="group" aria-label="Which reports">
+            @foreach (var (outcome, label) in Filters)
+            {
+                <button type="button"
+                        class="btn @(_outcome == outcome ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => SwitchAsync(outcome)" disabled="@_loading">
+                    @label
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_reports.Count == 0)
+    {
+        <div class="text-center text-secondary py-5">
+            <p class="mb-0">
+                @(_outcome == FeedReportOutcome.Pending
+                    ? "Nothing waiting. The queue is clear."
+                    : "Nothing here.")
+            </p>
+        </div>
+    }
+    else
+    {
+        @foreach (var report in _reports)
+        {
+            <div class="card mb-2">
+                <div class="card-body">
+
+                    <div class="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
+                        <a href="@($"/feed/{report.OrgMessageId}")" class="fw-semibold text-decoration-none">
+                            @report.PostAuthorDisplayName
+                        </a>
+                        <span class="text-secondary small">
+                            @report.PostDateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </span>
+
+                        @if (report.PostIsHidden)
+                        {
+                            <span class="badge bg-danger-subtle text-danger-emphasis">Hidden</span>
+                        }
+
+                        @if (report.ReportsAgainstThisPost > 1)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                                @report.ReportsAgainstThisPost reports
+                            </span>
+                        }
+                    </div>
+
+                    @* The post as written, linkified the same way a reader sees it — a
+                       moderator judging a post should see what everyone else saw. *@
+                    <blockquote class="border-start ps-3 mb-2">
+                        <FeedText Body="@report.PostBody" Mentions="@(Array.Empty<FeedMentionRecord>())" />
+                    </blockquote>
+
+                    <p class="small text-secondary mb-2">
+                        Reported by <strong>@report.ReportedByDisplayName</strong>
+                        @report.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        @if (!string.IsNullOrWhiteSpace(report.Reason))
+                        {
+                            <text> — “@report.Reason”</text>
+                        }
+                    </p>
+
+                    @if (report.Outcome == FeedReportOutcome.Pending)
+                    {
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    disabled="@(_resolving == report.Id)"
+                                    @onclick="() => ResolveAsync(report, FeedReportOutcome.Hidden)">
+                                Hide the post
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    disabled="@(_resolving == report.Id)"
+                                    @onclick="() => ResolveAsync(report, FeedReportOutcome.Dismissed)">
+                                Leave it up
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="small text-secondary mb-0">
+                            @(report.Outcome == FeedReportOutcome.Hidden ? "Hidden" : "Left up")
+                            @if (report.ResolvedByDisplayName is not null)
+                            {
+                                <text> by @report.ResolvedByDisplayName</text>
+                            }
+                            @if (report.ResolvedUtc is { } when)
+                            {
+                                <text> @when.ToViewerLocalTime(UserState).ToDisplayDateTime()</text>
+                            }
+
+                            @if (report.Outcome == FeedReportOutcome.Hidden)
+                            {
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-2 align-baseline"
+                                        disabled="@(_resolving == report.Id)"
+                                        @onclick="() => ResolveAsync(report, FeedReportOutcome.Dismissed)">
+                                    Put it back
+                                </button>
+                            }
+                        </p>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private static readonly (FeedReportOutcome Outcome, string Label)[] Filters =
+    [
+        (FeedReportOutcome.Pending,   "Waiting"),
+        (FeedReportOutcome.Hidden,    "Hidden"),
+        (FeedReportOutcome.Dismissed, "Left up"),
+    ];
+
+    private List<FeedReportRecord> _reports = [];
+    private FeedReportOutcome _outcome = FeedReportOutcome.Pending;
+    private Guid? _resolving;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task SwitchAsync(FeedReportOutcome outcome)
+    {
+        if (_outcome == outcome) return;
+        _outcome = outcome;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _reports = [.. await Feed.GetFeedReportsAsync(_outcome)];
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Decides a report, then reloads.
+    /// </summary>
+    /// <remarks>
+    /// A reload rather than patching the row, because one decision resolves <i>every</i> pending
+    /// report against that post — so other rows on screen have changed too, and patching one would
+    /// leave the rest of the list lying.
+    /// </remarks>
+    private async Task ResolveAsync(FeedReportRecord report, FeedReportOutcome outcome)
+    {
+        _resolving = report.Id;
+        try
+        {
+            if (!await Feed.ResolveFeedReportAsync(report.Id, outcome))
+            {
+                _error = "Couldn't record that decision. Try again in a moment.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        finally { _resolving = null; }
+    }
+}
