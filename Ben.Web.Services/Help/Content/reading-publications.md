@@ -27,7 +27,8 @@ recent one went up.*
 
 ## Finding something to read
 
-**Publications** in the left-hand menu lists every publication with at least one published post.
+**Publications** in the left-hand menu — under **Community** once you are signed in — lists every
+publication with at least one published post.
 Publications with nothing in them yet are not listed — a title that leads to an empty page is not
 worth the click.
 
