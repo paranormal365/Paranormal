@@ -88,23 +88,56 @@
 
     private sealed record Section(string? Title, IReadOnlyList<NavItem> Items);
 
-    /// <summary>Sections after the filter box has been applied, dropping any left empty.</summary>
+    /// <summary>Whether the filter box has anything in it.</summary>
+    private bool IsFiltering => !string.IsNullOrWhiteSpace(_filter);
+
+    /// <summary>
+    /// Sections after the filter box has been applied, dropping any left empty.
+    /// </summary>
+    /// <remarks>
+    /// A matching group is kept with <b>only its matching children</b>. Keeping the whole group
+    /// would answer "Checkouts" with an Equipment group holding four entries, three of which have
+    /// nothing to do with what was typed — which is the same amount of reading the filter was
+    /// meant to save.
+    /// </remarks>
     private IEnumerable<Section> VisibleSections
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_filter)) return Sections;
+            if (!IsFiltering) return Sections;
 
             return Sections
-                .Select(s => s with { Items = s.Items.Where(Matches).ToList() })
+                .Select(s => s with { Items = s.Items.Where(Matches).Select(Prune).ToList() })
                 .Where(s => s.Items.Count > 0)
                 .ToList();
         }
     }
 
+    /// <summary>Drops the children of a matched group that do not themselves match.</summary>
+    /// <remarks>
+    /// A group whose own name matched keeps everything — typing "Equipment" is asking for the
+    /// Equipment group, not for the one entry inside it that repeats the word.
+    /// </remarks>
+    private NavItem Prune(NavItem item)
+    {
+        if (item.Children.Count == 0) return item;
+        if (item.Text.Contains(_filter, StringComparison.OrdinalIgnoreCase)) return item;
+
+        return new NavItem(item.Text, item.Icon, item.Url,
+                           children: item.Children.Where(Matches).Select(Prune).ToList());
+    }
+
+    /// <summary>
+    /// True when this item, or anything at any depth beneath it, matches the filter.
+    /// </summary>
+    /// <remarks>
+    /// Recursive rather than one level deep. Administration's tools are two levels down, so
+    /// filtering for one of them used to find nothing — and now that ordinary entries live in
+    /// groups too, a one-level check would fail the same way for most of the menu.
+    /// </remarks>
     private bool Matches(NavItem item)
         => item.Text.Contains(_filter, StringComparison.OrdinalIgnoreCase)
-        || item.Children.Any(c => c.Text.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+        || item.Children.Any(Matches);
 
     // Same buckets, order and roll-up rules as the Telerik drawer this replaces — only the
     // icon names change (Telerik SvgIcon -> sprite symbol id).
@@ -119,21 +152,32 @@
             // browse it, and the admin tools are what they are reaching for.
             var home = new List<NavItem> { new NavItem("Home", "home", "/") };
 
-            var main = new List<NavItem>
+            var main = new List<NavItem>();
+
+            // ── Signed out ────────────────────────────────────────────────────
+            // Flat, and staying flat. There are only four entries at most, and folding four items
+            // into two groups adds a click to reach each of them while saving two rows nobody was
+            // struggling to read. Grouping earns its keep at eighteen items, not at four.
+            if (!IsAuthenticated || IsImpersonating)
             {
                 // The client's way in: the request wizard, where they give the address the case
                 // is about. Sits above the browse-style entries because it is the thing a first
-                // -time visitor actually came to do. Anonymous visitors see it too — the wizard
-                // itself handles sending them through sign-in.
-                new NavItem("Request Investigation", "file-plus", "/my-requests/new"),
-                new NavItem("Join a Group", "map-pin", "/find"),
-            };
+                // -time visitor actually came to do — the wizard itself handles sending them
+                // through sign-in.
+                main.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
+                main.Add(new NavItem("Join a Group", "map-pin", "/find"));
 
-            // Sections a SuperAdmin can switch off. The links go when the feature does — and the
-            // pages themselves refuse the URL through the same provider, so a hidden link is
-            // never the only thing standing between a visitor and a disabled section.
-            if (Features.IsOn(SiteFeatures.Equipment))
-                main.Add(new NavItem("Equipment", "tool", "/equipment-catalog"));
+                // Sections a SuperAdmin can switch off. The links go when the feature does — and
+                // the pages themselves refuse the URL through the same provider, so a hidden link
+                // is never the only thing standing between a visitor and a disabled section.
+                if (Features.IsOn(SiteFeatures.Equipment))
+                    main.Add(new NavItem("Equipment", "tool", "/equipment-catalog"));
+
+                // Publications are written to be read by people who have no account, so this is
+                // one of the few entries that matters more signed out than signed in.
+                if (Features.IsOn(SiteFeatures.Publications))
+                    main.Add(new NavItem("Publications", "book-open", "/publications"));
+            }
 
             if (IsAuthenticated && !IsImpersonating)
             {
@@ -144,35 +188,62 @@
                 // the Organizations badge; the bell popover is what breaks them apart again.
                 var orgSide = Combine(s.OrgMessages, s.CaseMessagesAsOrgMember);
 
+                // ── Kept at the top level, deliberately ───────────────────────
+                // These two are checked constantly rather than navigated to, and a thing you look
+                // at every few minutes should not be behind a disclosure triangle. Everything else
+                // below is a place you go on purpose, which is what a group is for.
                 main.Add(new NavItem("Notifications",     "bell",        "/notifications",
                                      Combine(s.SystemMessages, s.PendingPermissionRequests),
                                      badgeNoun: "unread notifications"));
-                main.Add(new NavItem("My Cases",          "folder",      "/my-cases", s.CaseMessagesAsClient,
-                                     badgeNoun: "unread case messages"));
-                main.Add(new NavItem("My Investigations", "calendar",    "/my-investigations", s.InvestigationInvites,
-                                     badgeNoun: "investigation invitations"));
-                main.Add(new NavItem("My Requests",       "inbox",       "/my-requests"));
-                if (Features.IsOn(SiteFeatures.VideoEditor))
-                    main.Add(new NavItem("My Videos",     "film",        "/my-videos"));
-                if (Features.IsOn(SiteFeatures.Equipment))
-                    main.Add(new NavItem("My Equipment",  "tool",        "/my-equipment"));
-                if (Features.IsOn(SiteFeatures.Equipment))
-                {
-                    main.Add(new NavItem("My Checkouts",  "calendar",    "/my-checkouts"));
-                    main.Add(new NavItem("Gear Questions","help-circle", "/my-equipment/questions"));
-                }
                 main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide,
                                      badgeNoun: "unread group messages"));
-                main.Add(new NavItem("Upload Files",      "upload",      "/upload-files"));
+
+                // ── My Work ───────────────────────────────────────────────────
+                main.Add(Group("My Work", "clipboard",
+                    new NavItem("My Cases",          "folder",   "/my-cases", s.CaseMessagesAsClient,
+                                badgeNoun: "unread case messages"),
+                    new NavItem("My Investigations", "calendar", "/my-investigations", s.InvestigationInvites,
+                                badgeNoun: "investigation invitations"),
+                    new NavItem("My Requests",       "inbox",    "/my-requests")));
+
+                // ── Equipment ─────────────────────────────────────────────────
+                // The public catalogue joins its owner's own gear here rather than sitting alone
+                // above: someone looking for a thermal camera does not first decide whether they
+                // mean theirs or everybody's.
+                if (Features.IsOn(SiteFeatures.Equipment))
+                {
+                    main.Add(Group("Equipment", "tool",
+                        new NavItem("Catalogue",       "book-open",   "/equipment-catalog"),
+                        new NavItem("My Equipment",    "tool",        "/my-equipment"),
+                        new NavItem("My Checkouts",    "calendar",    "/my-checkouts", s.EquipmentCheckouts,
+                                    badgeNoun: "gear requests and overdue items"),
+                        new NavItem("Gear Questions",  "help-circle", "/my-equipment/questions")));
+                }
+
+                // ── Media ─────────────────────────────────────────────────────
+                var media = new List<NavItem> { new NavItem("Upload Files", "upload", "/upload-files") };
                 if (Features.IsOn(SiteFeatures.MediaLibrary))
-                    main.Add(new NavItem("Media Library", "image",       "/media-library"));
+                    media.Add(new NavItem("Media Library", "image", "/media-library"));
+                if (Features.IsOn(SiteFeatures.VideoEditor))
+                    media.Add(new NavItem("My Videos",     "film",  "/my-videos"));
+                main.Add(Group("Media", "layers", media.ToArray()));
+
+                // ── Community ─────────────────────────────────────────────────
+                var community = new List<NavItem>();
 
                 // The badge is mentions specifically, not feed activity: being named is
                 // addressed to you and worth a number, while "there are new posts" is a feed
                 // doing what a feed does and would make the badge meaningless within a day.
                 if (Features.IsOn(SiteFeatures.PublicFeed))
-                    main.Add(new NavItem("Feed",          "message-circle", "/feed", s.FeedMentions,
-                                         badgeNoun: "posts that mention you"));
+                    community.Add(new NavItem("Feed", "message-circle", "/feed", s.FeedMentions,
+                                              badgeNoun: "posts that mention you"));
+                if (Features.IsOn(SiteFeatures.Publications))
+                    community.Add(new NavItem("Publications", "book-open", "/publications"));
+
+                community.Add(new NavItem("Join a Group", "map-pin", "/find"));
+                community.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
+
+                main.Add(Group("Community", "users", community.ToArray()));
             }
 
             // No Login entry here: the header carries a Sign In control on every page, and a
@@ -292,6 +363,17 @@
                    @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
                     <BenIcon Name="@item.Icon" />
                     <span class="nav-link-text">@item.Text</span>
+                    @* Only while closed. Open, every child shows its own badge directly beneath,
+                       and a parent repeating their sum reads as a second, larger pile of work. *@
+                    @if (!IsExpanded(item) && RolledUp(item) is { Count: > 0 } waiting)
+                    {
+                        var label = waiting.Count == 1
+                            ? $"1 item waiting in {item.Text}"
+                            : $"{waiting.Count} items waiting in {item.Text}";
+
+                        <span class="badge badge-end @NotificationBadge.CssClass(waiting)"
+                              title="@label" aria-label="@label">@NotificationBadge.Text(waiting.Count)</span>
+                    }
                     <span class="collapse-sign" aria-hidden="true">
                         <i class="sa @(IsExpanded(item) ? "sa-chevron-up" : "sa-chevron-down")"></i>
                     </span>
@@ -316,7 +398,10 @@
     /// than only when that link is its direct child.
     /// </summary>
     private bool IsExpanded(NavItem group)
-        => _openGroups.Contains(group.Text) || ContainsActive(group);
+        // While filtering, everything left is open. A filter that returns a collapsed group has
+        // shown you that a match exists somewhere and then hidden it, which is worse than not
+        // filtering at all.
+        => IsFiltering || _openGroups.Contains(group.Text) || ContainsActive(group);
 
     private bool ContainsActive(NavItem group)
         => group.Children.Any(c => IsActive(c) || ContainsActive(c));
@@ -349,6 +434,39 @@
         TokenStore.StateChanged -= OnAuthChanged;
     }
 
+    /// <summary>
+    /// A collapsible group — unless it would hold a single item, in which case it <i>is</i> that
+    /// item.
+    /// </summary>
+    /// <remarks>
+    /// A group of one is strictly worse than the item alone: same row on screen, plus a click to
+    /// reach what the row already named. It happens for real — switch the media library and the
+    /// video editor off and Media is left holding only Upload Files.
+    /// </remarks>
+    private static NavItem Group(string text, string icon, params NavItem[] children)
+        => children.Length == 1
+            ? children[0]
+            : new NavItem(text, icon, children: children);
+
+    /// <summary>
+    /// Everything waiting anywhere beneath a group, as one bucket.
+    /// </summary>
+    /// <remarks>
+    /// <para>Without this, folding a badged item into a group hides its badge: only a leaf renders
+    /// one, so a collapsed group is a closed door with nothing on it. That turns grouping — meant
+    /// to make the sidebar readable — into a way of losing the one signal the sidebar exists to
+    /// carry.</para>
+    ///
+    /// <para>Recursive, so a badge two levels down still reaches the top. The urgency comes from
+    /// the oldest unread item in the whole subtree, which is what <see cref="Combine"/> already
+    /// computes — a group is as overdue as the most overdue thing in it.</para>
+    /// </remarks>
+    private static NotificationBucket RolledUp(NavItem group)
+        => Combine(Descendants(group).Select(i => i.Bucket ?? NotificationBucket.Empty).ToArray());
+
+    private static IEnumerable<NavItem> Descendants(NavItem item)
+        => item.Children.SelectMany(c => new[] { c }.Concat(Descendants(c)));
+
     /// <summary>Merges buckets that share one destination, keeping the older timestamp.</summary>
     private static NotificationBucket Combine(params NotificationBucket[] buckets)
     {
@@ -372,6 +490,12 @@
         /// <summary>Items waiting behind this destination, or 0 for a plain nav item.</summary>
         public int Count { get; }
 
+        /// <summary>
+        /// The bucket this item's badge came from, kept so a parent group can add its children's
+        /// counts together. Null for an item with no badge.
+        /// </summary>
+        public NotificationBucket? Bucket { get; }
+
         /// <summary>How overdue those items are — drives the badge colour.</summary>
         public NotificationBadge.Urgency Urgency { get; }
 
@@ -393,6 +517,7 @@
             Icon = icon;
             Url = url;
             Children = children ?? Array.Empty<NavItem>();
+            Bucket = bucket;
             Count = bucket?.Count ?? 0;
             Urgency = bucket is null ? NotificationBadge.Urgency.None : NotificationBadge.Classify(bucket);
             BadgeNoun = badgeNoun;

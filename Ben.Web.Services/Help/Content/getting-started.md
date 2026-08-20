@@ -68,14 +68,29 @@ not shown until you are actually attending.
 Everything you can reach is in the **menu down the left**. It only ever lists what applies to you,
 so it grows once you sign in and grows again if you run a group.
 
-A few things there are worth knowing about:
+Signed out it is a short list. Signed in, most of it is **grouped by subject**, so the menu stays
+about eight rows however much you can reach:
 
-- **Filter** at the top of the menu narrows it as you type. Useful once the list is long.
+- **Notifications** and **Organizations** stay at the top level — you check those constantly, and
+  they should not be behind anything.
+- **My Work** — your cases, your investigations, your requests.
+- **Equipment** — the public catalogue, your own gear, what you have out on loan, and gear questions.
+- **Media** — uploaded files, the media library, your videos.
+- **Community** — the feed, publications, finding a group, and requesting an investigation.
+- **Administration**, for site administrators, holding the site-wide tools grouped by what they
+  are for.
+
+A few things worth knowing:
+
+- **Filter** at the top of the menu narrows it as you type, and looks *inside* the groups. Type
+  "checkouts" and you get the one entry, with its group opened for you.
+- Entries with a **chevron** open into a group rather than going somewhere. Click the name to open
+  or close it.
+- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
+  **A closed group shows the total of everything inside it**, so nothing is ever hidden by being
+  grouped — open it and each entry shows its own share.
 - The **arrow beside the site name** collapses the menu to icons and back, if you would rather give
   the page the width.
-- Entries with a **chevron** open into a group rather than going somewhere — **Administration**
-  works this way, holding the site-wide tools grouped by what they are for.
-- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
 
 Along the top right are the display controls: a **sun or moon** switches between light and dark,
 and the **arrows** expand the page to fill the screen. Both are remembered on this device.

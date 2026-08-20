@@ -1,0 +1,236 @@
+@page "/organizations/{OrgId:guid}/publications/{PublicationId:guid}"
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(_publication?.Title ?? "Publication")</PageTitle>
+
+@*
+    Everything in one publication, drafts included — the author's view of it.
+
+    A draft is a post with no publication date. There is no separate status column and no
+    "is-draft" flag, because two fields that must agree eventually disagree: a post is published if
+    and only if it carries the date it was published on.
+
+    Publish and Withdraw are the same button in two states, and the withdraw side says what it
+    actually does. Withdrawing stops the post being served; it does not un-send it. Anyone who
+    already read it still read it, and a link they shared now leads nowhere.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Publications">
+    <div class="container py-3" style="max-width: 900px;">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_publication is null)
+        {
+            <div class="text-center py-5">
+                <h1 class="fs-4">Publication not found</h1>
+                <p class="text-secondary">It may have been deleted, or you may not have access to it.</p>
+                <a class="btn btn-outline-secondary" href="/organizations/@OrgId">Back to the group</a>
+            </div>
+        }
+        else
+        {
+            <nav class="small text-secondary mb-2">
+                <a class="text-decoration-none" href="/organizations/@OrgId">Group</a>
+                <span class="mx-1">/</span>
+                <span>Publications</span>
+            </nav>
+
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                <div>
+                    <h1 class="fs-3 fw-bold mb-1">
+                        @_publication.Title
+                        <HelpLink Slug="publishing-with-publications" />
+                    </h1>
+                    <div class="small text-secondary">
+                        @if (_publication.IsPublic)
+                        {
+                            <a class="text-decoration-none" href="/publications/@_publication.UrlName">
+                                /publications/@_publication.UrlName
+                            </a>
+                            <span> · public</span>
+                        }
+                        else
+                        {
+                            <span>/publications/@_publication.UrlName</span>
+                            <span class="text-warning"> · not public — nobody outside the group can read it</span>
+                        }
+                    </div>
+                </div>
+
+                <a class="btn btn-primary"
+                   href="/organizations/@OrgId/publications/@PublicationId/posts/new">
+                    <BenIcon Name="plus" Class="me-1" />New post
+                </a>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            @if (_posts.Count == 0)
+            {
+                <div class="text-center text-secondary py-5">
+                    <p class="mb-0">Nothing written here yet.</p>
+                </div>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var post in _posts)
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                <div>
+                                    <div class="fw-bold">
+                                        @post.Title
+                                        @if (post.PublishedUtc is null)
+                                        {
+                                            <span class="badge bg-secondary ms-2">Draft</span>
+                                        }
+                                    </div>
+                                    <div class="small text-secondary">
+                                        @if (post.PublishedUtc is { } published)
+                                        {
+                                            <span>Published @published.ToLocalTime().ToString("d MMM yyyy, HH:mm")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Written @post.DateCreated.ToLocalTime().ToString("d MMM yyyy")</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(post.Excerpt))
+                                    {
+                                        <div class="small text-body mt-1">@post.Excerpt</div>
+                                    }
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <a class="btn btn-outline-secondary btn-sm"
+                                       href="/organizations/@OrgId/publications/@PublicationId/posts/@post.Id">
+                                        Edit
+                                    </a>
+
+                                    <button type="button" class="btn btn-sm @(post.PublishedUtc is null ? "btn-success" : "btn-outline-warning")"
+                                            disabled="@_working"
+                                            @onclick="() => TogglePublishedAsync(post)">
+                                        @(post.PublishedUtc is null ? "Publish" : "Withdraw")
+                                    </button>
+
+                                    @if (_confirmingDelete == post.Id)
+                                    {
+                                        <button type="button" class="btn btn-danger btn-sm" disabled="@_working"
+                                                @onclick="() => DeleteAsync(post)">
+                                            Really delete
+                                        </button>
+                                        <button type="button" class="btn btn-link btn-sm"
+                                                @onclick="() => _confirmingDelete = null">
+                                            Cancel
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                                @onclick="() => _confirmingDelete = post.Id">
+                                            Delete
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid PublicationId { get; set; }
+
+    private PublicationRecord? _publication;
+    private IReadOnlyList<PublicationPostRecord> _posts = [];
+    private bool _loading = true;
+    private bool _working;
+    private Guid? _confirmingDelete;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _confirmingDelete = null;
+        try
+        {
+            // The publication comes from the group's own list rather than a by-id call: the list
+            // is already permission-gated, so a publication that is not in it is one this person
+            // may not open — and the page says "not found" without a second round trip.
+            _publication = (await Client.GetOrgPublicationsAsync(OrgId))
+                .FirstOrDefault(p => p.Id == PublicationId);
+
+            _posts = _publication is null
+                ? []
+                : await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TogglePublishedAsync(PublicationPostRecord post)
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            var ok = await Client.SetPostPublishedAsync(
+                OrgId, PublicationId, post.Id, published: post.PublishedUtc is null);
+
+            if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task DeleteAsync(PublicationPostRecord post)
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            if (!await Client.DeletePostAsync(OrgId, PublicationId, post.Id))
+            {
+                _error = "Couldn't delete that post.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+}
