@@ -24,7 +24,7 @@ public class CaseNotesTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Main.GetByText("Cases", new() { Exact = false }).First;
+        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" }).First;
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

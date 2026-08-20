@@ -4964,7 +4964,7 @@ orphaned-screenshot guard refused the new image.
 
 ---
 
-## 99. Profile page — adopt the template's layout (raised 2026-08-19)
+## 99. Profile page — adopt the template's layout (CLOSED 2026-08-20 — phase 4)
 
 Ben likes the SmartAdmin profile demo and wants our profile page to read like it:
 <https://getwebora.com/smartadmin/demo/profile.html>
@@ -5180,3 +5180,29 @@ now, with a wrapper the library cannot touch as backstop.
 Two pre-existing e2e locators broke on the new org stats panel — `GetByText("Cases")` had always
 meant "any text saying Cases" and only now had competition. Tightened to `GetByRole(Tab)`, which is
 what they meant.
+
+### How it shipped (2026-08-20)
+
+Hero band (photo, name, sign-in address, chips that state something true about the account) over
+three tabs: **About** (name, both photos, the two-key consent switch), **Contact** (the four
+detail cards, two columns), **Where you've been** (the map, in its own tab as Ben chose). Every
+mechanism moved unchanged — the plain-input-not-Telerik name field, the optimistic consent toggle
+that reverts on failure, the data-URI photo pipeline that exists because an `<img>` sends no
+bearer token.
+
+**The find: `/api/my-investigations/attended` was returning 500 for every caller.** It ordered by a
+property of the record it was projecting into, which EF cannot translate and reports at runtime,
+not at compile time — the same shape as the two query bugs phase 3 hit. Both callers wrap it in a
+catch that falls back to an empty list, so a total endpoint failure surfaced as the reassuring
+sentence "you haven't attended an investigation yet", and the investigation map has been silently
+empty for everyone since it was written. Fixed by ordering on the entity before the projection;
+Sarah now has two attended investigations and a pin near Adams, Tennessee.
+
+That is the third time a swallowed exception has hidden a working-looking failure in this codebase.
+The catch is right — a history map must not take down someone's account settings — but a catch that
+distinguishes "nothing to show" from "the call failed" would have said so.
+
+**Cleanup the change forced:** eight e2e locators across five files said `GetByText("Cases")` when
+they meant the Cases *tab*. They only broke once the org stats panel gave the word competition, and
+Playwright's strict mode failed on the ambiguity rather than silently clicking the wrong element —
+the good outcome. All now `GetByRole(AriaRole.Tab)`.

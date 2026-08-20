@@ -273,6 +273,10 @@ public sealed class HelpMediaCapture : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
 
         await GoAsync("/profile");
+        // Wait for the tabs, not just the page: the hero band renders before the profile loads,
+        // and a shot taken between the two captures a page with no content under its heading.
+        await Page.GetByRole(AriaRole.Tab, new() { Name = "About" })
+                  .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
         await ShootAsync("your-profile", "profile.png");
     }
 
