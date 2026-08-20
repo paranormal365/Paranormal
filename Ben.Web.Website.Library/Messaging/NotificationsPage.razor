@@ -101,50 +101,59 @@
     }
     else
     {
-        <div class="list-group">
-            @foreach (var msg in _messages)
-            {
-                <button type="button"
-                        class="list-group-item list-group-item-action d-flex align-items-center gap-3"
-                        @onclick="@(() => OpenMessageAsync(msg))">
-                    <span class="flex-grow-1 text-start">
-                        <span class="d-block @(msg.ReadUtc is null ? "fw-bold" : "")">
-                            @(string.IsNullOrWhiteSpace(msg.Subject) ? "(no subject)" : msg.Subject)
-                        </span>
-                        <span class="d-block text-secondary small">
-                            @msg.TypeName · @SenderLabel(msg) ·
-                            @msg.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                        </span>
-                    </span>
-                    @if (msg.ReadUtc is null)
+        @* The same rows as a group's inbox. Platform messages are mail — a sender, a subject, a
+           body — so they read as mail here too, rather than as a second list style someone has to
+           learn. The two sections above stay list-groups on purpose: they are actions waiting on a
+           decision, not correspondence, and a mail row has nowhere to put an Approve button. *@
+        <div class="card">
+            <div class="card-body p-0">
+                <ul class="notification">
+                    @foreach (var m in _messages)
                     {
-                        <span class="badge rounded-pill bg-primary">New</span>
+                        var msg = m;
+                        <MailRow Sender="@SenderLabel(msg)"
+                                 Subject="@msg.Subject"
+                                 Body="@msg.Body"
+                                 BodyIsHtml="true"
+                                 When="@msg.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()"
+                                 Unread="@(msg.ReadUtc is null)"
+                                 Selected="@(_openMessage?.Id == msg.Id)"
+                                 OnOpen="@(() => OpenMessageAsync(msg))">
+                            <Badge>
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis">@msg.TypeName</span>
+                            </Badge>
+                        </MailRow>
                     }
-                </button>
-            }
+                </ul>
+            </div>
         </div>
-    }
-</div>
 
-@* ── Message dialog ───────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Size="lg">
-    <ChildContent>
+        @* Read below the list, not in a dialog — the same shape a group's inbox uses, and it keeps
+           the list in view while reading. *@
         @if (_openMessage is not null)
         {
-            <div class="mb-2 text-secondary small">
-                <strong>From:</strong> @SenderLabel(_openMessage)
-                · @_openMessage.TypeName
-                · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+            <div class="card mt-3">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-2 mb-2">
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">@(string.IsNullOrWhiteSpace(_openMessage.Subject) ? "(no subject)" : _openMessage.Subject)</h5>
+                            <div class="text-secondary small">
+                                From: @SenderLabel(_openMessage)
+                                · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                · <span class="badge bg-secondary-subtle text-secondary-emphasis">@_openMessage.TypeName</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                @onclick="@(() => _openMessage = null)">Close</button>
+                    </div>
+                    <div class="border-top pt-3">
+                        <MessageBody Body="@_openMessage.Body" Html="true" />
+                    </div>
+                </div>
             </div>
-            <div class="border-top pt-3">@((MarkupString)_openMessage.Body)</div>
         }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showMessage = false)">Close</button>
-        </div>
-    </ChildContent>
-</BenModal>
+    }
+</div>
 
 @code {
     private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
@@ -152,7 +161,6 @@
     private List<PendingPermissionRequestRecord> _pendingRequests = [];
 
     private MyMessageRecord? _openMessage;
-    private bool  _showMessage;
     private bool  _loadingMessages = true;
     private bool  _markingAll;
     private Guid? _reviewingId;
@@ -207,14 +215,13 @@
     private async Task OpenMessageAsync(MyMessageRecord msg)
     {
         _openMessage = msg;
-        _showMessage = true;
 
         if (msg.ReadUtc is not null) return;
 
         if (await AdminClient.MarkMyMessageReadAsync(msg.Id))
         {
-            // Patch locally instead of refetching the list — the dialog is already showing this
-            // message, and a refetch would reorder nothing but cost a round trip.
+            // Patch locally instead of refetching the list — the reading pane is already showing
+            // this message, and a refetch would reorder nothing but cost a round trip.
             var index = _messages.IndexOf(msg);
             if (index >= 0) _messages[index] = msg with { ReadUtc = DateTime.UtcNow };
             await Notifications.RefreshAsync(force: true);

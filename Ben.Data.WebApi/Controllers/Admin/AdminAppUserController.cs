@@ -109,7 +109,27 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.NormalizedEmail      = request.Email?.ToUpperInvariant() ?? user.NormalizedEmail;
         user.PhoneNumber          = request.PhoneNumber;
         user.EmailConfirmed       = request.IsEmailConfirmed;
-        user.TwoFactorEnabled     = request.IsTwoFactorEnabled;
+
+        // An administrator may switch two-factor authentication OFF but never ON.
+        //
+        // Turning it on from here sets the flag without an authenticator key behind it, so the
+        // next sign-in demands a code that account can never produce — an administrator locking
+        // somebody out by ticking a box meant to protect them. Enrolment is the account holder's
+        // own act, through /api/me/2fa, because only they have the app.
+        //
+        // Off stays available on purpose: it is the rescue for exactly the person who lost their
+        // phone and used up their recovery codes.
+        // TwoFactorEnabled is deliberately NOT written here.
+        //
+        // Ben, 2026-08-20: "Let the end user determine if they want 2FA or not. It is not an
+        // administrator-related setting." Right, and the mechanism agrees with the principle:
+        // enrolment needs an authenticator app that only the account holder has, so an
+        // administrator setting the flag would switch on a second factor nobody could satisfy and
+        // lock that person out of their own account. It is theirs to turn on and off, through
+        // /api/me/2fa.
+        //
+        // The field stays on the request record so the shape is unchanged for existing callers;
+        // it simply has no effect.
         user.LockoutEnabled       = request.IsLockoutEnabled;
         user.LockoutEnd           = request.LockoutEnd;
         user.DateCreated          = request.DateCreated;

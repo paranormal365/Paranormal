@@ -11,7 +11,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALLER_DIR="$(dirname "$SCRIPT_DIR")"
-SRC_APP="$INSTALLER_DIR/dist/BenVideoSidecar.app"
+# Two layouts, one script. In the repo this lives at installer/macos/ with the app two levels up
+# under installer/dist/; in the DOWNLOADED zip it sits directly beside the app, because a tester
+# should not need to know this repo's directory shape. Beside-me wins when both exist — the zip
+# is what a tester is holding.
+if [[ -d "$SCRIPT_DIR/BenVideoSidecar.app" ]]; then
+  SRC_APP="$SCRIPT_DIR/BenVideoSidecar.app"
+else
+  SRC_APP="$INSTALLER_DIR/dist/BenVideoSidecar.app"
+fi
 DEST_APP="$HOME/Applications/BenVideoSidecar.app"
 LABEL="video.ben.sidecar"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"

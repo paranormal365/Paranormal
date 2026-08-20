@@ -85,6 +85,77 @@ and the **arrows** expand the page to fill the screen. Both are remembered on th
 You need an account to request an investigation or join a group. Accounts are free, and the
 address you sign in with is never shown publicly.
 
+**Create one** from the sign-in page — *New here? Create an account* — or go straight to
+`/signup`. You'll be asked for four things:
+
+| | |
+|---|---|
+| **Your name** | What people see on your posts and your profile. Change it whenever you like. |
+| **Your @name** | How people mention you. **Chosen once and permanent** — see below. |
+| **Email** | Where we send the confirmation link. Never shown publicly. |
+| **Password** | At least 8 characters, with an upper-case letter, a lower-case letter and a digit. |
+
+### Your @name
+
+Your **@name** is your handle — `@sarahmitchell` — and it is how somebody writes to you or about
+you. Letters, numbers and underscores only, and it has to be one nobody else has taken; the page
+tells you as you type.
+
+**It cannot be changed afterwards.** That is deliberate: your @name ends up written inside other
+people's posts, and letting it move would leave those posts pointing at somebody who is no longer
+you. Pick one you will still want in a year.
+
+### Confirming your email
+
+You cannot sign in until you have. We send a link; open it and press the button on the page it
+takes you to.
+
+The button matters — we do not confirm your address just because the link was opened. Mail scanners
+and security filters visit every link they find in a message, and a confirmation that happened on
+opening would be one they could complete for you, which would prove nothing about whether the
+address reaches a person.
+
+If the link has expired, sign up again.
+
+## Two-step sign-in
+
+You can ask us for a code from your phone as well as your password. It is **entirely optional** and
+off unless you turn it on, under **Security** on your profile. Nobody else can turn it on or off for
+you — not an administrator either, because only you have the app that makes the codes.
+
+Any authenticator app works — **Duo Mobile**, **Okta Verify**, Google Authenticator, Microsoft
+Authenticator, 1Password. Scan the square code with the app, type the six digits it shows, and it is
+on. If you cannot scan, the key is printed beside the code to type in by hand.
+
+**Save the recovery codes.** They are shown once, and once only — we keep a scrambled copy that
+cannot be read back, so nobody can recover them for you afterwards. Each one signs you in a single
+time if you lose your phone. Print them, or put them somewhere that is not the phone.
+
+Turning it off again needs a current code from your app, which is what stops somebody at your
+unlocked computer removing it.
+
+### Signing in once it is on
+
+Enter your email and password as usual. We then ask for the six-digit code — on a phone the keyboard
+offers it straight from the notification, so you rarely have to read it across.
+
+If you have lost your phone, choose **I can't use my app** and enter one of your recovery codes
+instead. Each one works once.
+
+## When sign-in will not let you in
+
+The message says which of these it is, because the answer is different every time:
+
+| What it says | What to do |
+|---|---|
+| Invalid email or password | Check both. This is the only one where the password is actually wrong. |
+| Confirm your email address first | Open the link we emailed you when you signed up. |
+| This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
+| Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
+
+If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
+simply the second step.
+
 ## Finding help
 
 ![The help index, grouped into sections](/help/media/getting-started/help-index.png)

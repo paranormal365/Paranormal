@@ -52,6 +52,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Handle")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
 
@@ -89,6 +93,10 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Handle")
+                        .IsUnique()
+                        .HasFilter("[Handle] IS NOT NULL");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -2123,6 +2131,31 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EventAttendanceInvites");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventReminderSent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrgCalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("SentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("OrgCalendarEventId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("EventReminderSents");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2875,6 +2908,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("HiddenByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("HiddenUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("IsEncrypted")
                         .HasColumnType("bit");
 
@@ -2905,13 +2944,69 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("CreatedByAppUserId");
 
+                    b.HasIndex("HiddenByAppUserId");
+
                     b.HasIndex("OrganizationId");
 
                     b.HasIndex("ParentMessageId");
 
                     b.HasIndex("UpdatedByAppUserId");
 
+                    b.HasIndex("ChannelType", "HiddenUtc", "DateCreated");
+
                     b.ToTable("OrgMessages");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageHashtag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrgMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgMessageId", "Tag")
+                        .IsUnique();
+
+                    b.HasIndex("Tag", "DateCreated");
+
+                    b.ToTable("OrgMessageHashtags");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageMention", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("MentionedAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrgMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MentionedAppUserId", "DateCreated");
+
+                    b.HasIndex("OrgMessageId", "MentionedAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("OrgMessageMentions");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageRecipient", b =>
@@ -2940,6 +3035,48 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("OrgMessageRecipients");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrgMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("ReportedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ResolvedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ResolvedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportedByAppUserId");
+
+                    b.HasIndex("ResolvedByAppUserId");
+
+                    b.HasIndex("OrgMessageId", "ReportedByAppUserId")
+                        .IsUnique();
+
+                    b.HasIndex("Outcome", "DateCreated");
+
+                    b.ToTable("OrgMessageReports");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageView", b =>
@@ -4587,6 +4724,35 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("SidecarInstallLogs");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.SignInEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("Utc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId", "Utc");
+
+                    b.HasIndex("Utc", "Succeeded");
+
+                    b.ToTable("SignInEvents");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.SiteSetting", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5691,6 +5857,31 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("UserEmailTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserFollow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("FollowedAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FollowerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FollowedAppUserId");
+
+                    b.HasIndex("FollowerAppUserId", "FollowedAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("UserFollows");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UserLink", b =>
@@ -7683,6 +7874,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrgCalendarEvent");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventReminderSent", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgCalendarEvent", "OrgCalendarEvent")
+                        .WithMany()
+                        .HasForeignKey("OrgCalendarEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("OrgCalendarEvent");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.Case", "Case")
@@ -8127,6 +8337,11 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "HiddenByAppUser")
+                        .WithMany()
+                        .HasForeignKey("HiddenByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -8148,11 +8363,43 @@ namespace Ben.Data.Source.Migrations
 
                     b.Navigation("CreatedByAppUser");
 
+                    b.Navigation("HiddenByAppUser");
+
                     b.Navigation("Organization");
 
                     b.Navigation("ParentMessage");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageHashtag", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "OrgMessage")
+                        .WithMany("Hashtags")
+                        .HasForeignKey("OrgMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OrgMessage");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageMention", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "MentionedAppUser")
+                        .WithMany()
+                        .HasForeignKey("MentionedAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "OrgMessage")
+                        .WithMany("Mentions")
+                        .HasForeignKey("OrgMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MentionedAppUser");
+
+                    b.Navigation("OrgMessage");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageRecipient", b =>
@@ -8172,6 +8419,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrgMessage");
 
                     b.Navigation("RecipientAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageReport", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "OrgMessage")
+                        .WithMany("Reports")
+                        .HasForeignKey("OrgMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ReportedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ReportedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ResolvedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("OrgMessage");
+
+                    b.Navigation("ReportedByAppUser");
+
+                    b.Navigation("ResolvedByAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageView", b =>
@@ -8985,6 +9258,16 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("AppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.SignInEvent", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.SiteSetting", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -9509,6 +9792,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserFollow", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "FollowedAppUser")
+                        .WithMany()
+                        .HasForeignKey("FollowedAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "FollowerAppUser")
+                        .WithMany()
+                        .HasForeignKey("FollowerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("FollowedAppUser");
+
+                    b.Navigation("FollowerAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UserLink", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -9969,9 +10271,15 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessage", b =>
                 {
+                    b.Navigation("Hashtags");
+
+                    b.Navigation("Mentions");
+
                     b.Navigation("Recipients");
 
                     b.Navigation("Replies");
+
+                    b.Navigation("Reports");
 
                     b.Navigation("Views");
                 });

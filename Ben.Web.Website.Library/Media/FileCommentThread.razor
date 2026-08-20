@@ -101,6 +101,18 @@
     private bool _busy;
     private string? _error;
 
+    // Item #103: only the composer is auth-gated (comments themselves are the same for every
+    // viewer), so late auth needs a repaint, not a reload.
+    protected override async Task OnInitializedAsync()
+    {
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            StateHasChanged();
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (_comments is not null) return;

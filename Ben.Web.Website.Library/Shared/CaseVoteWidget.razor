@@ -90,7 +90,25 @@
     private string? _error;
     private string? _actionError;
 
-    protected override async Task OnParametersSetAsync()
+    // Item #103: this widget renders differently for a signed-in viewer (vote buttons, own
+    // score) and reads UserState at render — but auth resolves asynchronously after the circuit
+    // connects, so on a hard navigation the first load can run against the anonymous state and
+    // stay that way. When auth lands late, reload: the summary itself is viewer-specific
+    // (UserScore), so a repaint alone would show buttons beside stale anonymous data.
+    protected override async Task OnInitializedAsync()
+    {
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            await LoadSummaryAsync();
+            StateHasChanged();
+        }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadSummaryAsync();
+
+    private async Task LoadSummaryAsync()
     {
         if (PreloadedSummary is not null)
         {

@@ -7,125 +7,127 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>My Checkouts</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>My Checkouts</PageTitle>
 
-@* Answers the three questions Ben asked of this page at once: what I have out, what of mine is
-   out with someone else, and when any of it is due. Both stacks live here rather than on a
-   calendar, because a personal loan has no group whose calendar it could sit on. *@
+    @* Answers the three questions Ben asked of this page at once: what I have out, what of mine is
+       out with someone else, and when any of it is due. Both stacks live here rather than on a
+       calendar, because a personal loan has no group whose calendar it could sit on. *@
 
-<div class="container-fluid py-3" style="max-width:1000px;">
-    <h3 class="mb-1">Equipment I'm Borrowing<HelpLink Slug="borrowing-equipment" /></h3>
-    <p class="text-secondary small mb-4">
-        Gear you have out, and requests waiting on you.
-    </p>
+    <div class="container-fluid py-3" style="max-width:1000px;">
+        <h3 class="mb-1">Equipment I'm Borrowing<HelpLink Slug="borrowing-equipment" /></h3>
+        <p class="text-secondary small mb-4">
+            Gear you have out, and requests waiting on you.
+        </p>
 
-    @if (_error is not null)
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
-
-    @if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading your loans…" />
-    }
-    else
-    {
-        <h5 class="mb-2">Borrowing</h5>
-        @if (_borrowing.Count == 0)
+        @if (_error is not null)
         {
-            <div class="card mb-4">
-                <div class="card-body text-center py-4">
-                    <p class="text-secondary small mb-0">
-                        You aren't borrowing anything. Browse your groups' equipment to ask.
-                    </p>
-                </div>
-            </div>
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (_loading)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading your loans…" />
         }
         else
         {
-            <div class="row g-3 mb-4">
-                @foreach (var loan in _borrowing)
-                {
-                    <div class="col-md-6">
-                        <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
-                            <div class="card-body">
-                                @RenderHeader(loan)
+            <h5 class="mb-2">Borrowing</h5>
+            @if (_borrowing.Count == 0)
+            {
+                <div class="card mb-4">
+                    <div class="card-body text-center py-4">
+                        <p class="text-secondary small mb-0">
+                            You aren't borrowing anything. Browse your groups' equipment to ask.
+                        </p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3 mb-4">
+                    @foreach (var loan in _borrowing)
+                    {
+                        <div class="col-md-6">
+                            <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
+                                <div class="card-body">
+                                    @RenderHeader(loan)
 
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
-                                @if (loan.Flags.CanCancel)
-                                {
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => CancelAsync(loan))" disabled="@(!(!_busy))">Cancel request</button>
-                                }
-                                @if (loan.Flags.CanConfirmHandoff)
-                                {
-                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ConfirmHandoffAsync(loan))" disabled="@(!(!_busy))">I've got it</button>
-                                }
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
+                                    @if (loan.Flags.CanCancel)
+                                    {
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => CancelAsync(loan))" disabled="@(!(!_busy))">Cancel request</button>
+                                    }
+                                    @if (loan.Flags.CanConfirmHandoff)
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ConfirmHandoffAsync(loan))" disabled="@(!(!_busy))">I've got it</button>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </div>
-                }
-            </div>
-        }
-
-        <h5 class="mb-2">Waiting on me</h5>
-        @if (_toApprove.Count == 0)
-        {
-            <div class="card">
-                <div class="card-body text-center py-4">
-                    <p class="text-secondary small mb-0">Nothing of yours is out or waiting for a decision.</p>
+                    }
                 </div>
-            </div>
-        }
-        else
-        {
-            <div class="row g-3">
-                @foreach (var loan in _toApprove)
-                {
-                    <div class="col-md-6">
-                        <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
-                            <div class="card-body">
-                                @RenderHeader(loan)
+            }
 
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
-                                @if (loan.Flags.CanApprove)
-                                {
-                                    <div class="row g-2 align-items-end mb-2">
-                                        <div class="col-7">
-                                            <label class="form-label small fw-semibold mb-1">Due back (optional)</label>
-                                            <TelerikDatePicker Format="dd/MM/yyyy" Value="@GetDue(loan.Id)"
-                                                               ValueChanged="@((DateTime? v) => _dueDates[loan.Id] = v)"
-                                                               Width="100%" />
+            <h5 class="mb-2">Waiting on me</h5>
+            @if (_toApprove.Count == 0)
+            {
+                <div class="card">
+                    <div class="card-body text-center py-4">
+                        <p class="text-secondary small mb-0">Nothing of yours is out or waiting for a decision.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var loan in _toApprove)
+                    {
+                        <div class="col-md-6">
+                            <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
+                                <div class="card-body">
+                                    @RenderHeader(loan)
+
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
+                                    @if (loan.Flags.CanApprove)
+                                    {
+                                        <div class="row g-2 align-items-end mb-2">
+                                            <div class="col-7">
+                                                <label class="form-label small fw-semibold mb-1">Due back (optional)</label>
+                                                <TelerikDatePicker Format="dd/MM/yyyy" Value="@GetDue(loan.Id)"
+                                                                   ValueChanged="@((DateTime? v) => _dueDates[loan.Id] = v)"
+                                                                   Width="100%" />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-reason-required-to-decline-bd0c">Reason (required to decline)</label>
-                                        <input id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
-                                               value="@GetNote(loan.Id)"
-                                               @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
-                                    </div>
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveAsync(loan))" disabled="@(!(!_busy))">Approve</button>
-                                        <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => DenyAsync(loan))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetNote(loan.Id))))">Decline</button>
-                                    </div>
-                                }
-                                else if (loan.Flags.CanReceiveReturn)
-                                {
-                                    <div class="mb-2">
-                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-condition-on-return-optional-a06a">Condition on return (optional)</label>
-                                        <input id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
-                                               value="@GetNote(loan.Id)"
-                                               @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReceiveReturnAsync(loan))" disabled="@(!(!_busy))">Got it back</button>
-                                }
+                                        <div class="mb-2">
+                                            <label class="form-label small fw-semibold mb-1" for="mycheckouts-reason-required-to-decline-bd0c">Reason (required to decline)</label>
+                                            <input id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
+                                                   value="@GetNote(loan.Id)"
+                                                   @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveAsync(loan))" disabled="@(!(!_busy))">Approve</button>
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => DenyAsync(loan))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetNote(loan.Id))))">Decline</button>
+                                        </div>
+                                    }
+                                    else if (loan.Flags.CanReceiveReturn)
+                                    {
+                                        <div class="mb-2">
+                                            <label class="form-label small fw-semibold mb-1" for="mycheckouts-condition-on-return-optional-a06a">Condition on return (optional)</label>
+                                            <input id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
+                                                   value="@GetNote(loan.Id)"
+                                                   @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReceiveReturnAsync(loan))" disabled="@(!(!_busy))">Got it back</button>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </div>
-                }
-            </div>
+                    }
+                </div>
+            }
         }
-    }
-</div>
+    </div>
+</FeatureGate>
 
 @code {
     private List<EquipmentCheckoutRecord> _borrowing = [];

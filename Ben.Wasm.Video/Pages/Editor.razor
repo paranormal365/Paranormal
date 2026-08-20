@@ -1,10 +1,51 @@
 @page "/"
 @page "/editor"
+@using Ben.Wasm.Video.Services
+@implements IDisposable
+@inject AccountInfoService Account
+@inject TokenStore Tokens
 
 <PageTitle>Video Editor</PageTitle>
 
-@* ShowDiagnostics is left unset, so it falls back to the registered option, which is off. This
-   host has no role information at hand — sign-in here yields tokens, not claims the page reads —
-   so the operator tools stay hidden rather than being shown to whoever happens to be signed in.
-   Wiring them to an administrator check is item 96. *@
-<VideoEditor />
+@*
+    ShowDiagnostics is passed explicitly rather than left to the registered default, because this
+    host now has an answer to give. It asks the WebApi's /api/me whether the signed-in account
+    administers the platform or a group — sign-in here yields tokens, not claims, so there is
+    nothing on the client to read.
+
+    It starts false and only ever becomes true, so the panel is hidden while the answer is in
+    flight and stays hidden if the question cannot be asked at all. Signing out hides it again on
+    the next answer.
+*@
+<VideoEditor ShowDiagnostics="@_showDiagnostics" />
+
+@code {
+    private bool _showDiagnostics;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tokens.Changed += OnTokensChanged;
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Re-asks when the signed-in account changes.
+    /// </summary>
+    /// <remarks>
+    /// Sign-in happens on another page and this one is not re-created, so without this an
+    /// administrator who signed in after landing here would keep the answer from when they were
+    /// signed out. The event fires on sign-out too, which is the direction that matters.
+    /// </remarks>
+    private void OnTokensChanged() => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        var isAdministrator = await Account.IsAdministratorAsync();
+        if (isAdministrator == _showDiagnostics) return;
+
+        _showDiagnostics = isAdministrator;
+        StateHasChanged();
+    }
+
+    public void Dispose() => Tokens.Changed -= OnTokensChanged;
+}

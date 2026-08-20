@@ -34,6 +34,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The Web SDK's default Content globs include **/*.json and **/*.config from anywhere in
+         the project, and this project has an installer/ directory that holds BUILT PACKAGES. So a
+         publish swept the previously-built macOS .app's runtimeconfig.json, deps.json and its own
+         copy of ffmpeg-manifest.json into the new package — a macOS app's fragments shipping
+         inside a Windows download, and growing with whatever was last built. installer/ is build
+         tooling and build output; none of it belongs in the product. -->
+    <Content Remove="installer/**" />
+    <None Remove="installer/**" />
+
     <!-- ffmpeg-manifest.json is already auto-included as Content by the SDK's default item globs
          (EnableDefaultContentItems) — Update (not Include) just adds the copy-to-output
          instruction without re-declaring the item and tripping NETSDK1022. -->
@@ -47,6 +56,13 @@
     <Content Include="ffmpeg/$(BundledFfmpegRid)/**" Condition="Exists('ffmpeg/$(BundledFfmpegRid)')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <!-- On a single-file publish (the Windows profile) the bundler classifies these executables
+           as native binaries and swallows them INTO the host — measured: a 375 MB
+           Ben.Video.Sidecar.exe with no ffmpeg/ folder beside it, while the json manifest, not
+           being a binary, still copied loose. FfmpegLocator wants them at ffmpeg/<rid>/ next to
+           the app, and the manifest hash-check re-reads them from disk at startup. This keeps
+           them as ordinary files. Harmless on the non-single-file macOS publish. -->
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>
 

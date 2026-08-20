@@ -14,6 +14,15 @@ order: 50
 **My Profile**, in the menu under your avatar, is where you set your display name and photos.
 Your sign-in address is not changed here and is never shown publicly.
 
+The page opens with your name and picture, then three tabs:
+
+- **About** — your display name and both photos, with the consent switch for the private one.
+- **Contact** — email addresses, phone numbers, postal addresses and web links.
+- **Where you've been** — the map of investigations you have attended.
+
+Most visits here are to change one thing, which is why the sections are behind tabs rather than
+stacked down one page. The map in particular only loads when you open its tab.
+
 ## Two photos
 
 You can set two pictures, and they are treated very differently.
@@ -78,7 +87,8 @@ entry goes back to private — the new address has not been proven, only the old
 
 ## Your investigation map
 
-**My Investigations** keeps a map of where you have actually been, under *Where I've been*.
+Your profile's **Where you've been** tab keeps a map of the places you have actually been; the
+same map appears on **My Investigations**. Clicking a pin opens the case that visit belonged to.
 
 It shows visits you **attended** — not ones you were invited to, and not ones you said yes to. A
 map of places you might have gone is not a record of where you have been, and only the second is

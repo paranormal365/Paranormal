@@ -12,6 +12,7 @@
 
 @namespace Ben.Web.Website.Library.Manage.Audio
 @inject IBenAdminClient AdminClient
+@inject BenToastService Toasts
 
 @if (_loading)
 {
@@ -853,7 +854,6 @@ else
     private WaveSurferPlayer?                          _player;
     private WaveSurferPlayer?                          _modalPlayer;
     private BenContextMenu<AudioContextMenuItem>?  _contextMenu;
-    private TelerikNotification?                       _toast;
 
     // ── Region context menu state ──────────────────────────────────────────────
 
@@ -1342,8 +1342,18 @@ else
     private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
     private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
 
-    private void Notify(string message, string themeColor = "warning") =>
-        _toast?.Show(new NotificationModel { Text = message, ThemeColor = themeColor, CloseAfter = 4000 });
+    // Through BenToastService, the layout-rendered queue that replaced TelerikNotification.
+    // The old version showed these on a TelerikNotification field that no markup ever rendered,
+    // so every message here — including "Save failed" — went to nobody (item #102).
+    private void Notify(string message, string themeColor = "warning")
+    {
+        switch (themeColor)
+        {
+            case "success": Toasts.Success(message); break;
+            case "error":   Toasts.Error(message);   break;
+            default:        Toasts.Warning(message); break;
+        }
+    }
 
     // ── Spectrogram toggle + context menu ─────────────────────────────────────
 

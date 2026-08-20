@@ -1,0 +1,84 @@
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    A group's own numbers, on its Details tab.
+
+    The tab was a definition list of names and dates — accurate and inert. These are the same
+    counts a member could get by opening the tabs beside it and counting rows, which is exactly why
+    they belong here: the summary is the thing the tabs were making people do by hand.
+
+    Loads on its own and fails quietly. A panel of statistics must never be the reason a group's
+    Details tab shows an error — the details are the point, the numbers are the garnish.
+*@
+
+@if (_stats is not null)
+{
+    <div class="row g-2 mb-4">
+        <div class="col-6 col-lg-3">
+            <StatCard Label="Members" Icon="users" Value="@_stats.Members.ToString("N0")" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <StatCard Label="Open cases" Icon="folder" Value="@_stats.OpenCases.ToString("N0")"
+                      Caption="@($"of {_stats.Cases:N0} in total")" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <StatCard Label="Investigations" Icon="calendar"
+                      Value="@_stats.Investigations.ToString("N0")" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <StatCard Label="Cases this year" Icon="trending-up"
+                      Value="@_stats.CasesPerMonth.Sum(p => p.Count).ToString("N0")"
+                      Sparkline="@_stats.CasesPerMonth.Select(p => (double)p.Count).ToList()" />
+        </div>
+    </div>
+
+    @if (_stats.Cases > 0)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Cases by status</div>
+                    <ApexChart Type="donut" Height="240"
+                               Categories="@_stats.CasesByStatus.Select(s => s.Label).ToList()"
+                               Values="@_stats.CasesByStatus.Select(s => (double)s.Count).ToList()" />
+                </div></div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Cases opened, by month</div>
+                    <ApexChart Type="bar" Height="240"
+                               Categories="@_stats.CasesPerMonth.Select(p => p.Day.ToString("MMM")).ToList()"
+                               Series="@MonthlySeries"
+                               NoDataText="No cases opened in the last year." />
+                </div></div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private OrgStatsSummary? _stats;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+
+        try
+        {
+            _stats = await AdminClient.GetOrgStatsAsync(OrgId);
+            StateHasChanged();
+        }
+        catch
+        {
+            // Swallowed on purpose — see the note at the top. The panel simply does not appear.
+        }
+    }
+
+    private List<ApexChart.ChartSeries> MonthlySeries =>
+        [new("Cases", _stats!.CasesPerMonth.Select(p => (double)p.Count).ToList())];
+}

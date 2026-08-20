@@ -9,6 +9,18 @@ namespace Ben.Data.WebApi.Controllers;
 /// <summary>
 /// Abstract base controller that exposes read-only (GET) endpoints for an entity type.
 /// </summary>
+/// <!-- Item #107 (2026-08-19, testing pass): a route cross-check found thirteen row-level
+///   subclasses — the Organization/User address, email, phone, link, note, message and page
+///   controllers — with NO caller anywhere: not the site, not the editor, not the WASM host.
+///   Their user-facing work is done by the aggregate MyContactInfoController (api/me/*) and the
+///   api/admin/* proxies; the *Type lookup tables go through the generic route-string client.
+///
+///   DECIDED: they stay, as the deliberate raw-CRUD tier. They are SuperAdmin-locked (the
+///   Phase-A fix below) and enumerated by EntityReadControllerBaseAuthorizationTests, so the
+///   surface is closed and guarded; keeping them preserves a uniform admin escape hatch per
+///   entity at zero runtime cost. The next person to find one uncalled should read this rather
+///   than re-investigate — and anyone adding a USER-facing feature on one of these entities
+///   should extend the aggregate controllers, not open these up. -->
 /// <typeparam name="TEntity">The EF Core entity class stored in <c>BenDataContext</c>.</typeparam>
 /// <typeparam name="TRecord">The AutoMapper projection record returned to callers.</typeparam>
 /// <remarks>

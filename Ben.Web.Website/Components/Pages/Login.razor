@@ -48,15 +48,63 @@
                     <ValidationMessage For="@(() => _model.Password)" class="text-danger small" />
                 </div>
 
+                @*
+                    The second factor, shown only once the server has said this account needs one.
+                    Asking everybody up front would be asking most people for something they do not
+                    have — 2FA is opt-in, per account.
+                *@
+                @if (_needsTwoFactor)
+                {
+                    <div class="mb-3">
+                        @*
+                            A plain input, not TelerikMaskedTextBox. Telerik's box renders no id on
+                            its inner input — only a data-id GUID — so a label can never point at
+                            it, and it throws on an unmatched aria-label attribute during render,
+                            which kills the circuit. See TwoFactorPanel for the full reasoning.
+
+                            autocomplete="one-time-code" is the real win here: on a phone the
+                            keyboard offers the code straight from the notification.
+                        *@
+                        <label class="form-label" for="login-2fa-code">
+                            @(_useRecoveryCode ? "Recovery code" : "Authentication code")
+                        </label>
+                        <input id="login-2fa-code" class="form-control"
+                               type="text" autocomplete="one-time-code"
+                               inputmode="@(_useRecoveryCode ? "text" : "numeric")"
+                               maxlength="@(_useRecoveryCode ? 20 : 6)"
+                               placeholder="@(_useRecoveryCode ? "xxxxx-xxxxx" : "000000")"
+                               value="@_twoFactorCode"
+                               @oninput="@(e => _twoFactorCode = e.Value?.ToString() ?? string.Empty)" />
+                        <div class="form-text">
+                            @if (_useRecoveryCode)
+                            {
+                                <text>One of the codes you saved when you turned this on. Each works once.</text>
+                            }
+                            else
+                            {
+                                <text>The six-digit code from your authenticator app.</text>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm px-0"
+                                @onclick="@(() => { _useRecoveryCode = !_useRecoveryCode; _twoFactorCode = string.Empty; })">
+                            @(_useRecoveryCode ? "Use my authenticator app instead" : "I can't use my app — use a recovery code")
+                        </button>
+                    </div>
+                }
+
                 @if (_errorMessage is not null)
                 {
                     <div class="alert alert-danger py-2 mb-3">@_errorMessage</div>
                 }
 
                 <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
-                    @(_isLoading ? "Signing in..." : "Sign In")
+                    @(_isLoading ? "Signing in..." : _needsTwoFactor ? "Verify" : "Sign In")
                 </button>
             </EditForm>
+
+            <p class="text-center text-secondary small mt-3 mb-0">
+                New here? <a href="/signup">Create an account</a>.
+            </p>
 
             @if (_entraEnabled)
             {
@@ -110,26 +158,62 @@
             NavManager.NavigateTo(RedirectTarget);
     }
 
+    private bool _needsTwoFactor;
+    private bool _useRecoveryCode;
+    private string _twoFactorCode = string.Empty;
+
     private async Task HandleLogin()
     {
         _isLoading = true;
         _errorMessage = null;
 
-        var success = await AuthService.LoginAsync(_model.Email, _model.Password);
+        var code = string.IsNullOrWhiteSpace(_twoFactorCode) ? null : _twoFactorCode.Trim();
+
+        var success = await AuthService.LoginAsync(
+            _model.Email,
+            _model.Password,
+            twoFactorCode: _useRecoveryCode ? null : code,
+            recoveryCode:  _useRecoveryCode ? code : null);
 
         if (success)
         {
             NavManager.NavigateTo(RedirectTarget);
+            return;
         }
-        else
+
+        _isLoading = false;
+
+        // Five refusals, five different things to do about them. Reporting them all as "invalid
+        // email or password" sends four of the five somewhere useless — to reset a password that
+        // was right, or to retype credentials the server never even looked at.
+        switch (AuthService.LastLoginFailure)
         {
-            // Not always the password. The API rate-limits sign-in attempts, and reporting that
-            // refusal as "Invalid email or password" sends someone off to reset a password that
-            // was never wrong.
-            _errorMessage = AuthService.LastLoginFailure == LoginFailure.RateLimited
-                ? "Too many sign-in attempts. Please wait a minute and try again."
-                : "Invalid email or password.";
-            _isLoading = false;
+            case LoginFailure.RequiresTwoFactor:
+                _needsTwoFactor = true;
+                // Not an error the first time: the password was correct and this is the next step.
+                _errorMessage = code is null
+                    ? null
+                    : "That code wasn't right. Try the current one from your app.";
+                break;
+
+            case LoginFailure.RateLimited:
+                _errorMessage = "Too many sign-in attempts. Please wait a minute and try again.";
+                break;
+
+            case LoginFailure.EmailNotConfirmed:
+                _errorMessage = "Confirm your email address first — check your inbox for the link we sent.";
+                break;
+
+            case LoginFailure.LockedOut:
+                // Identity locks an account after repeated failures. Reporting this as a wrong
+                // password sends somebody to reset a password that was right, and the reset will
+                // not help either — only waiting does.
+                _errorMessage = "This account is locked for a few minutes after too many attempts. Wait, then try again.";
+                break;
+
+            default:
+                _errorMessage = "Invalid email or password.";
+                break;
         }
     }
 

@@ -1,0 +1,33 @@
+
+/* ── Message list rows ───────────────────────────────────────────────────────
+   The list itself carries the template's own `notification` class, which is where the row
+   separators, the unread tint and the hover gradient come from — see `.notification li` in
+   smartapp.min.css. Nothing here repeats any of that.
+
+   What remains is what the template genuinely does not have: its demo rows are static markup,
+   while ours are clickable and keyboard-reachable. */
+.mail-row {
+    cursor: pointer;
+    transition: background-color .12s ease-in-out;
+}
+
+/* The template's hover is a dark gradient over a light background, which does nothing visible in
+   night mode. A background *colour* sits under that gradient rather than fighting it, so light
+   mode keeps the template's look and dark mode gains a hover it otherwise wouldn't have. */
+.mail-row:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
+/* Focus must be visible: the row is keyboard-reachable (role="button", tabindex="0"), and a
+   keyboard user who cannot see where they are has no way to use the list at all. */
+.mail-row:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+}
+
+/* The open message, marked in the list beside it. A left border rather than a fill, so it reads as
+   a position marker and not as another unread state. */
+.mail-row--selected {
+    background-color: var(--bs-tertiary-bg);
+    box-shadow: inset 3px 0 0 0 var(--bs-primary);
+}

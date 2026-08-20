@@ -31,7 +31,7 @@ public class AudioScrubModeTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
+                            .Or(Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 

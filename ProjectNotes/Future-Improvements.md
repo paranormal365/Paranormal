@@ -140,7 +140,7 @@ On audio file playback/preview (e.g. `AudioFilePreview.razor`/`WaveSurferPlayer.
 
 ---
 
-## 9. Thoroughly test the Ben.Video component 🟡 In progress (2026-08-06)
+## 9. Thoroughly test the Ben.Video component (recurring practice, not a finishable item — both tracked bugs fixed)
 
 Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
 
@@ -2156,7 +2156,13 @@ dev tooling cannot drive an OS file picker). Profile and witness photos were ver
 > The public **CMS member roster** section (`CmsSectionType.MemberRoster`) is still a placeholder
 > that renders "Member roster section." — that belongs to item #80's CMS phases, not here.
 
-## 55. Equipment inventory & checkout tracking (not started)
+## 55. Equipment inventory & checkout tracking (BUILT through phase 6 — header was stale; see item 86 for what was deliberately left)
+
+> **Header correction (2026-08-20):** this read "not started" long after the fact. Personal and
+> organization equipment, sharing, checkouts, photos, FAQs, counters and loan feedback all shipped
+> across phases 1–6; all four phase-6 branches are content-verified in develop. What remains is
+> recorded honestly in item 86 (deliberate leftovers), plus one default decision and Ben's own
+> click-test. The description below is kept as the original spec.
 
 Two related but distinct systems:
 
@@ -3942,7 +3948,7 @@ Admin view is complete; only the stripping half waits.
 
 ---
 
-## 87. Open events — public investigations and open meetings (mostly built 2026-08-17 — the pre-event reminder remains, and needs a scheduler)
+## 87. Open events — public investigations and open meetings (CLOSED 2026-08-20 — the reminder and its scheduler shipped in phase 6)
 
 Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
 know they are coming they have to be a site user. The information to attend and information about
@@ -4172,6 +4178,41 @@ to invent a password.
 A reminder before the date belongs here too. Ben's *"I base this off my experience"* is the argument
 for it: somebody who signed up three weeks ago needs telling again, and a stranger who does not turn
 up is worse for the organization than one who never signed up.
+
+### The reminder, and the scheduler under it — ✅ built 2026-08-20 (phase 6)
+
+Anyone whose RSVP is **Accepted** is emailed roughly a day before the event: time, place, the link
+to the event page, and a way to say they can no longer come while the place can still be offered to
+somebody else. Not the merely invited and not the tentative — an invitation nobody answered is not a
+commitment, and mail about a thing somebody never agreed to is mail they did not ask for. Widening
+that is one enum value, and should be a decision rather than a drift.
+
+**This is the platform's first background worker.** `ScheduledWorkService` is a `BackgroundService`
+that wakes every five minutes and runs each registered `IScheduledJob` in its own scope and its own
+try/catch. **No Hangfire, no Quartz** — the work is a handful of jobs on a timer with no cron
+expressions, no backoff, no dashboard and no persisted queue, and the one guarantee that matters is
+provided by a unique index rather than by anything a job framework would supply. Adding a job is one
+`AddScoped<IScheduledJob, …>` line.
+
+Three decisions in it worth keeping:
+
+- **The first pass waits 30 seconds.** Jobs that fire the instant the process starts run while
+  migrations may still be applying, and turn a crash-restart loop into a job loop.
+- **Resolution happens inside the guard, not before it.** An exception escaping `ExecuteAsync` stops
+  the entire host by default, so a job whose constructor threw would have turned "reminders are
+  broken" into "the API is down". Caught while writing the tests, not by them.
+- **The marker is written after the send, never before.** Writing it first would make a failed send
+  permanent silence; writing it after means the worst case is a duplicate — much the better of the
+  two for somebody who is expected somewhere tomorrow.
+
+`EventReminderSent`'s unique index across (event, user) **is** the idempotency, not a tidiness
+constraint: the loop would otherwise find the same event on every pass and send the same person the
+same email a dozen times before the evening. The in-memory provider the tests use does not enforce
+unique indexes, so the tests exercise the query — the layer that operates on every normal pass — and
+assert the index structurally, with the reasoning next to the assertion.
+
+Turning **events off sitewide stops the mail**, not just the pages. A disabled section that carries
+on writing to people is worse than one that merely hides itself.
 
 ### Smaller things to settle when it is picked up
 
@@ -4635,7 +4676,7 @@ prettier dead end is still a dead end.
 
 ---
 
-## 91. Video editor — scope the Server media tab (raised 2026-08-19)
+## 91. Video editor — scope the Server media tab (CLOSED 2026-08-20 — phase 7)
 
 The editor's **Server** tab lists every media file the signed-in person can reach, in one flat
 list. That is fine with four demo clips and unusable with four hundred: a real investigation
@@ -4661,6 +4702,38 @@ aggregates across ownership, org membership, shares and case links —
 `MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
 editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
 is the client side. Keep the content-type filter as-is.
+
+### How it shipped (2026-08-20)
+
+A selector above the Server tab: **All media / My files / By case**, with a case list appearing for
+the third and a visit list appearing under that when the chosen case has more than one.
+
+**The scope narrows and cannot widen**, and that is a property of where the filtering happens
+rather than a promise. `MediaLibraryController` computes the full audience union first, exactly as
+it always did, and applies a scope as an *intersection* over the result — so naming a case you have
+no part in returns nothing rather than its contents. A test asserts precisely that, and fails if
+the intersection is ever "optimised" into the union.
+
+**The editor still does not know what a case is.** A second, optional interface —
+`IMediaLibraryScopeSource` — hands it groups with labels and ids; it renders them and sends an id
+back. A host that registers none simply gets All and Personal. Optional in the real sense: it is
+resolved through the service provider rather than with `[Inject]`, because `[Inject]` calls
+`GetRequiredService` and a nullable property does not make it optional.
+
+**Two things this turned up:**
+
+1. **The two hosts were listing different things.** The WASM host's Server tab called
+   `/api/upload-files`, which is *owner-only*, while the Blazor Server site called
+   `/api/media-library/files`, which aggregates. So the same tab in the same editor showed a
+   narrower list on one host than the other, and the WASM host silently omitted images as well.
+   Both now use the aggregating endpoint and both show images; anyone who wants the old behaviour
+   picks **My files**.
+2. **A stale-response race** — found by a test that changed scope twice quickly, which is exactly
+   what somebody hunting for a file does. The first fetch was still in flight when the second
+   scope was chosen, and whichever landed last won: the list would show the previous scope's files
+   under a selector describing the new one. A generation counter now discards superseded results.
+   The failing test went from a 17-second timeout to two seconds once it was fixed, which is how
+   the race announced itself.
 
 ---
 
@@ -4830,7 +4903,7 @@ mapping defects above — but neither was the stall.
 
 ---
 
-## 95. Editor toolbar — reclaim the space (raised 2026-08-19)
+## 95. Editor toolbar — reclaim the space (CLOSED 2026-08-20 — was already done)
 
 Three changes to the same row, all about making room for the buttons that matter:
 
@@ -4843,7 +4916,17 @@ Three changes to the same row, all about making room for the buttons that matter
 - Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
   into the overflow where they need text labels (item 93).
 
-## 96. Diagnostics and logs are visible to everyone (raised 2026-08-19)
+**Closed 2026-08-20 on inspection: all three were already shipped**, as part of item 93's toolbar
+work, and only this header was left stale — the same trap items 9, 55, 92 and 96 set. Verified in
+the running editor rather than by reading: the Initialize button is rendered only in the Idle and
+Error states, undo and redo are direct toolbar buttons rather than overflow entries, and the mark
+sits at the end of the bar.
+
+One detail worth recording because it is better than what was asked for. The mark is **not** two
+images chosen by theme — it is a single mask painted with `--bv-text-muted`, so it follows the
+theme by construction and there is no second asset that can drift out of step with the first.
+
+## 96. Diagnostics and logs are visible to everyone (CLOSED 2026-08-20 — phase 7)
 
 The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
 operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
@@ -4852,7 +4935,21 @@ their own footage has no use for them, and the output names internals they shoul
 Show them only to platform and group administrators. The editor itself has no notion of roles — it
 is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
 identity it already has: the site from its user state, the WASM host from the signed-in account.
-Default it to off, so a host that forgets is safe rather than exposed.
+
+**Status: closed 2026-08-20.** The site host gates all three editor pages on
+`IsSuperAdmin || IsAdmin`. The WASM host now asks `GET /api/me` after sign-in and sets
+`ShowDiagnostics` from the answer — it has no claims to read, because sign-in there goes through
+`MapIdentityApi` and yields tokens rather than a principal. It re-asks when the signed-in account
+changes, which matters most in the sign-out direction.
+
+The default stays **off**, and every failure resolves to off: signed out, no API configured, or the
+call throwing. This is a display decision and not a security boundary — every endpoint those tools
+reach authorises itself, so somebody who forced the answer would reveal a panel to themselves and
+gain nothing. That is written next to the code, because the next reader will wonder.
+
+Both directions are tested against the live WASM host. A test that only checked the panel was
+hidden would have passed against the previous behaviour, which hid it from everybody — including
+the people it exists for.
 
 ---
 
@@ -4889,7 +4986,7 @@ the topmost element is now a sidebar link.
 
 ---
 
-## 98. Charts — the template already styles ApexCharts, we just never shipped it (raised 2026-08-19)
+## 98. Charts — the template already styles ApexCharts, we just never shipped it (CLOSED 2026-08-20 — phase 2)
 
 Ben likes the look of the ApexCharts in the SmartAdmin demos and asked whether they come with the
 template. They effectively do: `smartapp.min.css` carries **190 `.apexcharts-*` rules** — the whole
@@ -4918,9 +5015,43 @@ dashboards end up with either unreadable thumbnails or oversized decorations.
 **Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
 reaches Kendo's; if not, the same bridge trick used for the video editor applies.
 
+### How it shipped (2026-08-20)
+
+**The licence turned out to be the real decision.** ApexCharts went dual-licensed at v5: free only
+under $2M annual revenue, payable above it. For a site with monetisation on the roadmap that is a
+dependency whose terms change exactly when it succeeds, so the vendored build is **4.7.0, the last
+MIT release** — MIT cannot be revoked from a version already published. Recorded in
+`wwwroot/plugins/apexcharts/VENDORED.md`, including the warning to read a future version's LICENSE
+file rather than npm's `license` field, which said "SEE LICENSE IN LICENSE" for precisely the
+releases where the terms changed.
+
+**The check this item asked for, answered:** `smartapp.min.css` carries all 190 `.apexcharts-*`
+rules and every one is light-theme; `themes/night.min.css` carries none. So `ben-charts.css` bridges
+the dark half off `--bs-*` properties — but only for what the library renders as real DOM. Series
+and axis-label colours are drawn from config, not CSS, so the JS module reads the palette at build
+time and re-reads it on a theme change.
+
+**Peity is not vendored.** It needs jQuery, which this site does not load; ApexCharts' sparkline
+mode covers the same job. One library for both roles — recorded because Ben asked for Peity by name.
+
+Built: `ApexChart.razor(.js)` (module-level Map keyed by container id — the multi-instance pattern
+a dashboard requires) and `StatCard.razor`, generalised from the sidecar page's three hand-rolled
+tiles, which were the only stat cards in the app and about to be copied. That page is the first
+consumer: its "Installations by version" badge row was a bar chart with the bars left out, and is
+now a bar chart.
+
+One thing looking at it caught that no assertion would have: with a single category ApexCharts
+stretches a bar across most of the panel, reading as a filled progress bar. Column width now scales
+with category count.
+
+Guards: three Playwright tests — renders with real geometry, one canvas per container (the
+multi-instance regression), and the canvas paints no background of its own in dark mode. The
+sidecar admin page also gained help documentation, which it had never had — found because the
+orphaned-screenshot guard refused the new image.
+
 ---
 
-## 99. Profile page — adopt the template's layout (raised 2026-08-19)
+## 99. Profile page — adopt the template's layout (CLOSED 2026-08-20 — phase 4)
 
 Ben likes the SmartAdmin profile demo and wants our profile page to read like it:
 <https://getwebora.com/smartadmin/demo/profile.html>
@@ -4937,7 +5068,7 @@ thing — and whether the investigation map belongs on the profile at all or beh
 
 ---
 
-## 100. Internal messages — adopt the template's mail layout (raised 2026-08-19)
+## 100. Internal messages — adopt the template's mail layout (CLOSED 2026-08-20 — phase 5)
 
 Ben likes the SmartAdmin system-mail demo for our internal messaging:
 <https://getwebora.com/smartadmin/demo/systemmail.html>
@@ -4955,9 +5086,54 @@ carry an audience, so the layout has to leave room to say so on each row.
 
 Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
 
+**Closed 2026-08-20.** The group's Messages tab is now the template's mail idiom: a folder rail
+(Inbox / Sent / Broadcasts / Direct / Case teams / Public, each with its unread count), a list of
+`MailRow`s inside the template's own `<ul class="notification">`, and a reading pane under the list
+in place of the modal. Platform messages on the notifications page use the same rows and the same
+reading pane. The case thread stays a chat — bubbles are right for it — but its body now renders
+through the shared `MessageBody`, and its received bubble no longer uses a fixed light fill that
+turned white in night mode.
+
+`MessageBody` is the point of the exercise beyond appearance: three surfaces each rendered a
+message body their own way, and @mention/#hashtag linkification (phase 8) needs one place to land.
+`MessageList.razor` is gone; nothing else consumed it.
+
+**Deviation from the plan:** compose stayed a dialog rather than becoming a route. A composer with
+bold/italic/lists is the "small formatting" exception to the pages-over-modals rule, and every mail
+client in the world overlays it. The *read* view did move out of its modal, which is the half that
+mattered.
+
+**Three bugs found while building it, all invisible to an owner account:**
+
+1. **Ordinary members could not open their own group at all** (fixed here). `GET
+   /api/organizations/{id}` required Read access through the org security service, which returns
+   true for Owners and Administrators and otherwise falls through to explicit grants and named
+   roles. A plain Member had none, so the hub — whose first call this is — said "Organization not
+   found or you do not have access" about a group they belong to and can post messages in. Three of
+   BenCo's four seeded members were locked out. Active membership is now sufficient to read the
+   organisation's own record; the check sits in the controller, not in `HasAccessAsync`, because
+   members are emphatically not entitled to read every table.
+2. **The recipient picker used an org-admin-only endpoint** (fixed here).
+   `GetOrganizationMembersAsync` goes through the security service and throws for anyone who is not
+   an org admin — that is, for exactly the person most likely to be sending a direct message. The
+   catch around it turned the refusal into "this group has no other active members to write to."
+   Now `GetOrgUserDirectoryAsync`, which asks only that the caller be an active member.
+3. **The channel dropdown never called its own change handler** (fixed here). `ChannelChangedAsync`
+   was written, correct, and unreferenced: the `BenSelect` had `@bind-Value` but no `OnChange`, so
+   the member fetch never ran and the picker sat on "Loading members…" indefinitely.
+
+The direct-message fix this item was partly about — compose sent `RecipientUserIds: []` while
+offering Direct Message and Case Team — is also done, and is covered by a test that reads the
+message as the recipient rather than trusting the composer.
+
+All six tests in the new `Messaging` Playwright category sign in as **James, an ordinary member**,
+not as Sarah, who owns BenCo. All three bugs above were owner-invisible. That is the lesson worth
+keeping from this phase, and it generalises past messaging: a suite that only ever authenticates as
+the most privileged account cannot see the product most people use.
+
 ---
 
-## 101. Administrator dashboard — the template's stat-card bar (raised 2026-08-19)
+## 101. Administrator dashboard — the template's stat-card bar (CLOSED 2026-08-20 — phase 3)
 
 For administrators and site administrators, Ben wants the row of cards the template's project
 dashboard opens with:
@@ -4980,3 +5156,536 @@ status, support tickets by state.
 
 Gate the whole bar on the same administrator check the diagnostics panel now uses (item 96), so
 one rule decides who sees operator-facing surfaces.
+
+---
+
+## 102. AudioFilePreview's toast has no element — its errors are shown to nobody (CLOSED 2026-08-19)
+
+`AudioFilePreview.razor` declares `TelerikNotification? _toast` and routes three messages through
+it, but no `<TelerikNotification @ref="_toast" />` exists in the markup, so `_toast` is null
+forever and `Notify()` no-ops. Two of the three are save confirmations; the third is the one that
+matters: **"Save failed — only WAV and MP3 sources can be clipped."** A user clipping from an
+unsupported source sees nothing happen, which reads as a broken button.
+
+Found by the compiler (CS0649), which is the same disguise the item #77 phase-6 bugs wore. Fix is
+one line of markup; while there, check whether the site's shared toast pattern should be used
+instead of a per-component TelerikNotification.
+
+## 103. Six public components read auth state that may not have resolved yet (CLOSED 2026-08-19)
+
+`PublicCaseDiscovery`, `HomeHero`, `CaseVoteWidget`, `EvidenceVoteWidget`, `UploadFileVoteBar` and
+`FileCommentThread` read `UserState.IsAuthenticated` without awaiting `AuthReady` and without
+subscribing to a state-changed event. Five are markup-only and merely render the signed-out
+variant until something re-renders them; `PublicCaseDiscovery` is worse — `LoadVoteSummariesAsync`
+bails on `!IsAuthenticated` **during initial load**, so on a hard navigation a signed-in user's
+own votes never appear on the home page's case cards until they page or re-sort.
+
+This is the same family as the Safari base-href bug and the editor toolbar repaint: state read
+once, never followed. The site-wide pattern (await `AuthReady` in pages; components either receive
+auth as a parameter or subscribe) should be applied, and the existing AuthReady guard test extended
+to components that inject `IBenUserState`.
+
+## 104. ImageEditorPlayer's opacity slider is fire-and-forget (CLOSED 2026-08-19)
+
+The layer-opacity `<input @oninput>` calls `async Task SetLayerOpacity(...)` without awaiting it
+(CS4014). Failures vanish as unobserved tasks, and a fast drag can interleave
+`setLayerOpacity`/`RefreshLayersAsync` pairs out of order. Make the lambda async and await, or
+funnel through a small debounce like the editor's own sliders use.
+
+## 105. One flaky e2e test: RequestList_AnonymousRedirectsToLogin (CLOSED 2026-08-19)
+
+The only failure in a 265-test run, and the product is fine — verified live, anonymous
+`/my-requests` lands on `/login` with the sign-in form. The test asserts on `Page.Url` immediately
+after `GotoAsync`, but the redirect is client-side after the circuit connects, so the assert races
+it. Wait for the URL change (`WaitForURLAsync`) the way the login helper already does. NetworkIdle
+proves nothing here — that lesson is already written down.
+
+## 106. The editor pages don't link their own help doc (CLOSED 2026-08-19)
+
+`using-the-video-editor.md` shipped with ten screenshots, and no screen links to it:
+`MyVideosPage`, `CaseVideoEditorPage` and `VideoEditorPage` carry no `HelpLink`. The house rule is
+docs + HelpLink in the same branch; the doc half landed alone. `getting-started` and
+`requesting-an-investigation` are also unlinked but reachable from the help index, which may be
+fine — decide deliberately.
+
+## 107. Nineteen entity controllers are exposed surface with no caller (CLOSED 2026-08-19 — decided: they stay, documented)
+
+The plain row controllers — `organization-addresses/emails/phones/links/notes/pages`,
+`user-addresses/emails/phones/links/notes`, `user-messages`, `user-message-tos` and friends — have
+zero client references. Their functions are served by the aggregate `MyContactInfoController`
+(`api/me/*`) and the `api/admin/*` proxies; the lookup-*type* tables go through the generic
+route-string client and are used. The rows are auth-filtered since security phase A, so this is
+not a hole — it is dead surface that will rot and confuse. Decide: delete them, or mark them as
+the deliberate raw-CRUD tier and say so in the controller docs.
+
+**Decided:** they stay. They are SuperAdmin-locked since Phase A and enumerated by
+`EntityReadControllerBaseAuthorizationTests`, so the surface is closed and guarded; deleting
+thirteen controllers the night before a UAT deploy buys tidiness and risk. The decision and the
+routing map (aggregates for users, admin proxies for operators, these as the raw tier) are
+written on `EntityReadControllerBase` itself, where the next investigator will look first.
+
+**How the rest closed (2026-08-19):** #102 routes through `BenToastService` — the documented
+TelerikNotification replacement the component predated — and the dead field is gone. #103 applies
+`WaitUntilAuthReadyAsync` to all six components (the three vote widgets reload, since their
+summaries are viewer-specific; the comment thread and hero repaint; the discovery grid waits
+inside `LoadVoteSummariesAsync`), plus a seventh nobody flagged: the notification bell, which was
+already correct through `EnsureStartedAsync`. A new source-scan guard —
+`Every_reader_of_auth_state_follows_its_resolution` — fails the build if a reader stops
+following; it was verified to discriminate. An e2e hard-nav test was added too, with an honest
+note: it passes against the un-fixed code on this machine (the race resolves in auth's favour
+locally), so the source scan is the enforcing barrier, not it. #104 awaits the call. #105 rewrites
+both redirect tests to wait on the URL change — the twin test shared the race and had merely been
+lucky. #106 links the doc from all three editor pages, the standalone page from its signed-out
+guard text, the two others from their headings.
+
+---
+
+## 108. Sitewide feature switches (CLOSED 2026-08-20 — phase 1 of the nine-phase plan)
+
+Ben asked for SuperAdmin switches "for most logical sections of the site" while the two new
+features (public feed, publications) were being flagged anyway. Ten switches now exist:
+video editor, equipment, events, discovery, CMS public pages, media library, group messaging,
+voting, plus the two unbuilt features.
+
+**The rule the design turns on:** switching a section off takes its **URLs** down, not just its
+navigation links. `FeatureGate` runs during the server render and shows the ordinary page-not-found
+body, so a bookmark or a shared link reaches the same dead end as the menu does. The navigation and
+the gate read one provider, so they cannot disagree — which is the failure mode this codebase keeps
+re-learning, most recently as "a refusal the UI discards is worse than no rule".
+
+**Shape.** Keys are declared in `SiteSettingKeys` with their defaults in one list
+(`FeatureDefaults`) — established sections default ON so adding a switch never removes a working
+feature, and the two unbuilt ones default OFF so they cannot appear early. No rows are seeded; a
+key with no row reads its declared default. A new `[AllowAnonymous] GET /api/public/site-features`
+returns the resolved bools, narrow in the same way `PublicSiteContactController` is narrow: it
+walks the declared feature list, so a non-feature setting can never leak onto it. The website holds
+a singleton `SiteFeaturesProvider` (30s snapshot, `RateLimitSettingsProvider` shape) whose fallback
+is the declared defaults — an unreachable API leaves the site looking normal rather than stripped.
+
+**Two bugs found while building it, both mine, both caught before commit:** `BooleanKeys` was a
+static field initialised before the list it read, so every request touching the class died in a
+`TypeInitializationException`; and the provider was a singleton holding a scoped client — a captive
+dependency the container refuses outright.
+
+**Also fixed in passing:** the admin settings page had no boolean editor, so the one bool-shaped
+setting carried "Accepts true or false" in its description — an instruction that existed only
+because the control was a text box. Switches now render as switches and save on toggle, and saving
+invalidates the provider so the administrator who threw the switch sees it immediately instead of
+up to thirty seconds later.
+
+Guards: five xUnit tests (key parity across the two projects, default parity, admin-page coverage,
+boolean rendering, and that the unbuilt features stay off) — the parity test verified to fail
+against a deliberately drifted key. One Playwright test throws the switch through the real admin
+UI and asserts the URL dies and returns.
+
+### How it shipped (2026-08-20)
+
+**Sign-ins get their own table, not audit rows.** `SignInEvent` is `AppUserId?`, `Utc`,
+`Succeeded`, `Method` and nothing else — the dashboard's question is a `GROUP BY` over an indexed
+date, and answering it from `AuditLogs` would mean string-matching action names across a mixed
+free-text stream forever. A unit test pins the column set, because the temptation later is "just
+an IP address", and that turns a counting table into a tracking one.
+
+**Where the hook goes.** `/login` is mapped by `MapIdentityApi`, so there is no action of ours to
+add a line to; recording lives in a `SignInManager` subclass, which every password check funnels
+through. Writing the row is wrapped in a swallow-and-log: losing a data point beats locking people
+out of the site. Verified live — three attempts produced two rows, the third being an address
+matching no account, which never reaches a password check and has no user to attribute.
+
+**Ben's chart ideas, costed and built:** busiest groups, largest groups, cases by status,
+sign-ins and registrations over time, and the three geographic cuts (people, cases, investigations
+by state) — all from `State` columns already on the entities. The registered-in-a-group funnel is a
+stat card with the percentage stated, since the raw pair invites the reader to divide it wrong.
+**Not built: anonymous visitor counts.** Nothing records people who are not signed in, so "new vs
+returning" would mean building page-view tracking — a privacy and retention decision, not a chart.
+The dashboard and its help doc both say so out loud rather than leaving the absence to be noticed.
+
+**Two bugs found by looking at the page, not by tests passing.** Every chart rendered *twice*:
+`create` is async, its library-load is a yield point, and two calls both cleared the container
+before either registered anything to clear — ApexCharts appends, so the dashboard stacked two
+complete charts per card. Serialised per container now, and the regression test counts canvases
+against containers: it reports "8 containers produced 16 charts" against the unfixed code. Second,
+a sparkline drew 300px wide inside a 258px card and hung 119px into its neighbour, because
+ApexCharts overwrites the inline width of the element it owns; the width is measured from the DOM
+now, with a wrapper the library cannot touch as backstop.
+
+Two pre-existing e2e locators broke on the new org stats panel — `GetByText("Cases")` had always
+meant "any text saying Cases" and only now had competition. Tightened to `GetByRole(Tab)`, which is
+what they meant.
+
+### How it shipped (2026-08-20)
+
+Hero band (photo, name, sign-in address, chips that state something true about the account) over
+three tabs: **About** (name, both photos, the two-key consent switch), **Contact** (the four
+detail cards, two columns), **Where you've been** (the map, in its own tab as Ben chose). Every
+mechanism moved unchanged — the plain-input-not-Telerik name field, the optimistic consent toggle
+that reverts on failure, the data-URI photo pipeline that exists because an `<img>` sends no
+bearer token.
+
+**The find: `/api/my-investigations/attended` was returning 500 for every caller.** It ordered by a
+property of the record it was projecting into, which EF cannot translate and reports at runtime,
+not at compile time — the same shape as the two query bugs phase 3 hit. Both callers wrap it in a
+catch that falls back to an empty list, so a total endpoint failure surfaced as the reassuring
+sentence "you haven't attended an investigation yet", and the investigation map has been silently
+empty for everyone since it was written. Fixed by ordering on the entity before the projection;
+Sarah now has two attended investigations and a pin near Adams, Tennessee.
+
+That is the third time a swallowed exception has hidden a working-looking failure in this codebase.
+The catch is right — a history map must not take down someone's account settings — but a catch that
+distinguishes "nothing to show" from "the call failed" would have said so.
+
+**Cleanup the change forced:** eight e2e locators across five files said `GetByText("Cases")` when
+they meant the Cases *tab*. They only broke once the org stats panel gave the word competition, and
+Playwright's strict mode failed on the ambiguity rather than silently clicking the wrong element —
+the good outcome. All now `GetByRole(AriaRole.Tab)`.
+
+---
+
+## 109. The test suite only ever signs in as privileged accounts (raised 2026-08-20)
+
+Phase 5 found three separate faults in group messaging that were **completely invisible to an owner
+account** and total for everyone else: the organisation page refusing ordinary members outright, the
+recipient list being fetched from an org-admin-only endpoint, and that fetch never being triggered
+at all. See item 100 for the detail.
+
+None of them were subtle. All three were caught within minutes of signing in as James — an ordinary
+BenCo member — instead of Sarah, who owns it. The rest of the Playwright suite uses `UserEmail`,
+which is Sarah, or the SuperAdmin. So the whole product is currently exercised from the two most
+privileged seats in it.
+
+BenCo's seed gives us four members at three levels (owner, active member, and Daniel, who is not an
+active member and is refused by design), which is enough to test this properly without new fixtures.
+
+What to do:
+
+- Give `BenTestBase` a named ordinary-member account alongside `UserEmail`, so reaching for it is
+  the easy path rather than a thing each test invents. `MessagingTests` defines its own today.
+- Walk the surfaces an ordinary member is supposed to reach — the org hub's tabs, cases,
+  investigations, calendar, files, equipment — as that member, and record what breaks. Expect more
+  of the same shape: `HasAccessAsync` returns false for a plain Member on *every* table, so any
+  surface gated on it that members are meant to use is broken right now.
+- Where a surface genuinely is admin-only, the failure should say so rather than claiming the thing
+  does not exist. "Organization not found or you do not have access" for a group you belong to is
+  the wrong sentence even when the refusal is right.
+
+This is adjacent to the standing "a server guard needs a UI path" rule, but the failure mode is the
+mirror image: there the server refused and the UI discarded the refusal; here the server refuses
+and the UI reports it faithfully, and nobody ever looked because nobody ever signed in as the
+person it happens to.
+
+---
+
+## 110. Merge two groups into one (raised 2026-08-20 by Ben — low priority, logic still to work out)
+
+An **admin-level** function: take two organisations and end up with one.
+
+Ben's framing, which is the starting point rather than a spec:
+
+- Someone has to choose **which group is the base** and which is merged into it. The distinction
+  matters because everything that cannot be duplicated — the URL name, the settings, the identity —
+  comes from the base.
+- Someone has to choose **the name after the merge**. It is not necessarily either group's current
+  name, so it is a decision, not a consequence of picking the base.
+- It is **low priority**, and **the logic needs working through with Ben** before anything is
+  built. Do not design this alone.
+
+Things that will need answering when it comes up, noted now so the conversation starts further
+along — none of these are decisions, just the questions the schema will ask:
+
+- **Members.** Someone in both groups has two memberships with two roles; the merged group can only
+  give them one. Higher role wins, base group's role wins, or ask?
+- **The URL name that goes away.** Item 89 established that a released URL name can capture another
+  group's traffic. A merged-away group's URL name should almost certainly become a permanent alias
+  pointing at the survivor rather than being freed.
+- **Cases, investigations, places, equipment, files, messages.** These reparent, but each carries
+  its own visibility and ownership rules, and case visibility in particular is set per case with the
+  original group as the audience.
+- **Clients.** A client of the merged-away group did not agree to work with the survivor. Whether
+  that needs telling them, or their consent, is a product question and not a data one.
+- **Reversibility.** A merge that cannot be undone is a destructive admin action on other people's
+  records, which argues for either a dry-run preview or a soft merge that can be unwound.
+
+Sequence: after the current nine-phase plan. Nothing depends on it.
+
+---
+
+## 111. Evidence at a public investigation — who may add it, and is it all public? (raised 2026-08-20 by Ben)
+
+Ben, while the accounts work was in flight: *"When we complete this, we need to address who and how
+people who attend a group's public investigations are able to add evidence and if public events have
+only public evidence and documentation."*
+
+Two questions, and they are not the same one.
+
+### Who may add evidence, and how
+
+A public event brings **strangers** — that is the whole point of item 87, and it is what makes this
+hard. The people who turn up are not group members, have no role, and in some cases have a
+passwordless account created by clicking a link in an email. Today only the group's own members can
+attach anything to an investigation.
+
+The shapes worth weighing when we get here:
+
+- **Nobody but members.** Simplest, and wastes the fact that thirty people were there with phones.
+- **Attendees may submit, a member must accept.** A queue, like the file-permission requests already
+  built. Keeps the group's record theirs while letting visitors contribute.
+- **Attendees may add directly.** Fastest, and makes the group's evidence trail something outsiders
+  can write to — which is a lot to hand somebody who signed up with an email address a fortnight ago.
+
+The middle one is almost certainly right, and it has a precedent in this codebase to copy rather
+than invent.
+
+### Is everything at a public event necessarily public?
+
+Item 87 already recorded the bargain: *"All collected evidence and data is public and cannot be made
+private for an open investigation. The location can be scrubbed and hidden to the public not
+attending, but evidence is not."* That settles the **group's own** findings.
+
+What it does not settle, and what needs deciding:
+
+- **A visitor's own recording of themselves or their friends.** Publishing it because they attended
+  a public event is a different promise from the group publishing its own findings.
+- **Other attendees appearing in someone's footage.** Thirty strangers in a dark building, and any
+  of them may be identifiable. There is already a two-key consent rule for member photos; this is
+  the same question with more people and less warning.
+- **Documentation** — reports, notes, timelines — as distinct from raw evidence. The quoted rule
+  says "evidence"; whether a group's written write-up is equally locked open is not stated.
+
+Sequence: after the feed and publications. It depends on nothing in them, but it is a policy
+decision as much as a build, and it should not be made in the middle of something else.
+
+---
+
+## 112. The 2FA enrolment panel hangs on "Starting…" (CLOSED 2026-08-20)
+
+Pressing **Turn on two-step sign-in** on the profile's Security tab leaves the button reading
+"Starting…" indefinitely. The QR never appears and no error is shown.
+
+**What is and is not broken.** The API underneath is complete and verified end to end against a
+live server with real TOTP codes computed from the secret it issues: setup, enable, sign-in with an
+app code, sign-in with a recovery code, single-use enforcement on recovery codes, and disable. It
+also rendered correctly through the browser once, early in the same session, before the panel was
+finished. It is the **panel** that hangs, not two-factor authentication.
+
+**What the evidence rules out.** A twenty-second `CancellationTokenSource` around the call does not
+surface either — no timeout message, no error, no re-render — and `finally` sets `_busy = false` and
+calls `StateHasChanged`. So the await is not simply slow: **the circuit stops re-rendering
+altogether**. That also rules out the HTTP call itself, and swapping `PostAsync` for
+`SendExpectingReasonAsync` (the helper every other POST on this page uses successfully) changed
+nothing. `GET /api/me/2fa` on the same page works — the panel renders "Off" from it.
+
+**Where to look next**, roughly in order of suspicion:
+
+- Something in the chain doing sync-over-async and deadlocking the circuit's synchronisation
+  context. A blocked circuit fits every symptom, including cancellation appearing to do nothing.
+- `TelerikQRCode`'s first render — it is the one component on this page never used anywhere else in
+  the product, and it is what the successful branch renders.
+- The interaction between the panel's `StateHasChanged` and Telerik's masked textboxes.
+
+**Reproduce it** by signing in as any account with 2FA off, opening `/profile` → Security, and
+pressing the button. `AccountTests.EnrollingWithARealCodeTurnsItOn` is written, is currently
+`Assert.Ignore`d pointing at this item, and will pass once the panel does — it should not be
+deleted.
+
+### The cause (found 2026-08-20)
+
+**`TelerikMaskedTextBox` does not splat unmatched attributes — it throws.**
+
+```
+System.InvalidOperationException: Object of type
+'Telerik.Blazor.Components.TelerikMaskedTextBox' does not have a property
+matching the name 'aria-label'.
+```
+
+The `aria-label` had been added to that component the day before, as the fix for a *different*
+finding: `LabelAssociationTests` had caught a `<label for>` pointing at nothing, because Telerik
+renders no `id` on its inner input — only a `data-id` GUID. The attribute was added on the
+assumption that Telerik splats what it does not recognise. It does not.
+
+The exception is thrown **during render**, not during the call, which is why every symptom pointed
+away from the truth: the API had already answered, the `finally` never took effect, the
+cancellation token never fired, and clicking a different tab did nothing either. **The circuit was
+dead.** It froze displaying the last frame it had successfully rendered — the one with the button
+reading "Starting…".
+
+What actually found it: reading the **browser console** through Playwright. Nothing server-side
+showed it. The diagnostic that split the problem in two — a `Console.WriteLine` at the top of the
+API action, proving the request arrived, was resolved and answered in milliseconds — is what
+justified looking at the client at all.
+
+### The fix
+
+Both code boxes — the enrolment panel and the sign-in page — are now **plain inputs** rather than
+`TelerikMaskedTextBox`. This is not a retreat from the house preference for Telerik components; the
+component genuinely cannot do what is needed here:
+
+- no `id`, so no `<label for>` can ever name it, and it has no accessible name at all;
+- it throws on an unmatched attribute, **during render**, killing the circuit;
+- no `inputmode="numeric"` and no `autocomplete="one-time-code"`, so a phone offers neither a
+  numeric keypad nor the code it has just received.
+
+A plain input gives all three, and a real label. A test asserts the accessible name comes from a
+label pointing at a real id.
+
+### Guarded against recurrence
+
+`TelerikAttributeSplattingTests` scans every `.razor` file in the site, the library, the editor and
+the WASM host, and fails on any Telerik tag carrying a plain HTML attribute. Verified by
+reintroducing the bug: it reports the offending file, tag and attribute by name.
+
+The next person will make the same assumption — that Telerik splats what it does not recognise — and
+this is how they find out in a second rather than an afternoon.
+
+### Two things fixed alongside
+
+- **`LockedOut` was being reported as "invalid email or password".** Found because a run of probes
+  locked the SuperAdmin account and the page said the password was wrong — sending somebody to
+  reset a password that was right, when only waiting helps. The sign-in page now distinguishes five
+  refusals.
+- **`SigningInWithTwoStepAsksForTheCodeAndAcceptsIt` was lying twice.** It shared the fixture's
+  account, so its result depended on what the previous test left behind; and the sign-in page
+  **pre-fills developer credentials in Development**, so a submit landing before the test's own
+  values reached the server model signed in as the developer, navigated to the home page, and
+  looked exactly like a two-step account being let through without a code. It now creates its own
+  throwaway account, and waits for the pre-fill to appear — which is itself proof the circuit is
+  live — before replacing it.
+
+### The misdiagnosis, recorded because it cost the most
+
+Several failing tests were read as a slow cold start, and timeouts were raised to 60, then 90, then
+120 seconds. **Measured, the page is interactive about 450ms after navigation on a cold host**, and
+server render is 9ms. The real fault: a character typed before the circuit connects is not merely
+ignored — the first interactive render overwrites the input from the server's empty value, so the
+keystroke is *erased*. The cure is to type again, not to wait longer. Those tests now run in about
+two seconds; they were taking ninety.
+
+A generous timeout on a fast page buys nothing and hides the next real regression behind a minute
+and a half of silence. Ben spotted it: *"It was almost instantaneous before these changes."*
+
+
+---
+
+## 113. Accounts: sign-up, @names, email confirmation and two-step sign-in (2026-08-20 — mostly shipped)
+
+Four things Ben asked for in one stretch, all of them account identity and all of them prerequisites
+for the public feed rather than part of it.
+
+### @names — shipped
+
+Ben: *"Lets let people choose a unique name to use for the @name when they create their account. We
+verify it is not already taken."* and *"For now, we will not let them change their @name but in the
+future we might... but super low priority."*
+
+`AppUser.Handle`, unique, lower-cased, 3–30 characters of letters, digits and underscores, starting
+with a letter. Reserved words are refused — route words that would make a profile URL read like a
+section of the site, and names somebody would trust in a mention (`support`, `admin`, `ishaunted`).
+Checked live as it is typed on the sign-up page; the unique index is what actually decides, and
+registration reports a collision that lands between the check and the insert.
+
+**Why a handle at all**, rather than matching display names: names here are neither unique nor free
+of spaces, so `@sarahmitchell` could only be matched by stripping punctuation and hoping exactly one
+account came back. Two people called Sarah Mitchell would then have meant notifying both or neither
+— and the answer would change as accounts were added, so a post's meaning would depend on who else
+had signed up since.
+
+Every account has one. `UserHandleBackfillService` gives one to anything created before the column
+existed and does nothing on every start after that; the other creation paths (Entra, event magic
+links, the seeders, an administrator) get one derived from the display name or email and uniquified.
+
+**Follow-up, explicitly low priority per Ben:** letting somebody change their @name later. It is not
+free — the handle appears in other people's posts — but the mention tables already store the
+account's id rather than the text, so old mentions would keep pointing at the right person.
+
+### Sign-up and email confirmation — shipped
+
+There was **no self-service sign-up at all** before this: accounts arrived through Entra, an invite,
+or an administrator. `/signup` now creates one, and `/confirm-email` is where the link lands.
+
+`MapIdentityApi`'s own `/register` could not be used — it takes an email and a password and nothing
+else, so an account made through it has no display name and no @name, and a handle cannot be added
+afterwards without letting people change it. Registration is therefore our own endpoint, generating
+the same token type and pointing at the same confirmation flow.
+
+Two decisions worth keeping:
+
+- **The answer is identical whether or not the address is already registered.** An endpoint that
+  says "that email is taken" is a way of testing who has an account here — worth more care on a site
+  about people's homes than a precise error is worth. The real account holder gets an email saying
+  somebody tried, which is the only party entitled to know. The @name is reported precisely, because
+  it is public by nature.
+- **Confirming happens on a button press, not on page load.** Mail scanners and security gateways
+  fetch every link in a message; a confirmation that happened on load is one they can complete on
+  somebody's behalf, which proves nothing about the address reaching a person.
+
+### Two-step sign-in — API shipped, panel blocked
+
+Standard TOTP, so **Duo Mobile and Okta Verify both work**, along with Google Authenticator,
+Microsoft Authenticator and 1Password — they scan the same code. (Duo's push approval and Okta as a
+single-sign-on provider are separate integrations and are not this. Okta as an identity provider
+would sit beside the existing Entra OIDC path.)
+
+**Opt-in, per account, and never required** — Ben: *"Let the end user determine if they want 2FA or
+not. It is not an administrator-related setting."* The administrator screen previously had a
+`TwoFactorEnabled` checkbox with no enrolment behind it, which would have switched on a second
+factor nobody could satisfy and locked that person out of their own account. The control is gone and
+the field is no longer written there; it shows as read-only status, because it is worth knowing when
+somebody writes in unable to sign in.
+
+Sign-in needed no new endpoint: `MapIdentityApi`'s `/login` already takes `twoFactorCode` and
+`twoFactorRecoveryCode` and answers `RequiresTwoFactor`. Reading that detail also fixed a separate
+long-standing lie — an unconfirmed account was being told "invalid email or password", which sends
+somebody off to reset a password that was always right. Four refusals now say four different things.
+
+**Telerik 14.1.0 has no OTP input component**, so the code boxes are `TelerikMaskedTextBox` with a
+`000000` mask. It does have `TelerikQRCode`, which is what renders the enrolment code.
+
+**The panel hangs — see item 112.** The API is complete and verified end to end with real TOTP
+codes. Do not read item 112 as "2FA does not work"; read it as "the enrolment page does not".
+
+### Found along the way
+
+- A **captive dependency** — a hosted service holding a scoped service — which the container refuses
+  to build, at startup, before anything else runs. Second instance of that class this month.
+- **`TelerikMaskedTextBox` renders no `id`**, only a `data-id` GUID, so a label pointing at the
+  component's `Id` names nothing: clicking it does nothing and a screen reader announces an
+  unlabelled box. `LabelAssociationTests` caught it; the accessible name comes from `aria-label`
+  instead, and a test now asserts the attribute reaches the input.
+- **Blazor Server pages are server-rendered long before their circuit connects**, so a test that
+  types as soon as an input appears triggers no handler at all and then waits out its timeout. It
+  passes or fails depending on how warm the host is, which reads as flakiness. The account tests
+  wait on the page's own echo to prove interactivity first.
+
+---
+
+## 114. Every page waits on a CDN for fabric.js (raised 2026-08-20)
+
+`App.razor` loads Fabric from an external CDN on **every page of the site**:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/fabric@6/dist/index.min.js" defer></script>
+```
+
+It is only needed by the image editor, and it is pre-existing — it came in with the original
+SmartAdmin shell — but it is paid for by every visitor on every page, including the sign-in page and
+the public microsite.
+
+**How it surfaced.** The first navigation of a Playwright run times out on
+`waiting until "load"` at 30 seconds, intermittently. Measured with a warm connection the fetch is
+352ms; cold, with DNS and a TLS handshake to an external host, it is the slowest thing on the page
+by a wide margin, and `load` does not fire until it finishes. Every test context is fresh, so there
+is no browser cache to help.
+
+**Why it matters beyond the tests:**
+
+- **A visitor's first page view pays for it too**, and they have no warm connection either.
+- **It is a third party on the critical path.** If jsdelivr is slow, blocked by a corporate proxy,
+  or unreachable — which is the normal state of an air-gapped or restricted network — every page on
+  the site waits, on a script only the image editor uses.
+- It is a privacy leak of sorts: every page view tells a CDN a visitor was here.
+
+**The fix is one already used here.** ApexCharts was vendored under
+`wwwroot/plugins/apexcharts/` with its licence and a `VENDORED.md` recording where it came from and
+why. Fabric should be vendored the same way — and, better, loaded **only by the image editor**
+rather than from the shell, since nothing else touches it.
+
+Small, self-contained, and it removes an external dependency from every page load.

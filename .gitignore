@@ -86,3 +86,8 @@ Ben.Video.Sidecar/installer/dist/
 # Publish output for the standalone editor (scripts/publish-editor.sh). Regenerated on demand and
 # around 65 MB, most of it the .NET runtime — a build product, not a source artefact.
 artifacts/
+
+# Sidecar zips are staged into the editor's downloads folder at publish time, never committed —
+# scripts/publish-editor.sh copies them from Ben.Video.Sidecar/installer/dist.
+Ben.Wasm.Video/wwwroot/downloads/*.zip
+Ben.Wasm.Video/wwwroot/downloads/checksums.txt

@@ -142,6 +142,92 @@ public class WasmEditorTests : BenTestBase
             + "authenticated call, and this host has no session until they sign in.");
     }
 
+    /// <summary>
+    /// The Server tab's scope selector narrows the list without leaving the tab.
+    /// </summary>
+    /// <remarks>
+    /// <para>This asserts the wiring — that the selector exists, that choosing a scope reaches the
+    /// server, and that the cascade appears — rather than which files come back. What each scope
+    /// <i>means</i>, and the property that a scope can never widen what somebody may see, is held
+    /// by MediaLibraryControllerTests, where it can be stated against known data.</para>
+    ///
+    /// <para>The half-made selection is worth its own assertion: "By case" with no case chosen
+    /// must empty the list and say so, rather than leaving the previous scope's files sitting
+    /// under a selector that no longer describes them.</para>
+    /// </remarks>
+    [Test]
+    [Description("The Server tab offers All / My files / By case, and the case choice cascades.")]
+    public async Task TheServerTabCanBeScoped()
+    {
+        await SignInAsync();
+        await OpenMediaTabAsync("Server");
+
+        var scopeSelect = Page.Locator(".bv-browser__scope-select").First;
+        await Expect(scopeSelect).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        var options = await scopeSelect.Locator("option").AllInnerTextsAsync();
+        Assert.That(options.Select(o => o.Trim()),
+            Is.EquivalentTo(new[] { "All media", "My files", "By case" }),
+            "The scope selector did not offer the three scopes. 'By case' is only offered when the "
+            + "host supplies the groups, so its absence means the scopes endpoint returned nothing.");
+
+        // Personal is a real round trip, not a client-side filter — it must not error.
+        await scopeSelect.SelectOptionAsync("personal");
+        await Expect(Page.Locator(".bv-browser__error")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        // By case, with nothing chosen yet: a second dropdown, and a list that says what to do.
+        await scopeSelect.SelectOptionAsync("case");
+        await Expect(Page.Locator(".bv-browser__scope-select")).ToHaveCountAsync(2, new() { Timeout = 15_000 });
+        await Expect(Page.Locator(".bv-browser__empty"))
+            .ToContainTextAsync("Choose a case", new() { Timeout = 15_000 });
+
+        // And choosing one reloads against that case.
+        var caseSelect = Page.Locator(".bv-browser__scope-select").Nth(1);
+        var values = await caseSelect.Locator("option").EvaluateAllAsync<string[]>("os => os.map(o => o.value)");
+        var firstCase = values.FirstOrDefault(v => !string.IsNullOrEmpty(v));
+        Assert.That(firstCase, Is.Not.Null, "No cases were offered to scope by.");
+
+        await caseSelect.SelectOptionAsync(firstCase!);
+        await Expect(Page.Locator(".bv-browser__error")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// The diagnostics panel is an operator tool, and this host now knows who is looking.
+    /// </summary>
+    /// <remarks>
+    /// <para>Sign-in here goes through <c>MapIdentityApi</c>, which returns tokens and no claims —
+    /// there is no principal on the client to read a role from. So the page asks
+    /// <c>GET /api/me</c>. Before this, <c>ShowDiagnostics</c> was simply left unset: safe, but
+    /// administrators lost the panel on this host entirely.</para>
+    ///
+    /// <para>Both directions are asserted. A test that only checked the panel was hidden would
+    /// pass against the previous behaviour, which hid it from everybody — including the people it
+    /// exists for.</para>
+    /// </remarks>
+    [Test]
+    [Description("An ordinary account does not get the ffmpeg diagnostics chip.")]
+    public async Task SignedInAsAnOrdinaryUser_TheDiagnosticsChipIsHidden()
+    {
+        await SignInAsync();
+
+        await Expect(Page.Locator(".bv-diagnostics-chip"))
+            .ToHaveCountAsync(0, new() { Timeout = 20_000 });
+    }
+
+    [Test]
+    [Description("A platform administrator does get it.")]
+    public async Task SignedInAsAnAdministrator_TheDiagnosticsChipIsShown()
+    {
+        await GoAsync("/login");
+        await Page.FillAsync("#email", SuperAdminEmail);
+        await Page.FillAsync("#password", SuperAdminPassword);
+        await Page.ClickAsync("button[type='submit']");
+
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Expect(Page.Locator(".bv-diagnostics-chip"))
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+    }
+
     [Test]
     [Description("Signed in, the Server tab lists the person's own media.")]
     public async Task SignedIn_TheServerTabListsMedia()

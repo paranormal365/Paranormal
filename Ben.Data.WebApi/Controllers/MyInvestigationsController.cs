@@ -80,6 +80,12 @@ public sealed class MyInvestigationsController : BenControllerBase
             .Where(a => a.AppUserId == userId
                      && a.DidAttend == true
                      && a.Investigation.ScheduledDateTime < now)
+            // Ordered on the ENTITY, before the projection. Sorting after it asks EF to order by a
+            // property of a record it is constructing, which it cannot turn into SQL — and it says
+            // so by throwing at runtime, not by failing to compile. Both callers wrap this in a
+            // catch that falls back to an empty list, so the 500 surfaced as "you have not
+            // attended anything yet" and the map was quietly empty for everyone.
+            .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .Select(a => new AttendedInvestigationItem(
                 a.InvestigationId,
                 a.Investigation.Title,
@@ -98,7 +104,6 @@ public sealed class MyInvestigationsController : BenControllerBase
                 a.Investigation.Longitude,
                 a.Investigation.GeocodeNote,
                 a.IsLead))
-            .OrderByDescending(i => i.ScheduledDateTime)
             .ToListAsync(ct);
 
         return Ok(rows);

@@ -148,6 +148,12 @@ public static class ServiceCollectionExtensions
         var httpClientBuilder = services.AddHttpClient(MediaLibraryHttpClientName);
         configureHttpClient?.Invoke(httpClientBuilder);
         services.AddScoped<IMediaLibraryProvider, HttpMediaLibraryProvider>();
+        // The same object also answers "what can the library be scoped by" (item 91). Registered
+        // as a second service resolving to the one instance rather than as its own class, so a
+        // host overriding IMediaLibraryProvider — as the Blazor Server site does — replaces both
+        // halves together instead of leaving a scope source pointed at a different API.
+        services.AddScoped<IMediaLibraryScopeSource>(sp =>
+            (IMediaLibraryScopeSource)sp.GetRequiredService<IMediaLibraryProvider>());
 
         // Project persistence — separate named HttpClient for POST/PUT to a document API.
         services.AddHttpClient(ProjectPersistenceHttpClientName);

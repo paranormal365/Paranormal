@@ -48,6 +48,23 @@ uploads, and anything shared with you through a group or a case.
 ![The Server tab listing media held on the site](/help/media/using-the-video-editor/media-library.png)
 *Everything you can reach, with its size. Clicking a file downloads it to this browser.*
 
+### Finding the right file
+
+The list above the files narrows what the tab shows:
+
+| | What you get |
+|---|---|
+| **All media** | Everything you can reach — your uploads, and anything shared with you. |
+| **My files** | Only what you uploaded yourself. |
+| **By case** | One case's media. A second list appears; pick the case. |
+
+Picking a case that had more than one visit adds a third list, so you can narrow to a single
+night's material rather than everything the case has ever produced. Leave it on **The whole case**
+to see all of it.
+
+The scope only ever narrows what you could already see. It is not a way of reaching somebody
+else's footage, and choosing a case you have no part in shows nothing rather than refusing.
+
 Bringing a file over is deliberately **two clicks**:
 
 1. **Click the file once.** It downloads to your browser and is kept there. A tick appears on the
@@ -167,8 +184,9 @@ the in-browser engine, exactly as it does now.
 
 ### Installing and pairing
 
-1. **Install it** on the computer you edit on. It runs quietly in the background and starts with
-   your machine.
+1. **Install it** on the computer you edit on — download it from
+   [the sidecar downloads page](/editor/downloads/), which carries the install steps for Windows
+   and Mac. It runs quietly in the background and starts with your machine.
 2. **Pair this browser with it.** The Sidecar shows a **six-digit code**; type that into the
    editor's pairing panel. That is all.
 

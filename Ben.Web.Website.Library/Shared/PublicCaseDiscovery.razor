@@ -400,6 +400,12 @@ else
     // Fetches vote summaries for the current page items in a single request.
     private async Task LoadVoteSummariesAsync()
     {
+        // Item #103: this used to read IsAuthenticated straight off the initial load, and auth
+        // resolves asynchronously after the circuit connects — so on a hard navigation a
+        // signed-in user's own votes never appeared until they paged or re-sorted. Wait for the
+        // answer before asking the question. During prerender the wait returns false and we skip;
+        // the interactive circuit re-runs the whole load path and comes through here again.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated || _pagedItems.Count == 0) return;
         var ids = _pagedItems.Select(i => i.CaseId);
         var summaries = await AdminClient.GetCaseVoteSummariesAsync(ids);

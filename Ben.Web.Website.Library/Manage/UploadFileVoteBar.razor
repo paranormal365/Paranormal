@@ -62,6 +62,16 @@
     {
         if (!firstRender) return;
         await ReloadAsync();
+
+        // Item #103: the buttons are disabled for anonymous viewers and the summary carries the
+        // viewer's own vote, so a load that beat late-resolving auth shows a signed-in user the
+        // anonymous bar. Reload once when auth lands after the first paint.
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            await ReloadAsync();
+        }
     }
 
     private async Task ReloadAsync()

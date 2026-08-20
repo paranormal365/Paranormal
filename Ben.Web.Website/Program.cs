@@ -61,6 +61,12 @@ builder.Services.AddBenVideoEditor(options =>
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
+// BenMediaLibraryProvider answers the scope question too (item 91). The editor's own registration
+// resolves IMediaLibraryScopeSource by casting whatever IMediaLibraryProvider is registered, so
+// this line is what makes that cast land on the site's provider rather than the editor's default.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryScopeSource>(sp =>
+    (Ben.Video.Editor.Services.IMediaLibraryScopeSource)
+        sp.GetRequiredService<Ben.Video.Editor.Services.IMediaLibraryProvider>());
 // Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
 // first when it has never been saved (the publish endpoint attaches to an existing project row).
 builder.Services.AddScoped<VideoExportPublisher>();
@@ -100,6 +106,13 @@ builder.Services.AddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
 // Help documents are embedded, immutable between deployments and identical for every reader, so
 // one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
 // in the resolver instead.
+// Singleton: which sections are on is a property of the site, not of the visitor, so one
+// snapshot serves every circuit. It refreshes itself behind readers and falls back to the
+// declared defaults, so the navigation and the route guards can answer synchronously during the
+// first render — which is what lets a switched-off section refuse its URL instead of drawing and
+// then hiding itself.
+builder.Services.AddSingleton<SiteFeaturesProvider>();
+
 builder.Services.AddSingleton<HelpContentService>();
 builder.Services.AddScoped<HelpViewerResolver>();
 

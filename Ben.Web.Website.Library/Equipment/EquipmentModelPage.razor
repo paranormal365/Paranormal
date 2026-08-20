@@ -3,142 +3,145 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@using Ben.Web.Services
 
-<PageTitle>@(_page is null ? "Equipment" : $"{_page.Model.BrandName} {_page.Model.Name}")</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>@(_page is null ? "Equipment" : $"{_page.Model.BrandName} {_page.Model.Name}")</PageTitle>
 
-@* One product, with what every owner has contributed pooled together. Public — the photos arrive
-   anonymously, and a photo only becomes a link when the server says this viewer may open that
-   particular item. *@
+    @* One product, with what every owner has contributed pooled together. Public — the photos arrive
+       anonymously, and a photo only becomes a link when the server says this viewer may open that
+       particular item. *@
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    <div class="mb-3">
-        <a href="/equipment-catalog" class="text-decoration-none small">&larr; Back to the catalog</a>
-    </div>
-
-    @if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading…" />
-    }
-    else if (_page is null)
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-2">That make and model could not be found</h6>
-                <p class="text-secondary small mb-0">It may not have been approved for the catalog yet.</p>
-            </div>
-        </div>
-    }
-    else
-    {
-        <h3 class="mb-1">@_page.Model.BrandName @_page.Model.Name<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
-        <p class="text-secondary small mb-4">
-            @_page.Model.CategoryName
-            @if (!string.IsNullOrWhiteSpace(_page.Model.ModelNumber))
-            {
-                <span> · model @_page.Model.ModelNumber</span>
-            }
-        </p>
-
-        @if (!string.IsNullOrWhiteSpace(_page.Model.Description))
-        {
-            <p>@_page.Model.Description</p>
-        }
-
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-md-3">
-                <div class="card h-100"><div class="card-body py-3 text-center">
-                    <div class="h4 mb-0">@_page.ItemCount</div>
-                    <div class="text-secondary small">@(_page.ItemCount == 1 ? "one is owned" : "owned by members")</div>
-                </div></div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card h-100"><div class="card-body py-3 text-center">
-                    <div class="h4 mb-0">@_page.AvailableToBorrowCount</div>
-                    <div class="text-secondary small">offered for borrowing</div>
-                </div></div>
-            </div>
+    <div class="container-fluid py-3" style="max-width:900px;">
+        <div class="mb-3">
+            <a href="/equipment-catalog" class="text-decoration-none small">&larr; Back to the catalog</a>
         </div>
 
-        @* ── What owners have read about it ─────────────────────────────────── *@
-        @if (_page.WebsiteLinks.Count > 0)
+        @if (_loading)
         {
-            <h5 class="mb-2">Links owners have added</h5>
-            <ul class="mb-4">
-                @foreach (var link in _page.WebsiteLinks)
-                {
-                    <li><a href="@link" target="_blank" rel="noopener noreferrer">@link</a></li>
-                }
-            </ul>
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
         }
-
-        @* ── What owners have written about theirs ───────────────────────────── *@
-        @if (_page.Faqs.Count > 0)
+        else if (_page is null)
         {
-            <h5 class="mb-2">Things owners say about it</h5>
-            <p class="text-secondary small">
-                Written by people who own one, and shown without saying which of them wrote what.
-            </p>
-            <div class="mb-4">
-                @foreach (var faq in _page.Faqs)
-                {
-                    <div class="border-bottom py-2">
-                        <div class="fw-semibold">@faq.Question</div>
-                        <div class="small" style="white-space:pre-line;">@faq.Answer</div>
-                    </div>
-                }
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h6 class="mb-2">That make and model could not be found</h6>
+                    <p class="text-secondary small mb-0">It may not have been approved for the catalog yet.</p>
+                </div>
             </div>
-        }
-
-        @* ── What borrowers thought of the gear itself ───────────────────────── *@
-        @if (_reviews.Count > 0)
-        {
-            <h5 class="mb-2">What borrowers said about it</h5>
-            <p class="text-secondary small">
-                Left after borrowing one, without their names.
-            </p>
-            <div class="mb-4">
-                @foreach (var review in _reviews)
-                {
-                    <div class="border-bottom py-2 small">
-                        <div class="text-secondary" style="font-size:.75rem;">
-                            @review.DateCreated.ToLocalTime().ToDisplayDate()
-                        </div>
-                        <div style="white-space:pre-line;">@review.Comment</div>
-                    </div>
-                }
-            </div>
-        }
-
-        @* ── The pooled photos ──────────────────────────────────────────────── *@
-        <h5 class="mb-2">Photos</h5>
-        @if (_page.Photos.Count == 0)
-        {
-            <p class="text-secondary small">Nobody has added a photo of one yet.</p>
         }
         else
         {
-            <p class="text-secondary small">
-                From members who own one. Photos are shown without saying whose they are.
-            </p>
-            <div class="d-flex flex-wrap gap-2">
-                @foreach (var photo in _page.Photos)
+            <h3 class="mb-1">@_page.Model.BrandName @_page.Model.Name<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
+            <p class="text-secondary small mb-4">
+                @_page.Model.CategoryName
+                @if (!string.IsNullOrWhiteSpace(_page.Model.ModelNumber))
                 {
-                    @* A link only where the server said this viewer may open that item. *@
-                    @if (photo.LinkedItemId is Guid itemId)
-                    {
-                        <a href="@($"/equipment/{itemId}")" title="@(photo.Caption ?? "View this one")">
-                            @RenderPhoto(photo)
-                        </a>
-                    }
-                    else
-                    {
-                        @RenderPhoto(photo)
-                    }
+                    <span> · model @_page.Model.ModelNumber</span>
                 }
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(_page.Model.Description))
+            {
+                <p>@_page.Model.Description</p>
+            }
+
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="card h-100"><div class="card-body py-3 text-center">
+                        <div class="h4 mb-0">@_page.ItemCount</div>
+                        <div class="text-secondary small">@(_page.ItemCount == 1 ? "one is owned" : "owned by members")</div>
+                    </div></div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card h-100"><div class="card-body py-3 text-center">
+                        <div class="h4 mb-0">@_page.AvailableToBorrowCount</div>
+                        <div class="text-secondary small">offered for borrowing</div>
+                    </div></div>
+                </div>
             </div>
+
+            @* ── What owners have read about it ─────────────────────────────────── *@
+            @if (_page.WebsiteLinks.Count > 0)
+            {
+                <h5 class="mb-2">Links owners have added</h5>
+                <ul class="mb-4">
+                    @foreach (var link in _page.WebsiteLinks)
+                    {
+                        <li><a href="@link" target="_blank" rel="noopener noreferrer">@link</a></li>
+                    }
+                </ul>
+            }
+
+            @* ── What owners have written about theirs ───────────────────────────── *@
+            @if (_page.Faqs.Count > 0)
+            {
+                <h5 class="mb-2">Things owners say about it</h5>
+                <p class="text-secondary small">
+                    Written by people who own one, and shown without saying which of them wrote what.
+                </p>
+                <div class="mb-4">
+                    @foreach (var faq in _page.Faqs)
+                    {
+                        <div class="border-bottom py-2">
+                            <div class="fw-semibold">@faq.Question</div>
+                            <div class="small" style="white-space:pre-line;">@faq.Answer</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── What borrowers thought of the gear itself ───────────────────────── *@
+            @if (_reviews.Count > 0)
+            {
+                <h5 class="mb-2">What borrowers said about it</h5>
+                <p class="text-secondary small">
+                    Left after borrowing one, without their names.
+                </p>
+                <div class="mb-4">
+                    @foreach (var review in _reviews)
+                    {
+                        <div class="border-bottom py-2 small">
+                            <div class="text-secondary" style="font-size:.75rem;">
+                                @review.DateCreated.ToLocalTime().ToDisplayDate()
+                            </div>
+                            <div style="white-space:pre-line;">@review.Comment</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── The pooled photos ──────────────────────────────────────────────── *@
+            <h5 class="mb-2">Photos</h5>
+            @if (_page.Photos.Count == 0)
+            {
+                <p class="text-secondary small">Nobody has added a photo of one yet.</p>
+            }
+            else
+            {
+                <p class="text-secondary small">
+                    From members who own one. Photos are shown without saying whose they are.
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var photo in _page.Photos)
+                    {
+                        @* A link only where the server said this viewer may open that item. *@
+                        @if (photo.LinkedItemId is Guid itemId)
+                        {
+                            <a href="@($"/equipment/{itemId}")" title="@(photo.Caption ?? "View this one")">
+                                @RenderPhoto(photo)
+                            </a>
+                        }
+                        else
+                        {
+                            @RenderPhoto(photo)
+                        }
+                    }
+                </div>
+            }
         }
-    }
-</div>
+    </div>
+</FeatureGate>
 
 @code {
     [Parameter] public Guid ModelId { get; set; }

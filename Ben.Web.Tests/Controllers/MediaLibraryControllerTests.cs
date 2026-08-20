@@ -64,9 +64,14 @@ public class MediaLibraryControllerTests
         return ctrl;
     }
 
-    private static async Task<List<UploadFileRecord>> GetFilesAsync(MediaLibraryController ctrl, string? contentTypePrefixes = null)
+    private static async Task<List<UploadFileRecord>> GetFilesAsync(
+        MediaLibraryController ctrl,
+        string? contentTypePrefixes = null,
+        string? scope = null,
+        Guid? caseId = null,
+        Guid? investigationId = null)
     {
-        var result = await ctrl.GetFiles(contentTypePrefixes, CancellationToken.None);
+        var result = await ctrl.GetFiles(contentTypePrefixes, scope, caseId, investigationId, CancellationToken.None);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         return ((IEnumerable<UploadFileRecord>)ok.Value!).ToList();
     }
@@ -575,5 +580,183 @@ public class MediaLibraryControllerTests
 
         var files = await GetFilesAsync(Build(factory, userId));
         Assert.Single(files);
+    }
+
+    // ── Scoping (item 91) ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The property everything else rests on: a scope narrows, and cannot widen.
+    /// </summary>
+    /// <remarks>
+    /// This is the one that would matter if the implementation were rearranged. The controller
+    /// computes the full audience union first and intersects a scope over the result, so a caller
+    /// naming a case they have no access to gets nothing. Weaving the scope into the union — the
+    /// obvious "optimisation" — would turn the query string into a way of reading other people's
+    /// case media.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_CaseScope_CannotReachACaseTheCallerHasNoAccessTo()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+
+        var strangerOrgId = Guid.NewGuid();
+        var strangerCaseId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = strangerOrgId, Name = "Someone else", UrlName = "else",
+                CreatedByAppUserId = strangerId, DateCreated = DateTime.UtcNow,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = strangerCaseId, OrganizationId = strangerOrgId, Title = "Not yours",
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = strangerId,
+            });
+
+            var theirFile = MakeFile(strangerId, "video/mp4");
+            db.UploadFiles.Add(theirFile);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = strangerCaseId, UploadFileId = theirFile.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = strangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId), scope: "case", caseId: strangerCaseId);
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public async Task GetFiles_PersonalScope_ReturnsOnlyOwnFiles()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+        var mineId = Guid.NewGuid();
+        var otherOwnerId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var mine = MakeFile(userId, "video/mp4");
+            mine.Id = mineId;
+            db.UploadFiles.Add(mine);
+
+            // Reachable through the case, but not mine.
+            var theirs = MakeFile(otherOwnerId, "video/mp4");
+            db.UploadFiles.Add(theirs);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = theirs.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherOwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, (await GetFilesAsync(Build(factory, userId))).Count);
+
+        var personal = await GetFilesAsync(Build(factory, userId), scope: "personal");
+        Assert.Single(personal);
+        Assert.Equal(mineId, personal[0].Id);
+    }
+
+    [Fact]
+    public async Task GetFiles_CaseScope_ReturnsThatCasesMediaAndNothingElse()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+        var onTheCaseId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var onTheCase = MakeFile(userId, "video/mp4");
+            onTheCase.Id = onTheCaseId;
+            db.UploadFiles.Add(onTheCase);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = onTheCaseId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+
+            // Mine, and reachable, but attached to no case.
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        var scoped = await GetFilesAsync(Build(factory, userId), scope: "case", caseId: caseId);
+
+        Assert.Single(scoped);
+        Assert.Equal(onTheCaseId, scoped[0].Id);
+    }
+
+    /// <summary>
+    /// A case scope with no case chosen returns nothing, rather than everything.
+    /// </summary>
+    /// <remarks>
+    /// The tempting reading is "no case named, so do not filter". That turns a half-made selection
+    /// into the widest possible answer, which is the opposite of what the person was in the middle
+    /// of asking for.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_CaseScopeWithNoCase_ReturnsNothing()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty(await GetFilesAsync(Build(factory, userId), scope: "case"));
+    }
+
+    [Fact]
+    public async Task GetFiles_UnknownScope_BehavesAsNoScope()
+    {
+        // A typo should not blank the media tab.
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Single(await GetFilesAsync(Build(factory, userId), scope: "nonsense"));
+    }
+
+    [Fact]
+    public async Task GetScopes_OffersOnlyCasesAtTheCallersOwnOrganizations()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var strangerOrgId = Guid.NewGuid();
+            db.Organizations.Add(new Organization
+            {
+                Id = strangerOrgId, Name = "Someone else", UrlName = "else",
+                CreatedByAppUserId = Guid.NewGuid(), DateCreated = DateTime.UtcNow,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = strangerOrgId, Title = "Not yours",
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId).GetScopes(CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var scopes = ((IEnumerable<MediaScopeCase>)ok.Value!).ToList();
+
+        var offered = Assert.Single(scopes);
+        Assert.Equal(caseId, offered.Id);
     }
 }

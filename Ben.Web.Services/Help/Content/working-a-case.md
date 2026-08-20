@@ -184,3 +184,34 @@ rows show their sharing setting: how another group chose to share something is t
 
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
+
+## Group messages
+
+The **Messages** tab on your group is its internal mail. It is not the same thing as the message
+board on a case, which the client can read — nothing here is visible outside the group.
+
+Messages arrive in folders down the left, with a count of what is unread in each:
+
+| Folder | What is in it |
+|---|---|
+| Inbox | Everything addressed to you, of any kind. |
+| Sent | What you have written. |
+| Broadcasts | Announcements to the whole group. |
+| Direct | Messages to named people. |
+| Case teams | Messages tied to a particular case. |
+| Public | Messages anyone in the group can read. |
+
+Unread messages are shown in bold. Clicking one opens it below the list, and marks it read.
+
+### Writing one
+
+**Compose** asks first who the message is for. Broadcast and Public go to the group as a whole and
+need no addressing. **Direct message** and **Case team** ask you to tick the people you mean, from
+the group's own member list — and you have to tick at least one, because a direct message with
+nobody on it goes nowhere.
+
+The subject is optional. The body is not.
+
+**Mark as encrypted / private** flags a message as sensitive. It is a marking on the message, for
+the people reading it — it is not a second password, and it does not hide the message from anyone
+who could otherwise open it.
