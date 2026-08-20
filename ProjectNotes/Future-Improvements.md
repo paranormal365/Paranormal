@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (raised 2026-08-20)
+## 120. The client adapter cannot tell "refused" from "empty" (FOUNDATION SHIPPED 2026-08-20)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -6068,3 +6068,46 @@ checked rather than assumed — the catalogue endpoint answers 200 with no token
 anyone may browse it, and `/attending/{Token}` is an emailed link whose token is the credential —
 so both are exemptions, not bugs. Verified to discriminate by removing the fix and watching the
 test name the file.
+
+### The foundation, shipped 2026-08-20
+
+Not the 136-site rewrite — a way to tell the truth, plus adoption on the two surfaces that
+actually carried the bug.
+
+**`LoadResult<T>`** (`Ben.Web.Services/WebApi/LoadResult.cs`) — a readonly struct carrying
+`Items`, `Failed` and an optional `Reason`. `Items` is safe to enumerate in **every** state
+including `default`, which is what makes adoption non-breaking: a call site that ignores `Failed`
+behaves exactly as it does today.
+
+**`IWebApiClient.GetListAsync<T>`** derives the distinction from the status code, treats an
+unreachable API as a failure rather than an empty list, and carries the server's sentence through
+when it is prose (a ProblemDetails blob or HTML page is dropped — same rule as
+`SendExpectingReasonAsync`).
+
+**`BenListState`** (`Kit/`) renders the three states a list actually has: loading, could not load,
+nothing here. The failure state deliberately does **not** say "you do not have permission" — the
+client cannot know that, and a 500 and a dropped connection arrive identically; guessing would be
+the page's second untruth.
+
+**Adopted** on the org Files tab and the Members roster — the two surfaces where refusals were
+found rendering as empty lists (item 119). Everything else keeps the old path until touched.
+
+15 tests on the type and client, including a theory that 403/401/404/500 are all failures.
+
+### Two more bugs found while doing it
+
+**`OrganizationFiles` had the same auth race as `OrganizationMembers`** (item 122). The guard
+written for that missed it, because its lifecycle method is `=> await ReloadAsync()` and the scan
+only read lifecycle *bodies* — one level of indirection. Found by loading the page by hand and
+seeing the new "Couldn't load this" state appear when the API was up. The guard now treats any
+routable page with a load-time lifecycle method that calls the API anywhere as in scope; it
+over-triggers on API calls in button handlers, which costs one unnecessary await against a live
+bug for the miss. Two more pages surfaced and both check out as genuinely anonymous
+(`OrgDiscovery`, `SupportTicketTrackingPage`).
+
+**A Razor paren bug in the Files grid's Source column.** `@((OrganizationFileRecord)context).X ? …`
+ends the expression at the cast, so the cell rendered the record's `ToString()` —
+`OrganizationFileRecord { Id = … }` — and the ternary as text. It compiled. Nobody saw it because
+**a populated row in that grid was unreachable**: ordinary members were refused, and the page
+loaded before auth. Fixing two access bugs is what made the third visible. One instance in the
+codebase; grepped for the pattern.

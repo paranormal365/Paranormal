@@ -67,6 +67,13 @@ public sealed class AuthReadyOnRoutablePagesTests
                                         + "200 with no token, and the help states anyone may browse it signed out.",
         ["EventAttendanceConfirm.razor"] = "Reached from an emailed link at /attending/{Token}; the token is the "
                                         + "credential, and the recipient may well have no account.",
+
+        // Found when the scan was widened to follow indirection; both were already commented in
+        // their own source as anonymous, and both check out.
+        ["OrgDiscovery.razor"]          = "/find browses groups anonymously — BrowseOrganizationsAsync and the "
+                                        + "geocoding search are anonymous endpoints.",
+        ["SupportTicketTrackingPage.razor"] = "/support/{AccessToken} — the token is the credential, and the "
+                                        + "person tracking a ticket need not have an account.",
     };
 
     private static IEnumerable<string> RazorFiles()
@@ -86,15 +93,26 @@ public sealed class AuthReadyOnRoutablePagesTests
         }
     }
 
-    /// <summary>The body of OnInitializedAsync / OnParametersSetAsync, where load-time calls live.</summary>
-    private static string LifecycleBodies(string source)
+    /// <summary>Whether the page loads anything when it renders.</summary>
+    /// <remarks>
+    /// <para><b>Deliberately broad, and it was not always.</b> The first version scanned only the
+    /// bodies of <c>OnInitializedAsync</c>/<c>OnParametersSetAsync</c> and so missed
+    /// <c>OrganizationFiles.razor</c>, whose lifecycle method is
+    /// <c>=> await ReloadAsync()</c> — one level of indirection, and the API call lives in the
+    /// helper. That page had exactly the bug this test exists to catch, and the test said it was
+    /// fine; it took loading the page by hand to find out.</para>
+    ///
+    /// <para>So the rule is now: a routable page that has a load-time lifecycle method at all, and
+    /// calls the API anywhere in the file, must wait. That over-triggers on a page whose only API
+    /// call is in a button handler — and the cost of that is one unnecessary await, against a
+    /// live bug for the miss. The trade is not close.</para>
+    /// </remarks>
+    private static bool LoadsOnRender(string source)
     {
-        var matches = Regex.Matches(
-            source,
-            @"(OnInitializedAsync|OnParametersSetAsync)\s*\(\s*\)(.*?)(?=\n    (?:private|protected|public|\}))",
-            RegexOptions.Singleline);
+        var hasLifecycle = Regex.IsMatch(source, @"\b(OnInitializedAsync|OnParametersSetAsync)\s*\(");
+        if (!hasLifecycle) return false;
 
-        return string.Concat(matches.Select(m => m.Groups[2].Value));
+        return Regex.IsMatch(source, @"\bawait\s+(AdminClient|Client|Api)\.");
     }
 
     [Fact]
@@ -113,11 +131,7 @@ public sealed class AuthReadyOnRoutablePagesTests
             // decided when it is safe to load.
             if (!source.Contains("@page ", StringComparison.Ordinal)) continue;
 
-            var lifecycle = LifecycleBodies(source);
-            if (lifecycle.Length == 0) continue;
-
-            var callsApi = Regex.IsMatch(lifecycle, @"\bawait\s+(AdminClient|Client|Api)\.");
-            if (!callsApi) continue;
+            if (!LoadsOnRender(source)) continue;
 
             if (!source.Contains("WaitUntilAuthReadyAsync", StringComparison.Ordinal))
                 offenders.Add(name);

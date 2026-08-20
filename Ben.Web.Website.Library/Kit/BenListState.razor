@@ -1,0 +1,92 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services.WebApi
+@typeparam TItem
+
+@*
+    The three states a list actually has: loading, could not load, and nothing here.
+
+    Today most surfaces have two — a spinner and "No records available" — so a refusal renders as
+    an empty group. That is not a wording problem: the page states something untrue, and does it
+    in the reassuring voice it uses for genuinely empty things. Item 120, and the shared cause of
+    three bugs on 2026-08-20.
+
+    The failure state says the load failed and offers to try again. It does NOT say "you do not
+    have permission", because the client cannot know that — a 500 and a dropped connection reach
+    here identically, and guessing at the cause is how a page tells its second untruth. When the
+    server gave a sentence worth reading, that sentence is shown instead of the generic line.
+
+    Wrapping a list in this is a two-line change and forces the caller to have decided what an
+    empty list should say — which the equipment tab already does well, and most do not.
+*@
+
+@if (Loading)
+{
+    <BenLoaderOverlay Visible="true" Text="@(LoadingText ?? "Loading…")" />
+}
+else if (Result.Failed)
+{
+    <div class="card border-warning">
+        <div class="card-body text-center py-4">
+            <h6 class="mb-2">Couldn't load this</h6>
+            <p class="text-secondary small mb-3">
+                @(Result.Reason ?? "Something went wrong fetching this list. It is still there — "
+                                 + "this is a problem reaching the server, not an empty list.")
+            </p>
+            @if (OnRetry.HasDelegate)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="OnRetry">
+                    Try again
+                </button>
+            }
+        </div>
+    </div>
+}
+else if (Result.IsEmpty)
+{
+    @if (Empty is not null)
+    {
+        @Empty
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-0">@(EmptyText ?? "Nothing here yet")</h6>
+            </div>
+        </div>
+    }
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    /// <summary>The load's outcome. Default (not failed, no items) reads as an empty list.</summary>
+    [Parameter, EditorRequired] public LoadResult<TItem> Result { get; set; }
+
+    /// <summary>True while the fetch is in flight — takes precedence over everything below.</summary>
+    [Parameter] public bool Loading { get; set; }
+
+    /// <summary>Rendered when there is something to show.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Rendered when the load succeeded and returned nothing.
+    /// </summary>
+    /// <remarks>
+    /// Worth writing rather than leaving to <see cref="EmptyText"/>: the best empty states on this
+    /// site say what the reader can do about it, and differ by whether they may
+    /// ("Add the group's own gear…") or may not ("Someone with the Equipment permission can…").
+    /// </remarks>
+    [Parameter] public RenderFragment? Empty { get; set; }
+
+    /// <summary>One line for the empty state, when a full fragment is more than it needs.</summary>
+    [Parameter] public string? EmptyText { get; set; }
+
+    /// <summary>Overrides the spinner's caption.</summary>
+    [Parameter] public string? LoadingText { get; set; }
+
+    /// <summary>Wire this and the failure state offers a Try again button.</summary>
+    [Parameter] public EventCallback OnRetry { get; set; }
+}
