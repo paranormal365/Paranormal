@@ -6037,3 +6037,34 @@ through membership role alone. The first run crashed on Investigation's direct `
 FK (an investigation can exist without a case, so the org is its own required column); the retry
 after the fix found everything the crashed run had created and duplicated nothing, which is the
 idempotency doing its job.
+
+---
+
+## 122. The standalone Members page rendered before auth (SHIPPED 2026-08-20)
+
+`OrganizationMembers.razor` called the API in `OnParametersSetAsync` with no
+`WaitUntilAuthReadyAsync`. It has its own route, so a hard navigation to
+`/organizations/{id}/members` rendered it before the circuit existed and before any bearer token
+did — both its calls came back unauthorised, the client's `?? []` turned that into empty results,
+and the page told a **SuperAdmin** the group had no members while printing the raw GUID as its
+heading (the org lookup came back empty too, so `_orgName` fell through to `OrgId.ToString()`).
+
+Embedded in the hub it was always fine: `OrganizationView` awaits AuthReady before rendering any
+tab, so the component only failed at its own address — which nothing exercised.
+
+**It was caught by a help screenshot.** The capture navigates to the standalone page, and the
+re-run after the seed expansion published a grid reading "No records available. 0 – 0 of 0 items"
+into the group-administration document. Worth recording: the screenshots are now load-bearing as
+tests, because they are the only thing that visits some of these addresses cold.
+
+### Guarded
+
+`AuthReadyOnRoutablePagesTests` scans every `.razor` with a `@page` route that awaits
+`AdminClient`/`Client` in a lifecycle method and requires `WaitUntilAuthReadyAsync`, with a named
+exemption list for pages that genuinely work signed out (each entry carries its reason).
+
+On its first run it found two more: `EquipmentModelPage` and `EventAttendanceConfirm`. Both were
+checked rather than assumed — the catalogue endpoint answers 200 with no token and the help states
+anyone may browse it, and `/attending/{Token}` is an emailed link whose token is the credential —
+so both are exemptions, not bugs. Verified to discriminate by removing the fix and watching the
+test name the file.

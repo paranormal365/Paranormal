@@ -73,15 +73,30 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Both calls need a bearer token, and this page is reachable directly at
+        // /organizations/{id}/members — so on a hard navigation it renders before the circuit is
+        // live and both come back unauthorised. The client turns that into empty results, so the
+        // page told a SuperAdmin the group had no members and fell back to printing the raw GUID
+        // as its heading, because the org lookup came back empty too.
+        //
+        // Embedded in the hub it never showed, since OrganizationView awaits AuthReady before it
+        // renders any tab — which is exactly why nobody saw this until a help screenshot captured
+        // the standalone page and published the empty grid.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
         _loading = true;
         try
         {
             _members  = await AdminClient.GetOrganizationMembersAsync(OrgId);
             var orgs  = await AdminClient.GetOrganizationsAsync();
+
+            // Still falls back to the id when the name genuinely cannot be resolved — a member of
+            // one group opening another group's address gets no org record, and a bare GUID is at
+            // least honest about that. It should no longer be the ordinary case.
             _orgName  = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
         }
         catch (Exception ex) { _error = ex.Message; }
-        finally { _loading = false; }
+        finally { _loading = false; StateHasChanged(); }
     }
 
     private static string RoleBadge(OrganizationMemberRole role) => role switch
