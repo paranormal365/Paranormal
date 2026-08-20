@@ -6111,3 +6111,41 @@ ends the expression at the cast, so the cell rendered the record's `ToString()` 
 **a populated row in that grid was unreachable**: ordinary members were refused, and the page
 loaded before auth. Fixing two access bugs is what made the third visible. One instance in the
 codebase; grepped for the pattern.
+
+---
+
+## 123. Images fetched the whole upload to draw a thumbnail (SHIPPED 2026-08-20, Ben's request)
+
+Every `<img>` on the site pointed at `/api/upload-files/{id}/download`, which serves the original
+bytes. A group logo drawn in a 40px box pulled the entire upload down the wire at whatever size it
+was uploaded, and the browser discarded nearly all of it. `/find` lists every group, so that was
+one full-size image per card — on the page a first-time visitor is most likely to open, quite
+possibly on a phone.
+
+Invisible in development: the seeded logos are a few kilobytes and the API is on localhost. It
+would have shown up as "the site is slow" once real groups uploaded real photographs.
+
+### What shipped
+
+`GET /api/upload-files/{id}/thumbnail`, beside the download route, reusing the thumbnail pipeline
+that already existed for equipment photos and video assets (`MediaIngestService`, 400px long
+edge, generated on first request so nothing needs backfilling).
+
+**The access check is literally the same call as the download's.** A thumbnail is still the
+picture; making it cheaper to fetch than the file it shrinks would be a way around the audience
+rules. Verified: anonymous gets 401 on both, a signed-in non-viewer gets 403 on both.
+
+**Non-images fall through to the real file** rather than 404 — the sanitiser returns nothing for a
+PDF, and the equipment route had already settled this question the same way.
+
+Six components moved over — org cards, the two public page headers, the CMS preview, the home
+hero, and the user menu avatar. All were 36–120px boxes.
+
+Measured on the seeded site photo: **960×540 / 14,709 bytes → 400×225 / 4,265 bytes**, a 71%
+reduction on a file small enough to be a rounding error. On a phone photograph it is the
+difference between a page and a download.
+
+Guarded by `ImagesUseThumbnailsTests`, which fails on any `src=` bound to `GetFileDownloadUrl` —
+and, in a second test, on the thumbnail helper falling out of use entirely.
+
+`<a href>` download links are untouched: that is somebody asking for the file.

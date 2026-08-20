@@ -104,6 +104,16 @@ public interface IBenOrganizationClient
     /// </summary>
     Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+
+    /// <summary>
+    /// Where to fetch a small copy of an image file — use this for anything a person looks at.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetFileDownloadUrl</c> serves the original bytes, so an <c>&lt;img&gt;</c> pointed at it
+    /// pulls a whole upload down the wire to draw a 40px avatar. Same access rules either way; a
+    /// non-image falls through to the real file.
+    /// </remarks>
+    string GetFileThumbnailUrl(Guid uploadFileId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     /// <summary>

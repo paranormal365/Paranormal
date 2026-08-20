@@ -204,6 +204,9 @@ public sealed partial class BenAdminClientAdapter
 
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
+
+    public string GetFileThumbnailUrl(Guid uploadFileId)
+        => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/thumbnail";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
         => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 

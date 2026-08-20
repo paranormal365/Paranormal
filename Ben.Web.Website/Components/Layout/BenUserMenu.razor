@@ -20,7 +20,7 @@
                 @onclick="Toggle">
             @if (_avatarFileId is { } fileId)
             {
-                <img src="@AdminClient.GetFileDownloadUrl(fileId)" alt=""
+                <img src="@AdminClient.GetFileThumbnailUrl(fileId)" alt=""
                      class="profile-image profile-image-md rounded-circle" />
             }
             else

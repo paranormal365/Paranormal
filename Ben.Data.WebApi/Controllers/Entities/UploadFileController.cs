@@ -119,6 +119,54 @@ public sealed class UploadFileController : BenControllerBase
         return NotFound("File data is unavailable.");
     }
 
+    /// <summary>
+    /// A small copy of an image file, for anywhere a picture is shown rather than downloaded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists.</b> Every <c>&lt;img&gt;</c> on the site pointed at
+    /// <c>/download</c>, which serves the original bytes. A group's logo rendered in a 40px avatar
+    /// on the browse page pulled the whole upload down the wire — however large it was — and the
+    /// browser then threw nearly all of it away. On a page listing twenty groups that is twenty
+    /// full-size images to draw twenty thumbnails.</para>
+    ///
+    /// <para><b>The access check is the same call as <see cref="Download"/>'s</b>, deliberately
+    /// not a looser one. A thumbnail is still the picture; making it easier to fetch than the file
+    /// it shrinks would be a way around the audience rules, and the two would drift. Same
+    /// reasoning as the equipment photo thumbnail route.</para>
+    ///
+    /// <para><b>Non-images fall through to the real file.</b> The sanitiser returns nothing for a
+    /// PDF or an audio file, and a caller asking for a thumbnail of one should get something
+    /// usable rather than a 404 — the same behaviour the equipment route settled on.</para>
+    ///
+    /// <para>Generated on first request when the sibling file is missing, so files uploaded before
+    /// the pipeline existed need no backfill.</para>
+    /// </remarks>
+    [HttpGet("{id:guid}/thumbnail")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Thumbnail(
+        [FromServices] IMediaIngestService mediaIngest, Guid id, CancellationToken cancellationToken)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
+
+        var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+        var userId = isAuthenticated ? GetCurrentUserId() : Guid.Empty;
+        if (!await FileAudienceAccess.CanViewFileAsync(db, id, userId, cancellationToken))
+            return isAuthenticated ? Forbid() : Unauthorized();
+
+        // Only disk-backed files can be shrunk; a row still carrying its bytes in FileData has no
+        // storage path for the sibling thumbnail to sit beside.
+        if (!string.IsNullOrEmpty(entity.StoragePath))
+        {
+            var thumb = await mediaIngest.OpenThumbnailAsync(entity.StoragePath, cancellationToken);
+            if (thumb is not null) return File(thumb, "image/jpeg");
+        }
+
+        return await Download(id, cancellationToken);
+    }
+
     [HttpPost]
     // No practical upload size limit for now — a future limit belongs at app-settings / per-person /
     // per-org / per-case / per-investigation scope, not a blanket cap baked into the endpoint.
