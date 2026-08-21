@@ -65,7 +65,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 ; app\ is what installer\windows\build.sh stages: the self-contained sidecar, its ffmpeg pair and
 ; the manifest. Built separately because it cross-publishes from macOS.
-Source: "..\dist\BenVideoSidecar-win-x64\app\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; .pdb files are excluded: debug symbols are of no use on a tester's machine and they publish the
+; build machine's source paths and internal structure to anyone who downloads the installer.
+Source: "..\dist\BenVideoSidecar-win-x64\app\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "post-install.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
