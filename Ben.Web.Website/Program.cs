@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
 using Ben.Web.Website.Components;
@@ -179,6 +180,27 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+// ── Behind a reverse proxy ──────────────────────────────────────────────────
+//
+// Must run BEFORE anything that inspects the scheme — UseHttpsRedirection below is the one that
+// matters. A proxy (Cloudflare Tunnel today, Azure App Service later) terminates TLS and forwards
+// to this app over plain HTTP, so without this the app sees IsHttps == false, issues its
+// 307 to https://, the proxy fetches that, and the request loops. The site looks completely
+// broken with nothing wrong in IIS.
+//
+// Only X-Forwarded-Proto and X-Forwarded-For are honoured. Both are trivially spoofable by a
+// client, so ASP.NET Core trusts them **only from loopback** by default and that default is left
+// alone deliberately: cloudflared runs on this machine and connects to localhost, so the immediate
+// peer genuinely is loopback. Widening KnownProxies/KnownNetworks would let any caller claim to
+// have arrived over HTTPS from any address.
+//
+// X-Forwarded-For also restores the real client IP, which the audit log would otherwise record as
+// the proxy for every single request.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
