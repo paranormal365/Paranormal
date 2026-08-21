@@ -92,8 +92,42 @@
                                     <input class="form-control" style="max-width:340px;" maxlength="100"
                                            placeholder="Your name" value="@_displayName"
                                            @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
-                                    <button type="button" class="btn btn-primary" @onclick="SaveNameAsync" disabled="@(!(!_saving))">Save</button>
                                 </div>
+
+                                @* Legal name. Required, and separate from the display name above:
+                                   a person may go by a nickname here and still be Margaret on a
+                                   case report. Accounts created before these fields existed had
+                                   theirs guessed by splitting the display name, so this is also
+                                   where somebody corrects a guess that got it wrong. *@
+                                <hr class="my-3" />
+                                <h6 class="card-title mb-1">Your real name</h6>
+                                <p class="text-secondary small">
+                                    Used on case paperwork and reports. Not shown to other members in place of
+                                    your display name.
+                                </p>
+                                <div class="row g-2" style="max-width:520px;">
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-first">First name</label>
+                                        <input id="profile-first" class="form-control" maxlength="100"
+                                               placeholder="First name" value="@_firstName"
+                                               @oninput="@(e => _firstName = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-last">Last name</label>
+                                        <input id="profile-last" class="form-control" maxlength="100"
+                                               placeholder="Last name" value="@_lastName"
+                                               @oninput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                </div>
+
+                                @if (_nameError is not null)
+                                {
+                                    <div class="alert alert-danger py-2 mt-2 mb-0">@_nameError</div>
+                                }
+
+                                <button type="button" class="btn btn-primary mt-3" @onclick="SaveNameAsync" disabled="@_saving">
+                                    @(_saving ? "Saving…" : "Save")
+                                </button>
                             </div>
                         </div>
 
@@ -211,6 +245,9 @@
 @code {
     private MyProfileRecord? _profile;
     private string _displayName = string.Empty;
+    private string _firstName   = string.Empty;
+    private string _lastName    = string.Empty;
+    private string? _nameError;
     private bool   _shareWithClients;
     private bool   _saving;
     private bool   _saved;
@@ -340,6 +377,8 @@
             if (_profile is not null)
             {
                 _displayName      = _profile.DisplayName ?? string.Empty;
+                _firstName        = _profile.FirstName ?? string.Empty;
+                _lastName         = _profile.LastName ?? string.Empty;
                 _shareWithClients = _profile.SharePrivatePhotoWithClients;
                 await LoadPreviewsAsync();
                 await LoadMapAsync();
@@ -366,12 +405,24 @@
 
     private async Task SaveNameAsync()
     {
-        _saving = true; _error = null; _saved = false;
+        _saving = true; _error = null; _saved = false; _nameError = null;
+
+        // Checked here as well as on the server so the person gets the answer without a round
+        // trip. The server refuses an empty value too — this is the courtesy, that is the rule.
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _nameError = "First and last name are both required.";
+            _saving = false;
+            return;
+        }
+
         try
         {
-            // Only the name is sent. The consent field stays null so saving a name can never
+            // Only the names are sent. The consent field stays null so saving a name can never
             // change what you've agreed to share.
-            var updated = await AdminClient.UpdateMyProfileAsync(new UpdateMyProfileRequest(_displayName));
+            var updated = await AdminClient.UpdateMyProfileAsync(
+                new UpdateMyProfileRequest(_displayName, SharePrivatePhotoWithClients: null,
+                                           FirstName: _firstName, LastName: _lastName));
             if (updated is null) { _error = "Couldn't save your name."; return; }
             _profile = updated;
             _saved = true;

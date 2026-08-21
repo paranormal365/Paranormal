@@ -2084,6 +2084,10 @@ namespace Ben.Data.Source.Context
             // number for a column somebody already chose a number for is not a tightening; it is
             // an unrequested schema change.
 
+            // Legal name. Bounded like DisplayName rather than left as nvarchar(max) — an
+            // unbounded string column is one nobody can index later without a migration.
+            modelBuilder.Entity<AppUser>().Property(e => e.FirstName).HasMaxLength(100);
+            modelBuilder.Entity<AppUser>().Property(e => e.LastName).HasMaxLength(100);
             modelBuilder.Entity<AppUser>().Property(e => e.DisplayName).HasMaxLength(200);
             modelBuilder.Entity<AppUser>().Property(e => e.Handle).HasMaxLength(30);
             // Unique, and filtered so that NULL does not collide with NULL. The filter is not a

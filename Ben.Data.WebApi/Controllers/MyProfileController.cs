@@ -72,6 +72,8 @@ public sealed class MyProfileController : BenControllerBase
         {
             AppUserId    = user.Id,
             DisplayName  = user.DisplayName,
+            FirstName    = user.FirstName,
+            LastName     = user.LastName,
             Email        = user.Email,
             PublicPhoto  = photos.FirstOrDefault(p => p.IsPublic),
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
@@ -108,6 +110,28 @@ public sealed class MyProfileController : BenControllerBase
             if (trimmed.Length > MaxDisplayNameLength)
                 return BadRequest($"Display name cannot exceed {MaxDisplayNameLength} characters.");
             user.DisplayName = trimmed.Length == 0 ? null : trimmed;
+        }
+
+        // Legal name. Null still means "not supplied", but unlike DisplayName an *empty* value is
+        // refused rather than treated as "clear it": first and last name are required, so there is
+        // no legitimate way to end up with none. A caller that sends "" is either a bug or an
+        // attempt to bypass the requirement, and both deserve the same answer.
+        if (request.FirstName is not null)
+        {
+            var first = request.FirstName.Trim();
+            if (first.Length == 0) return BadRequest("First name is required.");
+            if (first.Length > MaxLegalNameLength)
+                return BadRequest($"First name cannot exceed {MaxLegalNameLength} characters.");
+            user.FirstName = first;
+        }
+
+        if (request.LastName is not null)
+        {
+            var last = request.LastName.Trim();
+            if (last.Length == 0) return BadRequest("Last name is required.");
+            if (last.Length > MaxLegalNameLength)
+                return BadRequest($"Last name cannot exceed {MaxLegalNameLength} characters.");
+            user.LastName = last;
         }
 
         // Same null-means-untouched rule as DisplayName: consent is only changed when the caller
@@ -269,6 +293,9 @@ public sealed class MyProfileController : BenControllerBase
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private const int MaxDisplayNameLength = 100;
+
+    /// <summary>Matches the column width configured on AppUser.</summary>
+    private const int MaxLegalNameLength = 100;
 
     /// <summary>
     /// How many times a slot write may be attempted before a unique-index collision is treated as

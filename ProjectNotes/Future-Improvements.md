@@ -6279,3 +6279,44 @@ The local run cannot reproduce the loop: with no HTTPS port configured, `UseHttp
 inert, so both the with- and without-header cases return 200. What is proven locally is
 registration and ordering. The behavioural proof has to come from the deployed site behind the
 tunnel.
+
+---
+
+## 126. SuperAdmin Site Settings and Dashboard render empty on the server (raised 2026-08-21 by Ben)
+
+Ben reports both `/admin/site-settings` and `/admin/dashboard` are blank for him as SuperAdmin.
+
+**They are not blank locally.** Verified the same day against the dev stack: Site Settings renders
+every setting card including the ten feature switches, and the Dashboard renders its four stat
+cards, the sign-ins/registrations chart, the cases-by-status donut and the group tables. So this is
+a **deployment** fault, not a page fault — which narrows it a great deal.
+
+### The likely cause, and why it presents as "empty" rather than "error"
+
+Both pages are pure API consumers, and both go through the adapter's
+`GetAsync(...) ?? []` path — **item 120's bug class**. A failed call there is indistinguishable
+from a successful empty one, so an API that is refusing, unreachable, or answering on the wrong
+path renders as a page with nothing on it and no error anywhere. That is precisely the symptom
+described.
+
+Candidates, in order:
+
+1. **API base path.** The server deployment serves the API under `/webapi`, and
+   `ApiBasePathHandler` was added on 2026-08-21 (commit c82a7c9) for exactly this. If a call is
+   built without the base path it 404s, and 404 → `?? []` → empty page.
+2. **Auth.** SuperAdmin-only endpoints answering 401/403 to a token the site is not sending — same
+   silent-empty outcome.
+3. **CORS**, if the site and API are not same-origin in that deployment.
+
+### How to tell them apart in one step
+
+The browser's network tab on the deployed site, filtered to `/api/`: the status codes on
+`/api/admin/site-settings` and `/api/admin/stats/summary` name the cause immediately — 404 is the
+base path, 401/403 is auth, a CORS error is the third.
+
+### Worth doing regardless
+
+Adopting `LoadResult`/`BenListState` on these two pages would have made this self-diagnosing: the
+page would have said "Couldn't load this" instead of silently claiming there are no settings. They
+are good candidates for the next slice of item 120 adoption, precisely because they are
+admin-only pages where a silent empty state is most misleading.
