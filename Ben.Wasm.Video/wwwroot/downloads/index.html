@@ -8,11 +8,14 @@
     <link rel="icon" type="image/png" href="../favicon.png" />
     <!--
       A plain static page, deliberately: it lives inside the editor's static-file deployment
-      (C:\ishaunted\editor\downloads\) and must work with nothing running behind it — no Blazor,
-      no API, no external assets. All styling is inline for the same reason.
+      (C:\ishaunted\editors\video\downloads\) and must work with nothing running behind it — no
+      Blazor, no API, no external assets. All styling is inline for the same reason.
 
-      The zips themselves are NOT in source control; scripts/publish-editor.sh stages them from
-      Ben.Video.Sidecar/installer/dist/ and writes checksums.txt beside them at publish time.
+      The zips themselves are NOT in source control, and they are not served from this folder: they
+      are ~160 MB and ~97 MB build artifacts kept outside the site, under C:\ishaunted-files, and
+      published at /files/sidecar-video/<rid>/. scripts/deploy-ishaunted.ps1 stages them there from
+      Ben.Video.Sidecar/installer/dist/ and writes checksums.txt beside each one. The links below
+      are therefore site-absolute, not relative to this page.
     -->
     <style>
         :root {
@@ -94,7 +97,7 @@
     <div class="card">
         <h3>BenVideoSidecar-win-x64.zip</h3>
         <p class="meta">Windows 10 or 11, x64 · about 160&nbsp;MB · no administrator rights needed</p>
-        <a class="dl" href="BenVideoSidecar-win-x64.zip" download>Download for Windows</a>
+        <a class="dl" href="/files/sidecar-video/win-x64/BenVideoSidecar-win-x64.zip" download>Download for Windows</a>
         <ol>
             <li>Unzip the download somewhere — actually extract it, don't browse inside the zip.</li>
             <li>Right-click <code>install.ps1</code> and choose <strong>Run with PowerShell</strong>.
@@ -116,7 +119,7 @@
     <div class="card">
         <h3>BenVideoSidecar-osx-arm64.zip</h3>
         <p class="meta">macOS on M-series Macs · about 97&nbsp;MB · no administrator rights needed</p>
-        <a class="dl" href="BenVideoSidecar-osx-arm64.zip" download>Download for Mac</a>
+        <a class="dl" href="/files/sidecar-video/osx-arm64/BenVideoSidecar-osx-arm64.zip" download>Download for Mac</a>
         <ol>
             <li>Unzip the download.</li>
             <li>Open Terminal in the unzipped folder and run <code>./install.sh</code>.
@@ -136,8 +139,10 @@
         <li><strong>Pairing is per browser and per site address.</strong> Open the editor in a
             different browser and you pair again. The code is single-use and expires after ten
             minutes.</li>
-        <li><strong>Verifying your download:</strong> <a href="checksums.txt">checksums.txt</a>
-            lists the SHA-256 of each zip as built. On Windows:
+        <li><strong>Verifying your download:</strong> each build has a checksums file listing the
+            SHA-256 of the zip as built —
+            <a href="/files/sidecar-video/win-x64/checksums.txt">Windows</a> ·
+            <a href="/files/sidecar-video/osx-arm64/checksums.txt">Mac</a>. On Windows:
             <code>Get-FileHash BenVideoSidecar-win-x64.zip</code>; on macOS:
             <code>shasum -a 256 BenVideoSidecar-osx-arm64.zip</code>.</li>
         <li><strong>Removing it changes nothing else.</strong> The editor simply goes back to

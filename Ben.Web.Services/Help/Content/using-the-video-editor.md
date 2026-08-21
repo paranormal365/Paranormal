@@ -185,7 +185,7 @@ the in-browser engine, exactly as it does now.
 ### Installing and pairing
 
 1. **Install it** on the computer you edit on — download it from
-   [the sidecar downloads page](/editor/downloads/), which carries the install steps for Windows
+   [the sidecar downloads page](/editors/video/downloads/), which carries the install steps for Windows
    and Mac. It runs quietly in the background and starts with your machine.
 2. **Pair this browser with it.** The Sidecar shows a **six-digit code**; type that into the
    editor's pairing panel. That is all.

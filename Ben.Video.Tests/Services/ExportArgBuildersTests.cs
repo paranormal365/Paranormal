@@ -878,13 +878,35 @@ public sealed class ExportArgBuildersTests
         // embedded inside the title value, must read as "[CHAPTER]\" (continuation-escaped, part
         // of the title's own value) rather than a bare "[CHAPTER]" line ffmpeg would parse as a
         // second, genuine section header.
+        // \r? so the assertion is about the section header being alone on its line, not about which
+        // terminator follows it.
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(
-            result, @"^\[CHAPTER\]$", System.Text.RegularExpressions.RegexOptions.Multiline));
+            result, @"^\[CHAPTER\]\r?$", System.Text.RegularExpressions.RegexOptions.Multiline));
         // The newline immediately before the embedded "[CHAPTER]" text is escaped (a literal
         // backslash then the newline), not bare — this is what makes it a continuation of the
         // title value instead of a new line ffmpeg's parser would act on.
         Assert.Contains("\\\n[CHAPTER]", result);
         Assert.Contains("\\\nTIMEBASE", result);
+    }
+
+    // The counterpart to the subtitle line-ending tests, and deliberately the opposite convention.
+    // ffmpeg's own "-f ffmetadata" muxer writes LF, so LF is the form its demuxer is certain to
+    // read back; a header that arrived as "[CHAPTER]\r" and failed to match would not raise an
+    // error, it would just silently produce a file with no chapters in it. StringBuilder.AppendLine
+    // would reintroduce exactly that on Windows, which is where the site now runs.
+    [Fact]
+    public void BuildChapterMetadata_UsesLfLineEndings_RegardlessOfHost()
+    {
+        var markers = new List<TimelineMarker>
+        {
+            new() { Label = "Intro",   TimeSeconds = 0.0 },
+            new() { Label = "Outro",   TimeSeconds = 5.0 },
+        };
+
+        var result = ExportArgBuilders.BuildChapterMetadata(markers, 10.0);
+
+        Assert.Contains("\n", result);
+        Assert.DoesNotContain("\r", result);
     }
 
     [Fact]

@@ -50,12 +50,12 @@
          404, so nothing errored and the editor simply rendered with no component styling at all. -->
     <link href="Ben.Wasm.Video.styles.css" rel="stylesheet" />
     <!-- An observer used to live here that rewrote every relative _content/… href to a
-         root-absolute /_content/… one, to survive sub-routes like /editor. It was solving a
+         root-absolute /_content/… one, to survive sub-routes like /editors/video. It was solving a
          problem <base href> already solves: a relative URL resolves against the base, not against
          the current route, so the plain relative paths below are correct on every route.
 
          It has been removed because it was actively wrong for the deployed editor. Production
-         serves the app from https://ishaunted.com/editor/, and rewriting to the site root sent
+         serves the app from https://ishaunted.com/editors/video/, and rewriting to the site root sent
          the Kendo theme, both Ben.Video stylesheets and every injected link to an address one
          directory above where they are published — a 404 each, and an unstyled editor. -->
     <script type="importmap"></script>

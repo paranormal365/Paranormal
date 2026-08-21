@@ -1,3 +1,4 @@
+using Ben.Data.Common;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
 using Ben.Web.Website.Components;
@@ -122,8 +123,9 @@ builder.Services.AddScoped<HelpViewerResolver>();
 builder.Services.AddScoped<EntraTokenHolder>();
 
 var azureAd = builder.Configuration.GetSection("AzureAd");
-bool entraEnabled = !string.IsNullOrWhiteSpace(azureAd["ClientId"])
-                    && azureAd["ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
+// One rule, shared with Ben.Data.WebApi, so the two hosts cannot disagree about whether Entra is
+// configured - see EntraConfig for what went wrong when they each had their own.
+bool entraEnabled = EntraConfig.IsConfigured(azureAd["ClientId"]);
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -133,12 +135,15 @@ builder.Services
         cookie.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 
+var tenantId = EntraConfig.TenantOrCommon(azureAd["TenantId"]);
+bool multiTenant = EntraConfig.IsMultiTenant(tenantId);
+
 if (entraEnabled)
 {
     builder.Services.AddAuthentication()
         .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, oidc =>
         {
-            oidc.Authority = $"https://login.microsoftonline.com/{azureAd["TenantId"]}/v2.0";
+            oidc.Authority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
             oidc.ClientId = azureAd["ClientId"];
             oidc.ClientSecret = azureAd["ClientSecret"];
             oidc.ResponseType = OpenIdConnectResponseType.Code;
@@ -156,10 +161,16 @@ if (entraEnabled)
 
             oidc.TokenValidationParameters = new TokenValidationParameters
             {
-                // ValidateIssuer must be false when TenantId = "common".
-                // Each user's token carries their own tenant-specific issuer URL,
-                // not the /common endpoint URL used during discovery.
-                ValidateIssuer = false,
+                // ValidateIssuer has to be false on the multi-tenant authorities: every user's
+                // token carries their own tenant's issuer URL, not the /common URL used during
+                // discovery, so there is no single value to check against.
+                //
+                // Pointed at one tenant there is, and leaving this off would be a real hole -
+                // a token minted in ANY Microsoft tenant would satisfy the rest of the checks.
+                // ValidIssuer is deliberately not set: the handler then takes the issuer from
+                // the authority's own discovery document, which is correct whether TenantId is
+                // written as a GUID or as a domain name (the token always says GUID).
+                ValidateIssuer = !multiTenant,
                 NameClaimType = "preferred_username",
             };
 

@@ -7,7 +7,7 @@ namespace Ben.Video.Tests.Services;
 /// The editor has to work when it is not served from the root of its origin.
 /// </summary>
 /// <remarks>
-/// <para>Production serves it from a sub-path — https://ishaunted.com/editor/ — because a sub-path
+/// <para>Production serves it from a sub-path — https://ishaunted.com/editors/video/ — because a sub-path
 /// inherits the site's certificate while a subdomain needs its own. Every asset the library
 /// addressed as "/_content/Ben.Video.Editor/…" then pointed one directory above where it is
 /// published: 35 JS module imports, the Kendo theme, both Ben.Video stylesheets. The files were
