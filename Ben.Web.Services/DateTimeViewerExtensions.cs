@@ -62,11 +62,26 @@ public static class DateTimeViewerExtensions
     /// <summary>Time on its own, 12-hour with seconds.</summary>
     public const string TimePattern = "hh:mm:ss tt";
 
+    /// <summary>
+    /// A date short enough for a chart axis, where thirty of them sit side by side and a slash
+    /// pattern will not fit. Month first, like every other date on the site — an axis is not
+    /// exempt from that just because a charting library draws it.
+    /// </summary>
+    public const string ChartDayPattern = "MMM d";
+
+    /// <summary>The short month-first label used on chart axes.</summary>
+    public static string ToChartDay(this DateTime local) =>
+        local.ToString(ChartDayPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The same label for a plain day, which is what a daily series actually is.</summary>
+    public static string ToChartDay(this DateOnly day) =>
+        day.ToString(ChartDayPattern, System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>A date on its own: <c>08/04/2026</c>. Month first.</summary>
     public static string ToDisplayDate(this DateTime local) =>
         local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time: <c>04/08/2026 09:30:00 PM</c>.</summary>
+    /// <summary>A date and time: <c>08/04/2026 09:30:00 PM</c>.</summary>
     public static string ToDisplayDateTime(this DateTime local) =>
         local.ToString(DateTimePattern, System.Globalization.CultureInfo.InvariantCulture);
 

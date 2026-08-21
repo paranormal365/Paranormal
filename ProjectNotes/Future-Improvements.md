@@ -6282,7 +6282,7 @@ tunnel.
 
 ---
 
-## 126. SuperAdmin Site Settings and Dashboard render empty on the server (DIAGNOSABLE 2026-08-21 — cause still unconfirmed)
+## 126. SuperAdmin Site Settings and Dashboard render empty on the server (CLOSED 2026-08-21)
 
 Ben reports both `/admin/site-settings` and `/admin/dashboard` are blank for him as SuperAdmin.
 
@@ -6364,3 +6364,88 @@ it is most costly.
 `LoginAttempt` already carried the status code, so this is a sixth case rather than new plumbing:
 `WasUnreachable` (status 0, 404, or 5xx) maps to `LoginFailure.Unreachable`, and the page says the
 problem is with the site rather than the password.
+
+### 2026-08-21 — cause found: a stale WebApi, not a code fault
+
+Ben refreshed the WebApi on the server and both pages came up. **There was never a bug in the
+code** — the deployed `C:\Ben\WebApi` predated the controllers those two pages call, so the routes
+did not exist and returned 404.
+
+The dates were the tell, and they are worth keeping as a diagnostic habit:
+
+| Controller | Added | Deployed page |
+|---|---|---|
+| `MeController` | 07-16 | worked |
+| `AdminSiteSettingController` | **08-15** | blank |
+| `AdminStatsController` | **08-20** | blank |
+
+Everything failing was recent; everything working was old. Two other facts narrowed it before the
+check: production and development share one database, so the SuperAdmin rows behind the failing
+session were the same rows that work locally — which killed the role-claim theory — and the
+notification badge rendered, proving the token reached the API and was accepted.
+
+**The lesson is about deployment, not code:** the website and the WebApi are published separately,
+so they can drift, and the symptom of drift is a *recent* feature failing while everything older
+works. Worth republishing both together, or stamping a build version the site can compare.
+
+The reporting added earlier in the day is what made this a five-minute diagnosis instead of a
+guess, so it stays.
+
+---
+
+## 128. Admin dashboard: axis defects (SHIPPED 2026-08-21)
+
+Found in Ben's screenshot of the working dashboard.
+
+- **Day-first dates on the chart axis.** `DayLabels` formatted with a hardcoded `"d MMM"`, giving
+  "23 Jul" — day-first, on a site that is month-first everywhere, and written *at the call site*,
+  which is the exact thing `DateTimeViewerExtensions` exists to prevent. Now `ChartDayPattern`
+  (`MMM d`) with `DateTime` and `DateOnly` overloads, pinned by two tests.
+- **Fractional counts on the y-axis.** Left to itself ApexCharts picks a "nice" scale, so "People
+  by state" — tallest bar 1 — drew an axis reading 0, 0.2, 0.4, 0.6, 0.8, 1. Fractional people.
+  Every number this dashboard draws is a count, so the axis is integer-only, floored at zero, with
+  no more ticks than the largest value can fill.
+- **Ninety rotated labels stacked on each other.** Thinned to about eight ticks; the tooltip still
+  names every day. Rotation then had to go too — angled labels were clipped by the panel edge,
+  rendering "Jul 23" as "l 23".
+
+---
+
+## 129. Admin dashboard: readability and dead ends (SHIPPED 2026-08-21)
+
+Ben asked what would make the dashboard prettier and more functional. Four changes, plus two bugs
+the work uncovered.
+
+- **The stat cards are links.** "97 people" that cannot be clicked is a dead end — the number
+  raises a question and the list answers it. People → users, In a group → groups, Cases → cases.
+  *Signed in this week* deliberately stays inert: no page lists recent sign-ins, and a card
+  linking somewhere approximate is worse than one that stays put.
+- **Three "by state" panels became one with a toggle.** They filled a whole row to show one bar
+  each, which with a single state in the data is a row of decoration.
+- **Group charts are horizontal.** A vertical bar gives its label only as much width as the bar,
+  which is why "Tennessee Ghost Hunters" was rendering as a rotated "…essee Ghost Hunters".
+- **The donut legend carries counts.** Every number on it used to be behind a hover, which is no
+  answer for someone reading the page rather than pointing at it.
+
+### Two bugs found while verifying, both pre-existing
+
+**Charts never re-themed.** `RethemeAsync` was exported with a "call this from whoever owns the
+toggle" contract and had **no callers anywhere** — so every chart on the site kept the palette it
+was born with, and in light mode that meant near-white axis labels on a white card. The module now
+watches `data-bs-theme` on `<html>` itself with a MutationObserver. A contract nobody can forget
+beats a contract everybody forgot; the unused method is gone rather than left as a trap.
+
+**The re-theme then ate the axis config.** Apex's `updateOptions` *replaces* a nested object
+instead of merging into it, so sending `yaxis: { labels: { style } }` silently dropped the label
+formatter and `maxWidth` — group names truncated again the instant anyone touched the toggle, and
+the integer axis would have gone with them. `retheme` now derives its options from `baseOptions`
+and the stored spec, so a created chart and a re-themed one cannot drift apart.
+
+### Not done, and why
+
+- **The sign-in spike.** One seeded day of ~2,700 flattens the other 29 to the floor. It is seed
+  data, but any real burst does the same; a rolling-average toggle is the cheap insurance. Left
+  for Ben to decide whether it is worth a control.
+- **Nobody has an address.** "People by state" counts 1 of 97 because **no seeder writes
+  `UserAddress` rows** — that bar is Ben's own record. The panel is honest and useless until
+  either the seeder populates addresses or real users do. A data decision, not a chart fix.

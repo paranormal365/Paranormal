@@ -124,7 +124,12 @@ function baseOptions(el, spec) {
             // chart use the room. Measured against the sidecar page, which has exactly one
             // version and was the first thing to show the problem.
             bar: {
+                horizontal: !!spec.horizontal,
                 columnWidth: `${Math.min(60, 18 * Math.max(1, (spec.categories || []).length))}%`,
+                // Laid on its side the same reasoning applies to height instead of width, and a
+                // lone horizontal bar filling its panel looks even more like a progress meter
+                // than a vertical one does.
+                barHeight: `${Math.min(70, 22 * Math.max(1, (spec.categories || []).length))}%`,
                 borderRadius: 3,
             },
         },
@@ -137,13 +142,60 @@ function baseOptions(el, spec) {
 
     if (!sparkline) {
         const axisLabels = { style: { colors: p.muted, fontSize: '12px' } }
+        // A 90-day range is 90 categories, and Apex will happily draw all 90 rotated on top of
+        // one another. Thin them to roughly eight readable ticks; the tooltip still names every
+        // individual day, so nothing is lost but the clutter.
+        const categories = spec.categories || []
         options.xaxis = {
-            categories: spec.categories || [],
-            labels: axisLabels,
+            categories,
+            labels: {
+                ...axisLabels,
+                // Horizontal, not angled: once thinned to eight ticks they fit, and rotated
+                // labels get their leading characters clipped by the panel edge — "Jul 23"
+                // rendered as "l 23".
+                rotate: 0,
+                rotateAlways: false,
+                hideOverlappingLabels: true,
+                trim: false,
+            },
+            tickAmount: categories.length > 10 ? 8 : undefined,
             axisBorder: { color: p.border },
             axisTicks: { color: p.border },
         }
-        options.yaxis = { labels: axisLabels }
+        // Every number this dashboard draws is a count of things, and a count has no halves.
+        // Left to itself Apex picks a "nice" scale, so a chart whose tallest bar is 1 gets an
+        // axis reading 0, 0.2, 0.4 — fractional people. Integer ticks, and never more of them
+        // than the largest value can fill.
+        //
+        // Non-numbers pass through untouched, which is what makes this safe to hang on both
+        // axes: a horizontal bar chart swaps which axis carries the values, Apex is not
+        // consistent about which config key then owns the numeric ticks, and a formatter that
+        // rounds whatever it is handed would turn the category "BenCo" into NaN.
+        const asCount = v =>
+            (typeof v === 'number' && isFinite(v)) ? Math.round(v).toLocaleString() : v
+
+        const ceiling = Math.max(0, ...(spec.series || []).flatMap(s => s.data || []))
+        const countTicks = Math.max(1, Math.min(5, Math.ceil(ceiling)))
+
+        options.yaxis = {
+            labels: { ...axisLabels, formatter: asCount },
+            min: 0,
+            tickAmount: countTicks,
+        }
+
+        if (spec.horizontal) {
+            // Categories now run up the side and are read like a list, so they must not be
+            // thinned or clipped — the eight-tick rule above is for dates on a crowded bottom
+            // axis, not for eight group names with a line each.
+            options.xaxis.tickAmount = undefined
+            options.xaxis.labels.formatter = asCount
+            options.yaxis.min = undefined
+            options.yaxis.tickAmount = undefined
+            // Apex truncates category labels at 160px whatever the panel is doing, which put
+            // "Tennessee Ghost Hunt…" back on a chart turned sideways specifically to show the
+            // whole name. The room is there; the default just will not take it.
+            options.yaxis.labels.maxWidth = 260
+        }
     }
 
     // Donut and pie take a flat number[] plus labels; everything else takes named series.
@@ -151,7 +203,17 @@ function baseOptions(el, spec) {
         options.series = spec.values || []
         options.labels = spec.categories || []
         options.stroke = { width: 0 }
-        options.legend = { position: 'bottom', labels: { colors: p.text } }
+        // The legend is the only place a donut says anything in words, so it carries the count
+        // too. Without it every number on the chart is behind a hover, which is no answer at all
+        // for someone reading the page rather than pointing at it.
+        options.legend = {
+            position: 'bottom',
+            labels: { colors: p.text },
+            formatter: (label, opts) => {
+                const n = opts?.w?.globals?.series?.[opts.seriesIndex]
+                return typeof n === 'number' ? `${label} — ${n.toLocaleString()}` : label
+            },
+        }
     } else {
         options.series = spec.series || []
     }
@@ -177,6 +239,7 @@ export async function create(containerId, spec) {
         const chart = new ApexCharts(el, baseOptions(el, spec))
         await chart.render()
         _charts.set(containerId, { chart, spec })
+        watchTheme()
     })()
 
     _pending.set(containerId, run)
@@ -216,14 +279,52 @@ export async function retheme(containerId) {
     const el = document.getElementById(containerId)
     if (!el) return
 
-    const p = paletteFrom(el)
+    // Rebuild the whole option set from the stored spec rather than hand-listing the parts that
+    // carry colour. Apex's updateOptions REPLACES a nested object instead of merging into it, so
+    // sending `yaxis: { labels: { style } }` wiped the label formatter and maxWidth set at
+    // creation — group names went back to "Tennessee Ghost Hunt…" the moment anyone touched the
+    // theme toggle. Deriving both paths from baseOptions means axis behaviour cannot drift
+    // between a chart that was created and one that was re-themed.
+    const themed = baseOptions(el, entry.spec)
     await entry.chart.updateOptions({
-        colors: p.series,
-        grid: { borderColor: p.border, strokeDashArray: 3 },
-        legend: { labels: { colors: p.text } },
-        xaxis: { labels: { style: { colors: p.muted } } },
-        yaxis: { labels: { style: { colors: p.muted } } },
+        colors: themed.colors,
+        grid: themed.grid,
+        legend: themed.legend,
+        tooltip: themed.tooltip,
+        noData: themed.noData,
+        xaxis: themed.xaxis,
+        yaxis: themed.yaxis,
     }, false, false)
+}
+
+/*
+ * A chart does not inherit the page's palette. Series colours and axis text come from config read
+ * when the chart is built, not from CSS, so flipping the theme leaves every chart still wearing
+ * the palette it was born with — in light mode that means near-white axis labels on a white card,
+ * which is how the dashboard's group names became unreadable.
+ *
+ * The module watches for the switch itself rather than offering a method each page must remember
+ * to call. It already offered one: `retheme` was exported with a "call this from whoever owns the
+ * toggle" contract and, across every chart on the site, nobody ever did. A contract nobody can
+ * forget beats a contract everybody forgot.
+ */
+let _themeWatcher = null
+
+function watchTheme() {
+    if (_themeWatcher || typeof MutationObserver === 'undefined') return
+
+    _themeWatcher = new MutationObserver(() => {
+        for (const id of Array.from(_charts.keys())) {
+            retheme(id).catch(() => { /* chart torn down mid-flip */ })
+        }
+    })
+
+    // The toggle in ben-boot.js flips this one attribute on <html>; nothing else needs watching,
+    // and watching `class` as well would fire on every layout toggle for no gain.
+    _themeWatcher.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-bs-theme'],
+    })
 }
 
 export function destroy(containerId) {

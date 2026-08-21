@@ -27,6 +27,13 @@ public class DisplayDateFormatTests
     public void LongDate_IsWrittenOut() => Assert.Equal("August 4, 2026", Sample.ToDisplayDateLong());
 
     [Fact]
+    public void ChartAxisDay_IsMonthFirst() => Assert.Equal("Aug 4", Sample.ToChartDay());
+
+    [Fact]
+    public void ChartAxisDay_IsMonthFirstForAPlainDay() =>
+        Assert.Equal("Aug 4", DateOnly.FromDateTime(Sample).ToChartDay());
+
+    [Fact]
     public void MorningTimes_KeepTheLeadingZeroAndReadAM()
     {
         var morning = new DateTime(2026, 8, 4, 9, 5, 0);
