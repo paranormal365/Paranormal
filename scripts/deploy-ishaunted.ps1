@@ -720,20 +720,47 @@ if (-not $SkipSmoke) {
         }
     }
 
+    # Section 5 recycles the pools immediately above this, and an in-process ANCM application does
+    # not answer while it is still starting - IIS returns a bare HTTP 503 until the worker is up.
+    # A single attempt therefore reports a perfectly good deployment as a failure, and the script
+    # throws at the very end having done everything correctly. That happened twice on 2026-08-21,
+    # both times on the API, which is the slowest to start because it builds its EF model and runs
+    # the file-migration service. Retry a 503 rather than treat startup as an outage; anything that
+    # is genuinely broken still fails, just $SmokeRetries * $SmokeRetryDelay seconds later.
+    $SmokeRetries    = 6
+    $SmokeRetryDelay = 5
+
     $failed = @()
     foreach ($check in $checks) {
-        try {
-            $r = Invoke-WebRequest -Uri $check['url'] -UseBasicParsing -TimeoutSec 60
-            if ($r.StatusCode -ne 200) { throw "HTTP $($r.StatusCode)" }
-            if ($check.ContainsKey('expect') -and $r.Content -notlike "*$($check['expect'])*") {
-                # A 200 is not proof on its own: if the sub-application was never created, the
-                # website answers with its own 404 page, which is also HTML and also 200-shaped.
-                throw "200, but the body is not the editor - is $EditorBase an IIS Application?"
+        $lastError = $null
+        $ok        = $false
+
+        for ($attempt = 1; $attempt -le $SmokeRetries -and -not $ok; $attempt++) {
+            try {
+                $r = Invoke-WebRequest -Uri $check['url'] -UseBasicParsing -TimeoutSec 60
+                if ($r.StatusCode -ne 200) { throw "HTTP $($r.StatusCode)" }
+                if ($check.ContainsKey('expect') -and $r.Content -notlike "*$($check['expect'])*") {
+                    # A 200 is not proof on its own: if the sub-application was never created, the
+                    # website answers with its own 404 page, which is also HTML and also 200-shaped.
+                    throw "200, but the body is not the editor - is $EditorBase an IIS Application?"
+                }
+                $ok = $true
+                $suffix = if ($attempt -gt 1) { "  (after $attempt attempts)" } else { '' }
+                Write-Host "   OK   $($check['what'])  $($check['url'])$suffix" -ForegroundColor Green
+            } catch {
+                $lastError = $_.Exception.Message
+                # Only a starting application is worth waiting for. A 404, a 500 or a wrong body is
+                # a real result and retrying it just delays the report.
+                $starting = $lastError -match '\(503\)|actively refused|Unable to connect'
+                if (-not $starting -or $attempt -eq $SmokeRetries) { break }
+                Write-Host "   ...  $($check['what']) not up yet (attempt $attempt/$SmokeRetries), waiting $SmokeRetryDelay s" -ForegroundColor DarkGray
+                Start-Sleep -Seconds $SmokeRetryDelay
             }
-            Write-Host "   OK   $($check['what'])  $($check['url'])" -ForegroundColor Green
-        } catch {
+        }
+
+        if (-not $ok) {
             Write-Host "   FAIL $($check['what'])  $($check['url'])" -ForegroundColor Red
-            Write-Host "        $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "        $lastError" -ForegroundColor Red
             $failed += $check['what']
         }
     }

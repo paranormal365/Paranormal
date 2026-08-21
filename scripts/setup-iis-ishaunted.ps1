@@ -185,6 +185,21 @@ function Set-Pool ([string]$name, [bool]$dotnetApp) {
     # CLR loaded underneath it. The static pool needs no runtime at all.
     Set-ItemProperty "IIS:\AppPools\$name" -Name managedRuntimeVersion -Value ''
 
+    # autoStart=False is what IIS writes into applicationHost.config when a pool is stopped by
+    # hand, and it does not mean "idle" - it means disabled. The pool will not start on demand, so
+    # every request under it gets a bare HTTP 503 and the application's own logs say nothing,
+    # because the application never runs. This happened to the static pool on 2026-08-21: the
+    # editor and /files went 503 while the website stayed 200, which reads like an application
+    # fault in two apps rather than one pool being switched off. Reconciling the server is this
+    # script's whole job, so it turns the pool back on rather than reporting it.
+    Set-ItemProperty "IIS:\AppPools\$name" -Name autoStart -Value $true
+    if ((Get-WebAppPoolState -Name $name).Value -ne 'Started') {
+        if ($PSCmdlet.ShouldProcess($name, 'Start application pool')) {
+            Start-WebAppPool -Name $name | Out-Null
+            Write-Change "started pool $name (it was stopped)"
+        }
+    }
+
     if ($dotnetApp) {
         # Data Protection. ASP.NET Core Identity's bearer tokens and the support form's anti-abuse
         # tokens are encrypted with a key ring that, by default, lives in the app pool's user

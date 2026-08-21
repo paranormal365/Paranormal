@@ -81,16 +81,22 @@ builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebA
 // and the link previews that carry a shared URL into a chat window.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
+// ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
+// leading slash, which BaseAddress treats as root-relative and so discards the base path - see the
+// handler for the full story. Harmless when the API is at an origin root, as it is in development.
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
-});
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
+
 builder.Services.AddHttpClient<IWebApiClient, WebApiClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
-});
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IWebApiAuthService, WebApiAuthService>();
 builder.Services.AddScoped<IBenAdminClient, BenAdminClientAdapter>();
 builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredService<IWebApiTokenStore>());

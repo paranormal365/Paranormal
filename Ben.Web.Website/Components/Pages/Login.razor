@@ -141,8 +141,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _entraEnabled = !string.IsNullOrWhiteSpace(Configuration["AzureAd:ClientId"])
-                        && Configuration["AzureAd:ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
+        // The same rule both hosts use, rather than a third copy. This one still compared against
+        // the literal "YOUR_WEBAPP_CLIENT_ID", a placeholder that has not been in any config file
+        // for some time - so it answered "enabled" for anything non-blank, including a placeholder
+        // GUID that would have rendered a Microsoft button wired to a registration that does not
+        // exist. See Ben.Data.Common.EntraConfig.
+        _entraEnabled = Ben.Data.Common.EntraConfig.IsConfigured(Configuration["AzureAd:ClientId"]);
 
         if (Env.IsDevelopment())
         {
