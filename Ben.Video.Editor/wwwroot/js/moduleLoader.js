@@ -3,7 +3,7 @@
 //
 // Every module here used to be imported by its root-absolute path — "/_content/Ben.Video.Editor/
 // js/domInterop.js". That is correct only when the app is served from the root of its origin. The
-// production editor is served from a sub-path (https://ishaunted.com/editor/), because a sub-path
+// production editor is served from a sub-path (https://ishaunted.com/editors/video/), because a sub-path
 // inherits the site's certificate and a subdomain would need its own, and there every one of those
 // paths asks the site root for a file that lives under /editor. The files are published and
 // present; the URLs simply point past them.

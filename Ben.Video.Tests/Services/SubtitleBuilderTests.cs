@@ -76,10 +76,59 @@ public sealed class SubtitleBuilderTests
             Overlay("C", 4, 1),
         };
         var result = SubtitleBuilder.BuildSrt(overlays);
-        // All three sequential indices present
-        Assert.Contains("\n1\n", "\n" + result + "\n");
-        Assert.Contains("\n2\n", "\n" + result + "\n");
-        Assert.Contains("\n3\n", "\n" + result + "\n");
+        // All three sequential indices present, each alone on its own line. Asserted against split
+        // lines rather than embedded "\n1\n" needles: the builder writes CRLF, and a needle spelled
+        // with one particular terminator tests the line ending as much as the numbering.
+        var lines = result.ReplaceLineEndings("\n").Split('\n');
+        Assert.Contains("1", lines);
+        Assert.Contains("2", lines);
+        Assert.Contains("3", lines);
+    }
+
+    // These three pin the line terminator itself. Without them the only thing keeping the output
+    // stable is a habit: StringBuilder.AppendLine writes Environment.NewLine, so reintroducing it
+    // makes the same project export byte-different subtitles from Blazor Server on Windows (CRLF),
+    // from the WebAssembly editor in the browser (LF) and from a sidecar on macOS (LF) — with
+    // nothing failing anywhere to say so. CRLF is the choice here because SubRip specifies it.
+    [Theory]
+    [InlineData("srt")]
+    [InlineData("vtt")]
+    [InlineData("ass")]
+    public void Build_UsesCrlfLineEndings_RegardlessOfHost(string format)
+    {
+        var overlays = new[] { Overlay("One", 0, 1), Overlay("Two", 2, 1) };
+        var result = format switch
+        {
+            "srt" => SubtitleBuilder.BuildSrt(overlays),
+            "vtt" => SubtitleBuilder.BuildWebVtt(overlays),
+            _     => SubtitleBuilder.BuildAss(overlays),
+        };
+
+        Assert.Contains("\r\n", result);
+        // No LF that is not part of a CRLF pair.
+        Assert.Empty(System.Text.RegularExpressions.Regex.Matches(result, @"(?<!\r)\n"));
+    }
+
+    [Fact]
+    public void BuildSrt_CaptionTextWithLfBreaks_NormalisedToCrlf()
+    {
+        // Pasted text arrives with whatever endings its source used; a lone LF inside a cue would
+        // leave the file mixing both.
+        var result = SubtitleBuilder.BuildSrt([Overlay("Line one\nLine two", 0, 2)]);
+
+        Assert.Contains("Line one\r\nLine two", result);
+        Assert.Empty(System.Text.RegularExpressions.Regex.Matches(result, @"(?<!\r)\n"));
+    }
+
+    [Fact]
+    public void BuildAss_CaptionTextWithCrlfBreaks_BecomesEscapeNotStrayCarriageReturn()
+    {
+        // A Dialogue entry is one line: every break in the text has to become \N. Matching only
+        // "\n" left the CR of a CRLF behind, mid-line, where some parsers split the entry.
+        var result = SubtitleBuilder.BuildAss([Overlay("Line one\r\nLine two", 0, 2)]);
+
+        Assert.Contains(@"Line one\NLine two", result);
+        Assert.DoesNotContain("Line one\r", result);
     }
 
     [Fact]

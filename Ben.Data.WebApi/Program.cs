@@ -1,3 +1,4 @@
+using Ben.Data.Common;
 using Microsoft.AspNetCore.HttpOverrides;
 using AutoMapper;
 using Ben.Data.WebApi.Services;
@@ -219,19 +220,23 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──
 const string EntraScheme = "Entra";
 var entraConfig = builder.Configuration.GetSection("AzureAd");
-// Entra is on only when ClientId is a real registration id. Tested by SHAPE (a GUID) rather than
-// against a list of known placeholder strings: that list silently failed open the moment anyone
-// wrote a placeholder it didn't know about, standing the JWT handler up against an authority that
-// cannot exist.
-bool entraEnabled = Guid.TryParse(entraConfig["ClientId"], out _);
+// Entra is on only when ClientId is a real registration id: GUID-shaped AND not one of the
+// checked-in placeholders, which are themselves GUIDs. The shape test alone used to live here and
+// let the placeholder through, standing this JWT handler up against an authority that cannot
+// exist while the website - using a different rule - correctly stayed off. One rule now, in
+// EntraConfig, shared by both hosts.
+bool entraEnabled = EntraConfig.IsConfigured(entraConfig["ClientId"]);
 
 if (entraEnabled)
 {
     var clientId = entraConfig["ClientId"]!;
+    var tenantId = EntraConfig.TenantOrCommon(entraConfig["TenantId"]);
+    bool multiTenant = EntraConfig.IsMultiTenant(tenantId);
+
     builder.Services.AddAuthentication()
         .AddJwtBearer(EntraScheme, jwt =>
         {
-            jwt.Authority = $"https://login.microsoftonline.com/{entraConfig["TenantId"]}/v2.0";
+            jwt.Authority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
             jwt.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateAudience = true,
@@ -239,9 +244,13 @@ if (entraEnabled)
                 // Work/school accounts (AAD) issue tokens with audience = api://<clientId>.
                 // Accept both formats so either account type works.
                 ValidAudiences   = new[] { $"api://{clientId}", clientId },
-                // ValidateIssuer must be false when TenantId = "common".
-                // Each user's token carries their own tenant-specific issuer URL.
-                ValidateIssuer   = false,
+                // False only on the multi-tenant authorities, where each user's token carries
+                // their own tenant's issuer URL and there is nothing single to compare against.
+                // Pointed at one tenant it must be true, or a token from any Microsoft tenant
+                // anywhere clears every remaining check. ValidIssuer is left unset on purpose so
+                // the value comes from the authority's discovery document, which is right whether
+                // TenantId is configured as a GUID or as a domain.
+                ValidateIssuer   = !multiTenant,
                 ValidateLifetime = true,
                 NameClaimType    = "preferred_username",
             };

@@ -2,12 +2,14 @@
 #
 # Publishes the standalone WASM video editor for production, ready to copy to the IIS box.
 #
-# The editor is served from a sub-path of the main site (https://ishaunted.com/editor/) rather
-# than its own subdomain, which is a deliberate choice: a subdomain needs its own certificate,
-# and a sub-path inherits the site's. That choice has two consequences this script handles, and
-# both are silent failures if missed:
+# The editor is served from a sub-path of the main site (https://ishaunted.com/editors/video/)
+# rather than its own subdomain, which is a deliberate choice: a subdomain needs its own
+# certificate, and a sub-path inherits the site's. The path is /editors/video and not /video-editor
+# because the website itself already routes /video-editor to its in-app editor page, and an IIS
+# Application at that path would shadow it permanently.  That choice has two consequences this
+# script handles, and both are silent failures if missed:
 #
-#   1. <base href> must be "/editor/", not "/". Blazor resolves every framework file against it,
+#   1. <base href> must be "/editors/video/", not "/". Blazor resolves every framework file against it,
 #      so with the wrong value the browser asks for /_framework/... at the site root and gets the
 #      API's 404 page instead of the runtime. The app then hangs on "Loading" with no error.
 #
@@ -17,12 +19,14 @@
 #      just quietly removes the half of the product that talks to the site.
 #
 # Usage:  scripts/publish-editor.sh [api-origin]
-# Default api-origin is https://ishaunted.com — same origin as the sub-path, so no CORS.
+# Default api-origin is https://ishaunted.com/webapi — the API's own IIS Application, same origin
+# as the sub-path so no CORS. The /webapi suffix is part of the origin here: the editor appends
+# "/api/..." to whatever this value is.
 
 set -euo pipefail
 
-API_ORIGIN="${1:-https://ishaunted.com}"
-BASE_PATH="/editor/"
+API_ORIGIN="${1:-https://ishaunted.com/webapi}"
+BASE_PATH="/editors/video/"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/artifacts/editor"
 
@@ -78,26 +82,13 @@ for stale in index.html appsettings.json appsettings.Development.json; do
 done
 
 # ── Sidecar downloads ────────────────────────────────────────────────────────
-# wwwroot/downloads/index.html ships in source; the zips deliberately do not — they are ~160 MB
-# and ~97 MB build artifacts, rebuilt by the installer scripts under Ben.Video.Sidecar/installer/.
-# Staged here at publish time, with checksums.txt written beside them because the page links it:
-# for unsigned builds a published hash is the only integrity story a tester has.
-SIDECAR_DIST="$ROOT/Ben.Video.Sidecar/installer/dist"
-DOWNLOADS="$WWW/downloads"
-staged=0
-for z in BenVideoSidecar-win-x64.zip BenVideoSidecar-osx-arm64.zip; do
-    if [ -f "$SIDECAR_DIST/$z" ]; then
-        cp "$SIDECAR_DIST/$z" "$DOWNLOADS/$z"
-        staged=$((staged+1))
-    else
-        echo "  WARNING: $z not built — the downloads page will 404 that link." >&2
-        echo "           Build it: Ben.Video.Sidecar/installer/{windows,macos}/build.sh" >&2
-    fi
-done
-if [ "$staged" -gt 0 ]; then
-    ( cd "$DOWNLOADS" && shasum -a 256 BenVideoSidecar-*.zip > checksums.txt )
-    echo "  staged $staged sidecar zip(s) + checksums.txt into downloads/"
-fi
+# wwwroot/downloads/index.html ships in source and links the zips at /files/sidecar-video/<rid>/.
+# The zips themselves are NOT staged here: at ~160 MB and ~97 MB they do not belong in a folder
+# that gets mirrored on every deploy, and keeping them outside the site means rebuilding the editor
+# does not mean re-uploading a quarter of a gigabyte. They live under C:\ishaunted-files, published
+# as their own IIS Application at /files, and scripts/deploy-ishaunted.ps1 stages them there from
+# Ben.Video.Sidecar/installer/dist/ with a checksums.txt beside each — for unsigned builds a
+# published hash is the only integrity story a tester has.
 
 echo
 echo "Checks:"
@@ -121,4 +112,4 @@ echo "  $(find "$WWW/_framework" -type f | wc -l | tr -d ' ') framework files"
 echo "  $(du -sh "$WWW" | cut -f1) total"
 echo
 echo "Copy the CONTENTS of $WWW into the site's editor folder on the server,"
-echo "so that index.html lands at <site root>\\editor\\index.html."
+echo "so that index.html lands at <site root>\\editors\\video\\index.html."

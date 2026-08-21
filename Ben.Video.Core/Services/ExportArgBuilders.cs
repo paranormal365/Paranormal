@@ -824,7 +824,7 @@ internal static class ExportArgBuilders
 
         var ic     = System.Globalization.CultureInfo.InvariantCulture;
         var sb     = new System.Text.StringBuilder();
-        sb.AppendLine(";FFMETADATA1");
+        AppendLf(sb, ";FFMETADATA1");
 
         var sorted = markers.OrderBy(m => m.TimeSeconds).ToList();
 
@@ -838,17 +838,32 @@ internal static class ExportArgBuilders
             // clamp: end must be > start
             if (endMs <= startMs) endMs = startMs + 1;
 
-            sb.AppendLine("[CHAPTER]");
-            sb.AppendLine("TIMEBASE=1/1000");
-            sb.AppendLine($"START={startMs.ToString(ic)}");
-            sb.AppendLine($"END={endMs.ToString(ic)}");
+            AppendLf(sb, "[CHAPTER]");
+            AppendLf(sb, "TIMEBASE=1/1000");
+            AppendLf(sb, $"START={startMs.ToString(ic)}");
+            AppendLf(sb, $"END={endMs.ToString(ic)}");
             // Escape '=' and '#' per ffmetadata spec
             var title = EscapeMetadataValue(sorted[i].Label);
-            sb.AppendLine($"title={title}");
+            AppendLf(sb, $"title={title}");
         }
 
         return sb.ToString();
     }
+
+    /// <summary>Appends <paramref name="text"/> followed by a single LF.</summary>
+    /// <remarks>
+    /// <para>Deliberately not <c>AppendLine</c>, which writes <see cref="Environment.NewLine"/>.
+    /// This assembly is the ffmpeg wire contract shared with the sidecar, so the same project has
+    /// to produce the same bytes whether it is exported from Blazor Server on Windows (CRLF),
+    /// Blazor WebAssembly in the browser (LF), or a sidecar on Windows, macOS or Linux.</para>
+    ///
+    /// <para>LF rather than CRLF specifically, unlike the subtitle formats: this is what ffmpeg's
+    /// own <c>-f ffmetadata</c> muxer emits, so it is the form its demuxer is certain to read
+    /// back. A section header that arrived as <c>[CHAPTER]\r</c> and did not match would not be an
+    /// error — the chapters would simply not be there, which is a great deal harder to notice.
+    /// </para>
+    /// </remarks>
+    private static void AppendLf(System.Text.StringBuilder sb, string text) => sb.Append(text).Append('\n');
 
     /// <summary>
     /// ffmpeg args to mux <paramref name="inputFile"/> with the

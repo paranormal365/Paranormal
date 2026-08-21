@@ -87,5 +87,5 @@ fi
 
 echo
 echo "Copy the CONTENTS of $OUT to the site root (C:\\ishaunted)."
-echo "See docs/deploy-production.md — /webapi and /editor must each become their own IIS"
+echo "See docs/deploy-production.md — /webapi and /editors/video must each become their own IIS"
 echo "Application, or this app swallows every request to them."
