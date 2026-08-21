@@ -45,6 +45,14 @@
     /// <summary>Shown in place of an empty chart. Say what is missing, not "no data".</summary>
     [Parameter] public string? NoDataText { get; set; }
 
+    /// <summary>
+    /// Lay a bar chart on its side. Use it whenever the categories are names rather than dates:
+    /// vertical bars give a label only as much width as the bar, which turns "Tennessee Ghost
+    /// Hunters" into a rotated, truncated "…essee Ghost Hunters". Horizontal bars give the label
+    /// a whole line. Ignored by every type except bar.
+    /// </summary>
+    [Parameter] public bool Horizontal { get; set; }
+
     // Per-instance, because several charts share a dashboard and the module keys everything by
     // this id. See the note at the top of ApexChart.razor.js.
     private readonly string _containerId = $"apex-{Guid.NewGuid():N}";
@@ -73,14 +81,6 @@
         }
     }
 
-    /// <summary>Re-reads the palette after a theme change. Call from whoever owns the toggle.</summary>
-    public async Task RethemeAsync()
-    {
-        if (_module is null || !_created) return;
-        try { await _module.InvokeVoidAsync("retheme", _containerId); }
-        catch (JSDisconnectedException) { /* circuit went away mid-call */ }
-    }
-
     private object Spec() => new
     {
         type = Type,
@@ -90,6 +90,7 @@
         values = Values?.ToArray(),
         categories = Categories?.ToArray(),
         noDataText = NoDataText,
+        horizontal = Horizontal,
     };
 
     public async ValueTask DisposeAsync()

@@ -6408,3 +6408,44 @@ Found in Ben's screenshot of the working dashboard.
 - **Ninety rotated labels stacked on each other.** Thinned to about eight ticks; the tooltip still
   names every day. Rotation then had to go too — angled labels were clipped by the panel edge,
   rendering "Jul 23" as "l 23".
+
+---
+
+## 129. Admin dashboard: readability and dead ends (SHIPPED 2026-08-21)
+
+Ben asked what would make the dashboard prettier and more functional. Four changes, plus two bugs
+the work uncovered.
+
+- **The stat cards are links.** "97 people" that cannot be clicked is a dead end — the number
+  raises a question and the list answers it. People → users, In a group → groups, Cases → cases.
+  *Signed in this week* deliberately stays inert: no page lists recent sign-ins, and a card
+  linking somewhere approximate is worse than one that stays put.
+- **Three "by state" panels became one with a toggle.** They filled a whole row to show one bar
+  each, which with a single state in the data is a row of decoration.
+- **Group charts are horizontal.** A vertical bar gives its label only as much width as the bar,
+  which is why "Tennessee Ghost Hunters" was rendering as a rotated "…essee Ghost Hunters".
+- **The donut legend carries counts.** Every number on it used to be behind a hover, which is no
+  answer for someone reading the page rather than pointing at it.
+
+### Two bugs found while verifying, both pre-existing
+
+**Charts never re-themed.** `RethemeAsync` was exported with a "call this from whoever owns the
+toggle" contract and had **no callers anywhere** — so every chart on the site kept the palette it
+was born with, and in light mode that meant near-white axis labels on a white card. The module now
+watches `data-bs-theme` on `<html>` itself with a MutationObserver. A contract nobody can forget
+beats a contract everybody forgot; the unused method is gone rather than left as a trap.
+
+**The re-theme then ate the axis config.** Apex's `updateOptions` *replaces* a nested object
+instead of merging into it, so sending `yaxis: { labels: { style } }` silently dropped the label
+formatter and `maxWidth` — group names truncated again the instant anyone touched the toggle, and
+the integer axis would have gone with them. `retheme` now derives its options from `baseOptions`
+and the stored spec, so a created chart and a re-themed one cannot drift apart.
+
+### Not done, and why
+
+- **The sign-in spike.** One seeded day of ~2,700 flattens the other 29 to the floor. It is seed
+  data, but any real burst does the same; a rolling-average toggle is the cheap insurance. Left
+  for Ben to decide whether it is worth a control.
+- **Nobody has an address.** "People by state" counts 1 of 97 because **no seeder writes
+  `UserAddress` rows** — that bar is Ben's own record. The panel is honest and useless until
+  either the seeder populates addresses or real users do. A data decision, not a chart fix.

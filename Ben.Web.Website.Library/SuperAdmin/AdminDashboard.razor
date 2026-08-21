@@ -61,17 +61,25 @@
     else if (_summary is not null)
     {
         <div class="row g-2 mb-3">
+            @*
+                Each card links to the list behind its number. "Signed in this week" is the one
+                that does not: there is no page listing recent sign-ins, and a card that links
+                somewhere approximate is worse than one that stays put.
+            *@
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="People" Icon="users" Value="@_summary.People.ToString("N0")"
+                          Href="/admin/users"
                           Delta="@_summary.NewPeopleThisWeek" DeltaCaption="new this week" />
             </div>
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="In a group" Icon="user-check"
                           Value="@_summary.PeopleInAGroup.ToString("N0")"
+                          Href="/organizations" LinkLabel="Browse all groups"
                           Caption="@InAGroupCaption" />
             </div>
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="Cases" Icon="folder" Value="@_summary.Cases.ToString("N0")"
+                          Href="/admin/cases"
                           Delta="@_summary.NewCasesThisWeek" DeltaCaption="opened this week" />
             </div>
             <div class="col-sm-6 col-xl-3">
@@ -112,7 +120,7 @@
                     <p class="text-secondary" style="font-size:.78rem;">
                         Cases and investigations started in this period.
                     </p>
-                    <ApexChart Type="bar" Height="260"
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
                                Categories="@Labels(_charts.TopGroupsByActivity)"
                                Series="@Single("Cases and investigations", _charts.TopGroupsByActivity)"
                                NoDataText="No group started anything in this period." />
@@ -123,7 +131,7 @@
                 <div class="card h-100"><div class="card-body">
                     <div class="small text-secondary mb-2">Largest groups</div>
                     <p class="text-secondary" style="font-size:.78rem;">By active membership.</p>
-                    <ApexChart Type="bar" Height="260"
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
                                Categories="@Labels(_charts.TopGroupsByMembers)"
                                Series="@Single("Members", _charts.TopGroupsByMembers)"
                                NoDataText="No group has members yet." />
@@ -131,38 +139,36 @@
             </div>
 
             @*
-                Three cuts of the same question — where is this happening. Kept as bars rather
-                than a map: the query behind a choropleth is the same GROUP BY, but the map itself
-                is a build of its own, and bars answer "which states lead" without one. Revisit
-                when the answer stops fitting in eight rows.
+                Three cuts of the same question — where is this happening — behind one toggle
+                rather than three panels. As three they filled an entire row to show one bar
+                each, and with a single state in the data that is a row of decoration.
+
+                Kept as bars rather than a map: the query behind a choropleth is the same GROUP
+                BY, but the map itself is a build of its own, and bars answer "which states lead"
+                without one. Revisit when the answer stops fitting in eight rows.
             *@
-            <div class="col-xl-4">
+            <div class="col-12">
                 <div class="card h-100"><div class="card-body">
-                    <div class="small text-secondary mb-2">People by state</div>
-                    <ApexChart Type="bar" Height="240"
-                               Categories="@Labels(_charts.TopStatesByUser)"
-                               Series="@Single("People", _charts.TopStatesByUser)"
-                               NoDataText="Nobody has recorded an address yet." />
-                </div></div>
-            </div>
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div class="small text-secondary">Where this is happening</div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Geographic cut">
+                            @foreach (var cut in StateCuts)
+                            {
+                                <button type="button"
+                                        class="btn @(_stateCut == cut.Key ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="@(() => _stateCut = cut.Key)">
+                                    @cut.Label
+                                </button>
+                            }
+                        </div>
+                    </div>
 
-            <div class="col-xl-4">
-                <div class="card h-100"><div class="card-body">
-                    <div class="small text-secondary mb-2">Cases by state</div>
-                    <ApexChart Type="bar" Height="240"
-                               Categories="@Labels(_charts.TopStatesByCase)"
-                               Series="@Single("Cases", _charts.TopStatesByCase)"
-                               NoDataText="No cases with an address yet." />
-                </div></div>
-            </div>
+                    <p class="text-secondary" style="font-size:.78rem;">@ActiveCut.Caption</p>
 
-            <div class="col-xl-4">
-                <div class="card h-100"><div class="card-body">
-                    <div class="small text-secondary mb-2">Investigations by state</div>
-                    <ApexChart Type="bar" Height="240"
-                               Categories="@Labels(_charts.TopStatesByInvestigation)"
-                               Series="@Single("Investigations", _charts.TopStatesByInvestigation)"
-                               NoDataText="No investigations at a recorded place yet." />
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(ActiveCutSlices)"
+                               Series="@Single(ActiveCut.Label, ActiveCutSlices)"
+                               NoDataText="@ActiveCut.NoData" />
                 </div></div>
             </div>
         </div>
@@ -178,6 +184,30 @@
         new("30 days", 30),
         new("90 days", 90),
     ];
+
+    /// <summary>One geographic cut: a button, the words under it, and where its numbers live.</summary>
+    private sealed record StateCut(string Key, string Label, string Caption, string NoData);
+
+    private static readonly StateCut[] StateCuts =
+    [
+        new("people", "People", "Registered accounts, by the state on their address.",
+            "Nobody has recorded an address yet."),
+        new("cases", "Cases", "Reported cases, by the state of the address in the report.",
+            "No cases with an address yet."),
+        new("investigations", "Investigations", "Investigations, by the state of the place visited.",
+            "No investigations at a recorded place yet."),
+    ];
+
+    private string _stateCut = "people";
+
+    private StateCut ActiveCut => StateCuts.FirstOrDefault(c => c.Key == _stateCut) ?? StateCuts[0];
+
+    private IReadOnlyList<StatSlice> ActiveCutSlices => _stateCut switch
+    {
+        "cases" => _charts!.TopStatesByCase,
+        "investigations" => _charts!.TopStatesByInvestigation,
+        _ => _charts!.TopStatesByUser,
+    };
 
     private AdminStatsSummary? _summary;
     private AdminStatsCharts? _charts;
