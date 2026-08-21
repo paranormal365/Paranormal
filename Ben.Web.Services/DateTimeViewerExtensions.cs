@@ -35,18 +35,26 @@ public static class DateTimeViewerExtensions
     // One place decides how a date looks, so pages cannot drift apart the way they had: the same
     // screens were mixing "yyyy-MM-dd", "d MMM yyyy", "MMM d, yyyy h:mm tt" and "d MMM, HH:mm".
     //
+    // **US format, month first.** This is Ben's stated preference and it is not a style question
+    // to be re-litigated: the site's users, its groups and its cases are all American, and
+    // "08/04/2026" means August 4th to every one of them. These constants were day-first until
+    // 2026-08-21 — a previous session chose that deliberately, commented it "Day first", and wrote
+    // DisplayDateFormatTests to pin it, including a test named Date_IsDayFirst. So the format was
+    // asserted all along; it was asserted wrong, which is worse than unasserted: the suite was
+    // green and actively defending the mistake.
+    //
     // These format an already-local value and deliberately do not convert: each call site keeps
     // whatever timezone handling it already had, so this changes appearance only. Pair them with
     // ToViewerLocalTime when the source is UTC.
 
-    /// <summary>Day-first numeric date, used by every grid column and date control.</summary>
-    public const string DatePattern = "dd/MM/yyyy";
+    /// <summary>US month-first numeric date, used by every grid column and date control.</summary>
+    public const string DatePattern = "MM/dd/yyyy";
 
     /// <summary>Numeric date with a 12-hour clock and seconds.</summary>
-    public const string DateTimePattern = "dd/MM/yyyy hh:mm:ss tt";
+    public const string DateTimePattern = "MM/dd/yyyy hh:mm:ss tt";
 
     /// <summary>Numeric date and time without seconds, where seconds carry no meaning.</summary>
-    public const string DateTimeNoSecondsPattern = "dd/MM/yyyy hh:mm tt";
+    public const string DateTimeNoSecondsPattern = "MM/dd/yyyy hh:mm tt";
 
     /// <summary>Written-out date for prose: <c>August 4, 2026</c>.</summary>
     public const string LongDatePattern = "MMMM d, yyyy";
@@ -54,7 +62,7 @@ public static class DateTimeViewerExtensions
     /// <summary>Time on its own, 12-hour with seconds.</summary>
     public const string TimePattern = "hh:mm:ss tt";
 
-    /// <summary>A date on its own: <c>04/08/2026</c>. Day first.</summary>
+    /// <summary>A date on its own: <c>08/04/2026</c>. Month first.</summary>
     public static string ToDisplayDate(this DateTime local) =>
         local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
 

@@ -14,11 +14,11 @@ public class DisplayDateFormatTests
     private static readonly DateTime Sample = new(2026, 8, 4, 21, 30, 5);
 
     [Fact]
-    public void Date_IsDayFirst() => Assert.Equal("04/08/2026", Sample.ToDisplayDate());
+    public void Date_IsMonthFirst() => Assert.Equal("08/04/2026", Sample.ToDisplayDate());
 
     [Fact]
     public void DateTime_IsDayFirstWithTwelveHourClockAndSeconds()
-        => Assert.Equal("04/08/2026 09:30:05 PM", Sample.ToDisplayDateTime());
+        => Assert.Equal("08/04/2026 09:30:05 PM", Sample.ToDisplayDateTime());
 
     [Fact]
     public void Time_IsTwelveHourWithSeconds() => Assert.Equal("09:30:05 PM", Sample.ToDisplayTime());
@@ -30,7 +30,7 @@ public class DisplayDateFormatTests
     public void MorningTimes_KeepTheLeadingZeroAndReadAM()
     {
         var morning = new DateTime(2026, 8, 4, 9, 5, 0);
-        Assert.Equal("04/08/2026 09:05:00 AM", morning.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 09:05:00 AM", morning.ToDisplayDateTime());
     }
 
     [Fact]
@@ -38,21 +38,21 @@ public class DisplayDateFormatTests
     {
         // The classic 12-hour bug: "00" instead of "12".
         var midnight = new DateTime(2026, 8, 4, 0, 0, 0);
-        Assert.Equal("04/08/2026 12:00:00 AM", midnight.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 12:00:00 AM", midnight.ToDisplayDateTime());
     }
 
     [Fact]
     public void Noon_ReadsAsTwelvePM()
     {
         var noon = new DateTime(2026, 8, 4, 12, 0, 0);
-        Assert.Equal("04/08/2026 12:00:00 PM", noon.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 12:00:00 PM", noon.ToDisplayDateTime());
     }
 
     [Fact]
     public void Nullable_Overloads_PassThroughAndReturnNull()
     {
         DateTime? set = Sample;
-        Assert.Equal("04/08/2026", set.ToDisplayDate());
+        Assert.Equal("08/04/2026", set.ToDisplayDate());
         Assert.Equal("August 4, 2026", set.ToDisplayDateLong());
 
         DateTime? unset = null;
