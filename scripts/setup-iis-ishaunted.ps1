@@ -317,6 +317,38 @@ Set-App 'webapi'     $WebApiDir $WebApiPool
 Set-App $EditorPath  $EditorDir $StaticPool
 Set-App 'files'      $FilesRoot $StaticPool
 
+# IIS serves nothing whose extension it does not recognise - no MIME mapping, no response, a bare
+# 404. It ships a mapping for .zip, so the Windows download worked, and none for .dmg, so the Mac
+# download 404ed while the file sat correctly on disk with the right name and the right size. The
+# downloads page looked fine and one of its two buttons was dead.
+#
+# Written as a web.config in the files root rather than as a server-wide mapping: it travels with
+# the folder, it cannot collide with a mapping some other site needs, and <remove> first means
+# running this twice is safe (adding a duplicate mapping is itself an HTTP 500.19).
+if ($PSCmdlet.ShouldProcess((Join-Path $FilesRoot 'web.config'), 'Write download MIME mappings')) {
+    $mimeMaps = [ordered]@{
+        '.dmg' = 'application/x-apple-diskimage'
+        '.pkg' = 'application/octet-stream'
+        '.msi' = 'application/octet-stream'
+        '.exe' = 'application/octet-stream'
+    }
+    $lines = foreach ($ext in $mimeMaps.Keys) {
+        "        <remove fileExtension=`"$ext`" />`r`n        <mimeMap fileExtension=`"$ext`" mimeType=`"$($mimeMaps[$ext])`" />"
+    }
+    $filesWebConfig = @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <system.webServer>
+    <staticContent>
+$($lines -join "`r`n")
+    </staticContent>
+  </system.webServer>
+</configuration>
+"@
+    [IO.File]::WriteAllText((Join-Path $FilesRoot 'web.config'), $filesWebConfig, (New-Object Text.UTF8Encoding($false)))
+    Write-Change "MIME mappings written to $FilesRoot\web.config ($(($mimeMaps.Keys) -join ', '))"
+}
+
 # =============================================================================
 # 5. Permissions
 # =============================================================================

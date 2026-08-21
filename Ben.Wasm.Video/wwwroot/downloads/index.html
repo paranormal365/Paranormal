@@ -96,24 +96,26 @@
 
     <h2>Windows (64-bit)</h2>
     <div class="card">
-        <h3>BenVideoSidecar-win-x64.zip</h3>
-        <p class="meta">Windows 10 or 11, x64 · about 160&nbsp;MB · no administrator rights needed</p>
-        <a class="dl" href="/files/sidecar-video/win-x64/BenVideoSidecar-win-x64.zip" download>Download for Windows</a>
+        <h3>BenVideoSidecar-win-x64.exe</h3>
+        <p class="meta">Windows 10 or 11, x64 · about 150&nbsp;MB · no administrator rights needed</p>
+        <a class="dl" href="/files/sidecar-video/win-x64/BenVideoSidecar-win-x64.exe" download>Download for Windows</a>
         <ol>
-            <li>Unzip the download somewhere — actually extract it, don't browse inside the zip.</li>
-            <li>Right-click <code>install.ps1</code> and choose <strong>Run with PowerShell</strong>.
-                If that is blocked, open PowerShell in the folder and run
-                <code>powershell -ExecutionPolicy Bypass -File install.ps1</code>.</li>
-            <li>Expect <em>“Windows protected your PC”</em> the first time anything runs —
-                click <strong>More info</strong>, then <strong>Run anyway</strong>. That prompt is
-                what “unsigned” means. Some antivirus tools may quarantine it outright; if the
-                sidecar vanishes after install, that is what happened.</li>
+            <li>Run the downloaded installer.</li>
+            <li>Expect <em>“Windows protected your PC”</em> — click <strong>More info</strong>, then
+                <strong>Run anyway</strong>.
+                <span class="small">That prompt is what “unsigned” means, and it is the Windows
+                counterpart of the right-click&nbsp;Open below: this build has no Authenticode
+                certificate, so SmartScreen has no publisher to name and hides the Run button
+                behind “More info”. Nothing else about the install differs. Some antivirus tools
+                may quarantine it outright; if the sidecar vanishes after install, that is what
+                happened.</span></li>
             <li>A pairing page opens showing a <strong>six-digit code</strong>. In the editor,
                 click the sidecar chip in the toolbar and type the code in.</li>
         </ol>
         <p class="small">Installs under your own profile (<code>%LOCALAPPDATA%\BenVideoSidecar</code>)
-            and starts automatically when you sign in. Remove it any time with
-            <code>uninstall.ps1</code> from the same folder.</p>
+            and starts automatically when you sign in — no administrator password is asked for, and
+            nothing is written outside your profile. Remove it from
+            <strong>Settings → Apps → Installed apps</strong> like any other program.</p>
     </div>
 
     <h2>macOS (Apple Silicon)</h2>
@@ -149,7 +151,7 @@
             SHA-256 of the installer as built —
             <a href="/files/sidecar-video/win-x64/checksums.txt">Windows</a> ·
             <a href="/files/sidecar-video/osx-arm64/checksums.txt">Mac</a>. On Windows:
-            <code>Get-FileHash BenVideoSidecar-win-x64.zip</code>; on macOS:
+            <code>Get-FileHash BenVideoSidecar-win-x64.exe</code>; on macOS:
             <code>shasum -a 256 BenVideoSidecar-osx-arm64.dmg</code>.</li>
         <li><strong>Removing it changes nothing else.</strong> The editor simply goes back to
             rendering in the browser, which is what it does for everyone without a sidecar.</li>
