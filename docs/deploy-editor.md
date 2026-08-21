@@ -71,10 +71,25 @@ is refused the same way a wrong pairing code is — a 403, reading to the user a
 work" while a healthy sidecar sits right there. That list is host-based, so moving the editor's
 path does not affect it.
 
-Its installers are **not** served from the editor's folder. At ~160 MB and ~97 MB they would be
+Its installers are **not** served from the editor's folder. At ~160 MB and ~107 MB they would be
 re-copied on every editor deploy, so they live outside the site in `C:\ishaunted-files`, published
 as their own Application at `/files`, and the downloads page links them absolutely at
 `/files/sidecar-video/<rid>/`. `scripts\deploy-ishaunted.ps1` stages them there from
 `Ben.Video.Sidecar/installer/dist/` and writes a `checksums.txt` beside each — for unsigned builds
-a published hash is the only integrity story a tester has. A missing zip is a warning, not a failed
-deploy; the link 404s until it is built.
+a published hash is the only integrity story a tester has. A missing installer is a warning, not a
+failed deploy; the link 404s until it is built.
+
+**Windows ships a `.zip`, macOS a `.dmg`**, and the staging step prefers the `.dmg` for `osx-*`
+RIDs, falling back to a zip if that is all that has been built. The formats differ because the
+install does: a Mac zip meant unzip it, open Terminal and run a script, which is three steps and a
+terminal for something whose whole purpose is to sit in the background. The disk image is open it,
+right-click the installer, Open.
+
+Right-click, because these builds are unsigned. macOS quarantines anything downloaded and refuses
+to launch unsigned quarantined items from Finder, so a double-click is refused with "unidentified
+developer" — indistinguishable, to the person holding it, from a corrupt download. Opening via
+right-click records consent and macOS allows it. The permanent fix is a Developer ID signature over
+the bundle and the image plus notarization, which needs a paid Apple Developer account; until then
+the downloads page explains the extra click rather than letting someone conclude it is broken.
+
+Build them with `installer/macos/build.sh <rid>` followed by `installer/macos/build-dmg.sh <rid>`.

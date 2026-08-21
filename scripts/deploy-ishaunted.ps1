@@ -572,22 +572,47 @@ if (($Apps -contains 'files') -and -not $StageOnly) {
     Write-Step 'Sidecar downloads'
     $sidecarRoot = Join-Path $FilesRoot 'sidecar-video'
     foreach ($rid in $SidecarRids) {
-        $zipName = "BenVideoSidecar-$rid.zip"
-        $src = Join-Path $SidecarDrop $zipName
-        if (-not (Test-Path $src)) {
-            Write-Warn "$zipName is not in $SidecarDrop - the downloads page will 404 that link."
-            Write-Detail 'Build it: Ben.Video.Sidecar/installer/{windows,macos}/build.sh'
+        # macOS ships a disk image, Windows a zip, and the difference is about what the person on
+        # the other end has to do. A Mac zip meant unzip it, open Terminal, run a script - three
+        # steps and a terminal, to install something whose whole job is to be invisible. Opening a
+        # .dmg and right-clicking one installer is as close to ordinary as an unsigned build gets.
+        #
+        # Both are still accepted here: the .dmg wins when present so a stale zip left in dist/
+        # cannot quietly outrank a fresh image, and a RID with only a zip keeps working unchanged.
+        $candidates = if ($rid -like 'osx-*') {
+            @("BenVideoSidecar-$rid.dmg", "BenVideoSidecar-$rid.zip")
+        } else {
+            @("BenVideoSidecar-$rid.zip")
+        }
+
+        $name = $null
+        foreach ($candidate in $candidates) {
+            if (Test-Path (Join-Path $SidecarDrop $candidate)) { $name = $candidate; break }
+        }
+
+        if (-not $name) {
+            Write-Warn "No installer for $rid in $SidecarDrop - the downloads page will 404 that link."
+            Write-Detail 'Build it: Ben.Video.Sidecar/installer/macos/build.sh + build-dmg.sh, or installer/windows/build.ps1'
             continue
         }
+
+        $src = Join-Path $SidecarDrop $name
         $dstDir = Join-Path $sidecarRoot $rid
         New-Item -ItemType Directory -Force $dstDir | Out-Null
-        Copy-Item -Force $src (Join-Path $dstDir $zipName)
+
+        # Remove the other format from a previous deploy. Leaving it behind means the folder serves
+        # two installers of different vintages under names the page might still link.
+        foreach ($stale in $candidates) {
+            if ($stale -ne $name) { Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $dstDir $stale) }
+        }
+
+        Copy-Item -Force $src (Join-Path $dstDir $name)
         # These builds are unsigned, so a published hash is the only integrity story a tester has.
         # The format matches 'shasum -a 256', which is what the download page tells them to compare.
-        $hash = (Get-FileHash -Algorithm SHA256 (Join-Path $dstDir $zipName)).Hash.ToLowerInvariant()
-        [IO.File]::WriteAllText((Join-Path $dstDir 'checksums.txt'), "$hash  $zipName`n")
+        $hash = (Get-FileHash -Algorithm SHA256 (Join-Path $dstDir $name)).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText((Join-Path $dstDir 'checksums.txt'), "$hash  $name`n")
         $mb = [Math]::Round((Get-Item $src).Length / 1MB)
-        Write-Detail "staged $zipName ($mb MB) -> /files/sidecar-video/$rid/"
+        Write-Detail "staged $name ($mb MB) -> /files/sidecar-video/$rid/"
     }
 }
 

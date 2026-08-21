@@ -11,8 +11,9 @@
       (C:\ishaunted\editors\video\downloads\) and must work with nothing running behind it — no
       Blazor, no API, no external assets. All styling is inline for the same reason.
 
-      The zips themselves are NOT in source control, and they are not served from this folder: they
-      are ~160 MB and ~97 MB build artifacts kept outside the site, under C:\ishaunted-files, and
+      The installers themselves are NOT in source control, and they are not served from this folder:
+      they are ~160 MB and ~107 MB build artifacts kept outside the site, under C:\ishaunted-files,
+      and
       published at /files/sidecar-video/<rid>/. scripts/deploy-ishaunted.ps1 stages them there from
       Ben.Video.Sidecar/installer/dist/ and writes checksums.txt beside each one. The links below
       are therefore site-absolute, not relative to this page.
@@ -117,21 +118,26 @@
 
     <h2>macOS (Apple Silicon)</h2>
     <div class="card">
-        <h3>BenVideoSidecar-osx-arm64.zip</h3>
-        <p class="meta">macOS on M-series Macs · about 97&nbsp;MB · no administrator rights needed</p>
-        <a class="dl" href="/files/sidecar-video/osx-arm64/BenVideoSidecar-osx-arm64.zip" download>Download for Mac</a>
+        <h3>BenVideoSidecar-osx-arm64.dmg</h3>
+        <p class="meta">macOS on M-series Macs · about 107&nbsp;MB · no administrator rights needed</p>
+        <a class="dl" href="/files/sidecar-video/osx-arm64/BenVideoSidecar-osx-arm64.dmg" download>Download for Mac</a>
         <ol>
-            <li>Unzip the download.</li>
-            <li>Open Terminal in the unzipped folder and run <code>./install.sh</code>.
-                The Terminal route is required, not optional: with no Apple Developer&nbsp;ID and no
-                notarization, macOS refuses a double-click install — the script installs to
-                <code>~/Applications</code> and clears the downloaded-file quarantine flag itself.</li>
+            <li>Open the downloaded <code>.dmg</code>.</li>
+            <li><strong>Right-click</strong> <code>Install BenVideo Sidecar</code>, choose
+                <strong>Open</strong>, then click <strong>Open</strong> in the dialog that appears.
+                <span class="small">Right-click rather than double-click, and the difference is not
+                cosmetic: this build has no Apple Developer&nbsp;ID and is not notarized, so a
+                double-click is refused outright with “unidentified developer” — which looks like a
+                broken download. Opening it this way records that you chose to run it, and macOS
+                allows it. Nothing else about the install differs.</span></li>
             <li>A pairing page opens showing a <strong>six-digit code</strong>. In the editor,
                 click the sidecar chip in the toolbar and type the code in.</li>
         </ol>
-        <p class="small">Starts automatically at login. Remove it any time with
-            <code>./uninstall.sh</code> from the same folder. Intel Macs: no build yet — ask and
-            we will add one.</p>
+        <p class="small">Everything lands in your home folder — no password is asked for, and
+            nothing is installed system-wide. It starts automatically when you log in. To remove
+            it, right-click <code>Uninstall BenVideo Sidecar</code> in
+            <code>~/Applications</code> and choose Open; the installer puts it there so you do not
+            need this disk image again. Intel Macs: no build yet — ask and we will add one.</p>
     </div>
 
     <h2>Good to know</h2>
@@ -140,11 +146,11 @@
             different browser and you pair again. The code is single-use and expires after ten
             minutes.</li>
         <li><strong>Verifying your download:</strong> each build has a checksums file listing the
-            SHA-256 of the zip as built —
+            SHA-256 of the installer as built —
             <a href="/files/sidecar-video/win-x64/checksums.txt">Windows</a> ·
             <a href="/files/sidecar-video/osx-arm64/checksums.txt">Mac</a>. On Windows:
             <code>Get-FileHash BenVideoSidecar-win-x64.zip</code>; on macOS:
-            <code>shasum -a 256 BenVideoSidecar-osx-arm64.zip</code>.</li>
+            <code>shasum -a 256 BenVideoSidecar-osx-arm64.dmg</code>.</li>
         <li><strong>Removing it changes nothing else.</strong> The editor simply goes back to
             rendering in the browser, which is what it does for everyone without a sidecar.</li>
     </ul>

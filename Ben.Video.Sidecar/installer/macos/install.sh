@@ -49,6 +49,17 @@ cp -R "$SRC_APP" "$DEST_APP"
 # build would not need.
 xattr -dr com.apple.quarantine "$DEST_APP" 2>/dev/null || true
 
+# Keep the uninstaller somewhere that outlives the disk image. Ejecting the DMG is the first thing
+# anyone does after installing, and "to remove this, find the installer you downloaded last month"
+# is not an uninstall story. Beside the app, under the name Finder will run on a double-click.
+if [[ -f "$SCRIPT_DIR/uninstall.sh" ]]; then
+  cp "$SCRIPT_DIR/uninstall.sh" "$HOME/Applications/Uninstall BenVideo Sidecar.command"
+  chmod +x "$HOME/Applications/Uninstall BenVideo Sidecar.command"
+elif [[ -f "$SCRIPT_DIR/Uninstall BenVideo Sidecar.command" ]]; then
+  cp "$SCRIPT_DIR/Uninstall BenVideo Sidecar.command" "$HOME/Applications/"
+  chmod +x "$HOME/Applications/Uninstall BenVideo Sidecar.command"
+fi
+
 echo "==> Writing LaunchAgent $PLIST"
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -151,5 +162,6 @@ Installed:
   agent    $PLIST
   logs     $LOG_DIR/sidecar.log
 
-It starts automatically at login. To remove it: installer/macos/uninstall.sh
+It starts automatically at login.
+To remove it: ~/Applications/Uninstall BenVideo Sidecar.command  (right-click -> Open)
 EOF
