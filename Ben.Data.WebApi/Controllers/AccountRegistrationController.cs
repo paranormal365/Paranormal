@@ -137,6 +137,8 @@ public sealed class AccountRegistrationController : ControllerBase
             NormalizedEmail    = email.ToUpperInvariant(),
             NormalizedUserName = email.ToUpperInvariant(),
             DisplayName        = displayName,
+            FirstName          = request.FirstName?.Trim(),
+            LastName           = request.LastName?.Trim(),
             Handle             = UserHandle.Normalize(request.Handle),
             EmailConfirmed     = false,
             DateCreated        = DateTime.UtcNow,
@@ -281,7 +283,9 @@ public sealed class AccountRegistrationController : ControllerBase
 }
 
 /// <summary>A sign-up. <c>Handle</c> is normalised and checked server-side regardless of what the browser did.</summary>
-public sealed record RegisterRequest(string Email, string Password, string DisplayName, string Handle);
+public sealed record RegisterRequest(
+    string Email, string Password, string DisplayName, string Handle,
+    string? FirstName = null, string? LastName = null);
 
 /// <summary>The result of a sign-up. <c>Field</c> names the input to point at, or null for a general message.</summary>
 public sealed record RegisterResponse(bool Succeeded, string Message, string? Field);

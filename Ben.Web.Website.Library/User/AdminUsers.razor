@@ -37,7 +37,23 @@
                  Class="admin-users-grid">
         <GridColumns>
             <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
-            <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
+            @* Real name replaces the email column, at Ben's request. Email is still searchable —
+               see ApplySearch — so nothing became unfindable, it just stopped taking a column.
+               Accounts created before these fields existed have no name; an em dash says so
+               rather than leaving a cell that looks like a rendering fault. *@
+            <GridColumn Field="@nameof(AppUserRecord.FullName)" Title="Name" Width="200px">
+                <Template>
+                    @{ var u = (AppUserRecord)context; }
+                    @if (u.FullName is { } name)
+                    {
+                        @name
+                    }
+                    else
+                    {
+                        <span class="text-secondary">—</span>
+                    }
+                </Template>
+            </GridColumn>
             <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
                 <Template>
                     @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())

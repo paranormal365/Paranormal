@@ -29,6 +29,13 @@ public record MyProfileRecord
 {
     public Guid AppUserId { get; init; }
     public string? DisplayName { get; init; }
+
+    /// <summary>Legal first name. Required — the profile refuses to save it empty.</summary>
+    public string? FirstName { get; init; }
+
+    /// <summary>Legal last name. Required.</summary>
+    public string? LastName { get; init; }
+
     public string? Email { get; init; }
 
     /// <summary>The active public photo, or null when none is set.</summary>
@@ -60,7 +67,13 @@ public record MyProfileRecord
 /// Null leaves the current setting alone, so a caller updating only the display name can't
 /// accidentally revoke or grant consent it never mentioned.
 /// </param>
-public sealed record UpdateMyProfileRequest(string? DisplayName, bool? SharePrivatePhotoWithClients = null);
+/// <param name="FirstName">Null leaves it unchanged; empty or whitespace is refused.</param>
+/// <param name="LastName">Same.</param>
+public sealed record UpdateMyProfileRequest(
+    string? DisplayName,
+    bool? SharePrivatePhotoWithClients = null,
+    string? FirstName = null,
+    string? LastName = null);
 
 /// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
 /// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>

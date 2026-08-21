@@ -13,6 +13,13 @@ internal static class SuperAdminSeeder
         var displayName = config["SeedData:SuperAdmin:DisplayName"];
         var password = config["SeedData:SuperAdmin:Password"];
 
+        // Legal name and birth year come from config like everything else about this account.
+        // Without them the name backfill would split the display name — and a display name like
+        // "AverageBen" yields "AverageBen" with no surname, which is not who anybody is.
+        var firstName = config["SeedData:SuperAdmin:FirstName"];
+        var lastName  = config["SeedData:SuperAdmin:LastName"];
+        var birthYear = config.GetValue<int?>("SeedData:SuperAdmin:BirthYear");
+
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password) || password == "REPLACE_ME_WITH_YOUR_PASSWORD")
             return; // Not configured — skip silently
 
@@ -47,6 +54,9 @@ internal static class SuperAdminSeeder
                 UserName = email,
                 Email = email,
                 DisplayName = displayName,
+                FirstName   = firstName,
+                LastName    = lastName,
+                BirthYear   = birthYear,
                 EmailConfirmed = true,
                 DateCreated = DateTime.UtcNow
             };
@@ -54,6 +64,30 @@ internal static class SuperAdminSeeder
             var createResult = await userManager.CreateAsync(user, password);
             if (!createResult.Succeeded)
                 throw new InvalidOperationException($"Failed to create SuperAdmin user: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
+        }
+
+        // Fill in a legal name the account predates, without ever overwriting one already set.
+        //
+        // The seeder only supplies these on create, so an account that existed before the columns
+        // did would otherwise be left to UserNameBackfillService — which splits the display name,
+        // and "AverageBen" splits into a first name of "AverageBen" and no surname. That is not
+        // anybody's name. Config knows better, so config wins where the field is still empty.
+        //
+        // Only where empty: a name the person has since corrected on their profile is theirs, and
+        // a seeder that re-imposed config on every restart would undo that silently.
+        var needsName = string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(firstName);
+        var needsBirthYear = user.BirthYear is null && birthYear is not null;
+
+        if (needsName || needsBirthYear)
+        {
+            if (needsName)
+            {
+                user.FirstName = firstName;
+                user.LastName  = lastName;
+            }
+            if (needsBirthYear) user.BirthYear = birthYear;
+
+            await userManager.UpdateAsync(user);
         }
 
         // Ensure user is in SuperAdmin role

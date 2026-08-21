@@ -50,7 +50,9 @@ public interface IBenAccountClient
 /// <param name="Reason">Why not, when <paramref name="Available"/> is false.</param>
 public sealed record HandleAvailability(string Handle, bool Available, string? Reason);
 
-public sealed record RegisterAccount(string Email, string Password, string DisplayName, string Handle);
+public sealed record RegisterAccount(
+    string Email, string Password, string DisplayName, string Handle,
+    string FirstName, string LastName);
 
 /// <param name="Field">Which field to point at, when the server could say. Null for a general message.</param>
 public sealed record RegisterOutcome(bool Succeeded, string Message, string? Field);

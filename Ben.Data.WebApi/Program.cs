@@ -178,6 +178,7 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 // nothing on every subsequent start.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
 
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
