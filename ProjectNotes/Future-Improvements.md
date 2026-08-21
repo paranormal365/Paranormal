@@ -6188,3 +6188,48 @@ Fonts is an explicit, documented exception.
 
 **Not in the WASM host.** Checked at Ben's request: `Ben.Wasm.Video` never referenced Fabric, and
 its `index.html` loads no external assets either. Nothing to change there.
+
+---
+
+## 124. The fonts were the last third party on the critical path (SHIPPED 2026-08-21)
+
+Vendoring Fabric (item 114) did **not** stop the intermittent Playwright timeouts. The full suite
+still lost 3 of 319 to the exact symptom item 114 had blamed on Fabric:
+`navigating to /login, waiting until "load"` at 30s. All 3 passed in isolation and in the previous
+run, so they were flakes — but flakes with a cause.
+
+Two `@import url(https://fonts.googleapis.com/...)` statements were left, buried **inside**
+stylesheets rather than in the shell:
+
+- `css/smartapp.min.css` → Public Sans (body font, 6 faces)
+- `app.css` → Irish Grover (logo face)
+
+Confirmed live rather than assumed: `performance.getEntriesByType('resource')` showed exactly two
+external requests on `/login` and the browser's own `renderBlockingStatus` reported **both as
+`blocking`**. Worse than a tag in the head, because the browser cannot discover an `@import` until
+it has already fetched and parsed the stylesheet containing it — a serial chain on every
+navigation, in a fresh context with no cache, ~319 times a run.
+
+### What shipped
+
+All 7 woff2 files self-hosted under `wwwroot/fonts/` with `fonts.css` carrying Google's own
+`@font-face` blocks verbatim, URLs rewritten to local paths. Every unicode subset kept — dropping
+`latin-ext` or `vietnamese` would silently break accented characters rather than fail loudly.
+`font-display: swap` preserved, so a slow font can never block content. 148 KB total.
+
+**No CSS rule was altered** — only the two `@import` lines. The `font-family:"Public Sans"` rule on
+`:root` is present exactly once before and after, and the page renders identically.
+
+Measured on `/login`: **2 external requests → 0**, and the load event **282ms → 59ms**.
+
+### The guard was sheltering the bug
+
+`NoExternalAssetsInShellTests` originally allow-listed `fonts.googleapis.com` on the reasoning that
+self-hosting fonts is a separate decision. That allowance was hiding the actual remaining cause.
+The list is now empty, and a second test scans every stylesheet under `wwwroot/` for `@import`
+from another host — the place the fonts were actually hiding, which a scan of `App.razor` could
+never have found.
+
+That second test strips CSS comments first: `fonts.css` documents the very `@import` it replaced,
+and a guard that cannot tell a doc comment from a fetch flags the fix as the bug. It did exactly
+that on first run. Both guards verified to fail against a reintroduced import.

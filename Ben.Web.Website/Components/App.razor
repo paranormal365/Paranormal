@@ -14,6 +14,12 @@
          since a wrongly-fetched stylesheet's own relative @imports inherit its wrong base too).
          The template ships these paths relative; they are rewritten here for that reason. -->
 
+    <!-- Self-hosted web fonts, first so the faces are declared before anything asks for them.
+         These were @import'd from fonts.googleapis.com inside smartapp.min.css and app.css: two
+         render-blocking fetches to a third party on every navigation, at the end of a serial
+         chain (stylesheet → @import → font file). See wwwroot/fonts/fonts.css. -->
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+
     <!-- Bootstrap 5.3.8 is compiled INTO smartapp.min.css — do not also load it from a CDN,
          two copies fight over the same cascade. -->
     <link rel="stylesheet" href="/css/smartapp.min.css" />
