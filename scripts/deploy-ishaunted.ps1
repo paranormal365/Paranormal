@@ -572,13 +572,14 @@ if (($Apps -contains 'files') -and -not $StageOnly) {
     Write-Step 'Sidecar downloads'
     $sidecarRoot = Join-Path $FilesRoot 'sidecar-video'
     foreach ($rid in $SidecarRids) {
-        # macOS ships a disk image, Windows a zip, and the difference is about what the person on
-        # the other end has to do. A Mac zip meant unzip it, open Terminal, run a script - three
-        # steps and a terminal, to install something whose whole job is to be invisible. Opening a
-        # .dmg and right-clicking one installer is as close to ordinary as an unsigned build gets.
+        # Both platforms now ship something you double-click: a disk image on macOS, an Inno Setup
+        # installer on Windows. The zip they replaced meant extract it, find a script, and run it
+        # past an execution policy or a Terminal prompt - three steps and a command line, to
+        # install something whose whole job is to be invisible.
         #
-        # Both are still accepted here: the .dmg wins when present so a stale zip left in dist/
-        # cannot quietly outrank a fresh image, and a RID with only a zip keeps working unchanged.
+        # The zip is still accepted for either RID, and always loses. That ordering is the point:
+        # a stale zip left in dist/ cannot quietly outrank a freshly built installer, while a RID
+        # that only ever produced a zip keeps working unchanged.
         # Windows gets the same treatment for the same reason: the zip meant extract it, find
         # install.ps1, right-click it and get past the execution policy. A double-click installer
         # is what that should have been. The .exe wins over the zip exactly as the .dmg does, so a
@@ -597,7 +598,13 @@ if (($Apps -contains 'files') -and -not $StageOnly) {
 
         if (-not $name) {
             Write-Warn "No installer for $rid in $SidecarDrop - the downloads page will 404 that link."
-            Write-Detail 'Build it: Ben.Video.Sidecar/installer/macos/build.sh + build-dmg.sh, or installer/windows/build.ps1'
+            # Named exactly, because this is the one message somebody reads at the moment their
+            # installer is missing. Windows is two steps and they are not interchangeable: build.sh
+            # produces the app payload (it cross-publishes, so it can run anywhere), and
+            # build-installer.ps1 wraps that payload with Inno Setup and only runs on Windows.
+            Write-Detail 'Build it. macOS: installer/macos/build.sh then build-dmg.sh.'
+            Write-Detail '           Windows: installer/windows/build.sh for the payload, then'
+            Write-Detail '           installer/windows/build-installer.ps1 on Windows for the .exe.'
             continue
         }
 
