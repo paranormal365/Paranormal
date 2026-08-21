@@ -577,8 +577,8 @@
         await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
 
         _permissionRecords = [..permsTask.Result];
-        var groups  = groupsTask.Result;
-        var members = membersTask.Result;
+        var groups  = groupsTask.Result.Items;
+        var members = membersTask.Result.Items;
         var users   = usersTask.Result;
 
         _groupOptions = groups.Select(g => new GroupPermOption(g.Id, g.Name)).ToList();

@@ -94,9 +94,9 @@
         _loading = true;
         try
         {
-            _result   = await AdminClient.LoadOrganizationMembersAsync(OrgId);
+            _result   = await AdminClient.GetOrganizationMembersAsync(OrgId);
             _members  = _result.Items;
-            var orgs  = await AdminClient.GetOrganizationsAsync();
+            var orgs  = (await AdminClient.GetOrganizationsAsync()).Items;
 
             // Still falls back to the id when the name genuinely cannot be resolved — a member of
             // one group opening another group's address gets no org record, and a bare GUID is at

@@ -539,7 +539,7 @@
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
             // Loaded once with the calendar, not per dialog open — the list is short and rarely
             // changes, and fetching it while a dialog is opening is a visible stutter.
-            _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+            _addresses = (await AdminClient.GetOrgAddressesAsync(OrgId)).Items;
             _members = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
             await LoadEventsAsync();
         }

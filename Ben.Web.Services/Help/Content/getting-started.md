@@ -173,9 +173,26 @@ The message says which of these it is, because the answer is different every tim
 | Confirm your email address first | Open the link we emailed you when you signed up. |
 | This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
 | Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
+| Couldn't reach the sign-in service | Nothing is wrong with your password — it was never checked. The site could not reach the service behind it. Try again shortly. |
 
 If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
 simply the second step.
+
+## Empty, or broken?
+
+A list that shows nothing is telling you one of two different things, and the page says which.
+
+**"Nothing here yet"**, or a sentence like *"This group hasn't shared any files yet"*, is an
+answer. The list really is empty. Nothing is wrong, and there is nothing to retry.
+
+**"Couldn't load this"**, in a bordered box with a **Try again** button, means the page could not
+fetch the list at all. What you were looking for is still there — the site could not reach it, or
+was not allowed to. Try again first. If it keeps happening, the box usually names the reason, and
+quoting that on the contact form saves a great deal of guessing.
+
+The difference matters because these used to look identical: anything that failed to load simply
+showed an empty list, so the site would tell you your group had no members when it had four and
+had merely refused to say so.
 
 ## Notifications
 

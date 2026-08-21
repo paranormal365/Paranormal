@@ -394,11 +394,8 @@ public sealed partial class BenAdminClientAdapter
     /// The page this feeds rendered blank on the ishaunted.com deployment with no error anywhere,
     /// because a refused call and an empty list were the same value (items 120 and 126).
     /// </remarks>
-    public Task<LoadResult<SiteSettingRecord>> LoadSiteSettingsAsync(CancellationToken token = default)
+    public Task<LoadResult<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default)
         => _api.GetListAsync<SiteSettingRecord>("/api/admin/site-settings", token);
-
-    public async Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<SiteSettingRecord>>("/api/admin/site-settings", token) ?? [];
 
     public Task<SiteSettingRecord?> SetSiteSettingAsync(
         string key, SetSiteSettingRequest request, CancellationToken token = default)

@@ -435,8 +435,8 @@
             await SaveDraftSilent();
             // Load nearby orgs using the geocoded coordinates
             if (_lat.HasValue && _lon.HasValue)
-                _orgs = (await AdminClient.SearchOrganizationsAsync(
-                    (double)_lat.Value, (double)_lon.Value)).ToList();
+                _orgs = ((await AdminClient.SearchOrganizationsAsync(
+                    (double)_lat.Value, (double)_lon.Value)).Items).ToList();
             else
                 _orgs = [];
             _step = 4;

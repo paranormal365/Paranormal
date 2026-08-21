@@ -225,11 +225,11 @@ else
     }
 
     private async Task LoadAddressesAsync()
-        => _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+        => _addresses = (await AdminClient.GetOrgAddressesAsync(OrgId)).Items;
 
     private async Task LoadAddressTypesAsync()
     {
-        var types = await AdminClient.GetOrgAddressTypesAsync();
+        var types = (await AdminClient.GetOrgAddressTypesAsync()).Items;
         _addressTypes = types.Where(t => t.IsActive)
                              .OrderBy(t => t.SortOrder)
                              .Select(t => new AddressTypeOption(t.Id, t.Name))
@@ -241,12 +241,12 @@ else
     private async Task LoadMemberAccessAsync()
     {
         if (_editId is null) { _memberAccessList = []; return; }
-        _memberAccessList = await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value);
+        _memberAccessList = (await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value)).Items;
     }
 
     private async Task LoadOrgMembersAsync()
     {
-        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
         _orgMembers = members.Select(m => new OrgMemberOption(m.MembershipId, $"{m.Role} — {m.AppUserId.ToString()[..8]}…")).ToList();
     }
 

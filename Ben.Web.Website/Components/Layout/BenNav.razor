@@ -362,7 +362,7 @@
         try
         {
             // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
-            _organizationCount = (await AdminClient.GetOrganizationsAsync()).Count;
+            _organizationCount = (await AdminClient.GetOrganizationsAsync()).Items.Count;
 
             // SuperAdmin only, because only they are shown the Users entry this badges.
             //

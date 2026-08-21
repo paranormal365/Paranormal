@@ -13,6 +13,11 @@ Visible to app administrators only.
 **Administration → Dashboard** is the overview the rest of this menu drills into: four headline
 numbers over a grid of charts, with a 7 / 30 / 90-day range picker.
 
+The first three headline cards are links — **People** opens the user list, **In a group** the
+groups, **Cases** the case list — because the number is usually the start of a question the list
+answers. *Signed in this week* deliberately is not: there is no page listing recent sign-ins, and a
+card that sent you somewhere approximate would be worse than one that stays put.
+
 The numbers worth knowing how to read:
 
 - **People** and **In a group** — the second is the funnel. Someone who registers and never joins
@@ -22,8 +27,10 @@ The numbers worth knowing how to read:
   attempt count. Someone signing in from a laptop and a phone is one person, two sign-ins.
 - **Busiest groups** counts cases and investigations started inside the chosen range, so it moves
   with the range picker. **Largest groups** counts active membership and does not.
-- The three **by state** charts come from addresses already on record: people from their profile
-  addresses, cases from the address the case is about, investigations from the place visited.
+- **Where this is happening** has a People / Cases / Investigations toggle, and all three come from
+  addresses already on record: people from their profile addresses, cases from the address the case
+  is about, investigations from the place visited. Expect People to lag the other two — it counts
+  only those who have filled in an address, which most people have not.
 
 ### What the dashboard cannot tell you
 

@@ -63,7 +63,13 @@ else
         </div>
     }
 
-    <TelerikGrid Data="@_roles" Pageable="false" Sortable="true" Class="mb-3">
+    @* Three states, not two. An empty list said "No records available" in Telerik's voice, which
+       reads as a system message rather than an answer; a refused one said the same thing while
+       meaning something entirely different. Item 120. *@
+    <BenListState TItem="OrganizationRoleRecord" Result="@_rolesResult" Loading="false"
+                  EmptyText="This group hasn't defined any roles yet."
+                  OnRetry="@LoadAsync">
+    <TelerikGrid Data="@_rolesResult.Items" Pageable="false" Sortable="true" Class="mb-3">
         <GridColumns>
             <GridColumn Field="@nameof(OrganizationRoleRecord.Name)" Title="Name" />
             <GridColumn Field="@nameof(OrganizationRoleRecord.Description)" Title="Description" />
@@ -93,6 +99,7 @@ else
             </GridColumn>
         </GridColumns>
     </TelerikGrid>
+    </BenListState>
 
     @if (_editingRole is not null)
     {
@@ -124,7 +131,7 @@ else
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
-    private IReadOnlyList<OrganizationRoleRecord> _roles = [];
+    private LoadResult<OrganizationRoleRecord> _rolesResult;
     private bool    _loading       = true;
     private bool    _isSaving;
     private string? _errorMessage;
@@ -157,7 +164,10 @@ else
         StateHasChanged();
         try
         {
-            _roles = await AdminClient.GetOrgRolesAsync(OrgId);
+            // A refused fetch used to leave the list empty and the page silent, which reads as
+            // "this group has no roles" — the opposite of what a 403 means. The catch below never
+            // fired for it, because nothing threw. Item 120.
+            _rolesResult = await AdminClient.GetOrgRolesAsync(OrgId);
         }
         catch
         {
