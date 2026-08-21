@@ -5657,7 +5657,7 @@ codes. Do not read item 112 as "2FA does not work"; read it as "the enrolment pa
 
 ---
 
-## 114. Every page waits on a CDN for fabric.js (raised 2026-08-20)
+## 114. Every page waits on a CDN for fabric.js (CLOSED 2026-08-21)
 
 `App.razor` loads Fabric from an external CDN on **every page of the site**:
 
@@ -6149,3 +6149,42 @@ Guarded by `ImagesUseThumbnailsTests`, which fails on any `src=` bound to `GetFi
 and, in a second test, on the thumbnail helper falling out of use entirely.
 
 `<a href>` download links are untouched: that is somebody asking for the file.
+
+### Closed 2026-08-21 — and the image editor turned out to be dead
+
+Fabric is vendored at `Ben.Web.Website/wwwroot/plugins/fabric/` with its licence and a VENDORED.md,
+the CDN tag is gone from `App.razor`, and **the shell now loads nothing from a third party at all**
+(verified in a browser: `externalScripts: []` on the sign-in page).
+
+**The premise was wrong in our favour, then worse.** The item said Fabric was "only needed by the
+image editor". In fact nothing in the live solution referenced it — the only other match in the
+repo was the word *fabricated* in a comment. The reason: `image-editor.js` had only ever lived at
+`Ben.Web.WebApp/wwwroot/js/image-editor.js`, and commit `1762dfc` deleted that project. The
+component was ported to the new site; **its JavaScript module was left behind.**
+
+So `ImageEditorPlayer.razor` — still rendered by `OrganizationFiles`, `CaseTimeline` and
+`AdminUserDetail` — has been importing a 404 ever since. Confirmed live: `/js/image-editor.js`
+returned 404 while its sibling `/js/geolocation.js` returned 200. The image editor was not slow or
+partly broken; it could not start.
+
+Recovered the module from `1762dfc^` into `Ben.Web.Website/wwwroot/js/`, and fixed a second latent
+bug in it while there: every filter went through `fabric.Image.filters.*`, the **v5** path, which
+is undefined in v6 and v7 alike — 7 call sites that would have thrown. Filters live at
+`fabric.filters.*`.
+
+**Updated to the latest, 7.4.0, at Ben's request.** The API surface was checked in a real browser
+rather than by grepping a minified bundle (an earlier grep gave a confident false negative on every
+class): all nine classes the module uses are present, and all six filter classes resolve under
+`fabric.filters`. The old tag was `fabric@6` — a *floating* major that could change under the site
+without a commit; the vendored copy is pinned and sha-verified.
+
+**Loading moved to where it is used.** `image-editor.js` injects the script itself, once, on first
+`init()`, with the in-flight promise cached so two editors opening together share one fetch.
+Measured end to end: module imports in 6ms, `window.fabric` is `undefined` until `init`, then
+7.4.0 loads and a canvas is created in 32ms, with filters reachable.
+
+Guarded by `NoExternalAssetsInShellTests`, verified to fail when the CDN tag is put back. Google
+Fonts is an explicit, documented exception.
+
+**Not in the WASM host.** Checked at Ben's request: `Ben.Wasm.Video` never referenced Fabric, and
+its `index.html` loads no external assets either. Nothing to change there.

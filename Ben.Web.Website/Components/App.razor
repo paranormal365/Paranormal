@@ -47,7 +47,10 @@
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
     <script src="/_content/Ben.Video.Editor/js/moduleLoader.js"></script>
     <script src="/_content/Ben.Video.Editor/js/ffmpeg.umd.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/fabric@@6/dist/index.min.js" defer></script>
+    @* Fabric is NOT loaded here. It is a 300KB library used only by the image editor, and a
+       tag in this shell made every page — sign-in, the public microsite, every case screen —
+       fetch it from a third-party CDN before `load` fired. wwwroot/js/image-editor.js now
+       loads it from wwwroot/plugins/fabric/ on demand. See VENDORED.md there, and item 114. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
     @* …then the map onto this template's palette. telerik-night.css above covers the Kendo
        variables the widgets use; this covers the editor's own --bv-* family and the handful of
