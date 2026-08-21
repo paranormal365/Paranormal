@@ -163,7 +163,7 @@
         try
         {
             _transfers = (await AdminClient.GetCaseTransfersAsync(OrgId, CaseId)).ToList();
-            var allOrgs = await AdminClient.GetOrganizationsAsync();
+            var allOrgs = (await AdminClient.GetOrganizationsAsync()).Items;
             _otherOrgs = allOrgs
                 .Where(o => o.Id != OrgId)
                 .Select(o => new OrgOption(o.Id, o.Name))

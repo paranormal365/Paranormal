@@ -13,13 +13,13 @@
 
     <AdminPageHeader Title="All Cases" Subtitle="Every case across every organization." />
 
-    @if (_cases is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading cases…" />
-    }
-    else
-    {
-        <TelerikGrid Data="@_cases"
+    @* A refused cross-org list used to render as an empty grid — the same untruth that left
+       both admin pages blank on the deployment for a day (items 120, 126). *@
+    <BenListState TItem="AdminCaseSummaryRecord" Result="@_cases" Loading="@_loading"
+                  LoadingText="Loading cases…"
+                  EmptyText="No cases anywhere yet."
+                  OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_cases.Items"
                      TItem="AdminCaseSummaryRecord"
                      Sortable="true"
                      FilterMode="@GridFilterMode.FilterRow"
@@ -49,11 +49,12 @@
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
-    }
+    </BenListState>
 </div>
 
 @code {
-    private IReadOnlyList<AdminCaseSummaryRecord>? _cases;
+    private LoadResult<AdminCaseSummaryRecord> _cases;
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -66,7 +67,15 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
         _cases = await AdminClient.GetAllCasesAsync();
+        _loading = false;
         StateHasChanged();
     }
 

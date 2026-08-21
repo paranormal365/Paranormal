@@ -616,7 +616,7 @@ else
         // Build org-name lookup for the Memberships tab
         try
         {
-            var orgs = await AdminClient.GetOrganizationsAsync();
+            var orgs = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgNames = orgs.ToDictionary(o => o.Id, o => o.Name);
         }
         catch { /* non-critical — memberships tab falls back to ID */ }

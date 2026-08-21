@@ -153,7 +153,7 @@
             // LoadSiteSettings, not GetSiteSettings: the old call turned any refusal into an empty
             // list, so this page rendered blank on the ishaunted.com deploy with no error anywhere
             // — the catch below never fired, because nothing threw (items 120 and 126).
-            var result = await AdminClient.LoadSiteSettingsAsync();
+            var result = await AdminClient.GetSiteSettingsAsync();
 
             if (result.Failed)
             {

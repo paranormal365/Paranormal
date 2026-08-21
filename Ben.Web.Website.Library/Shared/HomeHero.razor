@@ -240,8 +240,18 @@
 
         // Fetch one extra to detect whether there are more results than we show
         var all      = await AdminClient.SearchOrganizationsAsync((double)geo.Latitude, (double)geo.Longitude, maxResults: 7);
-        _hasMore     = all.Count > 6;
-        _results     = all.Take(6).ToList();
+
+        // The front page, signed out: the audience least able to tell a broken search from a part
+        // of the country with no groups in it. Item 120.
+        if (all.Failed)
+        {
+            _geocodeError = all.Reason ?? "The search could not be run just now. Please try again.";
+            _searching    = false;
+            return;
+        }
+
+        _hasMore     = all.Items.Count > 6;
+        _results     = all.Items.Take(6).ToList();
         _searchedQuery = _query.Trim();
         _searched    = true;
         _searching   = false;

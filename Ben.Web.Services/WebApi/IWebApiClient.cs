@@ -71,6 +71,16 @@ public interface IWebApiClient
     /// </remarks>
     Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default);
 
+    /// <summary>
+    /// The same as <see cref="GetListAsync{T}"/> for an endpoint that takes no bearer token.
+    /// </summary>
+    /// <remarks>
+    /// Public pages need to distinguish "refused" from "empty" more than signed-in ones do, not
+    /// less: a visitor who sees an empty group has no account, no error and no way to tell the
+    /// difference.
+    /// </remarks>
+    Task<LoadResult<T>> GetAnonymousListAsync<T>(string relativeUrl, CancellationToken token = default);
+
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
 
     /// <summary>

@@ -506,7 +506,7 @@
     protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
-        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
         _orgMembers = members.ToList();
     }
 

@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (FOUNDATION SHIPPED 2026-08-20)
+## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization area converted 2026-08-21)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -6449,3 +6449,44 @@ and the stored spec, so a created chart and a re-themed one cannot drift apart.
 - **Nobody has an address.** "People by state" counts 1 of 97 because **no seeder writes
   `UserAddress` rows** — that bar is Ben's own record. The panel is honest and useless until
   either the seeder populates addresses or real users do. A data decision, not a chart fix.
+
+---
+
+### 2026-08-21 — the organization area, and a ratchet so it cannot regrow
+
+**The decision: replace, do not parallel.** The three methods converted on 08-20 were added
+*beside* their originals as `LoadXAsync`, leaving `GetXAsync` in place. A day later two of those
+originals — `GetOrgFilesAsync` and `GetSiteSettingsAsync` — had **zero callers**: the parallel
+approach had produced dead code within a day, while doubling the interface and leaving every old
+method sitting there as the trap it already was. Converting the return type instead means the
+compiler names every consumer, and there is one way to call each thing. Nothing has shipped, so
+this is the cheapest it will ever be.
+
+**A ratchet, because a ban is unmergeable.** 120 swallow sites, each needing its consumers changed
+with it, cannot land as one change. `SwallowedFailureRatchetTests` asserts the count is both at
+most and exactly the ceiling: it can only ever fall, and leaving the ceiling slack is itself a
+failure. Verified to discriminate by adding one and watching both assertions fail. **120 → 101.**
+
+**Converted:** the whole organization area — 17 methods and 32 files. `GetAnonymousListAsync` was
+added so public endpoints report failure too; a visitor refused a public list has no account, no
+error and no reason to try again, which makes anonymous surfaces the ones that need this most, not
+least.
+
+**Where the difference is now on screen** — rather than only in the type: the groups list, all
+cases, all investigations, site roles, group roles, public events, org discovery, and the front
+page's own search. Supporting fetches — dropdown options, name lookups, permission maps — take
+`.Items`, because a page makes no "nothing here" claim about them.
+
+**A test that was defending the bug.** `SearchOrganizationsAsync_WhenApiReturnsNull_ReturnsEmpty`
+asserted exactly the behaviour item 120 exists to end, and passed. It now asserts the opposite.
+Worth remembering that a green suite was part of how this survived.
+
+**Found and NOT fixed, deliberately:** `OrganizationView` decides `_isMember` and `_canEdit` from
+whether the org appears in the list it fetched, so a *failed* fetch silently demotes a member to a
+non-member and hides what they may do. Unchanged by this pass — an empty list did the same — but
+it is the same bug wearing a permissions hat, and it should be fixed with the rest of that page's
+conversion rather than bolted on mid-verification.
+
+**Still open: 101 sites** across equipment, case, platform, user, investigation, cms, places,
+media, publications, membership and feed. Same recipe each time; the ratchet stops the number
+growing while the work continues.

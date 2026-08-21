@@ -33,14 +33,12 @@
     </div>
 
     @* ── Grid ── *@
-    @if (_roles is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading roles…" />
-    }
-    else
-    {
+    <BenListState TItem="AdminRoleWithCountResponse" Result="@_roles" Loading="@_loadingRoles"
+                  LoadingText="Loading roles…"
+                  EmptyText="No roles are defined yet."
+                  OnRetry="@LoadRoles">
         <div style="max-width:640px">
-        <TelerikGrid Data="@_roles"
+        <TelerikGrid Data="@_roles.Items"
                      TItem="AdminRoleWithCountResponse"
                      Sortable="true"
                      Class="admin-roles-grid">
@@ -60,7 +58,7 @@
             </GridColumns>
         </TelerikGrid>
         </div>
-    }
+    </BenListState>
 </div>
 
 @* ── Delete Confirmation ── *@
@@ -81,7 +79,8 @@
 </BenConfirmDialog>
 
 @code {
-    private IReadOnlyList<AdminRoleWithCountResponse>? _roles;
+    private LoadResult<AdminRoleWithCountResponse> _roles;
+    private bool _loadingRoles = true;
     private string _newRoleName = string.Empty;
     private bool _isSaving;
     private string? _errorMessage;
@@ -109,7 +108,9 @@
 
     private async Task LoadRoles()
     {
+        _loadingRoles = true;
         _roles = await AdminClient.GetRolesAsync();
+        _loadingRoles = false;
     }
 
     private async Task CreateRole()

@@ -19,10 +19,10 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Organizations ─────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default)
+    public async Task<LoadResult<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationListItemResponse>>("/api/organizations", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationListItemResponse>("/api/organizations", token);
+        return result;
     }
 
     public Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default)
@@ -39,10 +39,10 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Roles ─────────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default)
+    public async Task<LoadResult<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<AdminRoleWithCountResponse>>("/api/admin/roles", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<AdminRoleWithCountResponse>("/api/admin/roles", token);
+        return result;
     }
 
     public Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default)
@@ -53,18 +53,18 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
 
-    public async Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<AdminCaseSummaryRecord>>("/api/admin/cases", token) ?? [];
+    public async Task<LoadResult<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default)
+        => await _api.GetListAsync<AdminCaseSummaryRecord>("/api/admin/cases", token);
 
-    public async Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<AdminInvestigationSummaryRecord>>("/api/admin/investigations", token) ?? [];
+    public async Task<LoadResult<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default)
+        => await _api.GetListAsync<AdminInvestigationSummaryRecord>("/api/admin/investigations", token);
 
     // ── Organization Logos ────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationLogoRecord>>($"/api/organizations/{orgId}/logos", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationLogoRecord>($"/api/organizations/{orgId}/logos", token);
+        return result;
     }
 
     public Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default)
@@ -91,11 +91,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.PutVoidAsync($"/api/organizations/{orgId}/area-of-operation/acceptance",
                new { IsAcceptingClients = isAcceptingClients, AcceptsClientsOutsideRange = acceptsClientsOutsideRange }, token);
 
-    public async Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default)
+    public async Task<LoadResult<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default)
     {
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<OrgSearchResult>>(
+        var result = await _api.GetAnonymousListAsync<OrgSearchResult>(
             $"/api/public/organizations/search?lat={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&lon={lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&maxResults={maxResults}", token);
-        return result ?? [];
+        return result;
     }
 
     public Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default)
@@ -104,16 +104,16 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Organization Addresses ────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressRecord>>($"/api/organizations/{orgId}/addresses", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationAddressRecord>($"/api/organizations/{orgId}/addresses", token);
+        return result;
     }
 
-    public async Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default)
+    public async Task<LoadResult<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressTypeRecord>>("/api/organization-address-types", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationAddressTypeRecord>("/api/organization-address-types", token);
+        return result;
     }
 
     public Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default)
@@ -161,13 +161,13 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Public events (item #87) ────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<PublicEventListItem>> GetPublicEventsAsync(
+    public async Task<LoadResult<PublicEventListItem>> GetPublicEventsAsync(
         string? orgUrlName = null, int maxResults = 50, CancellationToken token = default)
     {
         var url = $"/api/public/events?maxResults={maxResults}"
                 + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}");
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicEventListItem>>(url, token);
-        return result ?? [];
+        var result = await _api.GetAnonymousListAsync<PublicEventListItem>(url, token);
+        return result;
     }
 
     // Readable by a visitor who has never signed in — but the response also carries the viewer's
@@ -178,10 +178,10 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAsync<PublicEventRecord>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/events/{Uri.EscapeDataString(eventSlug)}", token);
 
-    public async Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default)
+    public async Task<LoadResult<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<PublicEventListItem>>("/api/public/events/mine", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<PublicEventListItem>("/api/public/events/mine", token);
+        return result;
     }
 
     public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
@@ -239,7 +239,7 @@ public sealed partial class BenAdminClientAdapter
     /// The second surface where a refusal rendered as an empty list — the Members tab told an
     /// ordinary member their group had nobody in it while Details counted three (items 119, 122).
     /// </remarks>
-    public async Task<LoadResult<OrgMembershipItem>> LoadOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
     {
         var result = await _api.GetListAsync<OrganizationUserMembershipResponse>($"/api/organizations/{orgId}/roster", token);
         if (result.Failed) return LoadResult<OrgMembershipItem>.Failure(result.Reason);
@@ -249,25 +249,13 @@ public sealed partial class BenAdminClientAdapter
             .ToList());
     }
 
-    public async Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetOrganizationUsersAsync(orgId, token);
-        return result.Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName)).ToList();
-    }
-
-    public async Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMemberGroupRecord>>($"/api/organizations/{orgId}/groups", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrgMemberGroupRecord>($"/api/organizations/{orgId}/groups", token);
+        return result;
     }
 
     // ── Organization Files ────────────────────────────────────────────────────
-
-    public async Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationFileRecord>>($"/api/organizations/{orgId}/files", token);
-        return result ?? [];
-    }
 
     /// <summary>
     /// The group's files, saying so when the list could not be fetched.
@@ -279,13 +267,13 @@ public sealed partial class BenAdminClientAdapter
     /// honest answer. Other callers move over as they are touched; see item 120 for why this is
     /// not one 136-site rewrite.
     /// </remarks>
-    public Task<LoadResult<OrganizationFileRecord>> LoadOrgFilesAsync(Guid orgId, CancellationToken token = default)
+    public Task<LoadResult<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<OrganizationFileRecord>($"/api/organizations/{orgId}/files", token);
 
-    public async Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationFileDeleteLogRecord>>($"/api/organizations/{orgId}/files/delete-log", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationFileDeleteLogRecord>($"/api/organizations/{orgId}/files/delete-log", token);
+        return result;
     }
 
     public Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default)
@@ -322,10 +310,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/groups/{groupId}", token);
 
-    public async Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default)
+    public async Task<LoadResult<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMemberGroupMembershipRecord>>($"/api/organizations/{orgId}/groups/{groupId}/members", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrgMemberGroupMembershipRecord>($"/api/organizations/{orgId}/groups/{groupId}/members", token);
+        return result;
     }
 
     public Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default)
@@ -337,10 +325,10 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Organization Roles ────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationRoleRecord>>($"/api/organizations/{orgId}/roles", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationRoleRecord>($"/api/organizations/{orgId}/roles", token);
+        return result;
     }
 
     public Task<OrganizationRoleRecord?> GetOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default)
@@ -355,19 +343,19 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}", token);
 
-    public async Task<IReadOnlyList<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationRolePermissionRecord>>($"/api/organizations/{orgId}/roles/{roleId}/permissions", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationRolePermissionRecord>($"/api/organizations/{orgId}/roles/{roleId}/permissions", token);
+        return result;
     }
 
     public Task<bool> SetOrgRolePermissionsAsync(Guid orgId, Guid roleId, IEnumerable<SetRolePermissionRequest> permissions, CancellationToken token = default)
         => _api.PutVoidAsync($"/api/organizations/{orgId}/roles/{roleId}/permissions", permissions, token);
 
-    public async Task<IReadOnlyList<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationRoleMembershipRecord>>($"/api/organizations/{orgId}/roles/{roleId}/members", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationRoleMembershipRecord>($"/api/organizations/{orgId}/roles/{roleId}/members", token);
+        return result;
     }
 
     public Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default)
@@ -378,10 +366,10 @@ public sealed partial class BenAdminClientAdapter
         => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
 
     // ── Org address member access ──────────────────────────────────────────────
-    public async Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default)
+    public async Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressMemberAccessRecord>>($"/api/organizations/{orgId}/addresses/{addressId}/member-access", token);
-        return result ?? [];
+        var result = await _api.GetListAsync<OrganizationAddressMemberAccessRecord>($"/api/organizations/{orgId}/addresses/{addressId}/member-access", token);
+        return result;
     }
     public Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default)
         => _api.PostAsync<AddAddressMemberAccessRequest, OrganizationAddressMemberAccessRecord>($"/api/organizations/{orgId}/addresses/{addressId}/member-access", new(orgUserMembershipId), token);

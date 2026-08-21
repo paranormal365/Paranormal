@@ -32,13 +32,13 @@
         <div class="alert alert-success mb-3">@_successMessage</div>
     }
 
-    @if (_orgs is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading organizations…" />
-    }
-    else
-    {
-        <TelerikGrid Data="@_orgs"
+    @* A refused list used to render as an empty grid, telling a signed-in member there are no
+       groups on the site at all. Item 120. *@
+    <BenListState TItem="OrganizationListItemResponse" Result="@_orgs" Loading="@_loadingOrgs"
+                  LoadingText="Loading organizations…"
+                  EmptyText="No groups have been created yet."
+                  OnRetry="@LoadOrgs">
+        <TelerikGrid Data="@_orgs.Items"
                      TItem="OrganizationListItemResponse"
                      Pageable="true"
                      PageSize="25"
@@ -100,7 +100,7 @@
                 </GridColumn>
             </GridColumns>
         </TelerikGrid>
-    }
+    </BenListState>
 </div>
 
 @* ── Delete Confirmation ── *@
@@ -118,7 +118,8 @@
 </BenConfirmDialog>
 
 @code {
-    private IReadOnlyList<OrganizationListItemResponse>? _orgs;
+    private LoadResult<OrganizationListItemResponse> _orgs;
+    private bool _loadingOrgs = true;
     private string? _errorMessage;
     private string? _successMessage;
     private bool _isBusy;
@@ -148,7 +149,11 @@
     }
 
     private async Task LoadOrgs()
-        => _orgs = await AdminClient.GetOrganizationsAsync();
+    {
+        _loadingOrgs = true;
+        _orgs = await AdminClient.GetOrganizationsAsync();
+        _loadingOrgs = false;
+    }
 
     private void RequestDelete(OrganizationListItemResponse org)
     {

@@ -40,9 +40,27 @@ public sealed class WebApiClient : IWebApiClient
     }
 
     /// <inheritdoc />
-    public async Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default)
+    public Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default)
+        => SendListAsync<T>(Auth(HttpMethod.Get, relativeUrl), token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<T>> GetAnonymousListAsync<T>(string relativeUrl, CancellationToken token = default)
+        => SendListAsync<T>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+
+    /// <summary>
+    /// The body both list fetches share. One implementation on purpose: the authenticated and
+    /// anonymous paths differ by a single header, and the whole value of <see cref="LoadResult{T}"/>
+    /// is that failure is reported identically wherever it happens.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous surfaces need this as much as signed-in ones. A public group page whose fetch is
+    /// refused shows a visitor an organisation with nothing in it, and the visitor has no account,
+    /// no error and no reason to try again — the one audience least able to tell a broken page from
+    /// an empty one.
+    /// </remarks>
+    private async Task<LoadResult<T>> SendListAsync<T>(HttpRequestMessage request, CancellationToken token)
     {
-        using var req = Auth(HttpMethod.Get, relativeUrl);
+        using var req = request;
 
         HttpResponseMessage response;
         try

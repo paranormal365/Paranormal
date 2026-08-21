@@ -378,14 +378,15 @@
         _loading = true;
         try
         {
-            // LoadOrgFiles, not GetOrgFiles: this is the tab where a 403 rendered as "the group
-            // has no files" to every ordinary member (item 119). The grid below is wrapped in
-            // BenListState so the difference is on screen rather than only in the type.
-            _filesResult = await AdminClient.LoadOrgFilesAsync(OrgId);
+            // This is the tab where a 403 rendered as "the group has no files" to every ordinary
+            // member (item 119). GetOrgFilesAsync returns the outcome rather than a bare list, and
+            // the grid below is wrapped in BenListState so the difference is on screen rather than
+            // only in the type.
+            _filesResult = await AdminClient.GetOrgFilesAsync(OrgId);
             _files      = _filesResult.Items.ToList();
-            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).ToList();
+            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).Items.ToList();
             _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
-            var orgs    = await AdminClient.GetOrganizationsAsync();
+            var orgs    = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
         }
         catch (Exception ex) { _error = ex.Message; }

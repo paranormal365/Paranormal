@@ -201,8 +201,8 @@
             var alreadyApplied = (await AdminClient.GetClientRequestOrgsAsync(request.Id))
                 .Select(a => a.OrganizationId)
                 .ToHashSet();
-            var results = await AdminClient.SearchOrganizationsAsync(
-                (double)request.Latitude.Value, (double)request.Longitude.Value);
+            var results = (await AdminClient.SearchOrganizationsAsync(
+                (double)request.Latitude.Value, (double)request.Longitude.Value)).Items;
             _pickerOrgs = results.Where(o => !alreadyApplied.Contains(o.OrganizationId)).ToList();
         }
         catch

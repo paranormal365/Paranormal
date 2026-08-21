@@ -24,27 +24,27 @@
             : "Events this group has opened to anyone.")
     </p>
 
-    @if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading…" />
-    }
-    else if (_events.Count == 0)
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-2">Nothing coming up</h6>
-                <p class="text-secondary small mb-0">
-                    @(UrlName is null
-                        ? "No groups have public events scheduled at the moment. Worth checking back."
-                        : "This group has no public events scheduled at the moment.")
-                </p>
+    @* This page is served to signed-out visitors, which is why the failure state matters more here
+       than anywhere else: somebody who is refused sees "Nothing coming up", has no account, no
+       error and no reason to try again. The empty state is kept verbatim — it says the right thing
+       when it is true. Item 120. *@
+    <BenListState TItem="PublicEventListItem" Result="@_events" Loading="@_loading"
+                  OnRetry="@ReloadAsync">
+        <Empty>
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h6 class="mb-2">Nothing coming up</h6>
+                    <p class="text-secondary small mb-0">
+                        @(UrlName is null
+                            ? "No groups have public events scheduled at the moment. Worth checking back."
+                            : "This group has no public events scheduled at the moment.")
+                    </p>
+                </div>
             </div>
-        </div>
-    }
-    else
-    {
+        </Empty>
+        <ChildContent>
         <div class="row g-3">
-            @foreach (var item in _events)
+            @foreach (var item in _events.Items)
             {
                 <div class="col-md-6">
                     <div class="card h-100">
@@ -96,14 +96,15 @@
                 </div>
             }
         </div>
-    }
+        </ChildContent>
+    </BenListState>
 </div>
 
 @code {
     /// <summary>Null on the site-wide route, set when showing one group's events.</summary>
     [Parameter] public string? UrlName { get; set; }
 
-    private IReadOnlyList<PublicEventListItem> _events = [];
+    private LoadResult<PublicEventListItem> _events;
     private bool _loading = true;
     private string? _loadedFor;
 
@@ -113,8 +114,15 @@
         if (_loadedFor == key) return;
         _loadedFor = key;
 
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
         _loading = true;
+        StateHasChanged();
         _events  = await AdminClient.GetPublicEventsAsync(UrlName);
         _loading = false;
+        StateHasChanged();
     }
 }
