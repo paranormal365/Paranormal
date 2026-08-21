@@ -171,23 +171,47 @@ public sealed class LoadResultTests
     }
 
     /// <summary>
-    /// A ProblemDetails blob or an HTML error page is dropped rather than shown.
+    /// A ProblemDetails blob or an HTML error page is replaced by the status, not shown raw.
     /// </summary>
     /// <remarks>
-    /// Same rule as <c>SendExpectingReasonAsync</c>: showing a person a JSON envelope is worse
-    /// than the generic sentence, and the component falls back to its own wording when Reason is
-    /// null.
+    /// <para>Showing a person a JSON envelope is worse than saying nothing. But saying nothing is
+    /// worse than naming the status: a blank admin page taught nobody anything on the production
+    /// deploy, whereas "the server answered 404" says the path is wrong and "403" says the path is
+    /// right and the caller is not allowed (item 126).</para>
+    ///
+    /// <para>So the assertion is two-sided — the raw body must not leak, and the reason must still
+    /// carry the status.</para>
     /// </remarks>
     [Theory]
     [InlineData("""{"type":"about:blank","status":500}""")]
     [InlineData("<html><body>500 Internal Server Error</body></html>")]
-    public async Task Machine_readable_error_bodies_are_not_shown_to_people(string body)
+    public async Task Machine_readable_error_bodies_are_replaced_by_the_status(string body)
     {
         var client = Client(new StubHandler(HttpStatusCode.InternalServerError, body));
 
         var result = await client.GetListAsync<string>("/api/whatever");
 
         Assert.True(result.Failed);
-        Assert.Null(result.Reason);
+        Assert.DoesNotContain("about:blank", result.Reason ?? "");
+        Assert.DoesNotContain("<html", result.Reason ?? "");
+        Assert.Contains("500", result.Reason ?? "");
+    }
+
+    /// <summary>The status reaches the reader for the two codes that matter most when deploying.</summary>
+    /// <remarks>
+    /// 404 and 403 are the pair that separate "the API is mounted somewhere else" from "the API is
+    /// there and refused you" — the exact question a blank page could not answer.
+    /// </remarks>
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, "404")]
+    [InlineData(HttpStatusCode.Forbidden, "403")]
+    public async Task The_status_code_is_named_in_the_reason(HttpStatusCode status, string expected)
+    {
+        var client = Client(new StubHandler(status, ""));
+
+        var result = await client.GetListAsync<string>("/api/whatever");
+
+        Assert.True(result.Failed);
+        Assert.Contains(expected, result.Reason ?? "");
     }
 }

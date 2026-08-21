@@ -129,6 +129,9 @@ public interface IBenPlatformClient
     /// <summary>Every sitewide setting, including ones never yet given a value.</summary>
     Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default);
 
+    /// <summary>Site settings, distinguishing "could not load" from "there are none".</summary>
+    Task<WebApi.LoadResult<SiteSettingRecord>> LoadSiteSettingsAsync(CancellationToken token = default);
+
     /// <summary>Sets one sitewide setting. An empty value clears it.</summary>
     Task<SiteSettingRecord?> SetSiteSettingAsync(
         string key, SetSiteSettingRequest request, CancellationToken token = default);

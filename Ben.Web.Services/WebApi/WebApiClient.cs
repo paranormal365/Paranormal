@@ -70,7 +70,15 @@ public sealed class WebApiClient : IWebApiClient
                                   && !body.TrimStart().StartsWith('{')
                                   && !body.TrimStart().StartsWith('<');
 
-                return LoadResult<T>.Failure(looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+                // Prose when the server wrote a sentence; otherwise the status itself, which is
+                // the single most useful thing a person debugging a deployment can be told. A
+                // blank page says nothing; "the server answered 404" says the path is wrong and
+                // "403" says the path is right and the caller is not allowed. That distinction
+                // cost a day of guessing on the ishaunted.com deploy (item 126).
+                return LoadResult<T>.Failure(
+                    looksLikeProse
+                        ? body.Trim('"', ' ', '\n')
+                        : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).");
             }
 
             var items = await response.Content.ReadFromJsonAsync<List<T>>(cancellationToken: token);

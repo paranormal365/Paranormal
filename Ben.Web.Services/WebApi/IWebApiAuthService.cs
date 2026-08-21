@@ -34,6 +34,15 @@ public enum LoginFailure
     RateLimited,
 
     /// <summary>
+    /// The sign-in endpoint was never reached, so the credentials were never judged.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="InvalidCredentials"/> on purpose: the fix is a deployment or a
+    /// network, never a password.
+    /// </remarks>
+    Unreachable,
+
+    /// <summary>
     /// The password was right; this account has two-factor authentication switched on and a code
     /// is needed. Not a failure to report as one — the caller should ask for the code.
     /// </summary>
