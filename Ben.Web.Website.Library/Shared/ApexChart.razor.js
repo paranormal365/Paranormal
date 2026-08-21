@@ -137,13 +137,36 @@ function baseOptions(el, spec) {
 
     if (!sparkline) {
         const axisLabels = { style: { colors: p.muted, fontSize: '12px' } }
+        // A 90-day range is 90 categories, and Apex will happily draw all 90 rotated on top of
+        // one another. Thin them to roughly eight readable ticks; the tooltip still names every
+        // individual day, so nothing is lost but the clutter.
+        const categories = spec.categories || []
         options.xaxis = {
-            categories: spec.categories || [],
-            labels: axisLabels,
+            categories,
+            labels: {
+                ...axisLabels,
+                // Horizontal, not angled: once thinned to eight ticks they fit, and rotated
+                // labels get their leading characters clipped by the panel edge — "Jul 23"
+                // rendered as "l 23".
+                rotate: 0,
+                rotateAlways: false,
+                hideOverlappingLabels: true,
+                trim: false,
+            },
+            tickAmount: categories.length > 10 ? 8 : undefined,
             axisBorder: { color: p.border },
             axisTicks: { color: p.border },
         }
-        options.yaxis = { labels: axisLabels }
+        // Every number this dashboard draws is a count of things, and a count has no halves.
+        // Left to itself Apex picks a "nice" scale, so a chart whose tallest bar is 1 gets an
+        // axis reading 0, 0.2, 0.4 — fractional people. Integer ticks, and never more of them
+        // than the largest value can fill.
+        const ceiling = Math.max(0, ...(spec.series || []).flatMap(s => s.data || []))
+        options.yaxis = {
+            labels: { ...axisLabels, formatter: v => Math.round(v).toLocaleString() },
+            min: 0,
+            tickAmount: Math.max(1, Math.min(5, Math.ceil(ceiling))),
+        }
     }
 
     // Donut and pie take a flat number[] plus labels; everything else takes named series.

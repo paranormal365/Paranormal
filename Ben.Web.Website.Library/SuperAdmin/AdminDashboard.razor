@@ -247,9 +247,13 @@
     private static List<ApexChart.ChartSeries> Single(string name, IReadOnlyList<StatSlice> slices)
         => [new(name, Counts(slices))];
 
-    /// <summary>Short day labels — a 90-day axis cannot carry full dates.</summary>
+    /// <summary>
+    /// Short day labels — a 90-day axis cannot carry full dates. Month first, via the shared
+    /// pattern: this read "23 Jul" because the format was written at the call site, which is
+    /// exactly what <see cref="DateTimeViewerExtensions"/> exists to prevent.
+    /// </summary>
     private static List<string> DayLabels(IReadOnlyList<StatPoint> points)
-        => points.Select(p => p.Day.ToString("d MMM")).ToList();
+        => points.Select(p => p.Day.ToChartDay()).ToList();
 
     private List<ApexChart.ChartSeries> ActivitySeries =>
     [

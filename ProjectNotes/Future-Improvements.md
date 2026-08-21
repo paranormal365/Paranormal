@@ -6282,7 +6282,7 @@ tunnel.
 
 ---
 
-## 126. SuperAdmin Site Settings and Dashboard render empty on the server (DIAGNOSABLE 2026-08-21 — cause still unconfirmed)
+## 126. SuperAdmin Site Settings and Dashboard render empty on the server (CLOSED 2026-08-21)
 
 Ben reports both `/admin/site-settings` and `/admin/dashboard` are blank for him as SuperAdmin.
 
@@ -6364,3 +6364,47 @@ it is most costly.
 `LoginAttempt` already carried the status code, so this is a sixth case rather than new plumbing:
 `WasUnreachable` (status 0, 404, or 5xx) maps to `LoginFailure.Unreachable`, and the page says the
 problem is with the site rather than the password.
+
+### 2026-08-21 — cause found: a stale WebApi, not a code fault
+
+Ben refreshed the WebApi on the server and both pages came up. **There was never a bug in the
+code** — the deployed `C:\Ben\WebApi` predated the controllers those two pages call, so the routes
+did not exist and returned 404.
+
+The dates were the tell, and they are worth keeping as a diagnostic habit:
+
+| Controller | Added | Deployed page |
+|---|---|---|
+| `MeController` | 07-16 | worked |
+| `AdminSiteSettingController` | **08-15** | blank |
+| `AdminStatsController` | **08-20** | blank |
+
+Everything failing was recent; everything working was old. Two other facts narrowed it before the
+check: production and development share one database, so the SuperAdmin rows behind the failing
+session were the same rows that work locally — which killed the role-claim theory — and the
+notification badge rendered, proving the token reached the API and was accepted.
+
+**The lesson is about deployment, not code:** the website and the WebApi are published separately,
+so they can drift, and the symptom of drift is a *recent* feature failing while everything older
+works. Worth republishing both together, or stamping a build version the site can compare.
+
+The reporting added earlier in the day is what made this a five-minute diagnosis instead of a
+guess, so it stays.
+
+---
+
+## 128. Admin dashboard: axis defects (SHIPPED 2026-08-21)
+
+Found in Ben's screenshot of the working dashboard.
+
+- **Day-first dates on the chart axis.** `DayLabels` formatted with a hardcoded `"d MMM"`, giving
+  "23 Jul" — day-first, on a site that is month-first everywhere, and written *at the call site*,
+  which is the exact thing `DateTimeViewerExtensions` exists to prevent. Now `ChartDayPattern`
+  (`MMM d`) with `DateTime` and `DateOnly` overloads, pinned by two tests.
+- **Fractional counts on the y-axis.** Left to itself ApexCharts picks a "nice" scale, so "People
+  by state" — tallest bar 1 — drew an axis reading 0, 0.2, 0.4, 0.6, 0.8, 1. Fractional people.
+  Every number this dashboard draws is a count, so the axis is integer-only, floored at zero, with
+  no more ticks than the largest value can fill.
+- **Ninety rotated labels stacked on each other.** Thinned to about eight ticks; the tooltip still
+  names every day. Rotation then had to go too — angled labels were clipped by the panel edge,
+  rendering "Jul 23" as "l 23".
