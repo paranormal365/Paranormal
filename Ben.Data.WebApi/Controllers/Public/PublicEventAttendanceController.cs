@@ -286,7 +286,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             await _email.SendAsync(email,
                 $"Confirm you're coming to {ev.Title}",
                 $"<p>You said you'd like to come to <strong>{safeTitle}</strong> on "
-                + $"{ev.StartDateTime:dddd d MMMM}.</p>"
+                + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
                 + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
                 + "<p>That link is good for two weeks, and only works once. If this wasn't you, "
                 + "nothing happens unless you click it.</p>", ct);

@@ -54,7 +54,7 @@
                             <div class="small text-secondary">
                                 @if (subscription.LatestPostUtc is { } latest)
                                 {
-                                    <span>Latest @latest.ToLocalTime().ToString("d MMM yyyy")</span>
+                                    <span>Latest @latest.ToLocalTime().ToString("MMM d, yyyy")</span>
                                 }
                                 else
                                 {
@@ -97,7 +97,7 @@
                                     @publication.PostCount @(publication.PostCount == 1 ? "post" : "posts")
                                     @if (publication.LatestPostUtc is { } latest)
                                     {
-                                        <span> · latest @latest.ToLocalTime().ToString("d MMM yyyy")</span>
+                                        <span> · latest @latest.ToLocalTime().ToString("MMM d, yyyy")</span>
                                     }
                                 </div>
                             </div>

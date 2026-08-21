@@ -89,7 +89,7 @@ else
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
+                <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label small fw-semibold" for="reportbuilder-executive-summary-66bf">Executive Summary</label>
@@ -154,7 +154,7 @@ else
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_newDeliveryDate" Width="100%" />
+                <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_newDeliveryDate" Width="100%" />
             </div>
         </div>
     </ChildContent>

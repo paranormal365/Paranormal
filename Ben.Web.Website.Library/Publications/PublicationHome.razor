@@ -110,7 +110,7 @@
                     {
                         <li class="pb-4 mb-4 border-bottom">
                             <div class="small text-secondary mb-1">
-                                @post.PublishedUtc.ToLocalTime().ToString("d MMMM yyyy")
+                                @post.PublishedUtc.ToLocalTime().ToString("MMMM d, yyyy")
                                 @if (post.RequiresSubscription)
                                 {
                                     <span class="badge bg-secondary ms-2">Subscribers</span>

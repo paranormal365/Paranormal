@@ -157,7 +157,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
                     "Your equipment request was approved",
                     checkout.DateDue is null
                         ? "Your request to borrow equipment has been approved. Confirm the hand-off once you have it."
-                        : $"Your request to borrow equipment has been approved. It's due back on {checkout.DateDue:d MMM yyyy}.");
+                        : $"Your request to borrow equipment has been approved. It's due back on {checkout.DateDue:MMM d, yyyy}.");
             });
 
     /// <summary>Turns a request down. A reason is required — a bare refusal helps nobody.</summary>

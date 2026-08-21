@@ -486,7 +486,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Date & Time</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="mycasedetail-brief-title-optional-e44e">Brief Title (optional)</label>
@@ -678,7 +678,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Your Preferred Date & Time</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_counterDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_counterDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="mycasedetail-notes-optional-70d8">Notes (optional)</label>

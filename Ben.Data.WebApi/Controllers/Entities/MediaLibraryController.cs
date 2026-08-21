@@ -299,7 +299,7 @@ public sealed class MediaLibraryController : BenControllerBase
 
         var byCase = investigations.GroupBy(i => i.CaseId!.Value)
             .ToDictionary(g => g.Key, g => g.Select(i =>
-                new MediaScopeInvestigation(i.Id, $"{i.ScheduledDateTime:d MMM yyyy} — {i.Title}")).ToList());
+                new MediaScopeInvestigation(i.Id, $"{i.ScheduledDateTime:MMM d, yyyy} — {i.Title}")).ToList());
 
         return Ok(cases.Select(c => new MediaScopeCase(
             c.Id, c.Title, byCase.GetValueOrDefault(c.Id) ?? [])));

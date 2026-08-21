@@ -141,7 +141,7 @@ public sealed class EventReminderJob : IScheduledJob
         var body = $"<p>{greeting},</p>"
                  + $"<p>You said you would be coming to <strong>{Safe(item.EventTitle)}</strong>, "
                  + $"hosted by {Safe(item.OrganizationName)}.</p>"
-                 + $"<p><strong>When:</strong> {item.StartUtc:dddd d MMMM yyyy, HH:mm} UTC</p>";
+                 + $"<p><strong>When:</strong> {item.StartUtc:dddd, MMMM d, yyyy, HH:mm} UTC</p>";
 
         if (!string.IsNullOrWhiteSpace(item.Location))
             body += $"<p><strong>Where:</strong> {Safe(item.Location)}</p>";
