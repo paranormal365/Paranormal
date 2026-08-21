@@ -92,3 +92,12 @@ artifacts/
 Ben.Wasm.Video/wwwroot/downloads/*.zip
 Ben.Wasm.Video/wwwroot/downloads/checksums.txt
 TestResults/
+
+# Loose credential files kept beside the repo but never in it.
+# The patterns above matched appsettings and SECRETS.md but not an ad-hoc file like
+# "IsHaunted - AZURE Client Secrets", which sat untracked and committable in the repo root.
+# This repo has already had an Azure secret scrubbed from history with git-filter-repo once.
+*[Cc]lient [Ss]ecret*
+*[Cc]lient[-_][Ss]ecret*
+*CLIENT_SECRET*
+*.secrets

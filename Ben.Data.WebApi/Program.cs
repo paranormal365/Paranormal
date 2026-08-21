@@ -1,4 +1,5 @@
 using Ben.Data.Common;
+using Microsoft.AspNetCore.HttpOverrides;
 using AutoMapper;
 using Ben.Data.WebApi.Services;
 using Ben.Service.Mappings;
@@ -299,6 +300,21 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// ── Behind a reverse proxy ──────────────────────────────────────────────────
+//
+// Same reasoning as the website's: a proxy terminates TLS and forwards over plain HTTP, so
+// without this the app sees IsHttps == false and UseHttpsRedirection below sends the caller to
+// https://, which the proxy fetches, which loops. Runs before anything that reads the scheme.
+//
+// Trusted from loopback only, by ASP.NET Core's default, which is left alone on purpose — these
+// headers are client-spoofable, and cloudflared connects from this machine. X-Forwarded-For also
+// restores the real caller IP, which the audit log would otherwise record as the proxy for every
+// request — worse here than on the website, since this is where security decisions are logged.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+});
 
 // Say what the CORS posture is at startup — a misconfigured deploy should fail loudly here, not
 // as a mystery in a browser console three layers away.

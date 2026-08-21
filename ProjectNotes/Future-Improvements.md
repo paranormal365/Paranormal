@@ -6233,3 +6233,49 @@ never have found.
 That second test strips CSS comments first: `fonts.css` documents the very `@import` it replaced,
 and a guard that cannot tell a doc comment from a fetch flags the fix as the bug. It did exactly
 that on first run. Both guards verified to fail against a reintroduced import.
+
+---
+
+## 125. Neither app honoured reverse-proxy headers (SHIPPED 2026-08-21)
+
+Found while planning a Cloudflare Tunnel for the UAT deploy, before it was set up rather than
+after.
+
+Both `Program.cs` files called `UseHttpsRedirection()` and neither called `UseForwardedHeaders`.
+Behind any reverse proxy — a tunnel now, Azure App Service later — TLS terminates at the proxy and
+the request reaches the app over plain HTTP. The app would have seen `IsHttps == false`, answered
+`307 → https://`, the proxy would have fetched that, and the request would have looped. IIS healthy,
+app healthy, site unreachable, nothing in any log to explain it.
+
+### What shipped
+
+`UseForwardedHeaders` in both apps, honouring `XForwardedProto | XForwardedFor`, registered
+immediately after `builder.Build()` — **before** anything that reads the scheme.
+
+`KnownProxies`/`KnownNetworks` are deliberately left at their defaults, which trust forwarded
+headers **only from loopback**. `cloudflared` runs on the same host and connects to `localhost`, so
+the immediate peer genuinely is loopback. Widening it would let any caller claim to have arrived
+over HTTPS from any address — the absence of that configuration is the secure state, not an
+oversight.
+
+`XForwardedFor` also restores the real client IP. Without it the audit log would have recorded the
+proxy for every request — worse on the API, which is where security decisions are logged.
+
+### Guarded on order, not presence
+
+`ForwardedHeadersTests` asserts `UseForwardedHeaders` appears **before** `UseHttpsRedirection` in
+both files. Registered after, it compiles, starts, serves every local request correctly, and still
+loops behind a proxy — so presence alone proves nothing. Verified by moving the call after the
+redirect and watching it fail.
+
+The guard flagged its own documentation on first run: the comment above the call names
+`UseHttpsRedirection`, so a naive `IndexOf` found the prose first. It strips comments now — the
+same mistake the stylesheet guard made a day earlier, which suggests any source-scanning guard
+should strip comments as a matter of course.
+
+### Not verified locally, and honestly so
+
+The local run cannot reproduce the loop: with no HTTPS port configured, `UseHttpsRedirection` is
+inert, so both the with- and without-header cases return 200. What is proven locally is
+registration and ordering. The behavioural proof has to come from the deployed site behind the
+tunnel.
