@@ -200,6 +200,13 @@
                     : "That code wasn't right. Try the current one from your app.";
                 break;
 
+            case LoginFailure.Unreachable:
+                // The password was never looked at. Saying "invalid email or password" here sends
+                // somebody to reset a password that was fine, and no reset will help.
+                _errorMessage = "Couldn't reach the sign-in service. This is a problem with the "
+                              + "site, not your password — try again shortly.";
+                break;
+
             case LoginFailure.RateLimited:
                 _errorMessage = "Too many sign-in attempts. Please wait a minute and try again.";
                 break;

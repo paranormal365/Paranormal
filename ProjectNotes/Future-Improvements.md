@@ -6282,7 +6282,7 @@ tunnel.
 
 ---
 
-## 126. SuperAdmin Site Settings and Dashboard render empty on the server (raised 2026-08-21 by Ben)
+## 126. SuperAdmin Site Settings and Dashboard render empty on the server (DIAGNOSABLE 2026-08-21 — cause still unconfirmed)
 
 Ben reports both `/admin/site-settings` and `/admin/dashboard` are blank for him as SuperAdmin.
 
@@ -6320,3 +6320,47 @@ Adopting `LoadResult`/`BenListState` on these two pages would have made this sel
 page would have said "Couldn't load this" instead of silently claiming there are no settings. They
 are good candidates for the next slice of item 120 adoption, precisely because they are
 admin-only pages where a silent empty state is most misleading.
+
+### 2026-08-21 — made self-diagnosing, not yet diagnosed
+
+**The cause is still unknown.** Both pages render fully against the dev stack, so it is a
+deployment fault, and nothing here identifies which one. What changed is that the pages will now
+*say* what happened instead of rendering blank.
+
+- **Site Settings** reads through `LoadSiteSettingsAsync`, so a refusal is a failure rather than an
+  empty list. Its existing `catch` never fired because nothing ever threw.
+- **Dashboard** treats a null summary or charts as failure — those endpoints always return an
+  object when they answer at all — and names what to check.
+- **`GetListAsync` now reports the status** when the body is not prose: "The server answered 404
+  (Not Found)." A blank page says nothing; 404 says the path is wrong and 403 says the path is
+  right and the caller was refused. That is the whole question.
+
+**A simulation that was NOT faithful, recorded so nobody repeats it.** Pointing `WebApi:BaseUrl` at
+`/wrongpath` reproduced blank-and-silent, but that path exists nowhere — whereas on the deployment
+`/webapi` does exist and `ApiBasePathHandler` restores it. Ben caught this: it risks re-fixing
+something the deploy already solved. The base path is not implicated by that test.
+
+**What the symptom does suggest:** sign-in works on the deployment and the admin menu renders, so
+the API is reachable and the token is accepted. That points away from the base path and toward the
+SuperAdmin *role* not being honoured on those endpoints — `/api/me` computes `isSuperAdmin` from
+the database, while `[Authorize(Roles = SuperAdmin)]` reads the token's role claim, and those two
+can disagree. Unconfirmed.
+
+**Next step is one look at the deployed browser's network tab**, filtered to `/api/admin/` — or
+simply reloading those pages once this ships, since they will now print the status themselves.
+
+---
+
+## 127. Sign-in blamed the password when the API was unreachable (SHIPPED 2026-08-21)
+
+Found while reproducing 126, and real independently of it.
+
+`LoginFailure` had five cases and no way to say "the endpoint was never reached", so a 404 or a 5xx
+fell through to the catch-all and the page said **"Invalid email or password."** The credentials
+were correct and had never been examined. That sends somebody to reset a password that was fine,
+and the reset cannot help — the same mistake the rate-limit case was fixed for, on the page where
+it is most costly.
+
+`LoginAttempt` already carried the status code, so this is a sixth case rather than new plumbing:
+`WasUnreachable` (status 0, 404, or 5xx) maps to `LoginFailure.Unreachable`, and the page says the
+problem is with the site rather than the password.
