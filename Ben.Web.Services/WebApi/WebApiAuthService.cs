@@ -29,7 +29,8 @@ public sealed class WebApiAuthService : IWebApiAuthService
             // person: wait, enter your code, or go and confirm your email. Collapsing them into
             // "invalid email or password" sends two of those three somewhere useless.
             LastLoginFailure =
-                attempt.WasRateLimited          ? LoginFailure.RateLimited
+                attempt.WasUnreachable          ? LoginFailure.Unreachable
+              : attempt.WasRateLimited          ? LoginFailure.RateLimited
               : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
               : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
               : attempt.Detail == "LockedOut"   ? LoginFailure.LockedOut

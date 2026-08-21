@@ -212,6 +212,18 @@
             // only fetched once; the charts are what the range applies to.
             _summary ??= await AdminClient.GetAdminStatsSummaryAsync();
             _charts = await AdminClient.GetAdminStatsChartsAsync(_days);
+
+            // Null here is a FAILURE, not "no data" — these endpoints always return an object when
+            // they answer at all. The client swallows the status code and returns null for any
+            // non-2xx, so without this the page simply drew nothing: no figures, no charts, no
+            // error. That is what a SuperAdmin saw on the ishaunted.com deploy (item 126).
+            if (_summary is null || _charts is null)
+            {
+                _error = "Couldn't load the dashboard figures — the server refused the request or "
+                       + "could not be reached. Check the browser's network tab for /api/admin/stats: "
+                       + "404 means the API path is wrong, 401 or 403 means this account was not "
+                       + "accepted as a SuperAdmin.";
+            }
         }
         catch (Exception)
         {

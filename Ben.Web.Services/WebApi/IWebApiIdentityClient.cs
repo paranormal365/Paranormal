@@ -26,6 +26,21 @@ public readonly record struct LoginAttempt(WebApiTokenResponse? Token, int Statu
     public bool WasRateLimited => StatusCode == 429;
 
     /// <summary>
+    /// The sign-in endpoint was not reached at all — the credentials were never examined.
+    /// </summary>
+    /// <remarks>
+    /// <para>A 404 means the API is not where the site thinks it is; a 5xx or 0 means it is there
+    /// and broken, or unreachable. Neither says anything about the password, and reporting them as
+    /// "invalid email or password" sends somebody to reset a password that was correct — the same
+    /// mistake the rate-limit case was fixed for.</para>
+    ///
+    /// <para>Reproduced deliberately: pointing WebApi:BaseUrl at a path that does not exist made
+    /// sign-in claim the credentials were wrong. On a deployment where the API is mounted under a
+    /// sub-path, that is the first thing an administrator would see (item 126).</para>
+    /// </remarks>
+    public bool WasUnreachable => StatusCode == 0 || StatusCode == 404 || StatusCode >= 500;
+
+    /// <summary>
     /// The password was right and a second factor is needed.
     /// </summary>
     /// <remarks>

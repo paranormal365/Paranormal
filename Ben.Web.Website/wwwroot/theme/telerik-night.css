@@ -117,3 +117,43 @@ body.k-body {
 
 .k-grid td,
 .k-grid .k-table-td { border-color: var(--bs-border-color); }
+
+/* ── Grid command buttons: small, and on one line ─────────────────────────────
+   Telerik's default button is sized for a form, not for a table cell. In a command column that
+   gives every row a stack of chunky buttons — on Manage Users, View and Impersonate wrapped onto
+   two lines and made each row twice as tall as its content needed.
+
+   Done here rather than by adding Size="Small" to each <GridCommandButton>: there are 42 of them
+   across a dozen files and only 8 had a size set, so the call-site approach is both a large edit
+   and one that every future grid silently opts out of. One rule covers them all, including grids
+   nobody has written yet.
+
+   white-space: nowrap is the half that stops the wrapping — a narrow command column would
+   otherwise break "Impersonate" across lines even at the smaller size. */
+.k-grid .k-command-cell .k-button,
+.k-grid .k-grid-content .k-button {
+    padding-block: 2px;
+    padding-inline: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* The icon inside a shrunken button keeps its original box otherwise, so the button stays tall
+   while only its text gets smaller. */
+.k-grid .k-command-cell .k-button .k-button-icon,
+.k-grid .k-grid-content .k-button .k-button-icon {
+    font-size: 0.875rem;
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+}
+
+/* Buttons sit side by side rather than stacking, with a small gap so they stay distinguishable. */
+.k-grid .k-command-cell {
+    white-space: nowrap;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    align-items: center;
+}

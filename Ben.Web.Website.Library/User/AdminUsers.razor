@@ -18,12 +18,14 @@
         </div>
     </div>
 
-    <div class="mb-3">
+    @* d-flex, because .form-control is display:block — the max-width kept it narrow but it still
+       claimed the whole line, pushing Search onto a row of its own. *@
+    <div class="mb-3 d-flex align-items-center gap-2">
         <input type="text" class="form-control" placeholder="Search by name or email…" style="max-width:320px;" @bind="@_search" @bind:event="oninput" />
-        <button type="button" class="btn btn-primary ms-2" @onclick="ApplySearch"><BenIcon Name="search" Class="me-1" />Search</button>
+        <button type="button" class="btn btn-primary flex-shrink-0" @onclick="ApplySearch"><BenIcon Name="search" Class="me-1" />Search</button>
         @if (!string.IsNullOrWhiteSpace(_search))
         {
-            <button type="button" class="btn btn-link text-decoration-none ms-1" @onclick="ClearSearch">Clear</button>
+            <button type="button" class="btn btn-link text-decoration-none flex-shrink-0" @onclick="ClearSearch">Clear</button>
         }
     </div>
 
@@ -35,7 +37,23 @@
                  Class="admin-users-grid">
         <GridColumns>
             <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
-            <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
+            @* Real name replaces the email column, at Ben's request. Email is still searchable —
+               see ApplySearch — so nothing became unfindable, it just stopped taking a column.
+               Accounts created before these fields existed have no name; an em dash says so
+               rather than leaving a cell that looks like a rendering fault. *@
+            <GridColumn Field="@nameof(AppUserRecord.FullName)" Title="Name" Width="200px">
+                <Template>
+                    @{ var u = (AppUserRecord)context; }
+                    @if (u.FullName is { } name)
+                    {
+                        @name
+                    }
+                    else
+                    {
+                        <span class="text-secondary">—</span>
+                    }
+                </Template>
+            </GridColumn>
             <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
                 <Template>
                     @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
@@ -49,18 +67,22 @@
                     }
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="200px">
+            <GridCommandColumn Width="130px">
                 <GridCommandButton Command="View"
                                    Icon="@SvgIcon.Eye"
                                    OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
                     View
                 </GridCommandButton>
+                @* Icon only, with Title for the tooltip and the accessible name.
+                   NO aria-label here: Telerik components do not splat unmatched attributes, they
+                   throw during render and take the circuit with them — that is item 112, which
+                   cost a debugging session when TelerikMaskedTextBox was given one. Title is a
+                   real GridCommandButton parameter; aria-label is not. *@
                 <GridCommandButton Command="Impersonate"
                                    Icon="@SvgIcon.User"
                                    ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))">
-                    Impersonate
-                </GridCommandButton>
+                                   Title="Impersonate this user"
+                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))" />
             </GridCommandColumn>
         </GridColumns>
     </TelerikGrid>

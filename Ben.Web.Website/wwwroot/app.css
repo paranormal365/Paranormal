@@ -470,3 +470,33 @@ html[data-bs-theme="dark"] {
     position: relative;
     z-index: 1001;
 }
+
+/* ── Header avatar: fixed size, and clear of the bell ─────────────────────────
+   The template defines .profile-image three separate times with different sizes — 2.8rem,
+   3.125rem with height:auto, and 3.125rem — so which one wins is a matter of source order rather
+   than intent. Whichever lands last beat the .profile-image-md (2rem) the header asks for, and a
+   50px avatar with height:auto grew the top bar to fit it. A tall header on every page because
+   one person uploaded a photo is not a trade anyone chose.
+
+   Pinned in all three axes because height:auto is the one that actually stretches: without an
+   explicit height a portrait photo is as tall as its aspect ratio demands. object-fit keeps it
+   from squashing once constrained.
+
+   Loaded from app.css, which App.razor links last precisely so it can settle arguments like this
+   one. */
+.page-header .profile-image,
+header .profile-image {
+    width: 2rem !important;
+    height: 2rem !important;
+    max-width: 2rem !important;
+    max-height: 2rem !important;
+    object-fit: cover;
+    flex: 0 0 auto;
+}
+
+/* Breathing room between the notification bell and the avatar — they were touching, which read
+   as one control rather than two. */
+.page-header .notification-bell,
+header .notification-bell {
+    margin-right: 0.5rem;
+}

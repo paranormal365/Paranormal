@@ -42,8 +42,27 @@
                 <EditForm Model="@_form" OnValidSubmit="SubmitAsync" FormName="signup">
                     <DataAnnotationsValidator />
 
+                    @* Legal name, above the display name — asked first because it is the one the
+                       site treats as the person's actual identity; the display name is a choice
+                       made afterwards. Both required, so the two are never confused for each
+                       other later. *@
+                    <div class="row g-2 mb-3">
+                        <div class="col-sm-6">
+                            <label class="form-label" for="signup-first">First name</label>
+                            <InputText id="signup-first" class="form-control" @bind-Value="_form.FirstName"
+                                       autocomplete="given-name" placeholder="Sarah" />
+                            <ValidationMessage For="@(() => _form.FirstName)" class="text-danger small" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="signup-last">Last name</label>
+                            <InputText id="signup-last" class="form-control" @bind-Value="_form.LastName"
+                                       autocomplete="family-name" placeholder="Mitchell" />
+                            <ValidationMessage For="@(() => _form.LastName)" class="text-danger small" />
+                        </div>
+                    </div>
+
                     <div class="mb-3">
-                        <label class="form-label" for="signup-name">Your name</label>
+                        <label class="form-label" for="signup-name">Display name</label>
                         <InputText id="signup-name" class="form-control" @bind-Value="_form.DisplayName"
                                    autocomplete="name" placeholder="Sarah Mitchell" />
                         <div class="form-text">What people see on your posts and your profile. You can change this later.</div>
@@ -177,7 +196,8 @@
         try
         {
             var result = await AccountClient.RegisterAsync(
-                new RegisterAccount(_form.Email, _form.Password, _form.DisplayName, _form.Handle));
+                new RegisterAccount(_form.Email, _form.Password, _form.DisplayName, _form.Handle,
+                                    _form.FirstName, _form.LastName));
 
             if (result.Succeeded)
             {
@@ -210,6 +230,14 @@
 
     private sealed class SignUpForm
     {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter your first name.")]
+        [System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 1)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter your last name.")]
+        [System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 1)]
+        public string LastName { get; set; } = string.Empty;
+
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter the name you want people to see.")]
         [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 2)]
         public string DisplayName { get; set; } = string.Empty;

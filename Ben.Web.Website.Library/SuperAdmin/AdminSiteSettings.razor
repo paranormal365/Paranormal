@@ -150,7 +150,20 @@
     {
         try
         {
-            _settings = await AdminClient.GetSiteSettingsAsync();
+            // LoadSiteSettings, not GetSiteSettings: the old call turned any refusal into an empty
+            // list, so this page rendered blank on the ishaunted.com deploy with no error anywhere
+            // — the catch below never fired, because nothing threw (items 120 and 126).
+            var result = await AdminClient.LoadSiteSettingsAsync();
+
+            if (result.Failed)
+            {
+                _error = result.Reason is { } why
+                    ? $"Couldn't load site settings. {why}"
+                    : "Couldn't load site settings — the server could not be reached.";
+                return;
+            }
+
+            _settings = result.Items.ToList();
             foreach (var s in _settings) _drafts[s.Key] = s.Value ?? string.Empty;
             await LoadAvatarPreviewAsync();
         }

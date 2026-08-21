@@ -5,6 +5,7 @@
 @inject NavigationManager NavManager
 @inject NotificationState Notifications
 @inject SiteFeaturesProvider Features
+@inject IBenAdminClient AdminClient
 
 @*
     The template's sidebar, driven by data instead of hand-maintained markup.
@@ -183,10 +184,6 @@
             {
                 var s = Notifications.Current;
 
-                // Buckets are rolled up to the page a user would actually go to. Group messages and
-                // client messages awaiting a reply both live under an organization, so they share
-                // the Organizations badge; the bell popover is what breaks them apart again.
-                var orgSide = Combine(s.OrgMessages, s.CaseMessagesAsOrgMember);
 
                 // ── Kept at the top level, deliberately ───────────────────────
                 // These two are checked constantly rather than navigated to, and a thing you look
@@ -195,8 +192,12 @@
                 main.Add(new NavItem("Notifications",     "bell",        "/notifications",
                                      Combine(s.SystemMessages, s.PendingPermissionRequests),
                                      badgeNoun: "unread notifications"));
-                main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide,
-                                     badgeNoun: "unread group messages"));
+                // Count of groups, not unread messages — Ben read the old badge as a count and he
+                // was right to: a bare number after a label reads as a quantity of that label.
+                // The unread counts still appear, broken out by bucket, in the bell popover.
+                main.Add(new NavItem("Organizations",     "globe",       "/organizations",
+                                     CountBadge(_organizationCount),
+                                     badgeNoun: "groups"));
 
                 // ── My Work ───────────────────────────────────────────────────
                 main.Add(Group("My Work", "clipboard",
@@ -272,12 +273,13 @@
     /// The former right-hand admin drawer, as expandable groups. Same destinations and grouping,
     /// so muscle memory carries over.
     /// </summary>
-    private static IReadOnlyList<NavItem> AdminGroups => new List<NavItem>
+    // Instance, not static: the Users entry now carries a live count from _userCount.
+    private IReadOnlyList<NavItem> AdminGroups => new List<NavItem>
     {
         // Top and ungrouped: it is the overview the rest of this menu drills into, so burying it
         // in a group would put the summary below the detail.
         new NavItem("Dashboard", "bar-chart-2", "/admin/dashboard"),
-        new NavItem("Users", "users", children: new[]
+        new NavItem("Users", "users", bucket: CountBadge(_userCount), badgeNoun: "people", children: new[]
         {
             new NavItem("Manage Users", "user", "/admin/users"),
             new NavItem("Site Roles",   "lock", "/admin/roles"),
@@ -318,7 +320,64 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+        if (!firstRender) return;
+
+        await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+        await LoadNavCountsAsync();
+    }
+
+    // ── Inventory counts on the nav ──────────────────────────────────────────
+    //
+    // These are "how many of these exist", not "how much needs your attention" — which is what
+    // every other badge in this menu means. Ben asked for it after reading the Organizations badge
+    // as a count of organizations when it was actually unread messages, which is the exact
+    // misreading BadgeNoun was added to mitigate and evidently did not.
+    //
+    // The message counts are not lost: the bell popover still breaks them out by bucket, which is
+    // where a per-bucket number belongs anyway.
+    //
+    // Fetched once per circuit rather than on the notification poll: an organisation being created
+    // or a person signing up is rare, and a badge that is a minute stale costs nothing. Sections
+    // is a synchronous property, so these land in fields and a re-render picks them up — the same
+    // shape as Notifications.Current.
+    private int? _organizationCount;
+    private int? _userCount;
+
+    /// <summary>
+    /// An inventory count, shaped as the bucket the badge renderer already takes.
+    /// </summary>
+    /// <remarks>
+    /// Null (not yet loaded) and zero both render nothing — "0 groups" is noise, and a badge that
+    /// flickers in a moment after the menu paints is worse than one that simply appears.
+    /// Urgency is None: these are counts, not work waiting, so they must never take the colour
+    /// that means "this is overdue".
+    /// </remarks>
+    private static NotificationBucket? CountBadge(int? count)
+        => count is > 0 ? new NotificationBucket(count.Value, null) : null;
+
+    private async Task LoadNavCountsAsync()
+    {
+        if (!IsAuthenticated || IsImpersonating) return;
+
+        try
+        {
+            // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
+            _organizationCount = (await AdminClient.GetOrganizationsAsync()).Count;
+
+            // SuperAdmin only, because only they are shown the Users entry this badges.
+            //
+            // Counting a full list is the wrong shape at scale — this pulls every user row to
+            // display one number. Fine at today's size, and the honest fix is a count endpoint
+            // rather than a cleverer client; noted rather than pretended away.
+            if (IsSuperAdmin)
+                _userCount = (await AdminClient.GetAllUsersAsync()).Count;
+        }
+        catch (Exception)
+        {
+            // A badge is not worth breaking the navigation over. Left null, which renders nothing.
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void OnFilterInput(ChangeEventArgs e) => _filter = e.Value?.ToString() ?? string.Empty;
@@ -365,7 +424,18 @@
                     <span class="nav-link-text">@item.Text</span>
                     @* Only while closed. Open, every child shows its own badge directly beneath,
                        and a parent repeating their sum reads as a second, larger pile of work. *@
-                    @if (!IsExpanded(item) && RolledUp(item) is { Count: > 0 } waiting)
+                    @* A group's own count — an inventory number like "how many people" — shows
+                       whether the group is open or shut, because it describes the group itself
+                       rather than summarising what is inside it. The rolled-up notification badge
+                       below is the one that hides when open, since its children then show their
+                       own. *@
+                    @if (item.Count > 0)
+                    {
+                        <span class="badge badge-end @NotificationBadge.CssClass(NotificationBadge.Urgency.None)"
+                              title="@($"{item.Count} {item.BadgeNoun}")"
+                              aria-label="@($"{item.Count} {item.BadgeNoun}")">@NotificationBadge.Text(item.Count)</span>
+                    }
+                    else if (!IsExpanded(item) && RolledUp(item) is { Count: > 0 } waiting)
                     {
                         var label = waiting.Count == 1
                             ? $"1 item waiting in {item.Text}"

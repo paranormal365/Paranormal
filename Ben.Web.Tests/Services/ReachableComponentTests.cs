@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;
@@ -244,12 +245,33 @@ public sealed class ReachableComponentTests
     /// architecture notes and a <c>Case.IsHaunted</c> property, none of which are a person reading
     /// a page.</para>
     /// </remarks>
+
+    /// <summary>Razor and C# comments removed, so only what renders is examined.</summary>
+    /// <remarks>
+    /// <para>"Anything a person reads" means the rendered page, not the source. A comment
+    /// explaining <i>why</i> a page once broke on the ishaunted.com deployment is documentation,
+    /// and flagging it tells the author to make their comment vaguer — which is the opposite of
+    /// what this test is for.</para>
+    ///
+    /// <para><b>Third time this pattern has bitten.</b> The stylesheet import guard flagged the
+    /// comment describing the import it replaced; the forwarded-headers guard flagged the comment
+    /// naming the middleware it must precede; this one flagged a comment naming the deployment.
+    /// Any guard that scans source for a literal should strip comments first, as a rule.</para>
+    /// </remarks>
+    private static string StripComments(string source)
+    {
+        source = Regex.Replace(source, @"@\*.*?\*@", "", RegexOptions.Singleline);   // Razor
+        source = Regex.Replace(source, @"/\*.*?\*/", "", RegexOptions.Singleline);   // C# block
+        source = Regex.Replace(source, @"//[^\n]*", "", RegexOptions.Multiline);      // C# line
+        return source;
+    }
+
     [Fact]
     public void The_site_name_is_never_a_literal_in_anything_a_person_reads()
     {
         var offenders = RazorSources()
             .Where(f => !f.EndsWith("SocialCard.razor", StringComparison.Ordinal))
-            .Select(f => (File: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .Select(f => (File: Path.GetFileName(f), Text: StripComments(File.ReadAllText(f))))
             // "IsHaunted.com" specifically — the bare word is a real property name on a case.
             .Where(x => x.Text.Contains("IsHaunted.com", StringComparison.OrdinalIgnoreCase))
             .Select(x => x.File)
