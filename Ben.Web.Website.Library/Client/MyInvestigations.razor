@@ -199,7 +199,7 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
-        _myEvents = await AdminClient.GetMyPublicEventsAsync();
+        _myEvents = (await AdminClient.GetMyPublicEventsAsync()).Items;
 
         try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }

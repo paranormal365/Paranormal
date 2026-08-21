@@ -448,7 +448,7 @@
     {
         try
         {
-            var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
             _memberOptions = members
                 .Where(m => m.IsActive)
                 .OrderBy(m => m.DisplayName)

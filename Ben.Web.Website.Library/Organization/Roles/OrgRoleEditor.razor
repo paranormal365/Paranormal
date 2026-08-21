@@ -282,8 +282,8 @@ else if (_role is not null)
             await Task.WhenAll(roleTask, permsTask, membersTask, orgMembersTask);
 
             _role         = roleTask.Result;
-            _members      = membersTask.Result;
-            _allOrgMembers = orgMembersTask.Result;
+            _members      = membersTask.Result.Items;
+            _allOrgMembers = orgMembersTask.Result.Items;
 
             if (_role is not null)
             {
@@ -293,7 +293,7 @@ else if (_role is not null)
                 _editSortOrder   = _role.SortOrder;
             }
 
-            _permissionMap = permsTask.Result
+            _permissionMap = permsTask.Result.Items
                 .ToDictionary(p => p.TableName, p => p.Actions);
 
             RefreshAvailableMembers();
@@ -386,7 +386,7 @@ else if (_role is not null)
 
         if (result is not null)
         {
-            _members = await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            _members = (await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId)).Items;
             RefreshAvailableMembers();
         }
         else
@@ -403,7 +403,7 @@ else if (_role is not null)
         var ok = await AdminClient.RemoveOrgRoleMemberAsync(OrgId, RoleId, rm.Id);
         if (ok)
         {
-            _members = await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            _members = (await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId)).Items;
             RefreshAvailableMembers();
         }
         else

@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -22,7 +23,7 @@ public interface IBenOrganizationClient
     /// Returns organizations visible to the current user, each with CanEdit and CanDelete flags.
     /// SuperAdmins see all organizations; others see only orgs they are active members of.
     /// </summary>
-    Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
+    Task<LoadResult<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
 
     /// <summary>Returns a single organization for pre-filling the edit form. Returns null if not found or forbidden.</summary>
     Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
@@ -39,7 +40,7 @@ public interface IBenOrganizationClient
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns all site-level roles with the number of users currently assigned to each.</summary>
-    Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
+    Task<LoadResult<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
 
     /// <summary>Creates a new site-level role.</summary>
     Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default);
@@ -50,14 +51,14 @@ public interface IBenOrganizationClient
     // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
 
     /// <summary>Returns every case across every organization (SuperAdmin only).</summary>
-    Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
+    Task<LoadResult<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
 
     /// <summary>Returns every investigation across every organization (SuperAdmin only).</summary>
-    Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
+    Task<LoadResult<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
 
     // ── Organization Logos ────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
     Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
@@ -73,7 +74,7 @@ public interface IBenOrganizationClient
     /// Public search — no auth required. Returns orgs ordered by proximity.
     /// Center coordinates are NOT included in results.
     /// </summary>
-    Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
+    Task<LoadResult<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
 
     /// <summary>
     /// Every organization, paged, with no location required — what the "Browse All Groups"
@@ -83,8 +84,8 @@ public interface IBenOrganizationClient
 
     // ── Organization Addresses ────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
     Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
     Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
@@ -154,7 +155,6 @@ public interface IBenOrganizationClient
 
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>
     /// The group's roster, distinguishing "could not load" from "nobody is in it".
@@ -163,13 +163,12 @@ public interface IBenOrganizationClient
     /// Prefer this for anything a person sees. The Members surfaces told readers their group was
     /// empty when the truth was a refusal, twice (items 119, 122).
     /// </remarks>
-    Task<WebApi.LoadResult<OrgMembershipItem>> LoadOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
+    Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────
 
     /// <summary>Returns all files owned by the organization.</summary>
-    Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>
     /// The group's files, distinguishing "could not load" from "there are none".
@@ -179,10 +178,10 @@ public interface IBenOrganizationClient
     /// surface where a refusal rendering as an empty list was actually caught — a member with a
     /// group handbook on the server was told the group had no files (items 119 and 120).
     /// </remarks>
-    Task<WebApi.LoadResult<OrganizationFileRecord>> LoadOrgFilesAsync(Guid orgId, CancellationToken token = default);
+    Task<WebApi.LoadResult<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Returns the deletion audit log for organization files.</summary>
-    Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Uploads a new file to the organization's file library.</summary>
     Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default);
@@ -204,24 +203,24 @@ public interface IBenOrganizationClient
     Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<LoadResult<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
     Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
     Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
 
     // ── Organization Roles ────────────────────────────────────────────────────────
-    Task<IReadOnlyList<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default);
     Task<OrganizationRoleRecord?> GetOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<OrganizationRoleRecord?> CreateOrgRoleAsync(Guid orgId, CreateOrgRoleRequest request, CancellationToken token = default);
     Task<OrganizationRoleRecord?> UpdateOrgRoleAsync(Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<bool> SetOrgRolePermissionsAsync(Guid orgId, Guid roleId, IEnumerable<SetRolePermissionRequest> permissions, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
 
     // ── Org address member access ──────────────────────────────────────────────
-    Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid accessId, CancellationToken token = default);
 
@@ -232,13 +231,13 @@ public interface IBenOrganizationClient
     // ── Public events (item #87) ────────────────────────────────────────────
 
     /// <summary>Upcoming public events, across every organization or narrowed to one.</summary>
-    Task<IReadOnlyList<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
+    Task<LoadResult<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
 
     /// <summary>One public event by its readable URL.</summary>
     Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
 
     /// <summary>Public events this caller has said they are coming to, recent past included.</summary>
-    Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);
+    Task<LoadResult<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);
 
     /// <summary>Says the signed-in caller is coming. Returns the refreshed event.</summary>
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);

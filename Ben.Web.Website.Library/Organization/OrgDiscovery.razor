@@ -206,7 +206,18 @@
             return;
         }
 
-        _results       = await AdminClient.SearchOrganizationsAsync((double)geo.Latitude, (double)geo.Longitude);
+        var search = await AdminClient.SearchOrganizationsAsync((double)geo.Latitude, (double)geo.Longitude);
+
+        // "No groups near you" and "the search could not run" are different answers, and only one
+        // of them should stop somebody looking. Item 120.
+        if (search.Failed)
+        {
+            _geocodeError = search.Reason ?? "The search could not be run just now. Please try again.";
+            _searching    = false;
+            return;
+        }
+
+        _results       = search.Items;
         _withinRange   = _results.Where(r => r.IsWithinRange).ToList();
         _outsideRange  = _results.Where(r => !r.IsWithinRange).ToList();
         _searchedQuery = _query.Trim();

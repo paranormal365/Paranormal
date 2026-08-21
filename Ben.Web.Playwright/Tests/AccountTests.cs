@@ -125,6 +125,11 @@ public class AccountTests : BenTestBase
         // Filled with a check that each value stuck. The @name box proved the circuit is live, but
         // these are separate InputTexts and a value typed into one before it is wired is discarded
         // by the next render — the same erasure, one field along.
+        // First and last name are required as of the legal-name change, and the form will not
+        // submit without them — the test that missed this simply sat on the page until it timed
+        // out, which reads as "sign-up is broken" rather than "the test is a field behind".
+        await FillAndConfirmAsync("#signup-first", "Signup");
+        await FillAndConfirmAsync("#signup-last", "Test");
         await FillAndConfirmAsync("#signup-name", "Signup Test");
         await FillAndConfirmAsync("#signup-email", email);
         await FillAndConfirmAsync("#signup-password", "Str0ngPass!");

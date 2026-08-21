@@ -340,7 +340,7 @@
 
             _org = orgTask.Result;
 
-            var listItem    = listTask.Result.FirstOrDefault(o => o.Id == OrgId);
+            var listItem    = listTask.Result.Items.FirstOrDefault(o => o.Id == OrgId);
             _isMember       = UserState.IsSuperAdmin || listItem is not null;
             _canEdit        = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
             _canManageRoles = _canEdit;
@@ -353,7 +353,7 @@
             }
             else if (UserState.UserId.HasValue)
             {
-                var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+                var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
                 _isOwnerOrSuperAdmin = members.Any(m =>
                     m.AppUserId == UserState.UserId.Value && m.Role == OrganizationMemberRole.Owner);
             }

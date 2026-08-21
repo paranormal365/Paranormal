@@ -607,11 +607,11 @@
         {
             // Get org name from the pages list (or first page's org)
             _pages = await AdminClient.GetCmsPagesAsync(OrgId);
-            _logos = await AdminClient.GetOrgLogosAsync(OrgId);
-            _groups = await AdminClient.GetGroupsAsync(OrgId);
+            _logos = (await AdminClient.GetOrgLogosAsync(OrgId)).Items;
+            _groups = (await AdminClient.GetGroupsAsync(OrgId)).Items;
 
             // Pre-load org membership + user list for member management
-            _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            _orgMemberships = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
             _orgUsers = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
 
             // Try to get org name
@@ -1036,7 +1036,7 @@
     {
         if (_membersGroup is null) return;
 
-        var rawMembers = await AdminClient.GetGroupMembersAsync(OrgId, _membersGroup.Id);
+        var rawMembers = (await AdminClient.GetGroupMembersAsync(OrgId, _membersGroup.Id)).Items;
         var memberships = _orgMemberships ?? [];
         var users = _orgUsers ?? [];
 
