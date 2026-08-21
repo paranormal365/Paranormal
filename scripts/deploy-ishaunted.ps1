@@ -579,10 +579,15 @@ if (($Apps -contains 'files') -and -not $StageOnly) {
         #
         # Both are still accepted here: the .dmg wins when present so a stale zip left in dist/
         # cannot quietly outrank a fresh image, and a RID with only a zip keeps working unchanged.
+        # Windows gets the same treatment for the same reason: the zip meant extract it, find
+        # install.ps1, right-click it and get past the execution policy. A double-click installer
+        # is what that should have been. The .exe wins over the zip exactly as the .dmg does, so a
+        # stale zip left in dist/ cannot quietly outrank a fresh installer, and a RID with only a
+        # zip keeps working unchanged.
         $candidates = if ($rid -like 'osx-*') {
             @("BenVideoSidecar-$rid.dmg", "BenVideoSidecar-$rid.zip")
         } else {
-            @("BenVideoSidecar-$rid.zip")
+            @("BenVideoSidecar-$rid.exe", "BenVideoSidecar-$rid.zip")
         }
 
         $name = $null
