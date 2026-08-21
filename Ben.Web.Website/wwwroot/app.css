@@ -3,7 +3,8 @@
    template does not cover. Keep it small; if a rule fights smartapp.min.css, the template's
    own class is almost always the better answer. */
 
-@import url('https://fonts.googleapis.com/css2?family=Irish+Grover&display=swap');
+/* Irish Grover is self-hosted now — see wwwroot/fonts/fonts.css, linked from App.razor.
+   This was a render-blocking fetch to Google on every page. */
 
 /* ── Brand ──────────────────────────────────────────────────────────────── */
 .is-haunted-text {

@@ -28,11 +28,18 @@ namespace Ben.Web.Tests.Website;
 /// </remarks>
 public sealed class NoExternalAssetsInShellTests
 {
-    private static readonly string[] AllowedHosts =
-    [
-        "fonts.googleapis.com",
-        "fonts.gstatic.com",
-    ];
+    /// <summary>
+    /// Nothing. The shell is expected to load everything from this origin.
+    /// </summary>
+    /// <remarks>
+    /// Google Fonts used to be allowed here, on the reasoning that self-hosting fonts is a separate
+    /// decision. That allowance turned out to be sheltering the actual problem: after Fabric was
+    /// vendored, the two font stylesheets were the <b>only</b> external requests left, the browser
+    /// reported both as render-blocking, and they matched the remaining intermittent
+    /// "waiting until load" timeouts exactly. The fonts are self-hosted now
+    /// (<c>wwwroot/fonts/</c>), so the list is empty and should stay that way.
+    /// </remarks>
+    private static readonly string[] AllowedHosts = [];
 
     private static DirectoryInfo RepoRoot()
     {
@@ -44,6 +51,39 @@ public sealed class NoExternalAssetsInShellTests
 
     private static string ShellPath() =>
         Path.Combine(RepoRoot().FullName, "Ben.Web.Website", "Components", "App.razor");
+
+    /// <summary>
+    /// The site's own stylesheets pull nothing from another host either.
+    /// </summary>
+    /// <remarks>
+    /// App.razor was only half the story. Both font fetches were <c>@import</c> statements buried
+    /// inside <c>css/smartapp.min.css</c> and <c>app.css</c> — invisible to a scan of the shell,
+    /// and worse than a tag in the head because the browser cannot even discover them until it has
+    /// fetched and parsed the stylesheet that contains them.
+    /// </remarks>
+    [Fact]
+    public void The_sites_stylesheets_import_nothing_from_another_host()
+    {
+        var root = Path.Combine(RepoRoot().FullName, "Ben.Web.Website", "wwwroot");
+        var offenders = new List<string>();
+
+        foreach (var css in Directory.EnumerateFiles(root, "*.css", SearchOption.AllDirectories))
+        {
+            // Comments are stripped first. Vendored CSS carries licence URLs, and fonts.css
+            // documents the very @import it replaced — a doc comment is not a fetch, and a
+            // guard that cannot tell the difference flags the fix as the bug.
+            var text = Regex.Replace(File.ReadAllText(css), @"/\*.*?\*/", "", RegexOptions.Singleline);
+
+            foreach (Match m in Regex.Matches(text, @"@import\s+url\(['""]?(https?://[^)'""]+)"))
+                offenders.Add($"{Path.GetFileName(css)} → {m.Groups[1].Value}");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "A stylesheet @imports from a third party. The browser cannot discover this until it "
+            + "has already fetched and parsed the containing stylesheet, so it is a serial chain "
+            + "on the critical path of every page. Self-host it under wwwroot/:\n  "
+            + string.Join("\n  ", offenders));
+    }
 
     [Fact]
     public void The_shell_loads_no_scripts_or_styles_from_another_host()
