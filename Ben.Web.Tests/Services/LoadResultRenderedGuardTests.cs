@@ -59,6 +59,11 @@ public sealed class LoadResultRenderedGuardTests
         "GetPendingPermissionRequestsForMeAsync", "GetUserAddressTypesAsync",
         "GetUserEmailTypesAsync", "GetUserPhoneTypesAsync", "GetUserLinkTypesAsync",
         "GetUserNoteTypesAsync",
+
+        // investigation slice
+        "GetInvestigationsAsync", "GetOrgInvestigationsAsync", "GetMyInvestigationsAsync",
+        "GetAttendedInvestigationsAsync", "GetInvestigationAttendeesAsync", "GetEvidenceVotesAsync",
+        "GetScheduleProposalsAsync", "GetMyScheduleProposalsAsync",
     ];
 
     /// <summary>
@@ -75,6 +80,16 @@ public sealed class LoadResultRenderedGuardTests
         ["CaseTimeline.razor"] =
             "Same taxonomy lookup, for the filter chips' labels. The timeline itself is wrapped "
           + "and reports its own refusal.",
+
+        ["MyProfile.razor"] =
+            "Attended investigations feed the pins on the profile's own map. A refusal drops pins "
+          + "from a personal map that already has its own empty state; nothing on the page claims "
+          + "the person attended nothing.",
+
+        ["EquipmentCheckoutRequestDialog.razor"] =
+            "The investigation picker is explicitly optional — the label says so and the default "
+          + "option is \"Not for a specific visit\". A refused fetch leaves an optional picker "
+          + "empty and the request still goes through.",
 
         ["AdminUserDetail.razor"] =
             "The five lookup-type dropdowns — address, email, phone, link and note types. They "

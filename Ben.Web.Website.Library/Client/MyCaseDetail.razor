@@ -819,7 +819,7 @@
         catch { _reportsResult = LoadResult<CaseReportSummary>.Failure(); }
 
         // Load pending scheduling proposals
-        try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
+        try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).Items.ToList(); StateHasChanged(); }
         catch { /* silent */ }
 
         // Co-clients — only load (and only shown) for the primary client. IsPrimaryClient comes
@@ -1248,7 +1248,7 @@
             {
                 // Reload so the status badge and cancel button update
                 _case = await AdminClient.GetMyCaseAsync(CaseId);
-                _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList();
+                _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).Items.ToList();
             }
             else { _error = "The cancellation window has closed for this investigation."; }
         }

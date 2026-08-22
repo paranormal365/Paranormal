@@ -158,7 +158,7 @@
         if (_selectedOrgId is null) { _investigations = []; return; }
 
         var investigations = await AdminClient.GetOrgInvestigationsAsync(_selectedOrgId.Value);
-        _investigations = [.. investigations
+        _investigations = [.. investigations.Items
             .Where(i => i.Status != InvestigationStatus.Cancelled)
             .OrderByDescending(i => i.ScheduledDateTime)
             .Take(25)

@@ -3,8 +3,15 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading proposals…" /> }
+else if (_proposalsResult.Failed)
+{
+    @* A pending proposal that does not render is a date nobody replies to. *@
+    <BenListState TItem="ScheduleProposalDto" Result="@_proposalsResult" OnRetry="@OnInitializedAsync" />
+}
 else
 {
     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -106,6 +113,7 @@ else
 
     private List<ScheduleProposalDto> _proposals = [];
     private bool _loading = true;
+    private LoadResult<ScheduleProposalDto> _proposalsResult;
     private bool _saving;
     private string? _error;
 
@@ -115,7 +123,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { _proposals = (await AdminClient.GetScheduleProposalsAsync(OrgId, CaseId)).ToList(); }
+        try { _proposalsResult = await AdminClient.GetScheduleProposalsAsync(OrgId, CaseId); _proposals = _proposalsResult.Items.ToList(); }
         catch { _error = "Failed to load proposals."; }
         _loading = false;
     }
