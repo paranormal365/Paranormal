@@ -188,6 +188,8 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             CreatedByAppUserId = appUserId
         });
 
+        Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(dbContext, organization.Id, appUserId);
+
         await dbContext.SaveChangesAsync(token);
         return organization;
     }

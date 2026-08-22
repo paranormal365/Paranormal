@@ -45,6 +45,138 @@ internal static class EquipmentTaxonomySeeder
         ("Other",                    "Gear that doesn't fit an existing category yet.", "bi bi-question-circle"),
     ];
 
+
+    // ── The real catalog (launch seed, 2026-08-22) ───────────────────────────
+    // Every entry is a genuine product the hobby actually uses, so a clean launch database
+    // starts with a catalog worth browsing instead of one Generic brand and a moderation queue.
+    // Names and model numbers are as the manufacturers print them; descriptions say what the
+    // thing does in the field, not marketing copy. All name-matched and idempotent, so a
+    // deployment that accumulated its own entries keeps them.
+
+    private static readonly string[] _realBrands =
+    [
+        "K-II Enterprises", "DAS Distribution", "Digital Dowsing", "GhostStop", "AlphaLab",
+        "GQ Electronics", "Extech", "Fluke", "FLIR", "Seek Thermal",
+        "Zoom", "Tascam", "Sony", "Olympus", "Panasonic",
+        "RadioShack", "Wyze", "GoPro", "SiOnyx", "Tendelux",
+        "ThermoPro", "Govee", "Motorola", "BaoFeng", "Anker",
+        "Manfrotto", "Joby", "Pelican", "Streamlight",
+    ];
+
+    /// <summary>(Category, Brand, Model, ModelNumber, Description) — see the block comment above.</summary>
+    private static readonly (string Category, string Brand, string Model, string? Number, string Description)[] _realModels =
+    [
+        // ── EMF meters ──
+        ("EMF Meter", "K-II Enterprises", "K-II EMF Meter", "K-II",
+         "The five-LED meter most people picture when they hear EMF. Instant response, no logging — a first-alert device."),
+        ("EMF Meter", "DAS Distribution", "Mel-8704R", "8704R",
+         "Gary Galka's combined EMF and ambient-temperature meter, designed for investigation work with a red backlight for the dark."),
+        ("EMF Meter", "AlphaLab", "TriField TF2", "TF2",
+         "Lab-grade AC magnetic, electric and RF measurement in one meter. The one to reach for when a K-II spike needs a second opinion."),
+        ("EMF Meter", "GhostStop", "EDI+ Meter", "EDI+",
+         "EMF, temperature, pressure, humidity and vibration in one unit, with on-board data logging for later graphing."),
+        ("EMF Meter", "GQ Electronics", "EMF-390", "EMF-390",
+         "Budget tri-field meter with logging and a spectrum display; popular for baseline sweeps."),
+
+        // ── Spirit boxes ──
+        ("Spirit Box", "DAS Distribution", "P-SB7 Spirit Box", "P-SB7 Rev4",
+         "The standard radio-sweep box: AM/FM scanned at adjustable speed, audio out to a speaker or recorder."),
+        ("Spirit Box", "DAS Distribution", "P-SB11 Spirit Box", "P-SB11",
+         "Dual simultaneous sweeps (AM+FM) with adjustable gap and noise-cancel modes; the P-SB7's bigger sibling."),
+        ("Spirit Box", "RadioShack", "12-587 (Hack Box)", "12-587",
+         "The classic modified RadioShack scanner — mute-pin disabled so it sweeps continuously. Long discontinued; still traded and used."),
+
+        // ── REM-Pods and trigger devices ──
+        ("REM-Pod / Trigger Device", "DAS Distribution", "REM-Pod", "REM-EMT",
+         "Radiates its own EM field from a telescoping antenna and alarms on disturbance, with ambient-temperature deviation alerts."),
+        ("REM-Pod / Trigger Device", "GhostStop", "Boo Buddy", null,
+         "Trigger-object teddy bear that speaks when its EMF, temperature or motion sensors trip. Made for cases involving children."),
+
+        // ── ITC and team communications ──
+        ("Communications", "Digital Dowsing", "Ovilus V", "Ovilus 5",
+         "Bill Chappell's word-bank ITC device: environmental readings select words from an internal dictionary, spoken and displayed."),
+        ("Communications", "Digital Dowsing", "Paranormal Puck 2", "Puck 2",
+         "Environmental sensor platform that streams readings to a phone and renders words from changes; the Ovilus's data-first sibling."),
+        ("Communications", "Motorola", "Talkabout T470", "T470",
+         "License-free two-way radios for keeping split teams in contact across a large site."),
+        ("Communications", "BaoFeng", "UV-5R", "UV-5R",
+         "Cheap programmable handheld transceiver; common team radio where somebody holds the licence."),
+
+        // ── Audio recorders ──
+        ("Audio Recorder", "Zoom", "H1n Handy Recorder", "H1n",
+         "Pocket X/Y stereo recorder; the default first EVP recorder for many groups."),
+        ("Audio Recorder", "Zoom", "H4n Pro", "H4n Pro",
+         "Four-track recorder with XLR inputs — run static room mics and a handheld pair at once."),
+        ("Audio Recorder", "Tascam", "DR-05X", "DR-05X",
+         "Omnidirectional stereo recorder with clean preamps; a workhorse for room captures."),
+        ("Audio Recorder", "Tascam", "DR-40X", "DR-40X",
+         "Adjustable X/Y-A/B mics plus XLR inputs, four tracks; a static-session hub."),
+        ("Audio Recorder", "Sony", "PCM-A10", "PCM-A10",
+         "High-resolution recorder with adjustable mics and USB output; excellent low noise floor for quiet rooms."),
+        ("Audio Recorder", "Sony", "ICD-PX470", "ICD-PX470",
+         "Entry-level voice recorder that punches above its price for EVP work; runs forever on AAA cells."),
+        ("Audio Recorder", "Olympus", "WS-853", "WS-853",
+         "Simple stereo voice recorder with strong battery life; a common handout unit for guest investigators."),
+        ("Audio Recorder", "Panasonic", "RR-DR60", "RR-DR60",
+         "The legendary 1990s IC recorder claimed to be unusually EVP-prone. Discontinued; sells second-hand for extraordinary money."),
+
+        // ── Video ──
+        ("Video Camera", "GhostStop", "Full Spectrum POV Cam", null,
+         "Compact full-spectrum camcorder capturing UV through IR, made for body-worn and static use with IR lighting."),
+        ("Video Camera", "Wyze", "Wyze Cam v3", "v3",
+         "Cheap wired camera with genuinely good night vision — groups scatter several as static coverage and record centrally."),
+        ("Video Camera", "GoPro", "HERO12 Black", "HERO12",
+         "Action camera for walkthrough POV; pair with an IR conversion or lighting for dark interiors."),
+        ("Video Camera", "SiOnyx", "Aurora Pro", "Aurora Pro",
+         "True digital night-vision camera that films full colour by moonlight; no IR illuminator needed outdoors."),
+
+        // ── Still photography ──
+        ("Still Camera", "GhostStop", "Full Spectrum Digital Camera", null,
+         "Point-and-shoot converted to pass UV through IR, for stills matching the full-spectrum video rig."),
+
+        // ── Thermal ──
+        ("Thermal Imaging", "FLIR", "ONE Pro", "ONE Pro",
+         "Phone-attached thermal camera; enough resolution to chase cold spots without carrying a second device."),
+        ("Thermal Imaging", "FLIR", "C5", "C5",
+         "Pocket standalone thermal camera with Wi-Fi export; the step up from phone attachments."),
+        ("Thermal Imaging", "FLIR", "TG165-X", "TG165-X",
+         "Spot thermometer with a thermal image behind the number — quick wall and window surveys."),
+        ("Thermal Imaging", "Seek Thermal", "CompactPRO", "CompactPRO",
+         "High-resolution phone-attached thermal imager; FLIR ONE's main rival in the field."),
+
+        // ── Environmental logging ──
+        ("Environmental Sensor", "Extech", "RHT10 Datalogger", "RHT10",
+         "USB humidity and temperature logger — leave one per room and graph the whole night afterwards."),
+        ("Environmental Sensor", "Fluke", "62 MAX+", "62 MAX+",
+         "Rugged IR spot thermometer for fast surface readings; survives being dropped in the dark."),
+        ("Environmental Sensor", "ThermoPro", "TP49 Hygrometer", "TP49",
+         "Tiny digital temperature and humidity display; cheap enough to leave one in every room on camera."),
+        ("Environmental Sensor", "Govee", "H5075 Thermometer", "H5075",
+         "Bluetooth temperature/humidity logger with phone export — baseline data with no wiring."),
+
+        // ── Motion and vibration ──
+        ("Motion / Vibration Sensor", "GhostStop", "Geophone", null,
+         "Seismic vibration detector with an LED ladder — footsteps and knocks register as light, silently, on camera."),
+
+        // ── Lighting ──
+        ("Lighting / IR Illuminator", "Tendelux", "AI4 IR Illuminator", "AI4",
+         "Wide-angle 850nm infrared floodlight; makes night-vision cameras actually see a whole room."),
+        ("Lighting / IR Illuminator", "GhostStop", "Laser Grid GS1", "GS1",
+         "Green laser matrix pen — project a dot grid across a hall and any movement breaks the pattern on camera."),
+        ("Lighting / IR Illuminator", "Streamlight", "ProTac HL-X", "HL-X",
+         "1,000-lumen duty flashlight with a low mode that will not wreck night vision."),
+
+        // ── Power, support, cases ──
+        ("Power & Batteries", "Anker", "PowerCore 10000", "A1263",
+         "Pocket USB battery bank — keeps phones, IR lights and Wyze cams alive through a long night."),
+        ("Tripods & Mounts", "Manfrotto", "Compact Action", "MKCOMPACTACN",
+         "Light aluminium tripod with a joystick head; fast to reposition between rooms in the dark."),
+        ("Tripods & Mounts", "Joby", "GorillaPod 3K", "3K",
+         "Flexible legs wrap railings and door frames — static cameras where no tripod stands."),
+        ("Protective / Utility", "Pelican", "1510 Case", "1510",
+         "Carry-on-sized waterproof hard case; the standard way a group's kit travels and survives."),
+    ];
+
     internal static async Task SeedAsync(IServiceProvider services, IConfiguration config)
     {
         var ownerEmail = config["SeedData:SuperAdmin:Email"];
@@ -148,7 +280,68 @@ internal static class EquipmentTaxonomySeeder
         }
         if (modelAdded) await db.SaveChangesAsync();
 
+        await SeedRealCatalogAsync(db, ownerId, now);
+
         await BackfillSlugsAsync(db);
+    }
+
+    /// <summary>Adds the real brands and models above, by name, never touching existing rows.</summary>
+    /// <remarks>
+    /// Approved on arrival: this is SuperAdmin-curated launch data, not a user proposal, so it
+    /// skips the moderation queue the accumulating catalog uses. A brand or model a deployment
+    /// already has — including one a user proposed under the same name — is left exactly as it
+    /// is, edits, approval state and all.
+    /// </remarks>
+    private static async Task SeedRealCatalogAsync(BenDataContext db, Guid ownerId, DateTime now)
+    {
+        var brandsByName = (await db.EquipmentBrands.ToListAsync())
+            .ToDictionary(b => b.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var name in _realBrands)
+        {
+            if (brandsByName.ContainsKey(name)) continue;
+            var brand = new EquipmentBrand
+            {
+                Id = Guid.NewGuid(), Name = name,
+                IsApproved = true, ApprovedByAppUserId = ownerId, DateApproved = now,
+                DateCreated = now, CreatedByAppUserId = ownerId,
+            };
+            db.EquipmentBrands.Add(brand);
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, brand, default);
+            brandsByName[name] = brand;
+        }
+        await db.SaveChangesAsync();
+
+        var categoriesByName = (await db.EquipmentCategories.ToListAsync())
+            .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        var existingModels = (await db.EquipmentModels.Select(m => new { m.EquipmentBrandId, m.Name }).ToListAsync())
+            .Select(m => (m.EquipmentBrandId, m.Name.ToLowerInvariant()))
+            .ToHashSet();
+
+        var added = 0;
+        foreach (var (categoryName, brandName, modelName, number, description) in _realModels)
+        {
+            if (!categoriesByName.TryGetValue(categoryName, out var category)) continue;
+            if (!brandsByName.TryGetValue(brandName, out var brand)) continue;
+            if (existingModels.Contains((brand.Id, modelName.ToLowerInvariant()))) continue;
+
+            var model = new EquipmentModel
+            {
+                Id = Guid.NewGuid(),
+                EquipmentBrandId = brand.Id, EquipmentCategoryId = category.Id,
+                Name = modelName, ModelNumber = number, Description = description,
+                IsApproved = true, ApprovedByAppUserId = ownerId, DateApproved = now,
+                DateCreated = now, CreatedByAppUserId = ownerId,
+            };
+            db.EquipmentModels.Add(model);
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, model, default);
+            added++;
+        }
+        if (added > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[EquipmentTaxonomySeeder] Added {added} real model(s) to the catalog.");
+        }
     }
 
     /// <summary>

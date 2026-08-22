@@ -377,6 +377,16 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.NotNull(membership);
         Assert.Equal(MemberRole.Owner, membership.Role);
         Assert.True(membership.IsActive);
+
+        // A new group's calendar must be usable from the first moment: registration stamps the
+        // default event types (OrgCalendarDefaults), same as both SuperAdmin create doors.
+        var eventTypes = await verify.OrgCalendarEventTypes
+            .Where(t => t.OrganizationId == org.Id)
+            .OrderBy(t => t.SortOrder)
+            .Select(t => t.Name)
+            .ToListAsync();
+
+        Assert.Equal(["Investigation", "Public Event", "Meeting", "Training", "Fundraiser"], eventTypes);
     }
 
     [Fact]
