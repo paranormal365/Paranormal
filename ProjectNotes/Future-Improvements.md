@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization area converted 2026-08-21)
+## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization + case areas converted, 81 of 120 left)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -5983,6 +5983,34 @@ Worth designing once rather than patching per-site: likely a `GetExpectingReason
 (the Delete/Send variants exist) plus a component-level convention for "couldn't load" vs
 "nothing here". Until then, any new list surface should assert real content in its tests, per
 the OrdinaryMemberSurfaceTests pattern.
+
+### Progress
+
+| Slice | Date | Converted | Ratchet |
+|---|---|---|---|
+| Organization | 2026-08-21 | 19 | 120 → 101 |
+| **Case** | **2026-08-22** | **20** | **101 → 81** |
+
+**Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
+`BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
+`IBenMediaClient`, and 19 consumers. `CaseMessageThread` — shared by the client and org sides — now
+takes a `LoadResult` delegate, so a refused thread stops telling a client nobody has written to
+them. Six adapter tests were **inverted**: they asserted that a refusal "returns empty", which made
+them green tests defending this very bug.
+
+New `LoadResultRenderedGuardTests` requires any `.razor` calling a converted method to mention
+`BenListState` or read `.Failed`, with an allowlist for genuine decorations that records the reason.
+It stops the likely half-conversion — silencing the compile error with `.Items` and leaving the page
+as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
+there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
+
+**Remaining, in size order:** Equipment 22, Platform 14, User 11, Investigation 8, Cms 6, Places 5,
+Media 5, Publications 4, Membership 3, Feed 2, Account 1.
+
+**For whoever takes the next slice:** a list that is mutated in place — `Insert`, `Add`,
+`RemoveAll` — must **not** be wrapped in `BenListState`. The wrapper keeps rendering the load's own
+emptiness, so the first item added never appears. Branch on `.Failed` beside the existing empty
+check instead.
 
 ---
 
@@ -6521,3 +6549,170 @@ fifth guard in this codebase that would otherwise fire on its own explanatory pr
 **The lesson is bigger than dates.** When something is reported wrong repeatedly *after* being
 fixed, the fix is landing somewhere the broken code never consults. Go and find the call sites, and
 add a source scan rather than another assertion on the thing that was already right.
+
+---
+
+## 131. Signed-out, the "Request an Investigation" page's button does nothing (raised 2026-08-22 by Ben)
+
+Ben: *"the sign up button if you try to create a case and are not logged in, does nothing."*
+
+`/my-requests/new` (`ClientRequestWizard.razor`) renders this to an anonymous visitor:
+
+```razor
+@if (!UserState.IsAuthenticated)
+{
+    <p class="lead">You must be signed in to submit a request.</p>
+    <button type="button" class="btn btn-primary"
+            @onclick="@(() => NavManager.NavigateTo("/login"))">Sign In</button>
+    return;
+}
+```
+
+**Why it does nothing.** `@onclick` needs a live SignalR circuit. This page is reached by a
+signed-out visitor — often the very first page they open — and it is prerendered long before the
+circuit connects, so a click in that window is dropped on the floor with no feedback. Navigation
+needs no circuit at all: a plain `<a href="/login" class="btn btn-primary">` works in the
+prerender, works with JS disabled, and is right-clickable. See the standing note on the Blazor
+Server interactivity race.
+
+**It is also the wrong destination.** Somebody who has never used the site and wants to report
+activity has no account yet. The dead end offers only Sign In; it should offer **Create an
+account** (`/signup`) as the primary action with Sign In secondary, and both should carry
+`?returnUrl=/my-requests/new` so they land back on the request they were trying to start rather
+than on a dashboard. `Login.razor` already supports `ReturnUrl` (built for the case-invite flow,
+item 4).
+
+**Same defect, same page family — fix together:**
+
+- `ClientRequests.razor:14` and `:32` — "New Request" buttons, also `@onclick` navigation
+- `HomeHero.razor:57` already gets this right (`<a href="/login">`), which is the model
+
+**Worth a guard.** A `@onclick` handler whose whole body is `NavManager.NavigateTo(<literal>)` is
+always better as an anchor, and a source scan can say so. That would also have caught this one.
+
+**Not yet verified live** — recorded from Ben's report and confirmed by reading the source; the
+prerender window is the likely mechanism but has not been reproduced in a browser.
+
+---
+
+---
+
+## 132. Dark mode: fixed-light Bootstrap utilities make white cards with near-white text (CLOSED 2026-08-22)
+
+Ben: *"even when you are in dark mode and on the audit log page, when you expand the log record,
+the row that opens has a white background card with near-white text."*
+
+`AdminAuditLog.razor`'s `<DetailTemplate>` used `bg-light` for the panel and `bg-white` for the
+JSON block. Both are pinned to a literal colour, so in dark mode the panel stayed white while the
+text inside kept the theme's light-on-dark foreground.
+
+### What was actually wrong — and two things worth correcting
+
+Reading the compiled `smartapp.min.css` instead of reasoning from class names changed the scope
+twice, both times **downward**. The dark block redefines `--bs-tertiary-bg-rgb`,
+`--bs-secondary-bg-rgb`, `--bs-body-bg-rgb`, `--bs-emphasis-color` and `--bs-secondary-color`, but
+**not** `--bs-light-rgb`, `--bs-white-rgb` or `--bs-dark-rgb`:
+
+| Class | Resolves through | Redefined in dark? | Verdict |
+|---|---|---|---|
+| `bg-light` | `--bs-light-rgb` | no | **broken** — 22 uses |
+| `bg-white` | `--bs-white-rgb` | no | **broken** — 3 uses |
+| `text-bg-light` | `--bs-light-rgb` + literal `#000` | no | **broken** — 1 use |
+| `text-dark` | `--bs-dark-rgb` | no | broken **only** off a fixed background — 10 of 76 |
+| `alert-light` | `--bs-light-bg-subtle` / `-text-emphasis` / `-border-subtle` | **yes, all three** | fine — leave alone |
+
+1. **`alert-light` was never broken.** The first version of this item said to sweep it. Wrong: the
+   theme redefines all three variables it reads (#343a40, #f8f9fa, #495057), so the ~15
+   `alert alert-light` empty states were always theme-aware.
+2. **65 of the 76 `text-dark` uses were fine.** They sit on `bg-warning` or `bg-info`, neither of
+   which changes between themes, so black text on them is correct in both. Only the 10 paired with
+   `bg-light`/`bg-white` needed anything, and they were fixed with their background.
+
+Guessing from the class name would have "fixed" 80 working things.
+
+### What shipped
+
+- 23 replacements: `bg-light` → `bg-body-tertiary` (surfaces) or `bg-body-secondary` (chips),
+  `bg-white` → `bg-body`, `text-bg-light` and paired `text-dark` → `text-body-emphasis`
+- **One deliberate exception**, annotated in place: the 2FA QR-code container keeps `bg-white`.
+  A QR code is read by a camera, not a person, and scanners need the light modules light in
+  either theme.
+- **`ThemeSafeColorExtensions`** — `ColorClass` is a *stored* value (an org picks a colour for a
+  calendar event type; `AdminLookupTypes` lets a SuperAdmin type any class into a free-text box),
+  so fixing the dropdown alone would only help the next choice. Stored values are translated at
+  render across 8 sites, and the picker's "Black" (`text-dark`, which vanished into the page in
+  dark mode) became "Contrast" (`text-body-emphasis` — black on light, white on dark).
+- **`FixedLightUtilityGuardTests`** bans all three utilities in `.razor`, and bans `text-dark`
+  except on a background that never changes; allowlist entries must still be real. Verified to
+  discriminate — reintroducing the audit log's `bg-light`, and adding a `text-dark` to a
+  theme-following surface, each fail it.
+
+### Measured in the running app
+
+| | background | text | contrast |
+|---|---|---|---|
+| Audit-log panel, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| JSON block, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| Panel, after | `#2b3035` | `#dee2e6` | **10.23:1** |
+| JSON block, after | `#212529` | `#dee2e6` | **11.85:1** |
+
+WCAG AA wants 4.5:1; at 1.30:1 the text was effectively invisible. Every replacement token was
+measured in both themes and changes value; all three banned ones were measured and do not. The home
+page renders zero banned backgrounds, and its two remaining `text-dark` are both
+`badge bg-warning text-dark` — black on yellow-ochre, correct in both themes.
+
+Ben confirmed the page himself: *"Audit log fix looks great."*
+
+The custom stylesheets needed nothing — `app.css`'s `#fff` uses sit inside
+`:root[data-bs-theme="dark"]` blocks, mixing outline-button colours *toward* white on purpose.
+
+---
+
+## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (raised 2026-08-22 by Ben)
+
+Ben, on two SuperAdmin pages: *"site settings page gives a couldn't load site settings, the server
+answered 401 (Unauthorized). then below it the word 'Loading…'"* and *"Support tickets page say
+Could not load tickets."*
+
+**First, the likely cause of that particular sighting.** The website host was restarted mid-session
+while Ben was signed in. `IWebApiTokenStore` is registered **scoped** (`Program.cs:83`), which under
+Blazor Server means per-circuit: restarting the host destroys every circuit and the access token
+with it. The browser reconnects into a fresh scope holding no token, `WebApiClient` sends no
+`Authorization` header, and the API answers 401 to everything. Signing in again clears it. So these
+two reports are probably not standing product defects — but they expose two that are.
+
+### 133a. A dead session is reported as an HTTP status code
+
+The page said *"the server answered 401 (Unauthorized)"*. That sentence is `LoadResult.Reason`
+being rendered faithfully — item 120 working as designed — but 401 is the one status where the
+generic treatment is wrong. It does not mean "something went wrong fetching this list"; it means
+**this person is no longer signed in**, and the only useful thing to say is so, with a way back.
+
+This is not a dev-only artefact. It happens in production whenever a token expires, an app pool
+recycles, or a deployment restarts the host — and the reader will be told their site settings could
+not be loaded rather than that they need to sign in again.
+
+**Fix.** Handle 401 distinctly from other failures in the client — a flag on `LoadResult` or a
+dedicated reason — and have `BenListState` (and the ad-hoc error banners) render "Your session has
+ended. Sign in again" with a link carrying `returnUrl`. Consider re-authenticating silently where a
+refresh token exists. Related to item 131, which is also a dead end offering no way forward.
+
+**Worth deciding separately:** whether the token should survive a reconnect at all. It is scoped
+today, and `EntraTokenPersister` only bridges the prerender-to-circuit handoff, not a host restart.
+
+### 133b. AdminSiteSettings renders its error and "Loading…" at the same time
+
+Real, and independent of the 401. In `AdminSiteSettings.razor`, `LoadAsync` sets `_error` and
+returns on failure — leaving `_settings` null. The template's only test is:
+
+```razor
+@if (_settings is null) { <p class="text-secondary">Loading…</p> }
+```
+
+So a failed load shows the red banner *and* a spinner that will never resolve, which reads as "it
+failed, but it is also still trying". The page needs the third state the rest of the site now has:
+this is a surface that should be using `BenListState`, which distinguishes loading from
+couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _page is null`) and
+is the model.
+
+Cheap, and worth doing with the next item-120 slice rather than alone.

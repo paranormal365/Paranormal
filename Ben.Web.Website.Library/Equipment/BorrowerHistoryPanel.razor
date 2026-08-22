@@ -22,7 +22,7 @@
             {
                 @* Below three ratings no average is shown: one sour opinion rendered as a number
                    reads as a verdict when it is one voice. *@
-                <span class="badge bg-light text-secondary border ms-2">
+                <span class="badge bg-body-secondary text-body-secondary border ms-2">
                     @_panel.Summary.RatingCount @(_panel.Summary.RatingCount == 1 ? "rating" : "ratings") — too few to average
                 </span>
             }

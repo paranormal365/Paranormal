@@ -1,6 +1,8 @@
 @* Reusable chat-style message thread for case client↔org dialogue. *@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Messaging
 @inject IBenUserState UserState
 
@@ -8,6 +10,12 @@
 @if (_messages is null)
 {
     <BenLoaderOverlay Visible="true" Text="Loading messages…" />
+}
+else if (_result.Failed)
+{
+    @* "No messages yet" to a client whose group has written to them is the worst version of this
+       bug: the thread is the only channel they have, and silence reads as being ignored. *@
+    <BenListState TItem="CaseMessageRecord" Result="@_result" OnRetry="@ReloadAsync" />
 }
 else if (_messages.Count == 0)
 {
@@ -83,12 +91,17 @@ else
     [Parameter, EditorRequired] public CaseMessageSide CurrentSide { get; set; }
 
     /// <summary>Async function to load messages.</summary>
-    [Parameter, EditorRequired] public Func<Task<IReadOnlyList<CaseMessageRecord>>> LoadMessages { get; set; } = null!;
+    /// <remarks>
+    /// Returns <see cref="LoadResult{T}"/> rather than a bare list so a refused thread is not
+    /// drawn as an empty one — see item 120.
+    /// </remarks>
+    [Parameter, EditorRequired] public Func<Task<LoadResult<CaseMessageRecord>>> LoadMessages { get; set; } = null!;
 
     /// <summary>Async function to post a new message and return the saved record.</summary>
     [Parameter, EditorRequired] public Func<string, Task<CaseMessageRecord?>> PostMessage { get; set; } = null!;
 
     private List<CaseMessageRecord>? _messages;
+    private LoadResult<CaseMessageRecord> _result;
     private string _draft = string.Empty;
     private bool _sending;
     private string? _error;
@@ -102,19 +115,23 @@ else
     /// </summary>
     private int _revision;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
     {
         var revision = _revision;
         try
         {
-            var loaded = (await LoadMessages()).ToList();
+            var loaded = await LoadMessages();
             if (revision != _revision) return;   // superseded by a send
-            _messages = loaded;
+            _result   = loaded;
+            _messages = loaded.Items.ToList();
         }
         catch
         {
             if (revision != _revision) return;
-            _error = "Failed to load messages.";
+            // A throw and a refusal are the same thing to the reader: the thread did not load.
+            _result   = LoadResult<CaseMessageRecord>.Failure();
             _messages = [];
         }
     }
@@ -141,6 +158,9 @@ else
 
             _messages ??= [];
             _messages.Add(saved);
+            // The thread is on screen now, whatever the earlier load did — leaving the failure
+            // panel up beside a message the person can see would be its own untruth.
+            _result = LoadResult<CaseMessageRecord>.Ok(_messages);
             _revision++;   // any load still in flight is now stale
         }
         catch

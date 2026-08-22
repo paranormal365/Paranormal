@@ -1,6 +1,8 @@
 @page "/my-cases"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -10,27 +12,20 @@
 <div class="container-fluid py-3" style="max-width:860px;">
     <h3 class="mb-4">My Cases</h3>
 
-    @if (_error is not null)
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
-
-    @if (_cases is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading your cases…" />
-    }
-    else if (_cases.Count == 0)
-    {
-        <div class="text-center py-5 text-secondary">
-            <p class="mb-3">You have no active cases.</p>
-            <p class="small">Cases appear here after an investigation group accepts your request.</p>
-            <a href="/my-requests" class="btn btn-outline-primary mt-2">View My Requests</a>
-        </div>
-    }
-    else
-    {
+    @* A client has no other window into this. "You have no active cases" to somebody who has one
+       is not a wording slip — they will wait for a group that already accepted them. *@
+    <BenListState TItem="ClientCaseListItem" Result="@_result" Loading="@(_cases is null)"
+                  LoadingText="Loading your cases…" OnRetry="@LoadAsync">
+        <Empty>
+            <div class="text-center py-5 text-secondary">
+                <p class="mb-3">You have no active cases.</p>
+                <p class="small">Cases appear here after an investigation group accepts your request.</p>
+                <a href="/my-requests" class="btn btn-outline-primary mt-2">View My Requests</a>
+            </div>
+        </Empty>
+        <ChildContent>
         <div class="d-flex flex-column gap-3">
-            @foreach (var c in _cases)
+            @foreach (var c in _result.Items)
             {
                 <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-cases/{c.CaseId}"))">
                     <div class="card-body">
@@ -65,20 +60,35 @@
                 </div>
             }
         </div>
-    }
+        </ChildContent>
+    </BenListState>
 </div>
 
 @code {
     private List<ClientCaseListItem>? _cases;
-    private string? _error;
+    private LoadResult<ClientCaseListItem> _result;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
-        try { _cases = (await AdminClient.GetMyCasesAsync()).ToList(); }
-        catch { _error = "Failed to load cases."; _cases = []; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _result = await AdminClient.GetMyCasesAsync();
+            _cases  = _result.Items.ToList();
+        }
+        catch
+        {
+            // A thrown fetch is a failed load too — same panel, not an empty world.
+            _result = LoadResult<ClientCaseListItem>.Failure();
+            _cases  = [];
+        }
         StateHasChanged();
     }
 

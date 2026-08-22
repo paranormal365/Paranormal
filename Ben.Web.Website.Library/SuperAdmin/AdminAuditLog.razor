@@ -107,7 +107,7 @@
 
         <DetailTemplate>
             @{ var log = (AuditLogRecord)context; }
-            <div class="p-3 bg-light border rounded ms-3" style="max-width:860px;">
+            <div class="p-3 bg-body-tertiary border rounded ms-3" style="max-width:860px;">
                 <div class="row g-2 mb-2">
                     <div class="col-sm-3 text-secondary small">Entity ID</div>
                     <div class="col-sm-9 font-monospace small">@log.EntityId</div>
@@ -121,7 +121,7 @@
                 @if (!string.IsNullOrWhiteSpace(log.ChangesJson))
                 {
                     <div class="text-secondary small mb-1">Changes</div>
-                    <pre class="bg-white border rounded p-2 small" style="max-height:200px; overflow:auto; white-space:pre-wrap; word-break:break-all;">@FormatJson(log.ChangesJson)</pre>
+                    <pre class="bg-body border rounded p-2 small" style="max-height:200px; overflow:auto; white-space:pre-wrap; word-break:break-all;">@FormatJson(log.ChangesJson)</pre>
                 }
             </div>
         </DetailTemplate>
@@ -177,7 +177,7 @@
     <ChildContent>
         @if (_mailTarget is not null)
         {
-            <div class="mb-3 p-2 bg-light rounded small">
+            <div class="mb-3 p-2 bg-body-tertiary rounded small">
                 <strong>@_mailTarget.EntityType</strong> · @ActionLabel(_mailTarget.Action) ·
                 @_mailTarget.OccurredAt.ToDisplayDateTime() UTC
             </div>

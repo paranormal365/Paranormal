@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -83,7 +84,7 @@ public interface IBenMediaClient
     // ── Clipart catalog (SuperAdmin) ─────────────────────────────────────────
 
     /// <summary>Every catalog asset, active and retired.</summary>
-    Task<List<VideoAssetAdminRecord>> GetVideoAssetsAsync(CancellationToken token = default);
+    Task<LoadResult<VideoAssetAdminRecord>> GetVideoAssetsAsync(CancellationToken token = default);
 
     /// <summary>Publishes an already-uploaded file into the shared catalog.</summary>
     Task<VideoAssetAdminRecord?> CreateVideoAssetAsync(

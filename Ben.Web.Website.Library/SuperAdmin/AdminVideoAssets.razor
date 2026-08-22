@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -75,6 +77,10 @@
     {
         <p class="text-secondary">Loading…</p>
     }
+    else if (_assetsResult.Failed)
+    {
+        <BenListState TItem="VideoAssetAdminRecord" Result="@_assetsResult" OnRetry="@LoadAsync" />
+    }
     else if (_assets.Count == 0)
     {
         <p class="text-secondary">Nothing published yet.</p>
@@ -138,6 +144,7 @@
 
 @code {
     private List<VideoAssetAdminRecord>? _assets;
+    private LoadResult<VideoAssetAdminRecord> _assetsResult;
     private readonly Dictionary<Guid, string> _thumbs = [];
     private bool _busy;
     private string? _error;
@@ -175,10 +182,15 @@
     {
         try
         {
-            _assets = await AdminClient.GetVideoAssetsAsync();
+            _assetsResult = await AdminClient.GetVideoAssetsAsync();
+            _assets       = _assetsResult.Items.ToList();
             await LoadThumbsAsync();
         }
-        catch { _error = "Couldn't load the clipart library."; }
+        catch
+        {
+            _assetsResult = LoadResult<VideoAssetAdminRecord>.Failure();
+            _assets       = [];
+        }
     }
 
     /// <summary>

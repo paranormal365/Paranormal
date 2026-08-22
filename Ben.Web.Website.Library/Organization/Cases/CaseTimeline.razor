@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -20,6 +22,10 @@
     @if (_entries is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading timeline…" />
+    }
+    else if (_entriesResult.Failed)
+    {
+        <BenListState TItem="CaseTimelineEntryRecord" Result="@_entriesResult" OnRetry="@LoadAsync" />
     }
     else if (_entries.Count == 0)
     {
@@ -62,7 +68,7 @@
             {
                 var e = row.Entry;
                 var moment = row.Moment;
-                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
+                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-body-tertiary" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div class="flex-grow-1">
@@ -105,7 +111,7 @@
                                     <div class="mt-1 d-flex gap-1 flex-wrap">
                                         @foreach (var typeId in e.ExperienceTypeIds)
                                         {
-                                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                            <span class="badge bg-body-secondary text-body-emphasis border" style="font-size:0.7rem;">
                                                 @(_expTypeNames.GetValueOrDefault(typeId, typeId.ToString()[..8]))
                                             </span>
                                         }
@@ -185,7 +191,7 @@
                 <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
                     @foreach (var cat in _taxonomy)
                     {
-                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass">
+                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass.ToThemeSafeColorClass()">
                             @cat.Category.Name
                         </div>
                         @foreach (var t in cat.Types)
@@ -303,6 +309,7 @@
     [Parameter] public Guid CaseId { get; set; }
 
     private List<CaseTimelineEntryRecord>? _entries;
+    private LoadResult<CaseTimelineEntryRecord> _entriesResult;
     private string? _error;
     private bool _isBusy;
     private CaseTimelineEntryType? _typeFilter;
@@ -431,8 +438,17 @@
 
     private async Task LoadAsync()
     {
-        try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load timeline."; }
+        try
+        {
+            _entriesResult = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId);
+            _entries       = _entriesResult.Items.ToList();
+        }
+        catch
+        {
+            _error         = "Failed to load timeline.";
+            _entriesResult = LoadResult<CaseTimelineEntryRecord>.Failure();
+            _entries     ??= [];
+        }
 
         // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
         // chips just don't appear.

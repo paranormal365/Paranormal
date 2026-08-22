@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -106,7 +108,18 @@
         </div>
 
         @* ── Submitted-to organizations ─────────────────────────────────── *@
-        @if (_orgs.Count > 0)
+        @* Hiding the card on a refusal made a submitted request look like one that had gone
+           nowhere — the single fact this page exists to report. *@
+        @if (_orgsResult.Failed)
+        {
+            <div class="card mt-3">
+                <div class="card-header fw-semibold">Submitted To</div>
+                <div class="card-body">
+                    <BenListState TItem="ClientRequestOrganizationRecord" Result="@_orgsResult" OnRetry="@LoadAsync" />
+                </div>
+            </div>
+        }
+        else if (_orgs.Count > 0)
         {
             <div class="card mt-3">
                 <div class="card-header fw-semibold">Submitted To</div>
@@ -133,7 +146,7 @@
                                 @for (int si = 0; si < steps.Count; si++)
                                 {
                                     var step = steps[si];
-                                    <span class="badge @(step.Active ? "bg-primary" : "bg-light text-secondary border")">@step.Label</span>
+                                    <span class="badge @(step.Active ? "bg-primary" : "bg-body-secondary text-body-secondary border")">@step.Label</span>
                                     @if (si < steps.Count - 1)
                                     {
                                         <span class="text-secondary">›</span>
@@ -175,6 +188,7 @@
 
     private ClientRequestRecord? _request;
     private List<ClientRequestOrganizationRecord> _orgs = [];
+    private LoadResult<ClientRequestOrganizationRecord> _orgsResult;
     private ClientCaseListItem? _myCase;  // set when Assigned to link directly to the case
     private string? _error;
     private bool _isBusy;
@@ -190,21 +204,34 @@
             NavManager.NavigateTo("/login");
             return;
         }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
         try
         {
             _request = await AdminClient.GetClientRequestAsync(Id);
             if (_request is null) { _error = "Request not found."; }
             else
             {
-                _orgs = (await AdminClient.GetClientRequestOrgsAsync(Id)).ToList();
+                _orgsResult = await AdminClient.GetClientRequestOrgsAsync(Id);
+                _orgs        = _orgsResult.Items.ToList();
                 if (_request.Status == ClientRequestStatus.Assigned)
                 {
+                    // Only used to find the one case this request became; a failed lookup
+                    // simply leaves the link off, which is what an empty list already did.
                     var cases = await AdminClient.GetMyCasesAsync();
-                    _myCase = cases.FirstOrDefault();
+                    _myCase = cases.Items.FirstOrDefault();
                 }
             }
         }
-        catch { _error = "Failed to load request."; }
+        catch
+        {
+            _error      = "Failed to load request.";
+            _orgsResult = LoadResult<ClientRequestOrganizationRecord>.Failure();
+        }
         StateHasChanged();
     }
 

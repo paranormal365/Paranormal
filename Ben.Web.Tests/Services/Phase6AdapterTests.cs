@@ -25,30 +25,42 @@ public class Phase6AdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseTransferLogRecord>>(
+        api.Setup(x => x.GetListAsync<CaseTransferLogRecord>(
                 $"/api/organizations/{orgId}/cases/{caseId}/transfers", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), CaseId = caseId,
+           .ReturnsAsync(LoadResult<CaseTransferLogRecord>.Ok([new() { Id = Guid.NewGuid(), CaseId = caseId,
                FromOrganizationId = orgId, ToOrganizationId = Guid.NewGuid(),
                ProposedByAppUserId = Guid.NewGuid(), Status = CaseTransferStatus.Pending,
-               DateProposed = DateTime.UtcNow }]);
+               DateProposed = DateTime.UtcNow }]));
 
         var result = await Build(api).GetCaseTransfersAsync(orgId, caseId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<CaseTransferLogRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<CaseTransferLogRecord>(
             $"/api/organizations/{orgId}/cases/{caseId}/transfers", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A refused fetch must not read as "there is nothing here".
+    /// </summary>
+    /// <remarks>
+    /// This assertion used to be the opposite — that a non-2xx "returns empty" — which made it a
+    /// green test defending item 120's bug rather than catching it.
+    /// </remarks>
     [Fact]
-    public async Task GetCaseTransfersAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetCaseTransfersAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseTransferLogRecord>>(
+        api.Setup(x => x.GetListAsync<CaseTransferLogRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<CaseTransferLogRecord>?)null);
+           .ReturnsAsync(LoadResult<CaseTransferLogRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetCaseTransfersAsync(Guid.NewGuid(), Guid.NewGuid());
-        Assert.Empty(result);
+
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
@@ -111,29 +123,38 @@ public class Phase6AdapterTests
     public async Task GetPublicCasesAsync_GetsFromPublicUrl()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
+        api.Setup(x => x.GetAnonymousListAsync<PublicCaseListItem>(
                 "/api/public/organizations/ghost-hunters-tn/cases", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new("#2026-042", "the-mill-house", "Smith, Nashville TN", "Nashville", "TN",
-               CaseStatus.Public, DateTime.UtcNow, null, false)]);
+           .ReturnsAsync(LoadResult<PublicCaseListItem>.Ok([new("#2026-042", "the-mill-house",
+               "Smith, Nashville TN", "Nashville", "TN",
+               CaseStatus.Public, DateTime.UtcNow, null, false)]));
 
         var result = await Build(api).GetPublicCasesAsync("ghost-hunters-tn");
 
-        Assert.Single(result);
-        Assert.Equal("#2026-042", result[0].CaseReference);
-        api.Verify(x => x.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("#2026-042", result.Items[0].CaseReference);
+        api.Verify(x => x.GetAnonymousListAsync<PublicCaseListItem>(
             "/api/public/organizations/ghost-hunters-tn/cases", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// The anonymous case list, refused. A visitor has no account and no error console; if this
+    /// page says the group has published nothing, that is all they will ever know.
+    /// </summary>
     [Fact]
-    public async Task GetPublicCasesAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetPublicCasesAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
+        api.Setup(x => x.GetAnonymousListAsync<PublicCaseListItem>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<PublicCaseListItem>?)null);
+           .ReturnsAsync(LoadResult<PublicCaseListItem>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetPublicCasesAsync("org");
-        Assert.Empty(result);
+
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
