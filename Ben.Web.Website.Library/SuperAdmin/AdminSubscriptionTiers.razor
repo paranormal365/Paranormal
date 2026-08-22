@@ -209,14 +209,47 @@
             </div>
         }
 
+        @if (_impact is not null && (_impact.GroupsMessagedNow > 0 || _impact.PaidGroupsNoticed > 0))
+        {
+            @* The blast radius, stated before the save commits it. Saving from here is a second,
+               informed click — a SuperAdmin should learn "this lowers storage for 12 paid groups"
+               from this panel, not from support tickets. *@
+            <div class="alert alert-warning mt-3">
+                <strong>This edit will notify people:</strong>
+                <ul class="mb-2">
+                    @foreach (var change in _impact.Changes)
+                    {
+                        <li>
+                            @change.Sentence
+                            <span class="badge @(change.IsImprovement ? "bg-success" : "bg-danger") ms-1">
+                                @(change.IsImprovement ? "improvement" : "reduction")
+                            </span>
+                        </li>
+                    }
+                </ul>
+                @if (_impact.GroupsMessagedNow > 0)
+                {
+                    <div class="small">@_impact.GroupsMessagedNow group(s) will be messaged immediately.</div>
+                }
+                @if (_impact.PaidGroupsNoticed > 0)
+                {
+                    <div class="small">
+                        @_impact.PaidGroupsNoticed paid group(s) keep their current terms until renewal
+                        and will be notified up to two weeks before it.
+                    </div>
+                }
+            </div>
+        }
+
         @if (_saveError is not null)
         {
             <div class="alert alert-danger py-2 mt-3">@_saveError</div>
         }
         <div class="d-flex gap-2 justify-content-end mt-3">
             <button type="button" class="btn btn-secondary" @onclick="() => _showDialog = false">Cancel</button>
-            <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
-                @(_saving ? "Saving…" : "Save")
+            <button type="button" class="btn @(_impact is null ? "btn-primary" : "btn-warning")"
+                    disabled="@_saving" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : _impact is null ? "Save" : "Confirm and save")
             </button>
         </div>
     </ChildContent>
@@ -231,6 +264,7 @@
     private bool _saving;
     private string? _saveError;
     private SubscriptionTierAdminRecord? _editing;
+    private TierImpactRecord? _impact;
     private TierForm _form = new();
 
     protected override async Task OnInitializedAsync()
@@ -258,6 +292,7 @@
         _editing = null;
         _form = TierForm.Blank();
         _saveError = null;
+        _impact = null;
         _showDialog = true;
     }
 
@@ -266,6 +301,7 @@
         _editing = tier;
         _form = TierForm.From(tier);
         _saveError = null;
+        _impact = null;
         _showDialog = true;
     }
 
@@ -275,6 +311,20 @@
         _saveError = null;
 
         var request = _form.ToRequest();
+
+        // First click on an edit: fetch the blast radius. When it is non-empty the save stops
+        // here and the button becomes "Confirm and save" — the second click is the informed one.
+        if (_editing is not null && _impact is null)
+        {
+            var impact = await AdminClient.PreviewTierImpactAsync(_editing.Id, request);
+            if (impact is not null && (impact.GroupsMessagedNow > 0 || impact.PaidGroupsNoticed > 0))
+            {
+                _impact = impact;
+                _saving = false;
+                return;
+            }
+        }
+
         var (result, error) = _editing is null
             ? await AdminClient.CreateSubscriptionTierAsync(request)
             : await AdminClient.UpdateSubscriptionTierAsync(_editing.Id, request);

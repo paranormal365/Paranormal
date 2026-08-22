@@ -149,7 +149,20 @@ public sealed class AdminCouponController : BenControllerBase
         var coupon = await db.Coupons.Include(c => c.Codes).FirstOrDefaultAsync(c => c.Id == id, ct);
         if (coupon is null) return NotFound();
 
-        var before = new { coupon.Name, coupon.PercentOff, coupon.AmountOff, coupon.IsActive };
+        // Same-type clone for the audit diff — AuditChangeTracker refuses anonymous objects.
+        var before = new Coupon
+        {
+            Id             = coupon.Id,
+            Name           = coupon.Name,
+            Kind           = coupon.Kind,
+            PercentOff     = coupon.PercentOff,
+            AmountOff      = coupon.AmountOff,
+            Duration       = coupon.Duration,
+            MaxRedemptions = coupon.MaxRedemptions,
+            RedeemByUtc    = coupon.RedeemByUtc,
+            AppliesTo      = coupon.AppliesTo,
+            IsActive       = coupon.IsActive,
+        };
 
         // The kind is fixed once codes exist. Turning a two-hundred-code batch into a shared
         // campaign would leave a hundred and ninety-nine codes that are valid and meaningless.
@@ -266,7 +279,15 @@ public sealed class AdminCouponController : BenControllerBase
         if (request.RestrictedToAppUserId is { } owner && !await db.Users.AnyAsync(u => u.Id == owner, ct))
             return BadRequest("That account does not exist.");
 
-        var before = new { code.MaxRedemptions, code.IssuedTo, code.RestrictedToAppUserId, code.IsActive };
+        var before = new CouponCode
+        {
+            Id                    = code.Id,
+            Code                  = code.Code,
+            MaxRedemptions        = code.MaxRedemptions,
+            IssuedTo              = code.IssuedTo,
+            RestrictedToAppUserId = code.RestrictedToAppUserId,
+            IsActive              = code.IsActive,
+        };
 
         code.MaxRedemptions        = request.MaxRedemptions;
         code.IssuedTo              = string.IsNullOrWhiteSpace(request.IssuedTo) ? null : request.IssuedTo.Trim();

@@ -29,12 +29,15 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IAuditLogService _auditLog;
+    private readonly TierChangeNotifier _notifier;
 
     public AdminSubscriptionTierController(
-        IDbContextFactory<BenDataContext> dbFactory, IAuditLogService auditLog)
+        IDbContextFactory<BenDataContext> dbFactory, IAuditLogService auditLog,
+        TierChangeNotifier notifier)
     {
         _dbFactory = dbFactory;
         _auditLog  = auditLog;
+        _notifier  = notifier;
     }
 
     [HttpGet]
@@ -110,7 +113,18 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
-        var before = new { tier.Name, tier.MinMembers, tier.MaxMembers, tier.SortOrder, tier.IsActive };
+        // A same-type clone, not an anonymous object: AuditChangeTracker diffs property-by-
+        // property and (rightly) refuses mismatched types. Scalars only — it ignores navigations.
+        var before = new SubscriptionTier
+        {
+            Id         = tier.Id,
+            Name       = tier.Name,
+            MinMembers = tier.MinMembers,
+            MaxMembers = tier.MaxMembers,
+            SortOrder  = tier.SortOrder,
+            IsActive   = tier.IsActive,
+        };
+        var beforeTerms = TierChangeAnalyzer.TermsOf(tier);
 
         Apply(tier, request, userId, DateTime.UtcNow, isNew: false);
 
@@ -119,8 +133,50 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await db.SaveChangesAsync(ct);
         await _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, before, tier, userId, AppSources.WebApi);
 
+        // The fan-out runs AFTER the save: a message about a change that then failed to commit
+        // would be the worst kind of notice. Improvements go out now, reductions are queued to
+        // land two weeks before each paid group's renewal — see TierChangeNotifier.
+        var afterTerms = TierChangeAnalyzer.TermsOf(tier);
+        var changes    = TierChangeAnalyzer.Analyze(
+            beforeTerms.Limits, afterTerms.Limits, beforeTerms.Prices, afterTerms.Prices);
+        await _notifier.ApplyAsync(tier.Id, tier.Name, changes, userId, ct);
+
         var inUse = await db.OrganizationSubscriptions.CountAsync(s => s.SubscriptionTierId == id, ct);
         return Ok(ToRecord(tier, inUse));
+    }
+
+    /// <summary>
+    /// What saving <paramref name="request"/> over this band would do to the groups on it —
+    /// computed without saving or sending anything, for the confirm step in the editor.
+    /// </summary>
+    /// <remarks>
+    /// Shares its classification with the real fan-out, so the preview a SuperAdmin confirms is
+    /// exactly what then happens. A preview computed by different code is a promise nobody keeps.
+    /// </remarks>
+    [HttpPost("{id:guid}/impact")]
+    public async Task<ActionResult<TierImpactRecord>> PreviewImpact(
+        Guid id, [FromBody] SaveSubscriptionTierRequest request, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tier = await db.SubscriptionTiers.AsNoTracking()
+            .Include(t => t.Prices).Include(t => t.Limits)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (tier is null) return NotFound();
+
+        var before = TierChangeAnalyzer.TermsOf(tier);
+        var after  = (
+            Limits: (IReadOnlyDictionary<Ben.Data.Common.Enums.SubscriptionLimit, int?>)
+                request.Limits.ToDictionary(l => l.Limit, l => l.MaxValue),
+            Prices: (IReadOnlyDictionary<Ben.Data.Common.Enums.BillingInterval, decimal>)
+                request.Prices.Where(p => p.IsActive).ToDictionary(p => p.Interval, p => p.Price));
+
+        var changes = TierChangeAnalyzer.Analyze(before.Limits, after.Limits, before.Prices, after.Prices);
+        var impact  = await _notifier.PreviewAsync(id, tier.Name, changes, ct);
+
+        return Ok(new TierImpactRecord(
+            [.. impact.Changes.Select(c => new TierChangeRecord(c.IsImprovement, c.Sentence))],
+            impact.GroupsMessagedNow, impact.PaidGroupsNoticed));
     }
 
     /// <summary>
@@ -207,10 +263,13 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             existing.UpdatedByAppUserId = userId;
         }
 
+        // The new rows carry NO Id on purpose. They join the graph through a tracked parent's
+        // navigation, and DetectChanges reads a set Guid key as "this row already exists" — it
+        // then issues an UPDATE that matches nothing and the whole save dies with a concurrency
+        // exception. Found live on the first tier edit; an unset key is what marks them Added.
         foreach (var sent in request.Prices.Where(p => tier.Prices.All(e => e.Interval != p.Interval)))
             tier.Prices.Add(new SubscriptionTierPrice
             {
-                Id                 = Guid.NewGuid(),
                 SubscriptionTierId = tier.Id,
                 Interval           = sent.Interval,
                 Price              = sent.Price,
@@ -237,7 +296,6 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             else
                 tier.Limits.Add(new SubscriptionTierLimit
                 {
-                    Id                 = Guid.NewGuid(),
                     SubscriptionTierId = tier.Id,
                     Limit              = sent.Limit,
                     MaxValue           = sent.MaxValue,

@@ -31,7 +31,7 @@ public class AdminAuditLogControllerTests
     private static AdminAuditLogController Build(IDbContextFactory<BenDataContext> factory, Guid? userId = null)
     {
         var id = userId ?? Guid.NewGuid();
-        var ctrl = new AdminAuditLogController(factory);
+        var ctrl = new AdminAuditLogController(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

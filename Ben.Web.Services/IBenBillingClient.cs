@@ -30,6 +30,13 @@ public interface IBenBillingClient
     Task<(SubscriptionTierAdminRecord? Result, string? Error)> UpdateSubscriptionTierAsync(
         Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// What saving this edit would do to the groups on the band — computed without saving or
+    /// sending anything. The editor shows it before the save is confirmed.
+    /// </summary>
+    Task<TierImpactRecord?> PreviewTierImpactAsync(
+        Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default);
+
     // ── coupons ───────────────────────────────────────────────────────────────
 
     /// <summary>Every campaign, newest first, each carrying its misconfiguration when it has one.</summary>

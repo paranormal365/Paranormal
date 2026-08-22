@@ -22,6 +22,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<SaveSubscriptionTierRequest, SubscriptionTierAdminRecord>(
             HttpMethod.Put, $"/api/admin/subscription-tiers/{id}", request, token);
 
+    public Task<TierImpactRecord?> PreviewTierImpactAsync(
+        Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default)
+        => _api.PostAsync<SaveSubscriptionTierRequest, TierImpactRecord>(
+            $"/api/admin/subscription-tiers/{id}/impact", request, token);
+
     public Task<LoadResult<CouponAdminRecord>> GetCouponsAsync(CancellationToken token = default)
         => _api.GetListAsync<CouponAdminRecord>("/api/admin/coupons", token);
 

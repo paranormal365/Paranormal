@@ -142,7 +142,17 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
             CreatedByAppUserId = userId,
         };
 
-        var before = new { sub.Status, sub.SubscriptionTierId, sub.Interval, sub.CurrentPeriodEnd };
+        // Same-type clone for the audit diff — AuditChangeTracker refuses anonymous objects.
+        var before = new OrganizationSubscription
+        {
+            Id                 = sub.Id,
+            Status             = sub.Status,
+            SubscriptionTierId = sub.SubscriptionTierId,
+            Interval           = sub.Interval,
+            CurrentPeriodStart = sub.CurrentPeriodStart,
+            CurrentPeriodEnd   = sub.CurrentPeriodEnd,
+            CancelAtPeriodEnd  = sub.CancelAtPeriodEnd,
+        };
 
         sub.Status                  = request.Status;
         sub.SubscriptionTierId      = request.SubscriptionTierId;

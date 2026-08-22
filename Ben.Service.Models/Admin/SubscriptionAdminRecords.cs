@@ -196,3 +196,19 @@ public record SetOrganizationSubscriptionRequest(
     DateTime? CurrentPeriodEnd,
     bool CancelAtPeriodEnd,
     string? Note);
+
+/// <summary>One consequence of a tier edit, for the confirm step.</summary>
+public record TierChangeRecord(bool IsImprovement, string Sentence);
+
+/// <summary>
+/// What saving this edit will do, shown to the SuperAdmin before they commit it.
+/// </summary>
+/// <remarks>
+/// The blast radius belongs on the screen before the save, not in support tickets after it:
+/// "this lowers storage for 12 paid groups — they will be notified before renewal" is a decision,
+/// and the person making it should see it stated.
+/// </remarks>
+public record TierImpactRecord(
+    IReadOnlyList<TierChangeRecord> Changes,
+    int GroupsMessagedNow,
+    int PaidGroupsNoticed);

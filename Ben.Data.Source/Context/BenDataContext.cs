@@ -129,6 +129,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
+        public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -2329,6 +2330,23 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // The delivery job's work queue is "due and undelivered", so that is the index.
+            modelBuilder.Entity<TierChangeNotice>()
+                .HasIndex(e => new { e.DeliveredAtUtc, e.DeliverAtUtc });
+            modelBuilder.Entity<TierChangeNotice>().Property(e => e.Sentences).HasMaxLength(4000);
+            modelBuilder.Entity<TierChangeNotice>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TierChangeNotice>()
+                .HasOne(e => e.SubscriptionTier).WithMany()
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<TierChangeNotice>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TierChangeNotice>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 

@@ -93,7 +93,14 @@ public static class EffectiveTermsResolver
                 continue;              // dropped from the tier: an improvement, effective now
 
             if (!inBought)
-                continue;              // added since they paid: a reduction, waits for renewal
+            {
+                // Added since they paid: a reduction, waits for renewal. Not silently dropped —
+                // the contract is holding "uncapped" against a live cap, and the card should say
+                // "Unlimited X (your current terms)" rather than nothing. Null max means the
+                // enforcement outcome is identical to skipping; only the display changes.
+                result.Add(new EffectiveLimit(limit, null, FromContract: true));
+                continue;
+            }
 
             result.Add(IsAtLeastAsGood(liveMax, boughtMax)
                 ? new EffectiveLimit(limit, liveMax, FromContract: false)
@@ -112,9 +119,15 @@ public static class EffectiveTermsResolver
     {
         var liveNow = SubscriptionPricing.PriceFor(liveTier, contract.Interval);
 
-        return liveNow is { } cheaper && cheaper < contract.Price
-            ? (cheaper, false)
-            : (contract.Price, true);
+        // FromContract means the live value is WORSE and the contract is holding the line — not
+        // merely "not better". An unchanged price flagged as held put "the plan has changed since
+        // you subscribed" on every fresh subscription's card; caught on the first live look.
+        return liveNow switch
+        {
+            { } live when live < contract.Price  => (live, false),
+            { } live when live == contract.Price => (contract.Price, false),
+            _                                    => (contract.Price, true),
+        };
     }
 
     /// <summary>Takes the snapshot a newly opened period should store.</summary>

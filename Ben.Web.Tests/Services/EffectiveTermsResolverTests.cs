@@ -60,16 +60,21 @@ public sealed class EffectiveTermsResolverTests
     /// <summary>A cap the tier gains mid-term does not bind a group that paid before it existed.</summary>
     /// <remarks>
     /// No cap at signing means uncapped was part of the deal. The new cap is a reduction and
-    /// reductions wait for renewal — the next snapshot picks it up.
+    /// reductions wait for renewal — but the held state is REPORTED, as unlimited-from-contract,
+    /// so the pricing card can say "Unlimited open cases (your current terms)" instead of nothing.
+    /// The first version dropped the entry entirely, and the kept-promise sentence never showed
+    /// for precisely the case it was written for — caught live on the first reduction.
     /// </remarks>
     [Fact]
-    public void A_cap_added_after_signing_does_not_bind_until_renewal()
+    public void A_cap_added_after_signing_does_not_bind_and_reports_the_contract_holding_it()
     {
         var result = EffectiveTermsResolver.Resolve(
             ContractWith((SubscriptionLimit.EquipmentItems, 25)),
             [Cap(SubscriptionLimit.EquipmentItems, 25), Cap(SubscriptionLimit.OpenCases, 5)]);
 
-        Assert.DoesNotContain(result, l => l.Limit == SubscriptionLimit.OpenCases);
+        var held = One(result, SubscriptionLimit.OpenCases);
+        Assert.Null(held.MaxValue);          // binds as unlimited — same as before the edit
+        Assert.True(held.FromContract);      // and the display knows why
     }
 
     /// <summary>A cap the tier drops stops binding at once — removal is an improvement.</summary>
@@ -146,6 +151,28 @@ public sealed class EffectiveTermsResolverTests
 
         Assert.Equal(15m, price);
         Assert.True(fromContract);
+    }
+
+    /// <summary>
+    /// An unchanged price is nobody's kept promise — the contract holds nothing.
+    /// </summary>
+    /// <remarks>
+    /// Caught live: a fresh subscription whose price equals the live price reported
+    /// priceFromContract = true, which put "the plan has changed since you subscribed" on every
+    /// paid group's pricing card from day one. Held-by-contract means the live value is WORSE,
+    /// not merely not-better.
+    /// </remarks>
+    [Fact]
+    public void An_unchanged_price_is_not_reported_as_held_by_the_contract()
+    {
+        var tier = new SubscriptionTier { Name = "Band" };
+        tier.Prices.Add(new SubscriptionTierPrice
+            { Interval = BillingInterval.Monthly, Price = 15m, IsActive = true });
+
+        var (price, fromContract) = EffectiveTermsResolver.EffectivePrice(ContractWith(), tier);
+
+        Assert.Equal(15m, price);
+        Assert.False(fromContract);
     }
 
     [Fact]

@@ -186,6 +186,10 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // between passes. Registering a job here is all it takes to have it run — see IScheduledJob.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventReminderJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.TierChangeNoticeJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
