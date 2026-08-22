@@ -6918,3 +6918,110 @@ Verified live: `testy` → `Testy`, `McTest-o'brien` → `McTest-O'Brien`, displ
 Only the signup form does this today. If the same treatment is wanted on profile editing and the
 admin user screens, that is a small follow-up — the helper is currently local to `SignUp.razor` and
 would move to `Ben.Web.Services` first.
+
+---
+
+## 137. UAT dashboard: "Couldn't load the dashboard figures" after a republish (raised 2026-08-22 by Ben)
+
+Ben, after publishing to ishaunted.com: *"when I go to dashboard after logging in, I get: Couldn't
+load the dashboard figures — the server refused the request or could not be reached."* That sentence
+is `AdminDashboard`'s own catch, which cannot tell the three causes apart.
+
+### Established by probing the live site anonymously
+
+| Probe | Result | What it rules out |
+|---|---|---|
+| `GET /webapi/api/admin/stats/summary` | **401** | The route **is deployed**. Not a stale API package, not a wrong path *on the server side*. An `[Authorize]` route answers 401 anonymously; a missing one answers 404. |
+| `GET /api/admin/stats/summary` (no prefix) | **404** | Confirms the prefix matters — a website calling the un-prefixed path would see exactly the 404 the message mentions. |
+| `GET /webapi/api/public/cases` | **200** | The API is up, reachable, and serving. |
+| `GET /webapi/api/public/organizations/search` | **200** | Anonymous API paths work end to end. |
+
+So the API is healthy and the endpoint exists. The failure is on the website→API leg, and it is one
+of two things.
+
+### The two candidates, and the one check that separates them
+
+**Read the failing request in the browser's network tab.** The full URL and status decide it:
+
+- **URL is missing `/webapi`** → configuration. The website's `WebApi:BaseUrl` is wrong on the box.
+  `ApiBasePathHandler` restores the base path for leading-slash calls, but it can only restore a
+  path that is configured in the first place.
+- **URL has `/webapi` and the status is 401 or 403** → authorization. `AdminStatsController` is
+  `[Authorize(Roles = RoleNames.SuperAdmin)]`, so the signed-in account is not carrying the
+  SuperAdmin role claim on that deployment.
+
+Checked and **ruled out** already: `AddIdentityApiEndpoints` *does* call `.AddRoles<IdentityRole<Guid>>()`,
+so role claims are populated in principle — this is not the "roles were never registered" bug.
+
+### Two repo-level defects found while diagnosing, worth fixing regardless
+
+1. **`scripts/publish-website.sh` writes `appsettings.Production.json`.** This is the exact pattern
+   the API side abandoned: that file loads only when `ASPNETCORE_ENVIRONMENT` matches, and a value
+   sitting unread in the package already cost a night on `FileStorage:RootPath`
+   (see the UAT deployment notes). `uat-webapi-config.py` merges into `appsettings.json` for the API
+   precisely because of it. The website was never given the same treatment.
+
+2. **Run with no arguments, it writes the literal string `__SET_ME__` as the API base URL.**
+   `API_URL="${1:-}"` then `"${API_URL:-__SET_ME__}"`. It prints a warning, but a warning in a build
+   log is not a guard: the package ships, IIS serves it, and every API call fails at runtime with a
+   message about the server being unreachable. `new Uri("__SET_ME__")` is not even a valid absolute
+   URI. **The script should refuse to publish** rather than emit a package that cannot work.
+
+Both are cheap and would make this class of failure impossible to ship silently, whichever of the
+two candidates turns out to be the actual cause here.
+
+---
+
+## 138. Grid filter-row dropdowns are unreadably narrow (raised 2026-08-22 by Ben, screenshot)
+
+Ben: *"when you pull up a grid like 'All Investigations' as SuperAdmin… there are dropdowns to
+choose from like the status column. You cannot read what to choose from because the size of the
+items to choose from is so narrow… I don't need the column to be wider, just the selection list."*
+
+The screenshot shows the Status column's filter cell: the popup is clipped to roughly the width of
+the little dropdown button, so the options read as `Se…`, `…posed`, `…pted`.
+
+### Researched — the setting Ben was reaching for does exist
+
+Reflected out of the installed **Telerik 14.1.0** assembly rather than taken from memory.
+`DropDownListPopupSettings` derives from `DropdownPopupSettings`, which exposes:
+
+`Width`, `MinWidth`, `MaxWidth`, `Height`, `MinHeight`, `MaxHeight`, `Class`, `AnimationDuration`
+
+So `<DropDownListPopupSettings Width="auto" MinWidth="16rem" />` sizes the popup to its content and
+leaves the column alone. The same properties exist on `ComboBoxPopupSettings`,
+`MultiSelectPopupSettings` and `DropDownButtonPopupSettings`.
+
+### The catch, and the two ways round it
+
+Popup settings only reach dropdowns **we** render. The filter cell in
+`FilterMode="GridFilterMode.FilterRow"` is built by the Grid, and there is no parameter path to its
+popup. What the Grid does expose, on `BoundColumnBase`:
+
+- **`FilterCellTemplate`** — supply our own editor for that column's filter, which *can* carry
+  popup settings. For a Status column this is the better UI anyway: a real list of statuses beats
+  an operator dropdown plus a text box.
+- `ShowFilterCellButtons` — reclaims the space the operator and clear buttons eat in a narrow cell.
+- `FilterOperators` — trims the operator list.
+
+Only **three** grids use FilterRow: `/admin/cases`, `/admin/investigations`, `/upload-files`.
+
+A `min-width` in CSS is the fallback for the Grid's own internal operator menu, which no parameter
+reaches. Note `.k-animation-container` carries **no width in the stylesheet** — Telerik sets it
+inline from the anchor's width — so a stylesheet `min-width` is what overrides it, not `width`.
+
+---
+
+## 139. File Types grid clips its own action buttons (raised 2026-08-22 by Ben, screenshot)
+
+The command column on `/admin/file-types` is too narrow for what it holds: **Edit** and
+**Extensions** fit, and the **Delete** button is cut off at the right edge — the trash icon and a
+sliver of its label are visible, the rest is outside the column.
+
+A row action a person cannot click is not a smaller button, it is a missing feature — and unlike a
+narrow text column, nothing about it invites the reader to widen anything.
+
+Worth checking the other admin grids in the same pass, since the command column is usually written
+by copying a neighbour: any grid whose `GridCommandColumn` has a fixed `Width` and three or more
+buttons is a candidate. Options are a wider command column, dropping the button labels to icons
+with tooltips, or moving Delete behind an overflow menu.

@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -116,7 +117,7 @@ public interface IBenPlacesClient
     Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
 
-    Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default);
 
@@ -133,7 +134,7 @@ public interface IBenPlacesClient
     Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
-    Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
 
     /// <summary>
@@ -150,7 +151,7 @@ public interface IBenPlacesClient
     // ── Published investigations (item #89) ─────────────────────────────────
 
     /// <summary>What an organization has published, most recent first. Anonymous.</summary>
-    Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+    Task<LoadResult<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
         string orgUrlName, CancellationToken token = default);
 
     /// <summary>One published investigation, by the address people share.</summary>

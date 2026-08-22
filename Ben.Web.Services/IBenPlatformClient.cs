@@ -27,7 +27,7 @@ public interface IBenPlatformClient
 
     /// <summary>Platform messages addressed to the current user, newest first.</summary>
     /// <param name="unreadOnly">Restrict to messages never opened.</param>
-    Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
+    Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
 
     /// <summary>Marks one of the current user's messages read. <paramref name="id"/> is the record's Id.</summary>
     Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default);
@@ -40,7 +40,7 @@ public interface IBenPlatformClient
 
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
     /// <summary>Recorded sidecar install/pair events, newest first (SuperAdmin).</summary>
-    Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);
+    Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);
 
     /// <summary>Distinct-install counts and a per-version breakdown (SuperAdmin).</summary>
     Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(CancellationToken token = default);
@@ -48,7 +48,7 @@ public interface IBenPlatformClient
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
-    Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
+    Task<LoadResult<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
     Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default);
 
     // ── Generic Lookup Types ──────────────────────────────────────────────────
@@ -56,7 +56,7 @@ public interface IBenPlatformClient
     // UserMessageType, and the five Org equivalents — all share the same schema.
 
     /// <summary>Returns all rows for a lookup-type table at the given admin API route.</summary>
-    Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
+    Task<LoadResult<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
 
     /// <summary>Creates a new row in a lookup-type table.</summary>
     Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default);
@@ -106,7 +106,7 @@ public interface IBenPlatformClient
     Task<SupportTicketPage?> GetSupportTicketsAsync(SupportTicketStatus? status = null, SupportTicketTopic? topic = null, string? search = null, int page = 1, int pageSize = 25, CancellationToken token = default);
 
     /// <summary>One ticket's full thread, internal notes included.</summary>
-    Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
+    Task<LoadResult<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
 
     /// <summary>Replies to the sender, or leaves an internal note.</summary>
     Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default);
@@ -116,14 +116,14 @@ public interface IBenPlatformClient
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
     Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default);
     Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default);
 
     // ── Calendar ──────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
 
     // ── Sitewide settings (SuperAdmin) ───────────────────────────────────────
 
@@ -165,13 +165,13 @@ public interface IBenPlatformClient
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
-    Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
+    Task<LoadResult<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
 
     /// <summary>SuperAdmin: all categories including pending/inactive.</summary>
-    Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
+    Task<LoadResult<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
 
     /// <summary>SuperAdmin: all types for a category including pending/inactive.</summary>
-    Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
+    Task<LoadResult<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
 
     Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default);
     Task<ExperienceCategoryRecord?> UpdateExperienceCategoryAsync(Guid id, UpsertExperienceCategoryRequest request, CancellationToken token = default);

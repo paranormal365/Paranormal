@@ -8,6 +8,8 @@
 @inject IBenUserState UserState
 @inject NotificationState Notifications
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Notifications</PageTitle>
 
@@ -95,6 +97,13 @@
     {
         <div class="text-secondary small">Loading…</div>
     }
+    @* The list is edited in place when a message is marked read, so the failure is branched on
+       rather than wrapping the list — a wrapped BenListState would keep reporting the load's own
+       emptiness. "No messages." to somebody who has been written to is the whole of item 120. *@
+    else if (_messagesResult.Failed)
+    {
+        <BenListState TItem="MyMessageRecord" Result="@_messagesResult" OnRetry="@LoadDetailAsync" />
+    }
     else if (_messages.Count == 0)
     {
         <div class="alert alert-light border">No messages.</div>
@@ -158,6 +167,7 @@
 @code {
     private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
     private List<MyMessageRecord> _messages = [];
+    private LoadResult<MyMessageRecord> _messagesResult;
     private List<PendingPermissionRequestRecord> _pendingRequests = [];
 
     private MyMessageRecord? _openMessage;
@@ -191,11 +201,13 @@
             var messagesTask = AdminClient.GetMyMessagesAsync();
             var requestsTask = AdminClient.GetPendingPermissionRequestsForMeAsync();
             await Task.WhenAll(messagesTask, requestsTask);
-            _messages        = await messagesTask;
+            _messagesResult  = await messagesTask;
+            _messages        = _messagesResult.Items.ToList();
             _pendingRequests = await requestsTask;
         }
         catch
         {
+            _messagesResult  = LoadResult<MyMessageRecord>.Failure();
             _messages        = [];
             _pendingRequests = [];
         }

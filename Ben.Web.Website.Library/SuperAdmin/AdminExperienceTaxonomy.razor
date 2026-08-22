@@ -1,6 +1,8 @@
 @page "/admin/experience-taxonomy"
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -22,6 +24,10 @@
     @if (_categories is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading taxonomy…" />
+    }
+    else if (_categoriesResult.Failed)
+    {
+        <BenListState TItem="ExperienceCategoryRecord" Result="@_categoriesResult" OnRetry="@LoadAsync" />
     }
     else if (_categories.Count == 0)
     {
@@ -204,6 +210,7 @@
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
     private List<ExperienceCategoryRecord>? _categories;
+    private LoadResult<ExperienceCategoryRecord> _categoriesResult;
     private Dictionary<Guid, List<ExperienceTypeRecord>> _typesByCat = new();
     private string? _error;
     private bool _isBusy;
@@ -238,11 +245,17 @@
     {
         try
         {
-            _categories = (await AdminClient.GetAllExperienceCategoriesAsync()).ToList();
+            _categoriesResult = await AdminClient.GetAllExperienceCategoriesAsync();
+            _categories       = _categoriesResult.Items.ToList();
             _typesByCat.Clear();
             foreach (var cat in _categories)
             {
-                var types = (await AdminClient.GetAllExperienceTypesAsync(cat.Id)).ToList();
+                // Each category's own types. The categories list above already reports a
+                // refusal; a per-category failure leaves that category looking empty, which is
+                // the same lie one level down — so it is carried on the same result.
+                var typesResult = await AdminClient.GetAllExperienceTypesAsync(cat.Id);
+                if (typesResult.Failed) _categoriesResult = LoadResult<ExperienceCategoryRecord>.Failure(typesResult.Reason);
+                var types = typesResult.Items.ToList();
                 _typesByCat[cat.Id] = types;
             }
         }

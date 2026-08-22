@@ -883,7 +883,9 @@
         if (_taxonomy.Count > 0) return;
         try
         {
-            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+            // A label lookup. If it fails the chips show ids instead of names, which is worse
+            // than names and better than an error panel over somebody's case.
+            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
             _expTypeNames = _taxonomy.SelectMany(c => c.Types).ToDictionary(t => t.Id, t => t.Name);
         }
         catch { /* tagging is optional — the dialog still works without the list */ }
