@@ -230,7 +230,7 @@
     {
         _loading = true;
         _error = null;
-        try { _allFiles = (await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes)).ToList(); }
+        try { _allFiles = (await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes)).Items.ToList(); }
         catch { _error = "Failed to load media files."; }
         _loading = false;
     }

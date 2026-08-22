@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Publications;
 
 namespace Ben.Web.Services;
@@ -20,7 +21,7 @@ public interface IBenPublicationClient
     // ── Authoring (permission-gated, org-scoped) ─────────────────────────────
 
     /// <summary>The group's publications, including ones it has not made public.</summary>
-    Task<IReadOnlyList<PublicationRecord>> GetOrgPublicationsAsync(
+    Task<LoadResult<PublicationRecord>> GetOrgPublicationsAsync(
         Guid organizationId, CancellationToken token = default);
 
     /// <summary>
@@ -47,7 +48,7 @@ public interface IBenPublicationClient
         Guid organizationId, Guid publicationId, CancellationToken token = default);
 
     /// <summary>Every post in a publication, drafts included, newest first.</summary>
-    Task<IReadOnlyList<PublicationPostRecord>> GetOrgPublicationPostsAsync(
+    Task<LoadResult<PublicationPostRecord>> GetOrgPublicationPostsAsync(
         Guid organizationId, Guid publicationId, CancellationToken token = default);
 
     /// <summary>Writes a new post. It is a draft until published — creating one publishes nothing.</summary>
@@ -72,7 +73,7 @@ public interface IBenPublicationClient
     // ── Reading (anonymous) ──────────────────────────────────────────────────
 
     /// <summary>The public directory: every public publication that has published something.</summary>
-    Task<IReadOnlyList<PublicPublicationRecord>> GetPublicPublicationsAsync(
+    Task<LoadResult<PublicPublicationRecord>> GetPublicPublicationsAsync(
         CancellationToken token = default);
 
     /// <summary>One publication and its published posts. Null when there is nothing public to show.</summary>
@@ -89,7 +90,7 @@ public interface IBenPublicationClient
     // ── Subscribing (signed in) ──────────────────────────────────────────────
 
     /// <summary>What the caller subscribes to.</summary>
-    Task<IReadOnlyList<MySubscriptionRecord>> GetMySubscriptionsAsync(CancellationToken token = default);
+    Task<LoadResult<MySubscriptionRecord>> GetMySubscriptionsAsync(CancellationToken token = default);
 
     /// <summary>Whether the caller subscribes to one publication.</summary>
     Task<bool> IsSubscribedAsync(string urlName, CancellationToken token = default);

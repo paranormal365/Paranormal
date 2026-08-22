@@ -19,11 +19,8 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── CMS Pages ─────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<CmsPageListItem>>($"/api/organizations/{orgId}/pages", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<CmsPageListItem>($"/api/organizations/{orgId}/pages", token);
 
     public Task<CmsPageDetail?> GetCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default)
         => _api.GetAsync<CmsPageDetail>($"/api/organizations/{orgId}/pages/{pageId}", token);
@@ -54,11 +51,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── CMS Page Permissions ──────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<CmsPagePermissionRecord>>($"/api/organizations/{orgId}/pages/{pageId}/permissions", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.GetListAsync<CmsPagePermissionRecord>($"/api/organizations/{orgId}/pages/{pageId}/permissions", token);
 
     public Task<CmsPagePermissionRecord?> CreatePagePermissionAsync(Guid orgId, Guid pageId, PagePermissionCreateRequest request, CancellationToken token = default)
         => _api.PostAsync<PagePermissionCreateRequest, CmsPagePermissionRecord>($"/api/organizations/{orgId}/pages/{pageId}/permissions", request, token);
@@ -89,11 +83,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── The group's saved templates (item #80, part 2) ──────────────────────
 
-    public async Task<IReadOnlyList<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default)
-    {
-        var url = $"/api/organizations/{orgId}/cms-templates" + (scope is null ? "" : $"?scope={scope}");
-        var result = await _api.GetAsync<IReadOnlyList<CmsTemplateRecord>>(url, token);
-        return result ?? [];
+    public Task<LoadResult<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default)
+    {        var url = $"/api/organizations/{orgId}/cms-templates" + (scope is null ? "" : $"?scope={scope}");
+        return _api.GetListAsync<CmsTemplateRecord>(url, token);
     }
 
     public Task<CmsTemplateRecord?> SaveCmsTemplateAsync(Guid orgId, SaveCmsTemplateRequest request, CancellationToken token = default)
@@ -105,18 +97,15 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/cms-templates/{templateId}", token);
 
-    public async Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(
+    public Task<LoadResult<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(
         Guid orgId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<EmbeddableRecord>>(
-               $"/api/organizations/{orgId}/cms/embeddable/investigations", token) ?? [];
+            => _api.GetListAsync<EmbeddableRecord>($"/api/organizations/{orgId}/cms/embeddable/investigations", token);
 
-    public async Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableCasesAsync(
+    public Task<LoadResult<EmbeddableRecord>> GetEmbeddableCasesAsync(
         Guid orgId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<EmbeddableRecord>>(
-               $"/api/organizations/{orgId}/cms/embeddable/cases", token) ?? [];
+            => _api.GetListAsync<EmbeddableRecord>($"/api/organizations/{orgId}/cms/embeddable/cases", token);
 
-    public async Task<IReadOnlyList<PublishableCaseFile>> GetPublishableCaseMediaAsync(
+    public Task<LoadResult<PublishableCaseFile>> GetPublishableCaseMediaAsync(
         Guid orgId, Guid caseId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<PublishableCaseFile>>(
-               $"/api/organizations/{orgId}/cms/embeddable/cases/{caseId}/media", token) ?? [];
+            => _api.GetListAsync<PublishableCaseFile>($"/api/organizations/{orgId}/cms/embeddable/cases/{caseId}/media", token);
 }

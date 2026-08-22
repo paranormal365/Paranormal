@@ -11,6 +11,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject BenToastService Toasts
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <div class="mt-4">
     <h5 class="mb-3 fw-semibold">Membership Applications</h5>
@@ -18,6 +20,11 @@
     @if (_loading)
     {
         <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    }
+    else if (_requestsResult.Failed)
+    {
+        @* People waiting to join, shown as nobody waiting, is an application that never gets answered. *@
+        <BenListState TItem="OrganizationMembershipRequestRecord" Result="@_requestsResult" OnRetry="@ReloadAsync" />
     }
     else if (_requests.Count == 0)
     {
@@ -145,6 +152,7 @@
 
     private bool _loading = true;
     private List<OrganizationMembershipRequestRecord> _requests = [];
+    private LoadResult<OrganizationMembershipRequestRecord> _requestsResult;
 
     private bool _showDenyDialog;
     private OrganizationMembershipRequestRecord? _pendingDeny;
@@ -163,7 +171,8 @@
     private async Task ReloadAsync()
     {
         _loading = true;
-        try { _requests = (await AdminClient.GetMembershipRequestsAsync(OrgId)).ToList(); }
+        try { _requestsResult = await AdminClient.GetMembershipRequestsAsync(OrgId);
+            _requests = _requestsResult.Items.ToList(); }
         catch { _requests = []; }
         finally { _loading = false; }
     }

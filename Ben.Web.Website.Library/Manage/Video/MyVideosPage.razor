@@ -131,7 +131,7 @@
     private async Task LoadProjectListAsync()
     {
         _loadingList = true;
-        _projects = (await AdminClient.GetMyVideoProjectsAsync()).ToList();
+        _projects = (await AdminClient.GetMyVideoProjectsAsync()).Items.ToList();
         _loadingList = false;
     }
 

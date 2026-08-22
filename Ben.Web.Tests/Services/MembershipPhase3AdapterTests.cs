@@ -31,14 +31,14 @@ public class MembershipPhase3AdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrganizationMembershipQuestionRecord>>(
+        api.Setup(x => x.GetListAsync<OrganizationMembershipQuestionRecord>(
                 $"/api/organizations/{orgId}/membership-questions", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([MakeQuestion(orgId)]);
+           .ReturnsAsync(LoadResult<OrganizationMembershipQuestionRecord>.Ok([MakeQuestion(orgId)]));
 
         var result = await Build(api).GetMembershipQuestionsAsync(orgId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<OrganizationMembershipQuestionRecord>>(
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<OrganizationMembershipQuestionRecord>(
             $"/api/organizations/{orgId}/membership-questions", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -46,13 +46,13 @@ public class MembershipPhase3AdapterTests
     public async Task GetMembershipQuestionsAsync_WhenApiReturnsNull_ReturnsEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrganizationMembershipQuestionRecord>>(
+        api.Setup(x => x.GetListAsync<OrganizationMembershipQuestionRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<OrganizationMembershipQuestionRecord>?)null);
+           .ReturnsAsync(LoadResult<OrganizationMembershipQuestionRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetMembershipQuestionsAsync(Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     // ── CreateMembershipQuestionAsync ─────────────────────────────────────────
@@ -180,19 +180,19 @@ public class MembershipPhase3AdapterTests
         var orgId     = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var api       = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<MembershipReviewVoteRecord>>(
+        api.Setup(x => x.GetListAsync<MembershipReviewVoteRecord>(
                 $"/api/organizations/{orgId}/membership-requests/{requestId}/votes",
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync([
+           .ReturnsAsync(LoadResult<MembershipReviewVoteRecord>.Ok([
                new() { Id = Guid.NewGuid(), OrganizationMembershipRequestId = requestId,
                        VoterAppUserId = Guid.NewGuid(), VoteType = MembershipVoteType.Approve,
                        DateVoted = DateTime.UtcNow }
-           ]);
+           ]));
 
         var result = await Build(api).GetMembershipVotesAsync(orgId, requestId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<MembershipReviewVoteRecord>>(
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<MembershipReviewVoteRecord>(
             $"/api/organizations/{orgId}/membership-requests/{requestId}/votes",
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -201,13 +201,13 @@ public class MembershipPhase3AdapterTests
     public async Task GetMembershipVotesAsync_WhenApiReturnsNull_ReturnsEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<MembershipReviewVoteRecord>>(
+        api.Setup(x => x.GetListAsync<MembershipReviewVoteRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<MembershipReviewVoteRecord>?)null);
+           .ReturnsAsync(LoadResult<MembershipReviewVoteRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetMembershipVotesAsync(Guid.NewGuid(), Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     // ── Enhanced RespondToMembershipRequestAsync ──────────────────────────────

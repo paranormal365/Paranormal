@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization + case areas converted, 81 of 120 left)
+## 120. The client adapter cannot tell "refused" from "empty" (CLOSED 2026-08-22 — all 120 converted; render debt tracked as item 141)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -5994,6 +5994,7 @@ the OrdinaryMemberSurfaceTests pattern.
 | **Equipment** | **2026-08-22** | **22** | **67 → 45** |
 | **User** | **2026-08-22** | **13** | **45 → 34** |
 | **Investigation** | **2026-08-22** | **8** | **34 → 26** |
+| **Cms, Places, Media, Publications, Membership, Feed, Account** | **2026-08-22** | **26** | **26 → 0** |
 
 **Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
 `BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
@@ -6008,8 +6009,20 @@ It stops the likely half-conversion — silencing the compile error with `.Items
 as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
 there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
 
-**Remaining, in size order:** Cms 6, Places 5, Media 5, Publications 4, Membership 3, Feed 2,
-Account 1 — **26 left of the original 120.**
+**None left.** All 120 are converted, and `SwallowedFailureRatchetTests` is now a **ban** rather
+than a count — it scans the whole `Ben.Web.Services/WebApi` folder, not just the adapter, with one
+principled exclusion: `LoadResult.Items => _items ?? []`, which is the mechanism that makes the
+rule enforceable rather than an instance of breaking it. Verified to discriminate.
+
+The final pass reached past the adapter again and converted **15** swallows inside `WebApiClient`
+itself, which the old ratchet never counted.
+
+**Three mutations were found wearing the same defect** and fixed differently, because "did this
+happen?" is not "is this list real?": `SetMyEquipmentSharesAsync` (a refused save closed its dialog
+reporting success), `SetInvestigationLeadAsync` (an empty roster would have wiped everyone off the
+screen as though it had worked), and `ScanAudioForEvpAsync` — where an empty list does not mean the
+scan came back clean, it means the scan never ran, and on this site "no EVP detected" is a finding
+somebody acts on.
 
 **Platform slice** brought the internal messaging surfaces over, which item 120 named from the
 start. Two of the scheduler's call sites were correctness bugs rather than display ones: the
@@ -7100,3 +7113,36 @@ shape as item 120 — a wrong answer delivered in the voice of a correct one.
 
 Recorded rather than acted on because the premise is unverified, and because acting on it would
 mean touching 37 files on the strength of a parenthetical.
+
+---
+
+## 141. Twenty-two pages can see a refusal and still render it as "nothing here" (raised 2026-08-22)
+
+Item 120 removed the client's ability to lie: every list method now returns `LoadResult<T>`, and a
+ban stops the pattern returning. **This is the other half** — the pages that receive that result and
+still only render two states.
+
+**They are no worse than before.** Previously the adapter handed them a bare empty list; now it
+hands them a result whose `.Items` is empty. The sentence on screen is identical. What changed is
+that the truth is now available at the call site, and this item records where it is going unused.
+
+Listed in `LoadResultRenderedGuardTests.AwaitingRenderPass` — deliberately **not** in
+`Decorations`, which is for fetches where a refusal genuinely costs the reader nothing. Each entry
+here has a list a person reads. A second ratchet holds the count at 22 and lets it only fall, so
+the list cannot become a place to hide a new page.
+
+The 22: `AdminFeedReports`, `AdminFileTypes`, `AudioFilePreview`, `CaseVideoEditorPage`,
+`ClientRequestWizard`, `CmsSectionEditor`, `FeedThreadPage`, `FileCommentThread`,
+`InvestigationRoster`, `MediaLibraryGrid`, `MyVideosPage`, `NewInvestigationWindow`,
+`OrgAddressManager`, `OrgPublicationPosts`, `OrgRoleEditor`, `OrganizationMembershipQuestions`,
+`OrganizationSecurity`, `OrganizationView`, `PlaceView`, `PublicationsDirectory`, `UploadFiles`,
+`WsRegionExplorer`.
+
+**Worth doing in the same slice-by-slice way**, and worth doing in this order — the ones where the
+false "empty" is a claim somebody acts on: `ClientRequestWizard`'s organization search (choosing
+who to send a case to), `OrgRoleEditor` and `OrganizationSecurity` (who has access),
+`InvestigationRoster` (who attended), then the media and CMS surfaces.
+
+Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
+list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first
+item is added.

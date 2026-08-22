@@ -8,6 +8,8 @@
 @inject IBenAdminClient Feed
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Reported posts</PageTitle>
 
@@ -163,6 +165,7 @@
     ];
 
     private List<FeedReportRecord> _reports = [];
+    private LoadResult<FeedReportRecord> _reportsResult;
     private FeedReportOutcome _outcome = FeedReportOutcome.Pending;
     private Guid? _resolving;
     private string? _error;
@@ -191,7 +194,8 @@
 
         try
         {
-            _reports = [.. await Feed.GetFeedReportsAsync(_outcome)];
+            _reportsResult = await Feed.GetFeedReportsAsync(_outcome);
+            _reports       = [.. _reportsResult.Items];
         }
         finally
         {

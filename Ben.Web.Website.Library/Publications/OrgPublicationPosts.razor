@@ -5,6 +5,8 @@
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>@(_publication?.Title ?? "Publication")</PageTitle>
 
@@ -159,6 +161,7 @@
 
     private PublicationRecord? _publication;
     private IReadOnlyList<PublicationPostRecord> _posts = [];
+    private LoadResult<PublicationPostRecord> _postsResult;
     private bool _loading = true;
     private bool _working;
     private Guid? _confirmingDelete;
@@ -182,11 +185,17 @@
             // is already permission-gated, so a publication that is not in it is one this person
             // may not open — and the page says "not found" without a second round trip.
             _publication = (await Client.GetOrgPublicationsAsync(OrgId))
-                .FirstOrDefault(p => p.Id == PublicationId);
+                .Items.FirstOrDefault(p => p.Id == PublicationId);
 
-            _posts = _publication is null
-                ? []
-                : await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId);
+            if (_publication is null)
+            {
+                _posts = [];
+            }
+            else
+            {
+                _postsResult = await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId);
+                _posts       = _postsResult.Items;
+            }
         }
         finally
         {

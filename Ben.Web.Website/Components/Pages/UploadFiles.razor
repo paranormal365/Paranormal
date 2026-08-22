@@ -10,6 +10,8 @@
 @using Ben.Data.Common.Helpers
 @using Ben.Service.Models.Entities
 @using Microsoft.AspNetCore.Components.Forms
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Upload Files</PageTitle>
 
@@ -221,6 +223,7 @@
 @code {
     // ── State ────────────────────────────────────────────────────────────────
     private IReadOnlyList<UploadFileRecord> _files = [];
+    private LoadResult<UploadFileRecord> _filesResult;
     private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
     private IReadOnlyList<OrganizationSummaryResponse> _myOrgs = [];
 
@@ -283,9 +286,10 @@
 
         await Task.WhenAll(filesTask, typesTask, orgsTask);
 
-        _files     = filesTask.Result;
-        _fileTypes = typesTask.Result;
-        _myOrgs    = orgsTask.Result;
+        _filesResult = filesTask.Result;
+        _files       = _filesResult.Items;
+        _fileTypes   = typesTask.Result.Items;
+        _myOrgs      = orgsTask.Result.Items;
 
         if (_fileTypes.Any())
             _newUpload.FileTypeId = _fileTypes[0].Id;

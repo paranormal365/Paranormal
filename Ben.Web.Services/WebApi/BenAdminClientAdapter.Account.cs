@@ -83,7 +83,12 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Post, url, new { code }, token);
 
         if (error is not null) return ([], error);
-        return (result?.RecoveryCodes ?? [], null);
+
+        // Explicit rather than `?? []`: the codes are only ever returned alongside a null error,
+        // so there is no path handing back "no recovery codes" as a fact.
+        if (result is null) return ([], "No recovery codes came back.");
+
+        return (result.RecoveryCodes, null);
     }
 
     private sealed record RecoveryCodesResponse(string[] RecoveryCodes);

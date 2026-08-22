@@ -19,8 +19,8 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Universal media library sharing ──────────────────────────────────────
 
-    public async Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<UploadFileShareRecord>>($"/api/upload-files/{fileId}/shares-v2", token) ?? [];
+    public Task<LoadResult<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default)
+            => _api.GetListAsync<UploadFileShareRecord>($"/api/upload-files/{fileId}/shares-v2", token);
 
     public Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default)
         => _api.PostAsync<CreateShareRequest, UploadFileShareRecord>($"/api/upload-files/{fileId}/shares-v2", request, token);
@@ -28,21 +28,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-file-shares-v2/{shareId}", token);
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default)
+    public Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default)
     {
         var url = "/api/media-library/files";
         if (contentTypePrefixes is { Length: > 0 })
             url += $"?contentTypePrefixes={Uri.EscapeDataString(string.Join(',', contentTypePrefixes))}";
-        return await _api.GetAsync<IReadOnlyList<UploadFileRecord>>(url, token) ?? [];
+        return _api.GetListAsync<UploadFileRecord>(url, token);
     }
 
     // ── File Types ────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<AdminFileTypeWithExtensionsResponse>> GetFileTypesWithExtensionsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<AdminFileTypeWithExtensionsResponse>>("/api/admin/upload-file-types/with-extensions", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<AdminFileTypeWithExtensionsResponse>> GetFileTypesWithExtensionsAsync(CancellationToken token = default)
+        => _api.GetListAsync<AdminFileTypeWithExtensionsResponse>("/api/admin/upload-file-types/with-extensions", token);
 
     public Task<UploadFileTypeRecord?> CreateFileTypeAsync(AdminCreateFileTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<AdminCreateFileTypeRequest, UploadFileTypeRecord>("/api/admin/upload-file-types", request, token);
@@ -71,11 +68,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetOrgSharedFilesAsync(orgId, token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetOrgSharedFilesAsync(orgId, token);
 
     public async Task<(byte[] Data, string ContentType)?> GetFileDataAsync(Guid fileId, CancellationToken token = default)
     {
@@ -84,8 +78,8 @@ public sealed partial class BenAdminClientAdapter
         return (result.Value.Data, result.Value.ContentType);
     }
 
-    public async Task<IReadOnlyList<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default)
-        => await _api.GetUploadFileTypesAsync(token);
+    public Task<LoadResult<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default)
+        => _api.GetUploadFileTypesAsync(token);
 
     public async Task<UploadFileRecord?> UploadImageAsync(
         Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data,
@@ -130,7 +124,7 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Region Notes ──────────────────────────────────────────────────────────
 
-    public Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+    public Task<LoadResult<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
         => _api.GetRegionNotesAsync(fileId, token);
 
     public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
@@ -144,7 +138,7 @@ public sealed partial class BenAdminClientAdapter
 
     // ── File Comments (item #6 phase 2) ───────────────────────────────────────
 
-    public Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+    public Task<LoadResult<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetFileCommentsAsync(fileId, token);
 
     public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
@@ -164,7 +158,7 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Audio Markers (EVP) ──────────────────────────────────────────────────
 
-    public Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+    public Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
         => _api.GetAudioMarkersAsync(fileId, token);
 
     public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
@@ -176,13 +170,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => _api.DeleteAudioMarkerAsync(fileId, markerId, token);
 
-    public Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+    public Task<IReadOnlyList<AudioMarkerRecord>?> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
         => _api.ReplaceAudioCandidatesAsync(fileId, request, token);
 
     public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
         => _api.ReviewAudioMarkerAsync(fileId, markerId, request, token);
 
-    public Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+    public Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
         => _api.ScanAudioForEvpAsync(fileId, sensitivity, options, token);
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
@@ -190,7 +184,7 @@ public sealed partial class BenAdminClientAdapter
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => _api.ClipAudioAsync(fileId, request, token);
 
-    public Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+    public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
 
     public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
@@ -200,11 +194,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetClipPreviewAsync(fileId, start, end, token);
 
     // ── Video projects ────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default)
-    {
-        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
-        var result = await _api.GetAsync<IReadOnlyList<VideoProjectRecord>>(url, token);
-        return result ?? [];
+    public Task<LoadResult<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default)
+    {        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
+        return _api.GetListAsync<VideoProjectRecord>(url, token);
     }
     public Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default)
         => _api.GetAsync<VideoProjectRecord>($"/api/video-projects/{id}", token);

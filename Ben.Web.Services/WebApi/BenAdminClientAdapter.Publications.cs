@@ -23,9 +23,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Authoring ────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<PublicationRecord>> GetOrgPublicationsAsync(
+    public Task<LoadResult<PublicationRecord>> GetOrgPublicationsAsync(
         Guid organizationId, CancellationToken token = default)
-        => await _api.GetAsync<List<PublicationRecord>>(OrgPublications(organizationId), token) ?? [];
+            => _api.GetListAsync<PublicationRecord>(OrgPublications(organizationId), token);
 
     public Task<(PublicationRecord? Publication, string? Error)> CreatePublicationAsync(
         Guid organizationId, SavePublicationRequest request, CancellationToken token = default)
@@ -46,10 +46,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.DeleteExpectingReasonAsync(
             $"{OrgPublications(organizationId)}/{publicationId}", token);
 
-    public async Task<IReadOnlyList<PublicationPostRecord>> GetOrgPublicationPostsAsync(
+    public Task<LoadResult<PublicationPostRecord>> GetOrgPublicationPostsAsync(
         Guid organizationId, Guid publicationId, CancellationToken token = default)
-        => await _api.GetAsync<List<PublicationPostRecord>>(
-            $"{OrgPublications(organizationId)}/{publicationId}/posts", token) ?? [];
+            => _api.GetListAsync<PublicationPostRecord>($"{OrgPublications(organizationId)}/{publicationId}/posts", token);
 
     public Task<(PublicationPostRecord? Post, string? Error)> CreatePostAsync(
         Guid organizationId, Guid publicationId, SavePublicationPostRequest request,
@@ -76,10 +75,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Reading, as a visitor ────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<PublicPublicationRecord>> GetPublicPublicationsAsync(
+    public Task<LoadResult<PublicPublicationRecord>> GetPublicPublicationsAsync(
         CancellationToken token = default)
-        => await _api.GetAnonymousAsync<List<PublicPublicationRecord>>(
-            "/api/public/publications", token) ?? [];
+            => _api.GetAnonymousListAsync<PublicPublicationRecord>("/api/public/publications", token);
 
     public Task<PublicPublicationDetailRecord?> GetPublicPublicationAsync(
         string urlName, CancellationToken token = default)
@@ -94,10 +92,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Subscribing ──────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<MySubscriptionRecord>> GetMySubscriptionsAsync(
+    public Task<LoadResult<MySubscriptionRecord>> GetMySubscriptionsAsync(
         CancellationToken token = default)
-        => await _api.GetAsync<List<MySubscriptionRecord>>(
-            "/api/me/publication-subscriptions", token) ?? [];
+            => _api.GetListAsync<MySubscriptionRecord>("/api/me/publication-subscriptions", token);
 
     public async Task<bool> IsSubscribedAsync(string urlName, CancellationToken token = default)
         => await _api.GetAsync<bool?>(

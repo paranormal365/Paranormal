@@ -270,18 +270,13 @@ public sealed class WebApiClient : IWebApiClient
     public Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
         => GetListAsync<AppUserRecord>("/api/app-users", token);
 
-    public async Task<IReadOnlyList<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
-    {
-        var organizations = await GetAsync<List<OrganizationSummaryResponse>>("/api/security/organizations/mine", token);
-        return organizations ?? [];
-    }
+    public Task<LoadResult<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
+        => GetListAsync<OrganizationSummaryResponse>("/api/security/organizations/mine", token);
 
-    public async Task<IReadOnlyList<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default)
-    {
-        var encodedQuery = Uri.EscapeDataString(query ?? string.Empty);
+    public Task<LoadResult<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default)
+    {        var encodedQuery = Uri.EscapeDataString(query ?? string.Empty);
         var relativeUrl = $"/api/security/organizations/users/search?q={encodedQuery}&skip={skip}&take={take}";
-        var users = await GetAsync<List<UserSearchResultResponse>>(relativeUrl, token);
-        return users ?? [];
+        return GetListAsync<UserSearchResultResponse>(relativeUrl, token);
     }
 
     public Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default)
@@ -314,11 +309,10 @@ public sealed class WebApiClient : IWebApiClient
     /// <para>Pointed at the manage endpoint, an ordinary member's own roster came back refused,
     /// and the <c>?? []</c> below turned that into "this group has no members". Item 109.</para>
     /// </remarks>
-    public async Task<IReadOnlyList<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default)
+    public Task<LoadResult<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default)
     {
         var relativeUrl = $"/api/organizations/{organizationId}/roster";
-        var users = await GetAsync<List<OrganizationUserMembershipResponse>>(relativeUrl, token);
-        return users ?? [];
+        return GetListAsync<OrganizationUserMembershipResponse>(relativeUrl, token);
     }
 
     public Task<OrganizationUserMembershipResponse?> UpsertOrganizationMembershipAsync(Guid organizationId, Guid targetUserId, UpsertOrganizationMembershipRequest request, CancellationToken token = default)
@@ -337,18 +331,12 @@ public sealed class WebApiClient : IWebApiClient
         => GetListAsync<OrgUserDirectoryEntryResponse>($"/api/organizations/{organizationId}/user-directory", token);
 
     // ── Upload File Types ────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileTypeRecord>>("/api/upload-file-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
+        => GetListAsync<UploadFileTypeRecord>("/api/upload-file-types", token);
 
     // ── Upload Files ─────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>("/api/upload-files", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>("/api/upload-files", token);
 
     public async Task<UploadFileRecord?> UploadFileAsync(MultipartFormDataContent content, CancellationToken token = default)
     {
@@ -414,11 +402,8 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
 
     // ── Region Notes ──────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRegionNoteRecord>>($"/api/upload-files/{fileId}/region-notes", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", token);
 
     public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
         => PostAsync<CreateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", request, token);
@@ -430,11 +415,8 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
 
     // ── File Comments (item #6 phase 2) ───────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileCommentRecord>>($"/api/upload-files/{fileId}/comments", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", token);
 
     public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
         => PostAsync<CreateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", request, token);
@@ -452,11 +434,8 @@ public sealed class WebApiClient : IWebApiClient
         => PutAsync<FileCommentSettingsRecord, FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", request, token);
 
     // ── Audio Markers (EVP) ──────────────────────────────────────────────────
-    public async Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<AudioMarkerRecord>>($"/api/upload-files/{fileId}/audio-markers", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", token);
 
     public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
         => PostAsync<CreateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", request, token);
@@ -467,22 +446,35 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-markers/{markerId}", token);
 
-    public async Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+    public async Task<IReadOnlyList<AudioMarkerRecord>?> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
     {
         var result = await PostAsync<BulkCreateAudioCandidatesRequest, List<AudioMarkerRecord>>(
             $"/api/upload-files/{fileId}/audio-markers/candidates", request, token);
-        return result ?? [];
+
+        // Null means the replace did not happen. Returning an empty list would say the file now
+        // has no candidates, which is a claim about the recording rather than about the request.
+        return result is null ? null : (IReadOnlyList<AudioMarkerRecord>)result;
     }
 
     public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
         => PutAsync<ReviewAudioMarkerRequest, AudioMarkerRecord>(
             $"/api/upload-files/{fileId}/audio-markers/{markerId}/review", request, token);
 
-    public async Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+    /// <summary>
+    /// Runs the EVP detector over a file and returns what it marked, or null if it did not run.
+    /// </summary>
+    /// <remarks>
+    /// <b>Null, not an empty list.</b> "The scan found nothing" and "the scan did not happen" are
+    /// different answers, and on this site the first one is a finding somebody may act on — it is
+    /// the whole point of the feature. Handing back an empty list on a refused or failed request
+    /// reports a clean recording that was never examined.
+    /// </remarks>
+    public async Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
     {
         var result = await PostAsync<EvpDetectionOptions?, List<AudioMarkerRecord>>(
             $"/api/upload-files/{fileId}/audio-markers/scan?sensitivity={sensitivity}", options, token);
-        return result ?? [];
+
+        return result;
     }
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
@@ -493,11 +485,8 @@ public sealed class WebApiClient : IWebApiClient
     public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
         => PostAsync<AudioEditRequest, UploadFileRecord>($"/api/upload-files/{fileId}/audio-edit", request, token);
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/{fileId}/clips", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>($"/api/upload-files/{fileId}/clips", token);
 
     public async Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
     {
@@ -522,17 +511,11 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-files/{fileId}/votes/my-vote", token);
 
     // ── Org Sharing ──────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileOrgShareResponse>>($"/api/upload-files/{fileId}/shares", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileOrgShareResponse>($"/api/upload-files/{fileId}/shares", token);
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/org/{orgId}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>($"/api/upload-files/org/{orgId}", token);
 
     public Task<UploadFileOrgShareResponse?> ShareFileWithOrgAsync(Guid fileId, ShareFileWithOrgRequest request, CancellationToken token = default)
         => PostAsync<ShareFileWithOrgRequest, UploadFileOrgShareResponse>($"/api/upload-files/{fileId}/shares", request, token);
@@ -544,17 +527,11 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-file-shares/{shareId}", token);
 
     // ── Permission Requests ──────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFilePermissionRequestResponse>>($"/api/upload-files/{fileId}/permission-requests", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFilePermissionRequestResponse>($"/api/upload-files/{fileId}/permission-requests", token);
 
-    public async Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFilePermissionRequestResponse>>($"/api/upload-file-permission-requests/pending-for/{reviewerUserId}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default)
+        => GetListAsync<UploadFilePermissionRequestResponse>($"/api/upload-file-permission-requests/pending-for/{reviewerUserId}", token);
 
     public Task<UploadFilePermissionRequestResponse?> SubmitPermissionRequestAsync(Guid fileId, SubmitPermissionRequestRequest request, CancellationToken token = default)
         => PostAsync<SubmitPermissionRequestRequest, UploadFilePermissionRequestResponse>($"/api/upload-files/{fileId}/permission-requests", request, token);
