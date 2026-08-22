@@ -568,3 +568,46 @@ textarea.form-control::placeholder {
 .ben-handle-prefix.is-checking { --ben-handle-color: var(--ben-handle-checking); }
 .ben-handle-prefix.is-free     { --ben-handle-color: var(--ben-handle-free); }
 .ben-handle-prefix.is-taken    { --ben-handle-color: var(--ben-handle-taken); }
+
+/* ── Grid command cells wrap instead of hiding a button ──────────────────────
+   Kendo gives every grid cell `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`.
+   On a text column that is right — a long name gets an ellipsis and the row stays one line. On a
+   command cell it means a button past the column's width is simply **cut off**, and a row action
+   somebody cannot click is not a smaller button, it is a missing feature. Nothing about it invites
+   the reader to widen anything, because there is no ellipsis on a button.
+
+   Ben reported it on /admin/file-types, where Delete was sliced in half. Rather than only widening
+   that one column, command cells now wrap: too many buttons makes the row taller, which is
+   self-correcting and cannot hide anything. The explicit widths below still keep the common cases
+   on one line. Item 139.
+
+   `white-space: normal` alone, deliberately. The first version also set `display: flex` here,
+   which turned out to be redundant: `telerik-night.css` already makes command cells flex. Adding
+   it again only risked a second opinion about a `<td>`'s formatting context in a file that does
+   not own that decision. Measured with the cell constrained to 220px: the buttons wrap, the last
+   one is fully visible, and the header and body columns still line up. */
+.k-grid td.k-command-cell,
+.k-grid .k-table-td.k-command-cell {
+    white-space: normal;
+}
+
+/* ── Dropdown popups are not limited to the width of what opened them ────────
+   Telerik sizes a popup to its anchor by writing an inline `width` on `.k-animation-container`
+   from JavaScript — the stylesheet carries no width at all, which is why a stylesheet `min-width`
+   is what overrides it and a `width` would not.
+
+   It matters most in a grid's filter row, where the anchor is a 130px Status column and the
+   options render as "Se…", "…posed", "…pted". `DropDownListPopupSettings.Width` fixes the
+   dropdowns we render ourselves, but the Grid builds its filter-cell dropdown internally and there
+   is no parameter path to it, so this is the only lever that reaches it. Item 138.
+
+   Scoped to popups that contain a list, so date pickers, colour pickers and the editor's own
+   popups are untouched. */
+.k-animation-container:has(.k-list-container) {
+    min-width: 15rem;
+}
+
+.k-animation-container:has(.k-list-container) > .k-popup,
+.k-animation-container:has(.k-list-container) .k-list-container {
+    min-width: 100%;
+}
