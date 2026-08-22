@@ -28,8 +28,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<CmsPageDetail?> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default)
         => _api.PostAsync<CmsCreatePageRequest, CmsPageDetail>($"/api/organizations/{orgId}/pages", request, token);
 
-    public Task<CmsPageDetail?> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default)
-        => _api.PutAsync<CmsUpdatePageRequest, CmsPageDetail>($"/api/organizations/{orgId}/pages/{pageId}", request, token);
+    public Task<(CmsPageDetail? Result, string? Error)> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CmsUpdatePageRequest, CmsPageDetail>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/pages/{pageId}", request, token);
 
     public Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}", token);

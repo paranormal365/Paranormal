@@ -86,15 +86,16 @@ public sealed partial class BenAdminClientAdapter
     public Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseClientRequestRecord>($"/api/organizations/{orgId}/cases/{caseId}/client-request", token);
 
-    public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
-        => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
+    public Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CreateCaseRequest, CaseRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases", request, token);
 
     public Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<OrgPendingRequestRecord>($"/api/organizations/{orgId}/cases/pending-requests", token);
 
-    public Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
-        => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
-               $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
+    public Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
     public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
         => _api.PostVoidAsync(

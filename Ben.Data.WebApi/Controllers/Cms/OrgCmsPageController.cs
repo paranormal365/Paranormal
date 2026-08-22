@@ -18,14 +18,18 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
     private readonly IAuditLogService _auditLog;
     private readonly ICmsMarkupSanitizer _sanitizer;
 
+    private readonly Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard _limits;
+
     public OrgCmsPageController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
         IOrganizationSecurityService security,
         IAuditLogService auditLog,
-        ICmsMarkupSanitizer sanitizer)
+        ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard limits)
         : base(dbFactory, mapper, security)
     {
+        _limits   = limits;
         _auditLog = auditLog;
         _sanitizer = sanitizer;
     }
@@ -265,6 +269,19 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         // Prevent a page from becoming its own ancestor
         if (request.ParentPageId == pageId)
             return BadRequest("A page cannot be its own parent.");
+
+        // The subscription cap binds at the moment a page BECOMES published — editing an
+        // already-published page is not a new public page, and unpublishing must always work.
+        if (request.IsPublished && !before.IsPublished)
+        {
+            var published = await db.OrganizationPages.CountAsync(p =>
+                p.OrganizationId == orgId && p.IsPublished
+                && p.DraftOfOrganizationPageId == null && p.Id != pageId, ct);
+
+            if (await _limits.WhyNotOneMoreAsync(
+                    orgId, Ben.Data.Common.Enums.SubscriptionLimit.PublishedPages, published, ct) is { } capped)
+                return BadRequest(capped);
+        }
 
         page!.PageTitle          = request.PageTitle.Trim();
         page.UrlName            = urlName;

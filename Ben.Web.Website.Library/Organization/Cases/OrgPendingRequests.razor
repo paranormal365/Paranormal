@@ -249,8 +249,8 @@
             var req = new AcceptClientRequestAsCaseRequest(
                 Title: string.IsNullOrWhiteSpace(_acceptTitle) ? null : _acceptTitle.Trim(),
                 CaseManagerAppUserId: null);
-            var newCase = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
-            if (newCase is null) { _actionError = "Accept failed."; }
+            var (newCase, error) = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
+            if (newCase is null) { _actionError = error ?? "Accept failed."; }
             else
             {
                 _acceptTarget = null;

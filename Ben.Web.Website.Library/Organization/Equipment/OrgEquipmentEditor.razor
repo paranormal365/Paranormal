@@ -218,15 +218,16 @@
             _includeInGlobalCatalog,
             string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
 
-        var saved = Item is null
+        var (saved, saveError) = Item is null
             ? await AdminClient.CreateOrgEquipmentAsync(OrgId, request)
-            : await AdminClient.UpdateOrgEquipmentAsync(OrgId, Item.Id, request);
+            : (await AdminClient.UpdateOrgEquipmentAsync(OrgId, Item.Id, request), null);
 
         _busy = false;
 
         if (saved is null)
         {
-            _error = "That couldn't be saved. You may no longer have permission to manage this group's equipment.";
+            _error = saveError
+                ?? "That couldn't be saved. You may no longer have permission to manage this group's equipment.";
             return;
         }
 

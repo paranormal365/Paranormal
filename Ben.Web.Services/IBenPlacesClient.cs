@@ -111,7 +111,7 @@ public interface IBenPlacesClient
     /// callers that need them refetch the list rather than have the create path assemble a second,
     /// subtly different shape.
     /// </remarks>
-    Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+    Task<(InvestigationRecord? Result, string? Error)> CreateOrgInvestigationAsync(
         Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);

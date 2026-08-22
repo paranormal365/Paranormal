@@ -66,7 +66,16 @@ off, free band bypasses snapshot entirely). Regress the resolver both directions
   be notified before renewal; 30 free groups change immediately." A SuperAdmin should see the
   blast radius before confirming, not learn it from support tickets.
 
-## Phase D — enforcement (the caps become real)
+## Phase D — enforcement (the caps become real) — SHIPPED 2026-08-22
+
+What changed from the sketch below: enforcement covers five points (open cases at both creation
+doors, equipment on the books, lending at the LENDER's approve, open investigations, and the
+moment a page becomes published). Storage is deliberately deferred — whose storage a case file
+counts against needs Ben's decision first — and pending-invites has no org-sent-invite feature to
+enforce on yet. Converting six client calls to reason-carrying tuples also rescued a pre-existing
+dropped sentence: the checkout "already promised to someone else" guard never reached a screen.
+
+## Phase D — original sketch
 
 - `SubscriptionLimitGuard.CheckAsync(orgId, limit, currentCount)` reading effective terms via the
   resolver — one seam, used by the create endpoints for open cases, equipment, loans,

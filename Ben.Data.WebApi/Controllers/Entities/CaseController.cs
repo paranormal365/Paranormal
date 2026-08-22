@@ -24,10 +24,30 @@ public sealed class CaseController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public CaseController(IDbContextFactory<BenDataContext> db, IMapper mapper)
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Services.Billing.SubscriptionLimitGuard limits)
     {
         _db = db;
         _mapper = mapper;
+        _limits = limits;
+    }
+
+    /// <summary>
+    /// The subscription cap on concurrent work. Closed and later statuses do not count —
+    /// capping total history would let a group's own past lock them out, and asking somebody
+    /// to delete last year's investigation to start this year's is data loss, not a plan prompt.
+    /// </summary>
+    private async Task<string?> WhyNotAnotherOpenCaseAsync(
+        BenDataContext db, Guid orgId, CancellationToken ct)
+    {
+        var open = await db.Cases.CountAsync(c =>
+            c.OrganizationId == orgId && c.Status <= CaseStatus.Summarized, ct);
+
+        return await _limits.WhyNotOneMoreAsync(
+            orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenCases, open, ct);
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────
@@ -124,6 +144,8 @@ public sealed class CaseController : BenControllerBase
         if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
         var entity = new Case
         {
@@ -261,6 +283,10 @@ public sealed class CaseController : BenControllerBase
         if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        // The cap applies to accepting a request too — it opens a case just as surely as creating
+        // one, and a cap only on the other door would simply move the traffic.
+        if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
         // Validate the org application exists and is pending
         var application = await db.ClientRequestOrganizations

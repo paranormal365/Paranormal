@@ -381,10 +381,10 @@
                     Kind: _kind),
                 Visibility: _visibility);
 
-            var created = await AdminClient.CreateOrgInvestigationAsync(OrgId, request);
+            var (created, error) = await AdminClient.CreateOrgInvestigationAsync(OrgId, request);
             if (created is null)
             {
-                _error = "That could not be scheduled just now.";
+                _error = error ?? "That could not be scheduled just now.";
                 _saving = false;
                 return;
             }
