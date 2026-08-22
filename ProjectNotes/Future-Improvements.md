@@ -6596,3 +6596,54 @@ Ben confirmed the page himself: *"Audit log fix looks great."*
 
 The custom stylesheets needed nothing — `app.css`'s `#fff` uses sit inside
 `:root[data-bs-theme="dark"]` blocks, mixing outline-button colours *toward* white on purpose.
+
+---
+
+## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (raised 2026-08-22 by Ben)
+
+Ben, on two SuperAdmin pages: *"site settings page gives a couldn't load site settings, the server
+answered 401 (Unauthorized). then below it the word 'Loading…'"* and *"Support tickets page say
+Could not load tickets."*
+
+**First, the likely cause of that particular sighting.** The website host was restarted mid-session
+while Ben was signed in. `IWebApiTokenStore` is registered **scoped** (`Program.cs:83`), which under
+Blazor Server means per-circuit: restarting the host destroys every circuit and the access token
+with it. The browser reconnects into a fresh scope holding no token, `WebApiClient` sends no
+`Authorization` header, and the API answers 401 to everything. Signing in again clears it. So these
+two reports are probably not standing product defects — but they expose two that are.
+
+### 133a. A dead session is reported as an HTTP status code
+
+The page said *"the server answered 401 (Unauthorized)"*. That sentence is `LoadResult.Reason`
+being rendered faithfully — item 120 working as designed — but 401 is the one status where the
+generic treatment is wrong. It does not mean "something went wrong fetching this list"; it means
+**this person is no longer signed in**, and the only useful thing to say is so, with a way back.
+
+This is not a dev-only artefact. It happens in production whenever a token expires, an app pool
+recycles, or a deployment restarts the host — and the reader will be told their site settings could
+not be loaded rather than that they need to sign in again.
+
+**Fix.** Handle 401 distinctly from other failures in the client — a flag on `LoadResult` or a
+dedicated reason — and have `BenListState` (and the ad-hoc error banners) render "Your session has
+ended. Sign in again" with a link carrying `returnUrl`. Consider re-authenticating silently where a
+refresh token exists. Related to item 131, which is also a dead end offering no way forward.
+
+**Worth deciding separately:** whether the token should survive a reconnect at all. It is scoped
+today, and `EntraTokenPersister` only bridges the prerender-to-circuit handoff, not a host restart.
+
+### 133b. AdminSiteSettings renders its error and "Loading…" at the same time
+
+Real, and independent of the 401. In `AdminSiteSettings.razor`, `LoadAsync` sets `_error` and
+returns on failure — leaving `_settings` null. The template's only test is:
+
+```razor
+@if (_settings is null) { <p class="text-secondary">Loading…</p> }
+```
+
+So a failed load shows the red banner *and* a spinner that will never resolve, which reads as "it
+failed, but it is also still trying". The page needs the third state the rest of the site now has:
+this is a surface that should be using `BenListState`, which distinguishes loading from
+couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _page is null`) and
+is the model.
+
+Cheap, and worth doing with the next item-120 slice rather than alone.
