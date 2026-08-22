@@ -352,9 +352,31 @@ app.UseExceptionHandler(handler =>
     handler.Run(async context =>
     {
         var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var logger  = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+        // A stored file that is not on disk is a 404, not a fault. IFileStorageService.OpenReadAsync
+        // throws FileNotFoundException, and none of its ~20 call sites catch it, so a row whose
+        // bytes are missing answered 500 and logged a stack trace. That is wrong twice over: the
+        // caller is told the server broke when the correct answer is "this is gone", and a routine
+        // data gap fills the error log with noise that hides real faults. Mapped here rather than
+        // at each call site for the same reason the log entry is written here - one place, and it
+        // covers the next endpoint to serve a file as well.
+        //
+        // Logged at Warning, because it is worth knowing about: it means the database and the disk
+        // disagree, which is a real condition even though it is not a crash.
+        if (feature?.Error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            logger.LogWarning(feature.Error,
+                "Stored file missing at {Path} - the database row exists but the bytes do not", feature.Path);
+
+            context.Response.StatusCode  = 404;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"That file is no longer available.\"}");
+            return;
+        }
+
         if (feature?.Error is not null)
         {
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
             logger.LogError(feature.Error,
                 "Unhandled exception at {Path} — Source: WebApi", feature.Path);
         }
