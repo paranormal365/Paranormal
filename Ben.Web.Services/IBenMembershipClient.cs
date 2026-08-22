@@ -26,7 +26,7 @@ public interface IBenMembershipClient
     Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Submits a membership application to the organization.</summary>
-    Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
+    Task<(OrganizationMembershipRequestRecord? Result, string? Error)> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
 
     /// <summary>Accepts or denies a pending membership application (requires MembershipRequests-Update permission).</summary>
     Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, bool? canReapply = null, string? denialReason = null, CancellationToken token = default);

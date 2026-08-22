@@ -2,6 +2,7 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services.WebApi
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @*
     Evidence offered by public-event attendees, waiting on the group (item 111). Renders nothing
@@ -54,7 +55,15 @@
     private bool _busy;
     private string? _error;
 
-    protected override async Task OnParametersSetAsync() => await LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        // The standing AuthReady rule: this fetch needs a bearer token, and a component can run
+        // before the circuit's auth state exists. A raced fetch here fails SILENTLY — the card
+        // renders nothing on an empty queue by design, so an unauthenticated 401 is
+        // indistinguishable from "nothing to review" on screen.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

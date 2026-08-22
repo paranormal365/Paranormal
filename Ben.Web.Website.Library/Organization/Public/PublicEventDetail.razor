@@ -365,9 +365,19 @@ else
         _evidenceError = null;
         try
         {
-            await using var stream = _evidenceFile.OpenReadStream(maxAllowedSize: long.MaxValue);
+            // Buffered BEFORE the HTTP call. A RemoteBrowserFileStream pulls its bytes over
+            // SignalR on demand, and handing it straight to StreamContent makes HttpClient and
+            // the circuit fight over who pumps — the submit "completed" up to twenty seconds
+            // after the click, against a page that showed nothing, and a reconnecting circuit
+            // could then REPLAY the click and submit twice. Copying first finishes the SignalR
+            // half while the circuit is idle, and only then starts the HTTP half.
+            await using var buffered = new MemoryStream();
+            await using (var browserStream = _evidenceFile.OpenReadStream(maxAllowedSize: long.MaxValue))
+                await browserStream.CopyToAsync(buffered);
+            buffered.Position = 0;
+
             var (result, error) = await AdminClient.SubmitEventEvidenceAsync(
-                _event.Id, stream, _evidenceFile.Name, _evidenceFile.ContentType,
+                _event.Id, buffered, _evidenceFile.Name, _evidenceFile.ContentType,
                 string.IsNullOrWhiteSpace(_evidenceNote) ? null : _evidenceNote.Trim());
 
             if (result is null)

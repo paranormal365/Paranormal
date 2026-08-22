@@ -25,6 +25,9 @@ public sealed partial class BenAdminClientAdapter
         return result;
     }
 
+    public Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default)
+        => _api.RegisterOrganizationAsync(request, token);
+
     public Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default)
         => _api.GetAsync<OrganizationAdminRecord>($"/api/organizations/{id}", token);
 

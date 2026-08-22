@@ -31,7 +31,8 @@ public class OrgDiscoveryTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/tgh");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        // Heading role — the Apply panel also names the group; see OrgPublicPageTests.
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Tennessee Ghost Hunters" })).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]

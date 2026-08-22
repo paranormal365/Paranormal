@@ -25,6 +25,9 @@ public interface IBenOrganizationClient
     /// </summary>
     Task<LoadResult<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
 
+    /// <summary>Founds a group with the caller as Owner — the self-serve door, any signed-in user.</summary>
+    Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default);
+
     /// <summary>Returns a single organization for pre-filling the edit form. Returns null if not found or forbidden.</summary>
     Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
 

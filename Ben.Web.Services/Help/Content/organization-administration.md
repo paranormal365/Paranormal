@@ -379,6 +379,13 @@ to is just mail you did not ask for.
 Everyone is reminded once. If the site cannot reach somebody's address, it tries again on the next
 run rather than giving up quietly.
 
+## Applications from would-be members
+
+When **Accepting Membership Applications** is on (the group's Edit screen), your public page shows
+an apply box to signed-in visitors. Applications land on the **Members** tab, where any member
+with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
+sees your answer.
+
 ## Your group's plan
 
 Plans are priced by **active members, per group** — the price list is on the **Pricing** page,

@@ -1,0 +1,105 @@
+@page "/organizations/new"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Web.Website.Library.Manage.Icon
+
+<PageTitle>Start a Group</PageTitle>
+
+@*
+    The founder's door (found missing during the item-109 "super testing" journey): the register
+    endpoint has always let any signed-in person create a group and become its Owner — the whole
+    billing model depends on groups signing THEMSELVES up — but the only create page in the UI
+    was SuperAdmin-gated, so from the outside the product read as invitation-only. Third
+    write-only feature this journey surfaced.
+
+    Deliberately smaller than the SuperAdmin create page: a founder needs a name and an address,
+    and everything else (contact details, logos, settings) lives in the hub they are about to
+    own. Asking twelve questions at the door loses people at the door.
+*@
+
+<div class="d-flex align-items-center justify-content-center p-3">
+    <div class="card shadow-sm" style="width:100%;max-width:30rem;">
+        <div class="card-body p-4">
+            <h2 class="h4 mb-1">Start a group</h2>
+            <p class="text-secondary small mb-3">
+                You'll be its owner. You can invite members, take cases, and set everything else
+                up from your group's own page.
+            </p>
+
+            <div class="mb-3">
+                <label class="form-label" for="newgroup-name">Group name <span class="text-danger">*</span></label>
+                <input id="newgroup-name" type="text" class="form-control" maxlength="200"
+                       placeholder="e.g. Nashville Night Watch" @bind="_name" @bind:event="oninput"
+                       @bind:after="SuggestUrlName" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="newgroup-url">Web address <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">/o/</span>
+                    <input id="newgroup-url" type="text" class="form-control" maxlength="100"
+                           placeholder="nashville-night-watch" @bind="_urlName" @bind:event="oninput" />
+                </div>
+                <div class="form-text">Lowercase letters, numbers and hyphens. This is permanent-ish — choose kindly.</div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2">@_error</div>
+            }
+
+            <button type="button" id="newgroup-create" class="btn btn-primary w-100"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_urlName))"
+                    @onclick="CreateAsync">
+                @(_busy ? "Creating…" : "Create the group")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _name = "";
+    private string _urlName = "";
+    private bool _urlEdited;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/organizations/new")}");
+    }
+
+    /// <summary>Suggests a slug from the name until the person edits the slug themselves.</summary>
+    private void SuggestUrlName()
+    {
+        if (_urlEdited && _urlName.Length > 0) return;
+        _urlName = string.Concat(_name.ToLowerInvariant()
+                .Select(c => char.IsLetterOrDigit(c) ? c : '-'))
+            .Trim('-');
+        while (_urlName.Contains("--")) _urlName = _urlName.Replace("--", "-");
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _error = null;
+        _urlEdited = true;
+
+        var created = await AdminClient.RegisterOrganizationAsync(
+            new RegisterOrganizationRequest { Name = _name.Trim(), UrlName = _urlName.Trim().ToLowerInvariant() });
+
+        _busy = false;
+
+        if (created is null)
+        {
+            _error = "That couldn't be created — the web address may already be taken.";
+            return;
+        }
+
+        NavManager.NavigateTo($"/organizations/{created.OrganizationId}");
+    }
+}

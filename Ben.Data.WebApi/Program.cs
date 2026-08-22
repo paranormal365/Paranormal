@@ -445,6 +445,8 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     // ...and the roster seeder widens what it built: more people, the third group, more cases,
     // investigations and gear. Same flag, must run after DevelopmentDataSeeder.
     await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
+    // Last: needs the tiers, the groups and the past public event all to exist already.
+    await Ben.Data.WebApi.SeedData.BillingDemoSeeder.SeedAsync(app.Services, app.Configuration);
 }
 else
 {

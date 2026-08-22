@@ -416,11 +416,16 @@ else
 
     public async ValueTask DisposeAsync()
     {
-        if (_module is not null)
+        // Same as NearbyDiscovery: a disconnected circuit is the ordinary way off this page.
+        try
         {
-            await _module.InvokeVoidAsync("dispose");
-            await _module.DisposeAsync();
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
         }
+        catch (JSDisconnectedException) { }
         _dotnetRef?.Dispose();
     }
 
