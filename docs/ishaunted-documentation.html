@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>14 documents &middot; 7 sections</div>
-      <div>20 August 2026</div>
+      <div>22 August 2026</div>
     </div>
   </div>
   <div class="status">
@@ -317,7 +317,7 @@ instead. Each one works once.</p>
 <tbody>
 <tr>
 <td>Invalid email or password</td>
-<td>Check both. This is the only one where the password is actually wrong.</td>
+<td>Check both — or see the note below if you usually sign in with Microsoft.</td>
 </tr>
 <tr>
 <td>Confirm your email address first</td>
@@ -331,10 +331,36 @@ instead. Each one works once.</p>
 <td>Too many sign-in attempts</td>
 <td>The same, but counted across the whole site rather than your account. Wait a minute.</td>
 </tr>
+<tr>
+<td>Couldn't reach the sign-in service</td>
+<td>Nothing is wrong with your password — it was never checked. The site could not reach the service behind it. Try again shortly.</td>
+</tr>
 </tbody>
 </table>
 <p>If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
 simply the second step.</p>
+<h2>Forgot your password — or never had one</h2>
+<p><strong>Forgot your password?</strong> on the sign-in page emails you a link to choose a new one. The link
+brings you back to the site; if your mail app breaks the link, the email also carries a code you
+can paste in by hand.</p>
+<p>The same flow covers a case that does not look like "forgot" at all: <strong>an account created by
+signing in with Microsoft has no password</strong>. Password sign-in against it says "invalid email or
+password", which is true but unhelpful — there is nothing to be wrong yet. Use the reset link to
+add a password, and both ways of signing in will work from then on.</p>
+<p>Already signed in? <strong>Profile → Security → Password</strong> does the same job without the email round
+trip: it offers <em>Add password</em> if your account has none, and an ordinary change-password form if
+it does.</p>
+<h2>Empty, or broken?</h2>
+<p>A list that shows nothing is telling you one of two different things, and the page says which.</p>
+<p><strong>"Nothing here yet"</strong>, or a sentence like <em>"This group hasn't shared any files yet"</em>, is an
+answer. The list really is empty. Nothing is wrong, and there is nothing to retry.</p>
+<p><strong>"Couldn't load this"</strong>, in a bordered box with a <strong>Try again</strong> button, means the page could not
+fetch the list at all. What you were looking for is still there — the site could not reach it, or
+was not allowed to. Try again first. If it keeps happening, the box usually names the reason, and
+quoting that on the contact form saves a great deal of guessing.</p>
+<p>The difference matters because these used to look identical: anything that failed to load simply
+showed an empty list, so the site would tell you your group had no members when it had four and
+had merely refused to say so.</p>
 <h2>Notifications</h2>
 <p>The <strong>bell</strong> in the top bar counts everything waiting on you, and the number is a total across
 several different kinds of thing. Open it, or the <strong>Notifications</strong> page, to see which.</p>
@@ -398,6 +424,21 @@ that is a different thing entirely and goes to the group, not to us.</p>
 keep it. It is how you read the reply and see whether the message has been picked up, and it is the
 only way back to a message sent without an account. If you were signed in when you wrote, the
 message is attached to your account as well.</p>
+<h2>Joining a group — or starting your own</h2>
+<p>On a group's public page, signed in, there's an <strong>Apply to join</strong> box (when the group is taking
+applications). Say a line about yourself if you like, send it, and the group answers — you'll see
+the state of your application right there on their page.</p>
+<p>Or found your own: <strong>Organizations → Start a Group</strong> asks only for a name and a web address;
+everything else — members, cases, settings, your public page — is set up from the group's own hub
+once it exists. You're the owner from the first moment.</p>
+<h2>Going to a group's public event</h2>
+<p>Public events are open to anyone — you'll find them on a group's page and under <strong>Join a Group</strong>.
+Say you're coming with your email address, click the link we send, and you're on the list (that
+also creates you an account, with no password to invent).</p>
+<p>Afterwards, if you captured something, the event's page lets you <strong>offer it to the group</strong>. A
+member reviews every submission. If yours is accepted it becomes part of that event's public
+record, credited to you; if it's declined you're told why, and your file stays private. You can
+see where each of your submissions stands on the same page.</p>
 </section>
 <section class="doc" id="requesting-an-investigation">
   <div class="doc-head">
@@ -480,6 +521,20 @@ are more useful than one.</p>
 anything you prefer. Set it on your case page under <strong>How You're Named Publicly</strong>.</p>
 <p>Your investigators always see your real name. They cannot work a case while blind to who reported
 it, so the alias applies to public pages and shared documents only.</p>
+<h2>If your case is paused</h2>
+<p>A paused case means the organization's subscription ended — nothing more. <strong>Nothing you reported
+or they collected has been lost</strong>, and all of it stays readable to you. If the group renews, the
+case resumes exactly where it left off.</p>
+<p>You can also <strong>move your case to a different organization</strong>, right from the banner on the case
+page. Pick a group, and choose what they will be able to see:</p>
+<ul>
+<li>the <strong>history</strong> collected so far — reports, notes, evidence</li>
+<li>the <strong>investigations</strong> the previous group ran</li>
+</ul>
+<p>Anything you don't share stays with the original case — visible to you, never to the new group,
+and nothing is deleted either way. The findings belong to the original group <em>and</em> to you, which
+is why this is your choice alone; the original group is not asked. The new group answers your
+request, and you hear their answer either way. Until they do, you can withdraw the request.</p>
 </section>
 <section class="doc" id="working-a-case">
   <div class="doc-head">
@@ -681,6 +736,21 @@ nobody on it goes nowhere.</p>
 <p><strong>Mark as encrypted / private</strong> flags a message as sensitive. It is a marking on the message, for
 the people reading it — it is not a second password, and it does not hide the message from anyone
 who could otherwise open it.</p>
+<h2>Incoming cases</h2>
+<p>When another group — or a client moving their own paused case — asks your group to take a case
+over, it appears at the top of your <strong>Cases</strong> page as <em>Incoming cases</em>, with Accept and Decline
+right there. For a client-proposed move, the card says what you will be able to see of the
+previous group's work: the client decides whether their collected history and past investigations
+travel with the case, and that choice is theirs, not the previous group's. Accepting gives the
+case a fresh number in your group and makes it active again; the client is told either way.</p>
+<h2>Evidence from people who attended a public event</h2>
+<p>Anyone who attended one of your public events can offer what they captured — audio, photos, video
+— from the event's own page. Nothing they send goes into your record automatically: submissions
+wait in <strong>Evidence from your public events</strong> on your group's Calendar tab until a member accepts
+or declines one. Declining asks for a reason, and the submitter is told either way.</p>
+<p>Accepting puts the file into that event's <strong>public</strong> record, credited to the attendee — that is
+the bargain a public investigation makes, and submitters are told so before they send anything.
+Anything you decline stays private to the person who sent it.</p>
 </section>
 <section class="doc" id="the-feed">
   <div class="doc-head">
@@ -900,6 +970,18 @@ worth keeping.</p>
 <p>That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
 scheduled investigation appears in your list straight away but on the map only once someone has
 confirmed you were there.</p>
+<h2>Security — your password and two-step sign-in</h2>
+<p>The profile's <strong>Security</strong> tab holds how you get into your account.</p>
+<p><strong>Password.</strong> Change it here whenever you like. If your account was created by signing in with
+Microsoft it has <em>no</em> password yet — the panel says so and offers <strong>Add password</strong> instead, which
+asks for no current password because being signed in already proves who you are. Adding one lets
+you sign in either way from then on; Microsoft sign-in keeps working.</p>
+<p>Locked out entirely? <strong>Forgot your password?</strong> on the sign-in page emails you a link, and that
+same link is how a Microsoft-only account sets its first password.</p>
+<p><strong>Two-step sign-in.</strong> Optional, off unless you turn it on, and worth turning on. Scan the code
+with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
+Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
+in when your phone is not to hand, and each one works once.</p>
 </section>
 <section class="doc" id="your-equipment">
   <div class="doc-head">
@@ -1751,6 +1833,29 @@ maybe, is not written to: they did not agree to come, and a reminder about a thi
 to is just mail you did not ask for.</p>
 <p>Everyone is reminded once. If the site cannot reach somebody's address, it tries again on the next
 run rather than giving up quietly.</p>
+<h2>Applications from would-be members</h2>
+<p>When <strong>Accepting Membership Applications</strong> is on (the group's Edit screen), your public page shows
+an apply box to signed-in visitors. Applications land on the <strong>Members</strong> tab, where any member
+with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
+sees your answer.</p>
+<h2>Your group's plan</h2>
+<p>Plans are priced by <strong>active members, per group</strong> — the price list is on the <strong>Pricing</strong> page,
+visible to everyone. Yearly billing usually costs less than paying month by month; the card says
+how much less.</p>
+<p>Two things worth knowing about how plans behave:</p>
+<p><strong>What you signed up for is a contract for the period you paid for.</strong> If the plan changes after
+you subscribe, improvements reach you immediately — a raised limit, a lower price, nothing to do
+on your side. Changes that would reduce what you have wait until your renewal, and you'll get a
+message about them <strong>before</strong> your period ends, so nothing ever changes under you mid-period. When
+your current terms are better than what the pricing page shows, your Pricing page says so:
+"you keep the terms you signed up for until" your renewal date.</p>
+<p><strong>Plans can include limits</strong> — on open cases, equipment, loans out at a time, open investigations,
+public pages. If your group reaches one, the screen where you tried says exactly which limit and
+what your plan includes; closed cases and retired equipment never count against you. A larger plan
+raises the limit.</p>
+<p>Have a coupon code? There's a line for it at checkout — type it and the price updates before you
+confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
+to a specific account, so if a code is refused the message says why.</p>
 </section>
 <section class="doc" id="publishing-with-publications">
   <div class="doc-head">
@@ -1848,6 +1953,10 @@ Delete is missing on a publication that looks empty, that is usually why.</p>
 <h2>The dashboard</h2>
 <p><strong>Administration → Dashboard</strong> is the overview the rest of this menu drills into: four headline
 numbers over a grid of charts, with a 7 / 30 / 90-day range picker.</p>
+<p>The first three headline cards are links — <strong>People</strong> opens the user list, <strong>In a group</strong> the
+groups, <strong>Cases</strong> the case list — because the number is usually the start of a question the list
+answers. <em>Signed in this week</em> deliberately is not: there is no page listing recent sign-ins, and a
+card that sent you somewhere approximate would be worse than one that stays put.</p>
 <p>The numbers worth knowing how to read:</p>
 <ul>
 <li><strong>People</strong> and <strong>In a group</strong> — the second is the funnel. Someone who registers and never joins
@@ -1857,8 +1966,10 @@ numbers over a grid of charts, with a 7 / 30 / 90-day range picker.</p>
   attempt count. Someone signing in from a laptop and a phone is one person, two sign-ins.</li>
 <li><strong>Busiest groups</strong> counts cases and investigations started inside the chosen range, so it moves
   with the range picker. <strong>Largest groups</strong> counts active membership and does not.</li>
-<li>The three <strong>by state</strong> charts come from addresses already on record: people from their profile
-  addresses, cases from the address the case is about, investigations from the place visited.</li>
+<li><strong>Where this is happening</strong> has a People / Cases / Investigations toggle, and all three come from
+  addresses already on record: people from their profile addresses, cases from the address the case
+  is about, investigations from the place visited. Expect People to lag the other two — it counts
+  only those who have filled in an address, which most people have not.</li>
 </ul>
 <h3>What the dashboard cannot tell you</h3>
 <p>There is no count of visitors who never sign in, and no "new versus returning" split. Nothing on
@@ -1974,6 +2085,32 @@ installation id the sidecar generates for itself.</p>
 <em>The audit log records who changed what, and when. Filter it by entity, action, person or date.</em></p>
 <p><strong>Administration → Audit Log</strong> records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.</p>
+<h2>Billing</h2>
+<p><strong>Administration → Billing</strong> holds three screens.</p>
+<p><strong>Price Bands</strong> is the price list the public Pricing page renders — member ranges, a price per
+billing cadence, and the caps each band includes. Every save is validated as a whole list: the
+bands must cover every possible member count with no gaps or overlaps, and a save that would leave
+somebody unpriced is refused with the reason. Bands are retired, never deleted, because a band
+that has priced a period is part of the billing record. When an edit would affect groups already
+on the band, the save pauses and shows the blast radius first: improvements are announced to those
+groups immediately, reductions are queued and delivered up to two weeks before each group's own
+renewal — paid groups keep the terms they bought until then.</p>
+<p><strong>Coupons</strong> manages discount campaigns. A <em>shared</em> campaign is one code everybody types; a
+<em>generated</em> campaign is a batch of single-use codes you can print or mail, each withdrawable on
+its own, and addressable to a specific account. A campaign can be limited by date window, total
+redemptions (the budget), billing cadence, and occasion — first subscriptions only, or renewals
+only. A misconfigured campaign (one that takes nothing off, or whose window closes before it
+opens) wears a red <strong>Broken</strong> badge in the list rather than failing silently for whoever types it.</p>
+<p>Every code also doubles as a <strong>referral link</strong> — the codes panel's <em>Copy link</em> button gives a
+<code>/pricing?code=…</code> URL to hand to whoever is promoting or selling access. Visitors land with the
+code attached and see it priced against their group before anything is confirmed; the code's
+redemption count is the referrer's scorecard.</p>
+<p><strong>Subscriptions</strong> is where every group's standing lives — including groups never set up, which is
+the first thing to look for. Until a payment provider is wired in, this screen <em>is</em> the payment
+record: when a group pays, set their band, cadence and period here. The member count and price are
+frozen from the moment you save, and the group keeps those terms for the whole period whatever
+happens to the price list. The Members column shows the current count beside the frozen one —
+the gap is what the group will be re-banded on at renewal.</p>
 </section>
 <section class="doc" id="moderating-the-feed">
   <div class="doc-head">

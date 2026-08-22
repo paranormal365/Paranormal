@@ -7570,3 +7570,29 @@ navigation off the home page as an unhandled circuit exception), and the evidenc
 double-submit on circuit replay — it now buffers before the HTTP call. The tests themselves were
 also wrong twice over (asserting the note where only the file name renders; navigating away while
 the upload streamed).
+
+
+---
+
+## 147. Documentation audit — ten surfaces shipped with no help link (CLOSED 2026-08-22)
+
+Ben asked whether documentation and help were up to date. Audited rather than assumed, and the
+answer was **no** in three places:
+
+1. **Ten new surfaces had no `HelpLink` at all** — pricing, start-a-group, the apply panel, the
+   password panel, the evidence review queue, all three Billing screens, and both password pages.
+   The prose existed for every one of them; the in-app door to it did not. This is the standing
+   "docs + HelpLink in the same branch" rule failing quietly across a whole day's work, because
+   nothing checks it.
+2. **`your-profile.md` never mentioned the Security tab** — neither the new Password panel nor
+   two-step sign-in, so the natural place to look said nothing. New section added.
+3. **The product PDF was two days stale** (Aug 20), predating items 84, 85, 111 and 142.
+   Regenerated: 77 pages, all of today's sections present.
+
+**The guard.** `HelpLinkAnchorGuardTests` now scans every `.razor` in both web projects, resolves
+each `HelpLink`'s slug and anchor against the actual headings in the help content, and fails on
+any that points nowhere — a stale anchor is silent otherwise: it renders, it clicks, and it drops
+the reader at the top of a page missing the section they were promised. 56 links checked, 0
+broken; verified by renaming an anchor and watching it fail. It does not yet enforce that a NEW
+page HAS a link — that needs a list of what counts as a page, which is a judgement call, so the
+rule stays a habit backed by this audit.
