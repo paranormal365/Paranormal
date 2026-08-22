@@ -4,6 +4,8 @@
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
   Reusable comment thread for an UploadFile (item #6 phase 2). Self-contained — loads/posts/edits/
@@ -18,6 +20,11 @@
     @if (_comments is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading comments…" />
+    }
+    else if (_commentsResult.Failed)
+    {
+        @* "No comments yet" over a refusal hides a conversation somebody is waiting on. *@
+        <BenListState TItem="UploadFileCommentRecord" Result="@_commentsResult" OnRetry="@OnInitializedAsync" />
     }
     else if (_comments.Count == 0)
     {
@@ -95,6 +102,7 @@
     [Parameter] public bool CanModerate { get; set; }
 
     private List<UploadFileCommentRecord>? _comments;
+    private LoadResult<UploadFileCommentRecord> _commentsResult;
     private string _draft = string.Empty;
     private Guid? _editingId;
     private string _editDraft = string.Empty;
@@ -116,7 +124,7 @@
     protected override async Task OnParametersSetAsync()
     {
         if (_comments is not null) return;
-        try { _comments = (await AdminClient.GetFileCommentsAsync(FileId)).Items.OrderBy(c => c.DateCreated).ToList(); }
+        try { _commentsResult = await AdminClient.GetFileCommentsAsync(FileId); _comments = _commentsResult.Items.OrderBy(c => c.DateCreated).ToList(); }
         catch { _error = "Failed to load comments."; _comments = []; }
     }
 

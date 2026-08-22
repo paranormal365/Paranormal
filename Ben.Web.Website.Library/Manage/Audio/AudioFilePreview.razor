@@ -13,6 +13,8 @@
 @namespace Ben.Web.Website.Library.Manage.Audio
 @inject IBenAdminClient AdminClient
 @inject BenToastService Toasts
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading)
 {
@@ -215,7 +217,13 @@ else
                                 ➕ Add Marker at @FormatTime(_modalTime)
                             </button>
                         </div>
-                        @if (!ConfirmedMarkers.Any())
+                        @if (_markersResult.Failed)
+                        {
+                            @* Markers are somebody's analysis of a recording. "No markers yet"
+                               over a refusal says the file was reviewed and found empty. *@
+                            <BenListState TItem="AudioMarkerRecord" Result="@_markersResult" />
+                        }
+                        else if (!ConfirmedMarkers.Any())
                         {
                             <div class="text-secondary small fst-italic">No markers yet — play the file and drop a marker where you hear something.</div>
                         }
@@ -1009,7 +1017,8 @@ else
         if (_modalPlayer is null) return;
         try
         {
-            _markers = (await AdminClient.GetAudioMarkersAsync(FileId)).Items;
+            _markersResult = await AdminClient.GetAudioMarkersAsync(FileId);
+            _markers       = _markersResult.Items;
             foreach (var marker in _markers)
                 await AddMarkerRegionAsync(marker);
             StateHasChanged();
@@ -1518,6 +1527,7 @@ else
     // ── Phase D: EVP markers state ─────────────────────────────────────────────
 
     private IReadOnlyList<AudioMarkerRecord> _markers = [];
+    private LoadResult<AudioMarkerRecord> _markersResult;
     private bool                    _showMarkers;
     private bool                    _showMarkerDialog;
     private AudioMarkerRecord?      _editingMarker;

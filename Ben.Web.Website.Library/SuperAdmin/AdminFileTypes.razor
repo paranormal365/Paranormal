@@ -4,6 +4,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — File Types</PageTitle>
 
@@ -27,6 +29,11 @@
     }
     else
     {
+        @* An empty file-type grid reads as a deployment with no types configured, which sends
+           somebody to re-seed a table that is already full. *@
+        <BenListState TItem="AdminFileTypeWithExtensionsResponse" Result="@_typesResult"
+                      EmptyText="No file types are configured yet" OnRetry="@LoadAsync">
+        <ChildContent>
         <TelerikGrid Data="@_types"
                      TItem="AdminFileTypeWithExtensionsResponse"
                      Sortable="true"
@@ -83,6 +90,8 @@
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
+        </ChildContent>
+        </BenListState>
     }
 </div>
 
@@ -235,6 +244,7 @@
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
     private IReadOnlyList<AdminFileTypeWithExtensionsResponse> _types = [];
+    private LoadResult<AdminFileTypeWithExtensionsResponse> _typesResult;
     private bool _loading = true;
     private string? _error;
 
@@ -277,7 +287,8 @@
         _error = null;
         try
         {
-            _types = (await AdminClient.GetFileTypesWithExtensionsAsync()).Items;
+            _typesResult = await AdminClient.GetFileTypesWithExtensionsAsync();
+            _types       = _typesResult.Items;
         }
         catch (Exception ex)
         {

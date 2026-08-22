@@ -18,6 +18,13 @@ namespace Ben.Web.Tests.Services;
 /// purpose: it cannot check that the right thing is rendered, only that the failure was not
 /// dropped on the floor without a decision.</para>
 ///
+/// <para><b>It ran with a debt list for one day.</b> When item 120's conversion finished, 22 pages
+/// could see a refusal and still rendered two states. They were listed in an
+/// <c>AwaitingRenderPass</c> array with its own ratchet — visible and shrinking, rather than
+/// quietly excluded — and the list reached zero on 2026-08-22 (item 141), so it is gone. If this
+/// guard ever needs one again, that is the shape: a list that can only get shorter, never a
+/// silent exemption.</para>
+///
 /// <para><b>Deliberate exceptions are listed, with the reason.</b> Some fetches really are
 /// decorations, and a warning panel over a badge would be worse than the badge not appearing. Those
 /// belong in <see cref="Decorations"/> where the choice is written down, rather than passing
@@ -135,48 +142,6 @@ public sealed class LoadResultRenderedGuardTests
     };
 
 
-    /// <summary>
-    /// Pages that can now see a refusal and do not yet show it. <b>A debt list, not an exemption.</b>
-    /// </summary>
-    /// <remarks>
-    /// <para>These are not decorations — each one has a list a person reads, and each still renders
-    /// a refusal as "nothing here". They are listed rather than quietly excluded so the number is
-    /// visible and can only go down.</para>
-    ///
-    /// <para><b>They are no worse than before the conversion.</b> Previously the adapter handed
-    /// them a bare empty list; now it hands them a result whose <c>.Items</c> is empty. The lie is
-    /// identical — what changed is that the truth is now available at the call site, and this list
-    /// says where it is going unused. Item 141.</para>
-    ///
-    /// <para>Removing an entry means wrapping that page's list in <c>BenListState</c>, or branching
-    /// on <c>.Failed</c> where the list is mutated in place. Never move one to
-    /// <see cref="Decorations"/> unless it genuinely is one.</para>
-    /// </remarks>
-    private static readonly string[] AwaitingRenderPass =
-    [
-        "AdminFeedReports.razor",
-        "AdminFileTypes.razor",
-        "AudioFilePreview.razor",
-        "CaseVideoEditorPage.razor",
-        "ClientRequestWizard.razor",
-        "CmsSectionEditor.razor",
-        "FeedThreadPage.razor",
-        "FileCommentThread.razor",
-        "InvestigationRoster.razor",
-        "MediaLibraryGrid.razor",
-        "MyVideosPage.razor",
-        "NewInvestigationWindow.razor",
-        "OrgAddressManager.razor",
-        "OrgPublicationPosts.razor",
-        "OrgRoleEditor.razor",
-        "OrganizationMembershipQuestions.razor",
-        "OrganizationSecurity.razor",
-        "OrganizationView.razor",
-        "PlaceView.razor",
-        "PublicationsDirectory.razor",
-        "UploadFiles.razor",
-        "WsRegionExplorer.razor",
-    ];
 
     private static DirectoryInfo RepoRoot()
     {
@@ -236,7 +201,6 @@ public sealed class LoadResultRenderedGuardTests
         {
             var name = Path.GetFileName(file);
             if (Decorations.ContainsKey(name)) continue;
-            if (AwaitingRenderPass.Contains(name)) continue;
 
             var source = StripComments(File.ReadAllText(file));
 
@@ -266,48 +230,6 @@ public sealed class LoadResultRenderedGuardTests
     /// An allowlist that outlives its entries stops guarding. Every exception must still be a file
     /// that exists and still calls one of these methods.
     /// </summary>
-    /// <summary>
-    /// The render debt may only shrink.
-    /// </summary>
-    /// <remarks>
-    /// The same ratchet shape that took the client's swallowed failures from 120 to zero, applied
-    /// to the other half of the problem. Without it the list is a place to hide a new page rather
-    /// than a record of an old one.
-    /// </remarks>
-    [Fact]
-    public void The_render_debt_never_grows()
-    {
-        const int Ceiling = 22;
-
-        Assert.True(
-            AwaitingRenderPass.Length <= Ceiling,
-            $"The render debt went UP: {AwaitingRenderPass.Length}, ceiling {Ceiling}. A new page "
-          + "that ignores a refusal is a new instance of item 120, not an entry for this list.");
-
-        Assert.True(
-            AwaitingRenderPass.Length == Ceiling,
-            $"The render debt is down to {AwaitingRenderPass.Length} but the ceiling is still "
-          + $"{Ceiling}. Lower it to {AwaitingRenderPass.Length} to lock the progress in.");
-    }
-
-    /// <summary>Every page named in the debt list must still exist and still call one.</summary>
-    [Fact]
-    public void Every_debt_entry_is_still_real()
-    {
-        var files = RazorFiles().ToList();
-
-        foreach (var name in AwaitingRenderPass)
-        {
-            var match = files.FirstOrDefault(f => Path.GetFileName(f) == name);
-            Assert.True(match is not null, $"Debt entry '{name}' no longer exists — remove it.");
-
-            var source = StripComments(File.ReadAllText(match!));
-            Assert.True(
-                ConvertedMethods.Any(m => source.Contains(m, StringComparison.Ordinal)),
-                $"Debt entry '{name}' no longer calls a converted method — remove it.");
-        }
-    }
-
     [Fact]
     public void Every_declared_decoration_is_still_real()
     {

@@ -3,6 +3,8 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Membership Questions</PageTitle>
 
@@ -21,6 +23,11 @@
     @if (_questions is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading questions…" />
+    }
+    else if (_questionsResult.Failed)
+    {
+        @* A group shown no questions writes them again, and applicants answer two sets. *@
+        <BenListState TItem="OrganizationMembershipQuestionRecord" Result="@_questionsResult" OnRetry="@LoadAsync" />
     }
     else if (_questions.Count == 0)
     {
@@ -112,6 +119,7 @@
     [Parameter] public Guid OrgId { get; set; }
 
     private List<OrganizationMembershipQuestionRecord>? _questions;
+    private LoadResult<OrganizationMembershipQuestionRecord> _questionsResult;
     private string? _error;
     private bool _isBusy;
     private bool _showDialog;
@@ -131,7 +139,7 @@
 
     private async Task LoadAsync()
     {
-        try { _questions = (await AdminClient.GetMembershipQuestionsAsync(OrgId)).Items.ToList(); }
+        try { _questionsResult = await AdminClient.GetMembershipQuestionsAsync(OrgId); _questions = _questionsResult.Items.ToList(); }
         catch { _error = "Failed to load questions."; }
     }
 
