@@ -51,6 +51,10 @@ public sealed class PublicSiteFeaturesController : ControllerBase
                 : defaultWhenUnset;
         }
 
-        return Ok(new SiteFeaturesInfo(features));
+        // The one non-feature value published here, on purpose: a site-wide announcement is only
+        // useful if the people it warns — including anonymous visitors — can read it.
+        stored.TryGetValue(SiteSettingKeys.SiteAnnouncement, out var announcement);
+
+        return Ok(new SiteFeaturesInfo(features, announcement));
     }
 }

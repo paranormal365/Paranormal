@@ -214,8 +214,11 @@
             // Feature switches are read from a snapshot that refreshes on its own every 30
             // seconds. That is right for every other reader and wrong for the person who just
             // moved the switch: without this they save, look at the site, see no change, and
-            // reasonably conclude it did not work.
-            Features.Invalidate();
+            // reasonably conclude it did not work. Awaited, not just invalidated: Invalidate
+            // schedules a refresh behind the NEXT reader, so the admin's own next page could
+            // still render the old snapshot — exactly the "did it save?" moment this exists
+            // to prevent (found by the announcement-banner e2e test).
+            await Features.PrimeAsync();
         }
         catch { _error = "Couldn't save that setting."; }
         finally { _savingKey = null; StateHasChanged(); }

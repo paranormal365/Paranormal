@@ -52,6 +52,14 @@ that group's settings.
 Adding a new setting is a code change, not a database one: settings are declared in
 `SiteSettingKeys.Seed`, and the page renders whatever is declared.
 
+### The site-wide announcement
+
+**Site-wide announcement** is for maintenance windows and known issues. While it has text, an
+info banner shows it at the top of every page, to everyone — signed in or not — with your line
+breaks preserved. Clear the box and save to take the banner down; both the posting and the
+removal reach visitors within about half a minute, without a restart. It is shown exactly as
+typed: plain text, no formatting or links.
+
 ### Turning sections of the site on and off
 
 Near the bottom of Site Settings is a row of switches labelled **Feature — …**, one for each
