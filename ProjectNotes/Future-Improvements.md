@@ -6490,3 +6490,34 @@ conversion rather than bolted on mid-verification.
 **Still open: 101 sites** across equipment, case, platform, user, investigation, cms, places,
 media, publications, membership and feed. Same recipe each time; the ratchet stops the number
 growing while the work continues.
+
+---
+
+## 130. Dates were day-first in 74 places a constant could not reach (SHIPPED 2026-08-21)
+
+Ben reported British dates on "Date Created" columns. **This was the fourth time he had reported
+it**, and he was right every time.
+
+**Why three previous fixes did not hold.** Each one corrected `DateTimeViewerExtensions` and
+whichever screen was in front of us, and the constants then looked authoritative. A constant
+governs only what refers to it — and the places that were wrong *could not* refer to it. A Telerik
+picker takes `Format="dd/MM/yyyy"` as a string attribute; a grid column takes
+`DisplayFormat="{0:dd/MM/yyyy}"`. Neither can hold a C# constant without being written to.
+
+**The audit found 74 day-first patterns across 28 files**, including the WebApi — so emails to
+borrowers and event attendees carried them too, not just the UI. `DisplayDateFormatTests` passed
+throughout, because it only ever asserted the constants.
+
+Fixed by making the constants reachable — added `MediumDatePattern`, `GridDateFormat`,
+`GridDateTimeFormat` — and rewriting every call site to reference them instead of carrying a
+pattern. ISO `yyyy-MM-dd` was deliberately left alone: `<input type="date">`, log lines, sort keys
+and generated filenames all need it, and it is not ambiguous to anybody.
+
+**`DateFormatSourceGuardTests`** now scans every `.cs` and `.razor` across six projects and fails
+the build on any day-first literal, in each spelling that has actually turned up. Verified to
+discriminate: reintroducing one `Format="dd/MM/yyyy"` fails it. Comments are stripped first — the
+fifth guard in this codebase that would otherwise fire on its own explanatory prose.
+
+**The lesson is bigger than dates.** When something is reported wrong repeatedly *after* being
+fixed, the fix is landing somewhere the broken code never consults. Go and find the call sites, and
+add a source scan rather than another assertion on the thing that was already right.

@@ -110,7 +110,7 @@
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label fw-semibold">When did you get it?</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_acquisitionDate" Width="100%" />
+                <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_acquisitionDate" Width="100%" />
             </div>
         </div>
 

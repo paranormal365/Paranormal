@@ -59,7 +59,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold mb-1">When</label>
-                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_entryDate" Width="100%" />
+                            <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_entryDate" Width="100%" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold mb-1" for="orgequipmentservicelog-note-3fd9">Note</label>

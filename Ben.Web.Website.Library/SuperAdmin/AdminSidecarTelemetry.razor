@@ -77,7 +77,7 @@
     {
         <TelerikGrid Data="@_rows" Pageable="true" PageSize="25" Sortable="true" Height="60vh">
             <GridColumns>
-                <GridColumn Field="@nameof(SidecarInstallLogRecord.DateCreated)" Title="When" Width="180px" DisplayFormat="{0:dd/MM/yyyy hh:mm tt}" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.DateCreated)" Title="When" Width="180px" DisplayFormat="@DateTimeViewerExtensions.GridDateTimeFormat" />
                 <GridColumn Field="@nameof(SidecarInstallLogRecord.EventType)" Title="Event" Width="100px" />
                 <GridColumn Field="@nameof(SidecarInstallLogRecord.Version)" Title="Version" Width="120px" />
                 <GridColumn Field="@nameof(SidecarInstallLogRecord.Platform)" Title="Platform" Width="120px" />

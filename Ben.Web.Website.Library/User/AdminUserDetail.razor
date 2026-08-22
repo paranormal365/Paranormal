@@ -76,15 +76,15 @@ else
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>

@@ -72,7 +72,7 @@
                     <div class="row g-2 align-items-end mb-3">
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold mb-1">Keep it until</label>
-                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_requestedDate" Width="100%" />
+                            <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_requestedDate" Width="100%" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold mb-1" for="equipmentcheckoutdetail-why-optional-e5e7">Why (optional)</label>

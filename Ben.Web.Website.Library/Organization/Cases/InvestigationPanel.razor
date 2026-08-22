@@ -281,11 +281,11 @@
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
             </div>            <div class="col-md-6">
                 <label class="form-label fw-semibold">Scheduled Date & Time</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">End Time (optional)</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EndDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-location-within-property-optional-0b20">Location within property (optional)</label>
@@ -303,7 +303,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }

@@ -169,7 +169,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Date/Time (optional)</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="casetimeline-title-optional-5b26">Title (optional)</label>

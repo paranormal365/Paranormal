@@ -32,8 +32,15 @@ public static class DateTimeViewerExtensions
         DateTime.UtcNow.ToViewerLocalTime(userState);
 
     // ── Display formats ──────────────────────────────────────────────────────
-    // One place decides how a date looks, so pages cannot drift apart the way they had: the same
-    // screens were mixing "yyyy-MM-dd", "d MMM yyyy", "MMM d, yyyy h:mm tt" and "d MMM, HH:mm".
+    // One place decides how a date looks, so pages cannot drift apart the way they had.
+    //
+    // "One place" was not true for a long time, and saying it here did not make it so. A constant
+    // governs only what refers to it, and a Telerik picker or grid column takes a format STRING
+    // attribute — so 74 call sites across 28 files carried their own hand-typed day-first pattern
+    // while these constants sat here saying month-first and looking authoritative. Ben reported it
+    // as day-first a fourth time on 2026-08-21 and was right every time. The call sites now
+    // reference these constants, and DateFormatSourceGuardTests fails the build if a new literal
+    // date format appears anywhere.
     //
     // **US format, month first.** This is Ben's stated preference and it is not a style question
     // to be re-litigated: the site's users, its groups and its cases are all American, and
@@ -68,6 +75,26 @@ public static class DateTimeViewerExtensions
     /// exempt from that just because a charting library draws it.
     /// </summary>
     public const string ChartDayPattern = "MMM d";
+
+    /// <summary>
+    /// A date with the month spelled short: <c>Aug 4, 2026</c>. For prose — emails, bylines,
+    /// "published on" lines — where slashes read as data rather than a sentence.
+    /// </summary>
+    public const string MediumDatePattern = "MMM d, yyyy";
+
+    /// <summary>
+    /// The date pattern wrapped for a Telerik <c>DisplayFormat</c>, which wants <c>{0:...}</c>.
+    /// </summary>
+    /// <remarks>
+    /// These exist because the constants above could not reach a grid column or a picker: those
+    /// take a format STRING attribute, so every one of them carried its own hand-typed pattern.
+    /// Seventy-four of them were day-first while the shared constants said month-first, and the
+    /// constants looked authoritative the whole time. A constant only governs what refers to it.
+    /// </remarks>
+    public const string GridDateFormat = "{0:" + DatePattern + "}";
+
+    /// <summary>The date-and-time pattern wrapped for a Telerik <c>DisplayFormat</c>.</summary>
+    public const string GridDateTimeFormat = "{0:" + DateTimeNoSecondsPattern + "}";
 
     /// <summary>The short month-first label used on chart axes.</summary>
     public static string ToChartDay(this DateTime local) =>

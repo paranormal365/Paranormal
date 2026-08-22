@@ -78,9 +78,9 @@ else
                 <div class="col-12">
                     <div class="d-flex gap-2 align-items-center">
                         <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
-                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].Start" Width="200px" />
+                        <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].Start" Width="200px" />
                         <span class="text-secondary small">to</span>
-                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].End" Width="200px" />
+                        <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].End" Width="200px" />
                         @if (_slots.Count > 1)
                         {
                             <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.RemoveAt(idx))"><BenIcon Name="trash-2" /></button>
