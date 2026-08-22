@@ -1,4 +1,6 @@
 using Ben.Data.WebApi.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -11,6 +13,52 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 public abstract class BenControllerBase : ControllerBase
 {
+    /// <summary>
+    /// Whether the caller holds SuperAdmin, on an endpoint that does <b>not</b> require
+    /// authentication.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why an anonymous endpoint needs its own answer.</b> <c>UseAuthentication</c>
+    /// populates <c>User</c> from the <i>default</i> scheme only — the local Identity bearer
+    /// handler. On an endpoint with <c>[Authorize]</c> that does not matter, because the default
+    /// policy pins both schemes and the authorization middleware replaces <c>User</c> with the
+    /// merged, transformed principal. On an <c>[AllowAnonymous]</c> endpoint nothing does that, so
+    /// a caller signed in with Microsoft arrives with no principal at all: not merely without the
+    /// role, but unauthenticated. <c>User.IsInRole</c> returns false and the endpoint quietly
+    /// serves them the visitor's view.</para>
+    ///
+    /// <para>Item 140. Only two endpoints were affected, and both failed <i>closed</i> — an admin
+    /// saw less, never more — so this is a visibility gap rather than a security one.</para>
+    ///
+    /// <para>Costs nothing for an actual visitor: the local check answers first for a local
+    /// session, and the Entra round trip is a scheme authentication against a token that a
+    /// visitor does not have.</para>
+    /// </remarks>
+    protected async Task<bool> CallerIsSuperAdminAsync()
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
+
+        // Entra is registered only when it is configured, and AuthenticateAsync THROWS on a scheme
+        // that is not registered — so asking for it unconditionally would take these anonymous
+        // endpoints down everywhere Entra is off, which is most environments. The first version of
+        // this method did exactly that and the equipment tests caught it.
+        var schemes = HttpContext.RequestServices?
+            .GetService<Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider>();
+
+        if (schemes is null) return false;
+        if (await schemes.GetSchemeAsync(Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme) is null)
+            return false;
+
+        var entra = await HttpContext.AuthenticateAsync(
+            Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme);
+
+        // The claims transformation runs as part of AuthenticateAsync, so the role claims it
+        // resolves from the database are already on this principal.
+        return entra.Succeeded
+            && entra.Principal is not null
+            && entra.Principal.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
+    }
+
     /// <summary>
     /// Returns the current user's AppUser Guid.
     /// Prefers the <c>app_user_id</c> claim injected by EntraClaimsTransformation;

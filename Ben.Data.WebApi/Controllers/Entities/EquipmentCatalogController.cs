@@ -265,9 +265,12 @@ public sealed class EquipmentCatalogController : BenControllerBase
 
         // An unapproved model is visible to whoever proposed it and to SuperAdmin, matching the
         // search endpoint's rule — otherwise it is not public yet.
+        // CallerIsSuperAdminAsync, not User.IsInRole: this endpoint is [AllowAnonymous], so an
+        // Entra-signed-in SuperAdmin arrives unauthenticated and the plain claim check said no —
+        // 404ing them out of the very model they are here to review. Item 140.
         if (!model.IsApproved
             && !(callerId is not null && model.ProposedByAppUserId == callerId)
-            && !User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin))
+            && !await CallerIsSuperAdminAsync())
             return NotFound();
 
         var items = await db.EquipmentItems.AsNoTracking()
