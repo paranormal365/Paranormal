@@ -255,3 +255,14 @@ You do not need an account to write in. After you send the form you are given a 
 keep it. It is how you read the reply and see whether the message has been picked up, and it is the
 only way back to a message sent without an account. If you were signed in when you wrote, the
 message is attached to your account as well.
+
+## Going to a group's public event
+
+Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
+Say you're coming with your email address, click the link we send, and you're on the list (that
+also creates you an account, with no password to invent).
+
+Afterwards, if you captured something, the event's page lets you **offer it to the group**. A
+member reviews every submission. If yours is accepted it becomes part of that event's public
+record, credited to you; if it's declined you're told why, and your file stays private. You can
+see where each of your submissions stands on the same page.

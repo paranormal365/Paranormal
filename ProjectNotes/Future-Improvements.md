@@ -5443,7 +5443,23 @@ Sequence: after the current nine-phase plan. Nothing depends on it.
 
 ---
 
-## 111. Evidence at a public investigation — who may add it, and is it all public? (DECIDED 2026-08-22 — Ben picked the middle option; build in progress)
+## 111. Evidence at a public investigation — who may add it, and is it all public? (BUILT 2026-08-22; publicity sub-questions still open)
+
+**Shipped:** `EventEvidenceSubmission` + `EvidenceSubmissionStatus`; submit / mine / accepted /
+queue / review endpoints plus an anonymous bytes endpoint gated purely on acceptance-and-public;
+attendance proven by a confirmed `EventAttendanceInvite` OR org membership (members use the same
+door, so the record of who offered what stays uniform); acceptance flips `UploadFile.IsPublic` and
+messages the submitter; declining requires a reason. UI: submit panel + "your submissions" status
+on the public event page (the public-record sentence sits ABOVE the button), accepted list on the
+same page, review queue card on the group's Calendar tab that renders nothing when empty. Seed
+adds a past public event with Daniel — who belongs to no group — as a confirmed attendee, which is
+what makes the e2e deterministic. 9 controller tests (3 gates regressed) + 2 Playwright tests
+covering the whole journey including a real file chooser and the signed-out read.
+
+**Still open — the publicity sub-questions Ben did not decide:** a visitor's own recording of
+themselves, other attendees appearing in someone's footage (the two-key consent question with
+thirty strangers), and whether written documentation is as locked-open as raw evidence. The build
+decides none of these; it states item 87's existing bargain and stops.
 
 **Ben's decision:** attendees may SUBMIT, a member must ACCEPT — the queue shape, copying the
 file-permission-request precedent. The publicity sub-questions (a visitor's own recording of

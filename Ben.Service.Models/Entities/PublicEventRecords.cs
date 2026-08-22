@@ -150,3 +150,17 @@ public sealed record PublicInvestigationDetail(
     string? State,
     decimal? ApproximateLatitude,
     decimal? ApproximateLongitude);
+
+/// <summary>One attendee evidence submission, in every view that shows one (item 111).</summary>
+public sealed record EventEvidenceRecord(
+    Guid Id,
+    Guid OrgCalendarEventId,
+    string EventTitle,
+    string SubmitterDisplayName,
+    Guid UploadFileId,
+    string FileName,
+    string ContentType,
+    string? Note,
+    Ben.Data.Common.Enums.EvidenceSubmissionStatus Status,
+    string? RejectionReason,
+    DateTime DateCreated);

@@ -130,6 +130,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
+        public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -2330,6 +2331,32 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // The review queue reads "this org's pending, oldest first"; the event index serves
+            // both the queue join and the public page's accepted list.
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.Status });
+            modelBuilder.Entity<EventEvidenceSubmission>().Property(e => e.Note).HasMaxLength(2000);
+            modelBuilder.Entity<EventEvidenceSubmission>().Property(e => e.RejectionReason).HasMaxLength(1000);
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany()
+                .HasForeignKey(e => e.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            // Restrict: the file is the evidence — the review row must not orphan silently.
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.SubmittedByAppUser).WithMany()
+                .HasForeignKey(e => e.SubmittedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.ReviewedByAppUser).WithMany()
+                .HasForeignKey(e => e.ReviewedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventEvidenceSubmission>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
