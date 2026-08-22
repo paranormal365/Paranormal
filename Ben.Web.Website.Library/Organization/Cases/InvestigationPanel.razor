@@ -428,7 +428,9 @@
             var binder = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId);
             if (binder.Failed)
             {
-                _binderError = binder.Reason ?? "Couldn't load this binder.";
+                _binderError = binder.SessionExpired
+                    ? "You've been signed out. Sign in again to see this binder."
+                    : binder.Reason ?? "Couldn't load this binder.";
             }
             else
             {

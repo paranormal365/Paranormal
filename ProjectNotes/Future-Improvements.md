@@ -6744,7 +6744,7 @@ The custom stylesheets needed nothing — `app.css`'s `#fff` uses sit inside
 
 ---
 
-## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (raised 2026-08-22 by Ben)
+## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (CLOSED 2026-08-22)
 
 Ben, on two SuperAdmin pages: *"site settings page gives a couldn't load site settings, the server
 answered 401 (Unauthorized). then below it the word 'Loading…'"* and *"Support tickets page say
@@ -6792,6 +6792,50 @@ couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _p
 is the model.
 
 Cheap, and worth doing with the next item-120 slice rather than alone.
+
+### Fixed (2026-08-22)
+
+**133a — a dead session says so.** `LoadResult<T>` gains `SessionExpired`, and
+`WebApiClient.SendListAsync` maps 401 to it before any other handling. It is deliberately a
+*subset* of `Failed`, so every existing call site that only checks `Failed` is unaffected.
+
+**403 is deliberately excluded.** Forbidden means the session is fine and this particular thing is
+not theirs to see; telling that person to sign in again sends them round a loop back to the same
+refusal. Only 401 means "you are not signed in any more".
+
+`BenListState` grew a fourth state — loading, **signed out**, couldn't-load, empty — rendering
+*"You've been signed out"* with a **Sign in again** link carrying `returnUrl` so they come back to
+the page they were on. It is an anchor (item 131's rule) and offers no Try again button, because a
+retry on a dead session is a control that cannot work. `Login.razor` already had the `ReturnUrl`
+parameter and its open-redirect guard, so the link is relative.
+
+**The design reaches surfaces that never adopted `BenListState`, for free.** `SessionEnded()`
+carries **no** `Reason`, and four places render `Reason ?? "their own sentence"` — so a null falls
+through to their own wording instead of quoting HTTP at somebody. The two that a signed-in person
+can actually hit (`InvestigationPanel`'s binder, `ClientRequests`' organization picker) now name the
+state outright. The other two run anonymous searches, where a 401 cannot arise.
+
+**133b — the error and the spinner.** `AdminSiteSettings` now renders through `BenListState` with a
+real `_loading` flag cleared in a `finally`. The old template's only test was `_settings is null`,
+which stayed true after a failure, so the red banner and a spinner appeared together and read as
+"it failed, but it is also still trying". That is now structurally impossible rather than merely
+fixed: the loading branch and the failure branch are the same component's mutually exclusive arms.
+
+Four tests, verified to discriminate — removing the 401 mapping fails the two that assert it, while
+the 403 and unreachable-server tests stay green, which is what makes them worth having.
+
+### Still open, deliberately
+
+- **Only the list path is covered.** `GetAsync`, `PostAsync` and friends still answer a 401 with
+  `default`, so a single-record fetch or a save that hits a dead session is as silent as ever. That
+  is the same shape as item 120 and belongs with it.
+- **`AdminSupportTickets`** ("Could not load tickets") is not on `LoadResult` yet — it is in the
+  Platform slice, 14 swallows. Its message is at least generic rather than a status code, so Ben's
+  specific complaint does not apply there, but it cannot say "you've been signed out" either.
+- **Whether the token should survive a host restart at all.** `IWebApiTokenStore` is scoped, so a
+  restart takes every circuit's token with it. `EntraTokenPersister` only bridges prerender to
+  circuit, not a restart. Worth deciding separately — this item makes the symptom honest, it does
+  not remove the cause.
 
 ---
 

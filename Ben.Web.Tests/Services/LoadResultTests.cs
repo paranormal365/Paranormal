@@ -93,6 +93,79 @@ public sealed class LoadResultTests
             });
     }
 
+    // ── 401 is not "couldn't load this" ───────────────────────────────────────
+
+    /// <summary>
+    /// A dead session is reported as one, not as a broken list.
+    /// </summary>
+    /// <remarks>
+    /// Ben was shown "Couldn't load site settings. The server answered 401 (Unauthorized)." after
+    /// the host restarted under a signed-in session. Two things wrong with that sentence: nothing
+    /// is wrong with site settings, and the offered remedy — try again — was certain to fail the
+    /// same way. Item 133.
+    /// </remarks>
+    [Fact]
+    public async Task A_401_reports_an_ended_session_rather_than_a_failed_list()
+    {
+        var client = Client(new StubHandler(HttpStatusCode.Unauthorized, ""));
+
+        var result = await client.GetListAsync<string>("/api/whatever");
+
+        Assert.True(result.Failed);          // still a failure, so old call sites are unaffected
+        Assert.True(result.SessionExpired);  // …but a nameable one
+        Assert.Empty(result.Items);
+        Assert.False(result.IsEmpty);        // never "there is nothing here"
+    }
+
+    /// <summary>
+    /// The status code itself must not reach the reader for a 401.
+    /// </summary>
+    /// <remarks>
+    /// Reason being null is what makes the fix reach surfaces that never adopted
+    /// <c>BenListState</c>: several render <c>Reason ?? "some sentence of their own"</c>, so a
+    /// null falls through to their own wording instead of quoting HTTP at somebody.
+    /// </remarks>
+    [Fact]
+    public async Task A_401_carries_no_status_code_for_a_person_to_read()
+    {
+        var client = Client(new StubHandler(HttpStatusCode.Unauthorized, ""));
+
+        var result = await client.GetListAsync<string>("/api/whatever");
+
+        Assert.Null(result.Reason);
+    }
+
+    /// <summary>
+    /// 403 is a different thing and keeps the old treatment.
+    /// </summary>
+    /// <remarks>
+    /// Forbidden means the session is perfectly good and this particular thing is not theirs.
+    /// Telling that person to sign in again sends them round a loop back to the same refusal.
+    /// </remarks>
+    [Fact]
+    public async Task A_403_is_a_refusal_not_an_ended_session()
+    {
+        var client = Client(new StubHandler(HttpStatusCode.Forbidden, ""));
+
+        var result = await client.GetListAsync<string>("/api/whatever");
+
+        Assert.True(result.Failed);
+        Assert.False(result.SessionExpired);
+        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+    }
+
+    /// <summary>An unreachable server is not an ended session either.</summary>
+    [Fact]
+    public async Task An_unreachable_server_is_not_an_ended_session()
+    {
+        var client = Client(new ThrowingHandler());
+
+        var result = await client.GetListAsync<string>("/api/whatever");
+
+        Assert.True(result.Failed);
+        Assert.False(result.SessionExpired);
+    }
+
     private sealed class ThrowingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
