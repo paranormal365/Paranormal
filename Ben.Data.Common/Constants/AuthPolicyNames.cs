@@ -31,4 +31,11 @@ public static class AuthPolicyNames
     /// meant. See the note on the SuperAdmin policy in <c>Ben.Data.WebApi/Program.cs</c>.
     /// </remarks>
     public const string AppAdministrator = "AppAdministrator";
+
+    /// <summary>
+    /// The Microsoft Entra JWT bearer scheme, registered in <c>Program.cs</c> only when Entra is
+    /// configured. Shared so an endpoint that must authenticate it explicitly — an anonymous one,
+    /// which the default scheme alone cannot see — names the same string the registration does.
+    /// </summary>
+    public const string EntraScheme = "Entra";
 }
