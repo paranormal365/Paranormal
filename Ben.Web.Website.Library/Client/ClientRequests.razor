@@ -13,9 +13,9 @@
 <div class="container-fluid py-3" style="max-width:860px;">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">My Investigation Requests</h3>
-        <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))"><BenIcon Name="plus" Class="me-1" />
+        <a href="/my-requests/new" class="btn btn-primary"><BenIcon Name="plus" Class="me-1" />
             New Request
-        </button>
+        </a>
     </div>
 
     @if (_requests is null)
@@ -32,9 +32,9 @@
     {
         <div class="text-center py-5 text-secondary">
             <p class="mb-3">You haven't submitted an investigation request yet.</p>
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))">
+            <a href="/my-requests/new" class="btn btn-primary">
                 Submit Your First Request
-            </button>
+            </a>
         </div>
     }
     else

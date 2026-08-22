@@ -6552,7 +6552,7 @@ add a source scan rather than another assertion on the thing that was already ri
 
 ---
 
-## 131. Signed-out, the "Request an Investigation" page's button does nothing (raised 2026-08-22 by Ben)
+## 131. Signed-out, the "Request an Investigation" page's button does nothing (CLOSED 2026-08-22)
 
 Ben: *"the sign up button if you try to create a case and are not logged in, does nothing."*
 
@@ -6590,8 +6590,56 @@ item 4).
 **Worth a guard.** A `@onclick` handler whose whole body is `NavManager.NavigateTo(<literal>)` is
 always better as an anchor, and a source scan can say so. That would also have caught this one.
 
-**Not yet verified live** — recorded from Ben's report and confirmed by reading the source; the
-prerender window is the likely mechanism but has not been reproduced in a browser.
+### Verified live, and the first diagnosis was only half right
+
+Reproduced in a browser rather than left as a reading of the source, which changed the answer.
+
+**The wizard's button.** The `@onclick` mechanism is real but small: measured on localhost, the
+button is painted 5ms after navigation starts and the circuit's negotiate completes at 55ms — a
+**~50ms dead window**. Wide enough to swallow a fast click, and much wider over a real network,
+but not enough to explain a button that reliably does nothing. Fixed anyway, because an anchor is
+strictly better: `<a href="/login" class="btn btn-primary">` needs no circuit, survives a slow
+connection, works with scripting off and can be opened in a new tab. Confirmed by `curl` — the
+anchor is in the server's HTML with no JavaScript involved at all.
+
+**Ben's clarification settled the destination question.** *"Clicking the sign in button can
+redirect to the sign in page. There is a link there for signing up."* So the wizard keeps its
+single Sign In action; no create-an-account button was added, and the `returnUrl` idea was dropped.
+
+**What was actually dead was `/signup`.** Following the path Ben described — wizard → Sign In →
+login → "Create an account" → `/signup` — the Create account button ships **`disabled`**, and
+stays disabled until the @name availability check returns. Every other field is `[Required]` with
+a `ValidationMessage`; `Handle` had **neither**, and was enforced only by that silent `disabled`.
+
+Reproduced exactly: fill every field, leave @name alone, click Create account →
+`button_disabled: true`, **zero validation messages anywhere on the page**, nothing happens. And
+the @name box's grey placeholder read as a filled-in value (see item 134), so skipping it is the
+natural thing to do.
+
+### Fixed
+
+- `Handle` gets `[Required]` and a length rule, plus a `ValidationMessage` beside the field, so it
+  behaves like every other field. The same click now says *"Choose an @name — it's how people
+  mention you."*
+- The button is disabled only while the request is in flight. **A disabled control cannot explain
+  itself**, so it is the wrong way to enforce a rule the person can still fix — the same lesson as
+  a server guard the UI discards.
+- `SubmitAsync` checks the handle itself, so somebody who types a name and clicks inside the 400ms
+  debounce is no longer blocked by a race; the server remains the authority on uniqueness.
+- The three navigation buttons became anchors: `ClientRequestWizard` and `ClientRequests` (×2).
+- **At Ben's request**, the `@` prefix now reports the check: grey at rest, blue while in flight,
+  green when free, red when taken. See item 135 for what that took.
+
+### Left open — the other ten
+
+Ten `@onclick="() => NavigateTo("literal")"` handlers remain across 8 files (`OrganizationList`,
+`OrganizationCreateEdit`, `OrgCmsEditor`, `AdminUserDetail`, `AdminUserCreate`, `AdminUsers`,
+`ClientRequestDetail`). All are on **signed-in** pages, where the circuit is usually already warm,
+so the risk is much lower than on the anonymous entry page — but they are the same defect.
+
+Worth doing as one mechanical pass with a source-scan guard: an `@onclick` whose entire body is
+`NavigateTo` of a string literal should be an anchor, always. Not done here to keep this change
+reviewable.
 
 ---
 
@@ -6716,3 +6764,85 @@ couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _p
 is the model.
 
 Cheap, and worth doing with the next item-120 slice rather than alone.
+
+---
+
+## 134. Placeholders looked like filled-in text in dark mode (CLOSED 2026-08-22)
+
+Ben: *"if the placeholder in dark needs to look like a placeholder and not filled in text… Real
+text in dark mode looks way too close 'colorwise' to placeholder text."*
+
+The template renders `.form-control::placeholder` as `--bs-secondary-color`, which in night mode is
+`rgba(222, 226, 230, .75)` — **the same hue as body text** (`#dee2e6`) at 75% opacity. Measured
+against real input text in the running app, the ratio was **1.00:1**: indistinguishable.
+
+This was not cosmetic. It is why item 131 happened: the @name box showed a grey `sarahmitchell`
+placeholder that read as a value, so the field got skipped, and the only thing standing between the
+person and their account was a button that refused in silence.
+
+Fixed with a `--ben-placeholder-color` token defined per theme in `app.css`, so each value is
+chosen against its own background rather than one value being asked to work on both:
+
+| | placeholder vs real text | placeholder vs input background |
+|---|---|---|
+| Dark, before | **1.00:1** | — |
+| Dark, after | **4.01:1** | 2.96:1 |
+| Light, after | 2.96:1 | 2.72:1 |
+
+Legible, and unmistakably not a value.
+
+---
+
+## 135. The @name availability indicator, and what the template does to colours (CLOSED 2026-08-22)
+
+Ben, on the signup page: *"I liked the @ being blue and then turning green if the name was
+available after checking or red if the name was unavailable… I liked it being gray and turning blue
+while checking."*
+
+Built as four states on the `@` prefix — grey at rest, blue in flight, green free, red taken —
+which needed a new `_handleChecking` flag, since the 400ms debounce plus a round trip is long
+enough that the field otherwise just sits there.
+
+**Two things had to be beaten, and both are worth knowing for any future work on this template.**
+
+1. **`.input-group:focus-within .input-group-text` sets `color: var(--bs-white) !important`.** So
+   while the field has focus — exactly when somebody is typing a name — the prefix was forced to
+   white and none of the states showed. Bootstrap's own `.text-success` and friends lose that
+   fight: one class against three, even with `!important`. The prefix now carries its own class
+   with matching specificity and keeps a neutral, theme-following chip background in every state.
+2. **The semantic colours are theme-independent, but the chip background is not.** Raw
+   `--bs-primary` on the night chip measured **1.70:1** — the "checking" state, whose entire
+   purpose is to be noticed, was effectively invisible. `--bs-danger` was 2.78:1.
+
+The state colours are therefore mixed per theme, the same technique `app.css` already uses for
+outline buttons in dark mode. Measured after:
+
+| state | dark | light |
+|---|---|---|
+| idle (grey) | 6.49:1 | 3.69:1 |
+| checking (blue) | **4.60:1** (was 1.70) | 7.44:1 |
+| free (green) | 4.54:1 | 4.51:1 |
+| taken (red) | 4.50:1 | 4.54:1 |
+
+**The general lesson:** a semantic colour that does not change between themes still needs checking
+against a background that does. Item 132 established that reading the compiled CSS beats guessing
+from class names; this is the same point one level down.
+
+---
+
+## 136. First and last names get their initial capital (CLOSED 2026-08-22)
+
+Ben: *"can we capitalize first and last names when blurring the text box. Display name can be
+whatever."*
+
+Done on `/signup` via `@bind-Value:after`, which for a text input runs on change — i.e. on blur.
+
+**Only words typed in all lower case are touched.** Anyone who wrote "McTest", "van der Berg" or
+"d'Eath" meant it, and a blanket title-case would quietly correct somebody's own name to something
+wrong — the one field where being clever is least welcome. Word boundaries include hyphens and
+apostrophes, so `mctest-o'brien` becomes `McTest-O'Brien` while an existing `McTest` is left alone.
+Verified live: `testy` → `Testy`, `McTest-o'brien` → `McTest-O'Brien`, display name untouched.
+
+Only the signup form does this today. If the same treatment is wanted on profile editing and the
+admin user screens, that is a small follow-up — the helper is currently local to `SignUp.razor` and
+would move to `Ben.Web.Services` first.
