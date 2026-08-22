@@ -953,7 +953,7 @@ else
 
         try
         {
-            _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+            _fileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
             if (_fileTypes.Any() && _saveClipTypeId == Guid.Empty)
                 _saveClipTypeId = _fileTypes[0].Id;
         }
@@ -972,7 +972,7 @@ else
         if (_modalPlayer is null) return;
         try
         {
-            _childClips = await AdminClient.GetChildClipsAsync(FileId);
+            _childClips = (await AdminClient.GetChildClipsAsync(FileId)).Items;
             foreach (var clip in _childClips)
             {
                 if (clip.RegionStart is null || clip.RegionEnd is null) continue;
@@ -1009,7 +1009,7 @@ else
         if (_modalPlayer is null) return;
         try
         {
-            _markers = await AdminClient.GetAudioMarkersAsync(FileId);
+            _markers = (await AdminClient.GetAudioMarkersAsync(FileId)).Items;
             foreach (var marker in _markers)
                 await AddMarkerRegionAsync(marker);
             StateHasChanged();
@@ -1250,7 +1250,7 @@ else
                     // Reload so the marker row picks up its new LinkedClipUploadFileId — the server
                     // set it, and nothing else would tell this list about it.
                     _clipSourceMarker = null;
-                    _markers = await AdminClient.GetAudioMarkersAsync(FileId);
+                    _markers = (await AdminClient.GetAudioMarkersAsync(FileId)).Items;
                 }
 
                 // Remove the user-drawn region — replaced by the persisted overlay

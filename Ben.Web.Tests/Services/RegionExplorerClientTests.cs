@@ -35,12 +35,12 @@ public class RegionExplorerClientTests
         };
         var apiMock = ApiMock();
         apiMock.Setup(x => x.GetRegionNotesAsync(fileId, default))
-               .ReturnsAsync(expected);
+               .ReturnsAsync(LoadResult<UploadFileRegionNoteRecord>.Ok(expected));
 
         var result = await Build(apiMock).GetRegionNotesAsync(fileId);
 
-        Assert.Single(result);
-        Assert.Equal("<p>hi</p>", result[0].NoteHtml);
+        Assert.Single(result.Items);
+        Assert.Equal("<p>hi</p>", result.Items[0].NoteHtml);
         apiMock.Verify(x => x.GetRegionNotesAsync(fileId, default), Times.Once);
     }
 
@@ -50,11 +50,11 @@ public class RegionExplorerClientTests
         var fileId  = Guid.NewGuid();
         var apiMock = ApiMock();
         apiMock.Setup(x => x.GetRegionNotesAsync(fileId, default))
-               .ReturnsAsync([]);
+               .ReturnsAsync(LoadResult<UploadFileRegionNoteRecord>.Ok([]));
 
         var result = await Build(apiMock).GetRegionNotesAsync(fileId);
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     // ── CreateRegionNoteAsync ─────────────────────────────────────────────────
@@ -209,12 +209,12 @@ public class RegionExplorerClientTests
         };
         var apiMock = ApiMock();
         apiMock.Setup(x => x.GetChildClipsAsync(parentId, default))
-               .ReturnsAsync(clips);
+               .ReturnsAsync(LoadResult<UploadFileRecord>.Ok(clips));
 
         var result = await Build(apiMock).GetChildClipsAsync(parentId);
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, r => Assert.Equal(parentId, r.ParentFileId));
+        Assert.Equal(2, result.Items.Count);
+        Assert.All(result.Items, r => Assert.Equal(parentId, r.ParentFileId));
         apiMock.Verify(x => x.GetChildClipsAsync(parentId, default), Times.Once);
     }
 
@@ -224,11 +224,11 @@ public class RegionExplorerClientTests
         var parentId = Guid.NewGuid();
         var apiMock  = ApiMock();
         apiMock.Setup(x => x.GetChildClipsAsync(parentId, default))
-               .ReturnsAsync([]);
+               .ReturnsAsync(LoadResult<UploadFileRecord>.Ok([]));
 
         var result = await Build(apiMock).GetChildClipsAsync(parentId);
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     // ── GetClipPreviewAsync ───────────────────────────────────────────────────

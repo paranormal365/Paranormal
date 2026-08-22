@@ -20,7 +20,7 @@ public interface IBenMediaClient
     // ── Universal media library sharing (person / investigation team / org / public) ────────────
 
     /// <summary>Returns active shares for a file. Owner or SuperAdmin only.</summary>
-    Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default);
 
     /// <summary>Grants one of the 4 share targets on a file the caller owns.</summary>
     Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default);
@@ -33,13 +33,13 @@ public interface IBenMediaClient
     /// org, public, case-linked). Pass <paramref name="contentTypePrefixes"/> (e.g. "video/","image/")
     /// to narrow the result; omit for everything.
     /// </summary>
-    Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
 
     // ── File Types ────────────────────────────────────────────────────────────
 
     /// <summary>Returns all upload file types together with their allowed extension patterns.</summary>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
-    Task<IReadOnlyList<AdminFileTypeWithExtensionsResponse>> GetFileTypesWithExtensionsAsync(CancellationToken token = default);
+    Task<LoadResult<AdminFileTypeWithExtensionsResponse>> GetFileTypesWithExtensionsAsync(CancellationToken token = default);
 
     /// <summary>Creates a new upload file type.</summary>
     /// <param name="request">Fields for the new file type including display metadata and the <c>AllowAllExtensions</c> flag.</param>
@@ -100,13 +100,13 @@ public interface IBenMediaClient
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
-    Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Downloads raw file bytes + content-type for in-browser thumbnail rendering.</summary>
     Task<(byte[] Data, string ContentType)?> GetFileDataAsync(Guid fileId, CancellationToken token = default);
 
     /// <summary>Returns all active upload file types (used to choose a type when uploading a logo).</summary>
-    Task<IReadOnlyList<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default);
 
     /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
     Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
@@ -138,7 +138,7 @@ public interface IBenMediaClient
     // ── Region Notes ──────────────────────────────────────────────
 
     /// <summary>Returns all region notes for the given file, ordered by region start then time offset.</summary>
-    Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
 
     /// <summary>Creates a new region note and returns the persisted record.</summary>
     Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default);
@@ -152,7 +152,7 @@ public interface IBenMediaClient
     // ── File Comments (item #6 phase 2) ────────────────────────────
 
     /// <summary>Returns the full comment thread for a file — visible to anyone who can see the file.</summary>
-    Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
 
     /// <summary>Posts a new comment. Fails (null) unless the caller is the file's owner or matches an enabled audience.</summary>
     Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default);
@@ -172,7 +172,7 @@ public interface IBenMediaClient
     // ── Audio Markers (EVP) ───────────────────────────────────────
 
     /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>
-    Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
 
     /// <summary>Creates a new EVP marker and returns the persisted record.</summary>
     Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default);
@@ -187,7 +187,7 @@ public interface IBenMediaClient
     /// Replaces this file's pending detector candidates with a fresh scan's results, leaving
     /// confirmed and dismissed markers alone. Returns the newly-created candidates.
     /// </summary>
-    Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(
+    Task<IReadOnlyList<AudioMarkerRecord>?> ReplaceAudioCandidatesAsync(
         Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
 
     /// <summary>Records a reviewer's decision on a candidate — confirm (optionally relabelled and re-bounded) or dismiss.</summary>
@@ -201,7 +201,7 @@ public interface IBenMediaClient
     /// <param name="options">
     /// Per-scan overrides. Null uses <paramref name="sensitivity"/>'s preset unchanged.
     /// </param>
-    Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(
+    Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(
         Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
     // ── Audio Clip ─────────────────────────────────────────────────
@@ -220,7 +220,7 @@ public interface IBenMediaClient
     Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
 
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
-    Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
 
     // ── Audio Edit (destructive) ──────────────────────────────────
 
@@ -231,7 +231,7 @@ public interface IBenMediaClient
     Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // ── Video projects ────────────────────────────────────────────────────────
-    Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default);
+    Task<LoadResult<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default);
     Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default);
     Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default);
     Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default);

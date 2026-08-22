@@ -7,6 +7,8 @@
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @using Ben.Data.Common.Enums
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>@(_page?.PageTitle ?? "Edit Page") — CMS</PageTitle>
 
@@ -576,7 +578,7 @@
         var usersTask  = AdminClient.GetOrgUserDirectoryAsync(OrgId);
         await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
 
-        _permissionRecords = [..permsTask.Result];
+        _permissionRecords = [.. permsTask.Result.Items];
         var groups  = groupsTask.Result.Items;
         var members = membersTask.Result.Items;
         // A name lookup for the permission rows. If the directory is refused the rows still

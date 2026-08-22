@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -18,7 +19,7 @@ public interface IBenCmsClient
 {
     // ── CMS Pages ─────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
     Task<CmsPageDetail?> GetCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     Task<CmsPageDetail?> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default);
     Task<CmsPageDetail?> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default);
@@ -33,7 +34,7 @@ public interface IBenCmsClient
 
     // ── CMS Page Permissions ──────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+    Task<LoadResult<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     Task<CmsPagePermissionRecord?> CreatePagePermissionAsync(Guid orgId, Guid pageId, PagePermissionCreateRequest request, CancellationToken token = default);
     Task<CmsPagePermissionRecord?> UpdatePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CmsPageAction actions, CancellationToken token = default);
     Task<bool> DeletePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CancellationToken token = default);
@@ -54,14 +55,14 @@ public interface IBenCmsClient
 
     // ── The group's saved templates (item #80, part 2) ──────────────────────
 
-    Task<IReadOnlyList<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default);
+    Task<LoadResult<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default);
     Task<CmsTemplateRecord?> SaveCmsTemplateAsync(Guid orgId, SaveCmsTemplateRequest request, CancellationToken token = default);
 
     /// <summary>The group's own investigations, for the embed picker, flagged by whether each is already public.</summary>
-    Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>The group's own cases, same shape and same purpose.</summary>
-    Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableCasesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<EmbeddableRecord>> GetEmbeddableCasesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>
     /// The files of one case that may go on a public page — the case-media picker's options.
@@ -71,7 +72,7 @@ public interface IBenCmsClient
     /// say why rather than showing an empty list: an author who picked the right case and sees
     /// nothing will otherwise conclude the feature is broken.
     /// </remarks>
-    Task<IReadOnlyList<PublishableCaseFile>> GetPublishableCaseMediaAsync(
+    Task<LoadResult<PublishableCaseFile>> GetPublishableCaseMediaAsync(
         Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CmsTemplateRecord?> UpdateCmsTemplateAsync(Guid orgId, Guid templateId, SaveCmsTemplateRequest request, CancellationToken token = default);
     Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default);

@@ -150,7 +150,7 @@
             // Set the default project name from the case title
             ProjectStore.CurrentProjectName = _case.Title ?? "Case Project";
 
-            _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+            _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).Items.ToList();
         }
         catch (Exception ex)
         {
@@ -165,7 +165,7 @@
     private async Task LoadCaseProjectsAsync()
     {
         _loadingList = true;
-        _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+        _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).Items.ToList();
         _loadingList = false;
     }
 

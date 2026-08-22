@@ -611,7 +611,7 @@ else
         _phoneTypes      = (await AdminClient.GetUserPhoneTypesAsync()).Items;
         _linkTypes       = (await AdminClient.GetUserLinkTypesAsync()).Items;
         _noteTypes       = (await AdminClient.GetUserNoteTypesAsync()).Items;
-        _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
+        _uploadFileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
 
         // Build org-name lookup for the Memberships tab
         try

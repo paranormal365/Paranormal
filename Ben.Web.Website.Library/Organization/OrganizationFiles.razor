@@ -385,7 +385,7 @@
             _filesResult = await AdminClient.GetOrgFilesAsync(OrgId);
             _files      = _filesResult.Items.ToList();
             _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).Items.ToList();
-            _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
+            _fileTypes  = (await AdminClient.GetPublicFileTypesAsync()).Items;
             var orgs    = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
         }

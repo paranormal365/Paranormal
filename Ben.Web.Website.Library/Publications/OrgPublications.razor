@@ -4,6 +4,8 @@
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
     The group's publications, as a tab on its own page.
@@ -82,6 +84,11 @@
 @if (_loading)
 {
     <p class="text-secondary">Loading…</p>
+}
+else if (_publicationsResult.Failed)
+{
+    @* A group shown no publications may create a second copy of one they already have. *@
+    <BenListState TItem="PublicationRecord" Result="@_publicationsResult" OnRetry="@LoadAsync" />
 }
 else if (_publications.Count == 0 && !_creating)
 {
@@ -171,6 +178,7 @@ else
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
     private IReadOnlyList<PublicationRecord> _publications = [];
+    private LoadResult<PublicationRecord> _publicationsResult;
     private bool _loading = true;
     private bool _creating;
     private bool _working;
@@ -201,7 +209,8 @@ else
         _confirmingDelete = null;
         try
         {
-            _publications = await Client.GetOrgPublicationsAsync(OrgId);
+            _publicationsResult = await Client.GetOrgPublicationsAsync(OrgId);
+            _publications = _publicationsResult.Items;
         }
         finally
         {

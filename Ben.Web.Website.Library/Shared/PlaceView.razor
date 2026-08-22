@@ -179,7 +179,7 @@
         _place = await AdminClient.GetPlaceAsync(PlaceId);
         if (_place is null) return;
 
-        _rows = (await AdminClient.GetPlaceInvestigationsAsync(PlaceId)).ToList();
+        _rows = (await AdminClient.GetPlaceInvestigationsAsync(PlaceId)).Items.ToList();
         _summary = await AdminClient.GetPlaceSummaryAsync(PlaceId);
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }

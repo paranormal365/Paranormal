@@ -26,7 +26,7 @@ public interface IBenPlacesClient
     /// Investigations at a place that the signed-in caller may see — their own group's, anything
     /// public, and anything shared with groups who have also investigated there.
     /// </summary>
-    Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+    Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default);
 
     /// <summary>"N investigations by M groups since Y", counted over what this caller may see.</summary>
@@ -41,7 +41,7 @@ public interface IBenPlacesClient
     /// of a mile); the caller shows the answer and the person picks. Returns nothing when there is
     /// neither an address nor a name to go on.
     /// </remarks>
-    Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+    Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default);
 
@@ -62,11 +62,11 @@ public interface IBenPlacesClient
     /// rather than the one that was clicked. Leading is also an edit right, so the server requires
     /// the caller to already hold one.
     /// </remarks>
-    Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
 
     /// <summary>Every account filed for an investigation. Any member of the group may read them.</summary>
-    Task<IReadOnlyList<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
+    Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>
@@ -84,7 +84,7 @@ public interface IBenPlacesClient
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
-    Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+    Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>

@@ -277,7 +277,7 @@
         _error = null;
         try
         {
-            _types = await AdminClient.GetFileTypesWithExtensionsAsync();
+            _types = (await AdminClient.GetFileTypesWithExtensionsAsync()).Items;
         }
         catch (Exception ex)
         {

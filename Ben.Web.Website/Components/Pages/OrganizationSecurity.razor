@@ -270,7 +270,7 @@
 
         if (!TryGetSelectedOrganizationId(out var organizationId)) return;
 
-        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).ToList();
+        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).Items.ToList();
         _currentUserRole = organizationUsers
             .FirstOrDefault(m => m.AppUserId == TokenStore.UserId)
             ?.Role;
@@ -278,7 +278,7 @@
 
     private async Task LoadOrganizationsAsync()
     {
-        organizations = (await WebApiClient.GetMyOrganizationsAsync()).ToList();
+        organizations = (await WebApiClient.GetMyOrganizationsAsync()).Items.ToList();
     }
 
     private async Task RegisterOrganizationAsync()
@@ -311,7 +311,7 @@
 
     private async Task SearchUsersAsync()
     {
-        userSearchResults = (await WebApiClient.SearchUsersAsync(userSearchText, 50)).ToList();
+        userSearchResults = (await WebApiClient.SearchUsersAsync(userSearchText, 50)).Items.ToList();
         statusMessage = $"Found {userSearchResults.Count} users in your search scope.";
     }
 
@@ -335,7 +335,7 @@
             return;
         }
 
-        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).ToList();
+        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).Items.ToList();
         statusMessage = $"Loaded {organizationUsers.Count} organization user memberships.";
     }
 

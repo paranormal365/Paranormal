@@ -116,7 +116,7 @@
     protected override async Task OnParametersSetAsync()
     {
         if (_comments is not null) return;
-        try { _comments = (await AdminClient.GetFileCommentsAsync(FileId)).OrderBy(c => c.DateCreated).ToList(); }
+        try { _comments = (await AdminClient.GetFileCommentsAsync(FileId)).Items.OrderBy(c => c.DateCreated).ToList(); }
         catch { _error = "Failed to load comments."; _comments = []; }
     }
 

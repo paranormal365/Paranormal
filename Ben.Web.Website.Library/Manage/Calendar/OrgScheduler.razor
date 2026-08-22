@@ -832,9 +832,9 @@
     private async Task SearchPlacesAsync()
     {
         _placeSearched = true;
-        _placeCandidates = [.. await AdminClient.FindPlaceCandidatesAsync(
+        _placeCandidates = [.. (await AdminClient.FindPlaceCandidatesAsync(
             street: null, city: null, state: null, zip: null,
-            name: _placeSearch.Trim(), latitude: null, longitude: null)];
+            name: _placeSearch.Trim(), latitude: null, longitude: null)).Items];
     }
 
     private void SelectPlace(PlaceCandidate candidate)

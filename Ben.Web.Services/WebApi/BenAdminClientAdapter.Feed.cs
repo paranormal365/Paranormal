@@ -28,9 +28,9 @@ public sealed partial class BenAdminClientAdapter
         return _api.GetAsync<FeedPageRecord>(url, token);
     }
 
-    public async Task<IReadOnlyList<FeedPostRecord>> GetThreadAsync(
+    public Task<LoadResult<FeedPostRecord>> GetThreadAsync(
         Guid postId, CancellationToken token = default)
-        => await _api.GetAsync<List<FeedPostRecord>>($"/api/feed/posts/{postId}", token) ?? [];
+            => _api.GetListAsync<FeedPostRecord>($"/api/feed/posts/{postId}", token);
 
     public Task<FeedProfileRecord?> GetFeedProfileAsync(Guid appUserId, CancellationToken token = default)
         => _api.GetAsync<FeedProfileRecord>($"/api/feed/profile/{appUserId}", token);
@@ -60,13 +60,13 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Moderation ───────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<FeedReportRecord>> GetFeedReportsAsync(
+    public Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(
         FeedReportOutcome? outcome = null, CancellationToken token = default)
     {
         var url = "/api/admin/feed/reports"
                 + (outcome is { } wanted ? $"?outcome={(int)wanted}" : string.Empty);
 
-        return await _api.GetAsync<List<FeedReportRecord>>(url, token) ?? [];
+        return _api.GetListAsync<FeedReportRecord>(url, token);
     }
 
     public Task<bool> ResolveFeedReportAsync(

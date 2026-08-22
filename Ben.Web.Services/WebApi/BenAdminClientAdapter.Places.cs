@@ -22,18 +22,14 @@ public sealed partial class BenAdminClientAdapter
     public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
 
-    public async Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+    public Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<PlaceInvestigationRow>>(
-            $"/api/places/{placeId}/investigations", token);
-        return result ?? [];
-    }
+        => _api.GetListAsync<PlaceInvestigationRow>($"/api/places/{placeId}/investigations", token);
 
     public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
 
-    public async Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+    public Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default)
     {
@@ -54,21 +50,16 @@ public sealed partial class BenAdminClientAdapter
         Add("latitude", latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Add("longitude", longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-        var result = await _api.GetAsync<IReadOnlyList<PlaceCandidate>>(
+        return _api.GetListAsync<PlaceCandidate>(
             $"/api/places/candidates?{string.Join("&", query)}", token);
-        return result ?? [];
     }
 
     public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
 
-    public async Task<IReadOnlyList<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
+    public Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationFindingRecord>>(
-            $"/api/organizations/{orgId}/investigations/{investigationId}/findings", token);
-        return result ?? [];
-    }
+        => _api.GetListAsync<InvestigationFindingRecord>($"/api/organizations/{orgId}/investigations/{investigationId}/findings", token);
 
     public Task<InvestigationFindingRecord?> SaveMyInvestigationFindingAsync(
         Guid orgId, Guid investigationId, string narrative, CancellationToken token = default)
@@ -81,22 +72,31 @@ public sealed partial class BenAdminClientAdapter
         => _api.DeleteAsync(
             $"/api/organizations/{orgId}/investigations/{investigationId}/findings/mine", token);
 
-    public async Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+    /// <summary>
+    /// Sets or clears an attendee's lead flag and returns the roster as it now stands.
+    /// </summary>
+    /// <remarks>
+    /// A save, so no <see cref="LoadResult{T}"/> — but it had the same defect. A refused PUT became
+    /// <c>null</c> and then an empty roster, which reads as "this investigation now has nobody on
+    /// it": the opposite of what the caller just asked for, presented as the result of asking.
+    /// </remarks>
+    public async Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default)
     {
-        var result = await _api.PutAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+        var (result, error) = await _api.SendExpectingReasonAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+            HttpMethod.Put,
             $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/lead",
             new { IsLead = isLead }, token);
-        return result ?? [];
+
+        if (result is null)
+            return ([], error ?? "The lead could not be changed.");
+
+        return (result, null);
     }
 
-    public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+    public Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationRosterEntry>>(
-            $"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
-        return result ?? [];
-    }
+        => _api.GetListAsync<InvestigationRosterEntry>($"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
 
     public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
         Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
