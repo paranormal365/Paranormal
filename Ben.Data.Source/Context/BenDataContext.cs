@@ -127,6 +127,7 @@ namespace Ben.Data.Source.Context
 
         public virtual DbSet<SubscriptionTier> SubscriptionTiers { get; set; }
         public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
+        public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -2327,6 +2328,20 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // One cap per band per thing, for the same reason as the prices: two rows for the same
+            // limit is a question with two answers and no rule for picking.
+            modelBuilder.Entity<SubscriptionTierLimit>()
+                .HasIndex(e => new { e.SubscriptionTierId, e.Limit }).IsUnique();
+            modelBuilder.Entity<SubscriptionTierLimit>()
+                .HasOne(e => e.SubscriptionTier).WithMany(t => t.Limits)
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubscriptionTierLimit>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTierLimit>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 

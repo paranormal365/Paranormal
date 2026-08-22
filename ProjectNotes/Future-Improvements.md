@@ -7316,3 +7316,40 @@ factor, and genuinely wrong — because the next occurrence should be diagnosabl
 
 **Do not test this by typing Ben's password into the form.** Probe with curl against a seeded
 development account, or read the server log for the `SignInResult` that production is producing.
+
+---
+
+## 143. Monetization levers beyond tiers — the menu (OPEN, decisions pending — 2026-08-22)
+
+Ben mid-build on item 85: tiers are not the only part to monetize — equipment limits, loan limits,
+open-case limits, "keep in mind things we could do to monetize what we are building" — and then
+asked for suggestions. The foundation now supports two mechanisms, and almost every idea fits one:
+
+**Mechanism 1 — keyed limits (`SubscriptionTierLimit`, shipped with item 85).** A cap is a row
+(band × `SubscriptionLimit` enum × max), no row = no cap, zero = feature off for that band. In the
+enum already: OpenCases, EquipmentItems, ActiveEquipmentLoans, OpenInvestigations, PendingInvites,
+StorageMegabytes, PublishedPages. Cheap additions when wanted: members-per-case, EVP scans/month,
+video render minutes (the sidecar/RenderService makes these measurable).
+
+**Mechanism 2 — feature gating (zero-means-off).** Candidates, roughly by leverage:
+- Video editor tiers — the most differentiated asset. Basic trim free; overlays/keyframes/callouts/
+  background rendering/native sidecar paid. Rough-vs-fine render quality is already a concept.
+- EVP detection — basic scan free, adjustable-tolerance presets paid.
+- CMS — basic public page free; custom layouts, case-bound media slots, publications paid.
+- White-label / custom domain for a group's public site (needs real work, not just a gate).
+
+**Explicitly deprioritised:** paid placement in local discovery (erodes trust in a community
+product); marketplace shapes where clients pay groups through the platform (payouts, disputes,
+tax — see the monetization-direction memory: platform-bills-orgs first).
+
+**Enforcement rule when limits go live:** the check belongs server-side at the create/loan/open
+endpoint, refusing with a sentence that names the cap and the band — and per the standing lesson,
+every such refusal needs a UI path that renders it.
+
+**Ben's governing principle (his words, near enough):** maximise what we can earn *without turning
+people off*. The useful test that falls out of it: cap the things that scale with the value a group
+gets (storage, open cases, equipment, renders) and leave alone the things groups do to organise
+themselves (roles, members-per-case, naming, taxonomy). Ben floated a custom-roles cap; the enum
+value exists (`CustomRoles = 8`) so the option is real, with a note recommending it stay unset.
+
+Nothing here is decided. This item is the menu; Ben picks.

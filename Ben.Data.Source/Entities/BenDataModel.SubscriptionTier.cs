@@ -60,5 +60,11 @@ namespace Ben.Data.Source.Entities
         /// its own status rather than being inferred from an absent row.
         /// </summary>
         public virtual ICollection<SubscriptionTierPrice> Prices { get; set; } = [];
+
+        /// <summary>
+        /// What this band caps — open cases, equipment, loans, storage. A cap with no row is no
+        /// cap at all, which is the safe default; see <see cref="SubscriptionTierLimit"/>.
+        /// </summary>
+        public virtual ICollection<SubscriptionTierLimit> Limits { get; set; } = [];
     }
 }
