@@ -154,40 +154,24 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
             CancelAtPeriodEnd  = sub.CancelAtPeriodEnd,
         };
 
-        sub.Status                  = request.Status;
-        sub.SubscriptionTierId      = request.SubscriptionTierId;
-        sub.Interval                = request.Interval;
-        sub.CurrentPeriodStart      = request.CurrentPeriodStart;
-        sub.CurrentPeriodEnd        = request.CurrentPeriodEnd;
-        sub.CancelAtPeriodEnd       = request.CancelAtPeriodEnd;
-        sub.MemberCountAtPeriodStart = members;
-        sub.PriceAtPeriodStart      = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
-        sub.ProviderName            = "Manual";
+        // PeriodOpener carries the whole contract rule-set — freeze count and price, snapshot
+        // terms from the LIVE tier (which is how a queued reduction lands at renewal), set
+        // first-paid exactly once. The provider webhook will call the same method; two copies of
+        // this list would disagree within a month.
+        sub.CancelAtPeriodEnd = request.CancelAtPeriodEnd;
+        var snapshot = PeriodOpener.Open(
+            sub, tier, request.Status, request.Interval,
+            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId);
+        sub.ProviderName = "Manual";
 
-        // Set once and never cleared — it is what tells a renewal coupon from an acquisition one,
-        // and a group that lapsed is still a group that has paid before.
-        if (request.Status == SubscriptionStatus.Active && sub.FirstPaidPeriodStartUtc is null)
-            sub.FirstPaidPeriodStartUtc = request.CurrentPeriodStart ?? now;
-
-        sub.LapsedAtUtc = request.Status == SubscriptionStatus.Lapsed ? sub.LapsedAtUtc ?? now : null;
+        if (snapshot is not null)
+        {
+            await PeriodOpener.ReplaceSnapshotAsync(db, sub.Id, snapshot.PeriodStartUtc, ct);
+            db.SubscriptionContractTerms.Add(snapshot);
+        }
 
         if (isNew) db.OrganizationSubscriptions.Add(sub);
         else { sub.DateUpdated = now; sub.UpdatedByAppUserId = userId; }
-
-        // A paid period with dates is a contract, and the contract is a snapshot — the group
-        // keeps these terms for the period even if the tier is edited tomorrow. One snapshot per
-        // period: setting the same period twice replaces its snapshot rather than stacking two.
-        if (request.Status == SubscriptionStatus.Active && tier is not null
-            && request.CurrentPeriodStart is { } ps && request.CurrentPeriodEnd is { } pe)
-        {
-            var existing = await db.SubscriptionContractTerms
-                .Where(t => t.OrganizationSubscriptionId == sub.Id && t.PeriodStartUtc == ps)
-                .ToListAsync(ct);
-            db.SubscriptionContractTerms.RemoveRange(existing);
-
-            db.SubscriptionContractTerms.Add(EffectiveTermsResolver.Snapshot(
-                sub, tier, request.Interval, sub.PriceAtPeriodStart, ps, pe, userId));
-        }
 
         await db.SaveChangesAsync(ct);
 

@@ -378,3 +378,27 @@ to is just mail you did not ask for.
 
 Everyone is reminded once. If the site cannot reach somebody's address, it tries again on the next
 run rather than giving up quietly.
+
+## Your group's plan
+
+Plans are priced by **active members, per group** — the price list is on the **Pricing** page,
+visible to everyone. Yearly billing usually costs less than paying month by month; the card says
+how much less.
+
+Two things worth knowing about how plans behave:
+
+**What you signed up for is a contract for the period you paid for.** If the plan changes after
+you subscribe, improvements reach you immediately — a raised limit, a lower price, nothing to do
+on your side. Changes that would reduce what you have wait until your renewal, and you'll get a
+message about them **before** your period ends, so nothing ever changes under you mid-period. When
+your current terms are better than what the pricing page shows, your Pricing page says so:
+"you keep the terms you signed up for until" your renewal date.
+
+**Plans can include limits** — on open cases, equipment, loans out at a time, open investigations,
+public pages. If your group reaches one, the screen where you tried says exactly which limit and
+what your plan includes; closed cases and retired equipment never count against you. A larger plan
+raises the limit.
+
+Have a coupon code? There's a line for it at checkout — type it and the price updates before you
+confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
+to a specific account, so if a code is refused the message says why.
