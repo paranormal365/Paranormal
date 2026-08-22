@@ -70,7 +70,8 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="220px">
+                @* Edit + Extensions + Delete, all with labels — 220px cut Delete in half. *@
+                <GridCommandColumn Width="300px">
                     <GridCommandButton Command="Edit"
                                        Icon="@SvgIcon.Pencil"
                                        OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
