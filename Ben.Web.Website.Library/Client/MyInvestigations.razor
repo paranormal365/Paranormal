@@ -238,17 +238,22 @@
 
     private void OpenInvestigation(MyInvestigationItem inv)
     {
-        // CaseId is nullable now. A case-less visit has no case page to open, and building the URL
-        // anyway would navigate to /cases/ with nothing after it.
-        if (inv.CaseId is not { } caseId) return;
-        NavManager.NavigateTo($"/organizations/{inv.OrgId}/cases/{caseId}?tab=investigations");
+        // A case-bound visit opens its case page. A case-less one has no case page — it opens the
+        // group's Investigations tab instead, focused on this row. A card that invites a click
+        // must always land somewhere; the old "return;" here left two of Ben's investigations
+        // unclickable (2026-08-22).
+        NavManager.NavigateTo(inv.CaseId is { } caseId
+            ? $"/organizations/{inv.OrgId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{inv.OrgId}?tab=investigations&inv={inv.InvestigationId}");
     }
 
     private void OpenById(Guid investigationId)
     {
         var row = _attended.FirstOrDefault(a => a.InvestigationId == investigationId);
-        if (row?.CaseId is not { } caseId) return;
-        NavManager.NavigateTo($"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations");
+        if (row is null) return;
+        NavManager.NavigateTo(row.CaseId is { } caseId
+            ? $"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{row.OrganizationId}?tab=investigations&inv={row.InvestigationId}");
     }
 
     private static string AttendedWhere(AttendedInvestigationItem row)

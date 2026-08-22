@@ -67,6 +67,13 @@
     {
         if (_tabs.Contains(tab)) return;
         _tabs.Add(tab);
+
+        // OnParametersSet runs before any child has registered, so an ActiveId supplied with the
+        // very first render (a ?tab= deep link) found an empty list and silently kept index 0.
+        // Honouring it here, as the named tab arrives, is what makes deep links work at all.
+        if (ActiveId is not null && tab.Id == ActiveId)
+            ActiveIndex = _tabs.Count - 1;
+
         StateHasChanged();
     }
 

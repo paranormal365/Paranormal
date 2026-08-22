@@ -127,9 +127,9 @@
     else
     {
         @* ── Read-only tabbed view ─────────────────────────────────────────── *@
-        <BenTabs>
+        <BenTabs @bind-ActiveId="_activeTabId">
 
-            <BenTab Title="Details">
+            <BenTab Title="Details" Id="details">
                 @* The numbers first: someone opening a group wants to know how busy it is before
                    they want to know its URL slug. Full width, above the detail list. *@
                 <OrgStatsPanel OrgId="@OrgId" />
@@ -192,14 +192,14 @@
 
             @if (_isMember)
             {
-                <BenTab Title="Members">
+                <BenTab Title="Members" Id="members">
                     <OrganizationMembers OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_isMember)
             {
-                <BenTab Title="Cases">
+                <BenTab Title="Cases" Id="cases">
                     <CaseList OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
@@ -209,14 +209,14 @@
                 @* Member-visible, not admin-only: seeing where the group has worked is ordinary
                    membership. Who may *edit* a given investigation is decided per row by the
                    server and rendered from its verdict. *@
-                <BenTab Title="Investigations">
-                    <OrgInvestigations OrgId="@OrgId" />
+                <BenTab Title="Investigations" Id="investigations">
+                    <OrgInvestigations OrgId="@OrgId" FocusInvestigationId="@FocusInvestigationId" />
                 </BenTab>
             }
 
             @if (_isMember)
             {
-                <BenTab Title="Calendar">
+                <BenTab Title="Calendar" Id="calendar">
                     @* The review queue lives with the events that produce it. Renders nothing
                        when empty. *@
                     <EventEvidenceQueue OrgId="@OrgId" />
@@ -226,28 +226,28 @@
 
             @if (_isMember)
             {
-                <BenTab Title="Messages">
+                <BenTab Title="Messages" Id="messages">
                     <OrgMessages OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_isMember)
             {
-                <BenTab Title="Files">
+                <BenTab Title="Files" Id="files">
                     <OrganizationFiles OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Requests">
+                <BenTab Title="Requests" Id="requests">
                     <OrgPendingRequests OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="CMS">
+                <BenTab Title="CMS" Id="cms">
                     <OrgCmsEditor OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
@@ -258,7 +258,7 @@
                links to keep their own gate, because an address must die with the feature. *@
             @if (_canManageRoles && Features.IsOn(SiteFeatures.Publications))
             {
-                <BenTab Title="Publications">
+                <BenTab Title="Publications" Id="publications">
                     <Ben.Web.Website.Library.Publications.OrgPublications OrgId="@OrgId" />
                 </BenTab>
             }
@@ -266,27 +266,27 @@
             @* Equipment shared with the group is readable by any member — sharing is the owner's
                consent, so it needs no permission gate. The group's own equipment arrives here in
                phase 3, behind the new Equipment permission. *@
-            <BenTab Title="Equipment">
+            <BenTab Title="Equipment" Id="equipment">
                 <Ben.Web.Website.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
             </BenTab>
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Roles">
+                <BenTab Title="Roles" Id="roles">
                     <OrgRolesManager OrgId="@OrgId" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Addresses">
+                <BenTab Title="Addresses" Id="addresses">
                     <OrgAddressManager OrgId="@OrgId" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Settings">
+                <BenTab Title="Settings" Id="settings">
                     <OrgSettingsManager OrgId="@OrgId" />
                 </BenTab>
             }
@@ -302,6 +302,19 @@
     /// When null falls back to /organizations.</summary>
     [Parameter, SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
+
+    /// <summary>Tab to open on arrival, by <see cref="BenTab.Id"/> ("investigations", "cases", …).
+    /// Unknown or inaccessible ids fall back to the first tab — same contract as CaseDetail's.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "tab")]
+    public string? InitialTab { get; set; }
+
+    /// <summary>Investigation to highlight and scroll to on the Investigations tab. Set by the
+    /// surfaces that list case-less investigations (MyInvestigations, MyProfile), whose click has
+    /// no case page to open — this page is what that click shows instead.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "inv")]
+    public Guid? FocusInvestigationId { get; set; }
+
+    private string _activeTabId = "details";
 
     private OrganizationAdminRecord? _org;
     private bool   _canEdit;
@@ -326,6 +339,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _activeTabId = (InitialTab ?? "details").Trim().ToLowerInvariant();
+
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");

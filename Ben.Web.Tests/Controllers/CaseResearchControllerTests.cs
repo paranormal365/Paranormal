@@ -28,7 +28,8 @@ public class CaseResearchControllerTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
-    private static CaseResearchController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static CaseResearchController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId,
+        bool isSuperAdmin = false)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
@@ -43,7 +44,11 @@ public class CaseResearchControllerTests
             HttpContext = new DefaultHttpContext
             {
                 User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                    isSuperAdmin
+                        ? [new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                           new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin)]
+                        : [new Claim(ClaimTypes.NameIdentifier, userId.ToString())],
+                    "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
@@ -76,6 +81,18 @@ public class CaseResearchControllerTests
     }
 
     // ── GetAll ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAll_SuperAdminNonMember_IsNotForbidden()
+    {
+        // Same bypass rule as CaseFileController — see its SuperAdmin test for the 2026-08-22 bug.
+        var (factory, orgId, caseId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        Assert.IsNotType<ForbidResult>(result.Result);
+    }
 
     [Fact]
     public async Task GetAll_NonMember_ReturnsForbid()

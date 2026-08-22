@@ -352,8 +352,10 @@
     private void OpenInvestigation(Guid investigationId)
     {
         var row = _attended.FirstOrDefault(a => a.InvestigationId == investigationId);
-        if (row?.CaseId is not { } caseId) return;
-        NavManager.NavigateTo($"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations");
+        if (row is null) return;
+        NavManager.NavigateTo(row.CaseId is { } caseId
+            ? $"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{row.OrganizationId}?tab=investigations&inv={row.InvestigationId}");
     }
 
     protected override async Task OnInitializedAsync()

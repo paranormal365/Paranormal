@@ -7624,3 +7624,50 @@ all three creation doors (self-service registration and both SuperAdmin creates)
 same SaveChanges as the organization itself. A founder's calendar is usable from the first
 moment; the owner can rename, recolour, or retire them. Covered by tests on the registration
 service and the SuperAdmin controller door, both regressed against the un-wired code.
+
+## 149. A click must always show something — case-less investigations were dead ends (CLOSED 2026-08-22)
+
+Ben, as SuperAdmin, clicked the two seeded internal Bell Witch visits on /my-investigations and
+nothing happened. Deliberate code, wrong design: a case-less investigation has no case page, so
+three handlers (MyInvestigations ×2, MyProfile's map, and OrgInvestigations' own map pins) read
+`if (CaseId is not { } …) return;` under an element styled `cursor:pointer`. Ben's rule, now
+policy: **"A link should always show something... even if it is a message explaining why it
+shows nothing... or where to find it."**
+
+The fix gives case-less investigations a real destination: the group hub
+(`/organizations/{id}`) now honors `?tab=` (every BenTab got a stable Id) and `?inv=`, which
+lands on the Investigations tab with the row highlighted (`table-active`), scrolled into view,
+and its Team roster already open. Clicks from the tab's own map pins focus the row in place.
+Two structural bugs fell out along the way:
+
+- **BenTabs deep-link race**: `OnParametersSet` applied `ActiveId` before any tab had
+  registered, so a `?tab=` on first render silently kept index 0. `Register` now honors a
+  pending ActiveId as the named tab arrives. (CaseDetail's ?tab= links had been winning this
+  race by load-order luck.)
+- **Both video Publish buttons were dead**: MyVideosPage and CaseVideoEditorPage import
+  `/_content/Ben.Web.Website.Library/js/domInterop.js`, which did not exist — the only
+  domInterop.js shipped in Ben.Video.Editor's assets. The Library now ships its own (with the
+  scroll helper this fix needed).
+
+Proof: three Playwright tests (CaselessInvestigationClickTests) — the specific click, the
+deep-link surviving cold navigation, and an every-card-navigates sweep — plus
+DeadEndClickGuardTests, a source scan banning the `CaseId is not { } … ) return;` idiom in
+.razor files, regressed by reintroducing it and watching it name the file and line.
+
+## 150. SuperAdmin was Forbidden by six case surfaces the case page itself allowed (CLOSED 2026-08-22)
+
+Ben's report: production audio-mix page said "Couldn't load this case's audio files. This is a
+problem reaching the server, not an empty case." Root cause reproduced locally as a **403**:
+`CaseFileController.IsOrgMember` checked membership only, while the case endpoint honors
+SuperAdmin — so half the page loaded and the other half was refused. (The error surface itself
+worked exactly as designed — that message replacing a silent empty list is item 141 doing its
+job.)
+
+The sweep found the same membership-only helper in six controllers: CaseFile, CaseAudioMix,
+ScheduleProposal, CaseReport, CaseResearch, EventEvidence. All six now check
+`User.IsInRole(SuperAdmin)` first, the same shape as CaseNoteController / InvestigationController
+/ OrgCalendarController. UploadFileShareV2 already handled SuperAdmin at its call sites. Each of
+the six has a SuperAdmin-non-member regression test; the CaseFile one was watched failing
+against the reverted code. Live-verified: the exact production request (org 50000001…, case
+445ddf1d…) now answers 200 with an empty list — that case genuinely has no audio files yet, so
+after the next deploy the mixer will say so instead of erroring.

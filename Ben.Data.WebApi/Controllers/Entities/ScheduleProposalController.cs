@@ -127,8 +127,12 @@ public sealed class ScheduleProposalController : BenControllerBase
         return Ok(ToDto(proposal));
     }
 
-    private static async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
-        => await db.OrganizationUserMemberships.AsNoTracking()
+    // SuperAdmin first, membership second — the same shape as CaseNoteController and
+    // InvestigationController. Without the bypass, half a case page loaded for the site
+    // administrator and the other half said Forbid (the audio-mix bug, 2026-08-22).
+    private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await db.OrganizationUserMemberships.AsNoTracking()
             .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
 
     private static ScheduleProposalDto ToDto(InvestigationScheduleProposal p) => new(
