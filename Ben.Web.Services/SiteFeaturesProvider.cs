@@ -57,6 +57,7 @@ public sealed class SiteFeaturesProvider
     private readonly ILogger<SiteFeaturesProvider> _logger;
 
     private volatile IReadOnlyDictionary<string, bool> _snapshot = Defaults;
+    private volatile string? _announcement;
     private long _nextRefreshTicks;
     private int _refreshing;
 
@@ -72,6 +73,14 @@ public sealed class SiteFeaturesProvider
     {
         EnsureFresh();
         return _snapshot.TryGetValue(featureKey, out var on) && on;
+    }
+
+    /// <summary>The site-wide announcement, or null when none is set. Same snapshot, same
+    /// freshness rules as the feature flags; when the API is unreachable it starts as nothing
+    /// rather than a stale warning.</summary>
+    public string? Announcement
+    {
+        get { EnsureFresh(); return _announcement; }
     }
 
     /// <summary>
@@ -109,7 +118,12 @@ public sealed class SiteFeaturesProvider
             // An empty or absent answer is not an instruction to switch the site off. Only a
             // response that actually names features replaces the snapshot.
             if (info is { Features.Count: > 0 })
+            {
                 _snapshot = new Dictionary<string, bool>(info.Features, StringComparer.Ordinal);
+                // Inside the same validity check: only a response that names features may also
+                // set OR CLEAR the announcement, so a failed fetch cannot wipe a live notice.
+                _announcement = string.IsNullOrWhiteSpace(info.Announcement) ? null : info.Announcement;
+            }
         }
         catch (Exception ex)
         {

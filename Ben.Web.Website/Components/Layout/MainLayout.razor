@@ -10,6 +10,7 @@
 @inject ProtectedLocalStorage LocalStorage
 @inject EntraTokenHolder EntraTokenHolder
 @inject PersistentComponentState AppState
+@inject Ben.Web.Services.SiteFeaturesProvider Features
 
 @*
     The template's app-wrap skeleton. Everything below the markup is carried over from the
@@ -36,6 +37,18 @@
         <main class="app-body">
             <div class="app-content">
                 <div class="content-wrapper">
+                    @* The site-wide announcement (Administration → Site Settings). In the layout,
+                       not the home page, because its job is maintenance windows and outages — the
+                       people it warns are mid-task on any page, not just arriving at the front
+                       door. Rendered as text with line breaks preserved, never as markup. *@
+                    @if (Features.Announcement is { } announcement)
+                    {
+                        <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="status"
+                             style="white-space:pre-line;" id="site-announcement">
+                            <span aria-hidden="true">📢</span>
+                            <div>@announcement</div>
+                        </div>
+                    }
                     @Body
                 </div>
             </div>

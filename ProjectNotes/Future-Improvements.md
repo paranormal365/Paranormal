@@ -7671,3 +7671,26 @@ the six has a SuperAdmin-non-member regression test; the CaseFile one was watche
 against the reverted code. Live-verified: the exact production request (org 50000001…, case
 445ddf1d…) now answers 200 with an empty list — that case genuinely has no audio files yet, so
 after the next deploy the mixer will say so instead of erroring.
+
+## 151. The site-wide announcement was the seventh write-only feature (CLOSED 2026-08-22)
+
+Ben set a site-wide announcement in Site Settings and it showed nowhere. `site.announcement` was
+declared, seeded, editable — and read by nothing. It now rides the anonymous
+`/api/public/site-features` response (named explicitly on `SiteFeaturesInfo`, preserving the
+"only declared values can be published" property) into `SiteFeaturesProvider`, and MainLayout
+renders it as an info banner above every page's body — every page, not just home, because its
+declared purpose is maintenance windows and the people it warns are mid-task; anonymous
+visitors included. Plain text, line breaks preserved, never markup.
+
+Two rules from the pipe: only a response that names features may set OR clear the announcement
+(a failed fetch cannot wipe a live notice), and the admin's Save now awaits `PrimeAsync()`
+rather than firing `Invalidate()` — Invalidate schedules the refresh behind the NEXT reader, so
+the admin's own next page could still show the old snapshot, which is exactly the "did it
+save?" moment the call exists to prevent (found by this feature's e2e test).
+
+Proof: four unit tests (endpoint publishes/omits, provider carries and clears, failed refresh
+keeps the notice, layout wiring) — the endpoint one watched failing against the reverted
+controller — plus a Playwright test that saves a notice, sees the banner on home AND another
+page, clears it, sees it leave, and restores whatever announcement was set beforehand in a
+finally, because the database is shared with the public site. Help doc updated
+(site-administration → The site-wide announcement).
