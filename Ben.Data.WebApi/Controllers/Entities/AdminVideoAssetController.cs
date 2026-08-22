@@ -17,7 +17,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// exactly the kind of thing no single group should be able to edit.
 /// </summary>
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/video-assets")]
 public sealed class AdminVideoAssetController : BenControllerBase
 {

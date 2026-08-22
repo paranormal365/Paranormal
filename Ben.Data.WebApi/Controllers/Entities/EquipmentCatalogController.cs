@@ -1,3 +1,4 @@
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services;
@@ -510,7 +511,7 @@ public sealed class EquipmentCatalogController : BenControllerBase
 /// <summary>SuperAdmin moderation for the equipment taxonomy — categories are seeded/CRUD; brands and models are approve/reject.</summary>
 [ApiController]
 [Route("api/admin/equipment-taxonomy")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminEquipmentTaxonomyController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
