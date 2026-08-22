@@ -64,7 +64,15 @@
         </BenListState>
 
         @* ── Membership Requests section (if accepting applications) ─────── *@
-        <OrganizationMembershipRequests OrgId="@OrgId" />
+        @* Managers only. This used to render for every member, and since the requests fetch is
+           admin-gated, an ordinary member saw a broken "Couldn't load this — 403" card on their
+           own group's roster. A surface that is not theirs should be absent, not broken —
+           the same shape as the admin-only hub tabs. Caught by the item-109 member walk on its
+           first run. *@
+        @if (_canManage)
+        {
+            <OrganizationMembershipRequests OrgId="@OrgId" />
+        }
     }
 </div>
 
@@ -73,6 +81,7 @@
     [Parameter] public bool EmbeddedMode  { get; set; }
 
     private bool _loading = true;
+    private bool _canManage;
     private string? _error;
     private string _orgName = string.Empty;
     private IReadOnlyList<OrgMembershipItem> _members = [];
@@ -101,7 +110,9 @@
             // Still falls back to the id when the name genuinely cannot be resolved — a member of
             // one group opening another group's address gets no org record, and a bare GUID is at
             // least honest about that. It should no longer be the ordinary case.
-            _orgName  = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
+            var mine  = orgs.FirstOrDefault(o => o.Id == OrgId);
+            _orgName  = mine?.Name ?? OrgId.ToString();
+            _canManage = mine?.CanEdit ?? false;
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
