@@ -61,7 +61,10 @@ public sealed class SubscriptionLimitGuard
     /// <summary>
     /// Why this group may not add one more of <paramref name="limit"/>, or null when it may.
     /// </summary>
+    /// <param name="organizationId">The group being checked.</param>
+    /// <param name="limit">Which cap to test.</param>
     /// <param name="currentCount">How many the group has now, counted by the caller.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task<string?> WhyNotOneMoreAsync(
         Guid organizationId, SubscriptionLimit limit, int currentCount, CancellationToken ct)
     {

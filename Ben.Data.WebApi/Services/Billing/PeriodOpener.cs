@@ -28,7 +28,14 @@ public static class PeriodOpener
     /// Writes one period onto the subscription and returns the snapshot to add, or null when the
     /// state has no contract to snapshot (free, or no dates).
     /// </summary>
+    /// <param name="subscription">The tracked subscription the period is written onto.</param>
+    /// <param name="tier">The tier to snapshot, or null for free — which is what makes the return null.</param>
+    /// <param name="status">The status the subscription moves to.</param>
+    /// <param name="interval">Monthly or yearly, snapshotted so a later price change cannot rewrite this period.</param>
+    /// <param name="periodStart">Start of the period; null (with <paramref name="periodEnd"/>) means there is nothing to snapshot.</param>
+    /// <param name="periodEnd">End of the period.</param>
     /// <param name="memberCount">Active members right now — frozen for the whole period.</param>
+    /// <param name="byUserId">Who caused the period to open, recorded on the snapshot.</param>
     public static SubscriptionContractTerms? Open(
         OrganizationSubscription subscription,
         SubscriptionTier? tier,
