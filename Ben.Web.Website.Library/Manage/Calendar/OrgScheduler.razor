@@ -552,7 +552,7 @@
             // Loaded once with the calendar, not per dialog open — the list is short and rarely
             // changes, and fetching it while a dialog is opening is a visible stutter.
             _addresses = (await AdminClient.GetOrgAddressesAsync(OrgId)).Items;
-            _members = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            _members = (await AdminClient.GetOrgUserDirectoryAsync(OrgId)).Items;
             await LoadEventsAsync();
         }
         catch { _error = "Failed to load calendar."; }

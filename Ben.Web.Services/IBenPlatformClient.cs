@@ -36,7 +36,7 @@ public interface IBenPlatformClient
     Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default);
 
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
-    Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
+    Task<LoadResult<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
 
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
     /// <summary>Recorded sidecar install/pair events, newest first (SuperAdmin).</summary>

@@ -3,6 +3,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Users</PageTitle>
 
@@ -29,6 +31,10 @@
         }
     </div>
 
+    @* An empty user grid to a SuperAdmin reads as "this deployment has no accounts", which is
+       never true and sends them looking at the database. *@
+    <BenListState TItem="AppUserRecord" Result="@_usersResult" EmptyText="No user accounts yet" OnRetry="@OnInitializedAsync">
+    <ChildContent>
     <TelerikGrid Data="@_filtered"
                  TItem="AppUserRecord"
                  Pageable="true"
@@ -86,6 +92,8 @@
             </GridCommandColumn>
         </GridColumns>
     </TelerikGrid>
+    </ChildContent>
+    </BenListState>
 
     @if (_errorMessage is not null)
     {
@@ -96,6 +104,7 @@
 @code {
     private IReadOnlyList<AppUserRecord> _users  = [];
     private IReadOnlyList<AppUserRecord> _filtered = [];
+    private LoadResult<AppUserRecord> _usersResult;
     private string _search = string.Empty;
     private string? _errorMessage;
 
@@ -111,7 +120,8 @@
         if (firstRender)
         {
             if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-            _users    = await AdminClient.GetAllUsersAsync();
+            _usersResult = await AdminClient.GetAllUsersAsync();
+            _users       = _usersResult.Items;
             _filtered = _users;
             StateHasChanged();
         }

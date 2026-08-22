@@ -306,7 +306,7 @@
 
         try
         {
-            var directory = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            var directory = (await AdminClient.GetOrgUserDirectoryAsync(OrgId)).Items;
             _members = directory
                 .Where(m => m.Id != UserState.UserId)   // not yourself
                 .OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase)

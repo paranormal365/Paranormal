@@ -5992,6 +5992,7 @@ the OrdinaryMemberSurfaceTests pattern.
 | **Case** | **2026-08-22** | **20** | **101 → 81** |
 | **Platform** | **2026-08-22** | **14** | **81 → 67** |
 | **Equipment** | **2026-08-22** | **22** | **67 → 45** |
+| **User** | **2026-08-22** | **13** | **45 → 34** |
 
 **Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
 `BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
@@ -6006,8 +6007,8 @@ It stops the likely half-conversion — silencing the compile error with `.Items
 as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
 there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
 
-**Remaining, in size order:** User 11, Investigation 8, Cms 6, Places 5, Media 5, Publications 4,
-Membership 3, Feed 2, Account 1 — **45 left of the original 120.**
+**Remaining, in size order:** Investigation 8, Cms 6, Places 5, Media 5, Publications 4,
+Membership 3, Feed 2, Account 1 — **34 left of the original 120.**
 
 **Platform slice** brought the internal messaging surfaces over, which item 120 named from the
 start. Two of the scheduler's call sites were correctness bugs rather than display ones: the
@@ -6025,8 +6026,20 @@ refusal became `?? []`, and `EquipmentShareEditor` discarded the result, closed 
 reported success — somebody believed their equipment was shared when nothing had been saved. It now
 returns `(Shares, Error)` and the editor shows the reason.
 
-**Two dead methods found so far**, declared and implemented but called by nothing:
-`GetPublishedInvestigationsAsync` and `GetEquipmentItemCheckoutsAsync`.
+**User slice** reached past the adapter for the first time. `GetAllUsersAsync` and
+`GetOrgUserDirectoryAsync` delegate to dedicated methods on `WebApiClient` itself rather than the
+generic `GetAsync`, so their `?? []` sat outside the ratchet's scan — the ratchet counts
+`BenAdminClientAdapter.*.cs` only. Both are converted; worth remembering that the ratchet measures
+one file pattern, not the whole client.
+
+It also turned up a defect in **item 133's own work**. An adapter that reshapes a response —
+`Ok(result.Items.Select(…))` — silently drops `SessionExpired`, and both places doing that by hand
+had dropped it: a signed-out roster told the reader to "try again" instead of to sign in.
+`LoadResult.Map` now carries the whole outcome across and changes only the shape, and the
+organization roster uses it.
+
+**Three dead methods found so far**, declared and implemented but called by nothing:
+`GetPublishedInvestigationsAsync`, `GetEquipmentItemCheckoutsAsync` and `GetMyPhotosAsync`.
 
 **For whoever takes the next slice:** a list that is mutated in place — `Insert`, `Add`,
 `RemoveAll` — must **not** be wrapped in `BenListState`. The wrapper keeps rendering the load's own

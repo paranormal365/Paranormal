@@ -1,5 +1,7 @@
 @namespace Ben.Web.Website.Library.User
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <div class="card mb-3">
     <div class="card-body">
@@ -27,7 +29,12 @@
         }
         else
         {
-            @if (_rows.Count == 0 && !_showForm)
+            @if (_rowsResult.Failed)
+            {
+                @* Somebody shown an empty list adds a duplicate of what is already there. *@
+                <BenListState TItem="MyLinkRecord" Result="@_rowsResult" OnRetry="@LoadAsync" />
+            }
+            else if (_rows.Count == 0 && !_showForm)
             {
                 <p class="text-secondary small fst-italic mt-3 mb-0">No links yet.</p>
             }
@@ -117,6 +124,7 @@
 
 @code {
     private List<MyLinkRecord> _rows = new();
+    private LoadResult<MyLinkRecord> _rowsResult;
     private IReadOnlyList<UserLinkTypeRecord> _types = Array.Empty<UserLinkTypeRecord>();
     private bool _loading = true;
     private bool _saving;
@@ -133,14 +141,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _types = await AdminClient.GetUserLinkTypesAsync();
+        _types = (await AdminClient.GetUserLinkTypesAsync()).Items;
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _rows = await AdminClient.GetMyLinksAsync();
+        _rowsResult = await AdminClient.GetMyLinksAsync();
+        _rows       = [.. _rowsResult.Items];
         _loading = false;
     }
 

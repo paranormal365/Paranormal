@@ -370,7 +370,12 @@
             // display one number. Fine at today's size, and the honest fix is a count endpoint
             // rather than a cleverer client; noted rather than pretended away.
             if (IsSuperAdmin)
-                _userCount = (await AdminClient.GetAllUsersAsync()).Count;
+            {
+                // A badge number. A refused fetch leaves the badge off rather than showing
+                // zero users, which would be the same lie in a smaller space.
+                var users = await AdminClient.GetAllUsersAsync();
+                if (!users.Failed) _userCount = users.Items.Count;
+            }
         }
         catch (Exception)
         {
