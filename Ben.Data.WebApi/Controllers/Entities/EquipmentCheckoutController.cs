@@ -36,14 +36,18 @@ public sealed class EquipmentCheckoutController : BenControllerBase
     private readonly IOrganizationSecurityService _security;
     private readonly IAuditLogService _auditLog;
 
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
     public EquipmentCheckoutController(
         IDbContextFactory<BenDataContext> db,
         IOrganizationSecurityService security,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        Services.Billing.SubscriptionLimitGuard limits)
     {
         _db       = db;
         _security = security;
         _auditLog = auditLog;
+        _limits   = limits;
     }
 
     private bool IsSuperAdmin() => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
@@ -139,13 +143,40 @@ public sealed class EquipmentCheckoutController : BenControllerBase
             // One item, one holder. Several people may ask at once — that is a queue — but only one
             // of those asks can be granted until the gear is back.
             guardAsync: async (db, checkout) =>
-                await db.EquipmentCheckouts.AnyAsync(c =>
-                    c.EquipmentItemId == checkout.EquipmentItemId
-                    && c.Id != checkout.Id
-                    && (c.Status == EquipmentCheckoutStatus.Approved
-                        || c.Status == EquipmentCheckoutStatus.CheckedOut), ct)
-                    ? "This equipment is already promised to someone else. It has to come back before it can go out again."
-                    : null,
+            {
+                if (await db.EquipmentCheckouts.AnyAsync(c =>
+                        c.EquipmentItemId == checkout.EquipmentItemId
+                        && c.Id != checkout.Id
+                        && (c.Status == EquipmentCheckoutStatus.Approved
+                            || c.Status == EquipmentCheckoutStatus.CheckedOut), ct))
+                    return "This equipment is already promised to someone else. It has to come back before it can go out again.";
+
+                // The subscription cap on lending, enforced at the LENDER'S approval — their cap,
+                // their action, their screen. Capping the borrower's request instead would refuse
+                // somebody over a limit that is not theirs and that they cannot see. Personal gear
+                // (no owning organization) is not org-capped.
+                var owningOrg = await db.EquipmentItems.AsNoTracking()
+                    .Where(i => i.Id == checkout.EquipmentItemId)
+                    .Select(i => i.OwningOrganizationId)
+                    .FirstOrDefaultAsync(ct);
+
+                if (owningOrg is { } lender)
+                {
+                    var loansOut = await db.EquipmentCheckouts.CountAsync(c =>
+                        c.Id != checkout.Id
+                        && (c.Status == EquipmentCheckoutStatus.Approved
+                            || c.Status == EquipmentCheckoutStatus.CheckedOut)
+                        && db.EquipmentItems.Any(i =>
+                            i.Id == c.EquipmentItemId && i.OwningOrganizationId == lender), ct);
+
+                    if (await _limits.WhyNotOneMoreAsync(
+                            lender, Ben.Data.Common.Enums.SubscriptionLimit.ActiveEquipmentLoans,
+                            loansOut, ct) is { } capped)
+                        return capped;
+                }
+
+                return null;
+            },
             apply: (db, checkout, userId) =>
             {
                 checkout.Status              = EquipmentCheckoutStatus.Approved;

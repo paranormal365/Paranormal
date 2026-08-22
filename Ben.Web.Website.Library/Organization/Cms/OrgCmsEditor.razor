@@ -719,8 +719,8 @@
                 _pageForm.ParentPageId,
                 _pageForm.SortOrder));
 
-            if (result is null) _dialogError = "Failed to update page.";
-            else { _showPageDialog = false; _successMessage = $"Page '{result.PageTitle}' updated."; }
+            if (result.Result is null) _dialogError = result.Error ?? "Failed to update page.";
+            else { _showPageDialog = false; _successMessage = $"Page '{result.Result.PageTitle}' updated."; }
         }
 
         _isBusy = false;

@@ -19,6 +19,7 @@ public static class CaseStatusExtensions
         CaseStatus.Public      => "Public",
         CaseStatus.Haunted     => "Haunted",
         CaseStatus.Transferred => "Transferred",
+        CaseStatus.Paused      => "Paused",
         _                      => status.ToString(),
     };
 
@@ -32,6 +33,9 @@ public static class CaseStatusExtensions
         CaseStatus.Public      => "bg-info text-dark",
         CaseStatus.Haunted     => "bg-warning text-dark",
         CaseStatus.Transferred => "bg-secondary",
+        // Danger, not warning: a paused case needs somebody to act (renew, or reassign), and the
+        // yellow family is already spoken for by two working states.
+        CaseStatus.Paused      => "bg-danger",
         _                      => "bg-secondary",
     };
 }

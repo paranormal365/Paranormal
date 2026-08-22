@@ -20,8 +20,11 @@ public sealed class CaseTransferController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public CaseTransferController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    private readonly Services.PlatformMessageService _messages;
+
+    public CaseTransferController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper, Services.PlatformMessageService messages)
+    { _db = db; _mapper = mapper; _messages = messages; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseTransferLogRecord>>> GetAll(
@@ -37,6 +40,44 @@ public sealed class CaseTransferController : BenControllerBase
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<CaseTransferLogRecord>>(logs));
     }
+
+    /// <summary>
+    /// Transfers waiting on THIS organization's answer — the receiving side's inbox.
+    /// </summary>
+    /// <remarks>
+    /// Until this existed the receiving group had no surface at all: the pending log sat in a
+    /// table only the SENDER's case panel could list, because the per-case list requires the case
+    /// to already belong to you. Another write-only feature, found the moment the client-proposed
+    /// flow (item 84) needed the receiver to actually answer. Route is org-level and deliberately
+    /// not under /cases/{caseId} — the whole point is that the case is not yours yet.
+    /// </remarks>
+    [HttpGet("/api/organizations/{orgId:guid}/incoming-transfers")]
+    public async Task<ActionResult<IEnumerable<IncomingTransferRecord>>> GetIncoming(
+        Guid orgId, CancellationToken ct)
+    {
+        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var rows = await db.CaseTransferLogs.AsNoTracking()
+            .Where(l => l.ToOrganizationId == orgId && l.Status == CaseTransferStatus.Pending)
+            .OrderBy(l => l.DateProposed)
+            .Select(l => new IncomingTransferRecord(
+                l.Id, l.CaseId, l.Case.Title, l.Case.City, l.Case.State,
+                l.FromOrganization.Name,
+                l.ProposedByClient,
+                l.ProposedByClient ? l.ShareHistory : true,
+                l.ProposedByClient ? l.ShareInvestigations : true,
+                l.TransferReason, l.DateProposed))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
+    public sealed record IncomingTransferRecord(
+        Guid LogId, Guid CaseId, string CaseTitle, string City, string State,
+        string FromOrganizationName, bool ProposedByClient,
+        bool ShareHistory, bool ShareInvestigations,
+        string? Reason, DateTime DateProposed);
 
     /// <summary>Propose transferring this case to another organization.</summary>
     [HttpPost]
@@ -110,11 +151,68 @@ public sealed class CaseTransferController : BenControllerBase
                 c.CaseYear        = year;
                 c.OrgCaseNumber   = max + 1;
                 c.Status          = CaseStatus.Accepted;
+                c.StatusBeforePause = null;   // a fresh start, not a suspended old one
                 c.DateUpdated     = DateTime.UtcNow;
                 c.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+
+                // ── the client's consent, enforced at the moment it matters (item 84) ──
+                if (log.ProposedByClient)
+                {
+                    if (!log.ShareHistory)
+                    {
+                        // The collected history stays the client's: re-scoped to ClientOnly, which
+                        // this org's timeline never returns. Public entries stay public — they
+                        // were already published to the world, and "withhold from the new group"
+                        // cannot mean less than that.
+                        var withheld = await db.CaseTimelineEntries
+                            .Where(e => e.CaseId == caseId
+                                     && e.Visibility != CaseTimelineVisibility.Public)
+                            .ToListAsync(ct);
+                        foreach (var e in withheld)
+                            e.Visibility = CaseTimelineVisibility.ClientOnly;
+                    }
+
+                    if (!log.ShareInvestigations)
+                    {
+                        // Not shared means not carried: the original group's investigations detach
+                        // from the case and remain that group's flat records — "findings remain
+                        // the original group's". Nothing is deleted, nothing is copied.
+                        var withheld = await db.Investigations
+                            .Where(i => i.CaseId == caseId && i.OrganizationId == log.FromOrganizationId)
+                            .ToListAsync(ct);
+                        foreach (var inv in withheld)
+                            inv.CaseId = null;
+                    }
+                    // Shared investigations need no code at all: the case moved, their CaseId
+                    // still points at it, so the new group reads them through the case while the
+                    // original group keeps them in its own list — dual visibility for dual
+                    // ownership, no copy made.
+                }
             }
         }
         await db.SaveChangesAsync(ct);
+
+        // A client-proposed move ends with the client hearing the answer — from the platform,
+        // immediately, whichever way it went.
+        if (log.ProposedByClient)
+        {
+            var caseTitle = await db.Cases.AsNoTracking()
+                .Where(x => x.Id == caseId).Select(x => x.Title).FirstOrDefaultAsync(ct) ?? "your case";
+
+            await _messages.SendAsync(
+                request.Accept
+                    ? $"{log.ToOrganization.Name} accepted your case"
+                    : $"{log.ToOrganization.Name} declined your case",
+                request.Accept
+                    ? $"{log.ToOrganization.Name} has taken over \"{caseTitle}\". The case is "
+                    + "active again, and what they can see of the previous group's work follows "
+                    + "the choices you made."
+                    : $"{log.ToOrganization.Name} declined to take \"{caseTitle}\""
+                    + (string.IsNullOrWhiteSpace(log.RejectionReason) ? "." : $": {log.RejectionReason}")
+                    + " Your case remains paused, and you can ask a different organization.",
+                [log.ProposedByAppUserId], userId, ct);
+        }
+
         return Ok(_mapper.Map<CaseTransferLogRecord>(log));
     }
 

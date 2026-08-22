@@ -37,7 +37,7 @@ public class CaseFileControllerTests
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object);
+        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

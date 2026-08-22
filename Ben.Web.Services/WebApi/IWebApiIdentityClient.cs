@@ -17,6 +17,22 @@ public interface IWebApiIdentityClient
         string? twoFactorCode = null, string? recoveryCode = null,
         CancellationToken token = default);
     Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks for a password-reset email. Always reports success for a well-formed request —
+    /// the endpoint deliberately does not reveal whether the address has an account.
+    /// </summary>
+    /// <returns>False only when the request itself failed (unreachable, rate-limited).</returns>
+    Task<bool> ForgotPasswordAsync(string email, CancellationToken token = default);
+
+    /// <summary>
+    /// Completes a reset with the emailed code. Also how an Entra-born account acquires its
+    /// first password — resetting a password that was never set simply sets one.
+    /// </summary>
+    /// <returns>Null on success, or a sentence to show ("invalid or expired code", the
+    /// password-policy complaint).</returns>
+    Task<string?> ResetPasswordAsync(
+        string email, string resetCode, string newPassword, CancellationToken token = default);
 }
 
 /// <summary>The outcome of one sign-in request: the token when it worked, and the status either way.</summary>

@@ -106,11 +106,13 @@
                 "US",
                 null, null);
 
-            var result = await AdminClient.CreateOrgCaseAsync(OrgId, request);
+            var (result, error) = await AdminClient.CreateOrgCaseAsync(OrgId, request);
             if (result is not null)
                 NavManager.NavigateTo($"/organizations/{OrgId}/cases/{result.Id}");
             else
-                _error = "Case creation failed. Please try again.";
+                // The server's own sentence when it gave one — the subscription cap names the
+                // plan and what it includes, which "failed, try again" would bury.
+                _error = error ?? "Case creation failed. Please try again.";
         }
         catch (Exception ex)
         {

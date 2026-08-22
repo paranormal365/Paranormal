@@ -63,7 +63,7 @@ public class CaseControllerTests
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, RoleNames.SuperAdmin));
-        var ctrl = new CaseController(factory, CreateMapper());
+        var ctrl = new CaseController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

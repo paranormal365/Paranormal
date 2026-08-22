@@ -186,6 +186,13 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // between passes. Registering a job here is all it takes to have it run — see IScheduledJob.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventReminderJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.TierChangeNoticeJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.SubscriptionLapseJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
@@ -431,6 +438,7 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.EquipmentTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.SubscriptionTierSeeder.SeedAsync(app.Services, app.Configuration);
     // DevelopmentDataSeeder runs late — depends on all users/orgs above being present.
     // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
     await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);

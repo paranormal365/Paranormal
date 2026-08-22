@@ -605,12 +605,13 @@
                 ExperienceTypeIds: _form.ExperienceTypeIds.ToList());
 
             CaseTimelineEntryRecord? result;
+            string? error = null;
             if (_editEntry is null)
-                result = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
+                (result, error) = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
             else
                 result = await AdminClient.UpdateCaseTimelineEntryAsync(OrgId, CaseId, _editEntry.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else { CloseDialog(); await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }

@@ -142,6 +142,7 @@ else
                 using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
                 var result = await AdminClient.UploadCaseFileAsync(OrgId, CaseId, null, stream, f.Name, f.ContentType);
                 if (result is not null) _files.Insert(0, result);
+                else _error = AdminClient.LastCaseFileUploadError ?? "Failed to upload file.";
             }
         }
         catch { _error = "Failed to upload file."; }

@@ -14,7 +14,10 @@ public sealed class CaseMessageController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public CaseMessageController(IDbContextFactory<BenDataContext> db) => _db = db;
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseMessageController(IDbContextFactory<BenDataContext> db, Services.Billing.SubscriptionLimitGuard limits)
+    { _db = db; _limits = limits; }
 
     /// <summary>Returns all messages and marks client messages as read by the org.</summary>
     [HttpGet]
@@ -26,6 +29,9 @@ public sealed class CaseMessageController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
+        // MyCaseController and stays open — their records, their voice.
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var messages = await db.CaseMessages.AsNoTracking()
             .Include(m => m.AuthorAppUser)
@@ -57,6 +63,9 @@ public sealed class CaseMessageController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
+        // MyCaseController and stays open — their records, their voice.
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var msg = new CaseMessage
         {
@@ -97,6 +106,9 @@ public sealed class CaseMessageController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
+        // MyCaseController and stays open — their records, their voice.
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var count = await db.CaseMessages
             .CountAsync(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Client && !m.IsReadByOrg, ct);

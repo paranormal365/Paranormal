@@ -49,7 +49,7 @@ public class CaseNoteControllerTests
 
     private static CaseNoteController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseNoteController(factory, CreateMapper());
+        var ctrl = new CaseNoteController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

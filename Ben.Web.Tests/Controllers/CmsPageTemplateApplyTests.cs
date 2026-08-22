@@ -70,7 +70,8 @@ public sealed class CmsPageTemplateApplyTests
 
     private static OrgCmsPageController Build(IDbContextFactory<BenDataContext> factory)
         => new(factory, CreateMapper(), Mock.Of<IOrganizationSecurityService>(),
-               Mock.Of<IAuditLogService>(), new CmsMarkupSanitizer())
+               Mock.Of<IAuditLogService>(), new CmsMarkupSanitizer(),
+               new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory))
         {
             ControllerContext = new ControllerContext
             {

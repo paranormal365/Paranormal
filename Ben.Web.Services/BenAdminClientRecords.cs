@@ -1059,3 +1059,14 @@ public sealed record SidecarTelemetrySummaryRecord(
     int InstallsPairedToAnAccount,
     int DistinctPeople,
     IReadOnlyList<SidecarVersionCountRecord> ByVersion);
+
+/// <summary>A client's pending case move, as their own case page shows it.</summary>
+public sealed record PendingReassignRecord(
+    Guid LogId, string ToOrganizationName, bool ShareHistory, bool ShareInvestigations, DateTime DateProposed);
+
+/// <summary>One transfer waiting on an organization's answer — including client-proposed moves.</summary>
+public sealed record IncomingTransferRecord(
+    Guid LogId, Guid CaseId, string CaseTitle, string City, string State,
+    string FromOrganizationName, bool ProposedByClient,
+    bool ShareHistory, bool ShareInvestigations,
+    string? Reason, DateTime DateProposed);

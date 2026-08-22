@@ -104,6 +104,7 @@
 
             <p class="text-center text-secondary small mt-3 mb-0">
                 New here? <a href="/signup">Create an account</a>.
+                <br /><a href="/forgot-password">Forgot your password?</a>
             </p>
 
             @if (_entraEnabled)
@@ -223,7 +224,13 @@
                 break;
 
             default:
-                _errorMessage = "Invalid email or password.";
+                // Item 142: an account created by signing in with Microsoft has no password at
+                // all, and this message is what that case looks like. The hint is worded for that
+                // reader without weakening the message for a genuinely wrong password — and it
+                // deliberately does not reveal whether the address has an account.
+                _errorMessage = "Invalid email or password. If you normally sign in with Microsoft, "
+                              + "your account may not have a password yet — you can set one via "
+                              + "\"Forgot your password?\" below.";
                 break;
         }
     }

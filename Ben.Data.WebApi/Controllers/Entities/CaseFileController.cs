@@ -27,11 +27,15 @@ public sealed class CaseFileController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
 
-    public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, IAuditLogService auditLog)
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits)
     {
         _db = db;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
+        _limits = limits;
     }
 
     [HttpGet]
@@ -60,6 +64,7 @@ public sealed class CaseFileController : BenControllerBase
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
 
@@ -105,6 +110,7 @@ public sealed class CaseFileController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var sourceFile = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == uploadFileId, ct);
         if (sourceFile is null) return NotFound("File not found.");

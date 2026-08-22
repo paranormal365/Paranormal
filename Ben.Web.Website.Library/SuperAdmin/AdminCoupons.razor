@@ -1,0 +1,628 @@
+@page "/admin/coupons"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IJSRuntime Js
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Microsoft.JSInterop
+
+<PageTitle>SuperAdmin — Coupons</PageTitle>
+
+@*
+    Campaigns on top, and the selected campaign's codes inline below — not a nested modal, per the
+    pages-over-windows rule: a generated batch is a manage-everything surface with hundreds of rows.
+
+    The Problem column is this screen's reason to exist beyond CRUD. A coupon that takes nothing
+    off, or whose window closes before it opens, looks completely normal and fails silently for
+    whoever types it. The server computes the sentence; the list wears it as a red badge.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Coupons</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" @onclick="OpenCreate">
+                <BenIcon Name="plus" Class="me-1" />New Campaign
+            </button>
+        </div>
+    </div>
+
+    <BenListState TItem="CouponAdminRecord" Result="@_couponsResult" Loading="@_loading"
+                  EmptyText="No coupon campaigns exist yet" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_couponsResult.Items" TItem="CouponAdminRecord" Sortable="false">
+            <GridColumns>
+                <GridColumn Field="@nameof(CouponAdminRecord.Name)" Title="Campaign" />
+                <GridColumn Title="Code(s)" Width="170px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        @if (c.Kind == CouponKind.Shared)
+                        {
+                            <code>@(c.SharedCode ?? "—")</code>
+                        }
+                        else
+                        {
+                            <span class="badge bg-info">@c.CodeCount generated</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Discount" Width="160px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        <span>@DiscountLabel(c)</span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Applies" Width="180px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        @AppliesLabel(c)
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Redemptions" Width="120px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        @c.RedemptionCount@(c.MaxRedemptions is { } max ? $" / {max}" : "")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Window" Width="190px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        @WindowLabel(c)
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Status" Width="150px">
+                    <Template>
+                        @{ var c = (CouponAdminRecord)context; }
+                        @if (c.Problem is not null)
+                        {
+                            <span class="badge bg-danger" title="@c.Problem">Broken</span>
+                        }
+                        else if (!c.IsActive)
+                        {
+                            <span class="badge bg-secondary">Retired</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Live</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="180px">
+                    <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((CouponAdminRecord)e.Items.First()))">
+                        Edit
+                    </GridCommandButton>
+                    <GridCommandButton Command="Codes" Icon="@SvgIcon.ListUnordered"
+                                       OnClick="@((GridCommandEventArgs e) => SelectAsync((CouponAdminRecord)e.Items.First()))">
+                        Codes
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+
+    @if (_selected is not null)
+    {
+        <div class="card mt-4" id="coupon-codes">
+            <div class="card-header d-flex align-items-center">
+                <strong>Codes — @_selected.Name</strong>
+                @if (_selected.Problem is not null)
+                {
+                    <span class="badge bg-danger ms-2">@_selected.Problem</span>
+                }
+                <button type="button" class="btn-close ms-auto" aria-label="Close"
+                        @onclick="() => _selected = null"></button>
+            </div>
+            <div class="card-body">
+                @if (_selected.Kind == CouponKind.Generated)
+                {
+                    <div class="row mb-3 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label" for="gen-count">How many</label>
+                            <input id="gen-count" type="number" class="form-control" min="1" max="2000"
+                                   style="max-width:110px" @bind="_generateCount" />
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label" for="gen-prefix">Prefix</label>
+                            <input id="gen-prefix" type="text" class="form-control" placeholder="PARACON"
+                                   style="max-width:160px" @bind="_generatePrefix" />
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label" for="gen-uses">Uses per code</label>
+                            <input id="gen-uses" type="number" class="form-control" min="1"
+                                   style="max-width:110px" @bind="_generateUses" />
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-primary" disabled="@_generating" @onclick="GenerateAsync">
+                                @(_generating ? "Generating…" : "Generate")
+                            </button>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    disabled="@(_codesResult.Items.Count == 0)" @onclick="CopyCodesAsync">
+                                Copy all codes
+                            </button>
+                        </div>
+                    </div>
+                    @if (_generateError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_generateError</div>
+                    }
+                }
+
+                <BenListState TItem="CouponCodeAdminRecord" Result="@_codesResult" Loading="@_codesLoading"
+                              EmptyText="No codes yet — generate some above" OnRetry="@(() => SelectAsync(_selected))">
+                    <TelerikGrid Data="@_codesResult.Items" TItem="CouponCodeAdminRecord"
+                                 Sortable="false" Pageable="true" PageSize="25">
+                        <GridColumns>
+                            <GridColumn Field="@nameof(CouponCodeAdminRecord.Code)" Title="Code">
+                                <Template>
+                                    <code>@(((CouponCodeAdminRecord)context).Code)</code>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Title="Uses" Width="110px">
+                                <Template>
+                                    @{ var row = (CouponCodeAdminRecord)context; }
+                                    @row.RedemptionCount@(row.MaxRedemptions is { } m ? $" / {m}" : " / ∞")
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Title="Issued to / restricted to" >
+                                <Template>
+                                    @{ var row = (CouponCodeAdminRecord)context; }
+                                    @if (row.RestrictedToAppUserName is not null)
+                                    {
+                                        <span class="badge bg-warning text-dark me-1"
+                                              title="Only this account can redeem it">
+                                            @row.RestrictedToAppUserName
+                                        </span>
+                                    }
+                                    @row.IssuedTo
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Title="Status" Width="110px">
+                                <Template>
+                                    @{ var row = (CouponCodeAdminRecord)context; }
+                                    @if (!row.IsActive)
+                                    {
+                                        <span class="badge bg-secondary">Withdrawn</span>
+                                    }
+                                    else if (row.MaxRedemptions is { } m && row.RedemptionCount >= m)
+                                    {
+                                        <span class="badge bg-dark">Spent</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Live</span>
+                                    }
+                                </Template>
+                            </GridColumn>
+                            <GridCommandColumn Width="240px">
+                                @* The referral link: hand the URL to whoever is selling access,
+                                   and the visitor lands on /pricing with the code attached. Their
+                                   results are this row's redemption count — attribution rides the
+                                   redemption records that already exist. *@
+                                <GridCommandButton Command="CopyLink" Icon="@SvgIcon.Link"
+                                                   OnClick="@((GridCommandEventArgs e) => CopyReferralLinkAsync((CouponCodeAdminRecord)e.Items.First()))">
+                                    Copy link
+                                </GridCommandButton>
+                                <GridCommandButton Command="Withdraw" Icon="@SvgIcon.Cancel"
+                                                   OnClick="@((GridCommandEventArgs e) => ToggleCodeAsync((CouponCodeAdminRecord)e.Items.First()))">
+                                    @((_codesResult.Items.FirstOrDefault()?.IsActive ?? true) ? "Withdraw" : "Restore")
+                                </GridCommandButton>
+                            </GridCommandColumn>
+                        </GridColumns>
+                    </TelerikGrid>
+                </BenListState>
+
+                <h6 class="mt-4">Redemptions</h6>
+                <p class="text-secondary small mb-2">
+                    The referral report: who redeemed what, through which code, and the money as it
+                    was at the moment of redemption — the numbers a reimbursement is computed from.
+                </p>
+                <BenListState TItem="CouponRedemptionAdminRecord" Result="@_redemptionsResult"
+                              Loading="@_codesLoading"
+                              EmptyText="No redemptions yet" OnRetry="@(() => SelectAsync(_selected))">
+                    <TelerikGrid Data="@_redemptionsResult.Items" TItem="CouponRedemptionAdminRecord"
+                                 Sortable="false" Pageable="true" PageSize="25">
+                        <GridColumns>
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.Code)" Title="Code">
+                                <Template>
+                                    <code>@(((CouponRedemptionAdminRecord)context).Code)</code>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.ReferrerNote)" Title="Referrer" />
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.OrganizationName)" Title="Group" />
+                            <GridColumn Title="Redeemed" Width="120px">
+                                <Template>
+                                    @(((CouponRedemptionAdminRecord)context).RedeemedAtUtc.ToString("MM/dd/yyyy"))
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Title="List" Width="90px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).ListPrice:C2}")</Template>
+                            </GridColumn>
+                            <GridColumn Title="Discount" Width="100px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).Discount:C2}")</Template>
+                            </GridColumn>
+                            <GridColumn Title="Paid" Width="90px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).Payable:C2}")</Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </TelerikGrid>
+                </BenListState>
+            </div>
+        </div>
+    }
+</div>
+
+<BenModal @bind-Visible="@_showDialog" Title="@(_editing is null ? "New Campaign" : $"Edit {_editing.Name}")" Size="lg">
+    <ChildContent>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label" for="cpn-name">Campaign name <span class="text-danger">*</span></label>
+                <input id="cpn-name" type="text" class="form-control" @bind="_form.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="cpn-kind">Kind</label>
+                <select id="cpn-kind" class="form-select" @bind="_form.Kind" disabled="@(_editing is not null && _editing.CodeCount > 1)">
+                    <option value="@CouponKind.Shared">One shared code everybody types</option>
+                    <option value="@CouponKind.Generated">A batch of generated single-use codes</option>
+                </select>
+            </div>
+        </div>
+        @if (_form.Kind == CouponKind.Shared)
+        {
+            <div class="mb-3">
+                <label class="form-label" for="cpn-code">The code <span class="text-danger">*</span></label>
+                <input id="cpn-code" type="text" class="form-control text-uppercase" style="max-width:280px"
+                       placeholder="LAUNCH25" @bind="_form.SharedCode" @bind:event="oninput"
+                       disabled="@(_editing is not null)" />
+                @if (_editing is not null)
+                {
+                    <div class="form-text">A code cannot be changed once issued — people are holding it.</div>
+                }
+            </div>
+        }
+        <div class="mb-3">
+            <label class="form-label" for="cpn-desc">Notes (never shown to groups)</label>
+            <textarea id="cpn-desc" class="form-control" rows="2" @bind="_form.Description"></textarea>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="cpn-disc-kind">Discount</label>
+                <select id="cpn-disc-kind" class="form-select" @bind="_form.DiscountKind">
+                    <option value="percent">Percent off</option>
+                    <option value="amount">Fixed amount off</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="cpn-disc-val">&nbsp;</label>
+                @if (_form.DiscountKind == "percent")
+                {
+                    <div class="input-group" style="max-width:140px">
+                        <input id="cpn-disc-val" type="number" class="form-control" min="1" max="100" @bind="_form.PercentOff" />
+                        <span class="input-group-text">%</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="input-group" style="max-width:140px">
+                        <span class="input-group-text">$</span>
+                        <input id="cpn-disc-val" type="number" class="form-control" min="0.01" step="0.01" @bind="_form.AmountOff" />
+                    </div>
+                }
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="cpn-duration">For how long</label>
+                <select id="cpn-duration" class="form-select" @bind="_form.Duration">
+                    <option value="@CouponDuration.Once">One period</option>
+                    <option value="@CouponDuration.Repeating">A set number of periods</option>
+                    <option value="@CouponDuration.Forever">Every period, forever</option>
+                </select>
+            </div>
+            @if (_form.Duration == CouponDuration.Repeating)
+            {
+                <div class="col-auto">
+                    <label class="form-label" for="cpn-periods">Periods</label>
+                    <input id="cpn-periods" type="number" class="form-control" min="1" style="max-width:100px"
+                           @bind="_form.DurationPeriods" />
+                </div>
+            }
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="cpn-from">Valid from</label>
+                <input id="cpn-from" type="date" class="form-control" @bind="_form.ValidFrom" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="cpn-until">Redeem by</label>
+                <input id="cpn-until" type="date" class="form-control" @bind="_form.RedeemBy" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="cpn-budget">Total redemptions</label>
+                <input id="cpn-budget" type="number" class="form-control" min="1" style="max-width:120px"
+                       placeholder="unlimited" @bind="_form.MaxRedemptions" />
+                <div class="form-text">The campaign budget, across every code</div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="cpn-occasion">Occasion</label>
+                <select id="cpn-occasion" class="form-select" @bind="_form.AppliesTo">
+                    <option value="@CouponApplicability.Any">Any subscription or renewal</option>
+                    <option value="@CouponApplicability.NewSubscriptionsOnly">First subscription only</option>
+                    <option value="@CouponApplicability.RenewalsOnly">Renewals only</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="cpn-cadence">Billing cadence</label>
+                <select id="cpn-cadence" class="form-select" @bind="_form.AppliesToInterval">
+                    <option value="">Any cadence</option>
+                    <option value="@BillingInterval.Monthly">Monthly only</option>
+                    <option value="@BillingInterval.Quarterly">Quarterly only</option>
+                    <option value="@BillingInterval.HalfYearly">6-monthly only</option>
+                    <option value="@BillingInterval.Yearly">Yearly only</option>
+                </select>
+                <div class="form-text">"20% off yearly" means restricting this — a percent scales with the period</div>
+            </div>
+            <div class="col-auto d-flex align-items-end pb-2">
+                <label>
+                    <input type="checkbox" class="form-check-input" @bind="_form.IsActive" />
+                    <span class="ms-1">Active</span>
+                </label>
+            </div>
+        </div>
+
+        @if (_saveError is not null)
+        {
+            <div class="alert alert-danger py-2">@_saveError</div>
+        }
+        <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-secondary" @onclick="() => _showDialog = false">Cancel</button>
+            <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private LoadResult<CouponAdminRecord> _couponsResult;
+
+    private CouponAdminRecord? _selected;
+    private bool _codesLoading;
+    private LoadResult<CouponCodeAdminRecord> _codesResult;
+    private LoadResult<CouponRedemptionAdminRecord> _redemptionsResult;
+
+    private int _generateCount = 50;
+    private string? _generatePrefix;
+    private int _generateUses = 1;
+    private bool _generating;
+    private string? _generateError;
+
+    private bool _showDialog;
+    private bool _saving;
+    private string? _saveError;
+    private CouponAdminRecord? _editing;
+    private CouponForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _couponsResult = await AdminClient.GetCouponsAsync();
+        _loading = false;
+
+        if (_selected is not null)
+            _selected = _couponsResult.Items.FirstOrDefault(c => c.Id == _selected.Id);
+    }
+
+    private async Task SelectAsync(CouponAdminRecord coupon)
+    {
+        _selected = coupon;
+        _codesLoading = true;
+        _codesResult = await AdminClient.GetCouponCodesAsync(coupon.Id);
+        _redemptionsResult = await AdminClient.GetCouponRedemptionsAsync(coupon.Id);
+        _codesLoading = false;
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_selected is null) return;
+        _generating = true;
+        _generateError = null;
+
+        var (result, error) = await AdminClient.GenerateCouponCodesAsync(_selected.Id,
+            new GenerateCouponCodesRequest(_generateCount, _generatePrefix, _generateUses, null));
+
+        _generating = false;
+
+        if (result is null)
+        {
+            _generateError = error ?? "The codes could not be generated.";
+            return;
+        }
+
+        await SelectAsync(_selected);
+        await LoadAsync();
+    }
+
+    private async Task ToggleCodeAsync(CouponCodeAdminRecord code)
+    {
+        if (_selected is null) return;
+
+        var (result, error) = await AdminClient.UpdateCouponCodeAsync(_selected.Id, code.Id,
+            new SaveCouponCodeRequest(code.MaxRedemptions, code.IssuedTo, code.RestrictedToAppUserId, !code.IsActive));
+
+        if (result is null)
+        {
+            _generateError = error ?? "The code could not be changed.";
+            return;
+        }
+
+        await SelectAsync(_selected);
+    }
+
+    private async Task CopyReferralLinkAsync(CouponCodeAdminRecord code)
+    {
+        // Absolute against wherever the site is running — the admin copies from the same origin
+        // the buyer will land on.
+        var link = NavManager.ToAbsoluteUri($"/pricing?code={Uri.EscapeDataString(code.Code)}").ToString();
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", link);
+    }
+
+    private async Task CopyCodesAsync()
+    {
+        // For handing a batch to a printer or a mail merge. Clipboard is the whole feature —
+        // there is deliberately no file download, which the sandboxed viewer blocks anyway.
+        var text = string.Join('\n', _codesResult.Items.Where(c => c.IsActive).Select(c => c.Code));
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+
+    private void OpenCreate()
+    {
+        _editing = null;
+        _form = new CouponForm();
+        _saveError = null;
+        _showDialog = true;
+    }
+
+    private void OpenEdit(CouponAdminRecord coupon)
+    {
+        _editing = coupon;
+        _form = CouponForm.From(coupon);
+        _saveError = null;
+        _showDialog = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saveError = null;
+
+        var request = _form.ToRequest();
+        var (result, error) = _editing is null
+            ? await AdminClient.CreateCouponAsync(request)
+            : await AdminClient.UpdateCouponAsync(_editing.Id, request);
+
+        _saving = false;
+
+        if (result is null)
+        {
+            _saveError = error ?? "The campaign could not be saved.";
+            return;
+        }
+
+        _showDialog = false;
+        await LoadAsync();
+    }
+
+    private static string DiscountLabel(CouponAdminRecord c)
+    {
+        var discount = c.PercentOff is { } pct ? $"{pct}% off" : $"{c.AmountOff:C2} off";
+        var duration = c.Duration switch
+        {
+            CouponDuration.Once      => "one period",
+            CouponDuration.Repeating => $"{c.DurationPeriods} periods",
+            CouponDuration.Forever   => "forever",
+            _                        => "",
+        };
+        return $"{discount}, {duration}";
+    }
+
+    private static string AppliesLabel(CouponAdminRecord c)
+    {
+        var occasion = c.AppliesTo switch
+        {
+            CouponApplicability.NewSubscriptionsOnly => "new groups",
+            CouponApplicability.RenewalsOnly         => "renewals",
+            _                                        => "anyone",
+        };
+        var cadence = c.AppliesToInterval switch
+        {
+            BillingInterval.Monthly    => ", monthly",
+            BillingInterval.Quarterly  => ", quarterly",
+            BillingInterval.HalfYearly => ", 6-monthly",
+            BillingInterval.Yearly     => ", yearly",
+            _                          => "",
+        };
+        return occasion + cadence;
+    }
+
+    private static string WindowLabel(CouponAdminRecord c) => (c.ValidFromUtc, c.RedeemByUtc) switch
+    {
+        (null, null)           => "Always",
+        ({ } from, null)       => $"From {from:MM/dd/yyyy}",
+        (null, { } by)         => $"Until {by:MM/dd/yyyy}",
+        ({ } from, { } by)     => $"{from:MM/dd/yyyy} – {by:MM/dd/yyyy}",
+    };
+
+    private sealed class CouponForm
+    {
+        public string Name = string.Empty;
+        public string? Description;
+        public CouponKind Kind = CouponKind.Shared;
+        public string? SharedCode;
+        public string DiscountKind = "percent";
+        public int? PercentOff = 10;
+        public decimal? AmountOff;
+        public CouponDuration Duration = CouponDuration.Once;
+        public int? DurationPeriods;
+        public int? MaxRedemptions;
+        public DateTime? ValidFrom;
+        public DateTime? RedeemBy;
+        public CouponApplicability AppliesTo = CouponApplicability.Any;
+        public BillingInterval? AppliesToInterval;
+        public bool IsActive = true;
+
+        public static CouponForm From(CouponAdminRecord c) => new()
+        {
+            Name              = c.Name,
+            Description       = c.Description,
+            Kind              = c.Kind,
+            SharedCode        = c.SharedCode,
+            DiscountKind      = c.PercentOff is not null ? "percent" : "amount",
+            PercentOff        = c.PercentOff,
+            AmountOff         = c.AmountOff,
+            Duration          = c.Duration,
+            DurationPeriods   = c.DurationPeriods,
+            MaxRedemptions    = c.MaxRedemptions,
+            ValidFrom         = c.ValidFromUtc,
+            RedeemBy          = c.RedeemByUtc,
+            AppliesTo         = c.AppliesTo,
+            AppliesToInterval = c.AppliesToInterval,
+            IsActive          = c.IsActive,
+        };
+
+        public SaveCouponRequest ToRequest() => new(
+            Name, Description, Kind,
+            DiscountKind == "percent" ? PercentOff : null,
+            DiscountKind == "amount" ? AmountOff : null,
+            Duration, DurationPeriods, MaxRedemptions,
+            ValidFrom?.Date,
+            // The whole redeem-by day counts: a code "valid until the 15th" that dies at midnight
+            // the night before is a support ticket. The stored instant is the day's last moment.
+            RedeemBy?.Date.AddDays(1).AddTicks(-1),
+            AppliesToInterval, AppliesTo, IsActive, SharedCode);
+    }
+}

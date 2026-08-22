@@ -19,6 +19,17 @@ namespace Ben.Data.Source.Entities
 
         public CaseStatus Status { get; set; } = CaseStatus.Proposed;
 
+        /// <summary>
+        /// What the case was before a subscription lapse paused it. Null unless paused by a lapse.
+        /// </summary>
+        /// <remarks>
+        /// The round trip is the point: a group that renews gets its cases back exactly as they
+        /// were — an Active investigation resumes Active, a Proposed one resumes Proposed.
+        /// Guessing "Accepted" for everything would quietly rewrite the org's own record of where
+        /// each case stood. Cleared on restore. Item 84.
+        /// </remarks>
+        public CaseStatus? StatusBeforePause { get; set; }
+
         /// <summary>Brief title identifying the case (e.g. "Smith, Nashville TN").</summary>
         public string Title { get; set; } = null!;
 

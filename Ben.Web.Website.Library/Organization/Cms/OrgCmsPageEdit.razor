@@ -701,8 +701,8 @@
             _metaForm.SortOrder));
 
         _isBusy = false;
-        if (result is not null) { _successMessage = "Page settings saved."; _page = result; }
-        else _errorMessage = "Failed to save page settings.";
+        if (result.Result is not null) { _successMessage = "Page settings saved."; _page = result.Result; }
+        else _errorMessage = result.Error ?? "Failed to save page settings.";
     }
 
     // ── Preview ───────────────────────────────────────────────────────────────

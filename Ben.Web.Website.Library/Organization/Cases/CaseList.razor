@@ -30,6 +30,52 @@
         <div class="alert alert-danger">@_error</div>
     }
 
+    @if (_incoming.Count > 0)
+    {
+        @* Cases other groups — or their clients — have asked this one to take (item 84). Above
+           the list because it needs an answer, and until recently there was NO surface at all
+           for the receiving side of a transfer: the request sat in a table only the sender
+           could see. *@
+        <div class="card border-primary mb-4">
+            <div class="card-header"><strong>Incoming cases</strong> — waiting on your answer</div>
+            <div class="card-body">
+                @foreach (var t in _incoming)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom">
+                        <div class="me-auto">
+                            <strong>@t.CaseTitle</strong>
+                            <span class="text-secondary">— @t.City, @t.State</span>
+                            <div class="small text-secondary">
+                                @(t.ProposedByClient
+                                    ? $"The client is moving this case from {t.FromOrganizationName}."
+                                    : $"Proposed by {t.FromOrganizationName}.")
+                                @if (t.ProposedByClient)
+                                {
+                                    <span>
+                                        You'd see: @(t.ShareHistory ? "their history" : "no prior history"),
+                                        @(t.ShareInvestigations ? "past investigations" : "no past investigations").
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(t.Reason))
+                            {
+                                <div class="small">"@t.Reason"</div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-success btn-sm" disabled="@_incomingBusy"
+                                @onclick="() => AnswerIncomingAsync(t, accept: true)">Accept</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_incomingBusy"
+                                @onclick="() => AnswerIncomingAsync(t, accept: false)">Decline</button>
+                    </div>
+                }
+                @if (_incomingError is not null)
+                {
+                    <div class="alert alert-danger py-2 mt-2 mb-0">@_incomingError</div>
+                }
+            </div>
+        </div>
+    }
+
     @if (_cases is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading cases…" />
@@ -118,7 +164,7 @@
 
     private static readonly CaseStatus?[] _filterOptions =
         [null, CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active,
-         CaseStatus.Summarized, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
+         CaseStatus.Summarized, CaseStatus.Paused, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
 
     private IEnumerable<CaseRecord> FilteredCases =>
         _activeFilter is null ? _cases! : _cases!.Where(c => c.Status == _activeFilter);
@@ -130,6 +176,28 @@
         await LoadAsync();
     }
 
+    private List<IncomingTransferRecord> _incoming = [];
+    private bool _incomingBusy;
+    private string? _incomingError;
+
+    private async Task AnswerIncomingAsync(IncomingTransferRecord t, bool accept)
+    {
+        _incomingBusy = true;
+        _incomingError = null;
+
+        // Declining without a word helps nobody — the platform relays the reason to whoever
+        // asked, so a bare decline gets a serviceable default sentence.
+        var result = await AdminClient.RespondCaseTransferAsync(
+            OrgId, t.CaseId, t.LogId, accept,
+            accept ? null : "The group is unable to take this case on at the moment.");
+
+        _incomingBusy = false;
+
+        if (result is null) { _incomingError = "That couldn't be recorded — it may already have been answered."; return; }
+
+        await LoadAsync();
+    }
+
     private async Task LoadAsync()
     {
         _error = null;
@@ -137,6 +205,7 @@
         {
             _casesResult = await AdminClient.GetOrgCasesAsync(OrgId);
             _cases       = _casesResult.Items.ToList();
+            _incoming    = [.. (await AdminClient.GetIncomingTransfersAsync(OrgId)).Items];
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
             // Deliberately quiet: this is the count on a "pending requests" badge. If it can't
