@@ -117,7 +117,8 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         if (request.Status != SubscriptionStatus.Free && request.SubscriptionTierId is null)
             return BadRequest("A paid subscription needs a band to be priced on.");
 
-        var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
+        var tiers = await db.SubscriptionTiers.AsNoTracking()
+            .Include(t => t.Prices).Include(t => t.Limits).ToListAsync(ct);
         var tier  = tiers.FirstOrDefault(t => t.Id == request.SubscriptionTierId);
 
         if (request.SubscriptionTierId is not null && tier is null)
@@ -162,6 +163,21 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
 
         if (isNew) db.OrganizationSubscriptions.Add(sub);
         else { sub.DateUpdated = now; sub.UpdatedByAppUserId = userId; }
+
+        // A paid period with dates is a contract, and the contract is a snapshot — the group
+        // keeps these terms for the period even if the tier is edited tomorrow. One snapshot per
+        // period: setting the same period twice replaces its snapshot rather than stacking two.
+        if (request.Status == SubscriptionStatus.Active && tier is not null
+            && request.CurrentPeriodStart is { } ps && request.CurrentPeriodEnd is { } pe)
+        {
+            var existing = await db.SubscriptionContractTerms
+                .Where(t => t.OrganizationSubscriptionId == sub.Id && t.PeriodStartUtc == ps)
+                .ToListAsync(ct);
+            db.SubscriptionContractTerms.RemoveRange(existing);
+
+            db.SubscriptionContractTerms.Add(EffectiveTermsResolver.Snapshot(
+                sub, tier, request.Interval, sub.PriceAtPeriodStart, ps, pe, userId));
+        }
 
         await db.SaveChangesAsync(ct);
 

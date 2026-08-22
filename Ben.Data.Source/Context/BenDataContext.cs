@@ -128,6 +128,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTier> SubscriptionTiers { get; set; }
         public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
+        public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -2328,6 +2329,26 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // A contract snapshot per period. The subscription cascades — the contract history of a
+            // deleted group goes with the group — but the tier restricts, because a snapshot must
+            // stay resolvable to the row it was copied from.
+            modelBuilder.Entity<SubscriptionContractTerms>()
+                .HasIndex(e => new { e.OrganizationSubscriptionId, e.PeriodStartUtc });
+            modelBuilder.Entity<SubscriptionContractTerms>().Property(e => e.TierName).HasMaxLength(100);
+            modelBuilder.Entity<SubscriptionContractTerms>().Property(e => e.Price).HasPrecision(18, 2);
+            modelBuilder.Entity<SubscriptionContractTerms>()
+                .HasOne(e => e.OrganizationSubscription).WithMany()
+                .HasForeignKey(e => e.OrganizationSubscriptionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubscriptionContractTerms>()
+                .HasOne(e => e.SubscriptionTier).WithMany()
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SubscriptionContractTerms>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionContractTerms>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
