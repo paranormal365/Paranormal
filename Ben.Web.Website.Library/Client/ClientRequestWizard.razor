@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Submit an Investigation Request</PageTitle>
 
@@ -185,6 +187,12 @@
                 {
                     <BenLoaderOverlay Visible="true" Text="Finding organizations near you…" />
                 }
+                else if (_orgsResult.Failed)
+                {
+                    @* The one screen where "no groups near you" ends the whole errand: somebody
+                       reporting activity concludes nobody covers their area and stops. *@
+                    <BenListState TItem="OrgSearchResult" Result="@_orgsResult" OnRetry="@Step3Next" />
+                }
                 else if (_orgs.Count == 0)
                 {
                     @if (_lat is null || _lon is null)
@@ -314,6 +322,7 @@
 
     // Step 4 — org selection
     private List<OrgSearchResult>? _orgs;
+    private LoadResult<OrgSearchResult> _orgsResult;
     private readonly HashSet<Guid> _selectedOrgIds = new();
 
     // ── Options ───────────────────────────────────────────────────────────────
@@ -440,8 +449,11 @@
             await SaveDraftSilent();
             // Load nearby orgs using the geocoded coordinates
             if (_lat.HasValue && _lon.HasValue)
-                _orgs = ((await AdminClient.SearchOrganizationsAsync(
-                    (double)_lat.Value, (double)_lon.Value)).Items).ToList();
+            {
+                _orgsResult = await AdminClient.SearchOrganizationsAsync(
+                    (double)_lat.Value, (double)_lon.Value);
+                _orgs = _orgsResult.Items.ToList();
+            }
             else
                 _orgs = [];
             _step = 4;

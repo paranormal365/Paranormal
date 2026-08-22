@@ -158,18 +158,13 @@ public sealed class LoadResultRenderedGuardTests
         "AdminFileTypes.razor",
         "AudioFilePreview.razor",
         "CaseVideoEditorPage.razor",
-        "ClientRequestWizard.razor",
         "CmsSectionEditor.razor",
         "FeedThreadPage.razor",
         "FileCommentThread.razor",
-        "InvestigationRoster.razor",
         "MediaLibraryGrid.razor",
         "MyVideosPage.razor",
         "NewInvestigationWindow.razor",
-        "OrgAddressManager.razor",
         "OrgPublicationPosts.razor",
-        "OrgRoleEditor.razor",
-        "OrganizationMembershipQuestions.razor",
         "OrganizationSecurity.razor",
         "OrganizationView.razor",
         "PlaceView.razor",
@@ -277,7 +272,7 @@ public sealed class LoadResultRenderedGuardTests
     [Fact]
     public void The_render_debt_never_grows()
     {
-        const int Ceiling = 22;
+        const int Ceiling = 17;
 
         Assert.True(
             AwaitingRenderPass.Length <= Ceiling,

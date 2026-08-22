@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading)
 {
@@ -171,6 +173,11 @@ else if (_role is not null)
                     </button>
                 </div>
             }
+            else if (_membersResult.Failed)
+            {
+                @* "Nobody holds this role" is what an administrator grants access on. *@
+                <BenListState TItem="OrganizationRoleMembershipRecord" Result="@_membersResult" />
+            }
             else if (_members.Count == 0)
             {
                 <div class="text-secondary small">All org members are already assigned to this role.</div>
@@ -247,6 +254,7 @@ else if (_role is not null)
     private Dictionary<OrganizationSecurityTable, OrganizationSecurityAction> _permissionMap = new();
 
     private bool    _loading        = true;
+    private LoadResult<OrganizationRoleMembershipRecord> _membersResult;
     private bool    _isSaving;
     private bool    _isSavingPerms;
     private bool    _isSavingMember;
@@ -282,7 +290,8 @@ else if (_role is not null)
             await Task.WhenAll(roleTask, permsTask, membersTask, orgMembersTask);
 
             _role         = roleTask.Result;
-            _members      = membersTask.Result.Items;
+            _membersResult = membersTask.Result;
+            _members       = _membersResult.Items;
             _allOrgMembers = orgMembersTask.Result.Items;
 
             if (_role is not null)
@@ -386,7 +395,8 @@ else if (_role is not null)
 
         if (result is not null)
         {
-            _members = (await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId)).Items;
+            _membersResult = await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            _members       = _membersResult.Items;
             RefreshAvailableMembers();
         }
         else
