@@ -3887,7 +3887,7 @@ Groups are to be told all of this **when they join**, not when it happens.
 
 ---
 
-## 85. Monetisation: subscriptions, and paid rental (not started, direction set 2026-08-17)
+## 85. Monetisation: subscriptions, and paid rental (BUILT 2026-08-22 — header was stale like item 55's; the whole arc shipped: domain, admin screens, pricing page, contracts, notices, enforcement, lapse wind-down. Paid RENTAL remains unbuilt and undecided.)
 
 Deferred by Ben until the site's functionality and help documents are complete. Recorded so the
 thinking is not repeated. Payment provider undecided — **Square or PayPal** are the candidates.
@@ -5365,7 +5365,17 @@ the good outcome. All now `GetByRole(AriaRole.Tab)`.
 
 ---
 
-## 109. The test suite only ever signs in as privileged accounts (raised 2026-08-20)
+## 109. The test suite only ever signs in as privileged accounts (CLOSED 2026-08-22)
+
+**Done:** `MemberSurfaceWalkTests` walks all eight member-facing org-hub tabs as James and asserts
+content-not-refusal on each, plus the mirror check that the six admin-only tabs are ABSENT for
+him. It caught a real bug on its first run: the Members tab rendered the admin-gated
+membership-requests widget for everyone, so an ordinary member saw "Couldn't load this — 403" on
+their own group's roster. Now gated on CanEdit. The API-level probe of 13 member endpoints found
+the three 403s that exist are all deliberate (billing, CMS editing, addresses-with-access-controls).
+The four seats were already in `BenTestBase` from the earlier phase; this closes the walking half.
+
+### Original text
 
 Phase 5 found three separate faults in group messaging that were **completely invisible to an owner
 account** and total for everyone else: the organisation page refusing ordinary members outright, the
@@ -7302,6 +7312,21 @@ verified to discriminate.
 Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
 list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first
 item is added.
+
+---
+
+## 145. Price Bands killed its circuit on production (CLOSED 2026-08-22, same day it was reported)
+
+Ben, live: loading /admin/subscription-tiers terminated the Blazor circuit. The browser log showed
+Telerik frames, which suggested a component bug — but those were the aftermath of the dead
+connection. The cause: the tiling-validation endpoint returns `Ok(null)` when the price list is
+HEALTHY, ASP.NET renders that as **204 with an empty body**, and `WebApiClient.GetAsync`'s
+`ReadFromJsonAsync` throws on an empty stream — unhandled inside `OnInitializedAsync`, circuit
+dead. It fired precisely in the common case, and never during development because the page was
+verified by curl and never actually opened. Fixed in the client for the whole class (204 or
+zero-length success reads as null, `GetAsync` and `GetAnonymousAsync` both), 3 regression tests
+verified to fail without the guard, and the three Billing screens added to the Playwright admin
+walk — the layer that would have caught this before it shipped.
 
 ---
 

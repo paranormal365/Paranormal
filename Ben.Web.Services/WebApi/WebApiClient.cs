@@ -36,6 +36,16 @@ public sealed class WebApiClient : IWebApiClient
         using var req = Auth(HttpMethod.Get, relativeUrl);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
+
+        // Ok(null) from a controller becomes 204 WITH AN EMPTY BODY (HttpNoContentOutputFormatter),
+        // and ReadFromJsonAsync throws on an empty stream. That exception surfaced inside a page's
+        // OnInitializedAsync and killed the circuit — the Price Bands screen died on production
+        // precisely when the price list was HEALTHY, because healthy is when the endpoint answers
+        // "nothing to report". Null is the honest reading of an empty success either way.
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+            || response.Content.Headers.ContentLength == 0)
+            return default;
+
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
@@ -115,6 +125,12 @@ public sealed class WebApiClient : IWebApiClient
         using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
+
+        // Same empty-success guard as GetAsync — see the comment there.
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+            || response.Content.Headers.ContentLength == 0)
+            return default;
+
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
