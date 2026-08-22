@@ -1,9 +1,10 @@
 @namespace Ben.Web.Website.Library.Kit
 @using Ben.Web.Services.WebApi
+@inject NavigationManager Nav
 @typeparam TItem
 
 @*
-    The three states a list actually has: loading, could not load, and nothing here.
+    The four states a list actually has: loading, signed out, could not load, and nothing here.
 
     Today most surfaces have two — a spinner and "No records available" — so a refusal renders as
     an empty group. That is not a wording problem: the page states something untrue, and does it
@@ -22,6 +23,25 @@
 @if (Loading)
 {
     <BenLoaderOverlay Visible="true" Text="@(LoadingText ?? "Loading…")" />
+}
+else if (Result.SessionExpired)
+{
+    @* 401 is the one failure that is not about this list at all. "Couldn't load this — try again"
+       would be two untruths: nothing is wrong with the list, and trying again fails identically.
+       Item 133, after Ben was shown "the server answered 401 (Unauthorized)" on Site Settings.
+
+       The link carries the current page so signing in returns here rather than to a dashboard,
+       and it is an anchor, which works whether or not the circuit that just died is replaced. *@
+    <div class="card border-warning">
+        <div class="card-body text-center py-4">
+            <h6 class="mb-2">You've been signed out</h6>
+            <p class="text-secondary small mb-3">
+                Your session ended, so this couldn't be loaded. Signing in again will bring you
+                straight back to this page.
+            </p>
+            <a href="@SignInUrl" class="btn btn-primary btn-sm">Sign in again</a>
+        </div>
+    </div>
 }
 else if (Result.Failed)
 {
@@ -88,5 +108,23 @@ else
     [Parameter] public string? LoadingText { get; set; }
 
     /// <summary>Wire this and the failure state offers a Try again button.</summary>
+    /// <remarks>
+    /// Not offered for <see cref="LoadResult{T}.SessionExpired"/>: a retry on a dead session is a
+    /// button that cannot work.
+    /// </remarks>
     [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>Sign-in, carrying this page as the place to return to.</summary>
+    /// <remarks>
+    /// Relative, because <c>Login.razor</c> refuses a ReturnUrl that does not start with a single
+    /// slash — its open-redirect guard, which an absolute URI would trip.
+    /// </remarks>
+    private string SignInUrl
+    {
+        get
+        {
+            var here = Nav.ToBaseRelativePath(Nav.Uri);
+            return $"/login?returnUrl={Uri.EscapeDataString("/" + here)}";
+        }
+    }
 }

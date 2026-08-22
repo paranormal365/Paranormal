@@ -216,8 +216,10 @@
             var applied = await AdminClient.GetClientRequestOrgsAsync(request.Id);
             if (applied.Failed)
             {
-                _pickerError = applied.Reason
-                    ?? "Couldn't check which organizations you've already applied to. Please try again.";
+                _pickerError = applied.SessionExpired
+                    ? "You've been signed out. Sign in again to choose an organization."
+                    : applied.Reason
+                      ?? "Couldn't check which organizations you've already applied to. Please try again.";
                 return;
             }
             var alreadyApplied = applied.Items.Select(a => a.OrganizationId).ToHashSet();
