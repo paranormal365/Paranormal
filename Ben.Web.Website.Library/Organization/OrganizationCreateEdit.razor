@@ -11,9 +11,9 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+            <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")"><BenIcon Name="arrow-left" Class="me-1" />
                 Back to Organizations
-            </button>
+            </a>
             <h3 class="d-inline-block ms-3 mb-0">@(IsEditMode ? "Edit Organization" : "New Organization")</h3>
         </div>
     </div>
@@ -61,9 +61,9 @@
                 <button type="button" class="btn btn-primary" @onclick="Save" disabled="@(!(!_isSaving))"><BenIcon Name="save" Class="me-1" />
                     @(_isSaving ? "Saving…" : "Save")
                 </button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))">
+                <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")">
                     Cancel
-                </button>
+                </a>
             </div>
 
         </div>

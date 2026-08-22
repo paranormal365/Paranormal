@@ -49,13 +49,13 @@
                     <div class="row g-2 mb-3">
                         <div class="col-sm-6">
                             <label class="form-label" for="signup-first">First name</label>
-                            <InputText id="signup-first" class="form-control" @bind-Value="_form.FirstName"
+                            <InputText id="signup-first" class="form-control" @bind-Value="_form.FirstName" @bind-Value:after="TidyFirstName"
                                        autocomplete="given-name" placeholder="Sarah" />
                             <ValidationMessage For="@(() => _form.FirstName)" class="text-danger small" />
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label" for="signup-last">Last name</label>
-                            <InputText id="signup-last" class="form-control" @bind-Value="_form.LastName"
+                            <InputText id="signup-last" class="form-control" @bind-Value="_form.LastName" @bind-Value:after="TidyLastName"
                                        autocomplete="family-name" placeholder="Mitchell" />
                             <ValidationMessage For="@(() => _form.LastName)" class="text-danger small" />
                         </div>
@@ -72,7 +72,7 @@
                     <div class="mb-3">
                         <label class="form-label" for="signup-handle">Your @@name</label>
                         <div class="input-group">
-                            <span class="input-group-text">@@</span>
+                            <span class="input-group-text fw-semibold ben-handle-prefix @HandleSymbolClass">@@</span>
                             <input id="signup-handle" class="form-control @HandleFieldClass"
                                    value="@_form.Handle"
                                    @oninput="OnHandleInput"
@@ -88,6 +88,7 @@
                         {
                             <div class="small @(_handleAvailable ? "text-success" : "text-danger")">@_handleMessage</div>
                         }
+                        <ValidationMessage For="@(() => _form.Handle)" class="text-danger small" />
                     </div>
 
                     <div class="mb-3">
@@ -111,7 +112,12 @@
                         <div class="alert alert-danger">@_error</div>
                     }
 
-                    <button type="submit" class="btn btn-primary w-100" disabled="@(_busy || _handleAvailable == false)">
+                    @* Disabled only while the request is in flight. It used to also require _handleAvailable,
+                       which starts false — so before the availability check had ever run the only button on
+                       the page was dead, and being disabled it could not say why. Reported as "the sign up
+                       button does nothing". The handle is now checked on submit, where there is somewhere
+                       to put the answer. *@
+                    <button type="submit" class="btn btn-primary w-100" disabled="@_busy">
                         @(_busy ? "Creating your account…" : "Create account")
                     </button>
                 </EditForm>
@@ -131,6 +137,9 @@
     private bool _handleAvailable;
     private string? _handleMessage;
 
+    /// <summary>True from the first keystroke until the availability answer lands.</summary>
+    private bool _handleChecking;
+
     /// <summary>
     /// Debounces the availability check.
     /// </summary>
@@ -149,6 +158,75 @@
         _ => "is-invalid",
     };
 
+    /// <summary>
+    /// The @@ prefix is the progress indicator: grey while there is nothing to say, blue while the
+    /// answer is in flight, then green or red once it lands.
+    /// </summary>
+    /// <remarks>
+    /// The check is debounced by 400ms and then makes a round trip, which is long enough that
+    /// without this the field simply sits there. The colours live in app.css rather than on
+    /// Bootstrap utilities: the template forces the prefix to white with !important while the
+    /// group has focus, which is precisely when somebody is typing a name, and a single utility
+    /// class loses that fight on specificity.
+    /// </remarks>
+    private string HandleSymbolClass => _handleMessage switch
+    {
+        null when _handleChecking => "is-checking",
+        null                      => string.Empty,
+        _ when _handleAvailable   => "is-free",
+        _                         => "is-taken",
+    };
+
+    private void TidyFirstName() => _form.FirstName = CapitaliseName(_form.FirstName);
+    private void TidyLastName()  => _form.LastName  = CapitaliseName(_form.LastName);
+
+    /// <summary>
+    /// Gives each part of a name its initial capital when the field is left.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only words typed in all lower case are touched. Anyone who wrote "McTest",
+    /// "van der Berg" or "d'Eath" meant it, and a blanket title-case would quietly correct their
+    /// own name to something wrong — the one field where being clever is least welcome. So
+    /// "mctest" becomes "Mctest" and "McTest" is left exactly as written.</para>
+    ///
+    /// <para>Display name is deliberately not touched: it is whatever the person wants to be
+    /// called, including lower case.</para>
+    /// </remarks>
+    private static string CapitaliseName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value ?? string.Empty;
+
+        var chars = value.ToCharArray();
+        var atWordStart = true;
+
+        for (var i = 0; i < chars.Length; i++)
+        {
+            var c = chars[i];
+
+            if (char.IsWhiteSpace(c) || c is '-' or '\'' or '\u2019')
+            {
+                atWordStart = true;
+                continue;
+            }
+
+            if (atWordStart)
+            {
+                // Leave a word alone unless it is entirely lower case — see the remark above.
+                var end = i;
+                while (end < chars.Length && !char.IsWhiteSpace(chars[end])
+                       && chars[end] is not ('-' or '\'' or '\u2019')) end++;
+
+                var word = value[i..end];
+                if (word.All(ch => !char.IsLetter(ch) || char.IsLower(ch)))
+                    chars[i] = char.ToUpperInvariant(c);
+
+                atWordStart = false;
+            }
+        }
+
+        return new string(chars);
+    }
+
     private async Task OnHandleInput(ChangeEventArgs e)
     {
         // Normalised as they type, so what is shown is what will be stored — somebody typing
@@ -161,22 +239,39 @@
         _handleCheck = new CancellationTokenSource();
         var ct = _handleCheck.Token;
 
-        if (_form.Handle.Length == 0) { StateHasChanged(); return; }
+        if (_form.Handle.Length == 0) { _handleChecking = false; StateHasChanged(); return; }
 
         // The rules that need no server are answered immediately; only "is it taken" waits.
         if (!UserHandle.IsValid(_form.Handle, out var localError))
         {
+            _handleChecking  = false;
             _handleAvailable = false;
             _handleMessage = localError;
             StateHasChanged();
             return;
         }
 
+        _handleChecking = true;
+        StateHasChanged();
+
         try
         {
             await Task.Delay(400, ct);
             var result = await AccountClient.CheckHandleAsync(_form.Handle, ct);
-            if (ct.IsCancellationRequested || result is null) return;
+            if (ct.IsCancellationRequested) return;
+
+            _handleChecking = false;
+
+            if (result is null)
+            {
+                // The check itself failed to reach the server. Say nothing rather than claiming
+                // the name is taken — the prefix goes back to grey and submit is not blocked,
+                // because registration validates the name again and is the real authority.
+                _handleAvailable = false;
+                _handleMessage   = null;
+                StateHasChanged();
+                return;
+            }
 
             _handleAvailable = result.Available;
             _handleMessage = result.Available ? $"@{result.Handle} is free." : result.Reason;
@@ -184,12 +279,31 @@
         }
         catch (TaskCanceledException)
         {
-            // Superseded by a later keystroke.
+            // Superseded by a later keystroke, which owns _handleChecking now — leave it set so
+            // the prefix stays blue across the handover instead of flickering back to grey.
         }
     }
 
     private async Task SubmitAsync()
     {
+        // A check may still be in flight — somebody who types a name and clicks straight through
+        // beats the 400ms debounce. Cancel it so a late reply cannot overwrite what we say here.
+        _handleCheck?.Cancel();
+
+        if (!UserHandle.IsValid(_form.Handle, out var handleError))
+        {
+            _handleAvailable = false;
+            _handleMessage   = handleError;
+            return;
+        }
+
+        // A name already known to be taken is worth stopping for; anything else goes to the
+        // server, which is the only real authority on whether a name is free and says so below.
+        if (_handleMessage is not null && !_handleAvailable)
+        {
+            return;
+        }
+
         _busy = true;
         _error = null;
 
@@ -242,6 +356,15 @@
         [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 2)]
         public string DisplayName { get; set; } = string.Empty;
 
+        // Every other field on this form is [Required] with a ValidationMessage beside it, so
+        // leaving one blank says so when you click. Handle had neither: it was enforced only by
+        // disabling the submit button, which cannot explain itself. Item 131.
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Choose an @name — it's how people mention you.")]
+        [System.ComponentModel.DataAnnotations.StringLength(
+            Ben.Data.Common.Helpers.UserHandle.MaxLength,
+            MinimumLength = Ben.Data.Common.Helpers.UserHandle.MinLength,
+            ErrorMessage = "Names are between 3 and 30 characters.")]
         public string Handle { get; set; } = string.Empty;
 
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter your email address.")]
