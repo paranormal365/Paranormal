@@ -6,6 +6,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject NotificationState Notifications
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>My Investigations</PageTitle>
 
@@ -20,6 +22,11 @@
     @if (_items is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading your investigations…" />
+    }
+    else if (_itemsResult.Failed)
+    {
+        @* A client told they have no investigations stops expecting one. *@
+        <BenListState TItem="MyInvestigationItem" Result="@_itemsResult" OnRetry="@LoadAsync" />
     }
     else if (_items.Count == 0 && _myEvents.Count == 0)
     {
@@ -186,6 +193,7 @@
 
 @code {
     private List<MyInvestigationItem>? _items;
+    private LoadResult<MyInvestigationItem> _itemsResult;
     private List<AttendedInvestigationItem> _attended = [];
 
     /// <summary>Public events this person said they would attend. Empty is the ordinary case.</summary>
@@ -199,14 +207,19 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
         _myEvents = (await AdminClient.GetMyPublicEventsAsync()).Items;
 
-        try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
+        try { _itemsResult = await AdminClient.GetMyInvestigationsAsync(); _items = _itemsResult.Items.ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }
 
         try
         {
-            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).ToList();
+            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).Items.ToList();
             _attendedPins = _attended
                 .Select(a => new InvestigationMapPin(
                     a.InvestigationId, a.Title, a.Latitude, a.Longitude, IsPast: true))

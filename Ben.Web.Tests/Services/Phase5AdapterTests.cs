@@ -28,27 +28,40 @@ public class Phase5AdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        api.Setup(x => x.GetListAsync<InvestigationRecord>(
                 InvBase(orgId, caseId), It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), CaseId = caseId, Title = "Night Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }]);
+           .ReturnsAsync(LoadResult<InvestigationRecord>.Ok(
+               [new() { Id = Guid.NewGuid(), CaseId = caseId, Title = "Night Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }]));
 
         var result = await Build(api).GetInvestigationsAsync(orgId, caseId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<InvestigationRecord>(
             InvBase(orgId, caseId), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A refused investigation list is not a case with no investigations planned.
+    /// </summary>
+    /// <remarks>
+    /// The assertion was <c>Assert.Empty</c> — a green test defending the bug. On a case page it
+    /// reads as "nobody has scheduled anything", which is the answer a client is most likely to
+    /// act on and the one hardest for them to check.
+    /// </remarks>
     [Fact]
-    public async Task GetInvestigationsAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetInvestigationsAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        api.Setup(x => x.GetListAsync<InvestigationRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<InvestigationRecord>?)null);
+           .ReturnsAsync(LoadResult<InvestigationRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetInvestigationsAsync(Guid.NewGuid(), Guid.NewGuid());
-        Assert.Empty(result);
+
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     // ── CreateInvestigationAsync ──────────────────────────────────────────────

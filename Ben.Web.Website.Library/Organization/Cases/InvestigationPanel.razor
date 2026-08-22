@@ -526,7 +526,7 @@
 
     private async Task LoadAsync()
     {
-        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
         catch { _error = "Failed to load investigations."; }
     }
 
@@ -545,8 +545,15 @@
         _attendeeBusy = true;
         try
         {
+            // Same treatment as the binder above: a refused attendee list leaves the cache
+            // unset rather than caching an empty roster as fact.
             var list = await AdminClient.GetInvestigationAttendeesAsync(OrgId, CaseId, invId);
-            _attendeeCache[invId] = list.ToList();
+            if (list.Failed)
+                _error = list.SessionExpired
+                    ? "You've been signed out. Sign in again to see who attended."
+                    : list.Reason ?? "Failed to load attendees.";
+            else
+                _attendeeCache[invId] = list.Items.ToList();
         }
         catch { _error = "Failed to load attendees."; }
         finally { _attendeeBusy = false; }

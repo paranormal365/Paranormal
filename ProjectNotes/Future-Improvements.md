@@ -5993,6 +5993,7 @@ the OrdinaryMemberSurfaceTests pattern.
 | **Platform** | **2026-08-22** | **14** | **81 → 67** |
 | **Equipment** | **2026-08-22** | **22** | **67 → 45** |
 | **User** | **2026-08-22** | **13** | **45 → 34** |
+| **Investigation** | **2026-08-22** | **8** | **34 → 26** |
 
 **Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
 `BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
@@ -6007,8 +6008,8 @@ It stops the likely half-conversion — silencing the compile error with `.Items
 as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
 there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
 
-**Remaining, in size order:** Investigation 8, Cms 6, Places 5, Media 5, Publications 4,
-Membership 3, Feed 2, Account 1 — **34 left of the original 120.**
+**Remaining, in size order:** Cms 6, Places 5, Media 5, Publications 4, Membership 3, Feed 2,
+Account 1 — **26 left of the original 120.**
 
 **Platform slice** brought the internal messaging surfaces over, which item 120 named from the
 start. Two of the scheduler's call sites were correctness bugs rather than display ones: the

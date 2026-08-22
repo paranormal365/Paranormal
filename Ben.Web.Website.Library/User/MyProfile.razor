@@ -321,7 +321,7 @@
     {
         try
         {
-            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).ToList();
+            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).Items.ToList();
             _attendedPins = _attended
                 .Select(a => new InvestigationMapPin(
                     a.InvestigationId, a.Title, a.Latitude, a.Longitude, IsPast: true))

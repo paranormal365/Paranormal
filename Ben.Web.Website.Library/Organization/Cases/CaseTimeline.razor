@@ -452,7 +452,7 @@
 
         // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
         // chips just don't appear.
-        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
         catch { _investigations = []; }
     }
 
