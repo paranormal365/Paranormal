@@ -41,7 +41,7 @@
                                 <span class="badge @(q.IsRequired ? "bg-danger" : "bg-secondary")">
                                     @(q.IsRequired ? "Required" : "Optional")
                                 </span>
-                                @if (!q.IsActive) { <span class="badge bg-light text-dark border">Inactive</span> }
+                                @if (!q.IsActive) { <span class="badge bg-body-secondary text-body-emphasis border">Inactive</span> }
                                 <small class="text-secondary">#@q.SortOrder</small>
                             </div>
                             <span>@q.QuestionText</span>

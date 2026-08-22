@@ -36,9 +36,9 @@
                     <div class="d-flex align-items-center gap-2">
                         @if (!string.IsNullOrEmpty(cat.IconClass))
                         {
-                            <i class="@cat.IconClass @cat.ColorClass"></i>
+                            <i class="@cat.IconClass @cat.ColorClass.ToThemeSafeColorClass()"></i>
                         }
-                        <strong class="@cat.ColorClass">@cat.Name</strong>
+                        <strong class="@cat.ColorClass.ToThemeSafeColorClass()">@cat.Name</strong>
                         @if (!cat.IsApproved)
                         {
                             <span class="badge bg-warning text-dark ms-2">Pending Approval</span>

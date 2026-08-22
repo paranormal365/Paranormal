@@ -87,6 +87,9 @@
                         generated image: no round trip, and the secret never becomes a file on the
                         server that could be cached or logged.
                     *@
+                    @* bg-white on purpose, and the only one left in the app: a QR code is read by a camera,
+   not by a person, and scanners need the light modules light in either theme. Listed in
+   FixedLightUtilityGuardTests so the ban below stays a ban. *@
                     <div class="d-inline-block bg-white p-2 rounded border">
                         <TelerikQRCode Value="@_setup.AuthenticatorUri" Size="180px"
                                        ErrorCorrection="@QRCodeErrorCorrectionLevel.M" />

@@ -62,7 +62,7 @@
             {
                 var e = row.Entry;
                 var moment = row.Moment;
-                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
+                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-body-tertiary" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div class="flex-grow-1">
@@ -105,7 +105,7 @@
                                     <div class="mt-1 d-flex gap-1 flex-wrap">
                                         @foreach (var typeId in e.ExperienceTypeIds)
                                         {
-                                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                            <span class="badge bg-body-secondary text-body-emphasis border" style="font-size:0.7rem;">
                                                 @(_expTypeNames.GetValueOrDefault(typeId, typeId.ToString()[..8]))
                                             </span>
                                         }
@@ -185,7 +185,7 @@
                 <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
                     @foreach (var cat in _taxonomy)
                     {
-                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass">
+                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass.ToThemeSafeColorClass()">
                             @cat.Category.Name
                         </div>
                         @foreach (var t in cat.Types)

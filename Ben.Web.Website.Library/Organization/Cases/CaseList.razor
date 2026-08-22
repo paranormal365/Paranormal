@@ -50,7 +50,7 @@
                 var s = status;
                 <button type="button" class="btn @((_activeFilter == s ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _activeFilter = s)">
                     @(s is null ? "All" : s.Value.Label())
-                    <span class="badge bg-white text-dark ms-1">
+                    <span class="badge bg-body-secondary text-body-emphasis border ms-1">
                         @(s is null ? _cases.Count : _cases.Count(c => c.Status == s))
                     </span>
                 </button>

@@ -56,10 +56,10 @@
                             }
                             else
                             {
-                                <i class="@type.IconClass @type.ColorClass"></i>
+                                <i class="@type.IconClass @type.ColorClass.ToThemeSafeColorClass()"></i>
                             }
                         }
-                        <span class="fw-semibold @type.ColorClass">@type.Name</span>
+                        <span class="fw-semibold @type.ColorClass.ToThemeSafeColorClass()">@type.Name</span>
                         @if (!type.IsActive)
                         {
                             <span class="badge bg-secondary">Inactive</span>
@@ -94,7 +94,7 @@
                                     <option value="@option.Value" selected="@(option.Value == _formColorClass)">@option.Label</option>
                                 }
                             </select>
-                            <span class="small @_formColorClass">Preview</span>
+                            <span class="small @_formColorClass.ToThemeSafeColorClass()">Preview</span>
                         </div>
                         <div class="col-sm-2">
                             <label class="form-label small mb-1" for="orgcalendareventtypesmanager-order-c57e">Order</label>
@@ -165,7 +165,10 @@
         new("text-warning",  "Amber"),
         new("text-info",     "Teal"),
         new("text-secondary","Grey"),
-        new("text-dark",     "Black"),
+        // Was ("text-dark", "Black"), which vanished into the page in dark mode. Emphasis is
+        // black on light and white on dark — the "plainest, strongest text" this was reaching
+        // for, in whichever theme the reader is using.
+        new("text-body-emphasis", "Contrast"),
     ];
 
     private List<OrgCalendarEventTypeRecord> _types = new();
