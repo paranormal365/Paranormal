@@ -52,14 +52,73 @@
     {
         @* Item 84: the client's view of a lapse. Their records are intact and readable — the
            banner's first job is saying so, because "paused" reads as "gone" to somebody whose
-           haunting is still happening. Choosing a new organization is 84's next slice; until
-           that ships, the sentence promises only what exists. *@
+           haunting is still happening. The move flow lives right here rather than on its own
+           page: this banner is the only place a client learns the case is paused, and sending
+           them elsewhere to act on it loses half of them. *@
         <div class="alert alert-warning mb-3">
             <strong>This case is paused.</strong> The organization's subscription has ended, so
             they cannot work it right now. Everything collected so far is still here and still
-            yours to read. If the group renews, the case resumes exactly where it left off —
-            and you will also be able to move your case to a different organization, deciding
-            yourself what carries over.
+            yours to read. If the group renews, the case resumes exactly where it left off.
+
+            @if (_pendingMove is not null)
+            {
+                <hr />
+                <p class="mb-2">
+                    You've asked <strong>@_pendingMove.ToOrganizationName</strong> to take this
+                    case — waiting for their answer.
+                </p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_moveBusy"
+                        @onclick="WithdrawMoveAsync">Withdraw the request</button>
+            }
+            else if (!_showMoveForm)
+            {
+                <hr />
+                <button type="button" class="btn btn-primary btn-sm" @onclick="OpenMoveFormAsync">
+                    Move my case to a different organization
+                </button>
+            }
+            else
+            {
+                <hr />
+                <div class="mb-2">
+                    <label class="form-label" for="move-org">New organization</label>
+                    <select id="move-org" class="form-select" style="max-width:26rem" @bind="_moveToOrgId">
+                        <option value="">— choose a group —</option>
+                        @foreach (var org in _moveTargets)
+                        {
+                            <option value="@org.OrganizationId">@org.Name@(org.AreaLabel is null ? "" : $" — {org.AreaLabel}")</option>
+                        }
+                    </select>
+                </div>
+
+                @* The per-category consent — the whole point of the flow. The findings are
+                   dual-owned by the original group and you, which is why nothing here asks the
+                   original group's permission: sharing your own case's material onward is yours
+                   to decide. *@
+                <p class="mb-1"><strong>What should the new group be able to see?</strong></p>
+                <label class="d-block mb-1">
+                    <input type="checkbox" class="form-check-input" @bind="_moveShareHistory" />
+                    <span class="ms-1">The history collected so far (reports, notes, evidence)</span>
+                </label>
+                <label class="d-block mb-2">
+                    <input type="checkbox" class="form-check-input" @bind="_moveShareInvestigations" />
+                    <span class="ms-1">The investigations the previous group ran</span>
+                </label>
+                <p class="text-secondary small mb-2">
+                    Anything you don't share stays with the original case — visible to you, not to
+                    the new group. Nothing is deleted either way.
+                </p>
+
+                @if (_moveError is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-2">@_moveError</div>
+                }
+                <button type="button" class="btn btn-primary btn-sm" disabled="@_moveBusy" @onclick="SubmitMoveAsync">
+                    @(_moveBusy ? "Asking…" : "Ask this group")
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-1"
+                        @onclick="() => _showMoveForm = false">Cancel</button>
+            }
         </div>
     }
 
@@ -735,6 +794,56 @@
 </BenModal>
 
 @code {
+    // ── Item 84: moving a paused case ────────────────────────────────────────
+    private PendingReassignRecord? _pendingMove;
+    private bool _showMoveForm;
+    private bool _moveBusy;
+    private string? _moveError;
+    private string _moveToOrgId = "";
+    private bool _moveShareHistory = true;
+    private bool _moveShareInvestigations = true;
+    private List<OrgBrowseResult> _moveTargets = [];
+
+    private async Task OpenMoveFormAsync()
+    {
+        _showMoveForm = true;
+        if (_moveTargets.Count == 0)
+        {
+            // Accepting groups first — the browse endpoint already orders them that way. The
+            // current organization is not filtered out here because the client detail record
+            // does not carry its id; the server refuses a same-org move with a sentence this
+            // form renders.
+            var page = await AdminClient.BrowseOrganizationsAsync(1, 100);
+            _moveTargets = [.. page?.Items ?? []];
+        }
+    }
+
+    private async Task SubmitMoveAsync()
+    {
+        if (!Guid.TryParse(_moveToOrgId, out var toOrg)) { _moveError = "Choose a group first."; return; }
+
+        _moveBusy = true;
+        _moveError = null;
+
+        var failure = await AdminClient.ReassignMyCaseAsync(
+            CaseId, toOrg, _moveShareHistory, _moveShareInvestigations, null);
+
+        _moveBusy = false;
+
+        if (failure is not null) { _moveError = failure; return; }
+
+        _showMoveForm = false;
+        _pendingMove = await AdminClient.GetMyReassignAsync(CaseId);
+    }
+
+    private async Task WithdrawMoveAsync()
+    {
+        _moveBusy = true;
+        await AdminClient.CancelMyReassignAsync(CaseId);
+        _pendingMove = null;
+        _moveBusy = false;
+    }
+
     [Parameter] public Guid CaseId { get; set; }
 
     private ClientCaseDetail? _case;
@@ -819,6 +928,10 @@
         StateHasChanged();
         try { _case = await AdminClient.GetMyCaseAsync(CaseId); }
         catch { _error = "Failed to load case."; }
+
+        if (_case?.Status == Ben.Data.Common.Enums.CaseStatus.Paused)
+            _pendingMove = await AdminClient.GetMyReassignAsync(CaseId);
+
         _loading = false;
         StateHasChanged();
 

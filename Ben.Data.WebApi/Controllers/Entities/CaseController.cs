@@ -471,7 +471,10 @@ public sealed class CaseController : BenControllerBase
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
             .Include(e => e.Files).ThenInclude(f => f.UploadFile)
-            .Where(e => e.CaseId == caseId);
+            // ClientOnly is history the client declined to carry into this organization after a
+            // move (item 84) — the one visibility an org never sees, breaking the cumulative rule
+            // by design.
+            .Where(e => e.CaseId == caseId && e.Visibility != CaseTimelineVisibility.ClientOnly);
 
         if (investigationId is { } invId)
             query = query.Where(e => e.InvestigationId == invId);

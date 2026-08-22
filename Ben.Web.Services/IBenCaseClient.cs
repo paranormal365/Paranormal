@@ -20,6 +20,21 @@ public interface IBenCaseClient
     // ── Case Transfers ────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    // ── Item 84: a client moving their paused case, and the receiving side's inbox ──
+
+    /// <summary>Asks a new organization to take the client's paused case. Null on success.</summary>
+    Task<string?> ReassignMyCaseAsync(Guid caseId, Guid toOrganizationId,
+        bool shareHistory, bool shareInvestigations, string? note, CancellationToken token = default);
+
+    /// <summary>The client's pending move for this case, or null when there is none.</summary>
+    Task<PendingReassignRecord?> GetMyReassignAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Withdraws the client's pending move.</summary>
+    Task<bool> CancelMyReassignAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Transfers waiting on this organization's answer — case not yet theirs.</summary>
+    Task<LoadResult<IncomingTransferRecord>> GetIncomingTransfersAsync(Guid orgId, CancellationToken token = default);
     Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
     Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
     /// <summary>Cancels an outgoing pending transfer proposed by this org. Only the proposing org can cancel.</summary>

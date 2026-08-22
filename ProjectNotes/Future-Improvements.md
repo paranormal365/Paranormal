@@ -3796,7 +3796,7 @@ text reads well under real Telerik table layout before considering this fully do
 
 ---
 
-## 84. Organization subscription lapse, and what happens to their clients (SLICE 1 SHIPPED 2026-08-22; client reassignment remains)
+## 84. Organization subscription lapse, and what happens to their clients (CLOSED 2026-08-22)
 
 **Shipped (84a):** `CaseStatus.Paused` (= 8, appended; all 55 branch points audited — public
 surfaces were safe by allowlist construction, stats/avatars/filters fixed); `Case.StatusBeforePause`
@@ -3809,9 +3809,18 @@ attach), notes, and org case messages — the client's own MyCase surface delibe
 reactivation restores exactly the cases the lapse paused, via `PeriodOpener.RestorePausedCasesAsync`.
 Client banner on the paused case; help docs updated. 7 job tests, regressed two ways.
 
-**Remaining (84b):** the client choosing a new organization — extending `CaseTransferLog`'s
-Pending/Accepted flow for a client-initiated move, the per-category two-key consent (history /
-investigations), and dual-owned findings. The banner promises only what exists.
+**Shipped (84b, same day):** `CaseTransferLog` gains `ProposedByClient` + the two consent flags;
+`POST/GET/DELETE /api/my-cases/{caseId}/reassign` (paused cases only, one pending move at a time,
+the case STAYS Paused while pending so rejection leaves nothing to clean up); consent enforced at
+acceptance — withheld history re-scoped to a new `CaseTimelineVisibility.ClientOnly` (org queries
+exclude it, the client-side `>= Client` filter admits it by construction; Public entries stay
+Public), withheld investigations DETACH and remain the original group's flat records, shared ones
+stay attached while still org-owned = dual visibility for dual ownership, no copies, no deletes.
+Found and fixed in passing: the receiving side of ANY transfer had no surface at all (the per-case
+list requires the case to already be yours) — new org-level `incoming-transfers` endpoint + an
+Incoming cases card on the Cases page with the consent summary. The client hears the answer either
+way; the move flow lives in the paused banner itself. 7 consent tests, regressed both directions
+(consent inverted; detach replaced with delete).
 
 Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
 Deferred with the rest of monetisation until the site's functionality and help documents are

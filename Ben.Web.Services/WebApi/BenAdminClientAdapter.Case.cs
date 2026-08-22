@@ -19,6 +19,24 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Case Transfers ────────────────────────────────────────────────────────
 
+    public async Task<string?> ReassignMyCaseAsync(Guid caseId, Guid toOrganizationId,
+        bool shareHistory, bool shareInvestigations, string? note, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/my-cases/{caseId}/reassign",
+            new { toOrganizationId, shareHistory, shareInvestigations, note }, token);
+        return error;   // null on success
+    }
+
+    public Task<PendingReassignRecord?> GetMyReassignAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<PendingReassignRecord>($"/api/my-cases/{caseId}/reassign", token);
+
+    public Task<bool> CancelMyReassignAsync(Guid caseId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/reassign", token);
+
+    public Task<LoadResult<IncomingTransferRecord>> GetIncomingTransfersAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<IncomingTransferRecord>($"/api/organizations/{orgId}/incoming-transfers", token);
+
     public Task<LoadResult<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseTransferLogRecord>($"/api/organizations/{orgId}/cases/{caseId}/transfers", token);
 

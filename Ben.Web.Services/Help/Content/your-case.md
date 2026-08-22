@@ -47,6 +47,15 @@ it, so the alias applies to public pages and shared documents only.
 
 A paused case means the organization's subscription ended — nothing more. **Nothing you reported
 or they collected has been lost**, and all of it stays readable to you. If the group renews, the
-case resumes exactly where it left off. You will also be able to move your case to a different
-organization, choosing yourself what carries over — the history you reported, the investigations
-they ran — and anything you decide not to share stays private to the original case.
+case resumes exactly where it left off.
+
+You can also **move your case to a different organization**, right from the banner on the case
+page. Pick a group, and choose what they will be able to see:
+
+- the **history** collected so far — reports, notes, evidence
+- the **investigations** the previous group ran
+
+Anything you don't share stays with the original case — visible to you, never to the new group,
+and nothing is deleted either way. The findings belong to the original group *and* to you, which
+is why this is your choice alone; the original group is not asked. The new group answers your
+request, and you hear their answer either way. Until they do, you can withdraw the request.
