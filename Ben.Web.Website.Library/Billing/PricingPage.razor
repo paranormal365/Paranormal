@@ -2,6 +2,7 @@
 
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
+@inject NavigationManager NavManager
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models
 @using Ben.Web.Services.WebApi
@@ -21,6 +22,16 @@
 *@
 
 <div class="container py-4">
+    @if (_referralCode is not null)
+    {
+        @* A referral link landed here (?code=...). The code is applied to the signed-in quotes
+           below and travels to checkout — the visitor should never have to retype something the
+           link already carried. Nothing is redeemed by arriving: quoting never burns a code. *@
+        <div class="alert alert-info text-center">
+            Code <code>@_referralCode</code> will be applied at checkout.
+        </div>
+    }
+
     <div class="text-center mb-4">
         <h2>Pricing</h2>
         <p class="text-secondary">
@@ -149,6 +160,25 @@
                                     </p>
                                 }
                             }
+                            @if (_quotes.TryGetValue(org.Id, out var quote))
+                            {
+                                @if (quote.CouponRefusedBecause is not null)
+                                {
+                                    <p class="small text-warning mb-0 mt-1">@quote.CouponRefusedBecause</p>
+                                }
+                                else if (quote.Discount > 0)
+                                {
+                                    <p class="small text-success mb-0 mt-1">
+                                        With code @_referralCode: @($"{quote.Payable:C2}")
+                                        (@($"{quote.Discount:C2}") off@(quote.CouponAppliesForPeriods switch
+                                        {
+                                            1        => " your next period",
+                                            null     => ", every period",
+                                            { } n    => $" for {n} periods",
+                                        }))
+                                    </p>
+                                }
+                            }
                         </div>
                     </div>
                 </div>
@@ -163,9 +193,18 @@
     private List<BillingInterval> _intervals = [];
     private BillingInterval _selectedInterval = BillingInterval.Monthly;
     private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
+    private string? _referralCode;
+    private readonly Dictionary<Guid, SubscriptionQuoteResponse> _quotes = [];
 
     protected override async Task OnInitializedAsync()
     {
+        // A referral link is ?code=... on this page — a seller hands out the URL, the visitor
+        // arrives with the discount already attached. Which code was used is already attributed
+        // per redemption, so a seller's results are their code's redemption count.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("code", out var code) && !string.IsNullOrWhiteSpace(code))
+            _referralCode = code.ToString().Trim().ToUpperInvariant();
+
         await LoadAsync();
 
         // The enrichment never gates the page: tiers render for the signed-out reader first, and
@@ -177,7 +216,19 @@
                 // Null covers both "may not see billing" and "could not load" — either way there
                 // is no honest card to draw for this group on a pricing page.
                 if (await Client.GetMySubscriptionAsync(org.Id) is { } view)
+                {
                     _myGroups.Add((org, view));
+
+                    // The referral code priced against this group's own cadence — including the
+                    // refusal sentence when it does not apply, which is better learned here than
+                    // at checkout. Quoting never redeems anything.
+                    if (_referralCode is not null)
+                    {
+                        var (quote, _) = await Client.QuoteSubscriptionAsync(org.Id,
+                            new SubscriptionQuoteRequest(view.Interval, _referralCode));
+                        if (quote is not null) _quotes[org.Id] = quote;
+                    }
+                }
             }
         }
     }

@@ -7405,3 +7405,14 @@ collection.
 
 Recommendation on record: Shape 1 when per-member pricing is wanted; hold Shape 2 until
 Square/PayPal exists. Neither is built until Ben picks.
+
+**Referral links (Ben's follow-up, same day): SHIPPED in the minimal honest shape.** A referral
+link is `/pricing?code=X` — the Coupons screen's codes panel has a per-code **Copy link** button.
+The visitor lands with a banner, and signed-in group cards show the code quoted against their own
+cadence (or the refusal sentence, learned there rather than at checkout). Attribution needs no new
+machinery: which code was redeemed is already a `CouponRedemption` row, so a seller's results are
+their code's redemption count. **Still future:** a commission/payout ledger — what the platform
+OWES the seller per redemption — which belongs with the payment provider work, since payouts
+without a money pipeline are a spreadsheet anyway. A generated batch of one single-use code per
+seller, or one shared multi-use code per seller, both work today; the campaign budget caps
+exposure either way.

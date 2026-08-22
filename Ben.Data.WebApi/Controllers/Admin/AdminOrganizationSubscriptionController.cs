@@ -132,6 +132,35 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
 
         var now = DateTime.UtcNow;
         var sub = await db.OrganizationSubscriptions.FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+
+        // ── the coupon line, now with a real redemption behind it ────────────
+        // The quote never redeems; THIS is where a code is spent, because this is where the
+        // payment is recorded. Validated with the same rules the quote showed, so what the
+        // person was told is what happens.
+        CouponCode? code = null;
+        PeriodPrice? discounted = null;
+        if (!string.IsNullOrWhiteSpace(request.CouponCode) && request.Status == SubscriptionStatus.Active)
+        {
+            var typed = CouponCodeGenerator.Normalise(request.CouponCode);
+            code = await db.CouponCodes.Include(c => c.Coupon)
+                .FirstOrDefaultAsync(c => c.Code == typed, ct);
+
+            if (code is null) return BadRequest("That coupon code does not exist.");
+
+            var alreadyRedeemed = await db.CouponRedemptions
+                .AnyAsync(r => r.CouponId == code.CouponId && r.OrganizationId == organizationId, ct);
+
+            var ctx = new CouponRedemptionContext(
+                now, userId, request.Interval,
+                IsRenewal: sub is not null && CouponMath.IsRenewal(sub),
+                AlreadyRedeemedByThisOrg: alreadyRedeemed);
+
+            if (CouponMath.WhyNotRedeemable(code.Coupon, code, ctx) is { } refusal)
+                return BadRequest(refusal);
+
+            var listPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            discounted = CouponMath.PriceFor(listPrice, code.Coupon);
+        }
         var isNew = sub is null;
 
         sub ??= new OrganizationSubscription
@@ -168,6 +197,33 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         {
             await PeriodOpener.ReplaceSnapshotAsync(db, sub.Id, snapshot.PeriodStartUtc, ct);
             db.SubscriptionContractTerms.Add(snapshot);
+        }
+
+        if (code is not null && discounted is { } price)
+        {
+            // The discount applies to what is actually charged this period, and the redemption
+            // records the money AS OF NOW — reimbursement math must survive later price edits.
+            sub.PriceAtPeriodStart = price.Payable;
+            if (snapshot is not null) snapshot.Price = price.Payable;
+
+            db.CouponRedemptions.Add(new CouponRedemption
+            {
+                Id                 = Guid.NewGuid(),
+                CouponId           = code.CouponId,
+                CouponCodeId       = code.Id,
+                OrganizationId     = organizationId,
+                PeriodsRemaining   = CouponMath.PeriodsFor(code.Coupon) is { } periods ? periods - 1 : null,
+                RedeemedAtUtc      = now,
+                ListPrice          = price.ListPrice,
+                Discount           = price.Discount,
+                Payable            = price.Payable,
+                DateCreated        = now,
+                CreatedByAppUserId = userId,
+            });
+
+            // Fast-path counters; the unique index on (CouponId, OrganizationId) is the authority.
+            code.RedemptionCount++;
+            code.Coupon.RedemptionCount++;
         }
 
         if (isNew) db.OrganizationSubscriptions.Add(sub);

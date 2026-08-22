@@ -95,6 +95,37 @@ public sealed class AdminCouponController : BenControllerBase
             x.Code.IsActive, x.Code.DateCreated)));
     }
 
+    /// <summary>
+    /// Every redemption under one campaign, with the money — the referral report.
+    /// </summary>
+    /// <remarks>
+    /// This answers "what do I owe whoever handed these codes out?" — Ben's requirement, stated
+    /// as reimbursement. Each row carries the code, the code's IssuedTo note (the referrer), the
+    /// redeeming group, and the frozen list/discount/paid amounts. Frozen, because a commission
+    /// computed from live prices changes retroactively every time the price list is edited.
+    /// </remarks>
+    [HttpGet("{id:guid}/redemptions")]
+    public async Task<ActionResult<IEnumerable<CouponRedemptionAdminRecord>>> GetRedemptions(
+        Guid id, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        if (!await db.Coupons.AnyAsync(c => c.Id == id, ct)) return NotFound();
+
+        var rows = await db.CouponRedemptions.AsNoTracking()
+            .Where(r => r.CouponId == id)
+            .OrderByDescending(r => r.RedeemedAtUtc)
+            .Select(r => new CouponRedemptionAdminRecord(
+                r.CouponCode.Code,
+                r.CouponCode.IssuedTo,
+                r.Organization.Name,
+                r.RedeemedAtUtc,
+                r.ListPrice, r.Discount, r.Payable))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
     [HttpPost]
     public async Task<ActionResult<CouponAdminRecord>> Create(
         [FromBody] SaveCouponRequest request, CancellationToken ct)

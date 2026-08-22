@@ -2459,6 +2459,9 @@ namespace Ben.Data.Source.Context
             // what makes the redemption limit safe when two groups redeem the last use at once.
             modelBuilder.Entity<CouponRedemption>()
                 .HasIndex(e => new { e.CouponId, e.OrganizationId }).IsUnique();
+            modelBuilder.Entity<CouponRedemption>().Property(e => e.ListPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<CouponRedemption>().Property(e => e.Discount).HasPrecision(18, 2);
+            modelBuilder.Entity<CouponRedemption>().Property(e => e.Payable).HasPrecision(18, 2);
             modelBuilder.Entity<CouponRedemption>()
                 .HasOne(e => e.Coupon).WithMany(c => c.Redemptions)
                 .HasForeignKey(e => e.CouponId).OnDelete(DeleteBehavior.Restrict);

@@ -198,6 +198,11 @@ redemptions (the budget), billing cadence, and occasion — first subscriptions 
 only. A misconfigured campaign (one that takes nothing off, or whose window closes before it
 opens) wears a red **Broken** badge in the list rather than failing silently for whoever types it.
 
+Every code also doubles as a **referral link** — the codes panel's *Copy link* button gives a
+`/pricing?code=…` URL to hand to whoever is promoting or selling access. Visitors land with the
+code attached and see it priced against their group before anything is confirmed; the code's
+redemption count is the referrer's scorecard.
+
 **Subscriptions** is where every group's standing lives — including groups never set up, which is
 the first thing to look for. Until a payment provider is wired in, this screen *is* the payment
 record: when a group pays, set their band, cadence and period here. The member count and price are

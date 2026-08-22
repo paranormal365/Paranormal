@@ -195,7 +195,19 @@ public record SetOrganizationSubscriptionRequest(
     DateTime? CurrentPeriodStart,
     DateTime? CurrentPeriodEnd,
     bool CancelAtPeriodEnd,
-    string? Note);
+    string? Note,
+    string? CouponCode = null);
+
+/// <summary>One redemption on the referral report — enough to compute a reimbursement from.</summary>
+/// <param name="ReferrerNote">The code's IssuedTo — who handed this code out.</param>
+public record CouponRedemptionAdminRecord(
+    string Code,
+    string? ReferrerNote,
+    string OrganizationName,
+    DateTime RedeemedAtUtc,
+    decimal ListPrice,
+    decimal Discount,
+    decimal Payable);
 
 /// <summary>One consequence of a tier edit, for the confirm step.</summary>
 public record TierChangeRecord(bool IsImprovement, string Sentence);

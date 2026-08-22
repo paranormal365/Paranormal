@@ -43,6 +43,21 @@ namespace Ben.Data.Source.Entities
 
         public DateTime RedeemedAtUtc { get; set; }
 
+        /// <summary>The period price before the discount, frozen at redemption.</summary>
+        /// <remarks>
+        /// The money lives HERE, not looked up later: reimbursement math ("what do we owe the
+        /// referrer for this?") must survive every later price change, tier retirement and coupon
+        /// edit. Ben's requirement verbatim — track referrals in case somebody must be
+        /// reimbursed for them.
+        /// </remarks>
+        public decimal ListPrice { get; set; }
+
+        /// <summary>What the code took off this period.</summary>
+        public decimal Discount { get; set; }
+
+        /// <summary>What the group actually paid for the period.</summary>
+        public decimal Payable { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

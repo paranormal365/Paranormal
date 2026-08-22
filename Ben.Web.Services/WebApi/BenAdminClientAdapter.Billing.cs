@@ -33,6 +33,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CouponCodeAdminRecord>> GetCouponCodesAsync(Guid couponId, CancellationToken token = default)
         => _api.GetListAsync<CouponCodeAdminRecord>($"/api/admin/coupons/{couponId}/codes", token);
 
+    public Task<LoadResult<CouponRedemptionAdminRecord>> GetCouponRedemptionsAsync(Guid couponId, CancellationToken token = default)
+        => _api.GetListAsync<CouponRedemptionAdminRecord>($"/api/admin/coupons/{couponId}/redemptions", token);
+
     public Task<(CouponAdminRecord? Result, string? Error)> CreateCouponAsync(
         SaveCouponRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SaveCouponRequest, CouponAdminRecord>(

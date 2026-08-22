@@ -45,6 +45,9 @@ public interface IBenBillingClient
     /// <summary>The codes under one campaign, with who each is addressed to.</summary>
     Task<LoadResult<CouponCodeAdminRecord>> GetCouponCodesAsync(Guid couponId, CancellationToken token = default);
 
+    /// <summary>The referral report: every redemption under a campaign, with the frozen money.</summary>
+    Task<LoadResult<CouponRedemptionAdminRecord>> GetCouponRedemptionsAsync(Guid couponId, CancellationToken token = default);
+
     Task<(CouponAdminRecord? Result, string? Error)> CreateCouponAsync(
         SaveCouponRequest request, CancellationToken token = default);
 

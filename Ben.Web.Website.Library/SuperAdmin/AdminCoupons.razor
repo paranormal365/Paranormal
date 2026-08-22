@@ -202,12 +202,56 @@
                                     }
                                 </Template>
                             </GridColumn>
-                            <GridCommandColumn Width="130px">
+                            <GridCommandColumn Width="240px">
+                                @* The referral link: hand the URL to whoever is selling access,
+                                   and the visitor lands on /pricing with the code attached. Their
+                                   results are this row's redemption count — attribution rides the
+                                   redemption records that already exist. *@
+                                <GridCommandButton Command="CopyLink" Icon="@SvgIcon.Link"
+                                                   OnClick="@((GridCommandEventArgs e) => CopyReferralLinkAsync((CouponCodeAdminRecord)e.Items.First()))">
+                                    Copy link
+                                </GridCommandButton>
                                 <GridCommandButton Command="Withdraw" Icon="@SvgIcon.Cancel"
                                                    OnClick="@((GridCommandEventArgs e) => ToggleCodeAsync((CouponCodeAdminRecord)e.Items.First()))">
                                     @((_codesResult.Items.FirstOrDefault()?.IsActive ?? true) ? "Withdraw" : "Restore")
                                 </GridCommandButton>
                             </GridCommandColumn>
+                        </GridColumns>
+                    </TelerikGrid>
+                </BenListState>
+
+                <h6 class="mt-4">Redemptions</h6>
+                <p class="text-secondary small mb-2">
+                    The referral report: who redeemed what, through which code, and the money as it
+                    was at the moment of redemption — the numbers a reimbursement is computed from.
+                </p>
+                <BenListState TItem="CouponRedemptionAdminRecord" Result="@_redemptionsResult"
+                              Loading="@_codesLoading"
+                              EmptyText="No redemptions yet" OnRetry="@(() => SelectAsync(_selected))">
+                    <TelerikGrid Data="@_redemptionsResult.Items" TItem="CouponRedemptionAdminRecord"
+                                 Sortable="false" Pageable="true" PageSize="25">
+                        <GridColumns>
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.Code)" Title="Code">
+                                <Template>
+                                    <code>@(((CouponRedemptionAdminRecord)context).Code)</code>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.ReferrerNote)" Title="Referrer" />
+                            <GridColumn Field="@nameof(CouponRedemptionAdminRecord.OrganizationName)" Title="Group" />
+                            <GridColumn Title="Redeemed" Width="120px">
+                                <Template>
+                                    @(((CouponRedemptionAdminRecord)context).RedeemedAtUtc.ToString("MM/dd/yyyy"))
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Title="List" Width="90px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).ListPrice:C2}")</Template>
+                            </GridColumn>
+                            <GridColumn Title="Discount" Width="100px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).Discount:C2}")</Template>
+                            </GridColumn>
+                            <GridColumn Title="Paid" Width="90px">
+                                <Template>@($"{((CouponRedemptionAdminRecord)context).Payable:C2}")</Template>
+                            </GridColumn>
                         </GridColumns>
                     </TelerikGrid>
                 </BenListState>
@@ -357,6 +401,7 @@
     private CouponAdminRecord? _selected;
     private bool _codesLoading;
     private LoadResult<CouponCodeAdminRecord> _codesResult;
+    private LoadResult<CouponRedemptionAdminRecord> _redemptionsResult;
 
     private int _generateCount = 50;
     private string? _generatePrefix;
@@ -397,6 +442,7 @@
         _selected = coupon;
         _codesLoading = true;
         _codesResult = await AdminClient.GetCouponCodesAsync(coupon.Id);
+        _redemptionsResult = await AdminClient.GetCouponRedemptionsAsync(coupon.Id);
         _codesLoading = false;
     }
 
@@ -435,6 +481,14 @@
         }
 
         await SelectAsync(_selected);
+    }
+
+    private async Task CopyReferralLinkAsync(CouponCodeAdminRecord code)
+    {
+        // Absolute against wherever the site is running — the admin copies from the same origin
+        // the buyer will land on.
+        var link = NavManager.ToAbsoluteUri($"/pricing?code={Uri.EscapeDataString(code.Code)}").ToString();
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", link);
     }
 
     private async Task CopyCodesAsync()
