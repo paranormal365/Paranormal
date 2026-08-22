@@ -5443,7 +5443,15 @@ Sequence: after the current nine-phase plan. Nothing depends on it.
 
 ---
 
-## 111. Evidence at a public investigation — who may add it, and is it all public? (raised 2026-08-20 by Ben)
+## 111. Evidence at a public investigation — who may add it, and is it all public? (DECIDED 2026-08-22 — Ben picked the middle option; build in progress)
+
+**Ben's decision:** attendees may SUBMIT, a member must ACCEPT — the queue shape, copying the
+file-permission-request precedent. The publicity sub-questions (a visitor's own recording of
+themselves, other attendees in someone's footage, documentation vs evidence) were NOT decided and
+remain open below; the build tells submitters plainly that evidence accepted into a public
+investigation's record is public, per item 87's recorded bargain, and decides nothing beyond that.
+
+### Original text
 
 Ben, while the accounts work was in flight: *"When we complete this, we need to address who and how
 people who attend a group's public investigations are able to add evidence and if public events have
@@ -7425,6 +7433,36 @@ tax — see the monetization-direction memory: platform-bills-orgs first).
 endpoint, refusing with a sentence that names the cap and the band — and per the standing lesson,
 every such refusal needs a UI path that renders it.
 
+**Ben's launch shape (2026-08-22):** "to start, mostly the tiers will just be how many open cases
+and how many members increasingly." Both levers already exist and need no code: member bands are
+the tier boundaries, and Open cases is a cap row in the Price Bands editor, enforced at both
+case-creation doors with closed cases never counting. Setting it up is admin data entry.
+
+**The levers menu for later, ranked by Ben's own principle** (cap what scales with value received;
+never what groups do to organise themselves):
+
+1. **Storage** — the only lever that tracks a real cost to the platform, in a media-heavy product.
+   Mechanism exists (`StorageMegabytes`); enforcement waits on one decision: whose storage a case
+   file counts against.
+2. **Video rendering** — real CPU burned per render. Shapes: background/server rendering as a paid
+   feature (in-browser rough rendering free), fine two-pass quality paid, or metered render
+   minutes. The editor is the product's moat; this monetises its most expensive part without
+   locking the basic tool.
+3. **Video editor depth** — basic trim/clip free; overlays, keyframes, callouts, text effects,
+   clipart on paid bands. Zero-means-off already expresses it per feature.
+4. **EVP detection** — basic scan free; adjustable-tolerance presets, or scans-per-month, paid.
+   Server-side compute, so it also tracks cost.
+5. **Public presence** — published pages (cap exists), custom page layouts, case-bound media
+   slots, publications on paid bands; later, custom domain / white-label as a headline paid
+   feature (high perceived value, low marginal cost, real build).
+6. **Equipment lending** — active-loans cap (exists). Mild, but lending is coordination the
+   platform does.
+7. **Support priority** — cheap to offer, standard, zero code beyond a flag.
+
+**Deliberately not recommended:** charging for data export (data hostage-taking erodes trust),
+paid placement in local discovery (erodes the community product), and any cap on roles, naming,
+taxonomy, or members-per-case (self-organisation, not scale).
+
 **Ben's governing principle (his words, near enough):** maximise what we can earn *without turning
 people off*. The useful test that falls out of it: cap the things that scale with the value a group
 gets (storage, open cases, equipment, renders) and leave alone the things groups do to organise
@@ -7452,8 +7490,17 @@ notices and the admin surface, and makes MANUAL billing painful: ten members mea
 dates for a SuperAdmin to mark paid. Recommended only after a payment provider automates
 collection.
 
-Recommendation on record: Shape 1 when per-member pricing is wanted; hold Shape 2 until
-Square/PayPal exists. Neither is built until Ben picks.
+**Ben's pick (2026-08-22): the overflow-seat model.** A group's band covers its member count as
+today; a group can grow PAST its band by new members creating their own accounts and signing up,
+and ishaunted.com bills the NEW MEMBER individually — under the group's contract agreement, at a
+per-extra-member price. In Ben's words, "this is just another tier I can set up later with price
+per extra member values at that time" — so nothing is built now. When he sets it up, the schema
+addition is small and known: a per-extra-member price on the tier (a `SubscriptionTierPrice`-style
+row keyed "per extra member per period", or a nullable `PricePerExtraMember`), a member-level
+subscription record for the overflow seats (Shape 2's machinery, but scoped to overflow only —
+the base group contract stays one row), and the join flow offering "this group is full at its
+plan; join by subscribing yourself for $X/month". The resolver's band-tiling rule needs one
+amendment when this lands: a band with a per-extra-member price is allowed to be outgrown.
 
 **Referral links (Ben's follow-up, same day): SHIPPED in the minimal honest shape.** A referral
 link is `/pricing?code=X` — the Coupons screen's codes panel has a per-code **Copy link** button.
