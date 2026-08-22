@@ -102,9 +102,27 @@ public class NewGroupJourneyTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/organizations/new");
         await FillAndConfirmAsync("#newgroup-name", groupName);
         await FillAndConfirmAsync("#newgroup-url", groupSlug);
-        await ClickUntilAsync(
-            Page.Locator("#newgroup-create"),
-            Main.GetByText(groupName, new() { Exact = false }));
+
+        // The completion signal is the URL, not page text: creation navigates to the new hub, and
+        // under full-suite load the hub's own render can outlast a text-based retry budget — the
+        // one flake the first suite-context run produced. The URL changes the moment the create
+        // succeeds; the heading gets its own generous wait after that.
+        var created = false;
+        for (var attempt = 0; attempt < 5 && !created; attempt++)
+        {
+            try { await Page.Locator("#newgroup-create").ClickAsync(new() { Timeout = 5_000 }); }
+            catch (TimeoutException) { }
+            try
+            {
+                await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex("/organizations/[0-9a-f-]{36}$"),
+                    new() { Timeout = 8_000 });
+                created = true;
+            }
+            catch (TimeoutException) { /* click lost pre-circuit, or slow — go again */ }
+        }
+        Assert.That(created, Is.True, "Creating the group never navigated to its hub.");
+        await Expect(Main.GetByText(groupName, new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         // The founder can open their own hub — and turns on applications, which is what makes
         // the group joinable at all.
