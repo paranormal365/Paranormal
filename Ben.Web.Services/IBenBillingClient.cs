@@ -62,6 +62,17 @@ public interface IBenBillingClient
     Task<(OrganizationSubscriptionAdminRecord? Result, string? Error)> SetOrganizationSubscriptionAsync(
         Guid organizationId, SetOrganizationSubscriptionRequest request, CancellationToken token = default);
 
+    // ── public and group-facing ───────────────────────────────────────────────
+
+    /// <summary>The public price list, exactly as the pricing page shows it. Anonymous.</summary>
+    Task<LoadResult<PublicSubscriptionTier>> GetPublicPricingAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Where one of the caller's groups stands. Null when the caller may not see that group's
+    /// billing — the page skips the card rather than guessing.
+    /// </summary>
+    Task<OrgSubscriptionView?> GetMySubscriptionAsync(Guid organizationId, CancellationToken token = default);
+
     // ── checkout ──────────────────────────────────────────────────────────────
 
     /// <summary>

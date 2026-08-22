@@ -7383,3 +7383,25 @@ themselves (roles, members-per-case, naming, taxonomy). Ben floated a custom-rol
 value exists (`CustomRoles = 8`) so the option is real, with a note recommending it stay unset.
 
 Nothing here is decided. This item is the menu; Ben picks.
+
+---
+
+## 144. Per-member pricing, possibly per-member contracts (OPEN — decision pending, 2026-08-22)
+
+Ben, during the phase-B build: what if a tier charged **per member**, and **each member had their
+own contract**? Answer given: doable, in two shapes with very different costs.
+
+**Shape 1 — per-seat price, one group contract.** `PricingMode` on the tier (FlatPerPeriod vs
+PerMember); the bill is seat price × `MemberCountAtPeriodStart`, which already exists and is
+already frozen. Snapshot machinery, notices, admin UI all unchanged; one renewal date per group.
+Cheap — roughly a column, a resolver branch, and pricing-page wording.
+
+**Shape 2 — every seat its own contract.** Per-seat start dates, per-seat price-at-signing,
+staggered renewals. The contract-snapshot machinery generalizes (one row per seat instead of one
+per org-period), so it is structurally reachable — but it multiplies billing events, renewal
+notices and the admin surface, and makes MANUAL billing painful: ten members means ten renewal
+dates for a SuperAdmin to mark paid. Recommended only after a payment provider automates
+collection.
+
+Recommendation on record: Shape 1 when per-member pricing is wanted; hold Shape 2 until
+Square/PayPal exists. Neither is built until Ben picks.

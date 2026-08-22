@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Source.Entities;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Controllers.Cms;
 using Ben.Data.WebApi.Services.Billing;
@@ -34,6 +35,71 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
     public OrganizationSubscriptionController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper, IOrganizationSecurityService security)
         : base(dbFactory, mapper, security) { }
+
+    /// <summary>
+    /// Where this group stands: status, the band as it was sold, and the terms that actually bind.
+    /// </summary>
+    /// <remarks>
+    /// The terms come through <see cref="EffectiveTermsResolver"/> — the better of what was bought
+    /// and what the live tier now says — and each limit carries whether the contract is what is
+    /// holding it. That flag is the whole "your current terms until {date}" experience: without
+    /// it the page could only show numbers that quietly disagree with the public pricing page,
+    /// which reads as a bug rather than a kept promise.
+    /// </remarks>
+    [HttpGet]
+    public async Task<ActionResult<OrgSubscriptionView>> Get(Guid organizationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (!await IsCmsAuthorizedAsync(userId.Value, organizationId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Read, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+
+        // No row yet is the free state, not an error — same reading as the admin list.
+        if (sub is null)
+            return Ok(new OrgSubscriptionView(
+                SubscriptionStatus.Free, null, BillingInterval.Monthly,
+                null, false, null, false, [], false));
+
+        var liveTier = sub.SubscriptionTierId is { } tierId
+            ? await db.SubscriptionTiers.AsNoTracking()
+                .Include(t => t.Prices).Include(t => t.Limits)
+                .FirstOrDefaultAsync(t => t.Id == tierId, ct)
+            : null;
+
+        // The snapshot for the CURRENT period. An older one is somebody else's period and must
+        // not hold terms for this one — reductions land exactly by the new period not having it.
+        var contract = sub.CurrentPeriodStart is { } start
+            ? await db.SubscriptionContractTerms.AsNoTracking()
+                .Where(t => t.OrganizationSubscriptionId == sub.Id && t.PeriodStartUtc == start)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var limits = EffectiveTermsResolver.Resolve(contract, liveTier?.Limits ?? [])
+            .Select(l => new OrgEffectiveLimit(l.Limit, l.MaxValue, l.FromContract))
+            .ToList();
+
+        var (price, priceFromContract) = contract is not null && liveTier is not null
+            ? EffectiveTermsResolver.EffectivePrice(contract, liveTier)
+            : (sub.PriceAtPeriodStart, false);
+
+        return Ok(new OrgSubscriptionView(
+            sub.Status,
+            contract?.TierName ?? liveTier?.Name,
+            sub.Interval,
+            sub.Status == SubscriptionStatus.Free ? null : price,
+            priceFromContract,
+            sub.CurrentPeriodEnd,
+            sub.CancelAtPeriodEnd,
+            limits,
+            priceFromContract || limits.Any(l => l.FromContract)));
+    }
 
     /// <summary>Prices one period at one cadence, applying a typed coupon code when one is sent.</summary>
     [HttpPost("quote")]

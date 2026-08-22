@@ -1,0 +1,262 @@
+@page "/pricing"
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+<PageTitle>Pricing</PageTitle>
+
+@*
+    Rendered straight from the tier rows, which is the point: a SuperAdmin adding a band, a
+    cadence or a cap changes this page without a deployment. Anonymous first — the reader who
+    matters is the one deciding whether to sign up — and enriched after AuthReady for people who
+    already run a group.
+
+    What a signed-in group sees here can lawfully DISAGREE with the public cards: their contract
+    holds the terms they bought until their period ends. That case is said out loud ("your current
+    terms until…") because two silently different numbers read as a bug, not a kept promise.
+*@
+
+<div class="container py-4">
+    <div class="text-center mb-4">
+        <h2>Pricing</h2>
+        <p class="text-secondary">
+            Priced by active members, per group. Every plan includes the whole platform — cases,
+            investigations, equipment, the video editor.
+        </p>
+
+        @if (_intervals.Count > 1)
+        {
+            <div class="btn-group" role="group" aria-label="Billing cadence">
+                @foreach (var interval in _intervals)
+                {
+                    var current = interval;
+                    <button type="button"
+                            class="btn @(interval == _selectedInterval ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => _selectedInterval = current">
+                        @CadenceTitle(interval)
+                        @if (BestSaving(interval) is { } save)
+                        {
+                            <span class="badge bg-success ms-1">save up to @save%</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <BenListState TItem="PublicSubscriptionTier" Result="@_tiersResult" Loading="@_loading"
+                  EmptyText="Pricing is being updated — check back shortly" OnRetry="@LoadAsync">
+        <div class="row g-3 justify-content-center">
+            @foreach (var tier in _tiersResult.Items)
+            {
+                var price = tier.Prices.FirstOrDefault(p => p.Interval == _selectedInterval);
+                <div class="col-md-4 col-lg-3">
+                    <div class="card h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <h5>@tier.Name</h5>
+                            <p class="text-secondary small mb-3">
+                                @(tier.MaxMembers is { } max
+                                    ? $"{tier.MinMembers}–{max} active members"
+                                    : $"{tier.MinMembers}+ active members")
+                            </p>
+
+                            @if (IsFree(tier))
+                            {
+                                <div class="display-6 mb-1">Free</div>
+                                <div class="text-secondary small mb-3">forever</div>
+                            }
+                            else if (price is not null)
+                            {
+                                <div class="display-6 mb-1">@($"{price.Price:C0}")</div>
+                                <div class="text-secondary small mb-3">
+                                    per @CadenceNoun(_selectedInterval)
+                                    @if (price.SavingPercentAgainstMonthly is { } save)
+                                    {
+                                        <span class="badge bg-success ms-1">save @save%</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                @* This band is not sold at the selected cadence — a real state,
+                                   said plainly rather than rendered as $0. *@
+                                <div class="text-secondary my-3">
+                                    Not offered @CadenceTitle(_selectedInterval).ToLowerInvariant() —
+                                    available @string.Join(", ", tier.Prices.Select(p => CadenceTitle(p.Interval).ToLowerInvariant()))
+                                </div>
+                            }
+
+                            @if (tier.Limits.Count > 0)
+                            {
+                                <ul class="list-unstyled text-start small mt-auto mb-0">
+                                    @foreach (var limit in tier.Limits)
+                                    {
+                                        <li class="mb-1">@LimitSentence(limit)</li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <p class="text-secondary small mt-auto mb-0">No limits</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </BenListState>
+
+    @if (_myGroups.Count > 0)
+    {
+        <hr class="my-5" />
+        <h4>Your groups</h4>
+        <div class="row g-3">
+            @foreach (var (org, view) in _myGroups)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="mb-1">@org.Name</h6>
+                            @if (view.Status == SubscriptionStatus.Free)
+                            {
+                                <p class="text-secondary small mb-0">On the free plan.</p>
+                            }
+                            else
+                            {
+                                <p class="small mb-1">
+                                    <strong>@view.TierName</strong>,
+                                    @($"{view.Price:C2}") per @CadenceNoun(view.Interval)@(view.CurrentPeriodEnd is { } end
+                                        ? $" — {(view.CancelAtPeriodEnd ? "ends" : "renews")} {end:MM/dd/yyyy}" : "")
+                                </p>
+                                @if (view.AnyTermsHeldByContract && view.CurrentPeriodEnd is { } until)
+                                {
+                                    @* The kept-promise sentence. Without it, this card and the
+                                       public cards above can disagree and the reader has no way
+                                       to know that the difference is in their favour on purpose. *@
+                                    <p class="small text-info mb-1">
+                                        The plan has changed since you subscribed — you keep the
+                                        terms you signed up for until @until.ToString("MM/dd/yyyy").
+                                    </p>
+                                }
+                                @foreach (var limit in view.Limits.Where(l => l.FromContract))
+                                {
+                                    <p class="small text-secondary mb-0">
+                                        @LimitSentence(new PublicTierLimit(limit.Limit, limit.MaxValue)) (your current terms)
+                                    </p>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private LoadResult<PublicSubscriptionTier> _tiersResult;
+    private List<BillingInterval> _intervals = [];
+    private BillingInterval _selectedInterval = BillingInterval.Monthly;
+    private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        // The enrichment never gates the page: tiers render for the signed-out reader first, and
+        // the "your groups" section appears only for someone who can see a group's billing.
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) && UserState.IsAuthenticated)
+        {
+            foreach (var org in (await Client.GetOrganizationsAsync()).Items)
+            {
+                // Null covers both "may not see billing" and "could not load" — either way there
+                // is no honest card to draw for this group on a pricing page.
+                if (await Client.GetMySubscriptionAsync(org.Id) is { } view)
+                    _myGroups.Add((org, view));
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tiersResult = await Client.GetPublicPricingAsync();
+
+        _intervals = [.. _tiersResult.Items
+            .SelectMany(t => t.Prices.Select(p => p.Interval))
+            .Distinct().OrderBy(i => (int)i)];
+
+        if (_intervals.Count > 0 && !_intervals.Contains(_selectedInterval))
+            _selectedInterval = _intervals[0];
+
+        _loading = false;
+    }
+
+    /// <summary>A band whose every cadence costs nothing is the free band.</summary>
+    private static bool IsFree(PublicSubscriptionTier tier) =>
+        tier.Prices.Count > 0 && tier.Prices.All(p => p.Price == 0);
+
+    private int? BestSaving(BillingInterval interval) =>
+        _tiersResult.Items
+            .SelectMany(t => t.Prices)
+            .Where(p => p.Interval == interval)
+            .Select(p => p.SavingPercentAgainstMonthly)
+            .DefaultIfEmpty(null)
+            .Max();
+
+    private static string CadenceTitle(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "Monthly",
+        BillingInterval.Quarterly  => "Quarterly",
+        BillingInterval.HalfYearly => "Every 6 months",
+        BillingInterval.Yearly     => "Yearly",
+        _                          => interval.ToString(),
+    };
+
+    private static string CadenceNoun(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "month",
+        BillingInterval.Quarterly  => "quarter",
+        BillingInterval.HalfYearly => "6 months",
+        BillingInterval.Yearly     => "year",
+        _                          => "period",
+    };
+
+    /// <summary>
+    /// A cap as a sentence: "Up to 25 pieces of equipment", "Unlimited storage", "No public pages".
+    /// </summary>
+    /// <remarks>
+    /// Null and zero get words, not numbers — "∞" and "0" on a pricing card make the reader do
+    /// the interpreting, and zero-means-off is exactly the case that must not look like a typo.
+    /// </remarks>
+    private static string LimitSentence(PublicTierLimit limit)
+    {
+        var (thing, things) = limit.Limit switch
+        {
+            SubscriptionLimit.OpenCases            => ("open case", "open cases"),
+            SubscriptionLimit.EquipmentItems       => ("piece of equipment", "pieces of equipment"),
+            SubscriptionLimit.ActiveEquipmentLoans => ("equipment loan at a time", "equipment loans at a time"),
+            SubscriptionLimit.OpenInvestigations   => ("open investigation", "open investigations"),
+            SubscriptionLimit.PendingInvites       => ("pending invite", "pending invites"),
+            SubscriptionLimit.StorageMegabytes     => ("MB of storage", "MB of storage"),
+            SubscriptionLimit.PublishedPages       => ("public page", "public pages"),
+            SubscriptionLimit.CustomRoles          => ("custom role", "custom roles"),
+            _                                      => (limit.Limit.ToString(), limit.Limit.ToString()),
+        };
+
+        return limit.MaxValue switch
+        {
+            null => $"Unlimited {things}",
+            0    => $"No {things}",
+            1    => $"1 {thing}",
+            { } n when limit.Limit == SubscriptionLimit.StorageMegabytes && n >= 1024
+                 => $"{n / 1024m:0.#} GB of storage",
+            { } n => $"Up to {n:N0} {things}",
+        };
+    }
+}

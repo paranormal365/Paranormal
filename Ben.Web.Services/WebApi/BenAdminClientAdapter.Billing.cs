@@ -57,6 +57,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<SetOrganizationSubscriptionRequest, OrganizationSubscriptionAdminRecord>(
             HttpMethod.Put, $"/api/admin/organization-subscriptions/{organizationId}", request, token);
 
+    public Task<LoadResult<PublicSubscriptionTier>> GetPublicPricingAsync(CancellationToken token = default)
+        => _api.GetAnonymousListAsync<PublicSubscriptionTier>("/api/public/pricing", token);
+
+    public Task<OrgSubscriptionView?> GetMySubscriptionAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<OrgSubscriptionView>($"/api/organizations/{organizationId}/subscription", token);
+
     public Task<(SubscriptionQuoteResponse? Result, string? Error)> QuoteSubscriptionAsync(
         Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SubscriptionQuoteRequest, SubscriptionQuoteResponse>(
