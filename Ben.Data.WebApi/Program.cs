@@ -268,6 +268,8 @@ var schemes = entraEnabled
 // bypassing any claim-injection issues with IClaimsTransformation.
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.SuperAdminHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.AppAdministratorHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -277,11 +279,27 @@ builder.Services.AddAuthorization(options =>
 
     // Named "SuperAdmin" policy used by [Authorize(Policy = RoleNames.SuperAdmin)]
     // on all admin controllers. Delegates to SuperAdminHandler for DB-based role check.
+    //
+    // ADMIN CONTROLLERS MUST USE THIS POLICY, NOT [Authorize(Roles = ...)]. The difference is not
+    // stylistic. A bare Roles attribute names no authentication scheme, so it re-authenticates
+    // with the DEFAULT scheme only - the local Identity bearer handler. A caller holding a valid
+    // Entra JWT therefore comes back not as "authenticated but lacking the role" but as
+    // unauthenticated, and the endpoint answers 401 rather than 403. Eight endpoints were written
+    // that way and every one of them was closed to Entra sign-ins, including the dashboard's
+    // /api/admin/stats. The policy avoids it by pinning the schemes explicitly below, which is
+    // also what lets SuperAdminHandler resolve the role from the database by OID.
     options.AddPolicy(RoleNames.SuperAdmin, policy =>
         policy
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.SuperAdminRequirement()));
+
+    // The same arrangement for the endpoints that accept either app-wide role.
+    options.AddPolicy(AuthPolicyNames.AppAdministrator, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.AppAdministratorRequirement()));
 
     // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
     // EntraAuthController's Register/Link actions — those need to read the caller's OID/email

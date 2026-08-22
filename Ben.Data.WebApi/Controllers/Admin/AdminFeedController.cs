@@ -32,7 +32,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// </remarks>
 [ApiController]
 [Route("api/admin/feed")]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminFeedController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

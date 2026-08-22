@@ -17,7 +17,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// anything scoped to one organization belongs in that org's settings.
 /// </remarks>
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/site-settings")]
 public sealed class AdminSiteSettingController : BenControllerBase
 {

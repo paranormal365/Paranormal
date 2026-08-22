@@ -28,7 +28,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// behind them, which is the half the platform can answer honestly.</para>
 /// </remarks>
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/stats")]
 public sealed class AdminStatsController : BenControllerBase
 {

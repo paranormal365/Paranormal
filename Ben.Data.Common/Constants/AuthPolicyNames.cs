@@ -16,4 +16,19 @@ public static class AuthPolicyNames
     /// policy always denies rather than the request crashing on an unregistered scheme.
     /// </summary>
     public const string EntraOnly = "EntraOnly";
+
+    /// <summary>
+    /// Requires the caller to hold either app-wide administration role
+    /// (<see cref="RoleNames.SuperAdmin"/> or <see cref="RoleNames.Admin"/>), resolved the same
+    /// way the SuperAdmin policy resolves its role — by claim for a local Identity bearer token,
+    /// or by database lookup for an Entra JWT.
+    /// </summary>
+    /// <remarks>
+    /// Exists so an endpoint that accepts both roles can still go through a policy.
+    /// <c>[Authorize(Roles = "SuperAdmin,Admin")]</c> cannot: a bare Roles attribute names no
+    /// authentication scheme, so it re-authenticates with the default one only, and an Entra
+    /// caller is not merely refused but comes back as unauthenticated — a 401 where a 403 was
+    /// meant. See the note on the SuperAdmin policy in <c>Ben.Data.WebApi/Program.cs</c>.
+    /// </remarks>
+    public const string AppAdministrator = "AppAdministrator";
 }
