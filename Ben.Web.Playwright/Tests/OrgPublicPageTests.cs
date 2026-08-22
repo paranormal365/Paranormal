@@ -21,7 +21,9 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false }))
+        // Heading role, not bare text: the Apply-to-join panel also names the group, and a
+        // strict-mode GetByText resolves to both. The heading is the sharper assertion anyway.
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Tennessee Ghost Hunters" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -80,7 +82,7 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{NpsUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Nashville Paranormal Society", new() { Exact = false }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Nashville Paranormal Society" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 

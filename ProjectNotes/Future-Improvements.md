@@ -7528,3 +7528,45 @@ OWES the seller per redemption — which belongs with the payment provider work,
 without a money pipeline are a spreadsheet anyway. A generated batch of one single-use code per
 seller, or one shared multi-use code per seller, both work today; the campaign budget caps
 exposure either way.
+
+
+---
+
+## 146. The super-testing journey, and the three doors it found missing (CLOSED 2026-08-22)
+
+Ben's ask: run the product as a brand-new person — sign up, create a group, take a tier, add a
+member or two, open a case with an investigation. Built as `NewGroupJourneyTests` (Playwright,
+category `Journey`): every account is created DURING the test, so nothing leans on the seeded
+roster; email confirmation uses the dev fallback (the link lands in the API log, read via
+`BEN_API_LOG`; the fixture skips without it).
+
+**Writing the journey found three write-only features before it ever ran:**
+
+1. **Nobody could APPLY to join a group.** The API accepted applications and the group's review
+   panel existed — but no screen ever called `ApplyForMembershipAsync`. New `OrgApplyPanel` on the
+   group's public page (`/o/{urlName}`): sign-in aware, shows pending state, renders the server's
+   sentences ("not accepting applications", "already a member") verbatim.
+2. **Nobody could FOUND a group.** The register endpoint has always let any signed-in user create
+   a group and become its Owner — the billing model depends on self-serve founding — but the only
+   create page was SuperAdmin-gated. New `/organizations/new` ("Start a group": name + web
+   address, slug suggested from the name), a Start-a-Group button on /organizations for everyone,
+   and the admin create kept beside it.
+3. **The coupon line had no input box** on the manual payment screen — the request field existed
+   and nothing sent it (the server-guard-needs-a-UI-path lesson wearing its input-field face).
+   The Subscriptions modal now takes a code; the journey redeems LAUNCH25 on the new group's
+   first period.
+
+The journey passes end to end in ~24s: cold signup → confirm → found group → applications on →
+SuperAdmin records the Small-group tier with LAUNCH25 → two more cold signups apply → founder
+accepts both → roster of three → case opened → investigation scheduled.
+
+**Also from this session's full-suite analysis (12 e2e failures, all resolved):** nine were
+environmental (the WASM editor host wasn't running — it must be up for the full suite: :5180);
+one was a stale test asserting the pre-item-131 disabled-button contract on signup; two were the
+evidence tests, whose diagnosis found and fixed two REAL page bugs — `NearbyDiscovery` and
+`PublicCaseDiscovery` threw `JSDisconnectedException` from `DisposeAsync` (marking every
+navigation off the home page as an unhandled circuit exception), and the evidence submit handed a
+`RemoteBrowserFileStream` straight to `StreamContent`, which could leave the page frozen and even
+double-submit on circuit replay — it now buffers before the HTTP call. The tests themselves were
+also wrong twice over (asserting the note where only the file name renders; navigating away while
+the upload streamed).

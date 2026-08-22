@@ -13,14 +13,20 @@
         <div class="col">
             <h3 class="mb-0">Organizations</h3>
         </div>
-        @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
-        {
-            <div class="col-auto">
-                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))"><BenIcon Name="plus" Class="me-1" />
-                    New Organization
+        <div class="col-auto d-flex gap-2">
+            @* Anyone may found a group — the register endpoint always allowed it, and the billing
+               model depends on it; only the button was missing. The SuperAdmin keeps the fuller
+               admin create beside it. *@
+            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/new"))"><BenIcon Name="plus" Class="me-1" />
+                Start a Group
+            </button>
+            @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+            {
+                <button type="button" class="btn btn-outline-secondary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))">
+                    Admin Create
                 </button>
-            </div>
-        }
+            }
+        </div>
     </div>
 
     @if (_errorMessage is not null)

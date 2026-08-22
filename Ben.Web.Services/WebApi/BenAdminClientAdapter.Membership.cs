@@ -25,9 +25,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default)
         => _api.GetAsync<OrganizationMembershipRequestRecord>($"/api/organizations/{orgId}/membership-requests/my", token);
 
-    public Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default)
-        => _api.PostAsync<object, OrganizationMembershipRequestRecord>(
-               $"/api/organizations/{orgId}/membership-requests", new { Message = message }, token);
+    public Task<(OrganizationMembershipRequestRecord? Result, string? Error)> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationMembershipRequestRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/membership-requests", new { Message = message }, token);
 
     public Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(
         Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote,

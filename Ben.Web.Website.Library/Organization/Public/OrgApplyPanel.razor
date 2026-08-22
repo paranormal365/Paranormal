@@ -1,0 +1,100 @@
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    The applicant's half of membership requests (found missing during item 109's follow-up
+    "super testing"): the API accepted applications and the group could review them, but no
+    screen ever let a person APPLY — the whole feature was write-only from the outside. Lives on
+    the group's public page because that is where somebody decides they want in.
+*@
+
+<div class="card mt-3">
+    <div class="card-body">
+        @if (!_authKnown)
+        {
+            @* nothing until auth state is known — a flash of "sign in to join" at somebody
+               already signed in reads as being signed out *@
+        }
+        else if (!_isAuthenticated)
+        {
+            <p class="mb-2"><strong>Want to join @OrgName?</strong></p>
+            <a class="btn btn-outline-primary btn-sm"
+               href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.ToBaseRelativePath(NavManager.Uri) is var rel && rel.Length > 0 ? "/" + rel : "/")}")">
+                Sign in to apply
+            </a>
+        }
+        else if (_pending is not null)
+        {
+            <p class="mb-0">
+                <strong>Your application is in.</strong>
+                <span class="text-secondary">The group will answer it here and by message.</span>
+            </p>
+        }
+        else if (_applied)
+        {
+            <p class="mb-0"><strong>Application sent.</strong> The group has been notified.</p>
+        }
+        else
+        {
+            <p class="mb-2"><strong>Want to join @OrgName?</strong></p>
+            <textarea id="apply-message" class="form-control mb-2" rows="2" maxlength="1000"
+                      placeholder="A line about who you are or why (optional)" @bind="_message"></textarea>
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2">@_error</div>
+            }
+            <button type="button" id="apply-submit" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="ApplyAsync">
+                @(_busy ? "Sending…" : "Apply to join")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public string OrgName { get; set; } = "";
+
+    private bool _authKnown;
+    private bool _isAuthenticated;
+    private bool _applied;
+    private bool _busy;
+    private string _message = "";
+    private string? _error;
+    private OrganizationMembershipRequestRecord? _pending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _isAuthenticated = UserState.IsAuthenticated;
+        if (_isAuthenticated)
+            _pending = await AdminClient.GetMyMembershipRequestAsync(OrgId);
+
+        _authKnown = true;
+        StateHasChanged();
+    }
+
+    private async Task ApplyAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (result, error) = await AdminClient.ApplyForMembershipAsync(
+            OrgId, string.IsNullOrWhiteSpace(_message) ? null : _message.Trim());
+
+        _busy = false;
+
+        if (result is null)
+        {
+            // The server's sentences here are all actionable — "not accepting applications",
+            // "already a member", "already pending" — and worth showing verbatim.
+            _error = error ?? "That couldn't be sent just now.";
+            return;
+        }
+
+        _applied = true;
+    }
+}

@@ -150,6 +150,17 @@
                 </label>
             </div>
         </div>
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="sub-coupon">Coupon code (optional)</label>
+                <input id="sub-coupon" type="text" class="form-control text-uppercase" style="max-width:14rem"
+                       placeholder="LAUNCH25" @bind="_form.CouponCode" />
+                @* The redemption write-path: the server validates with the same rules the quote
+                   shows, discounts the frozen price, and records the redemption with its money.
+                   This box was missing at first — the request field existed and nothing sent it,
+                   the server-guard-needs-a-UI-path lesson wearing its input-field face. *@
+            </div>
+        </div>
         <p class="text-secondary small">
             The member count and price are frozen from today's values when you save — this screen is
             the manual payment record, so save it when the payment actually happened.
@@ -224,7 +235,8 @@
             new SetOrganizationSubscriptionRequest(
                 _form.Status,
                 Guid.TryParse(_form.TierId, out var tierId) ? tierId : null,
-                _form.Interval, _form.PeriodStart, _form.PeriodEnd, _form.CancelAtPeriodEnd, null));
+                _form.Interval, _form.PeriodStart, _form.PeriodEnd, _form.CancelAtPeriodEnd, null,
+                string.IsNullOrWhiteSpace(_form.CouponCode) ? null : _form.CouponCode.Trim()));
 
         _saving = false;
 
@@ -255,5 +267,6 @@
         public DateTime? PeriodStart;
         public DateTime? PeriodEnd;
         public bool CancelAtPeriodEnd;
+        public string CouponCode = "";
     }
 }

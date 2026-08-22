@@ -616,4 +616,75 @@ public abstract class BenTestBase : PageTest
         }
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
+
+    // ── Promoted from AccountTests for the journey fixture: erasure-safe input on
+    // not-yet-interactive Blazor pages. See each method's remarks.
+
+    /// <summary>Fills a field and retries until the value is actually there.</summary>
+    protected async Task FillAndConfirmAsync(string selector, string value)
+    {
+        var field = Page.Locator(selector);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await field.FillAsync(value);
+            if (await field.InputValueAsync() == value) return;
+        }
+
+        Assert.Fail($"{selector} would not hold \"{value}\" after five attempts.");
+    }
+
+    /// <summary>
+    /// Types an @name, retrying until the characters actually stick.
+    /// </summary>
+    /// <remarks>
+    /// <para>The trap this exists for, and it is not slowness. A Blazor Server page renders its
+    /// inputs before the circuit connects, and this one binds <c>value="@_form.Handle"</c>. A
+    /// character typed in that window goes into the DOM, and then the first interactive render
+    /// overwrites the field with the server's value — which is empty. The keystroke is not merely
+    /// ignored, it is <b>erased</b>, leaving an empty box and no echo.</para>
+    ///
+    /// <para>Measured, the page is interactive about 450ms after navigation on a cold host. So the
+    /// cure is to type again rather than to wait longer: a generous timeout here only turns a fast
+    /// failure into a slow one, and hides a real regression behind a minute and a half of nothing.
+    /// Retrying costs one keystroke when the circuit is already up.</para>
+    ///
+    /// <para>The page's own echo — the hint repeating the normalised name — is the signal, because
+    /// it can only change if a handler ran.</para>
+    /// </remarks>
+    protected async Task TypeHandleAsync(string handle)
+    {
+        var field = Page.Locator("#signup-handle");
+        var firstChar = handle[..1].ToLowerInvariant();
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            await field.ClickAsync();
+            await field.PressSequentiallyAsync(handle[..1], new() { Delay = 20 });
+
+            try
+            {
+                await Expect(Page.Locator(".form-text code").First)
+                    .ToHaveTextAsync($"@{firstChar}", new() { Timeout = 1_500 });
+
+                if (handle.Length > 1)
+                    await field.PressSequentiallyAsync(handle[1..], new() { Delay = 20 });
+
+                return;
+            }
+            catch (Exception)
+            {
+                // Swallowed by the circuit connecting mid-keystroke. Clear whatever survived and
+                // try again — by the second or third attempt the page is always live.
+                await field.FillAsync(string.Empty);
+            }
+        }
+
+        var hint = await Page.Locator(".form-text code").First.InnerTextAsync();
+        Assert.Fail(
+            $"Typing the @name never took after ten attempts. The hint still shows \"{hint}\", "
+            + "which means the page is not becoming interactive at all — a real fault, not a slow "
+            + "start. Check the browser console: an exception during render kills the circuit and "
+            + "leaves the page frozen exactly like this.");
+    }
 }

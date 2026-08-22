@@ -246,8 +246,16 @@
 
     public async ValueTask DisposeAsync()
     {
-        if (_module is not null)
-            await _module.DisposeAsync();
+        // JSDisconnectedException is the ORDINARY dispose path, not an error: navigating away
+        // tears the circuit down first, and a JS call after that cannot be issued. Letting it
+        // escape marks the whole circuit's teardown as an unhandled exception in the log — and
+        // this component sits on the HOME page, so every navigation away from home logged one.
+        try
+        {
+            if (_module is not null)
+                await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
         _dotnetRef?.Dispose();
     }
 }

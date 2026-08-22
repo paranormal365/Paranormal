@@ -256,6 +256,16 @@ keep it. It is how you read the reply and see whether the message has been picke
 only way back to a message sent without an account. If you were signed in when you wrote, the
 message is attached to your account as well.
 
+## Joining a group — or starting your own
+
+On a group's public page, signed in, there's an **Apply to join** box (when the group is taking
+applications). Say a line about yourself if you like, send it, and the group answers — you'll see
+the state of your application right there on their page.
+
+Or found your own: **Organizations → Start a Group** asks only for a name and a web address;
+everything else — members, cases, settings, your public page — is set up from the group's own hub
+once it exists. You're the owner from the first moment.
+
 ## Going to a group's public event
 
 Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
