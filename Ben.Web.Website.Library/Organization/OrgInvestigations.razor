@@ -3,6 +3,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
@@ -112,6 +113,14 @@ else
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>Row to highlight, scroll to, and open the team for, on arrival. This is where a
+    /// click on a case-less investigation lands (there is no case page to open), so the row has
+    /// to be unmissable — highlighted, on screen, and already expanded.</summary>
+    [Parameter] public Guid? FocusInvestigationId { get; set; }
+
+    private Guid? _focused;
+    private bool _scrollPending;
+
     private List<OrgInvestigationRow> _rows = [];
     private List<InvestigationMapPin> _pins = [];
     private List<OrgInvestigationRow> _upcoming = [];
@@ -161,7 +170,33 @@ else
         _pins = _rows.Select(r => new InvestigationMapPin(
             r.Id, r.Title, r.Latitude, r.Longitude, IsPast: r.ScheduledDateTime < now)).ToList();
 
+        if (FocusInvestigationId is { } focus && _rows.Any(r => r.Id == focus))
+            FocusRow(focus);
+
         _loading = false;
+    }
+
+    /// <summary>Highlights a row, opens its team, and queues a scroll to it on the next render.</summary>
+    private void FocusRow(Guid id)
+    {
+        _focused = id;
+        _openTeam = id;
+        _scrollPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollPending || _loading) return;
+        _scrollPending = false;
+
+        try
+        {
+            await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", $"inv-row-{_focused}");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { /* The highlight still marks the row; scrolling is a courtesy. */ }
     }
 
     /// <summary>
@@ -179,10 +214,16 @@ else
         if (row is null) return;
 
         // A case-bound visit belongs on its case's Investigations tab, which is where the binder
-        // and the editing dialog live. A case-less one still has no detail page of its own — its
-        // team is reachable here, via Team, rather than through a link that would 404.
+        // and the editing dialog live. A case-less one has no detail page of its own, so the
+        // click shows it HERE — highlighted, scrolled to, team open. A click must always show
+        // something; silently returning here is the bug Ben reported on 2026-08-22.
         if (row.CaseId is { } caseId)
+        {
             NavManager.NavigateTo($"/organizations/{OrgId}/cases/{caseId}?tab=investigations");
+            return;
+        }
+
+        FocusRow(id);
     }
 
     private static string WhereText(OrgInvestigationRow row)
@@ -221,7 +262,7 @@ else
             <tbody>
                 @foreach (var row in rows)
                 {
-                    <tr>
+                    <tr id="inv-row-@row.Id" class="@(row.Id == _focused ? "table-active" : null)">
                         <td class="text-nowrap">
                             @row.ScheduledDateTime.ToLocalTime().ToDisplayDateTime()
                         </td>

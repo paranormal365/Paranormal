@@ -72,14 +72,20 @@ public sealed class EventEvidenceTests
         return new World(f, orgId, eventId, member, attendee, stranger);
     }
 
-    private static EventEvidenceController Controller(IDbContextFactory<BenDataContext> f, Guid? userId)
+    private static EventEvidenceController Controller(IDbContextFactory<BenDataContext> f, Guid? userId,
+        bool isSuperAdmin = false)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(x => x.OrgFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
                .Returns<Guid, string>((o, n) => $"/tmp/{o}/{n}");
 
         var claims = userId is { } id
-            ? new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id.ToString())], "Bearer")
+            ? new ClaimsIdentity(
+                isSuperAdmin
+                    ? [new Claim(ClaimTypes.NameIdentifier, id.ToString()),
+                       new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin)]
+                    : [new Claim(ClaimTypes.NameIdentifier, id.ToString())],
+                "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role)
             : new ClaimsIdentity();
 
         return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f))
@@ -168,6 +174,18 @@ public sealed class EventEvidenceTests
         var sub = await db.EventEvidenceSubmissions.Include(s => s.UploadFile).SingleAsync();
         Assert.Equal(EvidenceSubmissionStatus.Rejected, sub.Status);
         Assert.False(sub.UploadFile.IsPublic);
+    }
+
+    [Fact]
+    public async Task A_superadmin_who_is_not_a_member_can_review()
+    {
+        // Same bypass rule as CaseFileController — see its SuperAdmin test for the 2026-08-22 bug.
+        var w = await SeedAsync();
+        var id = await SubmitAsync(w, w.AttendeeId);
+
+        var result = await Controller(w.F, w.StrangerId, isSuperAdmin: true).Review(w.OrgId, id,
+            new EventEvidenceController.ReviewEvidenceRequest(true, null), default);
+        Assert.IsNotType<ForbidResult>(result.Result);
     }
 
     [Fact]

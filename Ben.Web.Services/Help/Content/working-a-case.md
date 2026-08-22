@@ -70,6 +70,10 @@ client case — a landmark, a public building, or the group's own outing. Everyt
 works the same way: it appears on the map, the team can check in, and the findings are shared under
 the same rules.
 
+Because there is no case behind it, there is no case page either — so wherever you click one of
+these (your My Investigations list, your profile's map, the group's map), you land here, on the
+group's Investigations tab, with that visit highlighted and its team panel open.
+
 Describe where it is, and the form will tell you if the system already knows the place:
 
 > This place may already be on file.

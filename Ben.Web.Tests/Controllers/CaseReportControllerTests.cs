@@ -28,18 +28,32 @@ public class CaseReportControllerTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
-    private static CaseReportController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static CaseReportController Build(IDbContextFactory<BenDataContext> factory, Guid userId,
+        bool isSuperAdmin = false)
     {
         var ctrl = new CaseReportController(factory);
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
+    }
+
+    [Fact]
+    public async Task GetAll_SuperAdminNonMember_IsNotForbidden()
+    {
+        // Same bypass rule as CaseFileController — see its SuperAdmin test for the 2026-08-22 bug.
+        var seeded = await SeedAsync();
+        var ctrl = Build(seeded.Factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.GetAll(seeded.OrgId, seeded.CaseId, default);
+
+        Assert.IsNotType<ForbidResult>(result.Result);
     }
 
     private static async Task<(IDbContextFactory<BenDataContext> Factory, Guid OrgId, Guid CaseId, Guid UserId)> SeedAsync()

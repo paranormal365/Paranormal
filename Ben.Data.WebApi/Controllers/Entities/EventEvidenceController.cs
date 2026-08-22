@@ -257,7 +257,7 @@ public sealed class EventEvidenceController : BenControllerBase
     // ── helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>Attendance: a confirmed invite for this event, or being on the group's roster.</summary>
-    private static async Task<bool> AttendedAsync(
+    private async Task<bool> AttendedAsync(
         BenDataContext db, Guid eventId, Guid orgId, Guid userId, CancellationToken ct)
     {
         if (await db.EventAttendanceInvites.AnyAsync(i =>
@@ -267,8 +267,10 @@ public sealed class EventEvidenceController : BenControllerBase
         return await IsOrgMemberAsync(db, orgId, userId, ct);
     }
 
-    private static Task<bool> IsOrgMemberAsync(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
-        => db.OrganizationUserMemberships.AnyAsync(m =>
+    // SuperAdmin first, membership second — see CaseFileController.IsOrgMember for why.
+    private async Task<bool> IsOrgMemberAsync(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await db.OrganizationUserMemberships.AnyAsync(m =>
             m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
 
     private static async Task<List<EvidenceSubmissionRecord>> ProjectAsync(

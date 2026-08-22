@@ -52,7 +52,8 @@ public class CaseAudioMixControllerTests
     }
 
     private static CaseAudioMixController BuildController(
-        IDbContextFactory<BenDataContext> factory, Guid userId, Dictionary<string, byte[]> store, Action<byte[]>? onExportWritten = null)
+        IDbContextFactory<BenDataContext> factory, Guid userId, Dictionary<string, byte[]> store, Action<byte[]>? onExportWritten = null,
+        bool isSuperAdmin = false)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("export/mix.wav");
@@ -73,7 +74,11 @@ public class CaseAudioMixControllerTests
             HttpContext = new DefaultHttpContext
             {
                 User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                    isSuperAdmin
+                        ? [new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                           new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin)]
+                        : [new Claim(ClaimTypes.NameIdentifier, userId.ToString())],
+                    "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
@@ -144,6 +149,21 @@ public class CaseAudioMixControllerTests
         var result = await ctrl.Export(orgId, caseId, new ExportAudioMixRequest([]), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Export_SuperAdminNonMember_IsNotForbidden()
+    {
+        // 2026-08-22: the SuperAdmin could open a case's audio mixer but every fetch under it
+        // 403'd — IsOrgMember lacked the bypass the case endpoint itself already had.
+        var (factory, orgId, caseId, _) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, Guid.NewGuid(), store, "a.wav", CreateSineWav(440, 1));
+        var ctrl = BuildController(factory, Guid.NewGuid(), store, isSuperAdmin: true);
+
+        var result = await ctrl.Export(orgId, caseId, RequestFor((caseFile.Id, false, false)), default);
+
+        Assert.IsNotType<ForbidResult>(result.Result);
     }
 
     [Fact]

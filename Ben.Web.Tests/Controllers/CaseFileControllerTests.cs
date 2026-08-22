@@ -30,7 +30,8 @@ public class CaseFileControllerTests
     }
 
     private static CaseFileController BuildController(
-        IDbContextFactory<BenDataContext> factory, Guid userId, Mock<IFileStorageService>? storageMock = null)
+        IDbContextFactory<BenDataContext> factory, Guid userId, Mock<IFileStorageService>? storageMock = null,
+        bool isSuperAdmin = false)
     {
         var storage = storageMock ?? new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
@@ -38,12 +39,13 @@ public class CaseFileControllerTests
                .Returns(Task.CompletedTask);
 
         var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
@@ -102,6 +104,20 @@ public class CaseFileControllerTests
         var result = await ctrl.GetAll(orgId, caseId, default);
 
         Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetAll_SuperAdminNonMember_ReturnsOk()
+    {
+        // The audio-mix bug (2026-08-22): the SuperAdmin could open a case but not list its
+        // files, because this controller's IsOrgMember lacked the SuperAdmin bypass every
+        // sibling case surface already had. Half the page loaded, the other half said Forbid.
+        var (factory, orgId, caseId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
     }
 
     [Fact]
