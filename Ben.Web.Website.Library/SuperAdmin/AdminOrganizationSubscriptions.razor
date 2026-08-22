@@ -1,0 +1,259 @@
+@page "/admin/org-subscriptions"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+<PageTitle>SuperAdmin — Subscriptions</PageTitle>
+
+@*
+    Every organization's standing — including the ones with no subscription row, which are the rows
+    that need attention first. This screen IS the payment provider until a real one is wired in:
+    "this group paid, mark them up to March" happens here.
+
+    The Members column shows now-vs-frozen because the gap between them is what renewal will
+    re-band the group on, and one number without the other invites the wrong conclusion.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Subscriptions</h3>
+        </div>
+    </div>
+
+    <BenListState TItem="OrganizationSubscriptionAdminRecord" Result="@_subsResult" Loading="@_loading"
+                  EmptyText="No organizations exist yet" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_subsResult.Items" TItem="OrganizationSubscriptionAdminRecord"
+                     Sortable="true" Pageable="true" PageSize="25">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrganizationSubscriptionAdminRecord.OrganizationName)" Title="Group" />
+                <GridColumn Field="@nameof(OrganizationSubscriptionAdminRecord.Status)" Title="Status" Width="110px">
+                    <Template>
+                        @{ var s = (OrganizationSubscriptionAdminRecord)context; }
+                        @if (s.Status == SubscriptionStatus.Lapsed)
+                        {
+                            <span class="badge bg-danger">Lapsed</span>
+                        }
+                        else if (s.Status == SubscriptionStatus.Active && s.CancelAtPeriodEnd)
+                        {
+                            <span class="badge bg-warning text-dark">Closing</span>
+                        }
+                        else if (s.Status == SubscriptionStatus.Active)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Free</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Band" Width="150px">
+                    <Template>
+                        @{ var s = (OrganizationSubscriptionAdminRecord)context; }
+                        @(s.SubscriptionTierName ?? "—")
+                        @if (s.ResolvedTierName is not null && s.ResolvedTierName != s.SubscriptionTierName)
+                        {
+                            <div class="small text-warning" title="The band the current member count falls in">
+                                → @s.ResolvedTierName at renewal
+                            </div>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Members" Width="120px">
+                    <Template>
+                        @{ var s = (OrganizationSubscriptionAdminRecord)context; }
+                        @s.CurrentMemberCount
+                        @if (s.Status != SubscriptionStatus.Free && s.CurrentMemberCount != s.MemberCountAtPeriodStart)
+                        {
+                            <span class="text-secondary small">(billed on @s.MemberCountAtPeriodStart)</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Price" Width="120px">
+                    <Template>
+                        @{ var s = (OrganizationSubscriptionAdminRecord)context; }
+                        @if (s.Status != SubscriptionStatus.Free)
+                        {
+                            @($"{s.PriceAtPeriodStart:C2}")
+                            <span class="text-secondary small"> @CadenceLabel(s.Interval)</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Period ends" Width="140px">
+                    <Template>
+                        @{ var s = (OrganizationSubscriptionAdminRecord)context; }
+                        @(s.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "—")
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="110px">
+                    <GridCommandButton Command="Set" Icon="@SvgIcon.Pencil"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((OrganizationSubscriptionAdminRecord)e.Items.First()))">
+                        Set
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="@_showDialog" Title="@($"Subscription — {_editing?.OrganizationName}")">
+    <ChildContent>
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="sub-status">Status</label>
+                <select id="sub-status" class="form-select" @bind="_form.Status">
+                    <option value="@SubscriptionStatus.Free">Free</option>
+                    <option value="@SubscriptionStatus.Active">Active (paid)</option>
+                    <option value="@SubscriptionStatus.Lapsed">Lapsed</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="sub-tier">Band</label>
+                <select id="sub-tier" class="form-select" @bind="_form.TierId">
+                    <option value="">— none —</option>
+                    @foreach (var t in _tiers)
+                    {
+                        <option value="@t.Id">@t.Name (@t.MinMembers–@(t.MaxMembers?.ToString() ?? "∞"))</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="sub-interval">Cadence</label>
+                <select id="sub-interval" class="form-select" @bind="_form.Interval">
+                    <option value="@BillingInterval.Monthly">Monthly</option>
+                    <option value="@BillingInterval.Quarterly">Quarterly</option>
+                    <option value="@BillingInterval.HalfYearly">6-monthly</option>
+                    <option value="@BillingInterval.Yearly">Yearly</option>
+                </select>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label" for="sub-start">Period start</label>
+                <input id="sub-start" type="date" class="form-control" @bind="_form.PeriodStart" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="sub-end">Period end</label>
+                <input id="sub-end" type="date" class="form-control" @bind="_form.PeriodEnd" />
+            </div>
+            <div class="col-auto d-flex align-items-end pb-2">
+                <label>
+                    <input type="checkbox" class="form-check-input" @bind="_form.CancelAtPeriodEnd" />
+                    <span class="ms-1">Cancel at period end</span>
+                </label>
+            </div>
+        </div>
+        <p class="text-secondary small">
+            The member count and price are frozen from today's values when you save — this screen is
+            the manual payment record, so save it when the payment actually happened.
+        </p>
+        @if (_saveError is not null)
+        {
+            <div class="alert alert-danger py-2">@_saveError</div>
+        }
+        <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-secondary" @onclick="() => _showDialog = false">Cancel</button>
+            <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private LoadResult<OrganizationSubscriptionAdminRecord> _subsResult;
+    private IReadOnlyList<SubscriptionTierAdminRecord> _tiers = [];
+
+    private bool _showDialog;
+    private bool _saving;
+    private string? _saveError;
+    private OrganizationSubscriptionAdminRecord? _editing;
+    private SubForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _subsResult = await AdminClient.GetOrganizationSubscriptionsAsync();
+        _tiers = (await AdminClient.GetSubscriptionTiersAsync()).Items;
+        _loading = false;
+    }
+
+    private void OpenEdit(OrganizationSubscriptionAdminRecord sub)
+    {
+        _editing = sub;
+        _form = new SubForm
+        {
+            Status            = sub.Status,
+            TierId            = sub.SubscriptionTierId?.ToString() ?? "",
+            Interval          = sub.Interval,
+            PeriodStart       = sub.CurrentPeriodStart,
+            PeriodEnd         = sub.CurrentPeriodEnd,
+            CancelAtPeriodEnd = sub.CancelAtPeriodEnd,
+        };
+        _saveError = null;
+        _showDialog = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+        _saving = true;
+        _saveError = null;
+
+        var (result, error) = await AdminClient.SetOrganizationSubscriptionAsync(_editing.OrganizationId,
+            new SetOrganizationSubscriptionRequest(
+                _form.Status,
+                Guid.TryParse(_form.TierId, out var tierId) ? tierId : null,
+                _form.Interval, _form.PeriodStart, _form.PeriodEnd, _form.CancelAtPeriodEnd, null));
+
+        _saving = false;
+
+        if (result is null)
+        {
+            _saveError = error ?? "The subscription could not be saved.";
+            return;
+        }
+
+        _showDialog = false;
+        await LoadAsync();
+    }
+
+    private static string CadenceLabel(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "/mo",
+        BillingInterval.Quarterly  => "/qtr",
+        BillingInterval.HalfYearly => "/6mo",
+        BillingInterval.Yearly     => "/yr",
+        _                          => "",
+    };
+
+    private sealed class SubForm
+    {
+        public SubscriptionStatus Status = SubscriptionStatus.Free;
+        public string TierId = "";
+        public BillingInterval Interval = BillingInterval.Monthly;
+        public DateTime? PeriodStart;
+        public DateTime? PeriodEnd;
+        public bool CancelAtPeriodEnd;
+    }
+}

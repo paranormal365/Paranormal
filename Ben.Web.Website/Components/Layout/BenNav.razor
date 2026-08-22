@@ -301,6 +301,12 @@
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
         }),
+        new NavItem("Billing", "dollar-sign", children: new[]
+        {
+            new NavItem("Price Bands",   "layers",      "/admin/subscription-tiers"),
+            new NavItem("Coupons",       "tag",         "/admin/coupons"),
+            new NavItem("Subscriptions", "credit-card", "/admin/org-subscriptions"),
+        }),
         new NavItem("System", "settings", children: new[]
         {
             new NavItem("Site Settings",    "settings", "/admin/site-settings"),
