@@ -579,7 +579,9 @@
         _permissionRecords = [..permsTask.Result];
         var groups  = groupsTask.Result.Items;
         var members = membersTask.Result.Items;
-        var users   = usersTask.Result;
+        // A name lookup for the permission rows. If the directory is refused the rows still
+        // render, showing ids where names would be — visible, and not a claim about access.
+        var users   = usersTask.Result.Items;
 
         _groupOptions = groups.Select(g => new GroupPermOption(g.Id, g.Name)).ToList();
         _orgMemberOptions = members

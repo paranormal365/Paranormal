@@ -1,6 +1,8 @@
 @namespace Ben.Web.Website.Library.User
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <div class="card mb-3">
     <div class="card-body">
@@ -29,7 +31,12 @@
         }
         else
         {
-            @if (_rows.Count == 0 && !_showForm)
+            @if (_rowsResult.Failed)
+            {
+                @* Somebody shown an empty list adds a duplicate of what is already there. *@
+                <BenListState TItem="MyAddressRecord" Result="@_rowsResult" OnRetry="@LoadAsync" />
+            }
+            else if (_rows.Count == 0 && !_showForm)
             {
                 <p class="text-secondary small fst-italic mt-3 mb-0">No addresses yet.</p>
             }
@@ -124,6 +131,7 @@
 
 @code {
     private List<MyAddressRecord> _rows = new();
+    private LoadResult<MyAddressRecord> _rowsResult;
     private IReadOnlyList<UserAddressTypeRecord> _types = Array.Empty<UserAddressTypeRecord>();
     private bool _loading = true;
     private bool _saving;
@@ -141,14 +149,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _types = await AdminClient.GetUserAddressTypesAsync();
+        _types = (await AdminClient.GetUserAddressTypesAsync()).Items;
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _rows = await AdminClient.GetMyAddressesAsync();
+        _rowsResult = await AdminClient.GetMyAddressesAsync();
+        _rows       = [.. _rowsResult.Items];
         _loading = false;
     }
 

@@ -168,6 +168,7 @@
     private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
     private List<MyMessageRecord> _messages = [];
     private LoadResult<MyMessageRecord> _messagesResult;
+    private LoadResult<PendingPermissionRequestRecord> _pendingRequestsResult;
     private List<PendingPermissionRequestRecord> _pendingRequests = [];
 
     private MyMessageRecord? _openMessage;
@@ -203,7 +204,8 @@
             await Task.WhenAll(messagesTask, requestsTask);
             _messagesResult  = await messagesTask;
             _messages        = _messagesResult.Items.ToList();
-            _pendingRequests = await requestsTask;
+            _pendingRequestsResult = await requestsTask;
+            _pendingRequests       = [.. _pendingRequestsResult.Items];
         }
         catch
         {

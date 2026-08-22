@@ -104,7 +104,7 @@ public interface IWebApiClient
     Task<AcceptInviteResult?> AcceptInviteExistingAsync(string token, CancellationToken cancellationToken = default);
 
     // Example typed endpoint usage using service models.
-    Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
 
     Task<IReadOnlyList<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default);
     Task<IReadOnlyList<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default);
@@ -118,7 +118,7 @@ public interface IWebApiClient
     /// <summary>Minimal Id+DisplayName directory of an org's active members — see
     /// OrganizationController.GetUserDirectory's doc comment for why this exists instead of the
     /// full AppUserRecord (now SuperAdmin-only).</summary>
-    Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
+    Task<LoadResult<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     // Upload Files
     Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default);

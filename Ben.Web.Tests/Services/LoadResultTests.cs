@@ -93,6 +93,65 @@ public sealed class LoadResultTests
             });
     }
 
+    // ── Map carries the whole outcome, not just the items ─────────────────────
+
+    /// <summary>
+    /// A reshaped result keeps the ended session.
+    /// </summary>
+    /// <remarks>
+    /// This is the bug <c>Map</c> exists to prevent, and it had already happened twice. An adapter
+    /// that projects a response by hand writes <c>Ok(result.Items.Select(…))</c> and remembers to
+    /// carry <c>Reason</c> across, because a missing reason is visible. <c>SessionExpired</c> is a
+    /// bool nobody notices dropping — and dropping it turns "sign in again" back into "try again",
+    /// which is advice that cannot work.
+    /// </remarks>
+    [Fact]
+    public void Map_keeps_an_ended_session_across_a_projection()
+    {
+        var ended = LoadResult<string>.SessionEnded();
+
+        var mapped = ended.Map(s => s.Length);
+
+        Assert.True(mapped.Failed);
+        Assert.True(mapped.SessionExpired);
+        Assert.Empty(mapped.Items);
+    }
+
+    /// <summary>A reshaped failure keeps the server's sentence.</summary>
+    [Fact]
+    public void Map_keeps_the_reason_across_a_projection()
+    {
+        var failed = LoadResult<string>.Failure("The server answered 403 (Forbidden).");
+
+        var mapped = failed.Map(s => s.Length);
+
+        Assert.True(mapped.Failed);
+        Assert.False(mapped.SessionExpired);
+        Assert.Equal("The server answered 403 (Forbidden).", mapped.Reason);
+    }
+
+    /// <summary>A successful projection reshapes the items and stays successful.</summary>
+    [Fact]
+    public void Map_projects_the_items_of_a_successful_load()
+    {
+        var ok = LoadResult<string>.Ok(["alpha", "beta"]);
+
+        var mapped = ok.Map(s => s.Length);
+
+        Assert.False(mapped.Failed);
+        Assert.Equal([5, 4], mapped.Items);
+    }
+
+    /// <summary>An empty success maps to an empty success, not to a failure.</summary>
+    [Fact]
+    public void Map_of_an_empty_success_is_still_empty_and_successful()
+    {
+        var mapped = LoadResult<string>.Ok([]).Map(s => s.Length);
+
+        Assert.False(mapped.Failed);
+        Assert.True(mapped.IsEmpty);
+    }
+
     // ── 401 is not "couldn't load this" ───────────────────────────────────────
 
     /// <summary>

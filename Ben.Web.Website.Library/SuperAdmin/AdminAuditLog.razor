@@ -335,7 +335,7 @@
         if (_allUsers.Count > 0) return;
         try
         {
-            var users = await AdminClient.GetAllUsersAsync();
+            var users = (await AdminClient.GetAllUsersAsync()).Items;
             _allUsers = users
                 .Select(u => new UserSearchResult(u.Id, u.Email ?? "", u.DisplayName))
                 .OrderBy(u => u.Display)
