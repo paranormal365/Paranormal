@@ -27,11 +27,12 @@ public readonly struct LoadResult<T>
 {
     private readonly IReadOnlyList<T>? _items;
 
-    private LoadResult(IReadOnlyList<T>? items, bool failed, string? reason)
+    private LoadResult(IReadOnlyList<T>? items, bool failed, string? reason, bool sessionExpired = false)
     {
-        _items  = items;
-        Failed  = failed;
-        Reason  = reason;
+        _items         = items;
+        Failed         = failed;
+        Reason         = reason;
+        SessionExpired = sessionExpired;
     }
 
     /// <summary>What came back. Empty when the load failed — never null.</summary>
@@ -57,9 +58,31 @@ public readonly struct LoadResult<T>
     /// <summary>True when the load succeeded and returned nothing — "there is genuinely nothing here".</summary>
     public bool IsEmpty => !Failed && Items.Count == 0;
 
+    /// <summary>
+    /// The caller is no longer signed in — the server answered 401.
+    /// </summary>
+    /// <remarks>
+    /// <para>A subset of <see cref="Failed"/>, so any call site that only checks <c>Failed</c>
+    /// keeps working. It is separated out because 401 is the one status where "couldn't load this,
+    /// try again" is the wrong sentence: nothing about the list is broken and retrying will fail
+    /// identically. The person has been signed out, and the only useful thing to say is so.</para>
+    ///
+    /// <para>Deliberately <b>not</b> 403. Forbidden means the session is fine and this particular
+    /// thing is not theirs to see — telling them to sign in again would send them round a loop
+    /// that ends where it started.</para>
+    /// </remarks>
+    public bool SessionExpired { get; }
+
     /// <summary>A successful load.</summary>
     public static LoadResult<T> Ok(IReadOnlyList<T>? items) => new(items, failed: false, reason: null);
 
     /// <summary>A load that did not happen. Carries the server's sentence when there was one.</summary>
     public static LoadResult<T> Failure(string? reason = null) => new(null, failed: true, reason);
+
+    /// <summary>A load refused because the caller is not signed in any more.</summary>
+    /// <remarks>
+    /// No reason string: "The server answered 401 (Unauthorized)" is a fact about HTTP, not
+    /// something to show a person, and the surface renders its own sentence for this state.
+    /// </remarks>
+    public static LoadResult<T> SessionEnded() => new(null, failed: true, reason: null, sessionExpired: true);
 }

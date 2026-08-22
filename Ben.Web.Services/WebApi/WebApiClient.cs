@@ -78,6 +78,12 @@ public sealed class WebApiClient : IWebApiClient
         {
             if (!response.IsSuccessStatusCode)
             {
+                // 401 before anything else. A dead token is not a broken list: the page should say
+                // the session ended and offer a way back, not "couldn't load this — try again",
+                // which invites a retry that is certain to fail the same way. Item 133.
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    return LoadResult<T>.SessionEnded();
+
                 var body = await response.Content.ReadAsStringAsync(token);
 
                 // Same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence,

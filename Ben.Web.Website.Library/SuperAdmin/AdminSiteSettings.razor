@@ -25,13 +25,17 @@
         <div class="alert alert-success py-2">Saved.</div>
     }
 
-    @if (_settings is null)
-    {
-        <p class="text-secondary">Loading…</p>
-    }
-    else
-    {
-        @foreach (var setting in _settings)
+    @* Was `@if (_settings is null) { Loading… }`, which stayed true after a failed load — so the
+       page showed the red error banner and a spinner at the same time, reading as "it failed, but
+       it is also still trying". BenListState is exactly the missing third and fourth state, and it
+       is what tells a signed-out SuperAdmin to sign in rather than quoting a 401 at them.
+       Item 133. *@
+    <BenListState TItem="SiteSettingRecord" Result="@_result" Loading="@_loading"
+                  LoadingText="Loading site settings…"
+                  EmptyText="No site settings are defined yet"
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+        @foreach (var setting in _settings ?? [])
         {
             var s = setting;
             <div class="card mb-3">
@@ -117,13 +121,16 @@
                 </div>
             </div>
         }
-    }
+        </ChildContent>
+    </BenListState>
 </div>
 
 @code {
     private const string DefaultAvatarKey = "avatar.default.upload-file-id";
 
     private List<SiteSettingRecord>? _settings;
+    private LoadResult<SiteSettingRecord> _result;
+    private bool _loading = true;
     private readonly Dictionary<string, string> _drafts = [];
     private string? _savingKey;
     private string? _savedKey;
@@ -153,21 +160,21 @@
             // LoadSiteSettings, not GetSiteSettings: the old call turned any refusal into an empty
             // list, so this page rendered blank on the ishaunted.com deploy with no error anywhere
             // — the catch below never fired, because nothing threw (items 120 and 126).
-            var result = await AdminClient.GetSiteSettingsAsync();
+            _result = await AdminClient.GetSiteSettingsAsync();
 
-            if (result.Failed)
+            if (_result.Failed)
             {
-                _error = result.Reason is { } why
-                    ? $"Couldn't load site settings. {why}"
-                    : "Couldn't load site settings — the server could not be reached.";
+                // No _error banner: BenListState renders the failure, and a signed-out reader gets
+                // a way back rather than a status code. Setting both would say it twice.
                 return;
             }
 
-            _settings = result.Items.ToList();
+            _settings = _result.Items.ToList();
             foreach (var s in _settings) _drafts[s.Key] = s.Value ?? string.Empty;
             await LoadAvatarPreviewAsync();
         }
-        catch { _error = "Couldn't load site settings."; }
+        catch { _result = LoadResult<SiteSettingRecord>.Failure(); }
+        finally { _loading = false; }
     }
 
     /// <summary>
