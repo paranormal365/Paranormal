@@ -1803,6 +1803,15 @@ else
         {
             var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity, _scanOptions);
 
+            // Null means the scan did not run. "Nothing stood out from the background" is a
+            // finding somebody acts on, so it must never be printed for a request that failed.
+            if (candidates is null)
+            {
+                _scanMessage = "The scan couldn't be run just now. This recording has not been "
+                             + "examined — try again rather than reading anything into it.";
+                return;
+            }
+
             // Reload everything rather than merging the response in: the scan replaces the previous
             // pending set server-side, so the local list is stale in ways the response alone
             // doesn't describe.
