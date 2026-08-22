@@ -98,6 +98,13 @@ it before being restored — the saving's floor, the month arithmetic, the per-c
 the new-versus-renewal direction, and the per-person restriction. A rule nobody has watched fail is
 a rule nobody has tested.
 
+## Arc 2 — tiers as contracts, administered live
+
+Ben's follow-on specification (edit tiers in admin → the public pricing page updates; paid groups
+keep the terms they bought for the length of the period; improvements immediate, reductions at
+renewal with two weeks' notice by internal message) is planned in detail in
+`ProjectNotes/Plan-Item85-Tier-Contracts.md` — six phases, A through F.
+
 ## Still to build
 
 **Item 85**
