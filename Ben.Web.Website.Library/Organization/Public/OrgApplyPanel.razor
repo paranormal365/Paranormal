@@ -2,6 +2,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Website.Library.Help
 
 @*
     The applicant's half of membership requests (found missing during item 109's follow-up
@@ -38,7 +39,7 @@
         }
         else
         {
-            <p class="mb-2"><strong>Want to join @OrgName?</strong></p>
+            <p class="mb-2"><strong>Want to join @OrgName?</strong><HelpLink Slug="getting-started" Anchor="joining-a-group-or-starting-your-own" /></p>
             <textarea id="apply-message" class="form-control mb-2" rows="2" maxlength="1000"
                       placeholder="A line about who you are or why (optional)" @bind="_message"></textarea>
             @if (_error is not null)

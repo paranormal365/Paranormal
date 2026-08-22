@@ -97,3 +97,20 @@ worth keeping.
 That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
 scheduled investigation appears in your list straight away but on the map only once someone has
 confirmed you were there.
+
+## Security — your password and two-step sign-in
+
+The profile's **Security** tab holds how you get into your account.
+
+**Password.** Change it here whenever you like. If your account was created by signing in with
+Microsoft it has *no* password yet — the panel says so and offers **Add password** instead, which
+asks for no current password because being signed in already proves who you are. Adding one lets
+you sign in either way from then on; Microsoft sign-in keeps working.
+
+Locked out entirely? **Forgot your password?** on the sign-in page emails you a link, and that
+same link is how a Microsoft-only account sets its first password.
+
+**Two-step sign-in.** Optional, off unless you turn it on, and worth turning on. Scan the code
+with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
+Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
+in when your phone is not to hand, and each one works once.

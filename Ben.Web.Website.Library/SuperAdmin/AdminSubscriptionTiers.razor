@@ -8,6 +8,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
 
 <PageTitle>SuperAdmin — Price Bands</PageTitle>
 
@@ -26,7 +27,7 @@
 <div class="container-fluid px-3">
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <h3 class="mb-0">Price Bands</h3>
+            <h3 class="mb-0">Price Bands<HelpLink Slug="site-administration" Anchor="billing" /></h3>
         </div>
         <div class="col-auto">
             <button type="button" class="btn btn-primary" @onclick="OpenCreate">

@@ -3,6 +3,7 @@
 @using Ben.Web.Services.WebApi
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Website.Library.Help
 
 @*
     Evidence offered by public-event attendees, waiting on the group (item 111). Renders nothing
@@ -13,7 +14,7 @@
 @if (_queue.Items.Count > 0)
 {
     <div class="card border-primary mb-3">
-        <div class="card-header"><strong>Evidence from your public events</strong> — waiting on a member's review</div>
+        <div class="card-header"><strong>Evidence from your public events</strong> — waiting on a member's review<HelpLink Slug="working-a-case" Anchor="evidence-from-people-who-attended-a-public-event" /></div>
         <div class="card-body">
             <p class="text-secondary small mb-2">
                 Accepting puts a submission into the event's <strong>public</strong> record,
