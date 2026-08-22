@@ -425,7 +425,7 @@ else
     private async Task LoadOrgTemplatesAsync()
     {
         if (OrgId is not Guid orgId) return;
-        _orgTemplates = await AdminClient.GetCmsTemplatesAsync(orgId, CmsTemplateScope.Section);
+        _orgTemplates = (await AdminClient.GetCmsTemplatesAsync(orgId, CmsTemplateScope.Section)).Items;
     }
 
     /// <summary>
@@ -519,8 +519,8 @@ else
         // have silently offered investigations, and every id it saved would have resolved to
         // nothing.
         _embedChoices = SectionType is CmsSectionType.EmbeddedCases or CmsSectionType.CaseMedia
-            ? [.. await AdminClient.GetEmbeddableCasesAsync(orgId)]
-            : [.. await AdminClient.GetEmbeddableInvestigationsAsync(orgId)];
+            ? [.. (await AdminClient.GetEmbeddableCasesAsync(orgId)).Items]
+            : [.. (await AdminClient.GetEmbeddableInvestigationsAsync(orgId)).Items];
         _embedLoading = false;
         StateHasChanged();
     }
@@ -605,7 +605,7 @@ else
         _mediaLoading = true;
         StateHasChanged();
 
-        _mediaChoices = [.. await AdminClient.GetPublishableCaseMediaAsync(orgId, _mediaCaseId)];
+        _mediaChoices = [.. (await AdminClient.GetPublishableCaseMediaAsync(orgId, _mediaCaseId)).Items];
         _mediaLoadedFor = _mediaCaseId;
         _mediaLoading = false;
         StateHasChanged();

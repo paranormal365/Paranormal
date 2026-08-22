@@ -131,7 +131,7 @@
 
     private async Task LoadAsync()
     {
-        try { _questions = (await AdminClient.GetMembershipQuestionsAsync(OrgId)).ToList(); }
+        try { _questions = (await AdminClient.GetMembershipQuestionsAsync(OrgId)).Items.ToList(); }
         catch { _error = "Failed to load questions."; }
     }
 

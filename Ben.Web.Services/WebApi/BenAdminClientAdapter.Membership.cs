@@ -19,11 +19,8 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Membership Requests ───────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationMembershipRequestRecord>> GetMembershipRequestsAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationMembershipRequestRecord>>($"/api/organizations/{orgId}/membership-requests", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrganizationMembershipRequestRecord>> GetMembershipRequestsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrganizationMembershipRequestRecord>($"/api/organizations/{orgId}/membership-requests", token);
 
     public Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default)
         => _api.GetAsync<OrganizationMembershipRequestRecord>($"/api/organizations/{orgId}/membership-requests/my", token);
@@ -44,11 +41,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Membership Questions (Phase 3) ────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrganizationMembershipQuestionRecord>> GetMembershipQuestionsAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrganizationMembershipQuestionRecord>>($"/api/organizations/{orgId}/membership-questions", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrganizationMembershipQuestionRecord>> GetMembershipQuestionsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrganizationMembershipQuestionRecord>($"/api/organizations/{orgId}/membership-questions", token);
 
     public Task<OrganizationMembershipQuestionRecord?> CreateMembershipQuestionAsync(Guid orgId, UpsertMembershipQuestionRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertMembershipQuestionRequest, OrganizationMembershipQuestionRecord>($"/api/organizations/{orgId}/membership-questions", request, token);
@@ -71,9 +65,6 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/membership-requests/{requestId}/vote",
                new { VoteType = voteType, Comment = comment }, token);
 
-    public async Task<IReadOnlyList<MembershipReviewVoteRecord>> GetMembershipVotesAsync(Guid orgId, Guid requestId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<MembershipReviewVoteRecord>>($"/api/organizations/{orgId}/membership-requests/{requestId}/votes", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<MembershipReviewVoteRecord>> GetMembershipVotesAsync(Guid orgId, Guid requestId, CancellationToken token = default)
+        => _api.GetListAsync<MembershipReviewVoteRecord>($"/api/organizations/{orgId}/membership-requests/{requestId}/votes", token);
 }

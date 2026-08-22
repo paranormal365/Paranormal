@@ -285,8 +285,8 @@
             // No coordinates yet — nothing has geocoded what is being typed. The server treats
             // unknown distance as "no opinion" and matches on the text, which is the whole reason
             // the rule tolerates a missing position.
-            var found = await AdminClient.FindPlaceCandidatesAsync(
-                _street, _city, _state, _zip, _name, latitude: null, longitude: null);
+            var found = (await AdminClient.FindPlaceCandidatesAsync(
+                _street, _city, _state, _zip, _name, latitude: null, longitude: null)).Items;
             _candidates = found.ToList();
         }
         catch

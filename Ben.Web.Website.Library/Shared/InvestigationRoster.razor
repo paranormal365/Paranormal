@@ -287,11 +287,11 @@
     {
         try
         {
-            _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).ToList();
+            _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).Items.ToList();
             _arrivedCount = _roster.Count(r => r.DidAttend == true);
             _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
 
-            _findings = (await AdminClient.GetInvestigationFindingsAsync(OrgId, InvestigationId)).ToList();
+            _findings = (await AdminClient.GetInvestigationFindingsAsync(OrgId, InvestigationId)).Items.ToList();
             _myFinding = _findings.FirstOrDefault(f => f.AppUserId == UserState.UserId);
 
             // Only seeded from the server when the box is untouched. Overwriting what somebody is
@@ -354,8 +354,14 @@
         try
         {
             // The whole roster comes back, because naming a lead also clears somebody else's row.
-            _roster = (await AdminClient.SetInvestigationLeadAsync(
-                OrgId, InvestigationId, entry.AttendeeId, isLead)).ToList();
+            // The whole roster comes back, so a refused change must not be applied as one:
+            // an empty roster here would wipe everybody off the screen as though it had worked.
+            var (roster, error) = await AdminClient.SetInvestigationLeadAsync(
+                OrgId, InvestigationId, entry.AttendeeId, isLead);
+
+            if (error is not null) { _error = error; return; }
+
+            _roster  = roster.ToList();
             _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
         }
         catch

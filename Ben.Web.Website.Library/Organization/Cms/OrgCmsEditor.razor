@@ -606,7 +606,7 @@
         try
         {
             // Get org name from the pages list (or first page's org)
-            _pages = await AdminClient.GetCmsPagesAsync(OrgId);
+            _pages = (await AdminClient.GetCmsPagesAsync(OrgId)).Items;
             _logos = (await AdminClient.GetOrgLogosAsync(OrgId)).Items;
             _groups = (await AdminClient.GetGroupsAsync(OrgId)).Items;
 
@@ -651,7 +651,7 @@
         _pageForm     = new PageFormModel { SortOrder = (_pages?.Count ?? 0) + 1 };
         _showPageDialog = true;
 
-        _pageTemplates = [.. await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)];
+        _pageTemplates = [.. (await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)).Items];
     }
 
     private void OpenEditPageDialog(CmsPageListItem pg)
@@ -811,13 +811,13 @@
         // not seeing StateHasChanged() calls made after the dialog is already open.
         try
         {
-            var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+            var allFiles = (await AdminClient.GetOrgSharedFilesAsync(OrgId)).Items;
             _orgImageFiles = allFiles
                 .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (_fileTypes is null)
-                _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+                _fileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
 
             // Auto-select the dedicated "Logo" type; fall back to first available
             if (_fileTypes is not null && _uploadFileTypeId == Guid.Empty)
@@ -882,7 +882,7 @@
                 _selectedLogoFileId = uploaded.Id;
                 _uploadedLogoName   = file.Name;
                 // Refresh the library list so the new image appears
-                var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+                var allFiles = (await AdminClient.GetOrgSharedFilesAsync(OrgId)).Items;
                 _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
             }
         }

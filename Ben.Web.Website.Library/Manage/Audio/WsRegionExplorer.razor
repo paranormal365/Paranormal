@@ -374,8 +374,8 @@
             else
                 _loadError = "Could not clip audio for this region. Only WAV and MP3 sources are supported.";
 
-            _fileTypes = typesTask.Result;
-            _notes     = FilterNotesForRegion(notesTask.Result);
+            _fileTypes = typesTask.Result.Items;
+            _notes     = FilterNotesForRegion(notesTask.Result.Items);
 
             if (_fileTypes.Any())
                 _clipFileTypeId = _fileTypes[0].Id;
@@ -411,7 +411,7 @@
         _loadingNotes = true;
         try
         {
-            var all = await AdminClient.GetRegionNotesAsync(FileId);
+            var all = (await AdminClient.GetRegionNotesAsync(FileId)).Items;
             _notes = FilterNotesForRegion(all);
             _noteError = null;
         }

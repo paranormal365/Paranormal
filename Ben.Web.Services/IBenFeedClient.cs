@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Feed;
 
@@ -31,7 +32,7 @@ public interface IBenFeedClient
         string? mode = null, string? hashtag = null, string? cursor = null, CancellationToken token = default);
 
     /// <summary>One post and its replies, the root first. Empty when the post is gone or hidden.</summary>
-    Task<IReadOnlyList<FeedPostRecord>> GetThreadAsync(Guid postId, CancellationToken token = default);
+    Task<LoadResult<FeedPostRecord>> GetThreadAsync(Guid postId, CancellationToken token = default);
 
     /// <summary>Somebody's feed profile — their counts, and whether the reader follows them.</summary>
     Task<FeedProfileRecord?> GetFeedProfileAsync(Guid appUserId, CancellationToken token = default);
@@ -55,7 +56,7 @@ public interface IBenFeedClient
     // ── Moderation (SuperAdmin) ──────────────────────────────────────────────
 
     /// <summary>The moderation queue, oldest first. Omit the outcome for what is still pending.</summary>
-    Task<IReadOnlyList<FeedReportRecord>> GetFeedReportsAsync(
+    Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(
         FeedReportOutcome? outcome = null, CancellationToken token = default);
 
     /// <summary>

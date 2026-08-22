@@ -120,7 +120,7 @@
         // work for somebody who will never sign in — and the wait can never complete for them.
         try
         {
-            _publications = await Client.GetPublicPublicationsAsync();
+            _publications = (await Client.GetPublicPublicationsAsync()).Items;
         }
         finally
         {
@@ -131,7 +131,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) return;
 
-        _subscriptions = await Client.GetMySubscriptionsAsync();
+        _subscriptions = (await Client.GetMySubscriptionsAsync()).Items;
         StateHasChanged();
     }
 }

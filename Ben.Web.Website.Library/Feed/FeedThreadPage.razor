@@ -6,6 +6,8 @@
 @inject IBenAdminClient Feed
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Post</PageTitle>
 
@@ -78,6 +80,7 @@
 
     private FeedPostRecord? _root;
     private readonly List<FeedPostRecord> _replies = [];
+    private LoadResult<FeedPostRecord> _threadResult;
     private string? _error;
     private bool _loading = true;
 
@@ -100,10 +103,11 @@
         {
             // The endpoint returns the root first, then its replies in order.
             var thread = await Feed.GetThreadAsync(PostId);
-            if (thread.Count == 0) return;
+            _threadResult = thread;
+            if (thread.Items.Count == 0) return;
 
-            _root = thread[0];
-            _replies.AddRange(thread.Skip(1));
+            _root = thread.Items[0];
+            _replies.AddRange(thread.Items.Skip(1));
         }
         finally
         {

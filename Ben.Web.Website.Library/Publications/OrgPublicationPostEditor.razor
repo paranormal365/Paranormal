@@ -127,6 +127,7 @@
 
     private bool _loading = true;
     private bool _notFound;
+    private string? _loadError;
     private bool _working;
     private bool _saved;
     private string? _error;
@@ -149,8 +150,14 @@
         {
             if (_isNew) return;
 
-            var post = (await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId))
-                .FirstOrDefault(p => p.Id == PostId);
+            var posts = await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId);
+            var post  = posts.Items.FirstOrDefault(p => p.Id == PostId);
+
+            // "Not found" and "we could not look" are different answers, and the first one sends
+            // an author away believing their draft is gone.
+            if (posts.Failed) { _loadError = posts.SessionExpired
+                ? "You've been signed out. Sign in again to open this post."
+                : posts.Reason ?? "This post could not be loaded."; return; }
 
             if (post is null) { _notFound = true; return; }
 
