@@ -13,7 +13,12 @@
 {
     <div class="container py-5 text-center">
         <p class="lead">You must be signed in to submit a request.</p>
-        <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/login"))">Sign In</button>
+        @* An anchor, not @@onclick. This is the first page a signed-out visitor reaches, and an
+           @@onclick handler only works once the SignalR circuit is live — measured at ~50ms after
+           the button is painted on localhost, and far longer over a real network. A click in that
+           window is dropped with no feedback. A plain href needs no circuit, survives a slow
+           connection, works with scripting off, and can be opened in a new tab. Item 131. *@
+        <a href="/login" class="btn btn-primary">Sign In</a>
     </div>
     return;
 }

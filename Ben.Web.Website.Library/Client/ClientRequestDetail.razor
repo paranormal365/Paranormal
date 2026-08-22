@@ -13,9 +13,9 @@
 <div class="container-fluid py-3" style="max-width:860px;">
 
     <div class="d-flex align-items-center gap-2 mb-4">
-        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/my-requests"))"><BenIcon Name="arrow-left" Class="me-1" />
+        <a href="/my-requests" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")"><BenIcon Name="arrow-left" Class="me-1" />
             My Requests
-        </button>
+        </a>
         <span class="text-secondary">/</span>
         <h5 class="mb-0">Request Details</h5>
     </div>

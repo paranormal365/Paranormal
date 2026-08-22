@@ -18,9 +18,9 @@
     {
         <div class="row mb-3 align-items-center">
             <div class="col">
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+                <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")"><BenIcon Name="arrow-left" Class="me-1" />
                     Back to Organizations
-                </button>
+                </a>
                 <h3 class="d-inline-block ms-3 mb-0">CMS — @(_orgName ?? OrgId.ToString())</h3>
             </div>
         </div>

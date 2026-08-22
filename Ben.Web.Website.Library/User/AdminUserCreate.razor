@@ -10,9 +10,9 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => NavManager.NavigateTo("/admin/users"))"><BenIcon Name="arrow-left" Class="me-1" />
+            <a href="/admin/users" class="btn btn-link text-decoration-none"><BenIcon Name="arrow-left" Class="me-1" />
                 Back to Users
-            </button>
+            </a>
             <h3 class="d-inline-block ms-3 mb-0">New User</h3>
         </div>
     </div>
@@ -71,9 +71,9 @@
             <button type="button" class="btn btn-primary" @onclick="CreateUser" disabled="@(!(!_isSaving))"><BenIcon Name="save" Class="me-1" />
                 @(_isSaving ? "Creating…" : "Create User")
             </button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="@(() => NavManager.NavigateTo("/admin/users"))">
+            <a href="/admin/users" class="btn btn-outline-secondary">
                 Cancel
-            </button>
+            </a>
         </div>
 
     </div>

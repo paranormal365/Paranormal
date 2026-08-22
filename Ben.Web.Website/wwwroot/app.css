@@ -500,3 +500,71 @@ header .profile-image {
 header .notification-bell {
     margin-right: 0.5rem;
 }
+
+/* ── Placeholders must read as absent text ───────────────────────────────────
+   In night mode the template's placeholder colour is --bs-secondary-color,
+   rgba(222,226,230,.75) — the same hue as body text (#dee2e6) at 75% opacity. Measured against
+   real input text it came out at a contrast ratio of 1.00: identical. A grey "sarahmitchell"
+   sitting in the @name box read as a filled-in value, which is how somebody fills in a signup
+   form, skips that field believing it already had a name in it, and reports the button as dead.
+
+   A placeholder should be legible but unmistakably not a value. These sit around 3:1 against the
+   input background — clearly present, clearly secondary — and are defined per theme so each one
+   is chosen against its own background rather than one value being asked to work on both. */
+:root {
+    --ben-placeholder-color: rgba(33, 37, 41, .45);
+}
+
+:root[data-bs-theme="dark"] {
+    --ben-placeholder-color: rgba(222, 226, 230, .38);
+}
+
+.form-control::placeholder,
+.form-select::placeholder,
+textarea.form-control::placeholder {
+    color: var(--ben-placeholder-color) !important;
+    opacity: 1;
+}
+
+/* ── The @name prefix reports the availability check ─────────────────────────
+   Grey with nothing to say, blue while the answer is in flight, green or red once it lands.
+
+   Two things have to be overridden for that to be visible at all. The template paints
+   `.input-group:focus-within .input-group-text` with a primary-500 fill and
+   `color: var(--bs-white) !important` — so while the field has focus, which is exactly when
+   somebody is typing a name, the prefix was forced to white and none of the states showed. And
+   the utility classes it would otherwise use (.text-success and friends) lose that fight on
+   specificity, being a single class against three.
+
+   So the chip keeps its own neutral, theme-following background in every state and carries the
+   colour itself. --bs-primary/success/danger are identical in both themes by design; the resting
+   grey is --bs-secondary-color, which follows the theme. */
+.input-group .input-group-text.ben-handle-prefix,
+.input-group:focus-within .input-group-text.ben-handle-prefix {
+    background-color: var(--bs-tertiary-bg) !important;
+    border-color:     var(--bs-border-color) !important;
+    color:            var(--ben-handle-color, var(--bs-secondary-color)) !important;
+    transition:       color .15s ease-in-out;
+}
+
+/* The state colours are mixed per theme rather than used raw. The chip's background follows the
+   theme but --bs-primary/success/danger do not, so the same three colours land very differently on
+   each: measured against the night chip, raw primary came out at 1.70:1 — the "checking" state was
+   effectively invisible, which is the one state that exists purely to be noticed. Every value below
+   clears 4.5:1 against its own chip, mixed only as far as it needs to be so the hues still read as
+   blue, green and red. Same technique as the outline buttons above. */
+:root {
+    --ben-handle-checking: var(--bs-primary);
+    --ben-handle-free:     color-mix(in srgb, var(--bs-success) 82%, #000);
+    --ben-handle-taken:    var(--bs-danger);
+}
+
+:root[data-bs-theme="dark"] {
+    --ben-handle-checking: color-mix(in srgb, var(--bs-primary) 59%, #fff);
+    --ben-handle-free:     color-mix(in srgb, var(--bs-success) 90%, #fff);
+    --ben-handle-taken:    color-mix(in srgb, var(--bs-danger) 73%, #fff);
+}
+
+.ben-handle-prefix.is-checking { --ben-handle-color: var(--ben-handle-checking); }
+.ben-handle-prefix.is-free     { --ben-handle-color: var(--ben-handle-free); }
+.ben-handle-prefix.is-taken    { --ben-handle-color: var(--ben-handle-taken); }
