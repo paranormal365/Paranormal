@@ -4,10 +4,16 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading)
 {
     <span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>
+}
+else if (_votesResult.Failed)
+{
+    <BenListState TItem="EvidenceVoteRecord" Result="@_votesResult" OnRetry="@OnInitializedAsync" />
 }
 else if (_votes.Count == 0)
 {
@@ -80,10 +86,11 @@ else
 
     private List<EvidenceVoteRecord> _votes = [];
     private bool _loading = true;
+    private LoadResult<EvidenceVoteRecord> _votesResult;
 
     protected override async Task OnInitializedAsync()
     {
-        try { _votes = (await AdminClient.GetEvidenceVotesAsync(UploadFileId)).ToList(); }
+        try { _votesResult = await AdminClient.GetEvidenceVotesAsync(UploadFileId); _votes = _votesResult.Items.ToList(); }
         catch { /* non-critical — panel just stays empty */ }
         _loading = false;
     }

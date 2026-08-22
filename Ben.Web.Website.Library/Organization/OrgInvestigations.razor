@@ -3,6 +3,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
    Every investigation the group has run, mapped and listed. The point of the screen is the two
@@ -38,6 +40,11 @@
 @if (_loading)
 {
     <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
+}
+else if (_rowsResult.Failed)
+{
+    @* "No investigations" to a group that has some is the answer they will plan around. *@
+    <BenListState TItem="OrgInvestigationRow" Result="@_rowsResult" OnRetry="@LoadAsync" />
 }
 else if (_rows.Count == 0)
 {
@@ -112,6 +119,7 @@ else
     private List<OrgInvestigationRow> _unplaceable = [];
 
     private bool _loading = true;
+    private LoadResult<OrgInvestigationRow> _rowsResult;
     private bool _creating;
 
     /// <summary>Which row has its team open, if any. One at a time — each roster polls.</summary>
@@ -133,7 +141,8 @@ else
 
         try
         {
-            _rows = (await AdminClient.GetOrgInvestigationsAsync(OrgId)).ToList();
+            _rowsResult = await AdminClient.GetOrgInvestigationsAsync(OrgId);
+            _rows       = _rowsResult.Items.ToList();
         }
         catch
         {
