@@ -74,11 +74,11 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Start</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.Start" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.Start" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">End</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.End" Width="100%" />
+                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.End" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Type</label>
@@ -308,7 +308,7 @@
 
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Sign-ups close (optional)</label>
-                                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
+                                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
                                 <div class="form-text">Leave empty to allow sign-ups until it starts.</div>
                             </div>
                         </div>
@@ -404,7 +404,7 @@
             new("weekly",        $"Every week on {dayName}"),
             new("biweekly",      $"Every 2 weeks on {dayName}"),
             new("monthly",       $"Every month on day {start.Day}"),
-            new("yearly",        $"Every year on {start:d MMMM}"),
+            new("yearly",        $"Every year on {start:MMMM d}"),
             new(RecurrenceCustom, "Custom\u2026"),
         ];
     }

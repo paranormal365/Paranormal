@@ -50,11 +50,11 @@
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">From</label>
-                    <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_filterDateFrom" Width="100%" />
+                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateFrom" Width="100%" />
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">To</label>
-                    <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_filterDateTo" Width="100%" />
+                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateTo" Width="100%" />
                 </div>
             </div>
             <div class="row g-2 mt-1">
