@@ -22,8 +22,12 @@ public sealed class InvestigationController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public InvestigationController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public InvestigationController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Services.Billing.SubscriptionLimitGuard limits)
+    { _db = db; _mapper = mapper; _limits = limits; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvestigationRecord>>> GetAll(
@@ -77,6 +81,15 @@ public sealed class InvestigationController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct))
             return NotFound("Case not found.");
+
+        // The subscription cap on concurrent investigations. Completed and cancelled ones do not
+        // count — same reasoning as open cases: history must not lock a group out of new work.
+        var open = await db.Investigations.CountAsync(i =>
+            i.OrganizationId == orgId
+            && (i.Status == InvestigationStatus.Scheduled || i.Status == InvestigationStatus.InProgress), ct);
+        if (await _limits.WhyNotOneMoreAsync(
+                orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenInvestigations, open, ct) is { } capped)
+            return BadRequest(capped);
 
         var entity = new Investigation
         {

@@ -259,6 +259,26 @@
         await LoadAsync();
     }
 
+    /// <summary>
+    /// The reason-carrying variant: shows the server's own sentence when it gave one.
+    /// </summary>
+    /// <remarks>
+    /// Approval needed this first — its refusals are worth reading verbatim ("already promised to
+    /// someone else", the lending cap naming the group's plan), and the old path flattened them
+    /// all into "it may have been withdrawn".
+    /// </remarks>
+    private async Task RunWithReasonAsync(
+        Func<Task<(EquipmentCheckoutRecord? Result, string? Error)>> action, string failure)
+    {
+        _busy = true;
+        _error = null;
+        var (result, error) = await action();
+        _busy = false;
+
+        if (result is null) _error = error ?? failure;
+        await LoadAsync();
+    }
+
     private Task CancelAsync(EquipmentCheckoutRecord loan)
         => RunAsync(() => AdminClient.CancelEquipmentCheckoutAsync(loan.Id),
                     "That request couldn't be cancelled — it may have already been decided.");
@@ -268,7 +288,7 @@
                     "That couldn't be confirmed — the loan may have changed.");
 
     private Task ApproveAsync(EquipmentCheckoutRecord loan)
-        => RunAsync(() => AdminClient.ApproveEquipmentCheckoutAsync(loan.Id, GetDue(loan.Id), GetNote(loan.Id)),
+        => RunWithReasonAsync(() => AdminClient.ApproveEquipmentCheckoutAsync(loan.Id, GetDue(loan.Id), GetNote(loan.Id)),
                     "That request couldn't be approved — it may have been withdrawn.");
 
     private Task DenyAsync(EquipmentCheckoutRecord loan)

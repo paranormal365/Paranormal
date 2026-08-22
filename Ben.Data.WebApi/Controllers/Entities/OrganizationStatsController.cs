@@ -77,7 +77,7 @@ public sealed class OrganizationStatsController : BenControllerBase
 
         // "Open" is everything that has not reached a resting state. Closed and Transferred are
         // the two that mean nobody is expected to act; the rest are live work.
-        var openStatuses = new[] { CaseStatus.Closed, CaseStatus.Transferred };
+        var openStatuses = new[] { CaseStatus.Closed, CaseStatus.Transferred, CaseStatus.Paused };
 
         return Ok(new OrgStatsSummary(
             Members: await db.OrganizationUserMemberships

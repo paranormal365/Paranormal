@@ -1,0 +1,458 @@
+@page "/admin/subscription-tiers"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+<PageTitle>SuperAdmin — Price Bands</PageTitle>
+
+@*
+    The platform's price list. Two things make this screen unlike its CRUD siblings:
+
+    1. The validation banner. The bands must tile the whole member range, and the server refuses a
+       save that would break that — but a list can already be broken (someone edited rows by hand,
+       a seed failed halfway). The banner shows the server's own sentence so the problem is seen
+       here rather than as every organization silently becoming unpriced.
+
+    2. There is no Delete. Bands are retired, and the organization count on each row is what makes
+       retiring a decision rather than a click.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Price Bands</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" @onclick="OpenCreate">
+                <BenIcon Name="plus" Class="me-1" />New Band
+            </button>
+        </div>
+    </div>
+
+    @if (_validationProblem is not null)
+    {
+        <div class="alert alert-danger">
+            <strong>The price list is unusable:</strong> @_validationProblem
+            <div class="small mt-1">
+                Until this is fixed, no organization can be priced and checkout is refused.
+            </div>
+        </div>
+    }
+
+    <BenListState TItem="SubscriptionTierAdminRecord" Result="@_tiersResult" Loading="@_loading"
+                  EmptyText="No price bands exist yet — every organization is unpriced" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_tiersResult.Items" TItem="SubscriptionTierAdminRecord" Sortable="false">
+            <GridColumns>
+                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.Name)" Title="Band" />
+                <GridColumn Title="Members" Width="130px">
+                    <Template>
+                        @{ var t = (SubscriptionTierAdminRecord)context; }
+                        @t.MinMembers–@(t.MaxMembers?.ToString() ?? "∞")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Prices">
+                    <Template>
+                        @{ var t = (SubscriptionTierAdminRecord)context; }
+                        @if (t.Prices.Count == 0)
+                        {
+                            <span class="badge bg-danger">No prices — nobody can subscribe</span>
+                        }
+                        @foreach (var p in t.Prices.Where(p => p.IsActive))
+                        {
+                            <span class="badge bg-primary me-1">
+                                @($"{p.Price:C0}") @CadenceLabel(p.Interval)
+                                @if (p.SavingPercentAgainstMonthly is { } save)
+                                {
+                                    <span class="ms-1">(save @save%)</span>
+                                }
+                            </span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Caps" Width="220px">
+                    <Template>
+                        @{ var t = (SubscriptionTierAdminRecord)context; }
+                        @if (t.Limits.Count == 0)
+                        {
+                            <span class="text-secondary">None</span>
+                        }
+                        @foreach (var l in t.Limits)
+                        {
+                            <span class="badge bg-secondary me-1">
+                                @LimitLabel(l.Limit): @(l.MaxValue?.ToString("N0") ?? "unlimited")
+                            </span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.OrganizationCount)" Title="Groups" Width="90px" />
+                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.IsActive)" Title="Active" Width="80px">
+                    <Template>
+                        @if (((SubscriptionTierAdminRecord)context).IsActive)
+                        {
+                            <BenIcon Name="check" />
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Retired</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="110px">
+                    <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((SubscriptionTierAdminRecord)e.Items.First()))">
+                        Edit
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="@_showDialog" Title="@(_editing is null ? "New Band" : $"Edit {_editing.Name}")" Size="lg">
+    <ChildContent>
+        <div class="row mb-3">
+            <div class="col-5">
+                <label class="form-label" for="tier-name">Name <span class="text-danger">*</span></label>
+                <input id="tier-name" type="text" class="form-control" @bind="_form.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="tier-min">From (members)</label>
+                <input id="tier-min" type="number" class="form-control" min="1" style="max-width:110px" @bind="_form.MinMembers" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="tier-max">To</label>
+                <input id="tier-max" type="number" class="form-control" min="1" style="max-width:110px"
+                       placeholder="unbounded" @bind="_form.MaxMembers" />
+                <div class="form-text">Blank = unbounded top band</div>
+            </div>
+            <div class="col-auto">
+                <label class="form-label" for="tier-sort">Sort</label>
+                <input id="tier-sort" type="number" class="form-control" style="max-width:90px" @bind="_form.SortOrder" />
+            </div>
+            <div class="col-auto d-flex align-items-end pb-2">
+                <label>
+                    <input type="checkbox" class="form-check-input" @bind="_form.IsActive" />
+                    <span class="ms-1">Active</span>
+                </label>
+            </div>
+        </div>
+
+        <h6>Prices</h6>
+        <p class="text-secondary small mb-2">
+            A cadence with no active price is not offered. The yearly saving is computed from the
+            two prices — set the yearly price directly, or use the % button to fill it in from
+            the monthly one.
+        </p>
+        @foreach (var row in _form.Prices)
+        {
+            <div class="row mb-2 align-items-center">
+                <div class="col-3">
+                    <label>
+                        <input type="checkbox" class="form-check-input" @bind="row.IsActive" />
+                        <span class="ms-1">@CadenceLabel(row.Interval)</span>
+                    </label>
+                </div>
+                <div class="col-auto">
+                    <div class="input-group" style="max-width:170px">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" min="0" step="0.01"
+                               disabled="@(!row.IsActive)" @bind="row.Price" aria-label="@($"{CadenceLabel(row.Interval)} price")" />
+                    </div>
+                </div>
+                @if (row.Interval != BillingInterval.Monthly)
+                {
+                    <div class="col-auto">
+                        <div class="input-group" style="max-width:200px">
+                            <input type="number" class="form-control" min="1" max="99" placeholder="e.g. 17"
+                                   disabled="@(!row.IsActive)" @bind="row.PercentHelper"
+                                   aria-label="@($"Percent off monthly for {CadenceLabel(row.Interval)}")" />
+                            <button type="button" class="btn btn-outline-secondary" disabled="@(!row.IsActive)"
+                                    @onclick="() => FillFromPercent(row)">
+                                % off monthly
+                            </button>
+                        </div>
+                    </div>
+                    @if (row.IsActive && SavingFor(row) is { } save)
+                    {
+                        <div class="col-auto text-secondary small">save @save% vs monthly</div>
+                    }
+                }
+            </div>
+        }
+
+        <h6 class="mt-3">Caps</h6>
+        <p class="text-secondary small mb-2">
+            A cap that is not listed does not apply — that is the safe default. Zero turns the
+            feature off for this band; ticking a cap with a blank number writes it down as
+            explicitly unlimited.
+        </p>
+        @foreach (var cap in _form.Limits)
+        {
+            <div class="row mb-1 align-items-center">
+                <div class="col-4">
+                    <label>
+                        <input type="checkbox" class="form-check-input" @bind="cap.Enabled" />
+                        <span class="ms-1">@LimitLabel(cap.Limit)</span>
+                    </label>
+                </div>
+                <div class="col-auto">
+                    <input type="number" class="form-control" min="0" style="max-width:130px"
+                           placeholder="unlimited" disabled="@(!cap.Enabled)" @bind="cap.MaxValue"
+                           aria-label="@($"Cap for {LimitLabel(cap.Limit)}")" />
+                </div>
+            </div>
+        }
+
+        @if (_impact is not null && (_impact.GroupsMessagedNow > 0 || _impact.PaidGroupsNoticed > 0))
+        {
+            @* The blast radius, stated before the save commits it. Saving from here is a second,
+               informed click — a SuperAdmin should learn "this lowers storage for 12 paid groups"
+               from this panel, not from support tickets. *@
+            <div class="alert alert-warning mt-3">
+                <strong>This edit will notify people:</strong>
+                <ul class="mb-2">
+                    @foreach (var change in _impact.Changes)
+                    {
+                        <li>
+                            @change.Sentence
+                            <span class="badge @(change.IsImprovement ? "bg-success" : "bg-danger") ms-1">
+                                @(change.IsImprovement ? "improvement" : "reduction")
+                            </span>
+                        </li>
+                    }
+                </ul>
+                @if (_impact.GroupsMessagedNow > 0)
+                {
+                    <div class="small">@_impact.GroupsMessagedNow group(s) will be messaged immediately.</div>
+                }
+                @if (_impact.PaidGroupsNoticed > 0)
+                {
+                    <div class="small">
+                        @_impact.PaidGroupsNoticed paid group(s) keep their current terms until renewal
+                        and will be notified up to two weeks before it.
+                    </div>
+                }
+            </div>
+        }
+
+        @if (_saveError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3">@_saveError</div>
+        }
+        <div class="d-flex gap-2 justify-content-end mt-3">
+            <button type="button" class="btn btn-secondary" @onclick="() => _showDialog = false">Cancel</button>
+            <button type="button" class="btn @(_impact is null ? "btn-primary" : "btn-warning")"
+                    disabled="@_saving" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : _impact is null ? "Save" : "Confirm and save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private LoadResult<SubscriptionTierAdminRecord> _tiersResult;
+    private string? _validationProblem;
+
+    private bool _showDialog;
+    private bool _saving;
+    private string? _saveError;
+    private SubscriptionTierAdminRecord? _editing;
+    private TierImpactRecord? _impact;
+    private TierForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tiersResult = await AdminClient.GetSubscriptionTiersAsync();
+        _validationProblem = await AdminClient.GetTierValidationAsync();
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        _editing = null;
+        _form = TierForm.Blank();
+        _saveError = null;
+        _impact = null;
+        _showDialog = true;
+    }
+
+    private void OpenEdit(SubscriptionTierAdminRecord tier)
+    {
+        _editing = tier;
+        _form = TierForm.From(tier);
+        _saveError = null;
+        _impact = null;
+        _showDialog = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saveError = null;
+
+        var request = _form.ToRequest();
+
+        // First click on an edit: fetch the blast radius. When it is non-empty the save stops
+        // here and the button becomes "Confirm and save" — the second click is the informed one.
+        if (_editing is not null && _impact is null)
+        {
+            var impact = await AdminClient.PreviewTierImpactAsync(_editing.Id, request);
+            if (impact is not null && (impact.GroupsMessagedNow > 0 || impact.PaidGroupsNoticed > 0))
+            {
+                _impact = impact;
+                _saving = false;
+                return;
+            }
+        }
+
+        var (result, error) = _editing is null
+            ? await AdminClient.CreateSubscriptionTierAsync(request)
+            : await AdminClient.UpdateSubscriptionTierAsync(_editing.Id, request);
+
+        _saving = false;
+
+        if (result is null)
+        {
+            // The server's sentence is the tiling explanation — "that would leave 4–10 members
+            // priced by nothing" — and it is the whole reason the save was refused. Item 120's
+            // rule: a refusal the UI discards is worse than no rule.
+            _saveError = error ?? "The band could not be saved.";
+            return;
+        }
+
+        _showDialog = false;
+        await LoadAsync();
+    }
+
+    private void FillFromPercent(PriceRow row)
+    {
+        var monthly = _form.Prices.FirstOrDefault(p => p.Interval == BillingInterval.Monthly);
+        if (monthly is null || !monthly.IsActive || monthly.Price <= 0 || row.PercentHelper is not > 0) return;
+
+        var months = (int)row.Interval;
+        row.Price = Math.Round(monthly.Price * months * (100 - row.PercentHelper.Value) / 100m, 2,
+            MidpointRounding.AwayFromZero);
+    }
+
+    private int? SavingFor(PriceRow row)
+    {
+        var monthly = _form.Prices.FirstOrDefault(p => p.Interval == BillingInterval.Monthly);
+        if (monthly is null || !monthly.IsActive || monthly.Price <= 0) return null;
+
+        var payingMonthly = monthly.Price * (int)row.Interval;
+        if (row.Price >= payingMonthly) return null;
+
+        return (int)Math.Floor((payingMonthly - row.Price) * 100m / payingMonthly);
+    }
+
+    private static string CadenceLabel(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "monthly",
+        BillingInterval.Quarterly  => "quarterly",
+        BillingInterval.HalfYearly => "6-monthly",
+        BillingInterval.Yearly     => "yearly",
+        _                          => interval.ToString(),
+    };
+
+    private static string LimitLabel(SubscriptionLimit limit) => limit switch
+    {
+        SubscriptionLimit.OpenCases            => "Open cases",
+        SubscriptionLimit.EquipmentItems       => "Equipment",
+        SubscriptionLimit.ActiveEquipmentLoans => "Active loans",
+        SubscriptionLimit.OpenInvestigations   => "Open investigations",
+        SubscriptionLimit.PendingInvites       => "Pending invites",
+        SubscriptionLimit.StorageMegabytes     => "Storage (MB)",
+        SubscriptionLimit.PublishedPages       => "Published pages",
+        SubscriptionLimit.CustomRoles          => "Custom roles",
+        _                                      => limit.ToString(),
+    };
+
+    private sealed class PriceRow
+    {
+        public BillingInterval Interval { get; init; }
+        public bool IsActive { get; set; }
+        public decimal Price { get; set; }
+        public int? PercentHelper { get; set; }
+    }
+
+    private sealed class LimitRow
+    {
+        public SubscriptionLimit Limit { get; init; }
+        public bool Enabled { get; set; }
+        public int? MaxValue { get; set; }
+    }
+
+    private sealed class TierForm
+    {
+        public string Name = string.Empty;
+        public int MinMembers = 1;
+        public int? MaxMembers;
+        public int SortOrder;
+        public bool IsActive = true;
+        public List<PriceRow> Prices = [];
+        public List<LimitRow> Limits = [];
+
+        public static TierForm Blank() => new()
+        {
+            Prices = [.. Enum.GetValues<BillingInterval>().Select(i => new PriceRow
+                { Interval = i, IsActive = i == BillingInterval.Monthly })],
+            Limits = [.. Enum.GetValues<SubscriptionLimit>().Select(l => new LimitRow { Limit = l })],
+        };
+
+        public static TierForm From(SubscriptionTierAdminRecord tier) => new()
+        {
+            Name       = tier.Name,
+            MinMembers = tier.MinMembers,
+            MaxMembers = tier.MaxMembers,
+            SortOrder  = tier.SortOrder,
+            IsActive   = tier.IsActive,
+            Prices = [.. Enum.GetValues<BillingInterval>().Select(i =>
+            {
+                var existing = tier.Prices.FirstOrDefault(p => p.Interval == i);
+                return new PriceRow
+                {
+                    Interval = i,
+                    IsActive = existing?.IsActive ?? false,
+                    Price    = existing?.Price ?? 0m,
+                };
+            })],
+            Limits = [.. Enum.GetValues<SubscriptionLimit>().Select(l =>
+            {
+                var existing = tier.Limits.FirstOrDefault(x => x.Limit == l);
+                return new LimitRow
+                {
+                    Limit    = l,
+                    Enabled  = existing is not null,
+                    MaxValue = existing?.MaxValue,
+                };
+            })],
+        };
+
+        public SaveSubscriptionTierRequest ToRequest() => new(
+            Name, MinMembers, MaxMembers, SortOrder, IsActive,
+            [.. Prices.Where(p => p.IsActive || p.Price > 0)
+                .Select(p => new SaveTierPriceRequest(p.Interval, p.Price, p.IsActive))],
+            [.. Limits.Where(l => l.Enabled)
+                .Select(l => new SubscriptionTierLimitAdminRecord(l.Limit, l.MaxValue))]);
+    }
+}

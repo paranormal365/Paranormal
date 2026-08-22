@@ -37,12 +37,16 @@ public sealed class MyCaseController : BenControllerBase
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
         IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
-        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
+        Services.PlatformMessageService messages)
     {
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
+        _messages = messages;
     }
+
+    private readonly Services.PlatformMessageService _messages;
 
     private readonly Ben.Data.Common.SiteIdentity _site;
 
@@ -697,6 +701,130 @@ public sealed class MyCaseController : BenControllerBase
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));
     }
+
+    // ── Reassignment of a paused case (item 84) ───────────────────────────────
+
+    public sealed record ReassignCaseRequest(
+        Guid ToOrganizationId, bool ShareHistory, bool ShareInvestigations, string? Note);
+
+    /// <summary>
+    /// Asks a new organization to take this paused case — the client's half of the two keys.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only a PAUSED case, and only its client. The consent flags are the client's alone:
+    /// findings are dual-owned by the original group and the client, which is exactly why the
+    /// original group's permission is not sought — the client sharing their own case's material
+    /// onward is theirs to decide. The receiving organization turns the second key by accepting,
+    /// and only then does anything move.</para>
+    ///
+    /// <para>The case STAYS paused while the proposal is pending — unlike the org-initiated flow,
+    /// which marks Transferred immediately. Paused already says everything true about the case,
+    /// and a rejection should leave no state to clean up.</para>
+    /// </remarks>
+    [HttpPost("{caseId:guid}/reassign")]
+    public async Task<IActionResult> ReassignCase(
+        Guid caseId, [FromBody] ReassignCaseRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
+        if (c is null) return NotFound();
+
+        if (c.Status != CaseStatus.Paused)
+            return BadRequest("Only a paused case can be moved to a new organization.");
+
+        if (c.OrganizationId == request.ToOrganizationId)
+            return BadRequest("That is the organization the case is already with.");
+
+        if (!await db.Organizations.AnyAsync(o => o.Id == request.ToOrganizationId, ct))
+            return BadRequest("That organization does not exist.");
+
+        if (await db.CaseTransferLogs.AnyAsync(l =>
+                l.CaseId == caseId && l.Status == CaseTransferStatus.Pending, ct))
+            return BadRequest("A move is already waiting for an answer. Cancel it first, or wait.");
+
+        db.CaseTransferLogs.Add(new CaseTransferLog
+        {
+            Id                  = Guid.NewGuid(),
+            CaseId              = caseId,
+            FromOrganizationId  = c.OrganizationId,
+            ToOrganizationId    = request.ToOrganizationId,
+            ProposedByAppUserId = userId,
+            ProposedByClient    = true,
+            ShareHistory        = request.ShareHistory,
+            ShareInvestigations = request.ShareInvestigations,
+            Status              = CaseTransferStatus.Pending,
+            TransferReason      = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            DateProposed        = DateTime.UtcNow,
+        });
+
+        await db.SaveChangesAsync(ct);
+
+        // The receiving group's admins hear about it — without this, the request sits in a table
+        // nobody reads, which is the write-only-feature shape this codebase keeps finding.
+        var admins = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == request.ToOrganizationId && m.IsActive
+                     && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator))
+            .Select(m => m.AppUserId)
+            .ToListAsync(ct);
+
+        await _messages.SendAsync(
+            "A client would like to move their case to your group",
+            $"A client has asked your group to take over their case \"{c.Title}\".\n\n"
+          + "Review it under your group's Cases → Incoming, where you can accept or decline. "
+          + "What you will be able to see of the previous group's work depends on what the "
+          + "client chose to share.",
+            admins, userId, ct);
+
+        return NoContent();
+    }
+
+    /// <summary>Withdraws the client's own pending move. The case was never anything but Paused.</summary>
+    [HttpDelete("{caseId:guid}/reassign")]
+    public async Task<IActionResult> CancelReassign(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var pending = await db.CaseTransferLogs.FirstOrDefaultAsync(l =>
+            l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient, ct);
+        if (pending is null) return NotFound("There is no pending move to withdraw.");
+
+        pending.Status        = CaseTransferStatus.Cancelled;
+        pending.DateResponded = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    /// <summary>The client's view of their pending move, if any.</summary>
+    [HttpGet("{caseId:guid}/reassign")]
+    public async Task<ActionResult<PendingReassignRecord?>> GetReassign(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var pending = await db.CaseTransferLogs.AsNoTracking()
+            .Where(l => l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient)
+            .Select(l => new PendingReassignRecord(
+                l.Id, l.ToOrganization.Name, l.ShareHistory, l.ShareInvestigations, l.DateProposed))
+            .FirstOrDefaultAsync(ct);
+
+        return Ok(pending);
+    }
+
+    public sealed record PendingReassignRecord(
+        Guid LogId, string ToOrganizationName, bool ShareHistory, bool ShareInvestigations, DateTime DateProposed);
 
     private static async Task<bool> IsCaseClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
     {

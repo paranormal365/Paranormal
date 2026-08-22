@@ -29,6 +29,10 @@ public interface IWebApiClient
     Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
         string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
+
+    /// <summary>Multipart upload that keeps the server's refusal sentence — see the implementation.</summary>
+    Task<(TResponse? Result, string? Error)> PostMultipartExpectingReasonAsync<TResponse>(
+        string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>

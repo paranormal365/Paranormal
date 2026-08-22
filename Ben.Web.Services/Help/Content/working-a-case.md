@@ -215,3 +215,13 @@ The subject is optional. The body is not.
 **Mark as encrypted / private** flags a message as sensitive. It is a marking on the message, for
 the people reading it — it is not a second password, and it does not hide the message from anyone
 who could otherwise open it.
+
+
+## Incoming cases
+
+When another group — or a client moving their own paused case — asks your group to take a case
+over, it appears at the top of your **Cases** page as *Incoming cases*, with Accept and Decline
+right there. For a client-proposed move, the card says what you will be able to see of the
+previous group's work: the client decides whether their collected history and past investigations
+travel with the case, and that choice is theirs, not the previous group's. Accepting gives the
+case a fresh number in your group and makes it active again; the client is told either way.

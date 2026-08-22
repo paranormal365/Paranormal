@@ -496,5 +496,8 @@
     }
 
     private async Task<CaseMessageRecord?> PostOrgMessage(string body)
-        => await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
+    {
+        var (result, _) = await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
+        return result;
+    }
 }

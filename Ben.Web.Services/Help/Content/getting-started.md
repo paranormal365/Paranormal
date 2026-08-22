@@ -169,7 +169,7 @@ The message says which of these it is, because the answer is different every tim
 
 | What it says | What to do |
 |---|---|
-| Invalid email or password | Check both. This is the only one where the password is actually wrong. |
+| Invalid email or password | Check both — or see the note below if you usually sign in with Microsoft. |
 | Confirm your email address first | Open the link we emailed you when you signed up. |
 | This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
 | Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
@@ -177,6 +177,21 @@ The message says which of these it is, because the answer is different every tim
 
 If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
 simply the second step.
+
+## Forgot your password — or never had one
+
+**Forgot your password?** on the sign-in page emails you a link to choose a new one. The link
+brings you back to the site; if your mail app breaks the link, the email also carries a code you
+can paste in by hand.
+
+The same flow covers a case that does not look like "forgot" at all: **an account created by
+signing in with Microsoft has no password**. Password sign-in against it says "invalid email or
+password", which is true but unhelpful — there is nothing to be wrong yet. Use the reset link to
+add a password, and both ways of signing in will work from then on.
+
+Already signed in? **Profile → Security → Password** does the same job without the email round
+trip: it offers *Add password* if your account has none, and an ordinary change-password form if
+it does.
 
 ## Empty, or broken?
 

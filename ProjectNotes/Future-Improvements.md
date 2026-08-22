@@ -3796,7 +3796,31 @@ text reads well under real Telerik table layout before considering this fully do
 
 ---
 
-## 84. Organization subscription lapse, and what happens to their clients (not started, designed 2026-08-17)
+## 84. Organization subscription lapse, and what happens to their clients (CLOSED 2026-08-22)
+
+**Shipped (84a):** `CaseStatus.Paused` (= 8, appended; all 55 branch points audited — public
+surfaces were safe by allowlist construction, stats/avatars/filters fixed); `Case.StatusBeforePause`
+makes the pause a lossless round trip (Active resumes Active); `SubscriptionLapseJob` runs the
+whole clock — two-week warning to the billing people, one-week tell-your-clients prompt, then
+lapse + pause open cases + message each case's clients directly, all date-keyed idempotent so a
+renewal re-arms the warnings with no clearing code; `WhyReadOnlyAsync` on the guard makes a lapsed
+group read-only across the five capped creates plus timeline entries, case files (upload AND
+attach), notes, and org case messages — the client's own MyCase surface deliberately stays open;
+reactivation restores exactly the cases the lapse paused, via `PeriodOpener.RestorePausedCasesAsync`.
+Client banner on the paused case; help docs updated. 7 job tests, regressed two ways.
+
+**Shipped (84b, same day):** `CaseTransferLog` gains `ProposedByClient` + the two consent flags;
+`POST/GET/DELETE /api/my-cases/{caseId}/reassign` (paused cases only, one pending move at a time,
+the case STAYS Paused while pending so rejection leaves nothing to clean up); consent enforced at
+acceptance — withheld history re-scoped to a new `CaseTimelineVisibility.ClientOnly` (org queries
+exclude it, the client-side `>= Client` filter admits it by construction; Public entries stay
+Public), withheld investigations DETACH and remain the original group's flat records, shared ones
+stay attached while still org-owned = dual visibility for dual ownership, no copies, no deletes.
+Found and fixed in passing: the receiving side of ANY transfer had no surface at all (the per-case
+list requires the case to already be yours) — new org-level `incoming-transfers` endpoint + an
+Incoming cases card on the Cases page with the consent summary. The client hears the answer either
+way; the move flow lives in the paused banner itself. 7 consent tests, regressed both directions
+(consent inverted; detach replaced with delete).
 
 Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
 Deferred with the rest of monetisation until the site's functionality and help documents are
@@ -7278,3 +7302,141 @@ verified to discriminate.
 Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
 list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first
 item is added.
+
+---
+
+## 142. Email-and-password sign-in fails on production; Entra works (CLOSED 2026-08-22)
+
+Ben, on ishaunted.com: **Entra sign-in works, but filling in Email and password does not.**
+
+That pairing is the useful half of the report. Entra and local sign-in share the return-URL
+handling, the cookie, the circuit and the redirect — so whatever is broken is almost certainly on
+the part they do *not* share: the Identity password check, the `SignInManager` call behind it, or
+the endpoint that receives the form.
+
+### What to rule out first, in order
+
+1. **The rate limiter.** `feedback_signin_rate_limited` records that a 429 from this endpoint used
+   to surface as "Invalid email or password", and Ben would have been retrying. Curl the endpoint
+   and read the actual status before believing any on-screen message. This is the cheapest check
+   and it has already fooled us once.
+2. **Whether the request arrives at all.** The site is behind IIS at `/` with the API at `/webapi`;
+   a sign-in POST that 404s or is swallowed by the reverse proxy looks identical to a wrong
+   password from the browser.
+3. **Password hash provenance.** Accounts created before a key or hashing-option change can fail
+   to verify while the account itself is fine. Entra users never touch this path, which fits the
+   symptom exactly.
+4. **`SignInResult` other than `Succeeded`.** `IsLockedOut`, `IsNotAllowed` (unconfirmed email) and
+   `RequiresTwoFactor` all end up rendering as a generic failure. Item 112 already records that the
+   2FA panel hangs — if production accounts have 2FA on, `RequiresTwoFactor` is a strong candidate
+   and the two items are the same bug wearing different clothes.
+
+### The reporting defect underneath it
+
+Whatever the cause turns out to be, the screen said something that did not distinguish four very
+different situations. Same disease as item 120: one message for every failure. Fix the cause, then
+make the four outcomes above say four different things — locked out, not confirmed, needs a second
+factor, and genuinely wrong — because the next occurrence should be diagnosable from the screen.
+
+**Do not test this by typing Ben's password into the form.** Probe with curl against a seeded
+development account, or read the server log for the `SignInResult` that production is producing.
+
+### Root cause — none of the four suspects; a product gap
+
+Probing production with a fake account returned a clean 401 "Failed" from `/webapi/login`, and the
+production sign-in page rendered "Invalid email or password" for it — transport, endpoint, rate
+limiter and page all healthy. The truth: **an account created through Entra has no password**
+(`EntraAuthController` calls `CreateAsync(user)` with none), and until today the product had **no
+way to acquire one** — no forgot-password link, no reset page, no set-password panel. The Identity
+endpoints and a real email sender existed, unreachable: the sixth write-only feature found by
+building the UI for something that "already worked". Ben's production account is Entra-born;
+"Invalid email or password" was technically true — there was no password to be wrong.
+
+### Shipped
+
+- `/forgot-password` + `/reset-password` pages riding Identity's own endpoints; the reset email
+  now carries a finished link (it used to send a bare code with nowhere to paste it)
+- `MyPasswordController` (`/api/me/password`): status, add-first-password (the session is the
+  proof — an Entra-born account has no "current password" to ask for), change-password
+- Profile → Security gains a Password panel beside two-step sign-in
+- The "Invalid email or password" message now hints at the Entra-born case without disclosing
+  whether an address has an account
+- Help: "Forgot your password — or never had one" in getting-started
+
+### Verified live (dev stack, seeded member account)
+
+forgot → logged link (SMTP fallback) → reset page → new password → login 200; wrong password still
+401; change-password demands the current one; the spent reset code refused with a sentence. The
+one branch not exercised live is `AddPasswordAsync` for a hash-less account (needs an Entra
+session to obtain a token) — it is the `else` of a live-verified `if`, and Ben's account will be
+its first real test after the next deploy.
+
+---
+
+## 143. Monetization levers beyond tiers — the menu (OPEN, decisions pending — 2026-08-22)
+
+Ben mid-build on item 85: tiers are not the only part to monetize — equipment limits, loan limits,
+open-case limits, "keep in mind things we could do to monetize what we are building" — and then
+asked for suggestions. The foundation now supports two mechanisms, and almost every idea fits one:
+
+**Mechanism 1 — keyed limits (`SubscriptionTierLimit`, shipped with item 85).** A cap is a row
+(band × `SubscriptionLimit` enum × max), no row = no cap, zero = feature off for that band. In the
+enum already: OpenCases, EquipmentItems, ActiveEquipmentLoans, OpenInvestigations, PendingInvites,
+StorageMegabytes, PublishedPages. Cheap additions when wanted: members-per-case, EVP scans/month,
+video render minutes (the sidecar/RenderService makes these measurable).
+
+**Mechanism 2 — feature gating (zero-means-off).** Candidates, roughly by leverage:
+- Video editor tiers — the most differentiated asset. Basic trim free; overlays/keyframes/callouts/
+  background rendering/native sidecar paid. Rough-vs-fine render quality is already a concept.
+- EVP detection — basic scan free, adjustable-tolerance presets paid.
+- CMS — basic public page free; custom layouts, case-bound media slots, publications paid.
+- White-label / custom domain for a group's public site (needs real work, not just a gate).
+
+**Explicitly deprioritised:** paid placement in local discovery (erodes trust in a community
+product); marketplace shapes where clients pay groups through the platform (payouts, disputes,
+tax — see the monetization-direction memory: platform-bills-orgs first).
+
+**Enforcement rule when limits go live:** the check belongs server-side at the create/loan/open
+endpoint, refusing with a sentence that names the cap and the band — and per the standing lesson,
+every such refusal needs a UI path that renders it.
+
+**Ben's governing principle (his words, near enough):** maximise what we can earn *without turning
+people off*. The useful test that falls out of it: cap the things that scale with the value a group
+gets (storage, open cases, equipment, renders) and leave alone the things groups do to organise
+themselves (roles, members-per-case, naming, taxonomy). Ben floated a custom-roles cap; the enum
+value exists (`CustomRoles = 8`) so the option is real, with a note recommending it stay unset.
+
+Nothing here is decided. This item is the menu; Ben picks.
+
+---
+
+## 144. Per-member pricing, possibly per-member contracts (OPEN — decision pending, 2026-08-22)
+
+Ben, during the phase-B build: what if a tier charged **per member**, and **each member had their
+own contract**? Answer given: doable, in two shapes with very different costs.
+
+**Shape 1 — per-seat price, one group contract.** `PricingMode` on the tier (FlatPerPeriod vs
+PerMember); the bill is seat price × `MemberCountAtPeriodStart`, which already exists and is
+already frozen. Snapshot machinery, notices, admin UI all unchanged; one renewal date per group.
+Cheap — roughly a column, a resolver branch, and pricing-page wording.
+
+**Shape 2 — every seat its own contract.** Per-seat start dates, per-seat price-at-signing,
+staggered renewals. The contract-snapshot machinery generalizes (one row per seat instead of one
+per org-period), so it is structurally reachable — but it multiplies billing events, renewal
+notices and the admin surface, and makes MANUAL billing painful: ten members means ten renewal
+dates for a SuperAdmin to mark paid. Recommended only after a payment provider automates
+collection.
+
+Recommendation on record: Shape 1 when per-member pricing is wanted; hold Shape 2 until
+Square/PayPal exists. Neither is built until Ben picks.
+
+**Referral links (Ben's follow-up, same day): SHIPPED in the minimal honest shape.** A referral
+link is `/pricing?code=X` — the Coupons screen's codes panel has a per-code **Copy link** button.
+The visitor lands with a banner, and signed-in group cards show the code quoted against their own
+cadence (or the refusal sentence, learned there rather than at checkout). Attribution needs no new
+machinery: which code was redeemed is already a `CouponRedemption` row, so a seller's results are
+their code's redemption count. **Still future:** a commission/payout ledger — what the platform
+OWES the seller per redemption — which belongs with the payment provider work, since payouts
+without a money pipeline are a spreadsheet anyway. A generated batch of one single-use code per
+seller, or one shared multi-use code per seller, both work today; the campaign budget caps
+exposure either way.

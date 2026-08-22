@@ -58,7 +58,7 @@ public class InvestigationEditVerdictTests
     }
 
     private static InvestigationController Build(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, Mapper())
+        => new(f, Mapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f))
         {
             ControllerContext = new ControllerContext
             {

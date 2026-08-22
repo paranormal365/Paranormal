@@ -75,10 +75,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<OrgInvestigationRow>($"/api/organizations/{orgId}/investigations", token);
 
-    public Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+    public Task<(InvestigationRecord? Result, string? Error)> CreateOrgInvestigationAsync(
         Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
-        => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
-            $"/api/organizations/{orgId}/investigations", request, token);
+        => _api.SendExpectingReasonAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/investigations", request, token);
 
     // ── Investigation Scheduling ──────────────────────────────────────────────
 

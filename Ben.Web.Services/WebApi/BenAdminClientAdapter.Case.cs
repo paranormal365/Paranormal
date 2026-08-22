@@ -19,6 +19,24 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Case Transfers ────────────────────────────────────────────────────────
 
+    public async Task<string?> ReassignMyCaseAsync(Guid caseId, Guid toOrganizationId,
+        bool shareHistory, bool shareInvestigations, string? note, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/my-cases/{caseId}/reassign",
+            new { toOrganizationId, shareHistory, shareInvestigations, note }, token);
+        return error;   // null on success
+    }
+
+    public Task<PendingReassignRecord?> GetMyReassignAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<PendingReassignRecord>($"/api/my-cases/{caseId}/reassign", token);
+
+    public Task<bool> CancelMyReassignAsync(Guid caseId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/reassign", token);
+
+    public Task<LoadResult<IncomingTransferRecord>> GetIncomingTransfersAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<IncomingTransferRecord>($"/api/organizations/{orgId}/incoming-transfers", token);
+
     public Task<LoadResult<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseTransferLogRecord>($"/api/organizations/{orgId}/cases/{caseId}/transfers", token);
 
@@ -86,15 +104,16 @@ public sealed partial class BenAdminClientAdapter
     public Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseClientRequestRecord>($"/api/organizations/{orgId}/cases/{caseId}/client-request", token);
 
-    public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
-        => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
+    public Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CreateCaseRequest, CaseRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases", request, token);
 
     public Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<OrgPendingRequestRecord>($"/api/organizations/{orgId}/cases/pending-requests", token);
 
-    public Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
-        => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
-               $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
+    public Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
     public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
         => _api.PostVoidAsync(
@@ -115,8 +134,9 @@ public sealed partial class BenAdminClientAdapter
         return _api.GetListAsync<CaseTimelineEntryRecord>(url, token);
     }
 
-    public Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default)
-        => _api.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>($"/api/organizations/{orgId}/cases/{caseId}/timeline", request, token);
+    public Task<(CaseTimelineEntryRecord? Result, string? Error)> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/timeline", request, token);
 
     public Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default)
         => _api.PutAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>($"/api/organizations/{orgId}/cases/{caseId}/timeline/{entryId}", request, token);
@@ -219,8 +239,21 @@ public sealed partial class BenAdminClientAdapter
         using var sc = new StreamContent(content);
         sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
         form.Add(sc, "file", fileName);
-        return await _api.PostMultipartAsync<CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/files", form, token);
+        var (result, error) = await _api.PostMultipartExpectingReasonAsync<CaseFileRecord>(
+            $"/api/orgs/{orgId}/cases/{caseId}/files", form, token);
+        LastCaseFileUploadError = error;
+        return result;
     }
+
+    /// <summary>
+    /// The refusal from the most recent <see cref="UploadCaseFileAsync"/>, when it failed.
+    /// </summary>
+    /// <remarks>
+    /// A side-channel rather than a tuple because the upload's callers thread the record through
+    /// several layers that a signature change would ripple across. The item-84 read-only sentence
+    /// is the payload that matters; a null here with a null result is a generic failure.
+    /// </remarks>
+    public string? LastCaseFileUploadError { get; private set; }
 
     public Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/files/{caseFileId}", token);
@@ -237,8 +270,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes", token);
 
-    public Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default)
-        => _api.PostAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes", request, token);
+    public Task<(CaseNoteDto? Result, string? Error)> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertCaseNoteDto, CaseNoteDto>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/notes", request, token);
 
     public Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default)
         => _api.PutAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes/{noteId}", request, token);
@@ -396,8 +430,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", token);
 
-    public Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
-        => _api.PostAsync<object, CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
+    public Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, CaseMessageRecord>(
+            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
 
     public async Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default)
     {

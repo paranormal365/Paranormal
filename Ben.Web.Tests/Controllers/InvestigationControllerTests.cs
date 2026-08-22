@@ -53,7 +53,7 @@ public class InvestigationControllerTests
 
     private static InvestigationController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new InvestigationController(factory, CreateMapper());
+        var ctrl = new InvestigationController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

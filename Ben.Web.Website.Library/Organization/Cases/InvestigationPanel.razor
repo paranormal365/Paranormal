@@ -458,7 +458,7 @@
         _binderError  = null;
         try
         {
-            var created = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId,
+            var (created, createError) = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId,
                 new UpsertTimelineEntryRequest(
                     _binderType,
                     DateTime.UtcNow,
@@ -470,7 +470,7 @@
                     [],
                     inv.Id));
 
-            if (created is null) { _binderError = "Couldn't add that entry."; return; }
+            if (created is null) { _binderError = createError ?? "Couldn't add that entry."; return; }
 
             _binderTitle = string.Empty;
             await LoadBinderAsync(inv.Id);

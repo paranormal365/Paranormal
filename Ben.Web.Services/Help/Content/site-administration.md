@@ -177,3 +177,35 @@ installation id the sidecar generates for itself.
 
 **Administration → Audit Log** records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.
+
+## Billing
+
+**Administration → Billing** holds three screens.
+
+**Price Bands** is the price list the public Pricing page renders — member ranges, a price per
+billing cadence, and the caps each band includes. Every save is validated as a whole list: the
+bands must cover every possible member count with no gaps or overlaps, and a save that would leave
+somebody unpriced is refused with the reason. Bands are retired, never deleted, because a band
+that has priced a period is part of the billing record. When an edit would affect groups already
+on the band, the save pauses and shows the blast radius first: improvements are announced to those
+groups immediately, reductions are queued and delivered up to two weeks before each group's own
+renewal — paid groups keep the terms they bought until then.
+
+**Coupons** manages discount campaigns. A *shared* campaign is one code everybody types; a
+*generated* campaign is a batch of single-use codes you can print or mail, each withdrawable on
+its own, and addressable to a specific account. A campaign can be limited by date window, total
+redemptions (the budget), billing cadence, and occasion — first subscriptions only, or renewals
+only. A misconfigured campaign (one that takes nothing off, or whose window closes before it
+opens) wears a red **Broken** badge in the list rather than failing silently for whoever types it.
+
+Every code also doubles as a **referral link** — the codes panel's *Copy link* button gives a
+`/pricing?code=…` URL to hand to whoever is promoting or selling access. Visitors land with the
+code attached and see it priced against their group before anything is confirmed; the code's
+redemption count is the referrer's scorecard.
+
+**Subscriptions** is where every group's standing lives — including groups never set up, which is
+the first thing to look for. Until a payment provider is wired in, this screen *is* the payment
+record: when a group pays, set their band, cadence and period here. The member count and price are
+frozen from the moment you save, and the group keeps those terms for the whole period whatever
+happens to the price list. The Members column shows the current count beside the frozen one —
+the gap is what the group will be re-banded on at renewal.

@@ -28,7 +28,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseMessageController(factory);
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -42,7 +42,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new CaseMessageController(factory);
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }

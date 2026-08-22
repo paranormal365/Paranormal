@@ -242,6 +242,7 @@
                     community.Add(new NavItem("Publications", "book-open", "/publications"));
 
                 community.Add(new NavItem("Join a Group", "map-pin", "/find"));
+                community.Add(new NavItem("Pricing", "dollar-sign", "/pricing"));
                 community.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
 
                 main.Add(Group("Community", "users", community.ToArray()));
@@ -300,6 +301,12 @@
             // feed that has been turned off may still have reports somebody never got to, and
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
+        }),
+        new NavItem("Billing", "dollar-sign", children: new[]
+        {
+            new NavItem("Price Bands",   "layers",      "/admin/subscription-tiers"),
+            new NavItem("Coupons",       "tag",         "/admin/coupons"),
+            new NavItem("Subscriptions", "credit-card", "/admin/org-subscriptions"),
         }),
         new NavItem("System", "settings", children: new[]
         {

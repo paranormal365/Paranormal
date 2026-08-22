@@ -230,8 +230,9 @@ public sealed partial class BenAdminClientAdapter
         return result ?? new OrgEquipmentListRecord(false, []);
     }
 
-    public Task<EquipmentItemRecord?> CreateOrgEquipmentAsync(Guid orgId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default)
-        => _api.PostAsync<UpsertOrgEquipmentItemRequest, EquipmentItemRecord>(OrgEquipBase(orgId), request, token);
+    public Task<(EquipmentItemRecord? Result, string? Error)> CreateOrgEquipmentAsync(Guid orgId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertOrgEquipmentItemRequest, EquipmentItemRecord>(
+               HttpMethod.Post, OrgEquipBase(orgId), request, token);
 
     public Task<EquipmentItemRecord?> UpdateOrgEquipmentAsync(Guid orgId, Guid itemId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default)
         => _api.PutAsync<UpsertOrgEquipmentItemRequest, EquipmentItemRecord>($"{OrgEquipBase(orgId)}/{itemId}", request, token);
@@ -283,9 +284,12 @@ public sealed partial class BenAdminClientAdapter
     public Task<EquipmentCheckoutRecord?> RequestEquipmentCheckoutAsync(RequestEquipmentCheckoutRequest request, CancellationToken token = default)
         => _api.PostAsync<RequestEquipmentCheckoutRequest, EquipmentCheckoutRecord>(CheckoutBase, request, token);
 
-    public Task<EquipmentCheckoutRecord?> ApproveEquipmentCheckoutAsync(Guid checkoutId, DateTime? dateDue, string? reviewNotes, CancellationToken token = default)
-        => _api.PostAsync<ApproveEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
-               $"{CheckoutBase}/{checkoutId}/approve", new ApproveEquipmentCheckoutRequest(dateDue, reviewNotes), token);
+    // Reason-carrying, which also rescues a sentence that was being silently dropped: the
+    // "already promised to someone else" guard on approval never reached a screen through the
+    // old PostAsync — the sixth instance of the server-guard-needs-a-UI-path lesson.
+    public Task<(EquipmentCheckoutRecord? Result, string? Error)> ApproveEquipmentCheckoutAsync(Guid checkoutId, DateTime? dateDue, string? reviewNotes, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<ApproveEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
+               HttpMethod.Post, $"{CheckoutBase}/{checkoutId}/approve", new ApproveEquipmentCheckoutRequest(dateDue, reviewNotes), token);
 
     public Task<EquipmentCheckoutRecord?> DenyEquipmentCheckoutAsync(Guid checkoutId, string reviewNotes, CancellationToken token = default)
         => _api.PostAsync<DenyEquipmentCheckoutRequest, EquipmentCheckoutRecord>(

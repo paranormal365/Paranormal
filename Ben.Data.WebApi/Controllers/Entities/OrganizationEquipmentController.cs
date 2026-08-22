@@ -38,13 +38,17 @@ public sealed class OrganizationEquipmentController : BenControllerBase
     private readonly IAuditLogService _auditLog;
     private readonly IMediaIngestService _mediaIngest;
 
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
     public OrganizationEquipmentController(
         IDbContextFactory<BenDataContext> db,
         IOrganizationSecurityService security,
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
-        IMediaIngestService mediaIngest)
+        IMediaIngestService mediaIngest,
+        Services.Billing.SubscriptionLimitGuard limits)
     {
+        _limits      = limits;
         _db          = db;
         _security    = security;
         _fileStorage = fileStorage;
@@ -201,6 +205,14 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.EquipmentModels.AnyAsync(m => m.Id == request.EquipmentModelId, ct))
             return BadRequest("Equipment model not found.");
+
+        // The subscription cap. Retired gear does not count — it is off the books, and counting
+        // it would make the cap one a group can never dig itself back out of.
+        var onBooks = await db.EquipmentItems.CountAsync(i =>
+            i.OwningOrganizationId == orgId && !i.IsRetired, ct);
+        if (await _limits.WhyNotOneMoreAsync(
+                orgId, Ben.Data.Common.Enums.SubscriptionLimit.EquipmentItems, onBooks, ct) is { } capped)
+            return BadRequest(capped);
 
         var entity = new EquipmentItem
         {
