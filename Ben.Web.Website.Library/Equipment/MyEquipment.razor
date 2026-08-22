@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.Equipment">
     <PageTitle>My Equipment</PageTitle>
@@ -60,6 +62,11 @@
         else if (_loading)
         {
             <BenLoaderOverlay Visible="true" Text="Loading your equipment…" />
+        }
+        else if (_itemsResult.Failed)
+        {
+            @* "You haven't added any equipment" to somebody who has is how they add it twice. *@
+            <BenListState TItem="EquipmentItemRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
         }
         else if (_items.Count == 0)
         {
@@ -187,6 +194,7 @@
     private bool _deleting;
     private bool _editorVisible;
     private bool _loading = true;
+    private LoadResult<EquipmentItemRecord> _itemsResult;
     private string? _error;
 
     private List<EquipmentShareOptionRecord> _myGroups = [];
@@ -212,12 +220,13 @@
         _error = null;
         try
         {
-            _items = [.. await AdminClient.GetMyEquipmentAsync()];
+            _itemsResult = await AdminClient.GetMyEquipmentAsync();
+        _items       = [.. _itemsResult.Items];
 
             // The share options for any one item double as "the groups I'm in" — the endpoint
             // returns every group with a flag, so one item's list answers the bulk panel too.
             _myGroups = _items.Count > 0
-                ? [.. await AdminClient.GetMyEquipmentSharesAsync(_items[0].Id)]
+                ? [.. (await AdminClient.GetMyEquipmentSharesAsync(_items[0].Id)).Items]
                 : [];
         }
         catch (Exception ex)

@@ -1,5 +1,7 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* An item's FAQ. Read-only for everyone but the people who look after the piece; nobody ever sees
    who wrote an entry, including on this page where the reader may already know whose gear it is —
@@ -20,7 +22,11 @@
             <div class="alert alert-danger py-2">@_error</div>
         }
 
-        @if (_faqs.Count == 0 && !_composing)
+        @if (_faqsResult.Failed)
+        {
+            <BenListState TItem="EquipmentFaqRecord" Result="@_faqsResult" OnRetry="@LoadAsync" />
+        }
+        else if (_faqs.Count == 0 && !_composing)
         {
             <p class="text-secondary small mb-0">
                 @(CanEdit
@@ -80,6 +86,7 @@
     [Parameter] public bool CanEdit { get; set; }
 
     private IReadOnlyList<EquipmentFaqRecord> _faqs = [];
+    private LoadResult<EquipmentFaqRecord> _faqsResult;
     private bool _composing, _busy;
     private Guid? _editingId;
     private string _question = string.Empty, _answer = string.Empty;
@@ -93,7 +100,7 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => _faqs = await AdminClient.GetEquipmentFaqsAsync(ItemId);
+    private async Task LoadAsync() => _faqs = (_faqsResult = await AdminClient.GetEquipmentFaqsAsync(ItemId)).Items;
 
     private void StartCompose(EquipmentFaqRecord? existing)
     {

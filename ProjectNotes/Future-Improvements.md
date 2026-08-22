@@ -5990,6 +5990,8 @@ the OrdinaryMemberSurfaceTests pattern.
 |---|---|---|---|
 | Organization | 2026-08-21 | 19 | 120 → 101 |
 | **Case** | **2026-08-22** | **20** | **101 → 81** |
+| **Platform** | **2026-08-22** | **14** | **81 → 67** |
+| **Equipment** | **2026-08-22** | **22** | **67 → 45** |
 
 **Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
 `BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
@@ -6004,8 +6006,27 @@ It stops the likely half-conversion — silencing the compile error with `.Items
 as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
 there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
 
-**Remaining, in size order:** Equipment 22, Platform 14, User 11, Investigation 8, Cms 6, Places 5,
-Media 5, Publications 4, Membership 3, Feed 2, Account 1.
+**Remaining, in size order:** User 11, Investigation 8, Cms 6, Places 5, Media 5, Publications 4,
+Membership 3, Feed 2, Account 1 — **45 left of the original 120.**
+
+**Platform slice** brought the internal messaging surfaces over, which item 120 named from the
+start. Two of the scheduler's call sites were correctness bugs rather than display ones: the
+attendee dedup set and the invitee prefill both read a refusal as "nobody is invited", which would
+have re-invited the whole list.
+
+**Equipment slice** was the one where the guard paid for itself. The area uses `[.. await …]`
+spreads, so 27 sites were a one-line mechanical change each — the whole slice compiled green while
+every page still reported a refusal as empty. Registering the new method names in
+`LoadResultRenderedGuardTests` turned it into a worklist of 14 files, which is how the twelve real
+surfaces were separated from the two genuine picker feeds.
+
+It also turned up a **mutation** with the same defect: `SetMyEquipmentSharesAsync` is a PUT whose
+refusal became `?? []`, and `EquipmentShareEditor` discarded the result, closed its dialog and
+reported success — somebody believed their equipment was shared when nothing had been saved. It now
+returns `(Shares, Error)` and the editor shows the reason.
+
+**Two dead methods found so far**, declared and implemented but called by nothing:
+`GetPublishedInvestigationsAsync` and `GetEquipmentItemCheckoutsAsync`.
 
 **For whoever takes the next slice:** a list that is mutated in place — `Insert`, `Add`,
 `RemoveAll` — must **not** be wrapped in `BenListState`. The wrapper keeps rendering the load's own
@@ -7025,3 +7046,43 @@ Worth checking the other admin grids in the same pass, since the command column 
 by copying a neighbour: any grid whose `GridCommandColumn` has a fixed `Width` and three or more
 buttons is a candidate. Options are a wider command column, dropping the button labels to icons
 with tooltips, or moving Delete behind an overflow menu.
+
+---
+
+## 140. Do the 87 inline `User.IsInRole` checks share the Entra blind spot? (raised 2026-08-22)
+
+Item 137's fix moved eight endpoints off `[Authorize(Roles = ...)]` onto the SuperAdmin policy,
+because a bare Roles attribute pins no authentication scheme and so answers 401 to an Entra caller.
+That is fixed and guarded. This item is about the layer underneath it.
+
+**The API makes 87 inline `User.IsInRole(...)` calls across 37 controller files.** They decide
+things like whether a SuperAdmin sees another group's CMS pages, whether a file share is visible,
+and whether a message board is readable — mostly by widening what an ordinary user would get.
+
+Those calls read role **claims**. An Entra JWT carries no Identity role claims of its own;
+`EntraClaimsTransformation` adds them, and when it runs and finds a linked account it does the job
+properly — it calls `GetRolesAsync` and adds a `ClaimTypes.Role` claim per role. So in the happy
+path these checks are fine.
+
+**The question is the unhappy path, and it comes from the fix's own documentation.**
+`AppUserPrincipal.ResolveAsync` says the OID fallback exists *"because it does not always run"*. If
+that is accurate, then every one of those 87 sites can silently evaluate `false` for a legitimate
+SuperAdmin signed in with Microsoft — and unlike the endpoint attribute, **there is no status code
+to notice**. The caller is quietly treated as an ordinary user: a filtered list, a missing button,
+a `Forbid()` that looks like a permissions decision rather than a bug. That is the same failure
+shape as item 120 — a wrong answer delivered in the voice of a correct one.
+
+**What to do, in order:**
+
+1. **Establish whether the premise is true.** Under what conditions does
+   `EntraClaimsTransformation` not run? `IClaimsTransformation` runs inside
+   `AuthenticationService.AuthenticateAsync`, which policy evaluation calls per scheme, so it may
+   in fact always run and the fallback is belt-and-braces. Worth settling, because the answer
+   decides whether this item is a real defect or a note.
+2. If it can be skipped, give the inline checks one shared helper with the same two paths as
+   `SuperAdminHandler` — claim first, database by OID second — rather than 87 copies of a claim
+   read.
+3. A guard, once the helper exists, so the 88th call site uses it.
+
+Recorded rather than acted on because the premise is unverified, and because acting on it would
+mean touching 37 files on the strength of a parenthetical.

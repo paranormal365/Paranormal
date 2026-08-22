@@ -42,6 +42,16 @@ public sealed class LoadResultRenderedGuardTests
         "GetExperienceTaxonomyAsync", "GetAllExperienceCategoriesAsync", "GetAllExperienceTypesAsync",
         "GetLookupTypesAsync", "GetAuditLogEntityTypesAsync", "GetSidecarTelemetryAsync",
         "GetPublishedInvestigationsAsync",
+
+        // equipment slice
+        "GetMyEquipmentAsync", "GetMyEquipmentCheckoutsAsync", "GetMyEquipmentSharesAsync",
+        "GetMyAskedQuestionsAsync", "GetMyReceivedQuestionsAsync", "GetEquipmentFaqsAsync",
+        "GetProductReviewsAsync", "GetEquipmentItemHistoryAsync", "GetCheckoutPhotosAsync",
+        "GetCheckoutRenewalsAsync", "GetOrgEquipmentServiceLogAsync", "GetOrgSharedEquipmentAsync",
+        "GetPublicEquipmentItemsAsync", "GetEquipmentCategoriesAsync", "GetEquipmentBrandsAsync",
+        "GetEquipmentModelsForBrandAsync", "SearchEquipmentModelsAsync",
+        "GetAdminEquipmentBrandsAsync", "GetAdminEquipmentCategoriesAsync",
+        "GetAdminEquipmentModelsAsync", "GetEquipmentItemCheckoutsAsync",
     ];
 
     /// <summary>
@@ -58,6 +68,15 @@ public sealed class LoadResultRenderedGuardTests
         ["CaseTimeline.razor"] =
             "Same taxonomy lookup, for the filter chips' labels. The timeline itself is wrapped "
           + "and reports its own refusal.",
+
+        ["MyEquipmentItemEditor.razor"] =
+            "Category, brand and model feed the three cascading pickers in the item form. A failed "
+          + "fetch leaves a picker empty, which the person sees and can retry by reopening; a "
+          + "warning panel inside a form field would be worse. The item lists that show what they "
+          + "own report their own failures.",
+
+        ["OrgEquipmentEditor.razor"] =
+            "The same three cascading pickers, in the group's version of the same form.",
 
         ["AdminAuditLog.razor"] =
             "The entity-type filter's options. A refusal narrows the filter; it does not misreport "

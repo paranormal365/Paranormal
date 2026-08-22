@@ -5,6 +5,8 @@
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.Equipment">
     <PageTitle>Equipment Catalog</PageTitle>
@@ -44,7 +46,13 @@
             <BenTabs @bind-ActiveId="@_activeTab">
 
                 <BenTab Title="Makes &amp; models" Id="models">
-                    @if (_models.Count == 0)
+                    @if (_modelsResult.Failed)
+                    {
+                        @* A visitor with no account has no way to tell a broken catalogue from
+                           an empty one. *@
+                        <BenListState TItem="EquipmentModelRecord" Result="@_modelsResult" OnRetry="@LoadAsync" />
+                    }
+                    else if (_models.Count == 0)
                     {
                         <div class="card mt-2">
                             <div class="card-body text-center py-5">
@@ -75,7 +83,11 @@
                 </BenTab>
 
                 <BenTab Title="Gear people own" Id="items">
-                    @if (_items.Count == 0)
+                    @if (_itemsResult.Failed)
+                    {
+                        <BenListState TItem="PublicEquipmentItemRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
+                    }
+                    else if (_items.Count == 0)
                     {
                         <div class="card mt-2">
                             <div class="card-body text-center py-5">
@@ -181,6 +193,8 @@
     private string _search = string.Empty;
     private string _activeTab = "models";
     private bool _loading = true;
+    private LoadResult<EquipmentModelRecord> _modelsResult;
+    private LoadResult<PublicEquipmentItemRecord> _itemsResult;
     private bool _isAuthenticated;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -192,7 +206,7 @@
         await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
         _isAuthenticated = UserState.IsAuthenticated;
 
-        _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+        _categories = [.. (await AdminClient.GetEquipmentCategoriesAsync()).Items];
         await LoadAsync();
         StateHasChanged();
     }
@@ -209,8 +223,10 @@
         StateHasChanged();
 
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
-        _models = [.. await AdminClient.SearchEquipmentModelsAsync(search, _categoryId)];
-        _items  = [.. await AdminClient.GetPublicEquipmentItemsAsync(search, _categoryId)];
+        _modelsResult = await AdminClient.SearchEquipmentModelsAsync(search, _categoryId);
+        _models       = [.. _modelsResult.Items];
+        _itemsResult  = await AdminClient.GetPublicEquipmentItemsAsync(search, _categoryId);
+        _items        = [.. _itemsResult.Items];
 
         _loading = false;
         StateHasChanged();
