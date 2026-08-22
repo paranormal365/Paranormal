@@ -219,7 +219,7 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        .AddDefaultTokenProviders();
 
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──
-const string EntraScheme = "Entra";
+const string EntraScheme = AuthPolicyNames.EntraScheme;
 var entraConfig = builder.Configuration.GetSection("AzureAd");
 // Entra is on only when ClientId is a real registration id: GUID-shaped AND not one of the
 // checked-in placeholders, which are themselves GUIDs. The shape test alone used to live here and

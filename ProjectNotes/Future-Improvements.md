@@ -7098,7 +7098,7 @@ with tooltips, or moving Delete behind an overflow menu.
 
 ---
 
-## 140. Do the 87 inline `User.IsInRole` checks share the Entra blind spot? (raised 2026-08-22)
+## 140. Do the inline `User.IsInRole` checks share the Entra blind spot? (CLOSED 2026-08-22 — 2 did, not 87)
 
 Item 137's fix moved eight endpoints off `[Authorize(Roles = ...)]` onto the SuperAdmin policy,
 because a bare Roles attribute pins no authentication scheme and so answers 401 to an Entra caller.
@@ -7135,6 +7135,37 @@ shape as item 120 — a wrong answer delivered in the voice of a correct one.
 
 Recorded rather than acted on because the premise is unverified, and because acting on it would
 mean touching 37 files on the strength of a parenthetical.
+
+### Answer: the premise was mostly wrong — 2 sites, not 87
+
+**`options.DefaultPolicy` pins both schemes.** So on any action with `[Authorize]` — bare, or with
+a policy — the authorization middleware authenticates Entra too, the claims transformation runs,
+and `User` is replaced with the merged principal carrying its database roles. **79 of the 81 role
+checks in the controllers sit on such actions and were always correct.** None of the `IsSuperAdmin()`
+helper calls were affected either.
+
+**The gap is `[AllowAnonymous]` actions**, where nothing does that. `UseAuthentication` populates
+`User` from the *default* scheme alone, so a caller signed in with Microsoft arrives with no
+principal at all — not lacking the role, unauthenticated — and the check silently says no. Two
+endpoints:
+
+- **`EquipmentCatalogController`** — an unapproved model 404s unless you are its proposer or a
+  SuperAdmin. An Entra SuperAdmin was **404ed out of the very model they were there to review.**
+- **`EquipmentItemDetailController`** — an Entra SuperAdmin saw the visitor's view of an item.
+
+Both fail **closed** — an admin saw less, never more — which is why this was a visibility gap
+rather than a security hole, and why nobody noticed.
+
+Fixed with `BenControllerBase.CallerIsSuperAdminAsync()`: the local claim first, then the Entra
+scheme authenticated explicitly. `AnonymousEndpointRoleChecksTests` bans `User.IsInRole` inside an
+`[AllowAnonymous]` action, and was verified to discriminate.
+
+**A bug in the first version of that fix, caught by the existing tests.**
+`HttpContext.AuthenticateAsync("Entra")` **throws when the scheme is not registered**, and Entra is
+registered only when configured — so the first attempt would have taken both anonymous endpoints
+down in every environment where Entra is off, which is most of them. It now asks
+`IAuthenticationSchemeProvider` whether the scheme exists first. Four `EquipmentItemDetailTests`
+failed immediately, which is the only reason it was caught before the branch was pushed.
 
 ---
 
