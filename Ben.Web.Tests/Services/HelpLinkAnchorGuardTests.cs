@@ -48,7 +48,7 @@ public sealed class HelpLinkAnchorGuardTests
         var headings = Directory
             .EnumerateFiles(Path.Combine(root, "Ben.Web.Services", "Help", "Content"), "*.md")
             .ToDictionary(
-                Path.GetFileNameWithoutExtension,
+                f => Path.GetFileNameWithoutExtension(f),
                 f => Regex.Matches(File.ReadAllText(f), @"^#{2,3}\s+(.+)$", RegexOptions.Multiline)
                           .Select(m => Slugify(m.Groups[1].Value.Trim()))
                           .ToHashSet());

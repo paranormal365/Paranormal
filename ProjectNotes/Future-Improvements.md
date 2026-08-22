@@ -7596,3 +7596,31 @@ the reader at the top of a page missing the section they were promised. 56 links
 broken; verified by renaming an anchor and watching it fail. It does not yet enforce that a NEW
 page HAS a link — that needs a list of what counts as a page, which is a judgement call, so the
 rule stays a habit backed by this audit.
+
+## 148. True-data launch seed — every lookup table populated with real values (CLOSED 2026-08-22)
+
+Ben will clean the shared database before launch and rebuild it from seeders, so every lookup
+table needs launch-real data in a production-safe seeder — not just the dev roster. The survey
+found most already were: experience taxonomy, contact/note types (org and user), file types,
+message types, and subscription tiers all ship real values. Per-org calendar event types are not
+a global lookup and were excluded from seeding — but see below. The genuine gap was the
+**equipment catalog**: production seeding created only "Generic / Unbranded" plus one generic
+model per category; every real-looking brand on the site came from the dev-only roster seeder
+and would vanish on a clean rebuild.
+
+`EquipmentTaxonomySeeder` now ships a real launch catalog: **29 genuine manufacturers** (K-II
+Enterprises, DAS Distribution, Digital Dowsing, GhostStop, FLIR, Zoom, Tascam, Sony, Fluke, GQ
+Electronics, …) and **40 genuine products** with model numbers and field-use descriptions,
+mapped across the existing 17 categories (K-II EMF Meter, Mel-8704R, P-SB7 Rev4, REM-Pod,
+Ovilus V, Zoom H1n, Sony PCM-A10, Panasonic RR-DR60, FLIR ONE Pro, SiOnyx Aurora Pro, Laser
+Grid GS1, …). Name-matched idempotent, approved-on-arrival (curated data skips moderation),
+slugs assigned, never touches existing rows including user-proposed same-name entries. Verified
+live: first cold start added 40, second added 0.
+
+Calendar event types got the launch treatment differently: they are per-organization, so a
+seeder cannot reach them — instead `OrgCalendarDefaults.AddDefaultEventTypes` now stamps five
+defaults (Investigation, Public Event, Meeting, Training, Fundraiser) onto every NEW group from
+all three creation doors (self-service registration and both SuperAdmin creates), staged on the
+same SaveChanges as the organization itself. A founder's calendar is usable from the first
+moment; the owner can rename, recolour, or retire them. Covered by tests on the registration
+service and the SuperAdmin controller door, both regressed against the un-wired code.

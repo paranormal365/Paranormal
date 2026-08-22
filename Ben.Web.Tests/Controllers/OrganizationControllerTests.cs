@@ -716,6 +716,12 @@ public class OrganizationControllerTests
         Assert.NotNull(created);
         Assert.Equal("New Org", created.Name);
         Assert.Equal(userId, created.CreatedByAppUserId);
+
+        // Every create door stamps the default calendar event types (OrgCalendarDefaults). This
+        // door leaves org.Id for EF's client-side Guid generation, so the child rows depend on
+        // the Id being real immediately after Add — this asserts that wiring holds.
+        var typeCount = await db.OrgCalendarEventTypes.CountAsync(t => t.OrganizationId == created.Id);
+        Assert.Equal(5, typeCount);
     }
 
     [Fact]

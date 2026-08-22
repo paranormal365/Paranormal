@@ -300,6 +300,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         };
 
         db.Organizations.Add(org);
+        OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
