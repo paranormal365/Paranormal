@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -31,6 +33,10 @@
     @if (_cases is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading cases…" />
+    }
+    else if (_casesResult.Failed)
+    {
+        <BenListState TItem="CaseRecord" Result="@_casesResult" OnRetry="@LoadAsync" />
     }
     else if (_cases.Count == 0)
     {
@@ -104,6 +110,7 @@
     [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<CaseRecord>? _cases;
+    private LoadResult<CaseRecord> _casesResult;
     private string? _orgName;
     private string? _error;
     private CaseStatus? _activeFilter;
@@ -120,18 +127,30 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
         try
         {
-            _cases = (await AdminClient.GetOrgCasesAsync(OrgId)).ToList();
+            _casesResult = await AdminClient.GetOrgCasesAsync(OrgId);
+            _cases       = _casesResult.Items.ToList();
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
             // Deliberately quiet: this is the count on a "pending requests" badge. If it can't
             // be fetched the badge simply doesn't appear, which is the same thing the user sees
             // when there is nothing pending — and failing the whole case list over a decoration
             // would be worse than omitting it.
-            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Count; } catch { }
+            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Items.Count; } catch { }
         }
-        catch { _error = "Failed to load cases."; }
+        catch
+        {
+            _error       = "Failed to load cases.";
+            _casesResult = LoadResult<CaseRecord>.Failure();
+            _cases     ??= [];
+        }
         StateHasChanged();
     }
 

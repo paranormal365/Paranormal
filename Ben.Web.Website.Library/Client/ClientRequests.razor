@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -16,14 +18,15 @@
         </button>
     </div>
 
-    @if (_error is not null)
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
-
     @if (_requests is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading your requests…" />
+    }
+    else if (_requestsResult.Failed)
+    {
+        @* "You haven't submitted a request yet" to somebody who has is how a client ends up
+           submitting a second one. *@
+        <BenListState TItem="ClientRequestRecord" Result="@_requestsResult" OnRetry="@LoadAsync" />
     }
     else if (_requests.Count == 0)
     {
@@ -136,7 +139,7 @@
 
 @code {
     private List<ClientRequestRecord>? _requests;
-    private string? _error;
+    private LoadResult<ClientRequestRecord> _requestsResult;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -147,11 +150,21 @@
             NavManager.NavigateTo("/login");
             return;
         }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
         try
         {
-            _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+            _requestsResult = await AdminClient.GetMyClientRequestsAsync();
+            _requests       = _requestsResult.Items.ToList();
         }
-        catch { _error = "Failed to load requests."; _requests = []; }
+        catch
+        {
+            _requestsResult = LoadResult<ClientRequestRecord>.Failure();
+            _requests       = [];
+        }
         StateHasChanged();
     }
 
@@ -198,9 +211,16 @@
 
         try
         {
-            var alreadyApplied = (await AdminClient.GetClientRequestOrgsAsync(request.Id))
-                .Select(a => a.OrganizationId)
-                .ToHashSet();
+            // A refusal here would silently offer organizations the person has already applied
+            // to, so it is treated as a failure to open the picker rather than as "none yet".
+            var applied = await AdminClient.GetClientRequestOrgsAsync(request.Id);
+            if (applied.Failed)
+            {
+                _pickerError = applied.Reason
+                    ?? "Couldn't check which organizations you've already applied to. Please try again.";
+                return;
+            }
+            var alreadyApplied = applied.Items.Select(a => a.OrganizationId).ToHashSet();
             var results = (await AdminClient.SearchOrganizationsAsync(
                 (double)request.Latitude.Value, (double)request.Longitude.Value)).Items;
             _pickerOrgs = results.Where(o => !alreadyApplied.Contains(o.OrganizationId)).ToList();
@@ -223,7 +243,8 @@
             if (result is not null)
             {
                 _pickerTarget = null;
-                _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+                _requestsResult = await AdminClient.GetMyClientRequestsAsync();
+                _requests       = _requestsResult.Items.ToList();
             }
             else
             {

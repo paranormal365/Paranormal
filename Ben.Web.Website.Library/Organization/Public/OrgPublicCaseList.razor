@@ -1,6 +1,8 @@
 @page "/o/{UrlName}/cases"
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Data.Common.Enums
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
@@ -25,14 +27,12 @@ else
 
         <h2 class="mb-3">Investigations</h2>
 
-        @if (_cases.Count == 0)
-        {
-            <div class="alert alert-light text-muted text-center">
-                No public cases have been published yet.
-            </div>
-        }
-        else
-        {
+        @* A visitor has no account, no logs and no second opinion: if this page says the group
+           has published nothing, that is the only thing they will ever know. *@
+        <BenListState TItem="PublicCaseListItem" Result="@_casesResult"
+                      EmptyText="No public cases have been published yet"
+                      OnRetry="@LoadAsync">
+        <ChildContent>
             <div class="row g-3">
                 @foreach (var c in _cases)
                 {
@@ -61,7 +61,8 @@ else
                     </div>
                 }
             </div>
-        }
+        </ChildContent>
+        </BenListState>
     </div>
 }
 
@@ -69,17 +70,21 @@ else
     [Parameter] public string UrlName { get; set; } = "";
 
     private IReadOnlyList<PublicCaseListItem> _cases = [];
+    private LoadResult<PublicCaseListItem> _casesResult;
     private string? _orgName;
     private bool _loading = true;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         _loading = true;
         StateHasChanged();
 
         var org = await AdminClient.GetPublicOrgAsync(UrlName);
         _orgName = org?.OrgName;
-        _cases   = await AdminClient.GetPublicCasesAsync(UrlName);
+        _casesResult = await AdminClient.GetPublicCasesAsync(UrlName);
+        _cases       = _casesResult.Items;
 
         _loading = false;
     }

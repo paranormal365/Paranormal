@@ -5971,7 +5971,7 @@ Calendar, Messages, Files, Equipment.
 
 ---
 
-## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization area converted 2026-08-21)
+## 120. The client adapter cannot tell "refused" from "empty" (IN PROGRESS — organization + case areas converted, 81 of 120 left)
 
 `WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
 `BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
@@ -5983,6 +5983,34 @@ Worth designing once rather than patching per-site: likely a `GetExpectingReason
 (the Delete/Send variants exist) plus a component-level convention for "couldn't load" vs
 "nothing here". Until then, any new list surface should assert real content in its tests, per
 the OrdinaryMemberSurfaceTests pattern.
+
+### Progress
+
+| Slice | Date | Converted | Ratchet |
+|---|---|---|---|
+| Organization | 2026-08-21 | 19 | 120 → 101 |
+| **Case** | **2026-08-22** | **20** | **101 → 81** |
+
+**Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
+`BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
+`IBenMediaClient`, and 19 consumers. `CaseMessageThread` — shared by the client and org sides — now
+takes a `LoadResult` delegate, so a refused thread stops telling a client nobody has written to
+them. Six adapter tests were **inverted**: they asserted that a refusal "returns empty", which made
+them green tests defending this very bug.
+
+New `LoadResultRenderedGuardTests` requires any `.razor` calling a converted method to mention
+`BenListState` or read `.Failed`, with an allowlist for genuine decorations that records the reason.
+It stops the likely half-conversion — silencing the compile error with `.Items` and leaving the page
+as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
+there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
+
+**Remaining, in size order:** Equipment 22, Platform 14, User 11, Investigation 8, Cms 6, Places 5,
+Media 5, Publications 4, Membership 3, Feed 2, Account 1.
+
+**For whoever takes the next slice:** a list that is mutated in place — `Insert`, `Add`,
+`RemoveAll` — must **not** be wrapped in `BenListState`. The wrapper keeps rendering the load's own
+emptiness, so the first item added never appears. Branch on `.Failed` beside the existing empty
+check instead.
 
 ---
 
@@ -6524,11 +6552,52 @@ add a source scan rather than another assertion on the thing that was already ri
 
 ---
 
-## 132. Dark mode: fixed-light Bootstrap utilities make white cards with near-white text (CLOSED 2026-08-22)
+## 131. Signed-out, the "Request an Investigation" page's button does nothing (raised 2026-08-22 by Ben)
 
-> **Merge note.** This item was first raised, in a shorter form, on `feature/loadresult-case-area`.
-> If `ProjectNotes/Future-Improvements.md` conflicts when both branches merge, keep **this**
-> version — it supersedes that one, and corrects two claims the first version got wrong.
+Ben: *"the sign up button if you try to create a case and are not logged in, does nothing."*
+
+`/my-requests/new` (`ClientRequestWizard.razor`) renders this to an anonymous visitor:
+
+```razor
+@if (!UserState.IsAuthenticated)
+{
+    <p class="lead">You must be signed in to submit a request.</p>
+    <button type="button" class="btn btn-primary"
+            @onclick="@(() => NavManager.NavigateTo("/login"))">Sign In</button>
+    return;
+}
+```
+
+**Why it does nothing.** `@onclick` needs a live SignalR circuit. This page is reached by a
+signed-out visitor — often the very first page they open — and it is prerendered long before the
+circuit connects, so a click in that window is dropped on the floor with no feedback. Navigation
+needs no circuit at all: a plain `<a href="/login" class="btn btn-primary">` works in the
+prerender, works with JS disabled, and is right-clickable. See the standing note on the Blazor
+Server interactivity race.
+
+**It is also the wrong destination.** Somebody who has never used the site and wants to report
+activity has no account yet. The dead end offers only Sign In; it should offer **Create an
+account** (`/signup`) as the primary action with Sign In secondary, and both should carry
+`?returnUrl=/my-requests/new` so they land back on the request they were trying to start rather
+than on a dashboard. `Login.razor` already supports `ReturnUrl` (built for the case-invite flow,
+item 4).
+
+**Same defect, same page family — fix together:**
+
+- `ClientRequests.razor:14` and `:32` — "New Request" buttons, also `@onclick` navigation
+- `HomeHero.razor:57` already gets this right (`<a href="/login">`), which is the model
+
+**Worth a guard.** A `@onclick` handler whose whole body is `NavManager.NavigateTo(<literal>)` is
+always better as an anchor, and a source scan can say so. That would also have caught this one.
+
+**Not yet verified live** — recorded from Ben's report and confirmed by reading the source; the
+prerender window is the likely mechanism but has not been reproduced in a browser.
+
+---
+
+---
+
+## 132. Dark mode: fixed-light Bootstrap utilities make white cards with near-white text (CLOSED 2026-08-22)
 
 Ben: *"even when you are in dark mode and on the audit log page, when you expand the log record,
 the row that opens has a white background card with near-white text."*

@@ -1,6 +1,8 @@
 @page "/my-cases/{CaseId:guid}"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
@@ -283,7 +285,16 @@
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showAddCoClient = true)"><BenIcon Name="plus" Class="me-1" />Add Person</button>
             </div>
             <div class="card-body">
-                @if (_coClients.Count == 0 && _pendingInvites.Count == 0)
+                @* These lists are mutated in place by Add/Remove below, so the failure state is
+                   branched on directly rather than wrapping the card: a wrapped BenListState would
+                   still be holding the load's own (now stale) emptiness after the first add. *@
+                @if (_coClientsResult.Failed || _invitesResult.Failed)
+                {
+                    <BenListState TItem="CoClientItem"
+                                  Result="@(_coClientsResult.Failed ? _coClientsResult : LoadResult<CoClientItem>.Failure(_invitesResult.Reason))"
+                                  OnRetry="@LoadAsync" />
+                }
+                else if (_coClients.Count == 0 && _pendingInvites.Count == 0)
                 {
                     <div class="text-secondary small">Only you have access. Use 'Add Person' to share this case with another account.</div>
                 }
@@ -396,7 +407,11 @@
             <div class="text-secondary small mb-2">
                 People you mention who don't have accounts on this site — for reference in your notes and timeline. This information is never made public.
             </div>
-            @if (_relatedPeople.Count == 0)
+            @if (_relatedPeopleResult.Failed)
+            {
+                <BenListState TItem="CaseRelatedPersonRecord" Result="@_relatedPeopleResult" OnRetry="@LoadAsync" />
+            }
+            else if (_relatedPeople.Count == 0)
             {
                 <div class="text-secondary small">No one added yet.</div>
             }
@@ -452,14 +467,25 @@
     </div>
 
     @* ── Published investigation reports ─────────────────────────────────────── *@
-    @if (_reports.Count > 0)
+    @* Shown when the fetch failed as well as when there is something to show: hiding the card on
+       failure made a case with reports look like a case without any. *@
+    @if (_reports.Count > 0 || _reportsResult.Failed)
     {
         <div class="card mt-4">
             <div class="card-header fw-semibold d-flex align-items-center gap-2">
                 <BenIcon Name="file" />
                 Investigation Reports
-                <span class="badge bg-secondary">@_reports.Count</span>
+                @if (!_reportsResult.Failed)
+                {
+                    <span class="badge bg-secondary">@_reports.Count</span>
+                }
             </div>
+            @if (_reportsResult.Failed)
+            {
+                <div class="card-body">
+                    <BenListState TItem="CaseReportSummary" Result="@_reportsResult" OnRetry="@LoadAsync" />
+                </div>
+            }
             <div class="list-group list-group-flush">
                 @foreach (var r in _reports)
                 {
@@ -710,18 +736,22 @@
     private string? _dialogError;
     private OccForm _form = new();
     private List<CaseReportSummary> _reports = [];
+    private LoadResult<CaseReportSummary> _reportsResult;
     private List<ScheduleProposalDto> _pendingProposals = [];
     private List<CoClientItem> _coClients = [];
+    private LoadResult<CoClientItem> _coClientsResult;
     private bool _isPrimaryClient;
     private bool _respondingProposal;
     private bool _cancelling;
     private bool _showAddCoClient;
     private string _addCoClientEmail = "";
     private List<CaseClientInviteRecord> _pendingInvites = [];
+    private LoadResult<CaseClientInviteRecord> _invitesResult;
     private InviteCoClientResult? _inviteResult;
     private string? _inviteError;
     private bool _isInviting;
     private List<CaseRelatedPersonRecord> _relatedPeople = [];
+    private LoadResult<CaseRelatedPersonRecord> _relatedPeopleResult;
     private bool _showAddRelatedPerson;
 
     private CaseDisplayAliasRecord? _alias;
@@ -778,8 +808,15 @@
         StateHasChanged();
 
         // Load published reports after case renders (non-blocking)
-        try { _reports = (await AdminClient.GetMyCaseReportsAsync(CaseId)).ToList(); StateHasChanged(); }
-        catch { /* reports are optional; silent failure */ }
+        // Reports are the deliverable the client is waiting for. A refused fetch used to hide the
+        // whole card, so the page looked like a case nobody had reported on yet.
+        try
+        {
+            _reportsResult = await AdminClient.GetMyCaseReportsAsync(CaseId);
+            _reports       = _reportsResult.Items.ToList();
+            StateHasChanged();
+        }
+        catch { _reportsResult = LoadResult<CaseReportSummary>.Failure(); }
 
         // Load pending scheduling proposals
         try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
@@ -794,22 +831,31 @@
         {
             try
             {
-                _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
-                _pendingInvites = (await AdminClient.GetCaseInvitesAsync(CaseId)).ToList();
+                _coClientsResult = await AdminClient.GetCoClientsAsync(CaseId);
+                _coClients       = _coClientsResult.Items.ToList();
+                _invitesResult   = await AdminClient.GetCaseInvitesAsync(CaseId);
+                _pendingInvites  = _invitesResult.Items.ToList();
                 StateHasChanged();
             }
-            catch { /* silent — Shared Access card just shows its empty state */ }
+            catch
+            {
+                // Was silent, and the card then said "Only you have access" — which is the one
+                // sentence a primary client must be able to trust.
+                _coClientsResult = LoadResult<CoClientItem>.Failure();
+                _invitesResult   = LoadResult<CaseClientInviteRecord>.Failure();
+            }
         }
 
         try
         {
-            _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList();
+            _relatedPeopleResult = await AdminClient.GetRelatedPeopleAsync(CaseId);
+            _relatedPeople       = _relatedPeopleResult.Items.ToList();
             await LoadPersonPhotosAsync();
             await LoadAliasAsync();
             await LoadTaxonomyAsync();
             StateHasChanged();
         }
-        catch { /* silent */ }
+        catch { _relatedPeopleResult = LoadResult<CaseRelatedPersonRecord>.Failure(); }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
@@ -1152,7 +1198,7 @@
         }
     }
 
-    private Task<IReadOnlyList<CaseMessageRecord>> LoadClientMessages()
+    private Task<LoadResult<CaseMessageRecord>> LoadClientMessages()
         => AdminClient.GetMyCaseMessagesAsync(CaseId);
 
     private async Task<CaseMessageRecord?> PostClientMessage(string body)

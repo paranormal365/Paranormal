@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -484,10 +486,12 @@
     private record StatusOption(CaseStatus Value, string Label);
     private record MemberOption(Guid Id, string Label);
 
-    private async Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
+    private async Task<LoadResult<CaseMessageRecord>> LoadOrgMessages()
     {
         var msgs = await AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
-        _unreadCount = 0; // tab opened — all now marked read by the server
+        // Only clear the badge if the thread actually came back; a refused fetch leaves the unread
+        // count alone rather than reporting that everything has been read.
+        if (!msgs.Failed) _unreadCount = 0;
         return msgs;
     }
 
