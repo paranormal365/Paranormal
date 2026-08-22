@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.Equipment">
     <PageTitle>My Checkouts</PageTitle>
@@ -25,7 +27,12 @@
             <div class="alert alert-danger">@_error</div>
         }
 
-        @if (_loading)
+        @if (_loansResult.Failed && !_loading)
+        {
+            @* A borrower shown an empty loan list assumes nothing is out and nothing is overdue. *@
+            <BenListState TItem="EquipmentCheckoutRecord" Result="@_loansResult" OnRetry="@LoadAsync" />
+        }
+        else if (_loading)
         {
             <BenLoaderOverlay Visible="true" Text="Loading your loans…" />
         }
@@ -135,6 +142,7 @@
     private readonly Dictionary<Guid, DateTime?> _dueDates = [];
     private readonly Dictionary<Guid, string> _reviewNotes = [];
     private bool _loading = true;
+    private LoadResult<EquipmentCheckoutRecord> _loansResult;
     private bool _busy;
     private string? _error;
 
@@ -227,8 +235,9 @@
         _error = null;
         try
         {
-            _borrowing = [.. await AdminClient.GetMyEquipmentCheckoutsAsync("borrower")];
-            _toApprove = [.. await AdminClient.GetMyEquipmentCheckoutsAsync("approver")];
+            _loansResult = await AdminClient.GetMyEquipmentCheckoutsAsync("borrower");
+            _borrowing   = [.. _loansResult.Items];
+            _toApprove = [.. (await AdminClient.GetMyEquipmentCheckoutsAsync("approver")).Items];
         }
         catch (Exception ex)
         {

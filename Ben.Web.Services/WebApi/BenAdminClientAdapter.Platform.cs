@@ -22,9 +22,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
 
-    public async Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
-        => await _api.GetAsync<List<MyMessageRecord>>(
-               $"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token) ?? [];
+    public Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
+        => _api.GetListAsync<MyMessageRecord>($"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token);
 
     public Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default)
         => _api.PutVoidAsync<object?>($"/api/me/messages/{id}/read", null, token);
@@ -45,22 +44,16 @@ public sealed partial class BenAdminClientAdapter
         return await _api.GetAsync<AuditLogPagedResponse>($"/api/admin/audit-logs{qs}", token);
     }
 
-    public async Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<string>>("/api/admin/audit-logs/entity-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/admin/audit-logs/entity-types", token);
 
     public Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendAuditLogMessageRequest, bool>("/api/admin/audit-logs/send-message", request, token);
 
     // ── Generic Lookup Types ──────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<LookupTypeAdminRecord>>($"/{route}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
+        => _api.GetListAsync<LookupTypeAdminRecord>($"/{route}", token);
 
     public Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default)
         => _api.PostAsync<LookupTypeUpsertRequest, LookupTypeAdminRecord>($"/{route}", request, token);
@@ -111,8 +104,8 @@ public sealed partial class BenAdminClientAdapter
         return await _api.GetAsync<SupportTicketPage>($"/api/admin/support-tickets?{string.Join("&", query)}", token);
     }
 
-    public async Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<SupportTicketReplyRecord>>($"/api/admin/support-tickets/{id}/replies", token) ?? [];
+    public Task<LoadResult<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default)
+        => _api.GetListAsync<SupportTicketReplyRecord>($"/api/admin/support-tickets/{id}/replies", token);
 
     public Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/admin/support-tickets/{id}/replies", request, token);
@@ -122,17 +115,11 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/inbox", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/inbox", token);
 
-    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/sent", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/sent", token);
 
     public Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default)
         => _api.GetAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/{messageId}", token);
@@ -142,11 +129,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Calendar ──────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventTypeRecord>>($"/api/organizations/{orgId}/calendar-event-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types", token);
 
     public Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertCalendarEventTypeRequest, OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types", request, token);
@@ -157,13 +141,12 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/calendar-event-types/{id}", token);
 
-    public async Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default)
+    public Task<LoadResult<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default)
     {
         var qs = string.Empty;
         if (from.HasValue) qs += $"?from={Uri.EscapeDataString(from.Value.ToString("o"))}";
         if (to.HasValue)   qs += (qs.Length > 0 ? "&" : "?") + $"to={Uri.EscapeDataString(to.Value.ToString("o"))}";
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>($"/api/organizations/{orgId}/calendar{qs}", token);
-        return result ?? [];
+        return _api.GetListAsync<OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar{qs}", token);
     }
 
     public Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
@@ -187,11 +170,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
 
-    public async Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventAttendeeRecord>>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
 
     public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddAttendeeRequest, OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", request, token);
@@ -211,23 +191,14 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryWithTypesResponse>>("/api/experience-categories/with-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
+        => _api.GetListAsync<ExperienceCategoryWithTypesResponse>("/api/experience-categories/with-types", token);
 
-    public async Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryRecord>>("/api/admin/experience-categories", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default)
+        => _api.GetListAsync<ExperienceCategoryRecord>("/api/admin/experience-categories", token);
 
-    public async Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceTypeRecord>>($"/api/admin/experience-categories/{categoryId}/types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default)
+        => _api.GetListAsync<ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", token);
 
     public Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertExperienceCategoryRequest, ExperienceCategoryRecord>("/api/admin/experience-categories", request, token);
@@ -279,10 +250,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(
+    public Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(
         int take = 200, CancellationToken token = default)
-        => await _api.GetAsync<List<SidecarInstallLogRecord>>(
-               $"/api/sidecar-telemetry?take={take}", token) ?? [];
+        => _api.GetListAsync<SidecarInstallLogRecord>($"/api/sidecar-telemetry?take={take}", token);
 
     public Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(
         CancellationToken token = default)
@@ -290,13 +260,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Published investigations (item #89) ─────────────────────────────────
 
-    public async Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+    public Task<LoadResult<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
         string orgUrlName, CancellationToken token = default)
-    {
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicInvestigationListItem>>(
-            $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations", token);
-        return result ?? [];
-    }
+        => _api.GetAnonymousListAsync<PublicInvestigationListItem>($"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations", token);
 
     public Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
         string orgUrlName, string investigationSlug, CancellationToken token = default)

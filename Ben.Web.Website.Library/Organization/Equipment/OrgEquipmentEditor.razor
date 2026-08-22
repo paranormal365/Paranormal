@@ -144,8 +144,8 @@
         _error = null;
 
         if (_categories.Count == 0)
-            _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
-        _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _categories = [.. (await AdminClient.GetEquipmentCategoriesAsync()).Items];
+        _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
 
         if (Item is null)
         {
@@ -172,7 +172,7 @@
             _categoryId = _categories.FirstOrDefault(c => c.Name == Item.CategoryName)?.Id;
             _brandId    = _brands.FirstOrDefault(b => b.Name == Item.BrandName)?.Id;
             if (_brandId is not null)
-                _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+                _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
         }
     }
 
@@ -200,7 +200,7 @@
     {
         _brandId = brandId;
         _modelId = null;
-        _models = brandId is null ? [] : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+        _models = brandId is null ? [] : [.. (await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)).Items];
     }
 
     private async Task SaveAsync()

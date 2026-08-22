@@ -35,6 +35,23 @@ public sealed class LoadResultRenderedGuardTests
         "GetMyCaseMessagesAsync", "GetCoClientsAsync", "GetCaseInvitesAsync",
         "GetRelatedPeopleAsync", "GetVideoAssetsAsync", "GetCaseMessagesAsync",
         "GetCaseVoteSummariesAsync",
+
+        // platform slice
+        "GetMyMessagesAsync", "GetOrgInboxAsync", "GetOrgSentAsync", "GetSupportTicketRepliesAsync",
+        "GetCalendarEventTypesAsync", "GetCalendarEventsAsync", "GetCalendarEventAttendeesAsync",
+        "GetExperienceTaxonomyAsync", "GetAllExperienceCategoriesAsync", "GetAllExperienceTypesAsync",
+        "GetLookupTypesAsync", "GetAuditLogEntityTypesAsync", "GetSidecarTelemetryAsync",
+        "GetPublishedInvestigationsAsync",
+
+        // equipment slice
+        "GetMyEquipmentAsync", "GetMyEquipmentCheckoutsAsync", "GetMyEquipmentSharesAsync",
+        "GetMyAskedQuestionsAsync", "GetMyReceivedQuestionsAsync", "GetEquipmentFaqsAsync",
+        "GetProductReviewsAsync", "GetEquipmentItemHistoryAsync", "GetCheckoutPhotosAsync",
+        "GetCheckoutRenewalsAsync", "GetOrgEquipmentServiceLogAsync", "GetOrgSharedEquipmentAsync",
+        "GetPublicEquipmentItemsAsync", "GetEquipmentCategoriesAsync", "GetEquipmentBrandsAsync",
+        "GetEquipmentModelsForBrandAsync", "SearchEquipmentModelsAsync",
+        "GetAdminEquipmentBrandsAsync", "GetAdminEquipmentCategoriesAsync",
+        "GetAdminEquipmentModelsAsync", "GetEquipmentItemCheckoutsAsync",
     ];
 
     /// <summary>
@@ -43,6 +60,28 @@ public sealed class LoadResultRenderedGuardTests
     /// </summary>
     private static readonly Dictionary<string, string> Decorations = new()
     {
+        ["MyCaseDetail.razor"] =
+            "Reads the experience taxonomy purely to turn type ids into names. A failed lookup "
+          + "shows ids instead of labels, which is worse than labels and far better than an error "
+          + "panel over somebody's case. The lists on that page report their own failures.",
+
+        ["CaseTimeline.razor"] =
+            "Same taxonomy lookup, for the filter chips' labels. The timeline itself is wrapped "
+          + "and reports its own refusal.",
+
+        ["MyEquipmentItemEditor.razor"] =
+            "Category, brand and model feed the three cascading pickers in the item form. A failed "
+          + "fetch leaves a picker empty, which the person sees and can retry by reopening; a "
+          + "warning panel inside a form field would be worse. The item lists that show what they "
+          + "own report their own failures.",
+
+        ["OrgEquipmentEditor.razor"] =
+            "The same three cascading pickers, in the group's version of the same form.",
+
+        ["AdminAuditLog.razor"] =
+            "The entity-type filter's options. A refusal narrows the filter; it does not misreport "
+          + "the log, which has its own state.",
+
         ["PublicCaseDiscovery.razor"] =
             "Vote summaries only mark which cards the viewer has already voted on. A failed lookup "
           + "leaves the marks off — the cases themselves still render, and a warning panel over a "

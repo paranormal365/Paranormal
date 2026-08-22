@@ -466,9 +466,19 @@
     {
         var failed = new List<string>();
 
-        var existing = (await AdminClient.GetCalendarEventAttendeesAsync(OrgId, eventId))
-            .Select(a => a.AppUserId)
-            .ToHashSet();
+        // This set is what stops an existing attendee being invited a second time. Read as
+        // "nobody is invited yet" when the fetch was actually refused, it would re-invite the
+        // whole list — so a refusal aborts rather than guessing.
+        var attendees = await AdminClient.GetCalendarEventAttendeesAsync(OrgId, eventId);
+        if (attendees.Failed)
+        {
+            failed.Add(attendees.SessionExpired
+                ? "invitations were skipped — you've been signed out"
+                : "invitations were skipped — the current guest list could not be read");
+            return failed;
+        }
+
+        var existing = attendees.Items.Select(a => a.AppUserId).ToHashSet();
 
         foreach (var memberId in _form.InviteeIds.Where(id => !existing.Contains(id)))
         {
@@ -534,7 +544,9 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         try
         {
-            _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+            // Options for the type dropdown. A refusal narrows the choices; it does not
+            // misreport the calendar, which reports its own state below.
+            _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).Items.ToList();
             _eventTypeOptions = [new(null, "(No type)"),
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
             // Loaded once with the calendar, not per dialog open — the list is short and rarely
@@ -549,7 +561,22 @@
 
     private async Task LoadEventsAsync()
     {
-        _events = (await AdminClient.GetCalendarEventsAsync(OrgId)).ToList();
+        // An empty scheduler and a refused one look identical, and the empty one is the reassuring
+        // reading — "nothing is booked" — which is the worst possible thing to tell somebody
+        // deciding whether a date is free.
+        var events = await AdminClient.GetCalendarEventsAsync(OrgId);
+
+        if (events.Failed)
+        {
+            _error = events.SessionExpired
+                ? "You've been signed out, so the calendar could not be loaded. Sign in again to see it."
+                : "The calendar could not be loaded. This is a problem reaching the server — it does "
+                + "not mean the calendar is empty.";
+            return;
+        }
+
+        _error        = null;
+        _events       = events.Items.ToList();
         _appointments = _events.Select(ToAppointment).ToList();
     }
 
@@ -640,10 +667,22 @@
         _emailInvitees.Clear();
         _inviteEmail = "";
         _inviteError = null;
-        _form.InviteeIds = _editingEvent is null
-            ? []
-            : (await AdminClient.GetCalendarEventAttendeesAsync(OrgId, _editingEvent.Id))
-                .Select(a => a.AppUserId).ToHashSet();
+        if (_editingEvent is null)
+        {
+            _form.InviteeIds = [];
+        }
+        else
+        {
+            // The checkboxes start from who is already invited. If that cannot be read, say so
+            // rather than presenting an empty guest list as though nobody had been invited.
+            var attendees = await AdminClient.GetCalendarEventAttendeesAsync(OrgId, _editingEvent.Id);
+            _form.InviteeIds = attendees.Items.Select(a => a.AppUserId).ToHashSet();
+
+            if (attendees.Failed)
+                _inviteError = attendees.SessionExpired
+                    ? "You've been signed out, so the current guest list couldn't be read."
+                    : "The current guest list couldn't be read, so nobody is shown as invited yet.";
+        }
 
         _showEventDialog = true;
     }

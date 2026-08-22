@@ -4,6 +4,8 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.OrgMessaging">
     @if (!EmbeddedMode) { <PageTitle>Messages</PageTitle> }
@@ -62,7 +64,17 @@
             <div class="col-lg-9 col-xl-10">
                 <div class="card">
                     <div class="card-body p-0">
-                        @if (_visible.Count == 0)
+                        @* EmptyMessage is carefully worded per folder — "No broadcasts to the
+                           whole group yet" and so on — which makes it exactly the wrong thing to
+                           print over a refused fetch. *@
+                        @if (_foldersResult.Failed)
+                        {
+                            <div class="m-3">
+                                <BenListState TItem="OrgMessageRecord" Result="@_foldersResult"
+                                              OnRetry="@LoadActiveTabAsync" />
+                            </div>
+                        }
+                        else if (_visible.Count == 0)
                         {
                             <p class="text-secondary small m-3 mb-3">@EmptyMessage</p>
                         }
@@ -236,6 +248,7 @@
 
     private string _activeTabId = "inbox";
     private List<OrgMessageRecord>? _inbox;
+    private LoadResult<OrgMessageRecord> _foldersResult;
     private List<OrgMessageRecord>? _sent;
 
     // ── Folder rail ───────────────────────────────────────────────────────────
@@ -408,9 +421,15 @@
             // is what gets fetched — and it is fetched even when a channel folder is open, so the
             // other folders' unread badges stay right.
             if (_activeTabId == "sent")
-                _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();
+            {
+                _foldersResult = await AdminClient.GetOrgSentAsync(OrgId);
+                _sent          = _foldersResult.Items.ToList();
+            }
             else
-                _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
+            {
+                _foldersResult = await AdminClient.GetOrgInboxAsync(OrgId);
+                _inbox         = _foldersResult.Items.ToList();
+            }
 
             ApplyFolder();
         }

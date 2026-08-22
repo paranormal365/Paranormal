@@ -271,7 +271,7 @@
         _loadedForItemId = key;
 
         _error = null;
-        _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+        _categories = [.. (await AdminClient.GetEquipmentCategoriesAsync()).Items];
 
         if (Item is null)
         {
@@ -296,12 +296,14 @@
             _loanAudience           = Item.LoanAudience;
 
             // Resolve the item's model back to its category/brand so the pickers open populated.
-            var model = (await AdminClient.SearchEquipmentModelsAsync()).FirstOrDefault(m => m.Id == Item.EquipmentModelId);
+            // Prefills the category/brand pickers from the item's model. A failed lookup leaves
+            // them unset, which the person can simply choose again.
+            var model = (await AdminClient.SearchEquipmentModelsAsync()).Items.FirstOrDefault(m => m.Id == Item.EquipmentModelId);
             _categoryId = model?.EquipmentCategoryId;
             _brandId    = model?.EquipmentBrandId;
             _modelId    = Item.EquipmentModelId;
-            if (_categoryId is not null) _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
-            if (_brandId is not null) _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+            if (_categoryId is not null) _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
+            if (_brandId is not null) _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
         }
 
         _newBrandName = string.Empty;
@@ -314,7 +316,7 @@
         _categoryId = categoryId;
         _brandId = null; _modelId = null;
         _models = [];
-        _brands = categoryId is null ? [] : [.. await AdminClient.GetEquipmentBrandsAsync()];
+        _brands = categoryId is null ? [] : [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
     }
 
     private async Task OnBrandChangedAsync(Guid? brandId)
@@ -323,7 +325,7 @@
         _modelId = null;
         _models = brandId is null || _categoryId is null
             ? []
-            : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+            : [.. (await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)).Items];
     }
 
     /// <summary>
@@ -352,7 +354,7 @@
         }
         else
         {
-            _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
             _newBrandName = string.Empty;
             await OnBrandChangedAsync(proposal.Created.Id);
         }
@@ -385,7 +387,7 @@
         }
         else
         {
-            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+            _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
             _newModelName = string.Empty;
             _modelId = created.Id;
         }

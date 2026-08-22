@@ -2,6 +2,8 @@
 
 @inject IBenAdminClient AdminClient
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Event types are what the calendar's "Type" dropdown offers. Until this screen existed they
    could only be created against the API directly, which is why an org could end up with a
@@ -33,7 +35,11 @@
         }
         else
         {
-            @if (_types.Count == 0 && !_showForm)
+            @if (_typesResult.Failed)
+            {
+                <BenListState TItem="OrgCalendarEventTypeRecord" Result="@_typesResult" OnRetry="@LoadAsync" />
+            }
+            else if (_types.Count == 0 && !_showForm)
             {
                 <p class="text-secondary small fst-italic mt-3 mb-0">
                     No event types yet. Events can still be created without one.
@@ -172,6 +178,7 @@
     ];
 
     private List<OrgCalendarEventTypeRecord> _types = new();
+    private LoadResult<OrgCalendarEventTypeRecord> _typesResult;
     private bool _loading = true;
     private bool _saving;
     private string? _error;
@@ -198,7 +205,8 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _types = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+        _typesResult = await AdminClient.GetCalendarEventTypesAsync(OrgId);
+        _types       = _typesResult.Items.ToList();
         _loading = false;
     }
 

@@ -143,6 +143,8 @@
     private readonly Dictionary<Guid, string> _reviewNotes = [];
     private DateTime? _requestedDate;
     private string _requestNotes = string.Empty;
+    /// <summary>True when the loan could not be looked up, as distinct from not existing.</summary>
+    private bool _loanLookupFailed;
     private bool _busy;
     private bool _loading = true;
     private string? _error;
@@ -186,12 +188,14 @@
         StateHasChanged();
 
         var mine = await AdminClient.GetMyEquipmentCheckoutsAsync("borrower");
-        Loan = mine.FirstOrDefault(c => c.Id == CheckoutId);
+        _loanLookupFailed = mine.Failed;
+        Loan = mine.Items.FirstOrDefault(c => c.Id == CheckoutId);
 
         if (Loan is null)
         {
             var toApprove = await AdminClient.GetMyEquipmentCheckoutsAsync("approver");
-            Loan = toApprove.FirstOrDefault(c => c.Id == CheckoutId);
+            _loanLookupFailed = _loanLookupFailed || toApprove.Failed;
+            Loan = toApprove.Items.FirstOrDefault(c => c.Id == CheckoutId);
         }
 
         if (Loan is not null)
@@ -209,7 +213,7 @@
     private async Task LoadRenewalsAsync()
     {
         if (Loan is null) return;
-        _renewals = [.. await AdminClient.GetCheckoutRenewalsAsync(Loan.Id)];
+        _renewals = [.. (await AdminClient.GetCheckoutRenewalsAsync(Loan.Id)).Items];
         StateHasChanged();
     }
 

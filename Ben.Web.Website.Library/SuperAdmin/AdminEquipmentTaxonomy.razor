@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Equipment Taxonomy</PageTitle>
 
@@ -27,7 +29,13 @@
 
     <BenTabs @bind-ActiveId="@_activeTab">
         <BenTab Title="Makes" Id="brands">
-            @if (_loading)
+            @if (_taxonomyResult.Failed)
+            {
+                @* One result covers all three lists: they load together, and a taxonomy that
+                   failed to load must not read as a taxonomy nobody has filled in. *@
+                <BenListState TItem="EquipmentBrandRecord" Result="@_taxonomyResult" OnRetry="@LoadAsync" />
+            }
+            else if (_loading)
             {
                 <BenLoaderOverlay Visible="true" Text="Loading…" />
             }
@@ -193,6 +201,7 @@
 
     private string _activeTab = "brands";
     private bool _loading = true;
+    private LoadResult<EquipmentBrandRecord> _taxonomyResult;
     private bool _busy;
     private string? _error;
 
@@ -220,9 +229,10 @@
         _error = null;
         try
         {
-            _brands     = [.. await AdminClient.GetAdminEquipmentBrandsAsync()];
-            _models     = [.. await AdminClient.GetAdminEquipmentModelsAsync()];
-            _categories = [.. await AdminClient.GetAdminEquipmentCategoriesAsync()];
+            _taxonomyResult = await AdminClient.GetAdminEquipmentBrandsAsync();
+            _brands         = [.. _taxonomyResult.Items];
+            _models     = [.. (await AdminClient.GetAdminEquipmentModelsAsync()).Items];
+            _categories = [.. (await AdminClient.GetAdminEquipmentCategoriesAsync()).Items];
         }
         catch (Exception ex)
         {

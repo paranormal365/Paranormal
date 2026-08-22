@@ -320,8 +320,9 @@
 
     private async Task LoadEntityTypesAsync()
     {
-        var types = await AdminClient.GetAuditLogEntityTypesAsync();
-        _entityTypeOptions = types;
+        // Options for the type filter. A failed fetch narrows the filter; it does not misreport
+        // the log itself, which has its own state.
+        _entityTypeOptions = (await AdminClient.GetAuditLogEntityTypesAsync()).Items;
     }
 
     /// <summary>

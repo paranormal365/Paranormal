@@ -4,6 +4,8 @@
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Equipment as this group sees it. Phase 2 is members' shared personal gear; phase 3 adds the
    group's own equipment alongside it. EmbeddedMode so the same component works as an org tab and,
@@ -203,6 +205,10 @@
     {
         <BenLoaderOverlay Visible="true" Text="Loading shared equipment…" />
     }
+    else if (_itemsResult.Failed)
+    {
+        <BenListState TItem="SharedEquipmentItemRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
+    }
     else if (_items.Count == 0)
     {
         <div class="card">
@@ -329,6 +335,7 @@
     private bool _canReviewLoans;
     private string _activeTab = "owned";
     private bool _loading = true;
+    private LoadResult<SharedEquipmentItemRecord> _itemsResult;
     private bool _ownedLoading = true;
     private string? _error;
     private Guid _loadedForOrg;
@@ -398,7 +405,8 @@
         _loading = true;
         try
         {
-            _items = [.. await AdminClient.GetOrgSharedEquipmentAsync(OrgId)];
+            _itemsResult = await AdminClient.GetOrgSharedEquipmentAsync(OrgId);
+            _items       = [.. _itemsResult.Items];
         }
         catch (Exception ex)
         {
