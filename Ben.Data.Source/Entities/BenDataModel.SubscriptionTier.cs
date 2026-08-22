@@ -3,7 +3,7 @@ using Ben.Data.Common.Interfaces;
 namespace Ben.Data.Source.Entities
 {
     /// <summary>
-    /// One band in the platform's price list: a member-count range and what it costs per month.
+    /// One band in the platform's price list: a member-count range, and what it costs to be in it.
     /// </summary>
     /// <remarks>
     /// <para><b>Rows, not constants.</b> Prices change, and a price change should not be a
@@ -16,6 +16,10 @@ namespace Ben.Data.Source.Entities
     ///
     /// <para><see cref="MaxMembers"/> is null for the top band, meaning unbounded. A number there
     /// would need editing every time a group outgrows it, which is the failure mode this avoids.</para>
+    ///
+    /// <para><b>The band does not hold a price.</b> It holds <see cref="Prices"/> — one row per
+    /// billing cadence — because a band sold monthly and yearly has two prices and neither is
+    /// derived from the other. See <see cref="SubscriptionTierPrice"/>.</para>
     /// </remarks>
     public class SubscriptionTier : IAuditableEntity
     {
@@ -29,12 +33,6 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Most active members this band covers, or null for the unbounded top band.</summary>
         public int? MaxMembers { get; set; }
-
-        /// <summary>
-        /// Monthly price. Zero is a real, deliberate value — the free band — and is why
-        /// <see cref="Ben.Data.Common.Enums.SubscriptionStatus.Free"/> exists as its own status.
-        /// </summary>
-        public decimal MonthlyPrice { get; set; }
 
         /// <summary>Display order in the price list; independent of the member bands.</summary>
         public int SortOrder { get; set; }
@@ -55,5 +53,12 @@ namespace Ben.Data.Source.Entities
 
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+
+        /// <summary>
+        /// What this band costs, one row per cadence. Zero is a real, deliberate price — the free
+        /// band — and is why <see cref="Ben.Data.Common.Enums.SubscriptionStatus.Free"/> exists as
+        /// its own status rather than being inferred from an absent row.
+        /// </summary>
+        public virtual ICollection<SubscriptionTierPrice> Prices { get; set; } = [];
     }
 }

@@ -1327,9 +1327,11 @@ namespace Ben.Data.Source.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                    b.Property<int>("AppliesTo")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AppliesToInterval")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
@@ -1341,7 +1343,8 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<int>("Duration")
                         .HasColumnType("int");
@@ -1352,8 +1355,16 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MaxRedemptions")
                         .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<int?>("PercentOff")
                         .HasColumnType("int");
@@ -1367,10 +1378,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.HasKey("Id");
+                    b.Property<DateTime?>("ValidFromUtc")
+                        .HasColumnType("datetime2");
 
-                    b.HasIndex("Code")
-                        .IsUnique();
+                    b.HasKey("Id");
 
                     b.HasIndex("CreatedByAppUserId");
 
@@ -1379,10 +1390,71 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("Coupons");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CouponCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("CouponId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IssuedTo")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int?>("MaxRedemptions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RedemptionCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("RestrictedToAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CouponId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("RestrictedToAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("CouponCodes");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CouponRedemption", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CouponCodeId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("CouponId")
@@ -1410,6 +1482,8 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CouponCodeId");
 
                     b.HasIndex("CreatedByAppUserId");
 
@@ -4686,6 +4760,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("FirstPaidPeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("LapsedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -5187,13 +5267,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("MinMembers")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("MonthlyPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -5210,6 +5287,49 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("IsActive", "MinMembers");
 
                     b.ToTable("SubscriptionTiers");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.SubscriptionTierPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("SubscriptionTierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("SubscriptionTierId", "Interval")
+                        .IsUnique();
+
+                    b.ToTable("SubscriptionTierPrices");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.SupportTicket", b =>
@@ -7794,8 +7914,47 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CouponCode", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Coupon", "Coupon")
+                        .WithMany("Codes")
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RestrictedToAppUser")
+                        .WithMany()
+                        .HasForeignKey("RestrictedToAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Coupon");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("RestrictedToAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CouponRedemption", b =>
                 {
+                    b.HasOne("Ben.Data.Source.Entities.CouponCode", "CouponCode")
+                        .WithMany("Redemptions")
+                        .HasForeignKey("CouponCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Ben.Data.Source.Entities.Coupon", "Coupon")
                         .WithMany("Redemptions")
                         .HasForeignKey("CouponId")
@@ -7820,6 +7979,8 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Coupon");
+
+                    b.Navigation("CouponCode");
 
                     b.Navigation("CreatedByAppUser");
 
@@ -9911,6 +10072,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.SubscriptionTierPrice", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.SubscriptionTier", "SubscriptionTier")
+                        .WithMany("Prices")
+                        .HasForeignKey("SubscriptionTierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("SubscriptionTier");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.SupportTicket", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -10832,6 +11019,13 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Coupon", b =>
                 {
+                    b.Navigation("Codes");
+
+                    b.Navigation("Redemptions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CouponCode", b =>
+                {
                     b.Navigation("Redemptions");
                 });
 
@@ -11011,6 +11205,11 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Posts");
 
                     b.Navigation("Subscriptions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.SubscriptionTier", b =>
+                {
+                    b.Navigation("Prices");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.SupportTicket", b =>

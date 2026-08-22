@@ -12,6 +12,26 @@ namespace Ben.Data.WebApi.Services.Billing;
 public readonly record struct PeriodPrice(decimal ListPrice, decimal Discount, decimal Payable);
 
 /// <summary>
+/// Everything about the moment a code is being typed that a coupon might care about.
+/// </summary>
+/// <param name="UtcNow">The moment, for the redemption window.</param>
+/// <param name="RedeemingAppUserId">Who is signed in, for a code addressed to one person.</param>
+/// <param name="Interval">The cadence being bought, for a cadence-restricted coupon.</param>
+/// <param name="IsRenewal">Whether this organization has ever had a paid period.</param>
+/// <param name="AlreadyRedeemedByThisOrg">Whether this campaign has been used here before.</param>
+/// <remarks>
+/// A record rather than five parameters. The three booleans and the two ids are all easy to pass
+/// in the wrong order, and every one of them changes whether somebody gets a discount — the sort
+/// of mistake that produces a wrong answer rather than a compiler error.
+/// </remarks>
+public readonly record struct CouponRedemptionContext(
+    DateTime UtcNow,
+    Guid RedeemingAppUserId,
+    BillingInterval Interval,
+    bool IsRenewal,
+    bool AlreadyRedeemedByThisOrg);
+
+/// <summary>
 /// Applies a coupon to a period's price, and says when a coupon may not be redeemed at all.
 /// </summary>
 /// <remarks>
@@ -21,19 +41,72 @@ public readonly record struct PeriodPrice(decimal ListPrice, decimal Discount, d
 /// </remarks>
 public static class CouponMath
 {
-    /// <summary>Why this coupon cannot be redeemed now, or null when it can.</summary>
-    public static string? WhyNotRedeemable(Coupon coupon, DateTime utcNow, bool alreadyRedeemedByThisOrg)
+    /// <summary>Whether a subscription's next period counts as a renewal rather than a first buy.</summary>
+    /// <remarks>
+    /// "Has ever paid", not "is paying now". A group that lapsed in March is who a renewal coupon
+    /// is written for, and reading this as "currently active" would shut them out of it.
+    /// </remarks>
+    public static bool IsRenewal(OrganizationSubscription subscription) =>
+        subscription.FirstPaidPeriodStartUtc is not null;
+
+    /// <summary>Why this code cannot be redeemed now, or null when it can.</summary>
+    /// <remarks>
+    /// <para>The order of these checks is the order the sentences should be read in, not an
+    /// arbitrary one. "Your group has already used that code" comes before "that code has been
+    /// fully claimed" because the first is actionable and the second is not, and a person who sees
+    /// only the second will go looking for a different code they do not need.</para>
+    ///
+    /// <para>Every message is written for the person typing, and none of them says which internal
+    /// rule fired. The one place that leaks anything is the addressed-code message, which admits
+    /// the code exists — but they are holding it, so there is nothing there to learn.</para>
+    /// </remarks>
+    public static string? WhyNotRedeemable(Coupon coupon, CouponCode code, CouponRedemptionContext ctx)
     {
-        if (!coupon.IsActive)                     return "That code is no longer available.";
-        if (alreadyRedeemedByThisOrg)             return "Your group has already used that code.";
-        if (coupon.RedeemByUtc is { } by && utcNow > by)
-                                                  return "That code has expired.";
+        if (!coupon.IsActive || !code.IsActive)
+            return "That code is no longer available.";
+
+        if (ctx.AlreadyRedeemedByThisOrg)
+            return "Your group has already used that code.";
+
+        if (coupon.ValidFromUtc is { } from && ctx.UtcNow < from)
+            return "That code cannot be used yet.";
+
+        if (coupon.RedeemByUtc is { } by && ctx.UtcNow > by)
+            return "That code has expired.";
+
+        if (code.RestrictedToAppUserId is { } owner && owner != ctx.RedeemingAppUserId)
+            return "That code was issued to a different account.";
+
+        if (code.MaxRedemptions is { } perCode && code.RedemptionCount >= perCode)
+            return "That code has already been used.";
+
         if (coupon.MaxRedemptions is { } max && coupon.RedemptionCount >= max)
-                                                  return "That code has been fully claimed.";
-        if (Misconfiguration(coupon) is { } bad)  return bad;
+            return "That code has been fully claimed.";
+
+        if (coupon.AppliesToInterval is { } only && only != ctx.Interval)
+            return $"That code only applies to {Describe(only)} billing.";
+
+        if (coupon.AppliesTo == CouponApplicability.NewSubscriptionsOnly && ctx.IsRenewal)
+            return "That code is for groups subscribing for the first time.";
+
+        if (coupon.AppliesTo == CouponApplicability.RenewalsOnly && !ctx.IsRenewal)
+            return "That code applies to a renewal, and this would be your group's first period.";
+
+        if (Misconfiguration(coupon) is { } bad)
+            return bad;
 
         return null;
     }
+
+    /// <summary>The cadence in the words a person would use, for a message rather than a label.</summary>
+    private static string Describe(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "monthly",
+        BillingInterval.Quarterly  => "quarterly",
+        BillingInterval.HalfYearly => "six-monthly",
+        BillingInterval.Yearly     => "yearly",
+        _                          => interval.ToString().ToLowerInvariant(),
+    };
 
     /// <summary>
     /// Why the coupon itself does not make sense, independent of who is redeeming it.
@@ -56,6 +129,30 @@ public static class CouponMath
             return "That code takes off more than the whole price.";
         if (coupon.Duration == CouponDuration.Repeating && coupon.DurationPeriods is not > 0)
             return "That code repeats, but for no periods.";
+        if (coupon.ValidFromUtc is { } from && coupon.RedeemByUtc is { } by && from > by)
+            return "That code stops being valid before it starts.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Why a generated batch does not make sense as a batch, independent of any one code.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="CouponKind.Generated"/> campaign whose codes are unlimited is a shared code
+    /// with extra steps, and a <see cref="CouponKind.Shared"/> campaign with several codes has no
+    /// single code to print. Neither is caught by <see cref="Misconfiguration"/>, because both are
+    /// about the codes rather than the discount — and both produce a coupon that works but does
+    /// not do what the person who made it meant.
+    /// </remarks>
+    public static string? BatchMisconfiguration(Coupon coupon, IReadOnlyList<CouponCode> codes)
+    {
+        if (codes.Count == 0)
+            return "That campaign has no codes, so there is nothing to redeem.";
+
+        if (coupon.Kind == CouponKind.Shared && codes.Count > 1)
+            return $"A shared campaign has one code; this one has {codes.Count}. "
+                 + "Make it a generated batch, or remove the extra codes.";
 
         return null;
     }
@@ -70,6 +167,10 @@ public static class CouponMath
     ///
     /// <para>A discount larger than the price yields a payable of zero, not a credit. The platform
     /// does not owe anybody money; a 100%-off coupon on a $15 band is a free month.</para>
+    ///
+    /// <para>A percentage applies to whatever the period costs, so 20% off a yearly period is a
+    /// fifth of the year — which is why <see cref="Coupon.AppliesToInterval"/> exists. A fixed
+    /// amount does not scale, and "$5 off" against a yearly price is $5, not $60.</para>
     /// </remarks>
     public static PeriodPrice PriceFor(decimal listPrice, Coupon? coupon)
     {

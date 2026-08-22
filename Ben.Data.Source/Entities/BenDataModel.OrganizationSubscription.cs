@@ -37,6 +37,14 @@ namespace Ben.Data.Source.Entities
         /// <summary>Active members counted when the current period opened. See remarks.</summary>
         public int MemberCountAtPeriodStart { get; set; }
 
+        /// <summary>How long each period lasts — the cadence the group chose and is billed on.</summary>
+        /// <remarks>
+        /// Stored here rather than read off the tier because the tier offers several cadences and
+        /// this is the one that was picked. Changing it takes effect at the next renewal, like
+        /// every other billing change.
+        /// </remarks>
+        public BillingInterval Interval { get; set; } = BillingInterval.Monthly;
+
         /// <summary>Price agreed for this period, copied from the tier so a later price change
         /// does not silently rewrite what was charged.</summary>
         public decimal PriceAtPeriodStart { get; set; }
@@ -57,6 +65,18 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>When the period actually lapsed, for the wind-down in item 84.</summary>
         public DateTime? LapsedAtUtc { get; set; }
+
+        /// <summary>
+        /// When this organization first paid for anything, or null if it never has.
+        /// </summary>
+        /// <remarks>
+        /// The test behind <see cref="CouponApplicability.NewSubscriptionsOnly"/> and
+        /// <see cref="CouponApplicability.RenewalsOnly"/>. It has to be its own field rather than
+        /// "is there a period open": a group that lapsed in March is not a new subscription in
+        /// June, and treating it as one hands the acquisition discount to the people the retention
+        /// discount was written for. Set once and never cleared.
+        /// </remarks>
+        public DateTime? FirstPaidPeriodStartUtc { get; set; }
 
         /// <summary>
         /// The payment provider's own identifier for this subscription, once there is a provider.

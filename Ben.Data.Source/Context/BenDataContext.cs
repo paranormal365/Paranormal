@@ -126,9 +126,11 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentServiceLog> EquipmentServiceLogs { get; set; }
 
         public virtual DbSet<SubscriptionTier> SubscriptionTiers { get; set; }
+        public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
+        public virtual DbSet<CouponCode> CouponCodes { get; set; }
         public virtual DbSet<CouponRedemption> CouponRedemptions { get; set; }
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
@@ -2308,10 +2310,25 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<SubscriptionTier>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<SubscriptionTier>()
-                .Property(e => e.MonthlyPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SubscriptionTier>().Property(e => e.Name).HasMaxLength(100);
             // Bands are read by member count on every billing evaluation.
             modelBuilder.Entity<SubscriptionTier>().HasIndex(e => new { e.IsActive, e.MinMembers });
+
+            // One price per band per cadence. The unique index is the whole point: two active
+            // yearly prices for the same band is a question with two answers, and whichever the
+            // query happened to order first would become the answer.
+            modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasIndex(e => new { e.SubscriptionTierId, e.Interval }).IsUnique();
+            modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.SubscriptionTier).WithMany(t => t.Prices)
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubscriptionTierPrice>().Property(e => e.Price).HasPrecision(18, 2);
+            modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTierPrice>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // One row per organization, enforced rather than assumed: a second row would make
             // "what does this group pay?" a question with two answers.
@@ -2353,14 +2370,34 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
-            // Codes are typed by hand, so they are matched case-insensitively and stored upper-
-            // cased; the unique index is on the stored form.
-            modelBuilder.Entity<Coupon>().HasIndex(e => e.Code).IsUnique();
+            modelBuilder.Entity<Coupon>().Property(e => e.Name).HasMaxLength(150);
+            modelBuilder.Entity<Coupon>().Property(e => e.Description).HasMaxLength(1000);
             modelBuilder.Entity<Coupon>().Property(e => e.AmountOff).HasPrecision(18, 2);
             modelBuilder.Entity<Coupon>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<Coupon>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // Codes are typed by hand, so they are matched case-insensitively and stored upper-
+            // cased; the unique index is on the stored form, and it spans every campaign — two
+            // batches that both generate ABC123 would make redemption ambiguous.
+            modelBuilder.Entity<CouponCode>().Property(e => e.Code).HasMaxLength(64);
+            modelBuilder.Entity<CouponCode>().Property(e => e.IssuedTo).HasMaxLength(256);
+            modelBuilder.Entity<CouponCode>().HasIndex(e => e.Code).IsUnique();
+            modelBuilder.Entity<CouponCode>()
+                .HasOne(e => e.Coupon).WithMany(c => c.Codes)
+                .HasForeignKey(e => e.CouponId).OnDelete(DeleteBehavior.Cascade);
+            // A code addressed to one person. NoAction rather than Cascade: deleting the account
+            // must not silently delete a code somebody may already have been told about.
+            modelBuilder.Entity<CouponCode>()
+                .HasOne(e => e.RestrictedToAppUser).WithMany()
+                .HasForeignKey(e => e.RestrictedToAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CouponCode>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CouponCode>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
@@ -2371,6 +2408,11 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<CouponRedemption>()
                 .HasOne(e => e.Coupon).WithMany(c => c.Redemptions)
                 .HasForeignKey(e => e.CouponId).OnDelete(DeleteBehavior.Restrict);
+            // Restrict, not Cascade: the redemption is the financial record of why a group was
+            // charged less, and withdrawing a code must not erase the answer.
+            modelBuilder.Entity<CouponRedemption>()
+                .HasOne(e => e.CouponCode).WithMany(c => c.Redemptions)
+                .HasForeignKey(e => e.CouponCodeId).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CouponRedemption>()
                 .HasOne(e => e.Organization).WithMany()
                 .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);

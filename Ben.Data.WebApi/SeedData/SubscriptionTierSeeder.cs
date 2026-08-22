@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Billing;
@@ -20,10 +21,18 @@ namespace Ben.Data.WebApi.SeedData;
 ///
 /// <para>The bands are item 85's worked example — 1–3 free, 4–10 at $15 — plus an unbounded top
 /// band, which the resolver requires so a group cannot outgrow the list.</para>
+///
+/// <para>Each paid band gets a monthly and a yearly price, the yearly one set to ten months —
+/// "two months free", which is the discount people recognise. The free band gets a monthly row
+/// only: a yearly price of zero is a cadence choice with no consequence, and offering it is a
+/// question asked for no reason.</para>
 /// </remarks>
 internal static class SubscriptionTierSeeder
 {
-    private static readonly (string Name, int Min, int? Max, decimal Price, int Sort)[] Bands =
+    /// <summary>Yearly costs this many months. Ten is "two months free".</summary>
+    private const int YearlyMonthsCharged = 10;
+
+    private static readonly (string Name, int Min, int? Max, decimal Monthly, int Sort)[] Bands =
     [
         ("Free",         1,    3,   0m, 1),
         ("Small group",  4,   10,  15m, 2),
@@ -48,20 +57,27 @@ internal static class SubscriptionTierSeeder
         if (await db.SubscriptionTiers.AnyAsync()) return;
 
         var now = DateTime.UtcNow;
-        foreach (var (name, min, max, price, sort) in Bands)
+        foreach (var (name, min, max, monthly, sort) in Bands)
         {
-            db.SubscriptionTiers.Add(new SubscriptionTier
+            var tier = new SubscriptionTier
             {
                 Id                 = Guid.NewGuid(),
                 Name               = name,
                 MinMembers         = min,
                 MaxMembers         = max,
-                MonthlyPrice       = price,
                 SortOrder          = sort,
                 IsActive           = true,
                 DateCreated        = now,
                 CreatedByAppUserId = owner.Id,
-            });
+            };
+
+            tier.Prices.Add(NewPrice(tier, BillingInterval.Monthly, monthly, now, owner.Id));
+
+            if (monthly > 0)
+                tier.Prices.Add(NewPrice(
+                    tier, BillingInterval.Yearly, monthly * YearlyMonthsCharged, now, owner.Id));
+
+            db.SubscriptionTiers.Add(tier);
         }
 
         await db.SaveChangesAsync();
@@ -72,4 +88,17 @@ internal static class SubscriptionTierSeeder
         if (SubscriptionTierResolver.Validate(seeded) is { } problem)
             throw new InvalidOperationException($"Seeded subscription tiers are not usable: {problem}");
     }
+
+    private static SubscriptionTierPrice NewPrice(
+        SubscriptionTier tier, BillingInterval interval, decimal price, DateTime now, Guid ownerId) =>
+        new()
+        {
+            Id                 = Guid.NewGuid(),
+            SubscriptionTierId = tier.Id,
+            Interval           = interval,
+            Price              = price,
+            IsActive           = true,
+            DateCreated        = now,
+            CreatedByAppUserId = ownerId,
+        };
 }

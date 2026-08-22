@@ -7278,3 +7278,41 @@ verified to discriminate.
 Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
 list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first
 item is added.
+
+---
+
+## 142. Email-and-password sign-in fails on production; Entra works (OPEN — reported 2026-08-22)
+
+Ben, on ishaunted.com: **Entra sign-in works, but filling in Email and password does not.**
+
+That pairing is the useful half of the report. Entra and local sign-in share the return-URL
+handling, the cookie, the circuit and the redirect — so whatever is broken is almost certainly on
+the part they do *not* share: the Identity password check, the `SignInManager` call behind it, or
+the endpoint that receives the form.
+
+### What to rule out first, in order
+
+1. **The rate limiter.** `feedback_signin_rate_limited` records that a 429 from this endpoint used
+   to surface as "Invalid email or password", and Ben would have been retrying. Curl the endpoint
+   and read the actual status before believing any on-screen message. This is the cheapest check
+   and it has already fooled us once.
+2. **Whether the request arrives at all.** The site is behind IIS at `/` with the API at `/webapi`;
+   a sign-in POST that 404s or is swallowed by the reverse proxy looks identical to a wrong
+   password from the browser.
+3. **Password hash provenance.** Accounts created before a key or hashing-option change can fail
+   to verify while the account itself is fine. Entra users never touch this path, which fits the
+   symptom exactly.
+4. **`SignInResult` other than `Succeeded`.** `IsLockedOut`, `IsNotAllowed` (unconfirmed email) and
+   `RequiresTwoFactor` all end up rendering as a generic failure. Item 112 already records that the
+   2FA panel hangs — if production accounts have 2FA on, `RequiresTwoFactor` is a strong candidate
+   and the two items are the same bug wearing different clothes.
+
+### The reporting defect underneath it
+
+Whatever the cause turns out to be, the screen said something that did not distinguish four very
+different situations. Same disease as item 120: one message for every failure. Fix the cause, then
+make the four outcomes above say four different things — locked out, not confirmed, needs a second
+factor, and genuinely wrong — because the next occurrence should be diagnosable from the screen.
+
+**Do not test this by typing Ben's password into the form.** Probe with curl against a seeded
+development account, or read the server log for the `SignInResult` that production is producing.
