@@ -53,7 +53,12 @@
                 <FeedComposer ParentPostId="@PostId" Placeholder="Write a reply…" ButtonText="Reply"
                               OnPosted="OnReplied" />
 
-                @if (_replies.Count == 0)
+                @if (_threadResult.Failed)
+                {
+                    @* A thread shown with no replies reads as a post nobody answered. *@
+                    <BenListState TItem="FeedPostRecord" Result="@_threadResult" />
+                }
+                else if (_replies.Count == 0)
                 {
                     <p class="text-secondary small">No replies yet.</p>
                 }

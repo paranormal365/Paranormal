@@ -5,6 +5,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_contentWarning is not null)
 {
@@ -99,6 +101,18 @@ else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.
         @if (_embedLoading)
         {
             <div class="text-secondary small">Loading…</div>
+        }
+        else if (_embedChoicesResult.Failed)
+        {
+            @* The list of things a page can embed. Shown empty, an author concludes the group has
+               nothing worth showing and publishes a thinner page. *@
+            <BenListState TItem="EmbeddableRecord" Result="@_embedChoicesResult" />
+        }
+        else if (_embedChoicesResult.Failed)
+        {
+            @* The list of things a page can embed. Shown empty, an author concludes the group has
+               nothing worth showing and publishes a thinner page. *@
+            <BenListState TItem="EmbeddableRecord" Result="@_embedChoicesResult" />
         }
         else if (_embedChoices.Count == 0)
         {
@@ -500,6 +514,7 @@ else
     // Nothing here is a control; it is the place where the group is told what publishing means.
 
     private List<EmbeddableRecord> _embedChoices = [];
+    private LoadResult<EmbeddableRecord> _embedChoicesResult;
     private bool _embedLoading;
     private List<Guid> _embedIds = [];
     private bool _embedIncludeNonPublic;
@@ -518,9 +533,10 @@ else
         // CaseMedia lists cases too — it is a case-bound section. Left off this condition it would
         // have silently offered investigations, and every id it saved would have resolved to
         // nothing.
-        _embedChoices = SectionType is CmsSectionType.EmbeddedCases or CmsSectionType.CaseMedia
-            ? [.. (await AdminClient.GetEmbeddableCasesAsync(orgId)).Items]
-            : [.. (await AdminClient.GetEmbeddableInvestigationsAsync(orgId)).Items];
+        _embedChoicesResult = SectionType is CmsSectionType.EmbeddedCases or CmsSectionType.CaseMedia
+            ? await AdminClient.GetEmbeddableCasesAsync(orgId)
+            : await AdminClient.GetEmbeddableInvestigationsAsync(orgId);
+        _embedChoices = [.. _embedChoicesResult.Items];
         _embedLoading = false;
         StateHasChanged();
     }

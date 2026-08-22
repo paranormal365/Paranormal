@@ -4,6 +4,8 @@
 
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Publications</PageTitle>
 
@@ -71,6 +73,11 @@
         {
             <p class="text-secondary">Loading…</p>
         }
+        else if (_publicationsResult.Failed)
+        {
+            @* A visitor browsing the directory cannot tell a broken list from an empty one. *@
+            <BenListState TItem="PublicPublicationRecord" Result="@_publicationsResult" OnRetry="@OnInitializedAsync" />
+        }
         else if (_publications.Count == 0)
         {
             <div class="text-center text-secondary py-5">
@@ -111,6 +118,7 @@
 
 @code {
     private IReadOnlyList<PublicPublicationRecord> _publications = [];
+    private LoadResult<PublicPublicationRecord> _publicationsResult;
     private IReadOnlyList<MySubscriptionRecord> _subscriptions = [];
     private bool _loading = true;
 
@@ -120,7 +128,8 @@
         // work for somebody who will never sign in — and the wait can never complete for them.
         try
         {
-            _publications = (await Client.GetPublicPublicationsAsync()).Items;
+            _publicationsResult = await Client.GetPublicPublicationsAsync();
+            _publications       = _publicationsResult.Items;
         }
         finally
         {

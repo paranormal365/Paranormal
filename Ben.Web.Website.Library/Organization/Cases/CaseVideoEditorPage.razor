@@ -8,6 +8,8 @@
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.VideoEditor">
     <PageTitle>Case Video Editor</PageTitle>
@@ -65,6 +67,10 @@
             @if (_loadingList)
             {
                 <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else if (_caseProjectsResult.Failed)
+            {
+                <BenListState TItem="VideoProjectRecord" Result="@_caseProjectsResult" />
             }
             else if (_caseProjects.Count == 0)
             {
@@ -126,6 +132,7 @@
     private bool _loaded;
     private string? _error;
     private List<VideoProjectRecord> _caseProjects = [];
+    private LoadResult<VideoProjectRecord> _caseProjectsResult;
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
@@ -150,7 +157,8 @@
             // Set the default project name from the case title
             ProjectStore.CurrentProjectName = _case.Title ?? "Case Project";
 
-            _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).Items.ToList();
+            _caseProjectsResult = await AdminClient.GetMyVideoProjectsAsync(CaseId);
+            _caseProjects       = _caseProjectsResult.Items.ToList();
         }
         catch (Exception ex)
         {

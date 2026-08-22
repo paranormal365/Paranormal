@@ -4,6 +4,8 @@
 @inject IWebApiClient WebApiClient
 @inject IWebApiTokenStore TokenStore
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Organization Security</PageTitle>
 
@@ -73,6 +75,13 @@
         <div class="col-md-6">
             <h4>Organization Users</h4>
             <button class="btn btn-outline-secondary mb-2" @onclick="LoadOrganizationUsersAsync">Load Users</button>
+            @* This page grants and revokes access. A membership list shown short is the input to
+               a decision about who can see what. *@
+            @if (organizationUsersResult.Failed)
+            {
+                <BenListState TItem="OrganizationUserMembershipResponse" Result="@organizationUsersResult"
+                              OnRetry="@LoadOrganizationUsersAsync" />
+            }
             <ul class="list-group">
                 @foreach (var user in organizationUsers)
                 {
@@ -94,6 +103,12 @@
                 <input id="organizationsecurity-search-users-in-scope-b69f" class="form-control" @bind="userSearchText" @bind:event="oninput" placeholder="Name, email, or username" />
             </div>
             <button class="btn btn-outline-info mb-2" @onclick="SearchUsersAsync">Search</button>
+            @if (userSearchResultsResult.Failed)
+            {
+                <div class="alert alert-warning py-2 small mb-2">
+                    The user search could not be run, so this list is not the whole answer.
+                </div>
+            }
             <select class="form-select" @bind="selectedTargetUserIdString">
                 <option value="">Select user...</option>
                 @foreach (var user in userSearchResults)
@@ -210,7 +225,9 @@
 
     private List<OrganizationSummaryResponse> organizations = [];
     private List<OrganizationUserMembershipResponse> organizationUsers = [];
+    private LoadResult<OrganizationUserMembershipResponse> organizationUsersResult;
     private List<UserSearchResultResponse> userSearchResults = [];
+    private LoadResult<UserSearchResultResponse> userSearchResultsResult;
 
     private string selectedOrganizationIdString = string.Empty;
     private OrganizationSecurityTable selectedTable = OrganizationSecurityTable.Organization;
@@ -270,7 +287,8 @@
 
         if (!TryGetSelectedOrganizationId(out var organizationId)) return;
 
-        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).Items.ToList();
+        organizationUsersResult = await WebApiClient.GetOrganizationUsersAsync(organizationId);
+        organizationUsers       = organizationUsersResult.Items.ToList();
         _currentUserRole = organizationUsers
             .FirstOrDefault(m => m.AppUserId == TokenStore.UserId)
             ?.Role;
@@ -311,7 +329,8 @@
 
     private async Task SearchUsersAsync()
     {
-        userSearchResults = (await WebApiClient.SearchUsersAsync(userSearchText, 50)).Items.ToList();
+        userSearchResultsResult = await WebApiClient.SearchUsersAsync(userSearchText, 50);
+        userSearchResults       = userSearchResultsResult.Items.ToList();
         statusMessage = $"Found {userSearchResults.Count} users in your search scope.";
     }
 
