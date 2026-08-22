@@ -52,6 +52,13 @@ public sealed class LoadResultRenderedGuardTests
         "GetEquipmentModelsForBrandAsync", "SearchEquipmentModelsAsync",
         "GetAdminEquipmentBrandsAsync", "GetAdminEquipmentCategoriesAsync",
         "GetAdminEquipmentModelsAsync", "GetEquipmentItemCheckoutsAsync",
+
+        // user slice
+        "GetAllUsersAsync", "GetOrgUserDirectoryAsync", "GetMyAddressesAsync", "GetMyEmailsAsync",
+        "GetMyPhonesAsync", "GetMyLinksAsync", "GetMyPhotosAsync",
+        "GetPendingPermissionRequestsForMeAsync", "GetUserAddressTypesAsync",
+        "GetUserEmailTypesAsync", "GetUserPhoneTypesAsync", "GetUserLinkTypesAsync",
+        "GetUserNoteTypesAsync",
     ];
 
     /// <summary>
@@ -68,6 +75,20 @@ public sealed class LoadResultRenderedGuardTests
         ["CaseTimeline.razor"] =
             "Same taxonomy lookup, for the filter chips' labels. The timeline itself is wrapped "
           + "and reports its own refusal.",
+
+        ["AdminUserDetail.razor"] =
+            "The five lookup-type dropdowns — address, email, phone, link and note types. They "
+          + "populate <select> options in the admin's edit form; the user's actual addresses and "
+          + "phones come from the detail record, which the page reports on separately. A refused "
+          + "lookup leaves a dropdown short, which is visible in the act of using it.",
+
+        ["OrgCmsPageEdit.razor"] =
+            "The user directory, used only to turn ids into display names on the permission rows. "
+          + "A refusal shows ids where names would be — visible, and not a claim about access.",
+
+        ["OrgCmsEditor.razor"] =
+            "Same directory, same purpose — names for the member-management picker. The membership "
+          + "list beside it is a separate call that reports its own failure.",
 
         ["MyEquipmentItemEditor.razor"] =
             "Category, brand and model feed the three cascading pickers in the item form. A failed "

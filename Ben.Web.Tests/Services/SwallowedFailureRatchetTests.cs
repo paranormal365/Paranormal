@@ -14,7 +14,8 @@ namespace Ben.Web.Tests.Services;
 /// deployment for a day, saying nothing at all about the 404s behind them.</para>
 ///
 /// <para><b>Why a count and not a ban.</b> There were 120 of these when the conversion started
-/// (101 after organization, 81 after case, 67 after platform, 45 after equipment), and
+/// (101 after organization, 81 after case, 67 after platform, 45 after equipment,
+/// 34 after user), and
 /// converting one means changing its consumers too, so a hard ban would mean a single unmergeable
 /// change touching hundreds of call sites. A ratchet lets the work land in pieces while making the
 /// one thing that matters impossible: adding a new one. If this test fails because the number went
@@ -32,7 +33,7 @@ public sealed class SwallowedFailureRatchetTests
     /// <summary>
     /// The count as it stands. Lower it as methods are converted; never raise it.
     /// </summary>
-    private const int Ceiling = 45;
+    private const int Ceiling = 34;
 
     private static DirectoryInfo RepoRoot()
     {

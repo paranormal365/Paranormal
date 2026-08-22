@@ -241,12 +241,11 @@ public sealed partial class BenAdminClientAdapter
     /// </remarks>
     public async Task<LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
     {
+        // Map rather than Failure(Reason) + Ok(Select(…)): the hand-rolled version carried the
+        // reason across but dropped SessionExpired, so a signed-out roster asked the reader to
+        // "try again" instead of to sign in.
         var result = await _api.GetListAsync<OrganizationUserMembershipResponse>($"/api/organizations/{orgId}/roster", token);
-        if (result.Failed) return LoadResult<OrgMembershipItem>.Failure(result.Reason);
-
-        return LoadResult<OrgMembershipItem>.Ok(result.Items
-            .Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName))
-            .ToList());
+        return result.Map(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName));
     }
 
     public async Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)

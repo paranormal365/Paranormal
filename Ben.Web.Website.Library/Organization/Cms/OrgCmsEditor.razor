@@ -612,7 +612,7 @@
 
             // Pre-load org membership + user list for member management
             _orgMemberships = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
-            _orgUsers = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            _orgUsers = (await AdminClient.GetOrgUserDirectoryAsync(OrgId)).Items;
 
             // Try to get org name
             var org = await AdminClient.GetOrganizationAsync(OrgId);

@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -29,7 +30,7 @@ public interface IBenUserClient
     Task<MyProfileRecord?> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken token = default);
 
     /// <summary>Every photo the current user has set, newest first — including inactive ones.</summary>
-    Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
 
     /// <summary>Makes an already-uploaded file the current user's photo for one slot.</summary>
     Task<AppUserPhotoRecord?> SetMyPhotoAsync(SetMyPhotoRequest request, CancellationToken token = default);
@@ -50,7 +51,7 @@ public interface IBenUserClient
     // Same scoping rule as My profile above: every call is implicitly the signed-in user, so none
     // of these take a user id — there is no "edit someone else" shape to get wrong.
 
-    Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
+    Task<LoadResult<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
     Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default);
     Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default);
     Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default);
@@ -61,17 +62,17 @@ public interface IBenUserClient
     /// </summary>
     Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
+    Task<LoadResult<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
     Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default);
     Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default);
     Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
+    Task<LoadResult<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
     Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default);
     Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default);
     Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
+    Task<LoadResult<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
     Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default);
     Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default);
     Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default);
@@ -94,7 +95,7 @@ public interface IBenUserClient
     /// EntityReadControllerBase's doc comment. Org-admin surfaces that only need to resolve
     /// member display names should use <see cref="GetOrgUserDirectoryAsync"/> instead.</summary>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
-    Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
 
     /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
     /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
@@ -102,7 +103,7 @@ public interface IBenUserClient
     /// of <paramref name="organizationId"/> themselves.</summary>
     /// <param name="organizationId">The organization whose member directory to return.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
-    Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
+    Task<LoadResult<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>Returns the full detail aggregate for a single user, including addresses, emails, phones, links, notes, memberships, and files.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user.</param>
@@ -146,11 +147,11 @@ public interface IBenUserClient
 
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
-    Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
     Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);

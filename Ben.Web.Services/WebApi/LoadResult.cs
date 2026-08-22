@@ -79,6 +79,20 @@ public readonly struct LoadResult<T>
     /// <summary>A load that did not happen. Carries the server's sentence when there was one.</summary>
     public static LoadResult<T> Failure(string? reason = null) => new(null, failed: true, reason);
 
+    /// <summary>
+    /// Projects the items, carrying every part of the outcome across unchanged.
+    /// </summary>
+    /// <remarks>
+    /// An adapter that reshapes a response — <c>Ok(result.Items.Select(…))</c> — silently drops
+    /// <see cref="SessionExpired"/> and <see cref="Reason"/> unless it remembers to copy them, and
+    /// the two places that already did this by hand had both dropped the first one. Mapping keeps
+    /// the answer and changes only the shape.
+    /// </remarks>
+    public LoadResult<TOut> Map<TOut>(Func<T, TOut> project) =>
+        Failed
+            ? new LoadResult<TOut>(null, failed: true, Reason, SessionExpired)
+            : LoadResult<TOut>.Ok([.. Items.Select(project)]);
+
     /// <summary>A load refused because the caller is not signed in any more.</summary>
     /// <remarks>
     /// No reason string: "The server answered 401 (Unauthorized)" is a fact about HTTP, not

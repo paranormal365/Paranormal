@@ -267,11 +267,8 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
-    {
-        var users = await GetAsync<List<AppUserRecord>>("/api/app-users", token);
-        return users ?? [];
-    }
+    public Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
+        => GetListAsync<AppUserRecord>("/api/app-users", token);
 
     public async Task<IReadOnlyList<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
     {
@@ -336,11 +333,8 @@ public sealed class WebApiClient : IWebApiClient
         return PutAsync<SetOrganizationGrantRequest, OrganizationAccessGrantResponse>(relativeUrl, request, token);
     }
 
-    public async Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
-    {
-        var entries = await GetAsync<List<OrgUserDirectoryEntryResponse>>($"/api/organizations/{organizationId}/user-directory", token);
-        return entries ?? [];
-    }
+    public Task<LoadResult<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+        => GetListAsync<OrgUserDirectoryEntryResponse>($"/api/organizations/{organizationId}/user-directory", token);
 
     // ── Upload File Types ────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)

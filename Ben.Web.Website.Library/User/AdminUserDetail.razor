@@ -606,11 +606,11 @@ else
         _edit = EditModel.From(_detail.User);
 
         // Pre-load type lists for dropdowns
-        _addressTypes    = await AdminClient.GetUserAddressTypesAsync();
-        _emailTypes      = await AdminClient.GetUserEmailTypesAsync();
-        _phoneTypes      = await AdminClient.GetUserPhoneTypesAsync();
-        _linkTypes       = await AdminClient.GetUserLinkTypesAsync();
-        _noteTypes       = await AdminClient.GetUserNoteTypesAsync();
+        _addressTypes    = (await AdminClient.GetUserAddressTypesAsync()).Items;
+        _emailTypes      = (await AdminClient.GetUserEmailTypesAsync()).Items;
+        _phoneTypes      = (await AdminClient.GetUserPhoneTypesAsync()).Items;
+        _linkTypes       = (await AdminClient.GetUserLinkTypesAsync()).Items;
+        _noteTypes       = (await AdminClient.GetUserNoteTypesAsync()).Items;
         _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
 
         // Build org-name lookup for the Memberships tab
@@ -942,27 +942,27 @@ else
             switch (_addTypeFor)
             {
                 case "address":
-                    _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+                    _addressTypes = (await AdminClient.GetUserAddressTypesAsync()).Items;
                     var newAddr = _addressTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newAddr is not null) _addr.TypeId = newAddr.Id;
                     break;
                 case "email":
-                    _emailTypes = await AdminClient.GetUserEmailTypesAsync();
+                    _emailTypes = (await AdminClient.GetUserEmailTypesAsync()).Items;
                     var newEml = _emailTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newEml is not null) _eml.TypeId = newEml.Id;
                     break;
                 case "phone":
-                    _phoneTypes = await AdminClient.GetUserPhoneTypesAsync();
+                    _phoneTypes = (await AdminClient.GetUserPhoneTypesAsync()).Items;
                     var newPhn = _phoneTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newPhn is not null) _phn.TypeId = newPhn.Id;
                     break;
                 case "link":
-                    _linkTypes = await AdminClient.GetUserLinkTypesAsync();
+                    _linkTypes = (await AdminClient.GetUserLinkTypesAsync()).Items;
                     var newLnk = _linkTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newLnk is not null) _lnk.TypeId = newLnk.Id;
                     break;
                 case "note":
-                    _noteTypes = await AdminClient.GetUserNoteTypesAsync();
+                    _noteTypes = (await AdminClient.GetUserNoteTypesAsync()).Items;
                     var newNte = _noteTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newNte is not null) _nte.TypeId = newNte.Id;
                     break;
