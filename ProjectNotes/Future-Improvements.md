@@ -7042,7 +7042,7 @@ not yet diagnosed" — the same two pages, the same fault, finally named.
 
 ---
 
-## 138. Grid filter-row dropdowns are unreadably narrow (raised 2026-08-22 by Ben, screenshot)
+## 138. Grid filter-row dropdowns are unreadably narrow (CLOSED 2026-08-22)
 
 Ben: *"when you pull up a grid like 'All Investigations' as SuperAdmin… there are dropdowns to
 choose from like the status column. You cannot read what to choose from because the size of the
@@ -7080,9 +7080,24 @@ A `min-width` in CSS is the fallback for the Grid's own internal operator menu, 
 reaches. Note `.k-animation-container` carries **no width in the stylesheet** — Telerik sets it
 inline from the anchor's width — so a stylesheet `min-width` is what overrides it, not `width`.
 
+### Fixed with the CSS floor, and verified
+
+`FilterCellTemplate` was the tidier option on paper but only reaches the columns we rewrite; the
+Grid's own operator menu has no parameter path, and that is the one in the screenshot. One rule in
+`app.css` covers every list popup, present and future, scoped with `:has(.k-list-container)` so
+date and colour pickers are untouched.
+
+**Measured against real components**, filter row on a 130px Status column:
+
+| | before | after |
+|---|---|---|
+| popup width | the anchor's width | **210px** |
+| anchor (filter cell) | 174px | 174px |
+| options | `Se…`, `…posed`, `…pted` | "Is equal to", "Is not equal to", "Does not contain" — all twelve in full |
+
 ---
 
-## 139. File Types grid clips its own action buttons (raised 2026-08-22 by Ben, screenshot)
+## 139. File Types grid clips its own action buttons (CLOSED 2026-08-22)
 
 The command column on `/admin/file-types` is too narrow for what it holds: **Edit** and
 **Extensions** fit, and the **Delete** button is cut off at the right edge — the trash icon and a
@@ -7095,6 +7110,26 @@ Worth checking the other admin grids in the same pass, since the command column 
 by copying a neighbour: any grid whose `GridCommandColumn` has a fixed `Width` and three or more
 buttons is a candidate. Options are a wider command column, dropping the button labels to icons
 with tooltips, or moving Delete behind an overflow menu.
+
+### Fixed at the mechanism, not just the column
+
+Kendo sets `white-space: nowrap; overflow: hidden; text-overflow: ellipsis` on every grid cell.
+That is right for a text column — a long name gets an ellipsis. On a command cell it means a button
+past the width is **cut off**, and unlike text there is no ellipsis to hint that anything is
+missing. A row action nobody can click is not a smaller button; it is an absent feature.
+
+So command cells now allow wrapping, which makes a cramped column taller instead of hiding
+something — self-correcting for the 18 command columns that exist and any written later. Three
+that were genuinely too narrow were widened as well, so the common case stays on one line:
+`AdminFileTypes` 220→300, `AdminUserDetail`'s addresses 220→320, `OrganizationFiles` 240→380.
+
+**Verified against real components** with the cell constrained to 220px: the buttons wrap, the last
+one is fully visible, and header and body columns still line up.
+
+A first attempt also set `display: flex` on the cell. That turned out to be **redundant** —
+`telerik-night.css` already makes command cells flex — and adding a second opinion about a `<td>`'s
+formatting context, from a file that does not own that decision, is how column alignment breaks on
+the first frozen or virtualised column. Dropped.
 
 ---
 

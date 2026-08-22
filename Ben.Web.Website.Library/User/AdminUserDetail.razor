@@ -110,7 +110,8 @@ else
                         <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="220px">
+                        @* Edit + Map + Directions + a Delete icon. *@
+                        <GridCommandColumn Width="320px">
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.MapMarker"

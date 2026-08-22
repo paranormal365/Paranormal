@@ -97,7 +97,9 @@
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
-                <GridCommandColumn Width="240px">
+                @* Publish/Unpublish + Edit + Delete, and Edit Image as well on an image row —
+                   the widest of these columns, and the one whose contents change per row. *@
+                <GridCommandColumn Width="380px">
                     <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                        Size="@ThemeConstants.Button.Size.Small">
