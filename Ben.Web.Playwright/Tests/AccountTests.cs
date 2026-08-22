@@ -149,12 +149,17 @@ public class AccountTests : BenTestBase
         // The account exists but is not usable yet, and the sign-in page says which of those it is
         // rather than claiming the password is wrong.
         await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("#login-email", email);
-        await Page.FillAsync("#login-password", "Str0ngPass!");
-        await Page.ClickAsync("button[type='submit']");
+        await FillAndConfirmAsync("#login-email", email);
+        await FillAndConfirmAsync("#login-password", "Str0ngPass!");
 
+        // Retried, not clicked once: a raw click on a not-yet-live circuit is silently dropped,
+        // and under full-suite load this was the one login in the suite still doing it — the
+        // singleton failure of proof-run five. The expected text is the retry's stop signal.
+        await ClickUntilAsync(
+            Page.Locator("button[type='submit']"),
+            Page.GetByText("Confirm your email address first"));
         await Expect(Page.GetByText("Confirm your email address first"))
-            .ToBeVisibleAsync(new() { Timeout = 20_000 });
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]

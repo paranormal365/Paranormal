@@ -88,8 +88,16 @@ public class EquipmentTests : BenTestBase
 
         // Most categories have no makes in the dev data, so taking the first one skipped every
         // run. Walk them until one leads somewhere — that is what a person would do too.
-        var categories = await selects.Nth(0).Locator("option").EvaluateAllAsync<string[]>(
-            "options => options.map(o => o.value).filter(v => v !== '')");
+        // Polled, not read once: the select is VISIBLE before its async fetch fills it, and
+        // under full-suite load that window stretches past a single read — the taxonomy looked
+        // empty when only the request was still in flight.
+        string[] categories = [];
+        for (var poll = 0; poll < 20 && categories.Length == 0; poll++)
+        {
+            categories = await selects.Nth(0).Locator("option").EvaluateAllAsync<string[]>(
+                "options => options.map(o => o.value).filter(v => v !== '')");
+            if (categories.Length == 0) await Page.WaitForTimeoutAsync(500);
+        }
         Assert.That(categories, Is.Not.Empty, "no equipment categories in the taxonomy");
 
         // Walks makes as well as categories. The make list is not filtered by category — only the
