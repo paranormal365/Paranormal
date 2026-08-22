@@ -6630,16 +6630,44 @@ natural thing to do.
 - **At Ben's request**, the `@` prefix now reports the check: grey at rest, blue while in flight,
   green when free, red when taken. See item 135 for what that took.
 
-### Left open — the other ten
+### The other ten — checked one at a time, seven converted (2026-08-22)
 
-Ten `@onclick="() => NavigateTo("literal")"` handlers remain across 8 files (`OrganizationList`,
-`OrganizationCreateEdit`, `OrgCmsEditor`, `AdminUserDetail`, `AdminUserCreate`, `AdminUsers`,
-`ClientRequestDetail`). All are on **signed-in** pages, where the circuit is usually already warm,
-so the risk is much lower than on the anonymous entry page — but they are the same defect.
+Ben asked for these to be done **only after verifying they are not working as one would expect**,
+which was the right instruction: checking turned ten into seven, and produced a sharper rule than
+"convert them all".
 
-Worth doing as one mechanical pass with a source-scan guard: an `@onclick` whose entire body is
-`NavigateTo` of a string literal should be an anchor, always. Not done here to keep this change
-reviewable.
+**What decides it is whether the button exists during the prerender.** A handler in markup that
+renders unconditionally is emitted by the server before the circuit exists, so it is on screen,
+looks pressable, and swallows clicks until SignalR connects. A handler inside a branch that cannot
+render until after the circuit — an auth check, or a field that is null until loaded — has no such
+window, because the button is not there yet.
+
+Verified by fetching each page **anonymously with curl**, no JavaScript involved, and looking for
+the button in the raw HTML:
+
+| Site | Renders in prerender? | Verdict |
+|---|---|---|
+| `OrganizationCreateEdit` "Back to Organizations" / "Cancel" | yes | converted |
+| `OrgCmsEditor` "Back to Organizations" (`@if (!EmbeddedMode)`, default false) | yes | converted |
+| `AdminUsers` "New User" | yes | converted |
+| `AdminUserCreate` "Back to Users" / "Cancel" | yes | converted |
+| `ClientRequestDetail` "My Requests" | yes | converted |
+| `OrganizationList` (inside `@if (UserState.IsSuperAdmin …)`) | **no** | left alone |
+| `AdminUserDetail` (inside `else` of `@if (_detail is null)`) | **no** | left alone |
+| `ClientRequestWizard` (signed-in branch, `@if (_step == 5)`) | **no** | left alone |
+
+**The dead window is bigger than the first measurement suggested.** The signed-out request page
+measured ~50ms; `/admin/users` measured **298ms** — and that is localhost with a warm server and no
+network. Wide enough for a real person to lose a real click.
+
+An incidental confirmation of why these could not be clicked directly: an anonymous visit to
+`/admin/users` renders the full page chrome and then **redirects to home once the circuit connects
+and auth resolves** — the markup ships to anyone, the authorisation happens a third of a second
+later.
+
+`NavigationIsAnAnchorTests` now bans the pattern, with the three verified exceptions listed
+alongside the branch that protects each. Verified to discriminate: turning the `AdminUsers` anchor
+back into a button fails it.
 
 ---
 
