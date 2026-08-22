@@ -7281,7 +7281,7 @@ item is added.
 
 ---
 
-## 142. Email-and-password sign-in fails on production; Entra works (OPEN — reported 2026-08-22)
+## 142. Email-and-password sign-in fails on production; Entra works (CLOSED 2026-08-22)
 
 Ben, on ishaunted.com: **Entra sign-in works, but filling in Email and password does not.**
 
@@ -7316,6 +7316,36 @@ factor, and genuinely wrong — because the next occurrence should be diagnosabl
 
 **Do not test this by typing Ben's password into the form.** Probe with curl against a seeded
 development account, or read the server log for the `SignInResult` that production is producing.
+
+### Root cause — none of the four suspects; a product gap
+
+Probing production with a fake account returned a clean 401 "Failed" from `/webapi/login`, and the
+production sign-in page rendered "Invalid email or password" for it — transport, endpoint, rate
+limiter and page all healthy. The truth: **an account created through Entra has no password**
+(`EntraAuthController` calls `CreateAsync(user)` with none), and until today the product had **no
+way to acquire one** — no forgot-password link, no reset page, no set-password panel. The Identity
+endpoints and a real email sender existed, unreachable: the sixth write-only feature found by
+building the UI for something that "already worked". Ben's production account is Entra-born;
+"Invalid email or password" was technically true — there was no password to be wrong.
+
+### Shipped
+
+- `/forgot-password` + `/reset-password` pages riding Identity's own endpoints; the reset email
+  now carries a finished link (it used to send a bare code with nowhere to paste it)
+- `MyPasswordController` (`/api/me/password`): status, add-first-password (the session is the
+  proof — an Entra-born account has no "current password" to ask for), change-password
+- Profile → Security gains a Password panel beside two-step sign-in
+- The "Invalid email or password" message now hints at the Entra-born case without disclosing
+  whether an address has an account
+- Help: "Forgot your password — or never had one" in getting-started
+
+### Verified live (dev stack, seeded member account)
+
+forgot → logged link (SMTP fallback) → reset page → new password → login 200; wrong password still
+401; change-password demands the current one; the spent reset code refused with a sentence. The
+one branch not exercised live is `AddPasswordAsync` for a hash-less account (needs an Entra
+session to obtain a token) — it is the `else` of a live-verified `if`, and Ben's account will be
+its first real test after the next deploy.
 
 ---
 

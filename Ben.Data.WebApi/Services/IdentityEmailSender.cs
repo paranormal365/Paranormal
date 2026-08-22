@@ -1,6 +1,8 @@
+using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using System.Net;
 
 namespace Ben.Data.WebApi.Services;
@@ -26,10 +28,14 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>
     private readonly IEmailService _email;
     private readonly ILogger<IdentityEmailSender> _logger;
 
-    public IdentityEmailSender(IEmailService email, ILogger<IdentityEmailSender> logger)
+    private readonly SiteIdentity _site;
+
+    public IdentityEmailSender(
+        IEmailService email, ILogger<IdentityEmailSender> logger, IOptions<SiteIdentity> site)
     {
         _email  = email;
         _logger = logger;
+        _site   = site.Value;
     }
 
     public Task SendConfirmationLinkAsync(AppUser user, string email, string confirmationLink)
@@ -50,13 +56,31 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>
              """,
             linkKind: "password reset", link: resetLink);
 
+    /// <summary>
+    /// The reset email carries a finished link, not a bare code.
+    /// </summary>
+    /// <remarks>
+    /// This used to send the code alone — with no reset page in the product, there was nowhere to
+    /// paste it, which made the whole flow decorative (item 142's sixth write-only feature). The
+    /// code still appears as text for anyone whose mail client mangles links, and the link
+    /// degrades to a relative path when no public origin is configured.
+    /// </remarks>
     public Task SendPasswordResetCodeAsync(AppUser user, string email, string resetCode)
-        => SendAsync(email, "Your password reset code",
+    {
+        var resetUrl = _site.AbsoluteUrl(
+            $"/reset-password?email={Uri.EscapeDataString(email)}&code={Uri.EscapeDataString(resetCode)}");
+
+        return SendAsync(email, "Reset your password",
             $"""
-             <p>Your password reset code is <strong>{WebUtility.HtmlEncode(resetCode)}</strong>.</p>
-             <p>If you did not request this, you can ignore this message.</p>
+             <p>Use the link below to choose a new password{(user.PasswordHash is null
+                 ? ", or to add a password to an account that signs in with Microsoft" : "")}.</p>
+             <p><a href="{WebUtility.HtmlEncode(resetUrl)}">Reset password</a></p>
+             <p>If the link does not work, go to the reset page and enter this code:
+                <strong>{WebUtility.HtmlEncode(resetCode)}</strong></p>
+             <p>If you did not request this, you can ignore this message — your password will not change.</p>
              """,
-            linkKind: "password reset code", link: resetCode);
+            linkKind: "password reset", link: resetUrl);
+    }
 
     private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link)
     {

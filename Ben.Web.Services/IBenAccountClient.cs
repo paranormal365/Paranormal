@@ -32,6 +32,15 @@ public interface IBenAccountClient
 
     // ── Two-factor ───────────────────────────────────────────────────────────
 
+    /// <summary>Whether the signed-in account has a password at all — an Entra-born one does not.</summary>
+    Task<bool?> GetHasPasswordAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Sets a first password (no current password needed — the session is the proof) or changes
+    /// the existing one. Null on success, or the sentence to show.
+    /// </summary>
+    Task<string?> SetPasswordAsync(string? currentPassword, string newPassword, CancellationToken token = default);
+
     Task<TwoFactorStatus?> GetTwoFactorStatusAsync(CancellationToken token = default);
 
     /// <summary>Starts enrolment. Nothing is switched on until a code is verified.</summary>

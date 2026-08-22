@@ -39,6 +39,25 @@ public sealed partial class BenAdminClientAdapter
         return result ?? new ConfirmEmailOutcome(false, "Couldn't reach the server. Try the link again.");
     }
 
+    // ── Password ─────────────────────────────────────────────────────────────
+
+    public async Task<bool?> GetHasPasswordAsync(CancellationToken token = default)
+    {
+        var status = await _api.GetAsync<PasswordStatusResponse>("/api/me/password", token);
+        return status?.HasPassword;
+    }
+
+    public async Task<string?> SetPasswordAsync(
+        string? currentPassword, string newPassword, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, "/api/me/password", new { currentPassword, newPassword }, token);
+
+        return error;   // null on success — same shape as DisableTwoFactorAsync
+    }
+
+    private sealed record PasswordStatusResponse(bool HasPassword);
+
     // ── Two-factor ───────────────────────────────────────────────────────────
 
     public Task<TwoFactorStatus?> GetTwoFactorStatusAsync(CancellationToken token = default)
