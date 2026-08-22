@@ -133,7 +133,7 @@
                                 @for (int si = 0; si < steps.Count; si++)
                                 {
                                     var step = steps[si];
-                                    <span class="badge @(step.Active ? "bg-primary" : "bg-light text-secondary border")">@step.Label</span>
+                                    <span class="badge @(step.Active ? "bg-primary" : "bg-body-secondary text-body-secondary border")">@step.Label</span>
                                     @if (si < steps.Count - 1)
                                     {
                                         <span class="text-secondary">›</span>

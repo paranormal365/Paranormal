@@ -78,7 +78,7 @@
                         @entry.DisplayName
                         @if (entry.IsLead)
                         {
-                            <span class="badge bg-light text-dark">Lead</span>
+                            <span class="badge bg-body-secondary text-body-emphasis border">Lead</span>
                         }
                         @if (entry.DateArrived is { } arrived)
                         {
@@ -414,7 +414,7 @@
         true => "bg-success",
         false => "bg-secondary",
         // Not yet known reads as waiting, not as a problem — most of the evening is spent here.
-        _ => "bg-light text-dark border",
+        _ => "bg-body-secondary text-body-emphasis border",
     };
 
     private static string ChipTitle(InvestigationRosterEntry entry)

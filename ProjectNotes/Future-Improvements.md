@@ -6521,3 +6521,129 @@ fifth guard in this codebase that would otherwise fire on its own explanatory pr
 **The lesson is bigger than dates.** When something is reported wrong repeatedly *after* being
 fixed, the fix is landing somewhere the broken code never consults. Go and find the call sites, and
 add a source scan rather than another assertion on the thing that was already right.
+
+---
+
+## 132. Dark mode: fixed-light Bootstrap utilities make white cards with near-white text (CLOSED 2026-08-22)
+
+> **Merge note.** This item was first raised, in a shorter form, on `feature/loadresult-case-area`.
+> If `ProjectNotes/Future-Improvements.md` conflicts when both branches merge, keep **this**
+> version — it supersedes that one, and corrects two claims the first version got wrong.
+
+Ben: *"even when you are in dark mode and on the audit log page, when you expand the log record,
+the row that opens has a white background card with near-white text."*
+
+`AdminAuditLog.razor`'s `<DetailTemplate>` used `bg-light` for the panel and `bg-white` for the
+JSON block. Both are pinned to a literal colour, so in dark mode the panel stayed white while the
+text inside kept the theme's light-on-dark foreground.
+
+### What was actually wrong — and two things worth correcting
+
+Reading the compiled `smartapp.min.css` instead of reasoning from class names changed the scope
+twice, both times **downward**. The dark block redefines `--bs-tertiary-bg-rgb`,
+`--bs-secondary-bg-rgb`, `--bs-body-bg-rgb`, `--bs-emphasis-color` and `--bs-secondary-color`, but
+**not** `--bs-light-rgb`, `--bs-white-rgb` or `--bs-dark-rgb`:
+
+| Class | Resolves through | Redefined in dark? | Verdict |
+|---|---|---|---|
+| `bg-light` | `--bs-light-rgb` | no | **broken** — 22 uses |
+| `bg-white` | `--bs-white-rgb` | no | **broken** — 3 uses |
+| `text-bg-light` | `--bs-light-rgb` + literal `#000` | no | **broken** — 1 use |
+| `text-dark` | `--bs-dark-rgb` | no | broken **only** off a fixed background — 10 of 76 |
+| `alert-light` | `--bs-light-bg-subtle` / `-text-emphasis` / `-border-subtle` | **yes, all three** | fine — leave alone |
+
+1. **`alert-light` was never broken.** The first version of this item said to sweep it. Wrong: the
+   theme redefines all three variables it reads (#343a40, #f8f9fa, #495057), so the ~15
+   `alert alert-light` empty states were always theme-aware.
+2. **65 of the 76 `text-dark` uses were fine.** They sit on `bg-warning` or `bg-info`, neither of
+   which changes between themes, so black text on them is correct in both. Only the 10 paired with
+   `bg-light`/`bg-white` needed anything, and they were fixed with their background.
+
+Guessing from the class name would have "fixed" 80 working things.
+
+### What shipped
+
+- 23 replacements: `bg-light` → `bg-body-tertiary` (surfaces) or `bg-body-secondary` (chips),
+  `bg-white` → `bg-body`, `text-bg-light` and paired `text-dark` → `text-body-emphasis`
+- **One deliberate exception**, annotated in place: the 2FA QR-code container keeps `bg-white`.
+  A QR code is read by a camera, not a person, and scanners need the light modules light in
+  either theme.
+- **`ThemeSafeColorExtensions`** — `ColorClass` is a *stored* value (an org picks a colour for a
+  calendar event type; `AdminLookupTypes` lets a SuperAdmin type any class into a free-text box),
+  so fixing the dropdown alone would only help the next choice. Stored values are translated at
+  render across 8 sites, and the picker's "Black" (`text-dark`, which vanished into the page in
+  dark mode) became "Contrast" (`text-body-emphasis` — black on light, white on dark).
+- **`FixedLightUtilityGuardTests`** bans all three utilities in `.razor`, and bans `text-dark`
+  except on a background that never changes; allowlist entries must still be real. Verified to
+  discriminate — reintroducing the audit log's `bg-light`, and adding a `text-dark` to a
+  theme-following surface, each fail it.
+
+### Measured in the running app
+
+| | background | text | contrast |
+|---|---|---|---|
+| Audit-log panel, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| JSON block, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| Panel, after | `#2b3035` | `#dee2e6` | **10.23:1** |
+| JSON block, after | `#212529` | `#dee2e6` | **11.85:1** |
+
+WCAG AA wants 4.5:1; at 1.30:1 the text was effectively invisible. Every replacement token was
+measured in both themes and changes value; all three banned ones were measured and do not. The home
+page renders zero banned backgrounds, and its two remaining `text-dark` are both
+`badge bg-warning text-dark` — black on yellow-ochre, correct in both themes.
+
+Ben confirmed the page himself: *"Audit log fix looks great."*
+
+The custom stylesheets needed nothing — `app.css`'s `#fff` uses sit inside
+`:root[data-bs-theme="dark"]` blocks, mixing outline-button colours *toward* white on purpose.
+
+---
+
+## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (raised 2026-08-22 by Ben)
+
+Ben, on two SuperAdmin pages: *"site settings page gives a couldn't load site settings, the server
+answered 401 (Unauthorized). then below it the word 'Loading…'"* and *"Support tickets page say
+Could not load tickets."*
+
+**First, the likely cause of that particular sighting.** The website host was restarted mid-session
+while Ben was signed in. `IWebApiTokenStore` is registered **scoped** (`Program.cs:83`), which under
+Blazor Server means per-circuit: restarting the host destroys every circuit and the access token
+with it. The browser reconnects into a fresh scope holding no token, `WebApiClient` sends no
+`Authorization` header, and the API answers 401 to everything. Signing in again clears it. So these
+two reports are probably not standing product defects — but they expose two that are.
+
+### 133a. A dead session is reported as an HTTP status code
+
+The page said *"the server answered 401 (Unauthorized)"*. That sentence is `LoadResult.Reason`
+being rendered faithfully — item 120 working as designed — but 401 is the one status where the
+generic treatment is wrong. It does not mean "something went wrong fetching this list"; it means
+**this person is no longer signed in**, and the only useful thing to say is so, with a way back.
+
+This is not a dev-only artefact. It happens in production whenever a token expires, an app pool
+recycles, or a deployment restarts the host — and the reader will be told their site settings could
+not be loaded rather than that they need to sign in again.
+
+**Fix.** Handle 401 distinctly from other failures in the client — a flag on `LoadResult` or a
+dedicated reason — and have `BenListState` (and the ad-hoc error banners) render "Your session has
+ended. Sign in again" with a link carrying `returnUrl`. Consider re-authenticating silently where a
+refresh token exists. Related to item 131, which is also a dead end offering no way forward.
+
+**Worth deciding separately:** whether the token should survive a reconnect at all. It is scoped
+today, and `EntraTokenPersister` only bridges the prerender-to-circuit handoff, not a host restart.
+
+### 133b. AdminSiteSettings renders its error and "Loading…" at the same time
+
+Real, and independent of the 401. In `AdminSiteSettings.razor`, `LoadAsync` sets `_error` and
+returns on failure — leaving `_settings` null. The template's only test is:
+
+```razor
+@if (_settings is null) { <p class="text-secondary">Loading…</p> }
+```
+
+So a failed load shows the red banner *and* a spinner that will never resolve, which reads as "it
+failed, but it is also still trying". The page needs the third state the rest of the site now has:
+this is a surface that should be using `BenListState`, which distinguishes loading from
+couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _page is null`) and
+is the model.
+
+Cheap, and worth doing with the next item-120 slice rather than alone.

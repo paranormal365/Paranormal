@@ -41,7 +41,7 @@
                glance. *@
             <ItemTemplate>
                 @{ var appt = (OrgCalendarAppointment)context; }
-                <div class="cal-item @(appt.IsPublic ? "cal-item--public" : "") @appt.ColorClass">
+                <div class="cal-item @(appt.IsPublic ? "cal-item--public" : "") @appt.ColorClass.ToThemeSafeColorClass()">
                     @if (appt.IsPublic)
                     {
                         <span class="cal-item__badge" title="Open to the public">◆</span>
