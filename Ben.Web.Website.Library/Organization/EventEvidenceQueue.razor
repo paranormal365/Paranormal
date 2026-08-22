@@ -1,0 +1,87 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@inject IBenAdminClient AdminClient
+
+@*
+    Evidence offered by public-event attendees, waiting on the group (item 111). Renders nothing
+    at all when the queue is empty — a permanently-empty review card would train everyone to stop
+    looking at the one that matters.
+*@
+
+@if (_queue.Items.Count > 0)
+{
+    <div class="card border-primary mb-3">
+        <div class="card-header"><strong>Evidence from your public events</strong> — waiting on a member's review</div>
+        <div class="card-body">
+            <p class="text-secondary small mb-2">
+                Accepting puts a submission into the event's <strong>public</strong> record,
+                credited to the attendee. Declining tells them why.
+            </p>
+            @foreach (var ev in _queue.Items)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom">
+                    <div class="me-auto">
+                        <strong>@ev.FileName</strong>
+                        <span class="text-secondary small">— @ev.SubmitterDisplayName at "@ev.EventTitle", @ev.DateCreated.ToString("MM/dd/yyyy")</span>
+                        @if (!string.IsNullOrWhiteSpace(ev.Note))
+                        {
+                            <div class="small">"@ev.Note"</div>
+                        }
+                    </div>
+                    <input type="text" class="form-control form-control-sm" style="max-width:16rem"
+                           placeholder="Reason if declining" @bind="_reasons[ev.Id]" @bind:event="oninput"
+                           aria-label="@($"Reason for declining {ev.FileName}")" />
+                    <button type="button" class="btn btn-success btn-sm" disabled="@_busy"
+                            @onclick="() => ReviewAsync(ev, true)">Accept</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
+                            @onclick="() => ReviewAsync(ev, false)">Decline</button>
+                </div>
+            }
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0">@_error</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private LoadResult<EventEvidenceRecord> _queue;
+    private readonly Dictionary<Guid, string> _reasons = [];
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _queue = await AdminClient.GetEvidenceQueueAsync(OrgId);
+        foreach (var ev in _queue.Items)
+            _reasons.TryAdd(ev.Id, "");
+    }
+
+    private async Task ReviewAsync(EventEvidenceRecord ev, bool accept)
+    {
+        _busy = true;
+        _error = null;
+
+        var reason = _reasons.GetValueOrDefault(ev.Id, "");
+        var (result, error) = await AdminClient.ReviewEventEvidenceAsync(
+            OrgId, ev.Id, accept, string.IsNullOrWhiteSpace(reason) ? null : reason.Trim());
+
+        _busy = false;
+
+        if (result is null)
+        {
+            // "Give the submitter a reason" arrives here verbatim — the server's sentence is the
+            // instruction, not an error code.
+            _error = error ?? "That couldn't be recorded.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

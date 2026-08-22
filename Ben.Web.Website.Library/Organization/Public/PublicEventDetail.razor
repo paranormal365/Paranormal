@@ -184,6 +184,88 @@ else
                 </div>
             </div>
         }
+
+        @* ── Evidence from the night (item 111) ────────────────────────────── *@
+        @if (_acceptedEvidence.Items.Count > 0)
+        {
+            <div class="card mt-3">
+                <div class="card-header"><strong>Evidence from attendees</strong></div>
+                <div class="card-body">
+                    @foreach (var ev in _acceptedEvidence.Items)
+                    {
+                        <div class="py-2 border-bottom">
+                            @* Absolute against the API origin: on the split deployment a raw
+                               /api href resolves to the SITE and 404s — the img-sends-no-token
+                               trap's anonymous sibling. *@
+                            <a href="@AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.Id)"
+                               target="_blank" rel="noopener">@ev.FileName</a>
+                            <span class="text-secondary small">— @ev.SubmitterDisplayName, @ev.DateCreated.ToString("MM/dd/yyyy")</span>
+                            @if (!string.IsNullOrWhiteSpace(ev.Note))
+                            {
+                                <div class="small">@ev.Note</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_isAuthenticated && _event is not null)
+        {
+            <div class="card mt-3">
+                <div class="card-header"><strong>Were you there? Share what you captured</strong></div>
+                <div class="card-body">
+                    @* The bargain, stated BEFORE the button — item 87's rule is that evidence at
+                       an open investigation is public, and nobody should learn that after
+                       submitting. *@
+                    <p class="text-secondary small">
+                        A group member reviews every submission. If yours is accepted it becomes
+                        part of this event's <strong>public</strong> record, credited to you.
+                    </p>
+
+                    <InputFile OnChange="OnEvidenceFileChosen" class="form-control mb-2" id="evidence-file" />
+                    <textarea class="form-control mb-2" rows="2" maxlength="2000" id="evidence-note"
+                              placeholder="What is this? Where in the building, what time, what did you hear or see?"
+                              @bind="_evidenceNote"></textarea>
+
+                    @if (_evidenceError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_evidenceError</div>
+                    }
+                    <button type="button" class="btn btn-primary" id="evidence-submit"
+                            disabled="@(_evidenceFile is null || _evidenceBusy)" @onclick="SubmitEvidenceAsync">
+                        @(_evidenceBusy ? "Sending…" : "Offer it to the group")
+                    </button>
+
+                    @if (_myEvidence.Items.Count > 0)
+                    {
+                        <h6 class="mt-3">Your submissions</h6>
+                        @foreach (var mine in _myEvidence.Items)
+                        {
+                            <div class="small py-1">
+                                @mine.FileName —
+                                @switch (mine.Status)
+                                {
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Pending:
+                                        <span class="badge bg-secondary">Waiting for review</span>
+                                        break;
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Accepted:
+                                        <span class="badge bg-success">Accepted — public</span>
+                                        break;
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Rejected:
+                                        <span class="badge bg-danger">Declined</span>
+                                        @if (mine.RejectionReason is not null)
+                                        {
+                                            <span class="text-secondary"> — @mine.RejectionReason</span>
+                                        }
+                                        break;
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
     </div>
 }
 
@@ -266,9 +348,54 @@ else
         }
     }
 
+    private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _acceptedEvidence;
+    private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _myEvidence;
+    private IBrowserFile? _evidenceFile;
+    private string _evidenceNote = "";
+    private bool _evidenceBusy;
+    private string? _evidenceError;
+
+    private void OnEvidenceFileChosen(InputFileChangeEventArgs e) => _evidenceFile = e.File;
+
+    private async Task SubmitEvidenceAsync()
+    {
+        if (_evidenceFile is null || _event is null) return;
+
+        _evidenceBusy = true;
+        _evidenceError = null;
+        try
+        {
+            await using var stream = _evidenceFile.OpenReadStream(maxAllowedSize: long.MaxValue);
+            var (result, error) = await AdminClient.SubmitEventEvidenceAsync(
+                _event.Id, stream, _evidenceFile.Name, _evidenceFile.ContentType,
+                string.IsNullOrWhiteSpace(_evidenceNote) ? null : _evidenceNote.Trim());
+
+            if (result is null)
+            {
+                // The server's sentence names the actual bar — "people who attended" — which a
+                // generic failure would bury.
+                _evidenceError = error ?? "That couldn't be sent just now.";
+                return;
+            }
+
+            _evidenceFile = null;
+            _evidenceNote = "";
+            _myEvidence = await AdminClient.GetMyEventEvidenceAsync(_event.Id);
+        }
+        finally { _evidenceBusy = false; }
+    }
+
     private async Task LoadAsync()
     {
         _event   = await AdminClient.GetPublicEventAsync(UrlName, EventSlug);
+
+        if (_event is not null)
+        {
+            _acceptedEvidence = await AdminClient.GetAcceptedEventEvidenceAsync(_event.Id);
+            if (_isAuthenticated)
+                _myEvidence = await AdminClient.GetMyEventEvidenceAsync(_event.Id);
+        }
+
         _loading = false;
         StateHasChanged();
     }

@@ -720,7 +720,43 @@ internal static class DevelopmentDataSeeder
         // ── Public events ────────────────────────────────────────────────────
         var placeId = new Guid("40000001-0000-0000-0000-000000000001");
         if (!await db.Places.AnyAsync(p => p.Id == placeId)) return;
-        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic)) return;
+
+        // ── A PAST public event with a confirmed outside attendee (item 111) ──
+        // Daniel belongs to no group, which makes him the canonical stranger-attendee: the
+        // evidence-submission door must open for him on attendance alone, and the e2e walk needs
+        // that state to exist without driving the email-confirmation flow.
+        var daniel = await db.Users.FirstOrDefaultAsync(u => u.Email == "daniel.park@benco.dev");
+        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Title == "Bell Witch Cave — Last Month's Open Night"))
+        {
+        var pastWalk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+            Title = "Bell Witch Cave — Last Month's Open Night",
+            Description = "<p>The previous public night at the cave.</p>",
+            PlaceId = placeId,
+            StartDateTime = now.AddDays(-30).Date.AddHours(20),
+            EndDateTime   = now.AddDays(-30).Date.AddHours(23),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(-30):yyyy-MM-dd}-bell-witch-cave-open-night",
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+        db.OrgCalendarEvents.Add(pastWalk);
+
+        if (daniel is not null)
+            db.EventAttendanceInvites.Add(new EventAttendanceInvite
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = pastWalk.Id,
+                Email = daniel.Email!, DisplayName = "Daniel",
+                DateConfirmed = now.AddDays(-31), ConfirmedByAppUserId = daniel.Id,
+                DateExpires = now.AddDays(-31).AddDays(14),
+                DateCreated = now.AddDays(-31), CreatedByAppUserId = daniel.Id,
+            });
+
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded the past public event with Daniel as a confirmed attendee (item 111).");
+        }
+
+        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic && e.StartDateTime > now)) return;
 
         // Dated from "now" rather than fixed, so the panel — which shows upcoming events only —
         // does not quietly empty out as the seed data ages.
@@ -763,7 +799,7 @@ internal static class DevelopmentDataSeeder
 
         db.OrgCalendarEvents.AddRange(walk, talk);
         await db.SaveChangesAsync();
-        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery.");
+        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery, and a past one with a confirmed attendee.");
     }
 
     /// <summary>

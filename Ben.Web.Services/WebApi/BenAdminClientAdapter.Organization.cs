@@ -174,6 +174,34 @@ public sealed partial class BenAdminClientAdapter
     // own RSVP and whether they organise the event, and fetching it anonymously meant a signed-in
     // visitor never saw either. GetAsync attaches a token only when there is one, so the anonymous
     // case is unchanged.
+    public async Task<(EventEvidenceRecord? Result, string? Error)> SubmitEventEvidenceAsync(
+        Guid eventId, Stream content, string fileName, string contentType, string? note, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        if (note is not null) form.Add(new StringContent(note), "note");
+        using var sc = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+
+        return await _api.PostMultipartExpectingReasonAsync<EventEvidenceRecord>(
+            $"/api/events/{eventId}/evidence", form, token);
+    }
+
+    public Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/mine", token);
+
+    public Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default)
+        => _api.GetAnonymousListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/accepted", token);
+
+    public Task<LoadResult<EventEvidenceRecord>> GetEvidenceQueueAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<EventEvidenceRecord>($"/api/organizations/{orgId}/evidence-submissions", token);
+
+    public Task<(EventEvidenceRecord? Result, string? Error)> ReviewEventEvidenceAsync(
+        Guid orgId, Guid submissionId, bool accept, string? reason, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EventEvidenceRecord>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/evidence-submissions/{submissionId}/review",
+            new { accept, reason }, token);
+
     public Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default)
         => _api.GetAsync<PublicEventRecord>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/events/{Uri.EscapeDataString(eventSlug)}", token);
@@ -209,6 +237,9 @@ public sealed partial class BenAdminClientAdapter
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/thumbnail";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
         => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
+
+    public string GetEventEvidenceFileUrl(Guid eventId, Guid submissionId)
+        => $"{_webApiBaseUrl}/api/events/{eventId}/evidence/{submissionId}/file";
 
     public string GetPublicCaseMediaUrl(Guid caseId, Guid uploadFileId)
         => $"{GetPublicCaseMediaBaseUrl()}{caseId}/media/{uploadFileId}";

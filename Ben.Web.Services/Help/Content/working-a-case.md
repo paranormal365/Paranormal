@@ -225,3 +225,14 @@ right there. For a client-proposed move, the card says what you will be able to 
 previous group's work: the client decides whether their collected history and past investigations
 travel with the case, and that choice is theirs, not the previous group's. Accepting gives the
 case a fresh number in your group and makes it active again; the client is told either way.
+
+## Evidence from people who attended a public event
+
+Anyone who attended one of your public events can offer what they captured — audio, photos, video
+— from the event's own page. Nothing they send goes into your record automatically: submissions
+wait in **Evidence from your public events** on your group's Calendar tab until a member accepts
+or declines one. Declining asks for a reason, and the submitter is told either way.
+
+Accepting puts the file into that event's **public** record, credited to the attendee — that is
+the bargain a public investigation makes, and submitters are told so before they send anything.
+Anything you decline stays private to the person who sent it.

@@ -130,6 +130,10 @@ public interface IBenOrganizationClient
     /// </remarks>
     string GetPublicCaseMediaUrl(Guid caseId, Guid uploadFileId);
 
+    /// <summary>Absolute URL for one accepted evidence submission's bytes — the API origin, not
+    /// the site's, which is the trap every raw /api href falls into on the split deployment.</summary>
+    string GetEventEvidenceFileUrl(Guid eventId, Guid submissionId);
+
     /// <summary>
     /// The prefix the public renderer appends <c>{caseId}/media/{fileId}</c> to.
     /// </summary>
@@ -235,6 +239,25 @@ public interface IBenOrganizationClient
 
     /// <summary>One public event by its readable URL.</summary>
     Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
+
+    // ── Item 111: attendee evidence at public events ──────────────────────────
+
+    /// <summary>Offers one file to the event's record. Null error on success.</summary>
+    Task<(EventEvidenceRecord? Result, string? Error)> SubmitEventEvidenceAsync(
+        Guid eventId, Stream content, string fileName, string contentType, string? note, CancellationToken token = default);
+
+    /// <summary>The caller's own submissions for an event, with review state.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>Accepted evidence — the public half of the record. Anonymous.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>Submissions waiting on this group's answer.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetEvidenceQueueAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>A member's verdict. Null error on success.</summary>
+    Task<(EventEvidenceRecord? Result, string? Error)> ReviewEventEvidenceAsync(
+        Guid orgId, Guid submissionId, bool accept, string? reason, CancellationToken token = default);
 
     /// <summary>Public events this caller has said they are coming to, recent past included.</summary>
     Task<LoadResult<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);

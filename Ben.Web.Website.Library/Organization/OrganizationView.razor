@@ -217,6 +217,9 @@
             @if (_isMember)
             {
                 <BenTab Title="Calendar">
+                    @* The review queue lives with the events that produce it. Renders nothing
+                       when empty. *@
+                    <EventEvidenceQueue OrgId="@OrgId" />
                     <OrgScheduler OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
