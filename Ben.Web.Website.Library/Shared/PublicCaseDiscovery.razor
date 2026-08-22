@@ -408,8 +408,10 @@ else
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated || _pagedItems.Count == 0) return;
         var ids = _pagedItems.Select(i => i.CaseId);
+        // A decoration: these only mark which cards the viewer has already voted on. A failed
+        // lookup leaves the marks off, which is what an empty answer already did — no panel.
         var summaries = await AdminClient.GetCaseVoteSummariesAsync(ids);
-        _voteSummaries = summaries.ToDictionary(s => s.CaseId);
+        _voteSummaries = summaries.Items.ToDictionary(s => s.CaseId);
     }
 
     public async ValueTask DisposeAsync()

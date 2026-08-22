@@ -1,5 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
@@ -22,7 +24,11 @@ else
 
     @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
 
-    @if (_entries.Count == 0)
+    @if (_entriesResult.Failed)
+    {
+        <BenListState TItem="CaseResearchEntryDto" Result="@_entriesResult" OnRetry="@LoadAsync" />
+    }
+    else if (_entries.Count == 0)
     {
         <div class="text-secondary text-center py-4 small">
             No research entries yet. Add notes, URLs, or documents to document the location's history and context.
@@ -109,6 +115,7 @@ else
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
     private List<CaseResearchEntryDto> _entries = [];
+    private LoadResult<CaseResearchEntryDto> _entriesResult;
     private bool _loading = true;
     private bool _saving;
     private bool _uploading;
@@ -123,8 +130,18 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { _entries = (await AdminClient.GetCaseResearchAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load research entries."; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _entriesResult = await AdminClient.GetCaseResearchAsync(OrgId, CaseId);
+            _entries       = _entriesResult.Items.ToList();
+        }
+        catch { _entriesResult = LoadResult<CaseResearchEntryDto>.Failure(); }
         _loading = false;
     }
 

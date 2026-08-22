@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -28,6 +30,10 @@
     @if (_requests is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading pending requests…" />
+    }
+    else if (_requestsResult.Failed)
+    {
+        <BenListState TItem="OrgPendingRequestRecord" Result="@_requestsResult" OnRetry="@LoadAsync" />
     }
     else if (_requests.Count == 0)
     {
@@ -149,6 +155,7 @@
     [Parameter] public bool EmbeddedMode { get; set; }
 
     private List<OrgPendingRequestRecord>? _requests;
+    private LoadResult<OrgPendingRequestRecord> _requestsResult;
     private string? _error;
     private bool _isBusy;
     private Guid? _expandedId;
@@ -168,8 +175,17 @@
 
     private async Task LoadAsync()
     {
-        try { _requests = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).ToList(); }
-        catch { _error = "Failed to load pending requests."; _requests = []; }
+        try
+        {
+            _requestsResult = await AdminClient.GetOrgPendingRequestsAsync(OrgId);
+            _requests       = _requestsResult.Items.ToList();
+        }
+        catch
+        {
+            // A group that thinks it has no pending requests leaves people waiting unanswered.
+            _requestsResult = LoadResult<OrgPendingRequestRecord>.Failure();
+            _requests       = [];
+        }
     }
 
     private async Task ToggleExpand(OrgPendingRequestRecord r)

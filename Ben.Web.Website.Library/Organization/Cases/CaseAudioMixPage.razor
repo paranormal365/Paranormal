@@ -1,6 +1,8 @@
 @page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/audio-mix"
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @implements IAsyncDisposable
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -54,7 +56,16 @@ else
                 <div class="card">
                     <div class="card-header fw-semibold small">Audio Clips</div>
                     <div class="card-body" style="max-height:520px;overflow-y:auto;">
-                        @if (_audioFiles.Count == 0)
+                        @if (_audioFilesFailed)
+                        {
+                            @* Telling a mixer the case has no audio, when the fetch was refused,
+                               sends them to the Files tab to upload what is already there. *@
+                            <div class="text-warning small">
+                                Couldn't load this case's audio files. This is a problem reaching
+                                the server, not an empty case.
+                            </div>
+                        }
+                        else if (_audioFiles.Count == 0)
                         {
                             <div class="text-secondary small">
                                 No audio files on this case yet. Upload some from the
@@ -163,6 +174,7 @@ else
 
     private CaseRecord? _case;
     private List<CaseFileRecord> _audioFiles = [];
+    private bool _audioFilesFailed;
     private readonly List<MixTrack> _tracks = [];
     private bool _loaded;
 
@@ -192,7 +204,10 @@ else
                 try
                 {
                     var files = await AdminClient.GetCaseFilesAsync(OrgId, CaseId);
-                    _audioFiles = files.Where(f => f.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)).ToList();
+                    _audioFilesFailed = files.Failed;
+                    _audioFiles = files.Items
+                        .Where(f => f.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                 }
                 catch { /* non-critical — picker just shows empty */ }
             }

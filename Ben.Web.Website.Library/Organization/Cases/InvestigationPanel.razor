@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -420,8 +422,18 @@
     {
         try
         {
-            _binderCache[investigationId] =
-                (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId)).ToList();
+            // This panel already got the distinction right by hand — a refused binder leaves the
+            // cache unset rather than caching an empty one. Now the refusal is visible rather
+            // than inferred from a throw that a 403 never produced.
+            var binder = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId);
+            if (binder.Failed)
+            {
+                _binderError = binder.Reason ?? "Couldn't load this binder.";
+            }
+            else
+            {
+                _binderCache[investigationId] = binder.Items.ToList();
+            }
         }
         catch
         {

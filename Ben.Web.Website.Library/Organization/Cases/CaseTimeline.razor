@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -20,6 +22,10 @@
     @if (_entries is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading timeline…" />
+    }
+    else if (_entriesResult.Failed)
+    {
+        <BenListState TItem="CaseTimelineEntryRecord" Result="@_entriesResult" OnRetry="@LoadAsync" />
     }
     else if (_entries.Count == 0)
     {
@@ -303,6 +309,7 @@
     [Parameter] public Guid CaseId { get; set; }
 
     private List<CaseTimelineEntryRecord>? _entries;
+    private LoadResult<CaseTimelineEntryRecord> _entriesResult;
     private string? _error;
     private bool _isBusy;
     private CaseTimelineEntryType? _typeFilter;
@@ -431,8 +438,17 @@
 
     private async Task LoadAsync()
     {
-        try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load timeline."; }
+        try
+        {
+            _entriesResult = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId);
+            _entries       = _entriesResult.Items.ToList();
+        }
+        catch
+        {
+            _error         = "Failed to load timeline.";
+            _entriesResult = LoadResult<CaseTimelineEntryRecord>.Failure();
+            _entries     ??= [];
+        }
 
         // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
         // chips just don't appear.

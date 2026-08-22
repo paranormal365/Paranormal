@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -20,6 +22,11 @@
     @if (_transfers is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_transfersResult.Failed)
+    {
+        @* A pending transfer of somebody's case is not a thing to render as "none". *@
+        <BenListState TItem="CaseTransferLogRecord" Result="@_transfersResult" OnRetry="@LoadAsync" />
     }
     else if (_transfers.Count == 0)
     {
@@ -135,6 +142,7 @@
     [Parameter] public Guid CaseId { get; set; }
 
     private List<CaseTransferLogRecord>? _transfers;
+    private LoadResult<CaseTransferLogRecord> _transfersResult;
     private List<OrgOption> _otherOrgs = [];
     private string? _error;
     private string? _dialogError;
@@ -162,7 +170,8 @@
     {
         try
         {
-            _transfers = (await AdminClient.GetCaseTransfersAsync(OrgId, CaseId)).ToList();
+            _transfersResult = await AdminClient.GetCaseTransfersAsync(OrgId, CaseId);
+            _transfers       = _transfersResult.Items.ToList();
             var allOrgs = (await AdminClient.GetOrganizationsAsync()).Items;
             _otherOrgs = allOrgs
                 .Where(o => o.Id != OrgId)

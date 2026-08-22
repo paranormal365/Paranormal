@@ -1,6 +1,8 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Website.Library.Media
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.User
 @using Microsoft.AspNetCore.Components.Forms
 @inject IBenAdminClient AdminClient
@@ -23,7 +25,14 @@ else
 
     @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
 
-    @if (_files.Count == 0)
+    @* The list is mutated in place by upload and delete, so only the failure state is branched
+       on here — a wrapping BenListState would hold the load's stale emptiness after the first
+       upload. This is the tab from item 119: a 403 read as "this case has no evidence". *@
+    @if (_filesResult.Failed)
+    {
+        <BenListState TItem="CaseFileRecord" Result="@_filesResult" OnRetry="@LoadAsync" />
+    }
+    else if (_files.Count == 0)
     {
         <div class="text-secondary text-center py-4 small">
             No files yet. Upload evidence photos, audio, video, or documents for this case.
@@ -95,6 +104,7 @@ else
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
     private List<CaseFileRecord> _files = [];
+    private LoadResult<CaseFileRecord> _filesResult;
     private bool _loading = true;
     private bool _uploading;
     private string? _error;
@@ -104,8 +114,18 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { _files = (await AdminClient.GetCaseFilesAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load files."; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _filesResult = await AdminClient.GetCaseFilesAsync(OrgId, CaseId);
+            _files       = _filesResult.Items.ToList();
+        }
+        catch { _filesResult = LoadResult<CaseFileRecord>.Failure(); }
         _loading = false;
     }
 

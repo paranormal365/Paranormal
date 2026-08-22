@@ -1,5 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -20,7 +22,11 @@ else if (_editingReport is null)
         <button type="button" class="btn btn-primary" @onclick="NewReport"><BenIcon Name="plus" Class="me-1" />New Report</button>
     </div>
 
-    @if (_reports.Count == 0)
+    @if (_reportsResult.Failed)
+    {
+        <BenListState TItem="CaseReportSummary" Result="@_reportsResult" OnRetry="@LoadAsync" />
+    }
+    else if (_reports.Count == 0)
     {
         <div class="text-secondary text-center py-4 small">No reports yet. Click 'New Report' to start building.</div>
     }
@@ -195,6 +201,7 @@ else
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
     private List<CaseReportSummary> _reports = [];
+    private LoadResult<CaseReportSummary> _reportsResult;
     private CaseReportDetail? _editingReport;
     private bool _loading = true;
     private bool _saving;
@@ -222,8 +229,18 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { _reports = (await AdminClient.GetCaseReportsAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load reports."; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _reportsResult = await AdminClient.GetCaseReportsAsync(OrgId, CaseId);
+            _reports       = _reportsResult.Items.ToList();
+        }
+        catch { _reportsResult = LoadResult<CaseReportSummary>.Failure(); }
         _loading = false;
     }
 

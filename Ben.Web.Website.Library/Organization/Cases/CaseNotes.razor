@@ -1,4 +1,6 @@
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 
@@ -19,7 +21,11 @@ else
         <div class="alert alert-danger">@_error</div>
     }
 
-    @if (_notes.Count == 0)
+    @if (_notesResult.Failed)
+    {
+        <BenListState TItem="CaseNoteDto" Result="@_notesResult" OnRetry="@LoadAsync" />
+    }
+    else if (_notes.Count == 0)
     {
         <p class="text-secondary">No notes yet. Add the first note to keep track of internal case details.</p>
     }
@@ -118,6 +124,7 @@ else
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
     private List<CaseNoteDto> _notes = [];
+    private LoadResult<CaseNoteDto> _notesResult;
     private bool _loading = true;
     private string? _error;
 
@@ -136,10 +143,20 @@ else
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        try { _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load notes."; }
-        finally { _loading = false; }
+        await LoadAsync();
         StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _notesResult = await AdminClient.GetCaseNotesAsync(OrgId, CaseId);
+            _notes       = _notesResult.Items.ToList();
+        }
+        catch { _notesResult = LoadResult<CaseNoteDto>.Failure(); }
+        finally { _loading = false; }
     }
 
     private void OpenNew()
@@ -185,7 +202,7 @@ else
             else
             {
                 _showDialog = false;
-                _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList();
+                await LoadAsync();
             }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
@@ -201,7 +218,7 @@ else
             await AdminClient.DeleteCaseNoteAsync(OrgId, CaseId, _deleteNote.Id);
             _showDeleteConfirm = false;
             _deleteNote        = null;
-            _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList();
+            await LoadAsync();
         }
         catch { _error = "Delete failed."; }
         finally { _isBusy = false; }
