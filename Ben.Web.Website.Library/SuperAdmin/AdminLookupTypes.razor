@@ -5,6 +5,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Lookup Types</PageTitle>
 
@@ -35,6 +37,10 @@
     else if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
+    }
+    else if (_itemsResult.Failed)
+    {
+        <BenListState TItem="LookupTypeAdminRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
     }
     else
     {
@@ -189,6 +195,7 @@
     private string _familyLabel => _families.FirstOrDefault(f => f.Route == _selectedFamily)?.Label ?? "Type";
 
     private IReadOnlyList<LookupTypeAdminRecord> _items = [];
+    private LoadResult<LookupTypeAdminRecord> _itemsResult;
     private bool _loading;
     private string? _error;
 
@@ -227,7 +234,8 @@
         _error = null;
         try
         {
-            _items = await AdminClient.GetLookupTypesAsync(_selectedFamily);
+            _itemsResult = await AdminClient.GetLookupTypesAsync(_selectedFamily);
+            _items       = _itemsResult.Items;
         }
         catch (Exception ex)
         {

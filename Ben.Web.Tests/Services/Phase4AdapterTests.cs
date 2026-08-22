@@ -24,28 +24,41 @@ public class Phase4AdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrgMessageRecord>>(
+        api.Setup(x => x.GetListAsync<OrgMessageRecord>(
                 $"/api/organizations/{orgId}/messages/inbox", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), Body = "Hi", AuthorAppUserId = Guid.NewGuid() }]);
+           .ReturnsAsync(LoadResult<OrgMessageRecord>.Ok(
+               [new() { Id = Guid.NewGuid(), Body = "Hi", AuthorAppUserId = Guid.NewGuid() }]));
 
         var result = await Build(api).GetOrgInboxAsync(orgId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<OrgMessageRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<OrgMessageRecord>(
             $"/api/organizations/{orgId}/messages/inbox", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A refused inbox is not an empty one.
+    /// </summary>
+    /// <remarks>
+    /// The assertion here used to be <c>Assert.Empty</c>. An inbox is the worst place for that
+    /// confusion: "no messages" and "we would not let you read your messages" look identical, and
+    /// the reader's natural conclusion — nobody has written to me — is the wrong one. Item 120
+    /// names the phase-5 messaging faults as something this mechanism hid.
+    /// </remarks>
     [Fact]
-    public async Task GetOrgInboxAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetOrgInboxAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrgMessageRecord>>(
+        api.Setup(x => x.GetListAsync<OrgMessageRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<OrgMessageRecord>?)null);
+           .ReturnsAsync(LoadResult<OrgMessageRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetOrgInboxAsync(Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
@@ -90,14 +103,16 @@ public class Phase4AdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrgCalendarEventTypeRecord>>(
+        api.Setup(x => x.GetListAsync<OrgCalendarEventTypeRecord>(
                 $"/api/organizations/{orgId}/calendar-event-types", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), OrganizationId = orgId, Name = "Meeting" }]);
+           .ReturnsAsync(LoadResult<OrgCalendarEventTypeRecord>.Ok(
+               [new() { Id = Guid.NewGuid(), OrganizationId = orgId, Name = "Meeting" }]));
 
         var result = await Build(api).GetCalendarEventTypesAsync(orgId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<OrgCalendarEventTypeRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<OrgCalendarEventTypeRecord>(
             $"/api/organizations/{orgId}/calendar-event-types", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -126,13 +141,13 @@ public class Phase4AdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>(
+        api.Setup(x => x.GetListAsync<OrgCalendarEventRecord>(
                 $"/api/organizations/{orgId}/calendar", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([]);
+           .ReturnsAsync(LoadResult<OrgCalendarEventRecord>.Ok([]));
 
         await Build(api).GetCalendarEventsAsync(orgId);
 
-        api.Verify(x => x.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>(
+        api.Verify(x => x.GetListAsync<OrgCalendarEventRecord>(
             $"/api/organizations/{orgId}/calendar", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -142,10 +157,10 @@ public class Phase4AdapterTests
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
         string? capturedUrl = null;
-        api.Setup(x => x.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>(
+        api.Setup(x => x.GetListAsync<OrgCalendarEventRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
            .Callback<string, CancellationToken>((url, _) => capturedUrl = url)
-           .ReturnsAsync([]);
+           .ReturnsAsync(LoadResult<OrgCalendarEventRecord>.Ok([]));
 
         var from = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
         var to   = new DateTime(2026, 7, 31, 0, 0, 0, DateTimeKind.Utc);

@@ -19,7 +19,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// a general widening: every other SuperAdmin check in the app is still SuperAdmin-only.
 /// </remarks>
 [ApiController]
-[Authorize(Roles = $"{RoleNames.SuperAdmin},{RoleNames.Admin}")]
+[Authorize(Policy = AuthPolicyNames.AppAdministrator)]
 [Route("api/admin/support-tickets")]
 public sealed class AdminSupportTicketController : BenControllerBase
 {

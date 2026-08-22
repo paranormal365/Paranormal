@@ -15,6 +15,51 @@ namespace Ben.Data.WebApi.Authorization;
 public sealed class SuperAdminRequirement : IAuthorizationRequirement { }
 
 /// <summary>
+/// Satisfied when the caller holds either app-wide administration role.
+/// </summary>
+/// <remarks>
+/// Separate from <see cref="SuperAdminRequirement"/> rather than a parameter on it, so that
+/// widening an endpoint from "SuperAdmin only" to "either administrator" is a visible change of
+/// requirement at the call site. <see cref="RoleNames.Admin"/> deliberately grants almost nothing
+/// today; this exists for the endpoints that already accepted both.
+/// </remarks>
+public sealed class AppAdministratorRequirement : IAuthorizationRequirement { }
+
+/// <summary>
+/// Resolves the <see cref="AppUser"/> behind a principal, whichever way it authenticated.
+/// </summary>
+/// <remarks>
+/// <para>Shared by both handlers below so there is exactly one answer to "who is calling?". A
+/// second copy of this logic is how an authorization boundary quietly develops two behaviours.</para>
+///
+/// <para>The order matters. <c>app_user_id</c> is injected by
+/// <see cref="EntraClaimsTransformation"/> when it runs; the <c>oid</c> fallback exists because it
+/// does not always run, and an Entra caller with no resolvable user must be refused rather than
+/// treated as anonymous-but-allowed.</para>
+/// </remarks>
+internal static class AppUserPrincipal
+{
+    public static async Task<AppUser?> ResolveAsync(ClaimsPrincipal principal, UserManager<AppUser> userManager)
+    {
+        var appUserIdStr = principal.FindFirstValue(EntraClaimsTransformation.AppUserIdClaimType);
+        if (Guid.TryParse(appUserIdStr, out var appUserId))
+        {
+            var byId = await userManager.FindByIdAsync(appUserId.ToString());
+            if (byId is not null) return byId;
+        }
+
+        var oidStr = principal.FindFirstValue("oid")
+                     ?? principal.FindFirstValue(
+                         "http://schemas.microsoft.com/identity/claims/objectidentifier");
+
+        if (!string.IsNullOrEmpty(oidStr))
+            return await userManager.FindByLoginAsync("Microsoft", oidStr);
+
+        return null;
+    }
+}
+
+/// <summary>
 /// Handles <see cref="SuperAdminRequirement"/> by checking the SuperAdmin role
 /// directly from the database via <c>UserManager</c> for Entra JWT sessions,
 /// and via role claims for local Identity bearer sessions.
@@ -39,27 +84,48 @@ public sealed class SuperAdminHandler : AuthorizationHandler<SuperAdminRequireme
         }
 
         // ── Path 2: Entra JWT — look up user in DB by OID ────────────────────
-        // app_user_id is injected by EntraClaimsTransformation when it works.
-        // If not present, fall back directly to the oid claim.
-        AppUser? user = null;
-
-        var appUserIdStr = context.User.FindFirstValue(EntraClaimsTransformation.AppUserIdClaimType);
-        if (Guid.TryParse(appUserIdStr, out var appUserId))
-        {
-            user = await _userManager.FindByIdAsync(appUserId.ToString());
-        }
-
-        if (user is null)
-        {
-            var oidStr = context.User.FindFirstValue("oid")
-                         ?? context.User.FindFirstValue(
-                             "http://schemas.microsoft.com/identity/claims/objectidentifier");
-
-            if (!string.IsNullOrEmpty(oidStr))
-                user = await _userManager.FindByLoginAsync("Microsoft", oidStr);
-        }
+        var user = await AppUserPrincipal.ResolveAsync(context.User, _userManager);
 
         if (user is not null && await _userManager.IsInRoleAsync(user, RoleNames.SuperAdmin))
             context.Succeed(requirement);
+    }
+}
+
+/// <summary>
+/// Handles <see cref="AppAdministratorRequirement"/>, accepting either app-wide role by the same
+/// two paths as <see cref="SuperAdminHandler"/>.
+/// </summary>
+public sealed class AppAdministratorHandler : AuthorizationHandler<AppAdministratorRequirement>
+{
+    private readonly UserManager<AppUser> _userManager;
+
+    public AppAdministratorHandler(UserManager<AppUser> userManager)
+    {
+        _userManager = userManager;
+    }
+
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context, AppAdministratorRequirement requirement)
+    {
+        foreach (var role in RoleNames.AppAdministrators)
+        {
+            if (context.User.IsInRole(role))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+        }
+
+        var user = await AppUserPrincipal.ResolveAsync(context.User, _userManager);
+        if (user is null) return;
+
+        foreach (var role in RoleNames.AppAdministrators)
+        {
+            if (await _userManager.IsInRoleAsync(user, role))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+        }
     }
 }

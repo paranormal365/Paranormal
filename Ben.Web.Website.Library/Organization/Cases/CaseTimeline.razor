@@ -430,7 +430,7 @@
     protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
-        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
             .SelectMany(c => c.Types)
             .ToDictionary(t => t.Id, t => t.Name);
@@ -579,7 +579,7 @@
 
     private async Task ReloadTaxonomyAsync()
     {
-        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
             .SelectMany(c => c.Types)
             .ToDictionary(t => t.Id, t => t.Name);

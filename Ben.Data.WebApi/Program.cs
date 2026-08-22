@@ -268,6 +268,8 @@ var schemes = entraEnabled
 // bypassing any claim-injection issues with IClaimsTransformation.
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.SuperAdminHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.AppAdministratorHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -277,11 +279,27 @@ builder.Services.AddAuthorization(options =>
 
     // Named "SuperAdmin" policy used by [Authorize(Policy = RoleNames.SuperAdmin)]
     // on all admin controllers. Delegates to SuperAdminHandler for DB-based role check.
+    //
+    // ADMIN CONTROLLERS MUST USE THIS POLICY, NOT [Authorize(Roles = ...)]. The difference is not
+    // stylistic. A bare Roles attribute names no authentication scheme, so it re-authenticates
+    // with the DEFAULT scheme only - the local Identity bearer handler. A caller holding a valid
+    // Entra JWT therefore comes back not as "authenticated but lacking the role" but as
+    // unauthenticated, and the endpoint answers 401 rather than 403. Eight endpoints were written
+    // that way and every one of them was closed to Entra sign-ins, including the dashboard's
+    // /api/admin/stats. The policy avoids it by pinning the schemes explicitly below, which is
+    // also what lets SuperAdminHandler resolve the role from the database by OID.
     options.AddPolicy(RoleNames.SuperAdmin, policy =>
         policy
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.SuperAdminRequirement()));
+
+    // The same arrangement for the endpoints that accept either app-wide role.
+    options.AddPolicy(AuthPolicyNames.AppAdministrator, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.AppAdministratorRequirement()));
 
     // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
     // EntraAuthController's Register/Link actions — those need to read the caller's OID/email
@@ -334,9 +352,31 @@ app.UseExceptionHandler(handler =>
     handler.Run(async context =>
     {
         var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var logger  = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+        // A stored file that is not on disk is a 404, not a fault. IFileStorageService.OpenReadAsync
+        // throws FileNotFoundException, and none of its ~20 call sites catch it, so a row whose
+        // bytes are missing answered 500 and logged a stack trace. That is wrong twice over: the
+        // caller is told the server broke when the correct answer is "this is gone", and a routine
+        // data gap fills the error log with noise that hides real faults. Mapped here rather than
+        // at each call site for the same reason the log entry is written here - one place, and it
+        // covers the next endpoint to serve a file as well.
+        //
+        // Logged at Warning, because it is worth knowing about: it means the database and the disk
+        // disagree, which is a real condition even though it is not a crash.
+        if (feature?.Error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            logger.LogWarning(feature.Error,
+                "Stored file missing at {Path} - the database row exists but the bytes do not", feature.Path);
+
+            context.Response.StatusCode  = 404;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"That file is no longer available.\"}");
+            return;
+        }
+
         if (feature?.Error is not null)
         {
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
             logger.LogError(feature.Error,
                 "Unhandled exception at {Path} — Source: WebApi", feature.Path);
         }

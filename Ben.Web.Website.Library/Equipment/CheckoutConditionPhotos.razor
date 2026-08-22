@@ -2,6 +2,8 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Before and after, side by side — the comparison is the whole reason these exist. Bytes come
    through the authed client as data: URIs; condition photos are never public, so a plain <img src>
@@ -15,7 +17,13 @@
 
             @{ var stagePhotos = _photos.Where(p => p.Stage == stage).ToList(); }
 
-            @if (stagePhotos.Count == 0)
+            @if (_photosResult.Failed)
+            {
+                @* Condition photos are the evidence in a damage dispute. "None taken" when the
+                   fetch was refused is the wrong answer to have on record. *@
+                <BenListState TItem="EquipmentCheckoutPhotoRecord" Result="@_photosResult" />
+            }
+            else if (stagePhotos.Count == 0)
             {
                 <p class="text-secondary small">No photos.</p>
             }
@@ -63,6 +71,7 @@
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EquipmentCheckoutPhotoRecord> _photos = [];
+    private LoadResult<EquipmentCheckoutPhotoRecord> _photosResult;
     private readonly Dictionary<Guid, string?> _dataUrls = [];
     private string? _error;
     private Guid? _loadedFor;
@@ -88,7 +97,8 @@
 
     private async Task LoadAsync()
     {
-        _photos = [.. await AdminClient.GetCheckoutPhotosAsync(Loan.Id)];
+        _photosResult = await AdminClient.GetCheckoutPhotosAsync(Loan.Id);
+        _photos       = [.. _photosResult.Items];
 
         foreach (var photo in _photos.Where(p => !_dataUrls.ContainsKey(p.Id)))
         {

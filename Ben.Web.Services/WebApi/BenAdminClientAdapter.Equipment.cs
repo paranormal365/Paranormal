@@ -15,44 +15,33 @@ public sealed partial class BenAdminClientAdapter
 {
     // ── Public catalog ────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<EquipmentCategoryRecord>> GetEquipmentCategoriesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<EquipmentCategoryRecord>>("/api/equipment-catalog/categories", token);
-        return result ?? [];
+    public Task<LoadResult<EquipmentCategoryRecord>> GetEquipmentCategoriesAsync(CancellationToken token = default)
+        => _api.GetAnonymousListAsync<EquipmentCategoryRecord>("/api/equipment-catalog/categories", token);
+
+    public Task<LoadResult<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default)
+    {        var url = "/api/equipment-catalog/brands" + (string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search)}");
+        return _api.GetListAsync<EquipmentBrandRecord>(url, token);
     }
 
-    public async Task<IReadOnlyList<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default)
-    {
-        var url = "/api/equipment-catalog/brands" + (string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search)}");
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentBrandRecord>>(url, token);
-        return result ?? [];
+    public Task<LoadResult<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default)
+    {        var url = $"/api/equipment-catalog/brands/{brandId}/models" + (categoryId is null ? "" : $"?categoryId={categoryId}");
+        return _api.GetListAsync<EquipmentModelRecord>(url, token);
     }
 
-    public async Task<IReadOnlyList<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default)
-    {
-        var url = $"/api/equipment-catalog/brands/{brandId}/models" + (categoryId is null ? "" : $"?categoryId={categoryId}");
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentModelRecord>>(url, token);
-        return result ?? [];
-    }
-
-    public async Task<IReadOnlyList<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default)
-    {
-        var query = new List<string>();
+    public Task<LoadResult<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default)
+    {        var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(search)) query.Add($"search={Uri.EscapeDataString(search)}");
         if (categoryId is not null) query.Add($"categoryId={categoryId}");
         var url = "/api/equipment-catalog/models" + (query.Count == 0 ? "" : "?" + string.Join("&", query));
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentModelRecord>>(url, token);
-        return result ?? [];
+        return _api.GetListAsync<EquipmentModelRecord>(url, token);
     }
 
-    public async Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default)
-    {
-        var query = new List<string>();
+    public Task<LoadResult<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default)
+    {        var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(search)) query.Add($"search={Uri.EscapeDataString(search)}");
         if (categoryId is not null) query.Add($"categoryId={categoryId}");
         var url = "/api/equipment-catalog/items" + (query.Count == 0 ? "" : "?" + string.Join("&", query));
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicEquipmentItemRecord>>(url, token);
-        return result ?? [];
+        return _api.GetAnonymousListAsync<PublicEquipmentItemRecord>(url, token);
     }
 
     public Task<EquipmentModelPageRecord?> GetEquipmentModelPageAsync(Guid modelId, CancellationToken token = default)
@@ -83,13 +72,10 @@ public sealed partial class BenAdminClientAdapter
 
     // ── FAQs and anonymous questions (Phase 6c) ─────────────────────────────
 
-    public async Task<IReadOnlyList<EquipmentFaqRecord>> GetEquipmentFaqsAsync(Guid itemId, CancellationToken token = default)
-    {
-        // Anonymous: the FAQ of a publicly-listed piece is readable by a passer-by, and the server
+    public Task<LoadResult<EquipmentFaqRecord>> GetEquipmentFaqsAsync(Guid itemId, CancellationToken token = default)
+    {        // Anonymous: the FAQ of a publicly-listed piece is readable by a passer-by, and the server
         // decides that from the item, not from whether a token arrived.
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<EquipmentFaqRecord>>(
-            $"/api/equipment/items/{itemId}/faqs", token);
-        return result ?? [];
+        return _api.GetAnonymousListAsync<EquipmentFaqRecord>($"/api/equipment/items/{itemId}/faqs", token);
     }
 
     public Task<EquipmentFaqRecord?> AddEquipmentFaqAsync(Guid itemId, UpsertEquipmentFaqRequest request, CancellationToken token = default)
@@ -107,17 +93,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<AskEquipmentQuestionRequest, AskedQuestionRecord>(
                $"/api/equipment/items/{itemId}/questions", new AskEquipmentQuestionRequest(questionText), token);
 
-    public async Task<IReadOnlyList<AskedQuestionRecord>> GetMyAskedQuestionsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<AskedQuestionRecord>>("/api/me/equipment-questions/asked", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<AskedQuestionRecord>> GetMyAskedQuestionsAsync(CancellationToken token = default)
+        => _api.GetListAsync<AskedQuestionRecord>("/api/me/equipment-questions/asked", token);
 
-    public async Task<IReadOnlyList<ReceivedQuestionRecord>> GetMyReceivedQuestionsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ReceivedQuestionRecord>>("/api/me/equipment-questions/received", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ReceivedQuestionRecord>> GetMyReceivedQuestionsAsync(CancellationToken token = default)
+        => _api.GetListAsync<ReceivedQuestionRecord>("/api/me/equipment-questions/received", token);
 
     public Task<ReceivedQuestionRecord?> AnswerEquipmentQuestionAsync(Guid questionId, AnswerEquipmentQuestionRequest request, CancellationToken token = default)
         => _api.PutAsync<AnswerEquipmentQuestionRequest, ReceivedQuestionRecord>(
@@ -141,12 +121,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<LenderFeedbackPanelRecord?> GetLenderFeedbackAsync(Guid itemId, CancellationToken token = default)
         => _api.GetAsync<LenderFeedbackPanelRecord>($"/api/equipment/items/{itemId}/lender-feedback", token);
 
-    public async Task<IReadOnlyList<ProductReviewRecord>> GetProductReviewsAsync(Guid modelId, CancellationToken token = default)
-    {
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<ProductReviewRecord>>(
-            $"/api/equipment-catalog/models/{modelId}/reviews", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ProductReviewRecord>> GetProductReviewsAsync(Guid modelId, CancellationToken token = default)
+        => _api.GetAnonymousListAsync<ProductReviewRecord>($"/api/equipment-catalog/models/{modelId}/reviews", token);
 
     // Not coalesced to an empty list: a 404 here means "not yours to moderate", and the page says
     // something different in that case than it does for a group with no feedback yet.
@@ -176,11 +152,8 @@ public sealed partial class BenAdminClientAdapter
 
     private const string MyEquipmentBase = "/api/me/equipment";
 
-    public async Task<IReadOnlyList<EquipmentItemRecord>> GetMyEquipmentAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentItemRecord>>(MyEquipmentBase, token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentItemRecord>> GetMyEquipmentAsync(CancellationToken token = default)
+        => _api.GetListAsync<EquipmentItemRecord>(MyEquipmentBase, token);
 
     public Task<EquipmentItemRecord?> GetMyEquipmentItemAsync(Guid id, CancellationToken token = default)
         => _api.GetAsync<EquipmentItemRecord>($"{MyEquipmentBase}/{id}", token);
@@ -208,28 +181,42 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Sharing with groups ───────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<EquipmentShareOptionRecord>> GetMyEquipmentSharesAsync(Guid itemId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentShareOptionRecord>>($"{MyEquipmentBase}/{itemId}/shares", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentShareOptionRecord>> GetMyEquipmentSharesAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentShareOptionRecord>($"{MyEquipmentBase}/{itemId}/shares", token);
 
-    public async Task<IReadOnlyList<EquipmentShareOptionRecord>> SetMyEquipmentSharesAsync(Guid itemId, IReadOnlyList<Guid> organizationIds, CancellationToken token = default)
+    /// <summary>
+    /// Saves which organizations an item is shared with, and says so when it did not save.
+    /// </summary>
+    /// <remarks>
+    /// <para>A <b>save</b>, not a load, so it does not return <see cref="LoadResult{T}"/> — the
+    /// question is "did this happen?", not "is this list real?". But it had the same defect: a
+    /// refused PUT became <c>null</c> and then <c>?? []</c>, so the caller was handed an empty
+    /// share list as though the item had successfully been shared with nobody, and
+    /// <c>EquipmentShareEditor</c> closed its dialog reporting success.</para>
+    ///
+    /// <para><c>SendExpectingReasonAsync</c> rather than a bare bool: sharing is refused for
+    /// reasons a person can act on — not a member of that group any more, item withdrawn — and
+    /// "Save failed" is not one of them.</para>
+    /// </remarks>
+    public async Task<(IReadOnlyList<EquipmentShareOptionRecord> Shares, string? Error)> SetMyEquipmentSharesAsync(Guid itemId, IReadOnlyList<Guid> organizationIds, CancellationToken token = default)
     {
-        var result = await _api.PutAsync<SetEquipmentSharesRequest, IReadOnlyList<EquipmentShareOptionRecord>>(
-            $"{MyEquipmentBase}/{itemId}/shares", new SetEquipmentSharesRequest(organizationIds), token);
-        return result ?? [];
+        var (result, error) = await _api.SendExpectingReasonAsync<SetEquipmentSharesRequest, IReadOnlyList<EquipmentShareOptionRecord>>(
+            HttpMethod.Put, $"{MyEquipmentBase}/{itemId}/shares", new SetEquipmentSharesRequest(organizationIds), token);
+
+        // Explicit rather than `result ?? []`: an empty list is returned only alongside a reason,
+        // so there is no path on which the caller receives "shared with nobody" as a fact.
+        if (result is null)
+            return ([], error ?? "The sharing change could not be saved.");
+
+        return (result, null);
     }
 
     public Task<BulkEquipmentShareResult?> BulkShareMyEquipmentAsync(Guid organizationId, bool share, CancellationToken token = default)
         => _api.PostAsync<BulkEquipmentShareRequest, BulkEquipmentShareResult>(
                $"{MyEquipmentBase}/shares/bulk", new BulkEquipmentShareRequest(organizationId, share), token);
 
-    public async Task<IReadOnlyList<SharedEquipmentItemRecord>> GetOrgSharedEquipmentAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<SharedEquipmentItemRecord>>($"/api/organizations/{orgId}/equipment/shared", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<SharedEquipmentItemRecord>> GetOrgSharedEquipmentAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<SharedEquipmentItemRecord>($"/api/organizations/{orgId}/equipment/shared", token);
 
     // ── The group's own equipment ─────────────────────────────────────────────
 
@@ -256,11 +243,8 @@ public sealed partial class BenAdminClientAdapter
         => _api.PutAsync<SetEquipmentHolderRequest, EquipmentItemRecord>(
                $"{OrgEquipBase(orgId)}/{itemId}/holder", new SetEquipmentHolderRequest(appUserId), token);
 
-    public async Task<IReadOnlyList<EquipmentServiceLogRecord>> GetOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentServiceLogRecord>>($"{OrgEquipBase(orgId)}/{itemId}/service-log", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentServiceLogRecord>> GetOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentServiceLogRecord>($"{OrgEquipBase(orgId)}/{itemId}/service-log", token);
 
     public Task<EquipmentItemPhotoRecord?> AttachOrgEquipmentPhotoAsync(Guid orgId, Guid itemId, MultipartFormDataContent content, CancellationToken token = default)
         => _api.PostMultipartAsync<EquipmentItemPhotoRecord>($"{OrgEquipBase(orgId)}/{itemId}/photos", content, token);
@@ -317,11 +301,8 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<ReturnEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
                $"{CheckoutBase}/{checkoutId}/return", new ReturnEquipmentCheckoutRequest(conditionNotes), token);
 
-    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetMyEquipmentCheckoutsAsync(string role = "borrower", CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/me/equipment-checkouts?role={role}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentCheckoutRecord>> GetMyEquipmentCheckoutsAsync(string role = "borrower", CancellationToken token = default)
+        => _api.GetListAsync<EquipmentCheckoutRecord>($"/api/me/equipment-checkouts?role={role}", token);
 
     public async Task<OrgCheckoutListRecord> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
     {
@@ -330,19 +311,13 @@ public sealed partial class BenAdminClientAdapter
         return result ?? new OrgCheckoutListRecord(false, []);
     }
 
-    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/equipment/{itemId}/checkouts", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentCheckoutRecord>($"/api/equipment/{itemId}/checkouts", token);
 
     // ── Condition photos, renewals, history ───────────────────────────────────
 
-    public async Task<IReadOnlyList<EquipmentCheckoutPhotoRecord>> GetCheckoutPhotosAsync(Guid checkoutId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutPhotoRecord>>($"{CheckoutBase}/{checkoutId}/photos", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentCheckoutPhotoRecord>> GetCheckoutPhotosAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentCheckoutPhotoRecord>($"{CheckoutBase}/{checkoutId}/photos", token);
 
     public Task<bool> DeleteCheckoutPhotoAsync(Guid checkoutId, Guid photoId, CancellationToken token = default)
         => _api.DeleteAsync($"{CheckoutBase}/{checkoutId}/photos/{photoId}", token);
@@ -355,11 +330,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<(byte[] Data, string ContentType, string FileName)?> GetCheckoutPhotoBytesAsync(Guid photoId, CancellationToken token = default)
         => _api.GetBytesAsync($"{CheckoutBase}/photos/{photoId}/content", "photo", token);
 
-    public async Task<IReadOnlyList<EquipmentCheckoutRenewalRecord>> GetCheckoutRenewalsAsync(Guid checkoutId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRenewalRecord>>($"{CheckoutBase}/{checkoutId}/renewals", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentCheckoutRenewalRecord>> GetCheckoutRenewalsAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentCheckoutRenewalRecord>($"{CheckoutBase}/{checkoutId}/renewals", token);
 
     public Task<EquipmentCheckoutRenewalRecord?> RequestCheckoutRenewalAsync(Guid checkoutId, DateTime requestedDateDue, string? notes, CancellationToken token = default)
         => _api.PostAsync<RequestEquipmentRenewalRequest, EquipmentCheckoutRenewalRecord>(
@@ -369,21 +341,15 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<ReviewEquipmentRenewalRequest, EquipmentCheckoutRenewalRecord>(
                $"{CheckoutBase}/{checkoutId}/renewals/{renewalId}/review", new ReviewEquipmentRenewalRequest(approve, reviewNotes), token);
 
-    public async Task<IReadOnlyList<EquipmentHistoryEntryRecord>> GetEquipmentItemHistoryAsync(Guid itemId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentHistoryEntryRecord>>($"/api/equipment/{itemId}/history", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentHistoryEntryRecord>> GetEquipmentItemHistoryAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetListAsync<EquipmentHistoryEntryRecord>($"/api/equipment/{itemId}/history", token);
 
     // ── SuperAdmin taxonomy moderation ───────────────────────────────────────
 
     private const string AdminTaxonomyBase = "/api/admin/equipment-taxonomy";
 
-    public async Task<IReadOnlyList<EquipmentCategoryRecord>> GetAdminEquipmentCategoriesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCategoryRecord>>($"{AdminTaxonomyBase}/categories", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentCategoryRecord>> GetAdminEquipmentCategoriesAsync(CancellationToken token = default)
+        => _api.GetListAsync<EquipmentCategoryRecord>($"{AdminTaxonomyBase}/categories", token);
 
     public Task<EquipmentCategoryRecord?> CreateEquipmentCategoryAsync(UpsertEquipmentCategoryRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentCategoryRequest, EquipmentCategoryRecord>($"{AdminTaxonomyBase}/categories", request, token);
@@ -394,11 +360,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteEquipmentCategoryAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{AdminTaxonomyBase}/categories/{id}", token);
 
-    public async Task<IReadOnlyList<EquipmentBrandRecord>> GetAdminEquipmentBrandsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentBrandRecord>>($"{AdminTaxonomyBase}/brands", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EquipmentBrandRecord>> GetAdminEquipmentBrandsAsync(CancellationToken token = default)
+        => _api.GetListAsync<EquipmentBrandRecord>($"{AdminTaxonomyBase}/brands", token);
 
     public Task<EquipmentBrandRecord?> ApproveEquipmentBrandAsync(Guid id, CancellationToken token = default)
         => _api.PutAsync<object, EquipmentBrandRecord>($"{AdminTaxonomyBase}/brands/{id}/approve", new { }, token);
@@ -406,11 +369,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RejectEquipmentBrandAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{AdminTaxonomyBase}/brands/{id}", token);
 
-    public async Task<IReadOnlyList<EquipmentModelRecord>> GetAdminEquipmentModelsAsync(Guid? brandId = null, CancellationToken token = default)
-    {
-        var url = $"{AdminTaxonomyBase}/models" + (brandId is null ? "" : $"?brandId={brandId}");
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentModelRecord>>(url, token);
-        return result ?? [];
+    public Task<LoadResult<EquipmentModelRecord>> GetAdminEquipmentModelsAsync(Guid? brandId = null, CancellationToken token = default)
+    {        var url = $"{AdminTaxonomyBase}/models" + (brandId is null ? "" : $"?brandId={brandId}");
+        return _api.GetListAsync<EquipmentModelRecord>(url, token);
     }
 
     public Task<EquipmentModelRecord?> ApproveEquipmentModelAsync(Guid id, CancellationToken token = default)

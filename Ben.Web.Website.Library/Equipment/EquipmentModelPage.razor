@@ -4,6 +4,8 @@
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.Equipment">
     <PageTitle>@(_page is null ? "Equipment" : $"{_page.Model.BrandName} {_page.Model.Name}")</PageTitle>
@@ -113,6 +115,10 @@
 
             @* ── The pooled photos ──────────────────────────────────────────────── *@
             <h5 class="mb-2">Photos</h5>
+            @if (_reviewsResult.Failed)
+            {
+                <BenListState TItem="ProductReviewRecord" Result="@_reviewsResult" />
+            }
             @if (_page.Photos.Count == 0)
             {
                 <p class="text-secondary small">Nobody has added a photo of one yet.</p>
@@ -153,6 +159,7 @@
 
     private EquipmentModelPageRecord? _page;
     private IReadOnlyList<ProductReviewRecord> _reviews = [];
+    private LoadResult<ProductReviewRecord> _reviewsResult;
     private readonly Dictionary<Guid, string?> _thumbnails = [];
     private bool _loading = true;
     private Guid _loadedFor;
@@ -204,7 +211,7 @@
             return;
         }
 
-        _reviews = await AdminClient.GetProductReviewsAsync(_loadedFor);
+        _reviews = (_reviewsResult = await AdminClient.GetProductReviewsAsync(_loadedFor)).Items;
         StateHasChanged();
 
         // Thumbnails, not full-resolution files — these are drawn 150px wide.

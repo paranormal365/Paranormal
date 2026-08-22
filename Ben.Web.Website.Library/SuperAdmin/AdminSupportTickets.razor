@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Support Tickets</PageTitle>
 
@@ -104,6 +106,11 @@
                         <hr class="my-2" />
                         <div class="mb-3" style="white-space:pre-wrap;">@ticket.Body</div>
 
+                        @if (_repliesResult.Failed)
+                        {
+                            @* A thread that failed to load is not a ticket nobody answered. *@
+                            <BenListState TItem="SupportTicketReplyRecord" Result="@_repliesResult" />
+                        }
                         @foreach (var reply in _replies)
                         {
                             <div class="card mb-2 @(reply.IsInternalNote ? "border-warning" : "")">
@@ -166,6 +173,7 @@
 @code {
     private SupportTicketPage? _page;
     private IReadOnlyList<SupportTicketReplyRecord> _replies = [];
+    private LoadResult<SupportTicketReplyRecord> _repliesResult;
     private Guid? _openTicketId;
     private string _replyDraft = "";
 
@@ -226,7 +234,8 @@
 
         _openTicketId = ticket.Id;
         _replyDraft = "";
-        _replies = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+        _repliesResult = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+        _replies       = _repliesResult.Items;
     }
 
     private async Task ReplyAsync(SupportTicketAdminRecord ticket, bool internalNote)
@@ -242,7 +251,8 @@
             if (!ok) { _error = "Could not save that reply."; return; }
 
             _replyDraft = "";
-            _replies = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+            _repliesResult = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+            _replies       = _repliesResult.Items;
             // Reload the list too: replying changes status and assignment on the server, and a
             // stale row would show the old ones.
             await LoadAsync(_page?.Page ?? 1);

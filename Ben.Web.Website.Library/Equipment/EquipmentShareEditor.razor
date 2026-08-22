@@ -2,6 +2,8 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Which groups can see one piece of gear. TelerikWindow with an in-content footer, never
    TelerikDialog and never WindowActions — see MyEquipmentItemEditor for both reasons. *@
@@ -22,6 +24,11 @@
         @if (_loading)
         {
             <p class="text-secondary">Loading your groups…</p>
+        }
+        else if (_optionsResult.Failed)
+        {
+            @* Told "you are not in any groups", somebody simply stops trying to share. *@
+            <BenListState TItem="EquipmentShareOptionRecord" Result="@_optionsResult" OnRetry="@OnParametersSetAsync" />
         }
         else if (_options.Count == 0)
         {
@@ -64,6 +71,7 @@
     private List<EquipmentShareOptionRecord> _options = [];
     private HashSet<Guid> _selected = [];
     private bool _loading;
+    private LoadResult<EquipmentShareOptionRecord> _optionsResult;
     private bool _busy;
     private string? _error;
     private Guid? _loadedFor;
@@ -76,7 +84,8 @@
 
         _loading = true;
         _error = null;
-        _options = [.. await AdminClient.GetMyEquipmentSharesAsync(Item.Id)];
+        _optionsResult = await AdminClient.GetMyEquipmentSharesAsync(Item.Id);
+        _options       = [.. _optionsResult.Items];
         _selected = _options.Where(o => o.IsShared).Select(o => o.OrganizationId).ToHashSet();
         _loading = false;
     }
@@ -94,9 +103,18 @@
         _error = null;
 
         // The server re-validates membership regardless; this call just carries the choice.
-        await AdminClient.SetMyEquipmentSharesAsync(Item.Id, [.. _selected]);
+        // Its answer used to be discarded, so a refused save closed the dialog reporting success
+        // and the person believed their equipment was shared. Item 120's shape, on a mutation.
+        var (_, error) = await AdminClient.SetMyEquipmentSharesAsync(Item.Id, [.. _selected]);
 
         _busy = false;
+
+        if (error is not null)
+        {
+            _error = error;
+            return;
+        }
+
         await OnSaved.InvokeAsync();
         await OnVisibleChanged(false);
     }
