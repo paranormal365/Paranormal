@@ -124,6 +124,12 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentItemPhoto> EquipmentItemPhotos { get; set; }
         public virtual DbSet<EquipmentItemShare> EquipmentItemShares { get; set; }
         public virtual DbSet<EquipmentServiceLog> EquipmentServiceLogs { get; set; }
+
+        public virtual DbSet<SubscriptionTier> SubscriptionTiers { get; set; }
+        public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
+        public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
+        public virtual DbSet<Coupon> Coupons { get; set; }
+        public virtual DbSet<CouponRedemption> CouponRedemptions { get; set; }
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
         public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
@@ -2292,6 +2298,86 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentServiceLog>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Subscriptions (items 84 and 85) ──────────────────────────────
+            modelBuilder.Entity<SubscriptionTier>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTier>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTier>()
+                .Property(e => e.MonthlyPrice).HasPrecision(18, 2);
+            // Bands are read by member count on every billing evaluation.
+            modelBuilder.Entity<SubscriptionTier>().HasIndex(e => new { e.IsActive, e.MinMembers });
+
+            // One row per organization, enforced rather than assumed: a second row would make
+            // "what does this group pay?" a question with two answers.
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasIndex(e => e.OrganizationId).IsUnique();
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            // Restrict, not Cascade: a tier that has priced a period must not be deletable out
+            // from under it. Retire it instead — SubscriptionTier.IsActive.
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasOne(e => e.SubscriptionTier).WithMany()
+                .HasForeignKey(e => e.SubscriptionTierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationSubscription>()
+                .Property(e => e.PriceAtPeriodStart).HasPrecision(18, 2);
+            // The notice job asks "whose period ends soon?" — an index on the date it scans.
+            modelBuilder.Entity<OrganizationSubscription>()
+                .HasIndex(e => new { e.Status, e.CurrentPeriodEnd });
+
+            // One nomination per person per organization.
+            modelBuilder.Entity<OrganizationBillingContact>()
+                .HasIndex(e => new { e.OrganizationId, e.AppUserId }).IsUnique();
+            modelBuilder.Entity<OrganizationBillingContact>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationBillingContact>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationBillingContact>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationBillingContact>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // Codes are typed by hand, so they are matched case-insensitively and stored upper-
+            // cased; the unique index is on the stored form.
+            modelBuilder.Entity<Coupon>().HasIndex(e => e.Code).IsUnique();
+            modelBuilder.Entity<Coupon>().Property(e => e.AmountOff).HasPrecision(18, 2);
+            modelBuilder.Entity<Coupon>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Coupon>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // One redemption per organization per coupon. This index is not a convenience — it is
+            // what makes the redemption limit safe when two groups redeem the last use at once.
+            modelBuilder.Entity<CouponRedemption>()
+                .HasIndex(e => new { e.CouponId, e.OrganizationId }).IsUnique();
+            modelBuilder.Entity<CouponRedemption>()
+                .HasOne(e => e.Coupon).WithMany(c => c.Redemptions)
+                .HasForeignKey(e => e.CouponId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CouponRedemption>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CouponRedemption>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CouponRedemption>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentServiceLog>().Property(e => e.Notes).HasMaxLength(2000);
