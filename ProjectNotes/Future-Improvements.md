@@ -6969,7 +6969,7 @@ would move to `Ben.Web.Services` first.
 
 ---
 
-## 137. UAT dashboard: "Couldn't load the dashboard figures" after a republish (raised 2026-08-22 by Ben)
+## 137. UAT dashboard: "Couldn't load the dashboard figures" after a republish (CLOSED 2026-08-22)
 
 Ben, after publishing to ishaunted.com: *"when I go to dashboard after logging in, I get: Couldn't
 load the dashboard figures — the server refused the request or could not be reached."* That sentence
@@ -7015,8 +7015,30 @@ so role claims are populated in principle — this is not the "roles were never 
    message about the server being unreachable. `new Uri("__SET_ME__")` is not even a valid absolute
    URI. **The script should refuse to publish** rather than emit a package that cannot work.
 
-Both are cheap and would make this class of failure impossible to ship silently, whichever of the
-two candidates turns out to be the actual cause here.
+Both are cheap and would make this class of failure impossible to ship silently. Neither turned out
+to be the cause here, and both are still worth doing.
+
+### Resolved — it was the authorization branch
+
+Eight endpoints across seven controllers were gated on `[Authorize(Roles = RoleNames.SuperAdmin)]`
+instead of the SuperAdmin policy. **A bare `Roles` attribute names no authentication scheme**, so
+ASP.NET re-authenticates with the *default* scheme alone — the local Identity bearer handler. A
+caller holding a valid Entra JWT is not refused for lacking the role; they come back
+unauthenticated, and the endpoint answers **401 where a 403 was meant**. The role check never runs.
+
+That is why the site let Ben onto the dashboard while the API refused him: the page's guard reads
+`UserState.IsSuperAdmin`, which comes from `/api/me` — and `/api/me` resolves the role from the
+**database**, not from a claim. Two sources of truth, agreeing right up until the scheme mismatch.
+
+Fixed by moving those endpoints onto policies whose registration pins both schemes explicitly, with
+`SuperAdminHandler` resolving the role by OID for Entra sessions.
+`AdminAuthorizationIsAPolicyTests` ratchets it — no controller may use `[Authorize(Roles = ...)]` —
+and was verified to discriminate.
+
+**Confirmed live by Ben after republishing: "Dashboard works again."**
+
+This also retro-closes the real cause of **item 126**, which was closed as "made self-diagnosing,
+not yet diagnosed" — the same two pages, the same fault, finally named.
 
 ---
 
@@ -7116,7 +7138,7 @@ mean touching 37 files on the strength of a parenthetical.
 
 ---
 
-## 141. Twenty-two pages can see a refusal and still render it as "nothing here" (raised 2026-08-22)
+## 141. Pages that can see a refusal and still render it as "nothing here" (CLOSED 2026-08-22 — all 22)
 
 Item 120 removed the client's ability to lie: every list method now returns `LoadResult<T>`, and a
 ban stops the pattern returning. **This is the other half** — the pages that receive that result and
@@ -7142,6 +7164,50 @@ The 22: `AdminFeedReports`, `AdminFileTypes`, `AudioFilePreview`, `CaseVideoEdit
 false "empty" is a claim somebody acts on: `ClientRequestWizard`'s organization search (choosing
 who to send a case to), `OrgRoleEditor` and `OrganizationSecurity` (who has access),
 `InvestigationRoster` (who attended), then the media and CMS surfaces.
+
+### Done 2026-08-22 — 22 → 17
+
+The five where the false "empty" ends an errand rather than merely misleading:
+
+- **`ClientRequestWizard`** — the organization search. The one screen where "no groups near you"
+  stops the whole thing: somebody reporting activity concludes nobody covers their area and leaves.
+- **`OrgRoleEditor`** — "nobody holds this role" is what an administrator grants access on.
+- **`InvestigationRoster`** — who attended is evidence; an empty roster over a refusal is a record
+  saying nobody was there.
+- **`OrganizationMembershipQuestions`** — a group shown no questions writes them again, and
+  applicants then answer two sets.
+- **`OrgAddressManager`** — the address list is what a group's area of operation is judged from.
+
+Two more were cleared before the list existed: `OrganizationMembershipRequests` (people waiting to
+join, shown as nobody waiting, is an application that never gets answered) and `OrgPublications`.
+
+### Closed — all 22, same day
+
+The remaining seventeen followed: the publications directory and posts, the place view, the feed
+moderation queue, the feed thread, the media library grid, file comments, both video project lists,
+the file-types and uploads grids, the region-note explorer, the CMS embed picker, audio markers,
+the new-investigation place search, the org security page and the org view.
+
+**Three of them were not list surfaces at all**, and are the ones worth remembering:
+
+- **`NewInvestigationWindow`** — the place-candidate search is what stops a second copy of a place
+  being created. Read as "no match exists" when the search was refused, it invites exactly the
+  duplicate it prevents. It now says so before you save.
+- **`OrganizationView`** — owner-ness is derived from the roster, so a refused roster read as "not
+  an owner" and quietly removed the person's own controls. It fails *closed*, which is the safe
+  direction, but silently — the page now says the role could not be confirmed rather than letting
+  somebody conclude their access changed.
+- **`AudioFilePreview`** — markers are somebody's analysis of a recording, and "no markers yet" over
+  a refusal says the file was reviewed and found empty.
+
+**The debt list is gone**, because it is empty. `LoadResultRenderedGuardTests` is unconditional
+again — verified by regressing a page that had been on the list and watching it fail. The class
+doc records that the list existed and what shape to use if one is ever needed again: something that
+can only get shorter, never a silent exemption.
+
+Item 120 and item 141 together mean the client cannot report a refusal as an empty list, and no
+page can receive that answer and ignore it. Both halves are enforced by tests that were each
+verified to discriminate.
 
 Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
 list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first

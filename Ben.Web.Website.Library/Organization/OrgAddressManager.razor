@@ -4,6 +4,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject IJSRuntime JS
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading)
 {
@@ -155,7 +157,15 @@ else
     }
     else if (!_showForm)
     {
-        <div class="text-muted small fst-italic">No addresses added yet.</div>
+        @if (_addressesResult.Failed)
+        {
+            @* An address list is what a group's area of operation is judged from. *@
+            <BenListState TItem="OrganizationAddressRecord" Result="@_addressesResult" OnRetry="@LoadAddressesAsync" />
+        }
+        else
+        {
+            <div class="text-muted small fst-italic">No addresses added yet.</div>
+        }
     }
 }
 
@@ -165,6 +175,7 @@ else
     // ── State ─────────────────────────────────────────────────────────────────
 
     private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+    private LoadResult<OrganizationAddressRecord> _addressesResult;
     private IReadOnlyList<AddressTypeOption>         _addressTypes = [];
     private AddressFieldsWithMap?                    _addrFields;
     private AddressFieldsState                       _addrState = new();
@@ -225,7 +236,10 @@ else
     }
 
     private async Task LoadAddressesAsync()
-        => _addresses = (await AdminClient.GetOrgAddressesAsync(OrgId)).Items;
+    {
+        _addressesResult = await AdminClient.GetOrgAddressesAsync(OrgId);
+        _addresses       = _addressesResult.Items;
+    }
 
     private async Task LoadAddressTypesAsync()
     {

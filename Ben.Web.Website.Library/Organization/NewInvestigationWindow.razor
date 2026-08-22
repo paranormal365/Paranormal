@@ -116,6 +116,10 @@
             </div>
 
             @* ── "Did you mean" ───────────────────────────────────────────────── *@
+            @if (_candidateError is not null)
+            {
+                <div class="alert alert-warning py-2 small mb-2">@_candidateError</div>
+            }
             @if (_candidates.Count > 0)
             {
                 <div class="alert alert-info py-2 small mt-3 mb-0">
@@ -232,6 +236,7 @@
     private string _zip = "";
 
     private List<PlaceCandidate> _candidates = [];
+    private string? _candidateError;
     private PlaceCandidate? _chosenPlace;
 
     private Timer? _lookupTimer;
@@ -285,9 +290,19 @@
             // No coordinates yet — nothing has geocoded what is being typed. The server treats
             // unknown distance as "no opinion" and matches on the text, which is the whole reason
             // the rule tolerates a missing position.
-            var found = (await AdminClient.FindPlaceCandidatesAsync(
-                _street, _city, _state, _zip, _name, latitude: null, longitude: null)).Items;
-            _candidates = found.ToList();
+            // This list is what stops a second copy of a place being created. Read as "no match
+            // exists" when the search was refused, it invites exactly the duplicate it prevents,
+            // so a refusal says so instead of returning nothing.
+            var found = await AdminClient.FindPlaceCandidatesAsync(
+                _street, _city, _state, _zip, _name, latitude: null, longitude: null);
+
+            _candidateError = found.Failed
+                ? (found.SessionExpired
+                    ? "You've been signed out, so existing places could not be checked."
+                    : "Existing places could not be checked just now — saving may create a duplicate.")
+                : null;
+
+            _candidates = found.Items.ToList();
         }
         catch
         {

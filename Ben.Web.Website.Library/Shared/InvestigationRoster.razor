@@ -3,6 +3,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
    Who is on tonight's team and who has turned up.
@@ -59,7 +61,13 @@
         }
 
         @* ── Roster ───────────────────────────────────────────────────────── *@
-        @if (_roster.Count == 0)
+        @if (_rosterResult.Failed)
+        {
+            @* Who attended is evidence. An empty roster over a refusal is a record that says
+               nobody was there. *@
+            <BenListState TItem="InvestigationRosterEntry" Result="@_rosterResult" />
+        }
+        else if (_roster.Count == 0)
         {
             <p class="text-secondary small fst-italic mt-3 mb-0">Nobody has been added to this investigation yet.</p>
         }
@@ -233,6 +241,7 @@
     [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
 
     private List<InvestigationRosterEntry> _roster = [];
+    private LoadResult<InvestigationRosterEntry> _rosterResult;
     private InvestigationRosterEntry? _myEntry;
     private int _arrivedCount;
 
@@ -287,7 +296,8 @@
     {
         try
         {
-            _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).Items.ToList();
+            _rosterResult = await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId);
+            _roster       = _rosterResult.Items.ToList();
             _arrivedCount = _roster.Count(r => r.DidAttend == true);
             _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
 

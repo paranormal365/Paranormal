@@ -3,6 +3,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
    A place, and the history of what has happened there.
@@ -105,7 +107,12 @@
         @if (_publicRows is not null)
         {
             <h6 class="fw-semibold mt-4">Published investigations</h6>
-            @if (_publicRows.Count == 0)
+            @if (_rowsResult.Failed)
+            {
+                @* A place shown with no investigations reads as somewhere nothing has happened. *@
+                <BenListState TItem="PlaceInvestigationRow" Result="@_rowsResult" OnRetry="@LoadSignedInAsync" />
+            }
+            else if (_publicRows.Count == 0)
             {
                 <p class="text-secondary small fst-italic">
                     Nothing has been published about this place yet.
@@ -148,6 +155,7 @@
     private PlaceRecord? _place;
     private PlaceSummary? _summary;
     private List<PlaceInvestigationRow>? _rows;
+    private LoadResult<PlaceInvestigationRow> _rowsResult;
     private List<PublicPlaceInvestigationRow>? _publicRows;
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
@@ -179,7 +187,8 @@
         _place = await AdminClient.GetPlaceAsync(PlaceId);
         if (_place is null) return;
 
-        _rows = (await AdminClient.GetPlaceInvestigationsAsync(PlaceId)).Items.ToList();
+        _rowsResult = await AdminClient.GetPlaceInvestigationsAsync(PlaceId);
+        _rows       = _rowsResult.Items.ToList();
         _summary = await AdminClient.GetPlaceSummaryAsync(PlaceId);
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }

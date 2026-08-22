@@ -16,6 +16,8 @@
 @using Telerik.Blazor.Components.Editor
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <BenModal @bind-Visible="@Visible" Title="@RegionTitle" Size="sm">
     <ChildContent>
@@ -129,6 +131,11 @@
                         @if (_loadingNotes)
                         {
                             <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+                        }
+                        else if (_notesResult.Failed)
+                        {
+                            @* Region notes are somebody's analysis of a recording. *@
+                            <BenListState TItem="UploadFileRegionNoteRecord" Result="@_notesResult" />
                         }
                         else if (!_notes.Any())
                         {
@@ -314,6 +321,7 @@
     // ── Notes state ───────────────────────────────────────────────────────────
 
     private IReadOnlyList<UploadFileRegionNoteRecord> _notes = [];
+    private LoadResult<UploadFileRegionNoteRecord> _notesResult;
     private bool   _loadingNotes;
     private string? _noteError;
     private bool   _isPointInTime;
@@ -375,7 +383,8 @@
                 _loadError = "Could not clip audio for this region. Only WAV and MP3 sources are supported.";
 
             _fileTypes = typesTask.Result.Items;
-            _notes     = FilterNotesForRegion(notesTask.Result.Items);
+            _notesResult = notesTask.Result;
+            _notes       = FilterNotesForRegion(_notesResult.Items);
 
             if (_fileTypes.Any())
                 _clipFileTypeId = _fileTypes[0].Id;

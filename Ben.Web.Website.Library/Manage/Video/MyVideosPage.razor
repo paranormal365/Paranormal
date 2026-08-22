@@ -8,6 +8,8 @@
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <FeatureGate Flag="@SiteFeatures.VideoEditor">
     <PageTitle>My Videos</PageTitle>
@@ -59,6 +61,11 @@
             {
                 <BenLoaderOverlay Visible="true" Text="Loading…" />
             }
+            else if (_projectsResult.Failed)
+            {
+                @* Somebody told their saved projects are gone does not go looking for them. *@
+                <BenListState TItem="VideoProjectRecord" Result="@_projectsResult" OnRetry="@LoadProjectListAsync" />
+            }
             else if (_projects.Count == 0)
             {
                 <p class="text-muted">No projects saved to server yet.</p>
@@ -108,6 +115,7 @@
 
 @code {
     private List<VideoProjectRecord> _projects = [];
+    private LoadResult<VideoProjectRecord> _projectsResult;
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
@@ -131,7 +139,8 @@
     private async Task LoadProjectListAsync()
     {
         _loadingList = true;
-        _projects = (await AdminClient.GetMyVideoProjectsAsync()).Items.ToList();
+        _projectsResult = await AdminClient.GetMyVideoProjectsAsync();
+        _projects       = _projectsResult.Items.ToList();
         _loadingList = false;
     }
 

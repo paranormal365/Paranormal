@@ -78,7 +78,12 @@
                 <div class="alert alert-danger">@_error</div>
             }
 
-            @if (_posts.Count == 0)
+            @if (_postsResult.Failed)
+            {
+                @* An author shown no posts may write a draft they already have. *@
+                <BenListState TItem="PublicationPostRecord" Result="@_postsResult" OnRetry="@LoadAsync" />
+            }
+            else if (_posts.Count == 0)
             {
                 <div class="text-center text-secondary py-5">
                     <p class="mb-0">Nothing written here yet.</p>

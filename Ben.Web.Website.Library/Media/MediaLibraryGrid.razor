@@ -5,6 +5,8 @@
 @using Ben.Web.Website.Library.Organization.Cases
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
   Reusable cross-scope media grid/list. Standalone browse mode (PickerMode="false") or an
@@ -49,6 +51,11 @@
     else if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
+    }
+    else if (_allFilesResult.Failed)
+    {
+        @* An empty media library sends somebody off to re-upload files they already have. *@
+        <BenListState TItem="UploadFileRecord" Result="@_allFilesResult" OnRetry="@LoadAsync" />
     }
     else if (!_filteredFiles.Any())
     {
@@ -199,6 +206,7 @@
     [Parameter] public int PageSize { get; set; } = 24;
 
     private List<UploadFileRecord> _allFiles = [];
+    private LoadResult<UploadFileRecord> _allFilesResult;
     private bool _loading = true;
     private string? _error;
     private int _page = 1;
@@ -230,7 +238,7 @@
     {
         _loading = true;
         _error = null;
-        try { _allFiles = (await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes)).Items.ToList(); }
+        try { _allFilesResult = await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes); _allFiles = _allFilesResult.Items.ToList(); }
         catch { _error = "Failed to load media files."; }
         _loading = false;
     }

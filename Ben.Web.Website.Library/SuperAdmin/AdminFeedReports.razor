@@ -59,6 +59,12 @@
     {
         <p class="text-secondary">Loading…</p>
     }
+    else if (_reportsResult.Failed)
+    {
+        @* An empty moderation queue means "nothing to review". Over a refusal it means reports
+           sit unanswered while the page says there are none. *@
+        <BenListState TItem="FeedReportRecord" Result="@_reportsResult" OnRetry="@LoadAsync" />
+    }
     else if (_reports.Count == 0)
     {
         <div class="text-center text-secondary py-5">
