@@ -226,24 +226,27 @@ public class CaseAdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+        // Reason-carrying since item 84: the lapsed-subscription refusal must reach the screen.
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+                HttpMethod.Post,
                 $"/api/organizations/{orgId}/cases/{caseId}/timeline",
                 It.IsAny<UpsertTimelineEntryRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new CaseTimelineEntryRecord
+           .ReturnsAsync((new CaseTimelineEntryRecord
            {
                Id = Guid.NewGuid(), CaseId = caseId,
                AuthorAppUserId = Guid.NewGuid(),
                EntryType = CaseTimelineEntryType.ClientReport,
-           });
+           }, (string?)null));
 
         var req = new UpsertTimelineEntryRequest(CaseTimelineEntryType.ClientReport,
             DateTime.UtcNow, "Knocking at night", "<p>Loud knocking.</p>", CaseTimelineVisibility.OrgOnly, []);
-        var result = await Build(api).AddCaseTimelineEntryAsync(orgId, caseId, req);
+        var (result, error) = await Build(api).AddCaseTimelineEntryAsync(orgId, caseId, req);
 
         Assert.NotNull(result);
-        api.Verify(x => x.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
-            $"/api/organizations/{orgId}/cases/{caseId}/timeline", req,
+        Assert.Null(error);
+        api.Verify(x => x.SendExpectingReasonAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/timeline", req,
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -67,6 +67,19 @@ namespace Ben.Data.Source.Entities
         public DateTime? LapsedAtUtc { get; set; }
 
         /// <summary>
+        /// The period end the two-week warning was sent for. Not-equal-to-current means unsent.
+        /// </summary>
+        /// <remarks>
+        /// Storing the period end rather than a boolean makes renewal reset the notice for free:
+        /// a new period is a new end date, so the stored value no longer matches and the next
+        /// approach warns again. A boolean would need clearing in every place a period opens.
+        /// </remarks>
+        public DateTime? TwoWeekNoticeSentForPeriodEnd { get; set; }
+
+        /// <summary>The period end the one-week notify-your-clients notice was sent for.</summary>
+        public DateTime? OneWeekNoticeSentForPeriodEnd { get; set; }
+
+        /// <summary>
         /// When this organization first paid for anything, or null if it never has.
         /// </summary>
         /// <remarks>

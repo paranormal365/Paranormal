@@ -42,3 +42,11 @@ anything you prefer. Set it on your case page under **How You're Named Publicly*
 
 Your investigators always see your real name. They cannot work a case while blind to who reported
 it, so the alias applies to public pages and shared documents only.
+
+## If your case is paused
+
+A paused case means the organization's subscription ended — nothing more. **Nothing you reported
+or they collected has been lost**, and all of it stays readable to you. If the group renews, the
+case resumes exactly where it left off. You will also be able to move your case to a different
+organization, choosing yourself what carries over — the history you reported, the investigations
+they ran — and anything you decide not to share stays private to the original case.

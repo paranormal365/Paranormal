@@ -69,6 +69,34 @@ public static class PeriodOpener
     }
 
     /// <summary>
+    /// Un-pauses exactly the cases a lapse paused, each back to its own prior status.
+    /// </summary>
+    /// <remarks>
+    /// <c>StatusBeforePause</c> is the marker AND the destination: only cases the lapse job
+    /// suspended carry it, so a case paused for any other future reason is left alone, and an
+    /// Active investigation resumes Active rather than a guessed default. Returns how many came
+    /// back, for the log line.
+    /// </remarks>
+    public static async Task<int> RestorePausedCasesAsync(
+        BenDataContext db, Guid organizationId, DateTime now, CancellationToken ct)
+    {
+        var pausedByLapse = await db.Cases
+            .Where(c => c.OrganizationId == organizationId
+                     && c.Status == CaseStatus.Paused
+                     && c.StatusBeforePause != null)
+            .ToListAsync(ct);
+
+        foreach (var c in pausedByLapse)
+        {
+            c.Status            = c.StatusBeforePause!.Value;
+            c.StatusBeforePause = null;
+            c.DateUpdated       = now;
+        }
+
+        return pausedByLapse.Count;
+    }
+
+    /// <summary>
     /// Removes any snapshot already covering <paramref name="periodStart"/> for this subscription,
     /// so re-setting the same period replaces its contract rather than stacking two.
     /// </summary>

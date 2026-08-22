@@ -499,6 +499,9 @@ public sealed class CaseController : BenControllerBase
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
             return NotFound();
 
+        // Item 84: a lapsed group reads everything and adds nothing — timeline entries included.
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
+
         var entry = new CaseTimelineEntry
         {
             Id                 = Guid.NewGuid(),

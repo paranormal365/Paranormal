@@ -118,7 +118,7 @@
 
     private static readonly CaseStatus?[] _filterOptions =
         [null, CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active,
-         CaseStatus.Summarized, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
+         CaseStatus.Summarized, CaseStatus.Paused, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
 
     private IEnumerable<CaseRecord> FilteredCases =>
         _activeFilter is null ? _cases! : _cases!.Where(c => c.Status == _activeFilter);

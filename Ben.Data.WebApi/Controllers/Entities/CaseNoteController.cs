@@ -19,8 +19,10 @@ public sealed class CaseNoteController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper, Services.Billing.SubscriptionLimitGuard limits)
+    { _db = db; _mapper = mapper; _limits = limits; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseNoteRecord>>> GetAll(
@@ -47,6 +49,7 @@ public sealed class CaseNoteController : BenControllerBase
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
             return NotFound("Case not found.");
         if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Body is required.");
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var note = new CaseNote
         {

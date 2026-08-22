@@ -356,6 +356,30 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    /// <summary>
+    /// Multipart upload that keeps the server's refusal sentence — the item-84 read-only refusal
+    /// arrives on file uploads too, and a null that discards "your subscription has ended" leaves
+    /// somebody staring at a generic failure while the real answer was one sentence long.
+    /// </summary>
+    public async Task<(TResponse? Result, string? Error)> PostMultipartExpectingReasonAsync<TResponse>(
+        string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = content;
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default)
         => PutAsync<UpdateUploadFileRequest, UploadFileRecord>($"/api/upload-files/{id}", request, token);
 

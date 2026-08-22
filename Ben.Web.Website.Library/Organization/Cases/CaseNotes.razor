@@ -193,12 +193,13 @@ else
         {
             var req = new UpsertCaseNoteDto(_formTitle?.Trim(), _formBody.Trim(), _formPinned);
             CaseNoteDto? result;
+            string? error = null;
             if (_editNote is null)
-                result = await AdminClient.CreateCaseNoteAsync(OrgId, CaseId, req);
+                (result, error) = await AdminClient.CreateCaseNoteAsync(OrgId, CaseId, req);
             else
                 result = await AdminClient.UpdateCaseNoteAsync(OrgId, CaseId, _editNote.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else
             {
                 _showDialog = false;

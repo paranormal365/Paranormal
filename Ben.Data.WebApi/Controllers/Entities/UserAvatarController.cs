@@ -253,6 +253,11 @@ public sealed class UserAvatarController : BenControllerBase
     /// Case states in which the client is still engaged with the organization. Excludes Closed,
     /// Transferred, Public and Haunted — those are finished files, not live working relationships.
     /// </summary>
+    /// <remarks>
+    /// Paused is IN: the relationship is suspended, not ended — both sides keep reading the case
+    /// and may resume it, and avatars going anonymous mid-pause would read as the other party
+    /// leaving. Item 84.
+    /// </remarks>
     private static readonly CaseStatus[] LiveCaseStatuses =
-        [CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active, CaseStatus.Summarized];
+        [CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active, CaseStatus.Summarized, CaseStatus.Paused];
 }

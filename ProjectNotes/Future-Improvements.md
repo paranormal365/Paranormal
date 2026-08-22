@@ -3796,7 +3796,22 @@ text reads well under real Telerik table layout before considering this fully do
 
 ---
 
-## 84. Organization subscription lapse, and what happens to their clients (not started, designed 2026-08-17)
+## 84. Organization subscription lapse, and what happens to their clients (SLICE 1 SHIPPED 2026-08-22; client reassignment remains)
+
+**Shipped (84a):** `CaseStatus.Paused` (= 8, appended; all 55 branch points audited — public
+surfaces were safe by allowlist construction, stats/avatars/filters fixed); `Case.StatusBeforePause`
+makes the pause a lossless round trip (Active resumes Active); `SubscriptionLapseJob` runs the
+whole clock — two-week warning to the billing people, one-week tell-your-clients prompt, then
+lapse + pause open cases + message each case's clients directly, all date-keyed idempotent so a
+renewal re-arms the warnings with no clearing code; `WhyReadOnlyAsync` on the guard makes a lapsed
+group read-only across the five capped creates plus timeline entries, case files (upload AND
+attach), notes, and org case messages — the client's own MyCase surface deliberately stays open;
+reactivation restores exactly the cases the lapse paused, via `PeriodOpener.RestorePausedCasesAsync`.
+Client banner on the paused case; help docs updated. 7 job tests, regressed two ways.
+
+**Remaining (84b):** the client choosing a new organization — extending `CaseTransferLog`'s
+Pending/Accepted flow for a client-initiated move, the per-category two-key consent (history /
+investigations), and dual-owned findings. The banner promises only what exists.
 
 Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
 Deferred with the rest of monetisation until the site's functionality and help documents are

@@ -33,12 +33,42 @@ public sealed class SubscriptionLimitGuard
     }
 
     /// <summary>
+    /// Why this group may not add records at all right now, or null when it may.
+    /// </summary>
+    /// <remarks>
+    /// <para>Item 84's read-only rule: a lapsed subscription keeps everything readable and stops
+    /// everything new. The test is <b>Status == Lapsed</b>, set by the lapse job — deliberately
+    /// not "period end has passed", because with manual billing a group that paid on Tuesday is
+    /// recorded on Thursday, and a wall-clock cutoff would read-only groups that paid on time.
+    /// The job is the arbiter; this only reads its verdict.</para>
+    ///
+    /// <para>Fail open like the caps: no subscription row is the free state, not the lapsed one.</para>
+    /// </remarks>
+    public async Task<string?> WhyReadOnlyAsync(Guid organizationId, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var lapsed = await db.OrganizationSubscriptions.AsNoTracking()
+            .AnyAsync(s => s.OrganizationId == organizationId
+                        && s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Lapsed, ct);
+
+        return lapsed
+            ? "Your group's subscription has ended, so nothing new can be added — everything "
+            + "already here stays readable. Renewing brings everything back exactly as it was."
+            : null;
+    }
+
+    /// <summary>
     /// Why this group may not add one more of <paramref name="limit"/>, or null when it may.
     /// </summary>
     /// <param name="currentCount">How many the group has now, counted by the caller.</param>
     public async Task<string?> WhyNotOneMoreAsync(
         Guid organizationId, SubscriptionLimit limit, int currentCount, CancellationToken ct)
     {
+        // Lapsed outranks any cap: "you are at your limit" would send somebody to upgrade a
+        // subscription that has actually ended.
+        if (await WhyReadOnlyAsync(organizationId, ct) is { } readOnly) return readOnly;
+
         var effective = await EffectiveLimitAsync(organizationId, limit, ct);
 
         if (effective.Max is null) return null;                    // uncapped, or nothing configured

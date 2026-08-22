@@ -229,6 +229,13 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         if (isNew) db.OrganizationSubscriptions.Add(sub);
         else { sub.DateUpdated = now; sub.UpdatedByAppUserId = userId; }
 
+        // Reactivation un-pauses what the lapse paused — and ONLY that. StatusBeforePause marks
+        // exactly the cases the lapse job suspended, each of which resumes its own prior status;
+        // a case paused for any other future reason has no marker and is left alone. This is the
+        // "everything comes back exactly as it was" half of item 84's promise.
+        if (before.Status == SubscriptionStatus.Lapsed && request.Status == SubscriptionStatus.Active)
+            await PeriodOpener.RestorePausedCasesAsync(db, organizationId, now, ct);
+
         await db.SaveChangesAsync(ct);
 
         if (isNew)
