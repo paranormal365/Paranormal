@@ -282,6 +282,12 @@ public sealed partial class BenAdminClientAdapter
         return result.Map(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName, m.MemberLevelId, m.MemberLevelName));
     }
 
+    /// <summary>The caller's own groups, membership rows only — the sidebar's list (item 159).
+    /// Never the SuperAdmin sees-all expansion; the token decides, which keeps impersonation
+    /// faithful for free.</summary>
+    public Task<LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyMembershipOrgItem>("/api/security/organizations/my-memberships", token);
+
     // ── Member-title ladder (item 157) ───────────────────────────────────────
 
     public Task<LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default)

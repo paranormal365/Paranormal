@@ -23,6 +23,7 @@ public interface IWebApiTokenStore
     string? OriginalRefreshToken { get; set; }
     Guid? OriginalUserId { get; set; }
     string? OriginalUserEmail { get; set; }
+    string? OriginalUserDisplayName { get; set; }
 
     /// <summary>
     /// True when the active session uses a Microsoft Entra access token.

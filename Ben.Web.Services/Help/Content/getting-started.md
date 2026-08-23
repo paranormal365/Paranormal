@@ -71,6 +71,9 @@ so it grows once you sign in and grows again if you run a group.
 Signed out it is a short list. Signed in, most of it is **grouped by subject**, so the menu stays
 about eight rows however much you can reach:
 
+- **Your groups come first.** Directly below Home sits a link to each group you belong to, by
+  name. Belong to more than five and they fold into one **Your Organizations** entry that opens
+  into the list — the menu stays a menu, however many groups you join.
 - **Notifications** and **Organizations** stay at the top level — you check those constantly, and
   they should not be behind anything.
 - **My Work** — your cases, your investigations, your requests.

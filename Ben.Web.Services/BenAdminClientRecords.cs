@@ -499,6 +499,9 @@ public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMembe
 public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null,
     Guid? MemberLevelId = null, string? MemberLevelName = null);
 
+/// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
+public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
+
 /// <summary>One rung of a group's member-title ladder (item 157). Seniority, never permission.</summary>
 public sealed record OrgMemberLevelItem(Guid Id, string Name, int SortOrder, bool IsActive);
 

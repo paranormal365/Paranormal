@@ -75,6 +75,28 @@ public class OrganizationMembershipController : BenControllerBase
         }));
     }
 
+    /// <summary>
+    /// The groups the caller actually belongs to — for the sidebar (item 159).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT <see cref="GetMyOrganizations"/>: that one expands to every organization
+    /// for a SuperAdmin, which is right for an admin list and wrong for a menu that says "your
+    /// groups". This reads membership rows only, so a SuperAdmin sees the groups they are a
+    /// member of, and an impersonated session sees the impersonated person's — the token decides,
+    /// which is the whole fidelity rule.
+    /// </remarks>
+    [HttpGet("my-memberships")]
+    public async Task<ActionResult<IEnumerable<MyMembershipOrganizationResponse>>> GetMyMembershipOrganizations(
+        CancellationToken cancellationToken)
+    {
+        var appUserId = GetCurrentUserIdOrThrow();
+        var organizations = await _organizationSecurityService.GetMembershipOrganizationsAsync(appUserId, cancellationToken);
+        return Ok(organizations.Select(o => new MyMembershipOrganizationResponse(o.Id, o.Name)));
+    }
+
+    /// <summary>One row of the caller's own groups, shaped for a navigation link.</summary>
+    public sealed record MyMembershipOrganizationResponse(Guid OrganizationId, string Name);
+
     /// <summary>Creates a new organization with the authenticated user as its <see cref="Ben.Data.Common.Enums.OrganizationMemberRole.Owner"/>.</summary>
     /// <param name="request">Name and URL slug for the new organization.</param>
     /// <param name="cancellationToken">Propagates cancellation from the HTTP request.</param>

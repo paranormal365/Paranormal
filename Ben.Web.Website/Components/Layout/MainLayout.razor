@@ -217,7 +217,13 @@
                     TokenStore.UserEmail,
                     TokenStore.UserId?.ToString(),
                     TokenStore.IsSuperAdmin,
-                    TokenStore.IsAdmin
+                    TokenStore.IsAdmin,
+                    TokenStore.IsImpersonating,
+                    TokenStore.OriginalAccessToken,
+                    TokenStore.OriginalRefreshToken,
+                    TokenStore.OriginalUserId?.ToString(),
+                    TokenStore.OriginalUserEmail,
+                    TokenStore.OriginalUserDisplayName
                 ));
             }
             else
@@ -244,6 +250,12 @@
                 TokenStore.UserId = Guid.TryParse(state.UserId, out var id) ? id : null;
                 TokenStore.IsSuperAdmin = state.IsSuperAdmin;
                 TokenStore.IsAdmin = state.IsAdmin;
+                TokenStore.IsImpersonating = state.IsImpersonating;
+                TokenStore.OriginalAccessToken = state.OriginalAccessToken;
+                TokenStore.OriginalRefreshToken = state.OriginalRefreshToken;
+                TokenStore.OriginalUserId = Guid.TryParse(state.OriginalUserId, out var origId) ? origId : null;
+                TokenStore.OriginalUserEmail = state.OriginalUserEmail;
+                TokenStore.OriginalUserDisplayName = state.OriginalUserDisplayName;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -268,7 +280,17 @@
         bool IsSuperAdmin,
         // Defaulted so a session persisted before this field existed still deserializes rather
         // than throwing the whole restore away and silently signing the user out.
-        bool IsAdmin = false
+        bool IsAdmin = false,
+        // Item 159: impersonation must survive a reload WITH its exit. Before these fields, a
+        // refresh mid-impersonation restored the impersonated token but dropped the banner and
+        // the SuperAdmin's original session — leaving them silently stuck as the other person
+        // until they logged out. Same defaulting rule as IsAdmin.
+        bool IsImpersonating = false,
+        string? OriginalAccessToken = null,
+        string? OriginalRefreshToken = null,
+        string? OriginalUserId = null,
+        string? OriginalUserEmail = null,
+        string? OriginalUserDisplayName = null
     );
 
 }

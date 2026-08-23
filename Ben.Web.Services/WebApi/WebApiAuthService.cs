@@ -109,6 +109,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.OriginalRefreshToken = _tokenStore.RefreshToken;
         _tokenStore.OriginalUserId = _tokenStore.UserId;
         _tokenStore.OriginalUserEmail = _tokenStore.UserEmail;
+        _tokenStore.OriginalUserDisplayName = _tokenStore.UserDisplayName;
 
         // Apply impersonated user's token
         ApplyTokenResponse(response);
@@ -125,6 +126,9 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.AccessToken = _tokenStore.OriginalAccessToken;
         _tokenStore.RefreshToken = _tokenStore.OriginalRefreshToken;
         _tokenStore.UserEmail = _tokenStore.OriginalUserEmail;
+        // The header's avatar reads this; without the restore it kept showing the impersonated
+        // person's initials after Return to SuperAdmin (item 159).
+        _tokenStore.UserDisplayName = _tokenStore.OriginalUserDisplayName;
         _tokenStore.UserId = _tokenStore.OriginalUserId;
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;

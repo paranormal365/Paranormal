@@ -172,6 +172,8 @@ public interface IBenOrganizationClient
     /// </remarks>
     Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
 
+    Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
+
     // ── Member-title ladder (item 157) — seniority, never permission ─────────
     Task<WebApi.LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgMemberLevelItem?> CreateMemberLevelAsync(Guid orgId, string name, int sortOrder, bool isActive, CancellationToken token = default);
