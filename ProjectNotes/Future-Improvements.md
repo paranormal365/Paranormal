@@ -8644,7 +8644,7 @@ fold with no scroll. Candidates: every TelerikGrid with an Actions template colu
   `AdminFileTypes`, `OrgCmsPageEdit`) turned out to be a modal or an in-place row swap,
   which bring themselves into view.
 
-## 170. Role editor offers grants over site-wide lookup tables (OPEN — found with Ben, 2026-08-23)
+## 170. Role editor offers grants over site-wide lookup tables (CLOSED 2026-08-23)
 
 Ben, mid-Phase-E review of the role editor: "Are the 'types' like address types specific to
 groups? I thought they were generalized."
@@ -8666,6 +8666,29 @@ role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warra
 `RolePermissionCoverageTests` to pin the corrected list. Caution: some type-like tables ARE
 per-org (calendar event types were seeded per-group in item 148) — each table needs its own
 verdict from the schema, not from its name.
+
+**Audited and fixed 2026-08-23.** The audit counted `HasAccessAsync`/`OrganizationSecurityTable`
+consumers per table across the WebApi and repository layers, and found TEN dead rows, not five:
+
+- The five `…Type` lookups (Address/Email/Phone/Link/Note Types): no OrganizationId column,
+  entity controllers read-only, writes SuperAdmin-only. Schema verdict pinned by a reflection
+  test (`Site_wide_lookup_tables_really_are_site_wide`).
+- Five more org-scoped tables whose CRUD is ALSO admin-only today with zero grant consumers:
+  **OrganizationEmail, OrganizationPhone, OrganizationLink, OrganizationNote,
+  OrganizationAddressSearch**. (The self-service contact work of 2026-08-15 was USER contact
+  info — `api/me/*` — never org contact rows; the org's public email/phone/website are plain
+  columns on Organization, gated by the Organization table.)
+
+The classification is a shared constant — `PermissionAreas.UngatedTables` — read by all three
+consumers so they cannot drift: the role editor (ten sections removed), `OrgRoleDefaults`
+(Historian now reads mapped-minus-ungated, so new groups stop seeding grants nothing consults),
+and `RolePermissionCoverageTests` (the every-table-assignable test skips them, and a REVERSE
+guard fails if any ungated table reappears in the editor — probe-verified). The area map stays
+total: the tables are excluded from GRANTING, not from existing. Existing groups' Historian
+rows still hold the old dead grants; they gate nothing and the editor's next save drops them.
+
+Restore path is deliberate friction: when a write path arrives for one of these tables, remove
+it from `UngatedTables` and the coverage guard demands its editor row back.
 
 ## 171. The group dashboard shows case counts to seats without case access (CLOSED 2026-08-23 — Ben: "the gates count as tabs")
 

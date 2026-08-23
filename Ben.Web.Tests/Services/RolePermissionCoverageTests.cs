@@ -48,6 +48,20 @@ public sealed class RolePermissionCoverageTests
         => name.StartsWith("User", StringComparison.Ordinal)
         || name == "AppUser";
 
+    /// <summary>
+    /// Tables no org-reachable write path consults (item 170), so a role grant on them gates
+    /// nothing and the editor must not offer one — the AppUser principle, applied wholesale.
+    /// </summary>
+    /// <remarks>
+    /// Two kinds. The five <c>…Type</c> tables are SITE-WIDE label lookups: no OrganizationId
+    /// column (pinned by <see cref="Site_wide_lookup_tables_really_are_site_wide"/>), written
+    /// only through the SuperAdmin admin screens. The other five are org-scoped rows whose
+    /// CRUD is likewise admin-only today — if self-service contact management ever ships, the
+    /// write path and the editor row return TOGETHER, and this set shrinks.
+    /// </remarks>
+    private static readonly HashSet<string> UngatedTables =
+        [.. Ben.Data.Common.Constants.PermissionAreas.UngatedTables.Select(t => t.ToString())];
+
     private static HashSet<string> TablesInEditor()
     {
         var block = Regex.Match(RoleEditorSource(), @"Sections =\s*\[(.*?)\n    \];", RegexOptions.Singleline);
@@ -66,7 +80,7 @@ public sealed class RolePermissionCoverageTests
         var inEditor = TablesInEditor();
 
         var missing = Enum.GetNames<OrganizationSecurityTable>()
-            .Where(name => !IsUserScoped(name))
+            .Where(name => !IsUserScoped(name) && !UngatedTables.Contains(name))
             .Where(name => !inEditor.Contains(name))
             .ToList();
 
@@ -74,6 +88,41 @@ public sealed class RolePermissionCoverageTests
             "These organization-scoped permissions have no row in OrgRoleEditor, so no role can ever "
             + "be granted them: " + string.Join(", ", missing)
             + ". Add a PermissionSection — with a description — for each.");
+    }
+
+    /// <summary>
+    /// The reverse guard for item 170: a table nothing consults must not reappear in the
+    /// editor — a toggle that grants nothing tells a role-builder something untrue.
+    /// </summary>
+    [Fact]
+    public void The_editor_offers_no_table_that_nothing_consults()
+    {
+        var offered = TablesInEditor().Where(UngatedTables.Contains).ToList();
+
+        Assert.True(offered.Count == 0,
+            "These tables are in UngatedTables (no org-reachable write path consults them) yet "
+            + "the role editor offers grants on them: " + string.Join(", ", offered)
+            + ". Either remove the row, or — if a write path now consults the table — remove it "
+            + "from UngatedTables so the first test demands the row instead.");
+    }
+
+    /// <summary>
+    /// The schema half of item 170's verdict: the five excluded …Type tables really are
+    /// site-wide — none carries an OrganizationId. If one ever becomes per-org, this fails and
+    /// the exclusion has to be re-argued rather than silently kept.
+    /// </summary>
+    [Fact]
+    public void Site_wide_lookup_tables_really_are_site_wide()
+    {
+        var entityAssembly = typeof(Ben.Data.Source.Entities.Organization).Assembly;
+        foreach (var name in new[]
+                 { "OrganizationAddressType", "OrganizationEmailType", "OrganizationPhoneType",
+                   "OrganizationLinkType", "OrganizationNoteType" })
+        {
+            var type = entityAssembly.GetType($"Ben.Data.Source.Entities.{name}");
+            Assert.NotNull(type);
+            Assert.Null(type!.GetProperty("OrganizationId"));
+        }
     }
 
     /// <summary>

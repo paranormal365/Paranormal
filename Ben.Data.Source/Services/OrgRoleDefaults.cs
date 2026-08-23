@@ -51,7 +51,11 @@ public static class OrgRoleDefaults
             [(OrganizationSecurityTable.OrganizationFiles, Crud), (OrganizationSecurityTable.CmsSection, ReadUpdate)]),
 
         ("Historian Role", "Reads everything, changes nothing: the group's memory.",
-            [.. PermissionAreas.Map.Keys.Select(t => (t, OrganizationSecurityAction.Read))]),
+            // Mapped tables minus the ungated ones (item 170): a grant nothing consults would
+            // sit in the role invisibly and be silently dropped on the editor's next save.
+            [.. PermissionAreas.Map.Keys
+                .Where(t => !PermissionAreas.UngatedTables.Contains(t))
+                .Select(t => (t, OrganizationSecurityAction.Read))]),
 
         ("Secretary Role", "Keeps the group running: the calendar, membership applications, and the group's own details.",
             [(OrganizationSecurityTable.OrgCalendar, Crud),

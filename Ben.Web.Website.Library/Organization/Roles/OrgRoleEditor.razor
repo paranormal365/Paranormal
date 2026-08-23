@@ -232,6 +232,12 @@ else if (_role is not null)
     [Parameter] public EventCallback OnSaved    { get; set; }
     [Parameter] public EventCallback OnCancelled { get; set; }
 
+    // Item 170: this list offers ONLY tables an org-reachable write path actually consults.
+    // Ten rows were removed 2026-08-23 — the five *Type lookup tables (site-wide labels, no
+    // OrganizationId column, written only by SuperAdmin admin screens) and five org tables
+    // whose CRUD is admin-only today (Emails, Phones, Links, Notes, Address Search). A toggle
+    // that grants nothing tells a role-builder something untrue. RolePermissionCoverageTests
+    // pins both directions; restore a row only together with the write path that reads it.
     private static readonly IReadOnlyList<PermissionSection> Sections =
     [
         new("Organization Settings",   OrganizationSecurityTable.Organization,            null,
@@ -240,28 +246,8 @@ else if (_role is not null)
             "Manage org-level display settings, such as whether the address map and directions link are shown."),
         new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null,
             "Manage the organization's street addresses."),
-        new("Address Types",           OrganizationSecurityTable.OrganizationAddressType, OrganizationSecurityTable.OrganizationAddress,
-            "Manage the labels available for addresses (e.g. \"Meeting Location\", \"Mailing\")."),
         new("Address: Member Access",  OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress,
             "Manage which specific members can see an address marked visible to Specific Members only."),
-        new("Address: Search Settings",OrganizationSecurityTable.OrganizationAddressSearch,       OrganizationSecurityTable.OrganizationAddress,
-            "Configure whether an address is searchable and its proximity search settings."),
-        new("Emails",                  OrganizationSecurityTable.OrganizationEmail,       null,
-            "Manage the organization's email addresses."),
-        new("Email Types",             OrganizationSecurityTable.OrganizationEmailType,   OrganizationSecurityTable.OrganizationEmail,
-            "Manage the labels available for email addresses (e.g. \"General\", \"Support\")."),
-        new("Phones",                  OrganizationSecurityTable.OrganizationPhone,       null,
-            "Manage the organization's phone numbers."),
-        new("Phone Types",             OrganizationSecurityTable.OrganizationPhoneType,   OrganizationSecurityTable.OrganizationPhone,
-            "Manage the labels available for phone numbers."),
-        new("Links",                   OrganizationSecurityTable.OrganizationLink,        null,
-            "Manage the organization's website and social links."),
-        new("Link Types",              OrganizationSecurityTable.OrganizationLinkType,    OrganizationSecurityTable.OrganizationLink,
-            "Manage the labels available for links (e.g. \"Website\", \"Facebook\")."),
-        new("Notes",                   OrganizationSecurityTable.OrganizationNote,        null,
-            "Manage internal notes kept about the organization."),
-        new("Note Types",              OrganizationSecurityTable.OrganizationNoteType,    OrganizationSecurityTable.OrganizationNote,
-            "Manage the labels available for notes."),
         new("Pages (CMS)",             OrganizationSecurityTable.OrganizationPage,        null,
             "Create and edit the organization's public CMS pages."),
         new("CMS Sections",            OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage,
