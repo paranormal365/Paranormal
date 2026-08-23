@@ -8270,3 +8270,25 @@ Live-verified: 3 tiers × 9 areas seeded; an uncheck survives reload; restored.
 
 Next: **Phase B** — role checks added ADDITIVELY to admin-only writes (calendar create, client
 request accept) so Secretary/Client Manager roles become useful with zero tightening.
+
+### Item 156 Phase B — SHIPPED 2026-08-23
+
+The three new permission surfaces do real work, strictly additively. Formerly admin-only writes
+became "admin OR the named grant": case Create and non-manager case Update (Case table); client
+request accept and decline (ClientRequest — accepting is handling the request; the case it opens
+is the consequence); calendar event-type CRUD per-action and the two attendee-management spots
+(OrgCalendar). Calendar events themselves were already member-open and stay that way — there was
+nothing to add. Every gate keeps the historical admin check in front and reads as what it is:
+the old rule OR the new one. A Case Manager Role, Client Manager Role, or Secretary Role built
+in the editor now actually does something.
+
+Five PhaseBAdditiveGrantTests through the REAL security service (grant opens the door for a
+plain member; no grant still Forbids; the admin path untouched; a grant on the WRONG table opens
+nothing — the per-table check matters; regressed by reverting the Create gate). Three existing
+test files updated for the new controller ctors. e2e: affected families green (one cold-host
+flake passed solo; the TierRoleAreas e2e now ENSURES its starting state instead of asserting it
+— a previous run's residue in the shared DB had turned one bad run into a permanently red test,
+and self-healing beats blame). Help: "What role grants open today."
+
+Next: **Phase C** — default roles at birth (the seven "… Role" templates), backfill, and the
+grandfathering decision Ben still owes an answer on.

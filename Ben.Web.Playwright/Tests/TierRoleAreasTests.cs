@@ -21,8 +21,19 @@ public class TierRoleAreasTests : BenTestBase
         var freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
         var calendar = freeRow.Locator("input[type=checkbox][id$='-9']");   // Calendar = 9
         await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        Assert.That(await calendar.IsCheckedAsync(), Is.True,
-            "Precondition: the seeded checklist is all-inclusive.");
+
+        // ENSURE the starting state rather than asserting it: a previous run that died between
+        // uncheck and restore leaves residue in the shared database, and an asserted
+        // precondition turns one bad run into a permanently red test. Self-healing beats blame.
+        if (!await calendar.IsCheckedAsync())
+        {
+            await calendar.CheckAsync();
+            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 15_000 });
+            await Page.ReloadAsync();
+            await WaitUntilLoadedAsync();
+            freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
+            calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
+        }
 
         try
         {

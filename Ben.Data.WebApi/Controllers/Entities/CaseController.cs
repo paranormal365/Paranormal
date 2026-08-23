@@ -28,12 +28,29 @@ public sealed class CaseController : BenControllerBase
 
     public CaseController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
-        Services.Billing.SubscriptionLimitGuard limits)
+        Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _mapper = mapper;
         _limits = limits;
+        _security = security;
     }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    /// <summary>
+    /// Admin-or-role, the Phase B shape (item 156): the historical admin gate stays exactly as
+    /// it was, and a custom-role grant on the named table now ALSO opens the door. Purely
+    /// additive — nobody loses anything, and a Case Manager Role or Client Manager Role becomes
+    /// real. Owner/Administrator/SuperAdmin still pass through HasAccessAsync's own bypass, but
+    /// the explicit admin check is kept in front so this reads as what it is: the old rule OR
+    /// the new one.
+    /// </summary>
+    private async Task<bool> IsAdminOrHasAsync(
+        Guid orgId, OrganizationSecurityTable table, OrganizationSecurityAction action, CancellationToken ct)
+        => await IsOrgAdminOrSuperAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId, table, action, ct);
 
     /// <summary>
     /// The subscription cap on concurrent work. Closed and later statuses do not count —
@@ -141,7 +158,7 @@ public sealed class CaseController : BenControllerBase
     public async Task<ActionResult<CaseRecord>> Create(
         Guid orgId, [FromBody] CreateCaseRequest request, CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Create, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -237,7 +254,7 @@ public sealed class CaseController : BenControllerBase
     [HttpPost("decline-request/{clientRequestId:guid}")]
     public async Task<ActionResult> DeclineClientRequest(Guid orgId, Guid clientRequestId, CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.ClientRequest, OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var application = await db.ClientRequestOrganizations
@@ -280,7 +297,7 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid clientRequestId, [FromBody] AcceptClientRequestAsCaseRequest request,
         CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.ClientRequest, OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -385,7 +402,7 @@ public sealed class CaseController : BenControllerBase
 
         // Case manager can update their own case; org admin/super can update any
         bool isCaseManager = entity.CaseManagerAppUserId == userId;
-        if (!isCaseManager && !await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!isCaseManager && !await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct)) return Forbid();
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
         entity.Description          = request.Description?.Trim();

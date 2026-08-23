@@ -21,8 +21,18 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public OrgCalendarEventTypeController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    public OrgCalendarEventTypeController(IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _mapper = mapper; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    /// <summary>Phase B additive gate (item 156): the old admin rule OR a Calendar role grant.</summary>
+    private async Task<bool> IsAdminOrHasAsync(
+        Guid orgId, OrganizationSecurityAction action, CancellationToken ct)
+        => await IsOrgAdminAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.OrgCalendar, action, ct);
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrgCalendarEventTypeRecord>>> GetAll(
@@ -40,7 +50,7 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
     public async Task<ActionResult<OrgCalendarEventTypeRecord>> Create(
         Guid orgId, [FromBody] UpsertCalendarEventTypeRequest request, CancellationToken ct)
     {
-        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityAction.Create, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = new OrgCalendarEventType
@@ -60,7 +70,7 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
     public async Task<ActionResult<OrgCalendarEventTypeRecord>> Update(
         Guid orgId, Guid id, [FromBody] UpsertCalendarEventTypeRequest request, CancellationToken ct)
     {
-        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = await db.OrgCalendarEventTypes
@@ -77,7 +87,7 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid id, CancellationToken ct)
     {
-        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityAction.Delete, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = await db.OrgCalendarEventTypes
             .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == orgId, ct);
@@ -113,8 +123,19 @@ public sealed class OrgCalendarEventController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public OrgCalendarEventController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    public OrgCalendarEventController(IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _mapper = mapper;  _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    /// <summary>Phase B additive gate (item 156): the old admin rule OR a Calendar role grant.
+    /// Event create/update/delete are member-open already and stay that way — this covers the
+    /// two attendee-management spots that were admin-only.</summary>
+    private async Task<bool> IsAdminOrHasAsync(Guid orgId, CancellationToken ct)
+        => await IsOrgAdminAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.OrgCalendar, OrganizationSecurityAction.Update, ct);
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrgCalendarEventRecord>>> GetAll(
@@ -437,7 +458,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
         if (attendee is null) return NotFound();
         // Only the attendee themselves or an org admin can update RSVP
-        if (attendee.AppUserId != userId && !await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        if (attendee.AppUserId != userId && !await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         attendee.RsvpStatus = request.RsvpStatus;
         attendee.DateRsvp   = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -450,7 +471,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
     public async Task<IActionResult> RemoveAttendee(
         Guid orgId, Guid eventId, Guid attendeeId, CancellationToken ct)
     {
-        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var attendee = await db.OrgCalendarEventAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);

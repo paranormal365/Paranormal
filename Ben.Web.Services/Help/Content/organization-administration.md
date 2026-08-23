@@ -50,6 +50,16 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+## What role grants open today
+
+Three of the role editor's sections started doing real work with the roles arc's Phase B:
+**Cases** (creating a case, and editing one you don't manage), **Client Requests** (accepting or
+declining what clients send in), and **Calendar** (event types, and managing other people's
+attendance). Each is strictly additive: owners and administrators keep everything they had, and
+a role grant now opens the same doors for the members who hold it. Nothing was taken from
+anyone — the grants only add. The remaining sections' grants become decisive as the later
+phases land; each section's own description says where it stands.
+
 ## Member titles — the ladder
 
 Separate from roles, on purpose: a **title** says how senior somebody is in the group — a
