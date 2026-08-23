@@ -70,23 +70,24 @@ public class Phase6AdapterTests
         var caseId = Guid.NewGuid();
         var toOrg  = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<object, CaseTransferLogRecord>(
-                $"/api/organizations/{orgId}/cases/{caseId}/transfers",
+        api.Setup(x => x.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+                HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/transfers",
                 It.IsAny<object>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new CaseTransferLogRecord
+           .ReturnsAsync((new CaseTransferLogRecord
            {
                Id = Guid.NewGuid(), CaseId = caseId,
                FromOrganizationId = orgId, ToOrganizationId = toOrg,
                ProposedByAppUserId = Guid.NewGuid(), Status = CaseTransferStatus.Pending,
                DateProposed = DateTime.UtcNow,
-           });
+           }, (string?)null));
 
-        var result = await Build(api).ProposeCaseTransferAsync(orgId, caseId, toOrg, "Org closing.");
+        var (result, error) = await Build(api).ProposeCaseTransferAsync(orgId, caseId, toOrg, "Org closing.");
 
+        Assert.Null(error);
         Assert.Equal(CaseTransferStatus.Pending, result!.Status);
-        api.Verify(x => x.PostAsync<object, CaseTransferLogRecord>(
-            $"/api/organizations/{orgId}/cases/{caseId}/transfers",
+        api.Verify(x => x.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/transfers",
             It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -97,23 +98,24 @@ public class Phase6AdapterTests
         var caseId = Guid.NewGuid();
         var logId  = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PutAsync<object, CaseTransferLogRecord>(
-                $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
+        api.Setup(x => x.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+                HttpMethod.Put, $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
                 It.IsAny<object>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new CaseTransferLogRecord
+           .ReturnsAsync((new CaseTransferLogRecord
            {
                Id = logId, CaseId = caseId,
                FromOrganizationId = Guid.NewGuid(), ToOrganizationId = orgId,
                ProposedByAppUserId = Guid.NewGuid(), Status = CaseTransferStatus.Accepted,
                DateProposed = DateTime.UtcNow, DateResponded = DateTime.UtcNow,
-           });
+           }, (string?)null));
 
-        var result = await Build(api).RespondCaseTransferAsync(orgId, caseId, logId, true, null);
+        var (result, error) = await Build(api).RespondCaseTransferAsync(orgId, caseId, logId, true, null);
 
+        Assert.Null(error);
         Assert.Equal(CaseTransferStatus.Accepted, result!.Status);
-        api.Verify(x => x.PutAsync<object, CaseTransferLogRecord>(
-            $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
+        api.Verify(x => x.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
             It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 

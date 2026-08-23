@@ -107,6 +107,28 @@ public static class TierChangeAnalyzer
         => $"Custom-role permissions for {AreaNoun(area)} are no longer included in the plan. "
          + "Existing role grants in that area stop applying but are kept, and resume if the area returns.";
 
+    /// <summary>One capability's removal sentence, exact-matched by the netting.</summary>
+    public static string CapabilityReductionSentence(TierCapability capability)
+        => $"{CapabilityNoun(capability)} are no longer included in the plan. "
+         + CapabilityConsequence(capability);
+
+    /// <summary>One capability's addition sentence.</summary>
+    public static string CapabilityImprovementSentence(TierCapability capability)
+        => $"{CapabilityNoun(capability)} are now included in the plan.";
+
+    private static string CapabilityNoun(TierCapability capability) => capability switch
+    {
+        TierCapability.CaseTransfers => "Case transfers",
+        _ => capability.ToString(),
+    };
+
+    private static string CapabilityConsequence(TierCapability capability) => capability switch
+    {
+        TierCapability.CaseTransfers =>
+            "Cases can neither be sent to another group nor accepted from one; existing cases are unaffected.",
+        _ => "",
+    };
+
     /// <summary>One area's addition sentence.</summary>
     public static string AreaImprovementSentence(OrganizationPermissionArea area)
         => $"Custom-role permissions for {AreaNoun(area)} are now included in the plan.";

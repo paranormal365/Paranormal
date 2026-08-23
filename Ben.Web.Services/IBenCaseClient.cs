@@ -35,8 +35,10 @@ public interface IBenCaseClient
 
     /// <summary>Transfers waiting on this organization's answer — case not yet theirs.</summary>
     Task<LoadResult<IncomingTransferRecord>> GetIncomingTransfersAsync(Guid orgId, CancellationToken token = default);
-    Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
-    Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
+    /// <summary>Refusal-carrying (item 167): a plan without case transfers answers with a
+    /// sentence worth showing, not a null that renders as "Proposal failed."</summary>
+    Task<(CaseTransferLogRecord? Result, string? Error)> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
+    Task<(CaseTransferLogRecord? Result, string? Error)> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
     /// <summary>Cancels an outgoing pending transfer proposed by this org. Only the proposing org can cancel.</summary>
     Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default);
 

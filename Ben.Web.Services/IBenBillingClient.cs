@@ -19,6 +19,7 @@ public interface IBenBillingClient
     /// <summary>Every band with its per-cadence prices and caps, in display order.</summary>
     Task<LoadResult<SubscriptionTierAdminRecord>> GetSubscriptionTiersAsync(CancellationToken token = default);
     Task<(SubscriptionTierAdminRecord? Result, string? Error)> SetTierPermissionAreasAsync(Guid tierId, IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> areas, CancellationToken token = default);
+    Task<(SubscriptionTierAdminRecord? Result, string? Error)> SetTierCapabilitiesAsync(Guid tierId, IReadOnlyList<Ben.Data.Common.Enums.TierCapability> capabilities, CancellationToken token = default);
 
     /// <summary>What is wrong with the price list as it stands, or null when it is sound.</summary>
     Task<string?> GetTierValidationAsync(CancellationToken token = default);

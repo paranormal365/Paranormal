@@ -139,14 +139,42 @@ public sealed class TierChangeNotifier
     /// undelivered notice, and only the areas with nothing left to cancel are announced as
     /// improvements. An uncheck-then-recheck therefore sends nothing at all.
     /// </summary>
-    public async Task ApplyAreaChangesAsync(
+    public Task ApplyAreaChangesAsync(
         Guid tierId, string tierName,
         IReadOnlySet<OrganizationPermissionArea> oldAreas,
         IReadOnlySet<OrganizationPermissionArea> newAreas,
         Guid editorUserId, CancellationToken ct)
+        => ApplyNettedAsync(tierId, tierName,
+            removed: [.. oldAreas.Except(newAreas).OrderBy(a => (int)a)
+                .Select(a => (TierChangeAnalyzer.AreaReductionSentence(a), TierChangeAnalyzer.AreaImprovementSentence(a)))],
+            added: [.. newAreas.Except(oldAreas).OrderBy(a => (int)a)
+                .Select(a => (TierChangeAnalyzer.AreaReductionSentence(a), TierChangeAnalyzer.AreaImprovementSentence(a)))],
+            editorUserId, ct);
+
+    /// <summary>The capabilities checklist's fan-out (item 167) — same netting as the areas.</summary>
+    public Task ApplyCapabilityChangesAsync(
+        Guid tierId, string tierName,
+        IReadOnlySet<TierCapability> oldCapabilities,
+        IReadOnlySet<TierCapability> newCapabilities,
+        Guid editorUserId, CancellationToken ct)
+        => ApplyNettedAsync(tierId, tierName,
+            removed: [.. oldCapabilities.Except(newCapabilities).OrderBy(c => (int)c)
+                .Select(c => (TierChangeAnalyzer.CapabilityReductionSentence(c), TierChangeAnalyzer.CapabilityImprovementSentence(c)))],
+            added: [.. newCapabilities.Except(oldCapabilities).OrderBy(c => (int)c)
+                .Select(c => (TierChangeAnalyzer.CapabilityReductionSentence(c), TierChangeAnalyzer.CapabilityImprovementSentence(c)))],
+            editorUserId, ct);
+
+    /// <summary>
+    /// The shared netting core: each change is a (reduction, improvement) sentence pair.
+    /// Removals QUEUE their reduction sentence; additions first cancel a pending matching
+    /// reduction per org, and only what had nothing to cancel is announced as an improvement.
+    /// </summary>
+    private async Task ApplyNettedAsync(
+        Guid tierId, string tierName,
+        IReadOnlyList<(string Reduction, string Improvement)> removed,
+        IReadOnlyList<(string Reduction, string Improvement)> added,
+        Guid editorUserId, CancellationToken ct)
     {
-        var removed = oldAreas.Except(newAreas).OrderBy(a => (int)a).ToList();
-        var added   = newAreas.Except(oldAreas).OrderBy(a => (int)a).ToList();
         if (removed.Count == 0 && added.Count == 0) return;
 
         var (free, paid) = await AffectedAsync(tierId, ct);
@@ -157,7 +185,7 @@ public sealed class TierChangeNotifier
         // ── Re-adds cancel their own pending removal, per org ───────────────────
         // Which added areas still need announcing differs per org: one org's removal notice may
         // already be delivered while another's is still pending.
-        var toAnnounce = new Dictionary<Guid, List<OrganizationPermissionArea>>();
+        var toAnnounce = new Dictionary<Guid, List<string>>();
         if (added.Count > 0)
         {
             var orgIds = free.Concat(paid).Select(sub => sub.OrganizationId).ToList();
@@ -169,18 +197,17 @@ public sealed class TierChangeNotifier
 
             foreach (var orgId in orgIds)
             {
-                var announce = new List<OrganizationPermissionArea>();
-                foreach (var area in added)
+                var announce = new List<string>();
+                foreach (var (reduction, improvement) in added)
                 {
-                    var sentence = TierChangeAnalyzer.AreaReductionSentence(area);
                     var holder = pending.FirstOrDefault(n => n.OrganizationId == orgId
-                        && n.Sentences.Split('\n').Contains(sentence));
+                        && n.Sentences.Split('\n').Contains(reduction));
                     if (holder is null)
                     {
-                        announce.Add(area);
+                        announce.Add(improvement);
                         continue;
                     }
-                    var rest = holder.Sentences.Split('\n').Where(l => l != sentence).ToList();
+                    var rest = holder.Sentences.Split('\n').Where(l => l != reduction).ToList();
                     if (rest.Count == 0) db.TierChangeNotices.Remove(holder);
                     else { holder.Sentences = string.Join('\n', rest); holder.DateUpdated = now; }
                 }
@@ -191,7 +218,7 @@ public sealed class TierChangeNotifier
         // ── Removals queue one notice per org ───────────────────────────────────
         if (removed.Count > 0)
         {
-            var sentences = string.Join('\n', removed.Select(TierChangeAnalyzer.AreaReductionSentence));
+            var sentences = string.Join('\n', removed.Select(r => r.Reduction));
 
             foreach (var sub in free)
                 db.TierChangeNotices.Add(new TierChangeNotice
@@ -222,9 +249,9 @@ public sealed class TierChangeNotifier
         await db.SaveChangesAsync(ct);
 
         // ── Only the un-netted additions are announced, immediately ─────────────
-        foreach (var (orgId, areas) in toAnnounce)
+        foreach (var (orgId, sentencesToSend) in toAnnounce)
             await SendNowAsync(orgId, tierName,
-                [.. areas.Select(a => new TierChange(true, TierChangeAnalyzer.AreaImprovementSentence(a)))],
+                [.. sentencesToSend.Select(t => new TierChange(true, t))],
                 editorUserId, ct);
     }
 

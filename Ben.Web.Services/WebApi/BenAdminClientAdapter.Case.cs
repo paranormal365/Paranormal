@@ -40,14 +40,14 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseTransferLogRecord>($"/api/organizations/{orgId}/cases/{caseId}/transfers", token);
 
-    public Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default)
-        => _api.PostAsync<object, CaseTransferLogRecord>(
-               $"/api/organizations/{orgId}/cases/{caseId}/transfers",
+    public Task<(CaseTransferLogRecord? Result, string? Error)> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/transfers",
                new { ToOrganizationId = toOrganizationId, TransferReason = reason }, token);
 
-    public Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default)
-        => _api.PutAsync<object, CaseTransferLogRecord>(
-               $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
+    public Task<(CaseTransferLogRecord? Result, string? Error)> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, CaseTransferLogRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
                new { Accept = accept, Reason = rejectionReason }, token);
 
     public Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default)

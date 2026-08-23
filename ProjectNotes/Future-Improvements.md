@@ -8445,7 +8445,7 @@ surfaces; PDF regen; item 166 closed with a per-phase record.
 W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
 dependency on 156 at all.
 
-## 167. Free-plan groups cannot transfer or accept transferred cases (OPEN — Ben, 2026-08-23)
+## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
 Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
 out nor accept a case transferred in. Both ends checked — a paid group must not be able to hand
@@ -8456,6 +8456,36 @@ is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
 a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
 the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
 Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
+
+**Built 2026-08-23, with one design correction found before it shipped.** `TierCapability`
+enum + `SubscriptionTierExcludedCapability` EXCLUSION rows — not inclusion rows like the areas,
+because with a single capability defined, an include-model cannot tell "never configured" from
+"explicitly none": unchecking the only capability leaves zero rows, which fail-open reads as
+everything-included, and the uncheck silently does nothing. Exclusions make fail-open
+structural (zero rows = nothing excluded), need no seeding or backfill at all, and excluding
+the one capability writes exactly one row.
+
+- `TierAreaResolution.HasCapabilityAsync` (shared `EffectiveTierAsync` core with the areas).
+- Three gates: org-Propose checks BOTH ends; Respond-accept re-checks the receiver at the
+  moment the case actually moves (the plan may have changed while the proposal waited);
+  rejecting never requires the capability. The client's own move (`MyCaseController.Reassign`)
+  is gated ONLY on the destination — a free plan must not hold a client's case hostage.
+- The refusal sentences actually SURFACE: Propose/Respond adapters moved to
+  `SendExpectingReasonAsync` (they were null-on-refusal → "Proposal failed", the exact
+  server-guard-needs-a-UI-path trap, caught in review); the client-move path already carried
+  reasons.
+- Admin: Capabilities checklist beside the role areas (save-per-toggle), PUT
+  `{id}/capabilities`; notices ride the SAME netting as areas — `ApplyNettedAsync` extracted
+  to a sentence-pair core, capability flip-flops reach groups as silence.
+- Pricing: `IncludedCapabilities` (null = everything) + "Not included: Case transfers" on the
+  card, anonymous-path verified. Help: site-administration checklist section + a case-transfer
+  passage in working-a-case (transfers had NO help coverage at all before); PDF regenerated.
+- Tests: 3 gate tests + reject-allowed (all three gates probe-regressed), netting ×2,
+  pricing projection, 3,000 unit green. Live: the Free tier now genuinely excludes Case
+  transfers — that IS the rule, left in place — and a real transfer proposal to a free-band
+  group answers 400 "That group's plan (Free) does not include case transfers…" with nothing
+  mutated. Test-writing also caught that a lone valid tier captures unsubscribed orgs via
+  member-count resolution — both test orgs get explicit subscription rows.
 
 ### Item 156 Phase D — SHIPPED 2026-08-23 (the enforcement flip)
 

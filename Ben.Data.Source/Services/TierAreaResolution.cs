@@ -35,32 +35,8 @@ public static class TierAreaResolution
     public static async Task<(IReadOnlySet<OrganizationPermissionArea> Areas, string? TierName)>
         ResolveAsync(BenDataContext db, Guid organizationId, CancellationToken ct = default)
     {
-        var sub = await db.OrganizationSubscriptions.AsNoTracking()
-            .Where(s => s.OrganizationId == organizationId)
-            .OrderByDescending(s => s.DateCreated)
-            .FirstOrDefaultAsync(ct);
-
-        Guid? tierId = sub?.SubscriptionTierId;
-        string? tierName = null;
-        if (tierId is null)
-        {
-            var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
-            if (tiers.Count == 0 || SubscriptionTierResolver.Validate(tiers) is not null)
-                return (All, null);
-
-            var members = await db.OrganizationUserMemberships.AsNoTracking()
-                .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-            var resolved = SubscriptionTierResolver.Resolve(tiers, members);
-            tierId   = resolved.Id;
-            tierName = resolved.Name;
-        }
-        else
-        {
-            tierName = await db.SubscriptionTiers.AsNoTracking()
-                .Where(t => t.Id == tierId)
-                .Select(t => t.Name)
-                .FirstOrDefaultAsync(ct);
-        }
+        var (tierId, tierName) = await EffectiveTierAsync(db, organizationId, ct);
+        if (tierId is null) return (All, null);
 
         var areas = await db.SubscriptionTierPermissionAreas.AsNoTracking()
             .Where(a => a.SubscriptionTierId == tierId)
@@ -68,6 +44,56 @@ public static class TierAreaResolution
             .ToListAsync(ct);
 
         return (areas.Count == 0 ? All : areas.ToHashSet(), tierName);
+    }
+
+    /// <summary>
+    /// Whether this group's plan includes a capability (item 167). Capabilities are stored as
+    /// EXCLUSION rows, so the fail-open property is structural: no resolvable tier, or a tier
+    /// nobody has excluded anything from, reads as everything-included — only a row that SAYS
+    /// so may take a capability away.
+    /// </summary>
+    public static async Task<(bool Included, string? TierName)> HasCapabilityAsync(
+        BenDataContext db, Guid organizationId, TierCapability capability, CancellationToken ct = default)
+    {
+        var (tierId, tierName) = await EffectiveTierAsync(db, organizationId, ct);
+        if (tierId is null) return (true, null);
+
+        var excluded = await db.SubscriptionTierExcludedCapabilities.AsNoTracking()
+            .AnyAsync(c => c.SubscriptionTierId == tierId && c.Capability == capability, ct);
+
+        return (!excluded, tierName);
+    }
+
+    /// <summary>
+    /// The tier that governs this group: its subscription row's tier when one exists, else the
+    /// band its member count lands in. (null, null) means the fail-open rules answer
+    /// everything-included without landing on a tier at all.
+    /// </summary>
+    private static async Task<(Guid? TierId, string? TierName)> EffectiveTierAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+    {
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .Where(s => s.OrganizationId == organizationId)
+            .OrderByDescending(s => s.DateCreated)
+            .FirstOrDefaultAsync(ct);
+
+        if (sub?.SubscriptionTierId is { } tierId)
+        {
+            var tierName = await db.SubscriptionTiers.AsNoTracking()
+                .Where(t => t.Id == tierId)
+                .Select(t => t.Name)
+                .FirstOrDefaultAsync(ct);
+            return (tierId, tierName);
+        }
+
+        var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
+        if (tiers.Count == 0 || SubscriptionTierResolver.Validate(tiers) is not null)
+            return (null, null);
+
+        var members = await db.OrganizationUserMemberships.AsNoTracking()
+            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
+        var resolved = SubscriptionTierResolver.Resolve(tiers, members);
+        return (resolved.Id, resolved.Name);
     }
 
     /// <summary>Whether one table's area is included. User-scoped tables are never tier-gated.</summary>

@@ -259,6 +259,13 @@ previous group's work: the client decides whether their collected history and pa
 travel with the case, and that choice is theirs, not the previous group's. Accepting gives the
 case a fresh number in your group and makes it active again; the client is told either way.
 
+**Case transfers follow your plan.** A group whose plan doesn't include case transfers can
+neither send a case to another group nor accept one in — both ends are checked, so a case also
+can't be handed *to* such a group. The refusal says exactly that when it applies, existing cases
+are never affected, and declining an incoming transfer is always allowed. A client moving their
+own paused case is never blocked by their current group's plan — only the destination's plan
+matters for their move. The Pricing page shows what each plan includes.
+
 ## Evidence from people who attended a public event
 
 Anyone who attended one of your public events can offer what they captured — audio, photos, video

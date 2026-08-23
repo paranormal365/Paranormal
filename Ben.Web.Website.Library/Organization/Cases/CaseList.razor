@@ -187,13 +187,17 @@
 
         // Declining without a word helps nobody — the platform relays the reason to whoever
         // asked, so a bare decline gets a serviceable default sentence.
-        var result = await AdminClient.RespondCaseTransferAsync(
+        var (result, error) = await AdminClient.RespondCaseTransferAsync(
             OrgId, t.CaseId, t.LogId, accept,
             accept ? null : "The group is unable to take this case on at the moment.");
 
         _incomingBusy = false;
 
-        if (result is null) { _incomingError = "That couldn't be recorded — it may already have been answered."; return; }
+        if (result is null)
+        {
+            _incomingError = error ?? "That couldn't be recorded — it may already have been answered.";
+            return;
+        }
 
         await LoadAsync();
     }

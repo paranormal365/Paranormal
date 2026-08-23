@@ -260,6 +260,16 @@ Unchecking saves per click, so the group-facing notices are **netted**: a remova
 the area before delivery cancels the pending notice — an accidental toggle reaches the groups as
 silence, not as two contradictory messages. Newly included areas are announced right away.
 
+### Capabilities on a price band
+
+Beside the role areas sits a **Capabilities** checklist — plain may-or-may-not switches, the
+first being **Case transfers**. A band without it can neither send a case to another group nor
+accept one transferred in, and both ends are enforced: a case can't be handed TO a group whose
+band lacks it either. Existing cases are unaffected; declining an incoming transfer never
+requires the capability. Changes save per click and notify the affected groups through the same
+netted notices as the role areas, and the public Pricing page says plainly what a band leaves
+out.
+
 
 **Administration → Billing** holds three screens.
 

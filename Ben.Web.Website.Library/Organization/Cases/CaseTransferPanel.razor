@@ -195,9 +195,9 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var result = await AdminClient.ProposeCaseTransferAsync(OrgId, CaseId, _proposeToOrgId,
+            var (result, error) = await AdminClient.ProposeCaseTransferAsync(OrgId, CaseId, _proposeToOrgId,
                 string.IsNullOrWhiteSpace(_proposeReason) ? null : _proposeReason.Trim());
-            if (result is null) { _dialogError = "Proposal failed."; }
+            if (result is null) { _dialogError = error ?? "Proposal failed."; }
             else { _showProposeDialog = false; await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
@@ -219,10 +219,10 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var result = await AdminClient.RespondCaseTransferAsync(OrgId, CaseId, _respondTransfer.Id,
+            var (result, error) = await AdminClient.RespondCaseTransferAsync(OrgId, CaseId, _respondTransfer.Id,
                 _respondAccept,
                 !_respondAccept && !string.IsNullOrWhiteSpace(_rejectReason) ? _rejectReason.Trim() : null);
-            if (result is null) { _dialogError = "Response failed."; }
+            if (result is null) { _dialogError = error ?? "Response failed."; }
             else { _showRespondDialog = false; await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }

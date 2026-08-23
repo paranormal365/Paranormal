@@ -748,6 +748,18 @@ public sealed class MyCaseController : BenControllerBase
                 l.CaseId == caseId && l.Status == CaseTransferStatus.Pending, ct))
             return BadRequest("A move is already waiting for an answer. Cancel it first, or wait.");
 
+        // ── Item 167, the RECEIVING end only ─────────────────────────────────────
+        // The case is the client's, so the CURRENT group's plan never blocks their move —
+        // a free plan must not hold a client's case hostage. But the destination is a group
+        // choosing to take on transferred work, and that is exactly what its plan governs.
+        // Told at pick time rather than left to fail at the group's accept.
+        var (receiverMay, receiverTier) = await Ben.Data.Source.Services.TierAreaResolution
+            .HasCapabilityAsync(db, request.ToOrganizationId, Ben.Data.Common.Enums.TierCapability.CaseTransfers, ct);
+        if (!receiverMay)
+            return BadRequest(
+                $"That group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
+                + "transfers, so they cannot take this case on. Pick a different group, or ask them about upgrading.");
+
         db.CaseTransferLogs.Add(new CaseTransferLog
         {
             Id                  = Guid.NewGuid(),

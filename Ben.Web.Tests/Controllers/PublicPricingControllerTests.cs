@@ -77,4 +77,33 @@ public sealed class PublicPricingControllerTests
         var large = Assert.Single(tiers, t => t.Id == secondId);
         Assert.Null(large.IncludedAreas); // zero rows = everything included, said as null
     }
+
+    [Fact]
+    public async Task A_capability_exclusion_arrives_as_the_reduced_inclusion_list()
+    {
+        var factory = CreateFactory();
+        var (firstId, secondId) = await SeedTiersAsync(factory);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+            {
+                SubscriptionTierId = firstId, Capability = TierCapability.CaseTransfers,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await new PublicPricingController(factory).GetTiers(CancellationToken.None);
+        var tiers  = Assert.IsAssignableFrom<IEnumerable<PublicSubscriptionTier>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        // The excluding tier lists what remains (nothing, today, with one capability defined);
+        // the untouched tier says null — everything included.
+        var small = Assert.Single(tiers, t => t.Id == firstId);
+        Assert.NotNull(small.IncludedCapabilities);
+        Assert.DoesNotContain(TierCapability.CaseTransfers, small.IncludedCapabilities);
+
+        var large = Assert.Single(tiers, t => t.Id == secondId);
+        Assert.Null(large.IncludedCapabilities);
+    }
 }

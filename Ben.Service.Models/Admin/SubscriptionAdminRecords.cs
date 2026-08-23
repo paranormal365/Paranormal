@@ -37,11 +37,17 @@ public record SubscriptionTierAdminRecord(
     int OrganizationCount,
     // Item 156 Phase A: the checklist of permission areas this tier includes. Defaulted so
     // callers written before the field existed keep deserializing.
-    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null);
+    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null,
+    // Item 167: the checklist of capabilities (case transfers, …), same contract.
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null);
 
 /// <summary>Replaces a tier's included-areas checklist (item 156 Phase A).</summary>
 public sealed record SetTierPermissionAreasRequest(
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas);
+
+/// <summary>The whole capabilities checklist to write over a tier (item 167).</summary>
+public sealed record SetTierCapabilitiesRequest(
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability> Capabilities);
 
 /// <summary>A price to write, as the editor sends it.</summary>
 public record SaveTierPriceRequest(BillingInterval Interval, decimal Price, bool IsActive);

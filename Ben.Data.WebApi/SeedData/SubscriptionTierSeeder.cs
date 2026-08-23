@@ -84,6 +84,7 @@ internal static class SubscriptionTierSeeder
             }
         }
 
+
         // Populated already — including deliberately emptied — is left as it is. See remarks.
         if (await db.SubscriptionTiers.AnyAsync()) return;
 
