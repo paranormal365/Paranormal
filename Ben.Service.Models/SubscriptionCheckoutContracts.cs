@@ -54,7 +54,8 @@ public record PublicSubscriptionTier(
     int MinMembers,
     int? MaxMembers,
     IReadOnlyList<PublicTierPrice> Prices,
-    IReadOnlyList<PublicTierLimit> Limits);
+    IReadOnlyList<PublicTierLimit> Limits,
+    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null);
 
 /// <summary>One cap as it actually binds a group right now.</summary>
 /// <param name="FromContract">

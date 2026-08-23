@@ -8478,6 +8478,92 @@ bare membership. The pieces:
   (triplicate ladder rungs breaking a strict-mode cleanup locator — purged, test now
   self-heals) and the known tier-checklist congestion case — both pass solo ×2.
 
-Remaining: **Phase E** (role editor grays excluded areas with the upgrade note, inactive-grant
-badges, tier areas on the public pricing page, downgrade notices naming areas) and **Phase F**
-(e2e journeys, help, the four-seat click-test).
+**Phase E — SHIPPED 2026-08-23.** The plan's areas became visible everywhere they matter:
+
+- **Role editor**: sections whose area the plan excludes are grayed with disabled toggles under
+  a note naming the areas, the plan, the count of kept-but-inactive grants, and a Pricing link.
+  Verified live on a free-band fixture group ("Phase E Probe Group", urlname `phase-e-probe` —
+  no org-delete endpoint exists, so it stays as the permanent e2e fixture).
+- **Server rule** (`OrganizationRoleController.SetPermissions`): a CHANGE to an excluded table
+  is refused with a sentence; untouched excluded grants are carried forward verbatim on every
+  save — the editor's graying is a courtesy, the server is the law. Tests regressed (2 of 3
+  fail with the guard removed; the identical-echo test passes either way by design).
+- **`GET api/security/organizations/{id}/included-areas`** returns areas + tier name; tier-name
+  resolution moved into `TierAreaResolution.ResolveAsync` because the first cut only named the
+  tier for groups with subscription ROWS — precisely not the free groups the note is for.
+- **Public pricing** (`/pricing`, anonymous-path verified): each plan lists its included
+  role areas, only when something is excluded; zero checklist rows serializes as **null**
+  (= everything), never an empty list that would read as "includes nothing".
+- **Downgrade notices with netting** (`TierChangeNotifier.ApplyAreaChangesAsync`): the areas
+  checklist saves per TOGGLE, so area changes do not use the terms fan-out. Removals are queued
+  (free groups behind a 30-minute grace, paid on the renewal window floored at the grace);
+  a re-add cancels the pending sentence per org, so uncheck-then-recheck — a mis-click, or
+  every e2e run — reaches groups as silence. Only un-netted additions are announced. The
+  delivery job's wording now distinguishes already-live changes from upcoming ones.
+- Also fixed along the way: role editor banner grammar; roles-grid Actions buttons kept on one
+  line (item 169's exemplar); Edit now scrolls the inline editor into view — smooth
+  `scrollIntoView` was measured to silently no-op on inner-container scrollers, so
+  `domInterop.scrollToElementId` verifies visibility and falls back to an instant jump, and
+  takes a `block` argument because centering a taller-than-viewport card puts its title
+  off-screen.
+
+Remaining: **Phase F** (e2e journeys, help sweep, the four-seat click-test) closes item 156.
+
+## 168. Billing paperwork: receipts, tax, and an audited money trail (OPEN — Ben, 2026-08-23)
+
+Ben, 2026-08-23: "Ability to generate receipts. Ability to calculate tax for bills. All billing
+tracked and audited in administration billing sections including tracking referrals overall and
+individually and how much is paid out."
+
+Three strands, all downstream of item 85's billing foundation:
+
+1. **Receipts** — a group's payment produces a receipt the payer can download (and re-download
+   later from their billing history). Needs a stable receipt number, the group's billing
+   details, line items, tax shown separately, and the payment reference.
+2. **Tax calculation** — bills compute tax rather than assuming none. Rate resolution (by the
+   group's jurisdiction), tax shown as its own line on quotes, bills, and receipts, and the
+   rate frozen on each historical document the way contract terms already are.
+3. **Admin billing audit trail** — the administration billing section shows every charge,
+   payment, adjustment, and payout with who/when/why, nothing editable in place. Includes
+   referral tracking: referrals overall and per referrer, and how much has been paid out to
+   each — which presumes a referral-reward scheme; its rules (who counts as a referrer, what
+   triggers a payout) need a design pass with Ben before building.
+
+Sequencing: after item 85's remaining phases (B–F) land — receipts and tax attach to real
+payment flow, and the audit section wants the payment provider integration to exist first.
+
+## 169. Grid action buttons: small, one line, everywhere (OPEN — Ben, 2026-08-23)
+
+Ben, 2026-08-23: "buttons in grids should be small and not wrap the line." And, on clicking Edit
+in the roles grid: "maybe the editor should scroll into view, or it will look like nothing
+happened."
+
+The roles grid (OrgRolesManager) got both fixes with item 156 Phase E: `btn-sm` was already
+there, a `text-nowrap` wrapper keeps Edit/Delete on one line, and Edit now scrolls the inline
+editor card into view. Remaining: a sweep of every other grid with action buttons for the same
+two defects — stacked/wrapping buttons, and inline editors or detail panes that open below the
+fold with no scroll. Candidates: every TelerikGrid with an Actions template column (grep for
+`GridColumn Title="Actions"`).
+
+## 170. Role editor offers grants over site-wide lookup tables (OPEN — found with Ben, 2026-08-23)
+
+Ben, mid-Phase-E review of the role editor: "Are the 'types' like address types specific to
+groups? I thought they were generalized."
+
+They ARE generalized — confirmed in the schema: `OrganizationAddressType`, `OrganizationEmailType`,
+`OrganizationPhoneType`, `OrganizationLinkType` (and their User* siblings) have **no
+OrganizationId column**. They are site-wide labels, written only through the SuperAdmin Admin
+controllers; the entity controllers are read-only for everyone else.
+
+The defect: `OrganizationSecurityTable` still lists these tables, so the org role editor renders
+C/U/D toggles for "Address Types", "Email Types", "Phone Types", "Link Types" — grants that gate
+NOTHING, because no org-reachable write path consults them. It is the mirror image of the
+write-only-feature class: a control the UI offers that the server never reads. A group owner who
+"grants" Address Types management has been lied to.
+
+The fix (own pass, not a Phase E rider): audit every table in `OrganizationSecurityTable` for
+whether an org-scoped write path actually consults it; drop the site-wide lookup tables from the
+role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warranted); adjust
+`RolePermissionCoverageTests` to pin the corrected list. Caution: some type-like tables ARE
+per-org (calendar event types were seeded per-group in item 148) — each table needs its own
+verdict from the schema, not from its name.

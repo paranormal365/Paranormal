@@ -430,4 +430,117 @@ public class OrganizationRoleControllerTests
         await using var verify = await factory.CreateDbContextAsync();
         Assert.False(await verify.OrganizationRoleMemberships.AnyAsync(m => m.Id == rmId));
     }
+
+    // ── Item 156 Phase E: excluded-area grants (grayed-but-remembered, D4) ────
+
+    /// <summary>Puts the org on a tier whose checklist includes only the given areas.</summary>
+    private static async Task SeedTierAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid ownerId,
+        params OrganizationPermissionArea[] includedAreas)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var tierId = Guid.NewGuid();
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = tierId, Name = "Test Tier", MinMembers = 1, MaxMembers = null,
+            SortOrder = 1, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        foreach (var area in includedAreas)
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tierId, Area = area,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, SubscriptionTierId = tierId,
+            Status = SubscriptionStatus.Active, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static Task<Guid> SeedRoleWithCaseReadAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid ownerId)
+        => SeedRoleAsync(factory, orgId, ownerId, DataTable.Case, DataAction.Read);
+
+    private static async Task<Guid> SeedRoleAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid ownerId,
+        DataTable table, DataAction actions)
+    {
+        var roleId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationRoles.Add(new OrganizationRole { Id = roleId, OrganizationId = orgId, Name = "Role", IsActive = true, SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+        db.OrganizationRolePermissions.Add(new OrganizationRolePermission { Id = Guid.NewGuid(), OrganizationRoleId = roleId, TableName = table, Actions = actions, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+        await db.SaveChangesAsync();
+        return roleId;
+    }
+
+    [Fact]
+    public async Task SetPermissions_ChangeToExcludedArea_IsRefusedAndNothingIsSaved()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId) = await SeedOrgAsync(factory);
+        await SeedTierAsync(factory, orgId, ownerId, OrganizationPermissionArea.Calendar); // Cases NOT included
+        var roleId = await SeedRoleWithCaseReadAsync(factory, orgId, ownerId);
+
+        var ctrl   = Build(factory, ownerId);
+        var result = await ctrl.SetPermissions(orgId, roleId, [
+            new SetRolePermissionRequest(DataTable.Case, DataAction.All), // a CHANGE to an excluded table
+        ], CancellationToken.None);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Cases", bad.Value!.ToString());
+        Assert.Contains("Pricing", bad.Value!.ToString());
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var perms = await verify.OrganizationRolePermissions.Where(p => p.OrganizationRoleId == roleId).ToListAsync();
+        var kept  = Assert.Single(perms);
+        Assert.Equal(DataAction.Read, kept.Actions); // untouched — the refusal saved nothing
+    }
+
+    [Fact]
+    public async Task SetPermissions_ExcludedGrantOmittedFromPayload_SurvivesTheSave()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId) = await SeedOrgAsync(factory);
+        await SeedTierAsync(factory, orgId, ownerId, OrganizationPermissionArea.Calendar);
+        var roleId = await SeedRoleWithCaseReadAsync(factory, orgId, ownerId);
+
+        var ctrl   = Build(factory, ownerId);
+        // The editor grays excluded sections and omits them — a save of what you MAY edit
+        // must not silently delete what you may not.
+        var result = await ctrl.SetPermissions(orgId, roleId, [
+            new SetRolePermissionRequest(DataTable.OrgCalendar, DataAction.Read),
+        ], CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var perms = await verify.OrganizationRolePermissions.Where(p => p.OrganizationRoleId == roleId).ToListAsync();
+        Assert.Equal(2, perms.Count);
+        Assert.Contains(perms, p => p.TableName == DataTable.Case && p.Actions == DataAction.Read);
+        Assert.Contains(perms, p => p.TableName == DataTable.OrgCalendar);
+    }
+
+    [Fact]
+    public async Task SetPermissions_ExcludedGrantEchoedUnchanged_IsAccepted()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId) = await SeedOrgAsync(factory);
+        await SeedTierAsync(factory, orgId, ownerId, OrganizationPermissionArea.Calendar);
+        var roleId = await SeedRoleWithCaseReadAsync(factory, orgId, ownerId);
+
+        var ctrl   = Build(factory, ownerId);
+        // An identical round-trip is a no-op, not a change — clients that echo the full
+        // list back must not be refused for it.
+        var result = await ctrl.SetPermissions(orgId, roleId, [
+            new SetRolePermissionRequest(DataTable.Case, DataAction.Read),
+        ], CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var kept = Assert.Single(await verify.OrganizationRolePermissions.Where(p => p.OrganizationRoleId == roleId).ToListAsync());
+        Assert.Equal(DataAction.Read, kept.Actions);
+    }
 }

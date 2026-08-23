@@ -43,7 +43,7 @@ public sealed class PublicPricingController : ControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tiers = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .Where(t => t.IsActive)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers)
             .ToListAsync(ct);
@@ -58,6 +58,13 @@ public sealed class PublicPricingController : ControllerBase
                     p.Interval, p.Price,
                     SubscriptionPricing.SavingPercentAgainstMonthly(t, p.Interval)))],
             [.. t.Limits.OrderBy(l => (int)l.Limit)
-                .Select(l => new PublicTierLimit(l.Limit, l.MaxValue))])));
+                .Select(l => new PublicTierLimit(l.Limit, l.MaxValue))],
+            // Item 156 Phase E: which role areas the plan includes — the pricing page's
+            // honest answer to what upgrading actually buys. Zero checklist rows means ALL
+            // areas (TierAreaResolution's fail-open rule), which the payload says as null —
+            // an empty list here would render as "includes nothing", the exact inversion.
+            t.PermissionAreas.Count == 0
+                ? null
+                : [.. t.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)])));
     }
 }

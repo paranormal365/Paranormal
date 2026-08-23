@@ -78,6 +78,53 @@ public static class TierChangeAnalyzer
         return changes;
     }
 
+    /// <summary>
+    /// The changes between two versions of a tier's included-areas checklist (item 156 Phase E).
+    /// Separate from <see cref="Analyze"/> because areas are saved through their own endpoint;
+    /// sharing the TierChange shape keeps the notifier's improvement/reduction fan-out identical.
+    /// </summary>
+    public static IReadOnlyList<TierChange> AnalyzeAreas(
+        IReadOnlySet<OrganizationPermissionArea> oldAreas,
+        IReadOnlySet<OrganizationPermissionArea> newAreas)
+    {
+        var changes = new List<TierChange>();
+        foreach (var area in oldAreas.Union(newAreas).OrderBy(a => (int)a))
+        {
+            if (oldAreas.Contains(area) && !newAreas.Contains(area))
+                changes.Add(new TierChange(false, AreaReductionSentence(area)));
+            else if (!oldAreas.Contains(area) && newAreas.Contains(area))
+                changes.Add(new TierChange(true, AreaImprovementSentence(area)));
+        }
+        return changes;
+    }
+
+    /// <summary>
+    /// One area's removal sentence, exactly as queued. The notifier matches on this exact string
+    /// to cancel a pending notice when the area is re-added before delivery — an uncheck-then-
+    /// recheck must net to silence, not to two contradictory messages.
+    /// </summary>
+    public static string AreaReductionSentence(OrganizationPermissionArea area)
+        => $"Custom-role permissions for {AreaNoun(area)} are no longer included in the plan. "
+         + "Existing role grants in that area stop applying but are kept, and resume if the area returns.";
+
+    /// <summary>One area's addition sentence.</summary>
+    public static string AreaImprovementSentence(OrganizationPermissionArea area)
+        => $"Custom-role permissions for {AreaNoun(area)} are now included in the plan.";
+
+    private static string AreaNoun(OrganizationPermissionArea area) => area switch
+    {
+        OrganizationPermissionArea.OrganizationProfile => "the group profile",
+        OrganizationPermissionArea.Membership          => "membership",
+        OrganizationPermissionArea.Cases               => "cases",
+        OrganizationPermissionArea.Investigations      => "investigations",
+        OrganizationPermissionArea.Clients             => "client requests",
+        OrganizationPermissionArea.Calendar            => "the calendar",
+        OrganizationPermissionArea.Files               => "files",
+        OrganizationPermissionArea.Equipment           => "equipment",
+        OrganizationPermissionArea.PublicPages         => "public pages",
+        _ => area.ToString(),
+    };
+
     /// <summary>The dictionaries <see cref="Analyze"/> wants, from a tier's live rows.</summary>
     public static (IReadOnlyDictionary<SubscriptionLimit, int?> Limits,
                    IReadOnlyDictionary<BillingInterval, decimal> Prices) TermsOf(SubscriptionTier tier) =>

@@ -65,6 +65,23 @@ else if (_role is not null)
         <div class="card-body">
             <h6 class="card-title">Permissions</h6>
             <p class="text-secondary small">Toggle Create (C), Read (R), Update (U), Delete (D) for each resource.</p>
+
+            @* Item 156 Phase E: sections whose AREA the group's plan does not include render
+               grayed-but-remembered (decision D4) — the stored values stay visible, the toggles
+               refuse, and this banner says why and what changes it. The server refuses changes
+               to these sections regardless, so the graying is honesty, not the lock itself. *@
+            @if (_excludedAreas.Count > 0)
+            {
+                <div class="alert alert-info py-2 small" id="role-areas-note">
+                    <strong>@ExcludedAreaNames</strong> permissions come with a higher plan@(_tierName is null ? "" : $" than {_tierName}"),
+                    so they are shown grayed out. Your settings are kept and apply again the
+                    moment the plan includes them. <a href="/pricing">See what each plan includes.</a>
+                    @if (_inactiveGrantCount > 0)
+                    {
+                        <span class="badge bg-secondary ms-1">@_inactiveGrantCount granted permission@(_inactiveGrantCount == 1 ? "" : "s") currently inactive</span>
+                    }
+                </div>
+            }
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-light">
                     <tr>
@@ -78,7 +95,8 @@ else if (_role is not null)
                 <tbody>
                     @foreach (var section in Sections)
                     {
-                        <tr>
+                        var sectionExcluded = IsExcluded(section.Table);
+                        <tr class="@(sectionExcluded ? "opacity-50" : "")">
                             <td class="@(section.ParentTable is not null ? "ps-4" : "")">
                                 @section.DisplayName
                                 <div class="text-secondary small">@section.Description</div>
@@ -93,6 +111,8 @@ else if (_role is not null)
                                     <button type="button"
                                             class="btn btn-sm @(isSet ? "btn-primary" : "btn-outline-secondary")"
                                             aria-pressed="@isSet.ToString().ToLowerInvariant()"
+                                            disabled="@sectionExcluded"
+                                            title="@(sectionExcluded ? "Included with a higher plan — see Pricing" : null)"
                                             @onclick="@(() => TogglePermission(tbl, act, !isSet))">
                                         @(action == OrganizationSecurityAction.Create ? "C" :
                                           action == OrganizationSecurityAction.Read   ? "R" :
@@ -188,6 +208,26 @@ else if (_role is not null)
 
 @code {
     [Parameter] public Guid OrgId    { get; set; }
+
+    private IReadOnlySet<Ben.Data.Common.Enums.OrganizationPermissionArea> _includedAreas =
+        Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>().ToHashSet();
+    private List<Ben.Data.Common.Enums.OrganizationPermissionArea> _excludedAreas = [];
+    private string? _tierName;
+    private int _inactiveGrantCount;
+
+    private bool IsExcluded(OrganizationSecurityTable table)
+        => Ben.Data.Common.Constants.PermissionAreas.AreaFor(table) is { } area
+        && !_includedAreas.Contains(area);
+
+    private string ExcludedAreaNames => string.Join(", ", _excludedAreas);
+
+    private void RecomputeAreaState()
+    {
+        _excludedAreas = Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>()
+            .Where(a => !_includedAreas.Contains(a)).ToList();
+        _inactiveGrantCount = _permissionMap.Count(kv =>
+            IsExcluded(kv.Key) && kv.Value != OrganizationSecurityAction.None);
+    }
     [Parameter] public Guid RoleId   { get; set; }
     [Parameter] public EventCallback OnSaved    { get; set; }
     [Parameter] public EventCallback OnCancelled { get; set; }
@@ -292,8 +332,9 @@ else if (_role is not null)
             var permsTask  = AdminClient.GetOrgRolePermissionsAsync(OrgId, RoleId);
             var membersTask = AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
             var orgMembersTask = AdminClient.GetOrganizationMembersAsync(OrgId);
+            var areasTask = AdminClient.GetOrgIncludedAreasAsync(OrgId);
 
-            await Task.WhenAll(roleTask, permsTask, membersTask, orgMembersTask);
+            await Task.WhenAll(roleTask, permsTask, membersTask, orgMembersTask, areasTask);
 
             _role         = roleTask.Result;
             _membersResult = membersTask.Result;
@@ -310,6 +351,15 @@ else if (_role is not null)
 
             _permissionMap = permsTask.Result.Items
                 .ToDictionary(p => p.TableName, p => p.Actions);
+
+            // Null (fetch failed) degrades to everything-included: graying is a courtesy, and
+            // the server refuses excluded-area changes regardless.
+            if (areasTask.Result is { } areas)
+            {
+                _includedAreas = areas.Areas.ToHashSet();
+                _tierName = areas.TierName;
+            }
+            RecomputeAreaState();
 
             RefreshAvailableMembers();
         }

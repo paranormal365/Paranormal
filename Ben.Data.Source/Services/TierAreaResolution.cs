@@ -25,6 +25,15 @@ public static class TierAreaResolution
     /// <summary>The areas included for this group, resolved from its effective tier.</summary>
     public static async Task<IReadOnlySet<OrganizationPermissionArea>> IncludedAreasAsync(
         BenDataContext db, Guid organizationId, CancellationToken ct = default)
+        => (await ResolveAsync(db, organizationId, ct)).Areas;
+
+    /// <summary>
+    /// The areas plus the effective tier's name — the name a plan-limitation notice should say,
+    /// whether the tier came from a subscription row or was resolved by member count. Name is
+    /// null exactly when the fail-open rules answered ALL without landing on a tier.
+    /// </summary>
+    public static async Task<(IReadOnlySet<OrganizationPermissionArea> Areas, string? TierName)>
+        ResolveAsync(BenDataContext db, Guid organizationId, CancellationToken ct = default)
     {
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
             .Where(s => s.OrganizationId == organizationId)
@@ -32,15 +41,25 @@ public static class TierAreaResolution
             .FirstOrDefaultAsync(ct);
 
         Guid? tierId = sub?.SubscriptionTierId;
+        string? tierName = null;
         if (tierId is null)
         {
             var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
             if (tiers.Count == 0 || SubscriptionTierResolver.Validate(tiers) is not null)
-                return All;
+                return (All, null);
 
             var members = await db.OrganizationUserMemberships.AsNoTracking()
                 .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-            tierId = SubscriptionTierResolver.Resolve(tiers, members).Id;
+            var resolved = SubscriptionTierResolver.Resolve(tiers, members);
+            tierId   = resolved.Id;
+            tierName = resolved.Name;
+        }
+        else
+        {
+            tierName = await db.SubscriptionTiers.AsNoTracking()
+                .Where(t => t.Id == tierId)
+                .Select(t => t.Name)
+                .FirstOrDefaultAsync(ct);
         }
 
         var areas = await db.SubscriptionTierPermissionAreas.AsNoTracking()
@@ -48,7 +67,7 @@ public static class TierAreaResolution
             .Select(a => a.Area)
             .ToListAsync(ct);
 
-        return areas.Count == 0 ? All : areas.ToHashSet();
+        return (areas.Count == 0 ? All : areas.ToHashSet(), tierName);
     }
 
     /// <summary>Whether one table's area is included. User-scoped tables are never tier-gated.</summary>

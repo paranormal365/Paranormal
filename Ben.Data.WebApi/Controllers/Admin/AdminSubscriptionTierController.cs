@@ -323,7 +323,6 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tier = await db.SubscriptionTiers
-            .Include(t => t.PermissionAreas)
             .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
@@ -331,6 +330,8 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         var wanted = request.Areas.Distinct().ToHashSet();
         var unknown = wanted.Where(a => !Enum.IsDefined(a)).ToList();
         if (unknown.Count > 0) return BadRequest("Unknown permission area.");
+
+        var beforeAreas = tier.PermissionAreas.Select(a => a.Area).ToHashSet();
 
         var now = DateTime.UtcNow;
         foreach (var row in tier.PermissionAreas.Where(a => !wanted.Contains(a.Area)).ToList())
@@ -348,8 +349,12 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             nameof(SubscriptionTier), tier.Id,
             new SubscriptionTier { Id = tier.Id, Name = tier.Name }, tier, userId, AppSources.WebApi));
 
+        // Area edits go through the netting fan-out, not ApplyAsync: the checklist saves per
+        // toggle, and an uncheck-then-recheck must reach the groups as silence, not whiplash.
+        await _notifier.ApplyAreaChangesAsync(tier.Id, tier.Name, beforeAreas, wanted, userId, ct);
+
         var refreshed = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .FirstAsync(t => t.Id == id, ct);
         var orgCount = await db.OrganizationSubscriptions.CountAsync(s2 => s2.SubscriptionTierId == id, ct);
         return Ok(ToRecord(refreshed, orgCount));

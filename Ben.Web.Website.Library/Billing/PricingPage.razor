@@ -102,6 +102,16 @@
                                 </div>
                             }
 
+                            @* Item 156 Phase E: what upgrading buys in role terms. Only shown
+                               when a plan EXCLUDES something — an all-inclusive checklist would
+                               render as a wall of everything, which says nothing. *@
+                            @if ((tier.IncludedAreas?.Count ?? 9) < 9)
+                            {
+                                <p class="small mb-1 fw-semibold">Custom-role areas included:</p>
+                                <p class="small text-secondary mb-2">
+                                    @string.Join(", ", (tier.IncludedAreas ?? []).Select(AreaLabel))
+                                </p>
+                            }
                             @if (tier.Limits.Count > 0)
                             {
                                 <ul class="list-unstyled text-start small mt-auto mb-0">
@@ -189,6 +199,20 @@
 </div>
 
 @code {
+    private static string AreaLabel(Ben.Data.Common.Enums.OrganizationPermissionArea area) => area switch
+    {
+        Ben.Data.Common.Enums.OrganizationPermissionArea.OrganizationProfile => "Group profile",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Membership          => "Membership",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Cases               => "Cases",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations      => "Investigations",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Equipment           => "Equipment",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.PublicPages         => "Public pages",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Files               => "Files",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Clients             => "Client requests",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
+        _ => area.ToString(),
+    };
+
     private bool _loading = true;
     private LoadResult<PublicSubscriptionTier> _tiersResult;
     private List<BillingInterval> _intervals = [];

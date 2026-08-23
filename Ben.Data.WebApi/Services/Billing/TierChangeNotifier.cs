@@ -123,6 +123,111 @@ public sealed class TierChangeNotifier
             reductions.Count > 0 ? paid.Count : 0);
     }
 
+    /// <summary>
+    /// How long an area REMOVAL sits in the queue before free-band groups hear about it. Long
+    /// enough to absorb an accidental toggle (the checklist saves per click), short enough that
+    /// a real downgrade is still announced promptly. Paid groups keep the renewal-window rule,
+    /// floored at this same grace.
+    /// </summary>
+    public static readonly TimeSpan AreaRemovalGrace = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// The fan-out from an included-areas edit (item 156 Phase E). Not <see cref="ApplyAsync"/>:
+    /// the checklist saves on every toggle, so this path must net a removal against a re-add.
+    /// A removal is QUEUED (free groups after <see cref="AreaRemovalGrace"/>, paid groups on the
+    /// renewal-window rule); a re-add first cancels that area's pending sentence from any
+    /// undelivered notice, and only the areas with nothing left to cancel are announced as
+    /// improvements. An uncheck-then-recheck therefore sends nothing at all.
+    /// </summary>
+    public async Task ApplyAreaChangesAsync(
+        Guid tierId, string tierName,
+        IReadOnlySet<OrganizationPermissionArea> oldAreas,
+        IReadOnlySet<OrganizationPermissionArea> newAreas,
+        Guid editorUserId, CancellationToken ct)
+    {
+        var removed = oldAreas.Except(newAreas).OrderBy(a => (int)a).ToList();
+        var added   = newAreas.Except(oldAreas).OrderBy(a => (int)a).ToList();
+        if (removed.Count == 0 && added.Count == 0) return;
+
+        var (free, paid) = await AffectedAsync(tierId, ct);
+        var now = DateTime.UtcNow;
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // ── Re-adds cancel their own pending removal, per org ───────────────────
+        // Which added areas still need announcing differs per org: one org's removal notice may
+        // already be delivered while another's is still pending.
+        var toAnnounce = new Dictionary<Guid, List<OrganizationPermissionArea>>();
+        if (added.Count > 0)
+        {
+            var orgIds = free.Concat(paid).Select(sub => sub.OrganizationId).ToList();
+            var pending = await db.TierChangeNotices
+                .Where(n => n.SubscriptionTierId == tierId
+                         && n.DeliveredAtUtc == null
+                         && orgIds.Contains(n.OrganizationId))
+                .ToListAsync(ct);
+
+            foreach (var orgId in orgIds)
+            {
+                var announce = new List<OrganizationPermissionArea>();
+                foreach (var area in added)
+                {
+                    var sentence = TierChangeAnalyzer.AreaReductionSentence(area);
+                    var holder = pending.FirstOrDefault(n => n.OrganizationId == orgId
+                        && n.Sentences.Split('\n').Contains(sentence));
+                    if (holder is null)
+                    {
+                        announce.Add(area);
+                        continue;
+                    }
+                    var rest = holder.Sentences.Split('\n').Where(l => l != sentence).ToList();
+                    if (rest.Count == 0) db.TierChangeNotices.Remove(holder);
+                    else { holder.Sentences = string.Join('\n', rest); holder.DateUpdated = now; }
+                }
+                if (announce.Count > 0) toAnnounce[orgId] = announce;
+            }
+        }
+
+        // ── Removals queue one notice per org ───────────────────────────────────
+        if (removed.Count > 0)
+        {
+            var sentences = string.Join('\n', removed.Select(TierChangeAnalyzer.AreaReductionSentence));
+
+            foreach (var sub in free)
+                db.TierChangeNotices.Add(new TierChangeNotice
+                {
+                    Id = Guid.NewGuid(), OrganizationId = sub.OrganizationId,
+                    SubscriptionTierId = tierId, Sentences = sentences,
+                    EffectiveAtUtc = now,                     // live already — the tier row changed
+                    DeliverAtUtc   = now + AreaRemovalGrace,  // …but the grace absorbs a mis-click
+                    DateCreated = now, CreatedByAppUserId = editorUserId,
+                });
+
+            foreach (var sub in paid)
+            {
+                var effective = sub.CurrentPeriodEnd ?? now;
+                var deliverAt = effective - NoticeWindow < now + AreaRemovalGrace
+                    ? now + AreaRemovalGrace
+                    : effective - NoticeWindow;
+                db.TierChangeNotices.Add(new TierChangeNotice
+                {
+                    Id = Guid.NewGuid(), OrganizationId = sub.OrganizationId,
+                    SubscriptionTierId = tierId, Sentences = sentences,
+                    EffectiveAtUtc = effective, DeliverAtUtc = deliverAt,
+                    DateCreated = now, CreatedByAppUserId = editorUserId,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        // ── Only the un-netted additions are announced, immediately ─────────────
+        foreach (var (orgId, areas) in toAnnounce)
+            await SendNowAsync(orgId, tierName,
+                [.. areas.Select(a => new TierChange(true, TierChangeAnalyzer.AreaImprovementSentence(a)))],
+                editorUserId, ct);
+    }
+
     private async Task SendNowAsync(
         Guid organizationId, string tierName, IReadOnlyList<TierChange> changes,
         Guid senderId, CancellationToken ct)
