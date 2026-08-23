@@ -292,6 +292,9 @@ and a group removing its copy never touches the member's own file.
 
 ## Editing your public pages
 
+*The CMS editor has a built-in walkthrough — the **?** button beside New Page runs it any
+time, and it runs itself once for first-time editors.*
+
 ![The CMS page list](help-media:organization-administration/cms.png)
 *Your public pages. A page is not visible to anyone until you publish it.*
 
@@ -379,6 +382,9 @@ readable by anyone who visits, including the person it is about.
 You can only show your own group's work. Everything is looked up fresh each time somebody views the
 page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
 you do not have to remember which ones.
+
+*On any case page, the **?** button beside Edit Case walks through exactly how a case goes
+public — the pseudonym, generalized addresses, and which media may appear.*
 
 ## Putting a case's photos on a page
 
