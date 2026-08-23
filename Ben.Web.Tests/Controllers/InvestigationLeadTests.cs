@@ -44,7 +44,7 @@ public class InvestigationLeadTests
         Guid PlainRow);
 
     private static OrgInvestigationsController Build(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, new Mock<IMapper>().Object, new Mock<IAuditLogService>().Object)
+        => new(f, new Mock<IMapper>().Object, new Mock<IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -106,6 +106,7 @@ public class InvestigationLeadTests
         }
 
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, OrgId);
         return new World(factory, invId, rows[FirstLeadId], rows[SecondLeadId], rows[PlainMemberId]);
     }
 

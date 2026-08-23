@@ -27,6 +27,15 @@ public class MemberTitleLadderTests : BenTestBase
         await Expect(Main.GetByText("Senior Investigator", new() { Exact = true }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
+        // Self-heal: residue rungs from a previous failed run accumulate in the shared DB and
+        // break every later cleanup locator with a strict-mode violation. Sweep them first.
+        while (await Main.Locator("li.list-group-item", new() { HasText = TestRung }).CountAsync() > 0)
+        {
+            await Main.Locator("li.list-group-item", new() { HasText = TestRung }).First
+                .GetByRole(AriaRole.Button, new() { Name = "Delete" }).ClickAsync();
+            await Page.WaitForTimeoutAsync(400);
+        }
+
         try
         {
             // Add a rung…
@@ -55,11 +64,13 @@ public class MemberTitleLadderTests : BenTestBase
             try { await dropdown.SelectOptionAsync(new SelectOptionValue { Label = "— none —" }); } catch { }
 
             await OpenTabAsync("Settings", Main.GetByText("Member titles"));
-            var row = Main.Locator("li.list-group-item", new() { HasText = TestRung });
-            if (await row.CountAsync() > 0)
-                await ClickUntilAsync(
-                    row.GetByRole(AriaRole.Button, new() { Name = "Delete" }),
-                    Main.GetByText(TestRung).Nth(1).Or(Main.Locator("#level-new-name")));
+            // Sweep ALL matches, First-based — duplicates must shrink the list, not break it.
+            while (await Main.Locator("li.list-group-item", new() { HasText = TestRung }).CountAsync() > 0)
+            {
+                await Main.Locator("li.list-group-item", new() { HasText = TestRung }).First
+                    .GetByRole(AriaRole.Button, new() { Name = "Delete" }).ClickAsync();
+                await Page.WaitForTimeoutAsync(400);
+            }
         }
     }
 }

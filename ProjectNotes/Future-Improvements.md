@@ -8443,3 +8443,41 @@ is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
 a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
 the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
 Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
+
+### Item 156 Phase D — SHIPPED 2026-08-23 (the enforcement flip)
+
+Reading a group's cases and investigations answers to `HasAccessAsync(table, Read)` instead of
+bare membership. The pieces:
+
+- **The tier area gate inside HasAccessAsync** (via the new shared
+  `TierAreaResolution` core, which also serves the WebApi resolver — one implementation of the
+  fail-open rules, because two copies would eventually disagree; `SubscriptionTierResolver`
+  moved down to Ben.Data.Source where it always belonged). Placed after the Owner/Administrator
+  bypass: a plan narrows what ROLES may do, never what the owner may do. Regressed.
+- **Ten controllers converted** — CaseFile, CaseAudioMix, CaseReport, CaseResearch,
+  ScheduleProposal, CaseNote, CaseTransfer, CaseController.CanReadAsync (→ Case), and
+  InvestigationController + OrgInvestigationsController (→ Investigation). Each helper is now a
+  one-line delegation, with the CLAIMS-based SuperAdmin bypass kept in front — dropping it was a
+  real regression the item-150 tests caught in flight (HasAccessAsync checks DB roles; the
+  claims principal is what production tokens carry).
+- **Deliberately NOT flipped, recorded as decisions:** equipment reads stay member-open (the
+  role editor has documented that as the product's promise since item 83 — flipping it would
+  need its own bridge, and the one-time grandfather gate is already consumed); calendar events
+  member-open by design; EventEvidence review stays member-gated pending its own decision.
+- **The UI mirrors the server the same day**: a `my-permissions` endpoint (per-area read
+  verdicts) now decides whether the hub's Cases and Investigations tabs render at all — a member
+  the server would refuse is never handed the tab (the sixth application of the
+  server-guard-needs-a-UI-path rule, this time BEFORE anyone hit it live).
+- **Test fallout, honestly handled**: 133 unit tests modeled the pre-flip world; their seeds now
+  run `TestSeeds.BridgeAsync` — the same bridge production members got — rather than weakening
+  assertions. `PhaseDFlipTests` pins the flip itself (a role-less member is refused; the bridge
+  opens it) plus a source scan that fails if any converted helper regrows a membership query.
+- **Live**: sarah (ordinary bridged member) answers `canReadCases:true` and reads TGH
+  investigations with a 200 — the flip is invisible to existing members, which was the entire
+  point of Phase C's bridge. e2e: 321/338 passed; the two failures were shared-DB residue
+  (triplicate ladder rungs breaking a strict-mode cleanup locator — purged, test now
+  self-heals) and the known tier-checklist congestion case — both pass solo ×2.
+
+Remaining: **Phase E** (role editor grays excluded areas with the upgrade note, inactive-grant
+badges, tier areas on the public pricing page, downgrade notices naming areas) and **Phase F**
+(e2e journeys, help, the four-seat click-test).

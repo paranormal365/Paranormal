@@ -53,7 +53,7 @@ public class InvestigationControllerTests
 
     private static InvestigationController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new InvestigationController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        var ctrl = new InvestigationController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -90,6 +90,7 @@ public class InvestigationControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId, user);
     }
 

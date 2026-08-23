@@ -49,7 +49,7 @@ public class CaseNoteControllerTests
 
     private static CaseNoteController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseNoteController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        var ctrl = new CaseNoteController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -85,6 +85,7 @@ public class CaseNoteControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId);
     }
 

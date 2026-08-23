@@ -28,7 +28,7 @@ public class ScheduleProposalControllerTests
     private static ScheduleProposalController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId,
         bool isSuperAdmin = false)
     {
-        var ctrl = new ScheduleProposalController(factory);
+        var ctrl = new ScheduleProposalController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
@@ -75,6 +75,7 @@ public class ScheduleProposalControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId);
     }
 
@@ -159,6 +160,7 @@ public class ScheduleProposalControllerTests
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Manager, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
             await db.SaveChangesAsync();
         }
+        await TestSeeds.BridgeAsync(factory, attackerOrgId);
         var attacker = BuildController(factory, attackerId);
 
         Assert.IsType<NotFoundResult>((await attacker.GetAll(attackerOrgId, victimCaseId, CancellationToken.None)).Result);

@@ -61,7 +61,7 @@ public class OrgInvestigationsControllerTests
 
     private static OrgInvestigationsController Build(
         IDbContextFactory<BenDataContext> factory, Guid? asUser = null)
-        => new(factory, Mapper(), new Mock<IAuditLogService>().Object)
+        => new(factory, Mapper(), new Mock<IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
         {
             ControllerContext = new ControllerContext
             {
@@ -89,6 +89,7 @@ public class OrgInvestigationsControllerTests
             Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, OrgId);
         return factory;
     }
 
@@ -373,6 +374,7 @@ public class OrgInvestigationsControllerTests
             });
             await db.SaveChangesAsync();
         }
+        await TestSeeds.BridgeAsync(factory, OrgId);
 
         // Created by MemberId.
         await Build(factory).Create(OrgId, Request(

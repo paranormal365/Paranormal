@@ -197,18 +197,21 @@
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Phase D (item 156): the tab renders from the same verdict the server enforces —
+               a member without case read must not be handed a tab whose every fetch refuses.
+               Owners, admins and role-holders (the grandfather bridge included) all pass. *@
+            @if (_isMember && _myPerms?.CanReadCases == true)
             {
                 <BenTab Title="Cases" Id="cases">
                     <CaseList OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
-            @if (_isMember)
+            @if (_isMember && _myPerms?.CanReadInvestigations == true)
             {
-                @* Member-visible, not admin-only: seeing where the group has worked is ordinary
-                   membership. Who may *edit* a given investigation is decided per row by the
-                   server and rendered from its verdict. *@
+                @* Reading where the group has worked now answers to the Investigation grant
+                   (Phase D) — the grandfather bridge keeps existing members seeing it. Who may
+                   *edit* a given investigation is still decided per row by the server. *@
                 <BenTab Title="Investigations" Id="investigations">
                     <OrgInvestigations OrgId="@OrgId" FocusInvestigationId="@FocusInvestigationId" />
                 </BenTab>
@@ -320,6 +323,7 @@
     private bool   _canEdit;
     private bool   _canManageRoles;
     private bool   _isMember;
+    private MyOrgPermissionsItem? _myPerms;
     private bool   _isOwnerOrSuperAdmin;
     private bool   _rosterUnavailable;
     private bool   _loading   = true;
@@ -372,6 +376,11 @@
 
             var listItem    = listTask.Result.Items.FirstOrDefault(o => o.Id == OrgId);
             _isMember       = UserState.IsSuperAdmin || listItem is not null;
+
+            // The per-area verdicts the Cases/Investigations tabs render from (Phase D). Fetched
+            // only for members — a non-member sees neither tab regardless.
+            if (_isMember)
+                _myPerms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
             _canEdit        = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
             _canManageRoles = _canEdit;
 

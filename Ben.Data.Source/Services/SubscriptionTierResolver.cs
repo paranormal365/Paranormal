@@ -1,6 +1,8 @@
 using Ben.Data.Source.Entities;
 
-namespace Ben.Data.WebApi.Services.Billing;
+// Moved from Ben.Data.WebApi.Services.Billing (item 156 Phase D): the security service
+// needs tier resolution for the area gate, and this was always pure logic over entities.
+namespace Ben.Data.Source.Services;
 
 /// <summary>
 /// Turns a member count into the band that prices it, and refuses price lists that cannot.

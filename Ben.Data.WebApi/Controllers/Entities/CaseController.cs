@@ -681,15 +681,12 @@ public sealed class CaseController : BenControllerBase
 
     // ── Auth helpers ──────────────────────────────────────────────────────────
 
+    // Item 156 Phase D: reading cases answers to HasAccessAsync(Case, Read) — SuperAdmin,
+    // owner/admin, the area gate, and the grants (grandfather bridge included) in one place.
     private async Task<bool> CanReadAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return false;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
 
     private async Task<bool> IsOrgAdminOrSuperAsync(Guid orgId, CancellationToken ct)
     {

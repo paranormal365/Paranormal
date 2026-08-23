@@ -97,6 +97,35 @@ public class OrganizationMembershipController : BenControllerBase
     /// <summary>One row of the caller's own groups, shaped for a navigation link.</summary>
     public sealed record MyMembershipOrganizationResponse(Guid OrganizationId, string Name);
 
+    /// <summary>
+    /// What the caller may see in one group — the UI's mirror of the Phase-D gates (item 156).
+    /// </summary>
+    /// <remarks>
+    /// The hub's Cases and Investigations tabs render from this rather than from bare
+    /// membership, so a tab never appears whose every fetch the server would refuse — the
+    /// server-guard-needs-a-UI-path rule. One round trip, extensible per area.
+    /// </remarks>
+    [HttpGet("{organizationId:guid}/my-permissions")]
+    public async Task<ActionResult<MyOrgPermissionsResponse>> GetMyPermissions(
+        Guid organizationId, CancellationToken cancellationToken)
+    {
+        var appUserId = GetCurrentUserIdOrThrow();
+        var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
+
+        return Ok(new MyOrgPermissionsResponse(
+            CanReadCases: isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
+                appUserId, organizationId,
+                Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken),
+            CanReadInvestigations: isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
+                appUserId, organizationId,
+                Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
+                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken)));
+    }
+
+    /// <summary>Per-area read verdicts for one member in one group.</summary>
+    public sealed record MyOrgPermissionsResponse(bool CanReadCases, bool CanReadInvestigations);
+
     /// <summary>Creates a new organization with the authenticated user as its <see cref="Ben.Data.Common.Enums.OrganizationMemberRole.Owner"/>.</summary>
     /// <param name="request">Name and URL slug for the new organization.</param>
     /// <param name="cancellationToken">Propagates cancellation from the HTTP request.</param>

@@ -16,7 +16,11 @@ public sealed class ScheduleProposalController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public ScheduleProposalController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public ScheduleProposalController(IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ScheduleProposalDto>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -127,13 +131,12 @@ public sealed class ScheduleProposalController : BenControllerBase
         return Ok(ToDto(proposal));
     }
 
-    // SuperAdmin first, membership second — the same shape as CaseNoteController and
-    // InvestigationController. Without the bypass, half a case page loaded for the site
-    // administrator and the other half said Forbid (the audio-mix bug, 2026-08-22).
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
-        || await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        || await _security.HasAccessAsync(userId, orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     private static ScheduleProposalDto ToDto(InvestigationScheduleProposal p) => new(
         p.Id, p.CaseId, p.Status, p.Notes, p.AcceptedSlotId,

@@ -31,7 +31,7 @@ public class CaseReportControllerTests
     private static CaseReportController Build(IDbContextFactory<BenDataContext> factory, Guid userId,
         bool isSuperAdmin = false)
     {
-        var ctrl = new CaseReportController(factory);
+        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
@@ -79,6 +79,7 @@ public class CaseReportControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId);
     }
 

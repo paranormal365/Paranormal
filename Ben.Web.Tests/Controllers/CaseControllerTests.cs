@@ -91,6 +91,7 @@ public class CaseControllerTests
             IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, userId);
     }
 

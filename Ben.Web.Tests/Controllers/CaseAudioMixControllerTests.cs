@@ -68,7 +68,7 @@ public class CaseAudioMixControllerTests
                    return Task.CompletedTask;
                });
 
-        var ctrl = new CaseAudioMixController(factory, storage.Object);
+        var ctrl = new CaseAudioMixController(factory, storage.Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -107,6 +107,7 @@ public class CaseAudioMixControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId);
     }
 
