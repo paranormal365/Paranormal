@@ -123,6 +123,18 @@ somebody makes deliberately rather than a default they inherit.
   actually publishes something, so switching it on shows visitors an empty directory at worst, not
   an unfinished one.
 
+## Impersonating a member
+
+**Administration → Users → the impersonate button** signs you in as that person, and what you
+see is exactly what they see: their navigation and their groups under Home, their notification
+counts on the bell, their pages, their refusals. Your own Administration menu disappears while
+you look — it is your tool, not part of their experience. A banner at the foot of the sidebar
+says who you are viewing as, with **Return to SuperAdmin** beside it, and both now survive a
+page reload — leaving impersonation always takes exactly one click, however you got there.
+
+Use it to see a reported problem through the reporter's eyes before assuming the cause. Actions
+you take while impersonating are real actions on their account.
+
 ## The clipart library
 
 **Administration → Clipart Library** curates the shared artwork every group can use in the video

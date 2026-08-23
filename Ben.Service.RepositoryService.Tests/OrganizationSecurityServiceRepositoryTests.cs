@@ -349,6 +349,64 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.Equal("Test Org", result[0].Name);
     }
 
+    // ── GetMembershipOrganizationsAsync (item 159) ────────────────────────────
+
+    [Fact]
+    public async Task MembershipOrganizations_ForSuperAdmin_AreOnlyTheirOwnMemberships()
+    {
+        // The sidebar's list answers "your groups". GetOrganizationsForUserAsync expands to every
+        // organization for a SuperAdmin — right for an admin screen, and exactly the wrong thing
+        // to render under Home. This method must never inherit that expansion.
+        var factory = CreateFactory();
+        var (orgId, _, _) = await SeedOrgAsync(factory);
+        var superAdmin = await SeedSuperAdminAsync(factory);
+
+        // A second org the SuperAdmin does NOT belong to.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = Guid.NewGuid(), Name = "Elsewhere", UrlName = "elsewhere",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = superAdmin
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = superAdmin,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = superAdmin
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var svc = CreateService(factory);
+
+        var mine = await svc.GetMembershipOrganizationsAsync(superAdmin);
+        Assert.Single(mine);
+        Assert.Equal(orgId, mine[0].Id);
+
+        // The admin expansion still exists and still differs — the two answers are different on purpose.
+        var all = await svc.GetOrganizationsForUserAsync(superAdmin);
+        Assert.True(all.Count > mine.Count);
+    }
+
+    [Fact]
+    public async Task MembershipOrganizations_ExcludeInactiveMemberships()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var m = await db.OrganizationUserMemberships.FirstAsync(x => x.AppUserId == memberId);
+            m.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var svc = CreateService(factory);
+        Assert.Empty(await svc.GetMembershipOrganizationsAsync(memberId));
+        Assert.Single(await svc.GetMembershipOrganizationsAsync(ownerId));
+    }
+
     // ── RegisterOrganizationAsync ─────────────────────────────────────────────
 
     [Fact]

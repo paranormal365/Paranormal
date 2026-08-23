@@ -47,6 +47,7 @@ public interface IOrganizationSecurityService
     /// </summary>
     /// <param name="appUserId">The user whose organizations are requested.</param>
     /// <param name="token">Propagates cancellation to the database query.</param>
+    Task<IReadOnlyList<Organization>> GetMembershipOrganizationsAsync(Guid appUserId, CancellationToken token = default);
     Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(Guid appUserId, CancellationToken token = default);
 
     /// <summary>

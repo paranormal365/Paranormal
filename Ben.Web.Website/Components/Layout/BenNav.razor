@@ -153,13 +153,34 @@
             // browse it, and the admin tools are what they are reaching for.
             var home = new List<NavItem> { new NavItem("Home", "home", "/") };
 
+            // Your groups, right below Home (item 159): one link per membership, by name. Six
+            // or more fold into an expandable entry — the sidebar is a menu, not a directory.
+            // Membership rows only, so a SuperAdmin sees the groups they belong to rather than
+            // all of them, and impersonation shows the impersonated person's groups.
+            if (IsAuthenticated && _myOrgs.Count > 0)
+            {
+                var orgLinks = _myOrgs
+                    .Select(o => new NavItem(o.Name, "globe", $"/organizations/{o.OrganizationId}"))
+                    .ToArray();
+
+                if (orgLinks.Length <= 5)
+                    home.AddRange(orgLinks);
+                else
+                    home.Add(Group("Your Organizations", "globe", orgLinks));
+            }
+
             var main = new List<NavItem>();
 
             // ── Signed out ────────────────────────────────────────────────────
             // Flat, and staying flat. There are only four entries at most, and folding four items
             // into two groups adds a click to reach each of them while saving two rows nobody was
             // struggling to read. Grouping earns its keep at eighteen items, not at four.
-            if (!IsAuthenticated || IsImpersonating)
+            // Impersonation deliberately does NOT fall in here any more (item 159): the whole
+            // point of impersonating is seeing the person's real experience, and the old
+            // signed-out menu was the single biggest lie in that view. What stays hidden while
+            // impersonating is the ADMIN section below — those are the SuperAdmin's own tools,
+            // not part of anyone's experience.
+            if (!IsAuthenticated)
             {
                 // The client's way in: the request wizard, where they give the address the case
                 // is about. Sits above the browse-style entries because it is the thing a first
@@ -180,7 +201,7 @@
                     main.Add(new NavItem("Publications", "book-open", "/publications"));
             }
 
-            if (IsAuthenticated && !IsImpersonating)
+            if (IsAuthenticated)
             {
                 var s = Notifications.Current;
 
@@ -348,6 +369,7 @@
     // is a synchronous property, so these land in fields and a re-render picks them up — the same
     // shape as Notifications.Current.
     private int? _organizationCount;
+    private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
     private int? _userCount;
 
     /// <summary>
@@ -364,10 +386,19 @@
 
     private async Task LoadNavCountsAsync()
     {
-        if (!IsAuthenticated || IsImpersonating) return;
+        // Impersonation no longer bails (item 159): every fetch below rides the current bearer
+        // token, so an impersonated session gets the impersonated person's numbers — fidelity
+        // for free. Only the SuperAdmin-gated user count below keeps its own guard.
+        //
+        // The TOKEN STORE, not the IsAuthenticated parameter: this runs from the store's own
+        // StateChanged, and the parameter only updates when MainLayout re-renders — reading it
+        // here raced the cascade and skipped the fetch on every soft sign-in.
+        if (!TokenStore.IsAuthenticated) return;
 
         try
         {
+            _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+
             // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
             _organizationCount = (await AdminClient.GetOrganizationsAsync()).Items.Count;
 
@@ -376,7 +407,7 @@
             // Counting a full list is the wrong shape at scale — this pulls every user row to
             // display one number. Fine at today's size, and the honest fix is a count endpoint
             // rather than a cleverer client; noted rather than pretended away.
-            if (IsSuperAdmin)
+            if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating)
             {
                 // A badge number. A refused fetch leaves the badge off rather than showing
                 // zero users, which would be the same lie in a smaller space.
@@ -499,7 +530,16 @@
 
     // Raised off the renderer's synchronization context by NotificationState's poll.
     private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
-    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    private void OnAuthChanged() => _ = InvokeAsync(async () =>
+    {
+        // Identity changed — sign-in, sign-out, impersonation either way. The org links and
+        // counts on screen belong to the previous identity; refetch under the new token rather
+        // than re-rendering stale numbers next to a new name (item 159).
+        _myOrgs = [];
+        _organizationCount = null;
+        StateHasChanged();
+        await LoadNavCountsAsync();
+    });
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
 
     private async Task ReturnToSuperAdmin()

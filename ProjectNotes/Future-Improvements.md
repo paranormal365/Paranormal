@@ -8060,7 +8060,7 @@ organization-administration (duties). Deliberately deferred to item 160 (Ben's m
 per-title duty ELIGIBILITY beyond the single minimum, capability semantics (PoC/invite/
 schedule per duty), and the Case Lead position.
 
-## 159. Impersonation-faithful bell + your-organizations links in the sidebar (OPEN — Ben, 2026-08-23)
+## 159. Impersonation-faithful bell + your-organizations links in the sidebar (CLOSED 2026-08-23)
 
 Two navigation-shell asks from Ben, verbatim in substance:
 
@@ -8076,6 +8076,34 @@ Two navigation-shell asks from Ben, verbatim in substance:
    (BenNav already renders grouped entries with chevrons and badge roll-ups; this reuses that
    machinery, fed from the person's memberships — and under impersonation it must show the
    impersonated person's groups, which is the same fidelity rule as the bell.)
+
+**Built 2026-08-23.** What the investigation found: the bell itself was already faithful —
+impersonation swaps the real bearer token and NotificationState refetches on the switch — but
+THREE adjacent fidelity breaks made the whole view lie:
+1. **The sidebar showed the signed-out menu while impersonating** (an explicit
+   `|| IsImpersonating` in both nav branches) — the single biggest lie in the view; the
+   impersonated person's real menus, groups, and badges never rendered. Removed; only the
+   SuperAdmin's own Administration section stays hidden while impersonating.
+2. **Impersonation did not survive a reload**: `PersistedAuthState` never carried
+   IsImpersonating or the Original* session, so a refresh restored the impersonated token with
+   no banner and no Return — the SuperAdmin was silently stuck as the other person until
+   logout. The full quintet (flag + original access/refresh/id/email/display-name) now
+   persists and restores.
+3. **The avatar kept the impersonated person's initials after Return** — StopImpersonating
+   restored email and id but not UserDisplayName. Restored with the rest.
+
+The sidebar links: new membership-rows-only endpoint
+(`/api/security/organizations/my-memberships`) and service method, deliberately distinct from
+the SuperAdmin-sees-all list — the sidebar answers "YOUR groups" (a SuperAdmin sees the three
+they belong to, not all fourteen; unit-tested contrast). One link per group under Home; six or
+more fold into a "Your Organizations" expandable. One timing fix worth remembering: the nav's
+fetch guard must read the TOKEN STORE, not the IsAuthenticated parameter — inside the store's
+own StateChanged handler the parameter is a render behind, and the fetch silently skipped on
+every soft sign-in. Verified live in the browser: sign-in shows the three links; impersonating
+Sarah shows HER two groups, her badges (bell 73 vs 78, Notifications 4 vs 7), her menus; a hard
+navigation keeps the banner and Return; returning restores everything including the avatar.
+Help updated (getting-started nav, site-administration impersonation section). e2e coverage
+deferred until Ben lifts the test hold.
 
 ## 160. Title-to-duty eligibility matrix, owner-configured per org (OPEN — Ben, 2026-08-23)
 
@@ -8106,3 +8134,16 @@ single-threshold case of this matrix — the schema hook is already there. What 
 
 Not started. Needs a design pass with Ben before building — the capability list per duty is
 product surface, not plumbing.
+
+## 161. Action-needed banners under the site-wide announcement (OPEN — Ben, 2026-08-23)
+
+Ben's spec: when an investigation request is waiting, show an info alert **just below the
+site-wide announcement banner** for anyone who can accept and review investigation requests;
+likewise a waiting membership application shows the alert to anyone with permission to accept
+members. Per-viewer, permission-aware banners in the MainLayout slot the announcement (item 151)
+already owns — the same render position, driven by the caller's own pending-work counts (the
+notification summary already carries some of these buckets; the banner is a louder surface for
+the two decisions that block OTHER people: a client waiting on an answer, an applicant waiting
+at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
+becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
+server-side (the item-141 rule — never render a bucket the caller cannot open).

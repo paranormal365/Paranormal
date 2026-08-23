@@ -134,6 +134,21 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             .ToListAsync(token);
     }
 
+    /// <summary>Organizations the user holds an active membership in — no SuperAdmin expansion.
+    /// The sidebar's "your groups" (item 159); see the controller for why the two lists differ.</summary>
+    public async Task<IReadOnlyList<Organization>> GetMembershipOrganizationsAsync(Guid appUserId, CancellationToken token = default)
+    {
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
+        return await
+            (from membership in dbContext.OrganizationUserMemberships.AsNoTracking()
+             join organization in dbContext.Organizations.AsNoTracking() on membership.OrganizationId equals organization.Id
+             where membership.AppUserId == appUserId && membership.IsActive
+             orderby organization.Name
+             select organization)
+            .Distinct()
+            .ToListAsync(token);
+    }
+
     public async Task<Organization> RegisterOrganizationAsync(Guid appUserId, string name, string urlName, CancellationToken token = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);

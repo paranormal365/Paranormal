@@ -19,6 +19,7 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
     public string? OriginalRefreshToken { get; set; }
     public Guid? OriginalUserId { get; set; }
     public string? OriginalUserEmail { get; set; }
+    public string? OriginalUserDisplayName { get; set; }
 
     public bool IsEntraSession { get; set; }
 
