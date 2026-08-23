@@ -8330,7 +8330,7 @@ passing solo in 2s — its waits are now 45s).
 Next: **Phase D** — the enforcement flip. Biggest phase; the bridge this phase built is what
 makes it safe.
 
-## 166. Wizards and walkthroughs — guided paths through the site's big jobs (OPEN — Ben, 2026-08-23)
+## 166. Wizards and walkthroughs — guided paths through the site's big jobs (CLOSED 2026-08-23 — W0-W5 all shipped)
 
 Ben's list, in substance; the closing rule matters most: **where the underlying functionality
 does not exist yet, we build the functionality AND its wizard/walkthrough together.**
@@ -8547,9 +8547,26 @@ e2e: both tours walked end to end from their ? affordances, every step's teachin
 dismissals verified in the tour-state API. 3,036 unit green; the selector guard covers all
 four tours now (owner-first-steps, layout, cms-editor, public-case-pages).
 
-**W5 essentials folded in**: help pages point at both ? affordances; PDF regenerated. Still
-open under W5's banner: extending the screenshot capture generators to the new surfaces —
-deferred with the help-media pass rather than half-done here.
+**W5 essentials folded in**: help pages point at both ? affordances; PDF regenerated. The one
+deferred W5 piece — extending the screenshot capture generators to the new surfaces — moves to
+the recurring help-media pass rather than being half-done here. **Item 166 is CLOSED.**
+
+### The full-suite validation (Ben's ask: "continue through W4 then run a full end to end test")
+
+Three full runs, each teaching something:
+1. **18 failures** → eight were the WASM family against a stale :5180 (the standing trap —
+   fresh host, all nine pass), and the other ten shared ONE root cause found via the SQL Logs
+   sink + a console-sink restart: **ApexChart's JS create fired after its container was gone**
+   (a tab switched away mid-flight), the JSException went unhandled, and the whole circuit
+   died — an old race exposed the day the stats panel's permission gating (item 171) slowed
+   its fetch. Fixed in ApexChart: a chart nobody is looking at is nothing to draw, never a
+   circuit kill. The flaking fixture went 33/33 across three runs.
+2. **3 failures** → CmsAuthoring assumed the page row's FIRST button opens Edit (item 169
+   moved Edit/Delete into the More-actions dropdown; the first button now NAVIGATES) — fixture
+   updated; NewGroupJourney's cold founder now legitimately meets W2's onboarding — the
+   journey Skips it like a real impatient founder; the video-editor back-nav was load timing.
+3. **Final: 341 passed / 1 load-timing failure (passes solo) / 14 deliberate skips.** 3,036
+   unit tests green throughout.
 
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
