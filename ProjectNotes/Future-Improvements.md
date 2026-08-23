@@ -8188,3 +8188,23 @@ the field). It is
 used for exactly one thing and the profile says so. 5 avatar-resolution tests (regressed by
 nulling the man branch) + a profile round-trip test; help updated on both pages. Upload
 click-throughs ride the held e2e pass.
+
+## 164. File deletion belonged to everyone; now it belongs to the owner (CLOSED 2026-08-23)
+
+Found while building item 162: `UploadFileController.Delete` had **no ownership check at all** —
+any authenticated user could hard-delete anyone's file AND its blob from disk. The destructive
+sibling of this controller family's previously flagged GetAll/Download gaps, and strictly worse:
+a read leaks, a delete destroys. The sibling Update endpoint had carried the correct
+owner-or-SuperAdmin gate the whole time.
+
+Ben's rule, set while fixing it: **only a file's owner can delete it. An organization can
+exclude a file from its own collection, but never delete it from the person's account.** The
+audit confirmed the org-side surfaces already obey: a case-file "delete" removes only the link
+(the UploadFile survives — chain of custody), and an OrganizationFile is the org's own byte-copy,
+so removing it never touches the source. The one path to a person's actual file now carries the
+same gate as Update; SuperAdmin retains it for moderation, the one deliberate exception to
+"owner only" — somebody has to be able to remove abuse, and that somebody is accountable.
+
+Three tests: non-owner gets Forbid with the row AND the blob surviving (the blob check matters —
+a Forbid that still deleted from disk would be the same hole in a different layer); owner
+deletes both; SuperAdmin may. The non-owner test was watched failing against the ungated code.

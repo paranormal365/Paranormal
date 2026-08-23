@@ -929,6 +929,90 @@ public class UploadFileControllerTests
     }
 
     [Fact]
+    public async Task Delete_ByNonOwner_ReturnsForbid_AndTheFileSurvives()
+    {
+        // Until 2026-08-23 this endpoint had no ownership check at all: any authenticated user
+        // could hard-delete anyone's file AND its blob. The destructive sibling of this
+        // controller family's earlier read gaps — a read leaks, a delete destroys.
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/x/a.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = BuildController(factory, Guid.NewGuid(), storage);
+
+        var result = await ctrl.Delete(fileId, default);
+
+        Assert.IsType<ForbidResult>(result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.NotNull(await verify.UploadFiles.FindAsync(fileId));
+        // The blob too: a Forbid that still deleted from disk would be the same hole in a
+        // different layer.
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Delete_ByOwner_RemovesRowAndBlob()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/x/a.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = BuildController(factory, ownerId, storage);
+
+        var result = await ctrl.Delete(fileId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Null(await verify.UploadFiles.FindAsync(fileId));
+        storage.Verify(x => x.DeleteAsync("users/x/a.jpg", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Delete_BySuperAdmin_Succeeds()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        Assert.IsType<NoContentResult>(await ctrl.Delete(fileId, default));
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Null(await verify.UploadFiles.FindAsync(fileId));
+    }
+
+    [Fact]
     public async Task Update_ConcurrentWithDelete_NeverThrows()
     {
         // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and

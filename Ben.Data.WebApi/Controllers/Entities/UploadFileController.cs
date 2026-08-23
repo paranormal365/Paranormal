@@ -349,6 +349,23 @@ public sealed class UploadFileController : BenControllerBase
         var entity = await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
 
+        // Owner or SuperAdmin, the same gate Update has always had. Until 2026-08-23 this
+        // endpoint had NO ownership check at all: any authenticated user could hard-delete
+        // anyone's file and its blob — the destructive sibling of the GetAll/Download gaps
+        // previously found in this controller family, and strictly worse, because a read leaks
+        // and a delete destroys.
+        // Owner or SuperAdmin, the same gate Update has always had. Until 2026-08-23 this
+        // endpoint had NO ownership check at all: any authenticated user could hard-delete
+        // anyone's file and its blob — the destructive sibling of the GetAll/Download gaps
+        // previously found in this controller family, and strictly worse, because a read leaks
+        // and a delete destroys. Ben's rule, stated the same day: only a file's owner deletes
+        // it; an organization excludes a file from ITS collection (unlinking a CaseFile,
+        // removing its own OrganizationFile copy) but never reaches the person's original.
+        // SuperAdmin stays for moderation — somebody has to be able to remove abuse.
+        var userId = GetCurrentUserId();
+        if (entity.AppUserId != userId && !User.IsInRole(RoleNames.SuperAdmin))
+            return Forbid();
+
         db.UploadFiles.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFile), id, entity, GetCurrentUserId(), AppSources.WebApi));
