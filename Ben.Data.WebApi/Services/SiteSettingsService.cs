@@ -291,7 +291,12 @@ public sealed class SiteSettingsService
         return SiteSettingKeys.Seed
             .Select(seed => stored.FirstOrDefault(s => s.Key == seed.Key)
                             ?? new SiteSetting { Key = seed.Key, Description = seed.Description })
-            .Select(s => { s.Description ??= DescriptionFor(s.Key); return s; })
+            // Always the CURRENT declaration's text, not whatever was stored when the row was
+            // first written: a stored description fossilizes the wording of the day it was set,
+            // and the admin page ends up explaining a workflow that no longer exists (caught by
+            // the 2026-08-23 screenshot pass — the generic avatar row still said "paste its file
+            // id here" months of edits after that stopped being true).
+            .Select(s => { s.Description = DescriptionFor(s.Key) ?? s.Description; return s; })
             .ToList();
     }
 

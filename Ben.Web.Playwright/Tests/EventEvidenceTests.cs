@@ -50,9 +50,23 @@ public class EventEvidenceTests : BenTestBase
 
     private async Task<bool> OpenPastEventAsync()
     {
-        // The public event page is reached by slug; the seed derives it from a moving date, so
-        // navigate via the org's public page rather than computing the URL here.
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/events/{DateTime.UtcNow.AddDays(-30):yyyy-MM-dd}-bell-witch-cave-open-night");
+        // The slug embeds the SEED date, not "today minus thirty": recomputing it here drifted
+        // one day per day after seeding and quietly skipped both tests from day one onward. Ask
+        // the anonymous events API for the real slug instead — the same source the page uses.
+        var api = await Page.APIRequest.GetAsync(
+            "http://localhost:5252/api/public/events?orgUrlName=tgh");
+        if (!api.Ok) return false;
+
+        var events = await api.JsonAsync();
+        string? slug = null;
+        foreach (var e in events!.Value.EnumerateArray())
+        {
+            if (e.GetProperty("title").GetString()?.Contains(EventTitle) == true)
+            { slug = e.GetProperty("urlName").GetString(); break; }
+        }
+        if (slug is null) return false;
+
+        await Page.GotoAsync($"{BaseUrl}/o/tgh/events/{slug}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         return (await Page.GetByText(EventTitle, new() { Exact = false }).CountAsync()) > 0;

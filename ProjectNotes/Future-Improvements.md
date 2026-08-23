@@ -8217,3 +8217,33 @@ someone with the org's Files-Create permission (`copy-from-user`, which also ver
 source is public or actively shared with this org), and publishing it publicly requires
 Files-Update on top. Every step is a real HasAccessAsync permission, not mere membership, so
 the item-156 roles arc will govern these gates without further work.
+
+## 165. The documentation refresh pass (CLOSED 2026-08-23)
+
+Ben lifted the e2e hold with "do e2e and screenshot and help and any missing seeding and
+anything else we missed." The pass:
+
+- **Two event-evidence e2e tests had been silently skipping since the day after they were
+  written**: the seeded past event's slug embeds the SEED date, and the tests recomputed
+  "today minus 30" — drifting one day per day. They now ask the anonymous events API for the
+  real slug (the same source the page uses). Both run and pass again.
+- **New e2e coverage** that had waited on the hold: ImpersonationAndSidebarTests (the
+  impersonated person's real menu, the reload surviving with its exit, membership-only sidebar
+  links) and DefaultAvatarUploadTests (a real PNG through the file input — the one interaction
+  the sandboxed browser pane cannot drive — including replace-over-replace and a shared-DB
+  cleanup that clears only what the test set).
+- **All 14 help-media generators re-run** (~40 dark-mode screenshots refreshed, including the
+  new Site Settings upload rows, the sidebar group links, and the members-grid Title column) and
+  the **product PDF rebuilt** (~10MB) via the headless-Chrome print step.
+- **A stale-description bug the screenshot pass caught**: SiteSettingsService.GetAllAsync
+  preferred the STORED description, fossilizing the wording of the day a row was first written —
+  the generic avatar row still told administrators to "paste its file id here". Descriptions now
+  always come from the current declaration.
+- **Seeding review**: nothing missing — the aged-out past event was a test-side drift, not a
+  seed defect; the three default-avatar images are deliberately unset for Ben to choose;
+  duties/levels/catalog all backfilled on earlier items.
+
+Final sheet: **322 e2e passed, 0 failed**, the only 15 skips being the capture generators
+themselves; 5,255 unit tests; zero warnings. Baseline run had two 30-second GotoAsync timeouts
+under full-machine load (both pass in 2s solo) — congestion, recorded here so the next reader
+doesn't chase them.

@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>14 documents &middot; 7 sections</div>
-      <div>22 August 2026</div>
+      <div>23 August 2026</div>
     </div>
   </div>
   <div class="status">
@@ -215,6 +215,9 @@ so it grows once you sign in and grows again if you run a group.</p>
 <p>Signed out it is a short list. Signed in, most of it is <strong>grouped by subject</strong>, so the menu stays
 about eight rows however much you can reach:</p>
 <ul>
+<li><strong>Your groups come first.</strong> Directly below Home sits a link to each group you belong to, by
+  name. Belong to more than five and they fold into one <strong>Your Organizations</strong> entry that opens
+  into the list — the menu stays a menu, however many groups you join.</li>
 <li><strong>Notifications</strong> and <strong>Organizations</strong> stay at the top level — you check those constantly, and
   they should not be behind anything.</li>
 <li><strong>My Work</strong> — your cases, your investigations, your requests.</li>
@@ -586,6 +589,9 @@ specifically granted the investigations permission.</p>
 client case — a landmark, a public building, or the group's own outing. Everything else about it
 works the same way: it appears on the map, the team can check in, and the findings are shared under
 the same rules.</p>
+<p>Because there is no case behind it, there is no case page either — so wherever you click one of
+these (your My Investigations list, your profile's map, the group's map), you land here, on the
+group's Investigations tab, with that visit highlighted and its team panel open.</p>
 <p>Describe where it is, and the form will tell you if the system already knows the place:</p>
 <blockquote>
 <p>This place may already be on file.</p>
@@ -597,6 +603,28 @@ created. The suggestion is only ever offered; nothing is merged behind your back
 <p>A place is only suggested when the address matches <strong>and</strong> it is within about a tenth of a mile.
 Both have to agree, because an address alone cannot tell two flats apart and a map position alone
 would suggest the house next door.</p>
+<h2>Duties — who's doing what tonight</h2>
+<p>Every visit has jobs: somebody leads, somebody owns the equipment, somebody collects the
+evidence at the end. The roster's <strong>Who's doing what</strong> panel makes those explicit — each duty is
+a row, each holder a badge, and a duty nobody holds shows <strong>Unfilled</strong>, which is the gap to
+close before the night of.</p>
+<p>Duties belong to one visit only. They are not titles (a junior investigator can lead a small
+visit) and they are not roles (holding Equipment tonight grants no standing permission). The one
+duty with teeth is <strong>Lead Investigator</strong>: the visit's lead can edit the investigation, exactly
+as before — handing that duty to someone is the same act as naming them lead.</p>
+<p>Your group defines its own duty list under <strong>Settings → Investigation duties</strong>, and a duty can
+ask for a <strong>minimum title</strong> from the ladder. That ask is soft: assigning someone below it shows
+a warning with an <strong>Assign anyway</strong> button, because the senior calls in sick and the capable
+junior steps up. The exception is recorded, so it was a decision rather than an accident — the
+holder's badge carries a small ⚠.</p>
+<h2>Who the client talks to</h2>
+<p>Every case answers "who do I talk to" with a name. On the case's <strong>Details</strong> column, <strong>Points of
+contact</strong> lists the members the client sees on their side of the case, and their messages are
+what land in those members' notifications. Choose contacts with the button there — the case
+manager and group admins can save the choice.</p>
+<p>With no explicit contact chosen, the <strong>case manager stands in</strong> automatically, marked as such.
+Clearing everyone returns to that fallback; the client's view is never blank while the case has
+a manager.</p>
 <h2>Arriving on site</h2>
 <p>The investigation's <strong>Team</strong> panel shows who is expected and who has turned up. Open it from the
 attendees on a case's Investigations tab, or from <strong>Team</strong> on any row of the group's Investigations
@@ -892,6 +920,12 @@ Your sign-in address is not changed here and is never shown publicly.</p>
 </ul>
 <p>Most visits here are to change one thing, which is why the sections are behind tabs rather than
 stacked down one page. The map in particular only loads when you open its tab.</p>
+<h2>Sex</h2>
+<p>Under your name sits an optional <strong>Sex</strong> field — Male, Female, or Unspecified, and it starts
+blank. It exists for exactly one thing: when you have no photo, the site shows a placeholder
+icon, and this choice picks which of the three placeholders you get. It is never shown to
+anyone, never shared, and never guessed from your name; blank and Unspecified both mean the
+generic placeholder stands in.</p>
 <h2>Two photos</h2>
 <p>You can set two pictures, and they are treated very differently.</p>
 <ul>
@@ -1575,6 +1609,30 @@ has decided its people stay unidentified to clients.</p>
 </tr>
 </tbody>
 </table>
+<h2>Member titles — the ladder</h2>
+<p>Separate from roles, on purpose: a <strong>title</strong> says how senior somebody is in the group — a
+<strong>role</strong> says what they may do. The two never mix. Giving somebody a grander title changes
+nothing about what they can access, and a brand-new member with the right role can do things a
+ten-year veteran without it cannot.</p>
+<p>Every group starts with the same five-rung ladder — <strong>Probationary, Junior Investigator,
+Investigator, Senior Investigator, Lead Investigator</strong> — and it is entirely yours to change:
+rename rungs, reorder them, add your own, or delete the ones you will never use, all under
+<strong>Settings → Member titles</strong>. Deleting a title simply clears it from anyone holding it; nobody
+loses any access, because titles never granted any.</p>
+<p>Assign titles from the <strong>Members</strong> tab — each row has a title dropdown if you administer the
+group. A member's title shows as a badge beside their name on the roster. Someone who belongs to
+two groups holds a separate title in each, which is exactly how it should be: seniority is
+earned per group.</p>
+<h2>Investigation duties</h2>
+<p>Under <strong>Settings → Investigation duties</strong> lives the list of jobs your group hands out per visit
+— every group starts with Lead Investigator, Equipment, Evidence Collection, and Documentation,
+and the list is yours: rename, add, retire. A duty marked <strong>one holder</strong> (like the lead) can
+only be held by a single person per visit; assigning it to someone takes it from the previous
+holder.</p>
+<p>A duty can ask for a <strong>minimum title</strong> from the member ladder — "Evidence Collection wants
+Investigator or above." The ask is deliberately soft: whoever manages a visit can assign past it
+with an explicit <em>Assign anyway</em>, and the exception is marked on the assignment. Duties never
+grant standing permissions; they exist so the visit's roster says who is doing what.</p>
 <h2>The Investigations tab</h2>
 <p>Every visit the group has run, mapped and listed, including ones that belong to no client case.
 It is visible to every member, not only administrators — knowing where the group has worked is
@@ -1985,14 +2043,48 @@ belongs here — settings about one person live on their profile, settings about
 that group's settings.</p>
 <p>Adding a new setting is a code change, not a database one: settings are declared in
 <code>SiteSettingKeys.Seed</code>, and the page renders whatever is declared.</p>
+<h3>Allowing groups to sign themselves up</h3>
+<p><strong>Allow groups to self-register</strong> decides whether an ordinary signed-in visitor may found a group.
+Left on — the default, and how the site normally runs — anyone can start one from <strong>Organizations
+→ Start a Group</strong> and becomes its owner. Switched off, that button disappears, the address behind
+it explains that new groups are not being accepted and points at the contact form, and the server
+refuses the request even if somebody has the address saved. You are exempt either way: an
+administrator can always create a group from this side of the site.</p>
+<p>Reach for it when you want to pause growth — a billing change you are part-way through, or a
+period where each new group needs a conversation first. It has no effect on groups that already
+exist.</p>
+<h3>The default profile picture</h3>
+<p>There are <strong>three default pictures</strong>: a generic one, one for members whose profile says they are
+a man, and one for members whose profile says they are a woman. Each is an ordinary upload:
+press <strong>Upload image</strong>, pick a JPEG, PNG, GIF or WebP, and it takes effect immediately — the
+preview under the row shows what is live. Uploading a replacement removes the previous image;
+there is nothing to clean up. The images are stored publicly on purpose, because they render for
+visitors who are not signed in.</p>
+<p>Which one a viewer sees follows the person's own profile — the optional <strong>Sex</strong> field under
+their name (Male, Female, Unspecified; blank by default), self-declared and never guessed from
+a name. Blank or Unspecified gets the generic image; Male or Female gets their specific image
+<strong>when you have uploaded one</strong>, and the generic otherwise. A real photo always outranks every
+default.</p>
+<h3>The site-wide announcement</h3>
+<p><strong>Site-wide announcement</strong> is for maintenance windows and known issues. While it has text, an
+info banner shows it at the top of every page, to everyone — signed in or not — with your line
+breaks preserved. Clear the box and save to take the banner down; both the posting and the
+removal reach visitors within about half a minute, without a restart. It is shown exactly as
+typed: plain text, no formatting or links.</p>
 <h3>Turning sections of the site on and off</h3>
 <p>Near the bottom of Site Settings is a row of switches labelled <strong>Feature — …</strong>, one for each
 major section: the video editor, equipment, events and calendars, local discovery and maps, group
 public pages, the media library, group messaging, voting, and the two newer features below.</p>
-<p>Turning one off does exactly what it says. The links disappear from the navigation <strong>and the
-addresses stop working</strong> — someone who bookmarked the page, or who is handed a link by a
-colleague, gets the ordinary "page not found" screen rather than a way in. That pairing is the
-point: hiding a link while the page still answers is not switching a feature off.</p>
+<p>Where a switch is fully wired, it does exactly what it says. The links disappear from the
+navigation <strong>and the addresses stop working</strong> — someone who bookmarked the page, or who is handed
+a link by a colleague, gets the ordinary "page not found" screen rather than a way in. That
+pairing is the point: hiding a link while the page still answers is not switching a feature off.</p>
+<p><strong>Four of them are not wired yet, and this page would rather tell you than let you find out.</strong>
+<strong>Local discovery and maps</strong>, <strong>Group public pages</strong> and <strong>Voting</strong> currently change nothing at
+all when switched off — the sections keep working exactly as before. <strong>Events and calendars</strong> is
+half-wired and is the one to be careful with: switching it off stops the reminder emails while
+leaving the calendars, event pages and RSVPs running, so people can still sign up for an event
+and simply never be reminded of it. Leave these four on until they are finished.</p>
 <p>What it does <strong>not</strong> do is delete anything. Equipment records, saved videos, messages and votes
 all stay exactly where they are, and turning the switch back on returns the section with its
 contents intact. Use it to take a section down while something is being fixed, or to run the site
@@ -2006,6 +2098,10 @@ without a feature your groups do not want — not as a way to remove data.</p>
   established sections on, unreleased features off. A connection problem will never make the site
   appear to have lost half its features.</li>
 </ul>
+<p>A switch with nothing saved against it shows the setting's own default and is marked
+<strong>(default)</strong> beside On or Off — so the row always describes what the site is doing, not merely
+what has been typed into it. Until recently it showed the stored value alone, which meant seven
+running features reported themselves as switched off simply because nobody had ever touched them.</p>
 <p>Two switches start <strong>off</strong>: <strong>Public feed</strong> and <strong>Publications</strong>. Both features are built, but
 neither is something a site should acquire by accident — each one adds a public surface that
 members and visitors will start using the moment it appears, so switching it on is a decision
@@ -2019,6 +2115,15 @@ somebody makes deliberately rather than a default they inherit.</p>
   actually publishes something, so switching it on shows visitors an empty directory at worst, not
   an unfinished one.</li>
 </ul>
+<h2>Impersonating a member</h2>
+<p><strong>Administration → Users → the impersonate button</strong> signs you in as that person, and what you
+see is exactly what they see: their navigation and their groups under Home, their notification
+counts on the bell, their pages, their refusals. Your own Administration menu disappears while
+you look — it is your tool, not part of their experience. A banner at the foot of the sidebar
+says who you are viewing as, with <strong>Return to SuperAdmin</strong> beside it, and both now survive a
+page reload — leaving impersonation always takes exactly one click, however you got there.</p>
+<p>Use it to see a reported problem through the reporter's eyes before assuming the cause. Actions
+you take while impersonating are real actions on their account.</p>
 <h2>The clipart library</h2>
 <p><strong>Administration → Clipart Library</strong> curates the shared artwork every group can use in the video
 editor. Upload the file first, then publish it here by its file id. The format is read from the
