@@ -356,6 +356,7 @@
     protected override async Task OnInitializedAsync()
     {
         _activeTabId = (InitialTab ?? "details").Trim().ToLowerInvariant();
+        _appliedInitialTab = InitialTab;   // primed, so a mere re-render never re-applies it
 
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
@@ -418,7 +419,36 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
+        _loadedOrgId = OrgId;
         await MaybeAutoLaunchTourAsync();
+    }
+
+    // ── Item 172 (Ben, 2026-08-23): the same component instance serves EVERY /organizations/{id}
+    // route, so clicking another group in the sidebar changes only the parameter — no fresh
+    // render, no reload, and the page keeps showing the old group, which reads as "clicking
+    // does nothing". Reload whenever the parameter points somewhere the loaded data is not. ──
+    private Guid _loadedOrgId;
+    private string? _appliedInitialTab;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedOrgId != Guid.Empty && _loadedOrgId != OrgId)
+        {
+            _loadedOrgId  = OrgId;
+            _editMode     = false;
+            _activeTabId  = (InitialTab ?? "details").Trim().ToLowerInvariant();
+            _appliedInitialTab = InitialTab;
+            await LoadAsync();
+            return;
+        }
+
+        // Same group, different ?tab= (a banner or bell deep link while already on the page):
+        // honor it once per distinct value, without clobbering tabs the person clicked since.
+        if (_loadedOrgId != Guid.Empty && InitialTab is not null && InitialTab != _appliedInitialTab)
+        {
+            _appliedInitialTab = InitialTab;
+            _activeTabId = InitialTab.Trim().ToLowerInvariant();
+        }
     }
 
     private async Task LoadAsync()

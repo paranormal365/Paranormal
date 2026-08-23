@@ -8774,7 +8774,7 @@ Ben ruled the second reading: **"the gates count as tabs."** Built same day:
   live against both seats' tokens: victor gets `{"members":9,"cases":null,...}`, james the
   full numbers.
 
-## 172. Sidebar group links stop working after opening a pending request (OPEN — Ben, 2026-08-23)
+## 172. Sidebar group links stop working after opening a pending request (CLOSED 2026-08-23 — fixed same day)
 
 Ben: "When I click a pending message like request for joining a group, I cannot click out into
 another group — it causes some kind of glitch where I cannot swap groups clicking them in the
@@ -8787,6 +8787,14 @@ as "clicking does nothing". The pending-request path (action-needed banner / bel
 with ?tab=) is simply the way Ben lands on an org page before trying to swap. Fix:
 observe parameter changes (OnParametersSetAsync) and reload when OrgId differs from the loaded
 org; e2e that walks org A → sidebar → org B and asserts B's name renders.
+
+**Fixed as diagnosed.** `OrganizationView.OnParametersSetAsync` reloads when `OrgId` differs
+from the loaded group (resetting edit mode and honoring the new ?tab=), and applies a CHANGED
+?tab= deep link on the same group without clobbering tabs the person clicked since (the
+applied-tab is primed at init so a mere re-render never re-applies it). The new
+`SidebarOrgSwapTests` e2e lands with a ?tab= deep link, swaps groups both ways through the
+sidebar, and REPRODUCES Ben's bug with the fix probed off — it fails exactly as reported,
+which is the proof the test discriminates.
 
 ## 173. Bell buckets: wrong destination and wrong counts (OPEN — Ben, 2026-08-23)
 
