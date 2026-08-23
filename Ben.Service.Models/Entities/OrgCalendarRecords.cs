@@ -17,6 +17,22 @@ public record OrgCalendarEventTypeRecord
     public Guid? UpdatedByAppUserId { get; init; }
 }
 
+/// <summary>One rung of a group's member-title ladder (item 157). A title is seniority, never
+/// permission — nothing may read it to decide access.</summary>
+public record OrganizationMemberLevelRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public required string Name { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+    public DateTime DateCreated { get; init; }
+    public DateTime? DateUpdated { get; init; }
+}
+
+/// <summary>Create/update body for a ladder rung.</summary>
+public sealed record UpsertMemberLevelRequest(string Name, int SortOrder, bool IsActive);
+
 public record OrgCalendarEventRecord
 {
     public Guid Id { get; init; }

@@ -648,6 +648,7 @@ public class OrganizationControllerTests
         await using (var seed = await factory.CreateDbContextAsync())
         {
             Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(seed, org.Id, userId);
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(seed, org.Id, userId);
             seed.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
                 Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
@@ -664,6 +665,7 @@ public class OrganizationControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.Null(await db.Organizations.FindAsync(org.Id));
         Assert.Empty(await db.OrgCalendarEventTypes.Where(t => t.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.OrganizationMemberLevels.Where(l => l.OrganizationId == org.Id).ToListAsync());
         Assert.Empty(await db.OrganizationUserMemberships.Where(m => m.OrganizationId == org.Id).ToListAsync());
     }
 
@@ -755,6 +757,9 @@ public class OrganizationControllerTests
         // the Id being real immediately after Add — this asserts that wiring holds.
         var typeCount = await db.OrgCalendarEventTypes.CountAsync(t => t.OrganizationId == created.Id);
         Assert.Equal(5, typeCount);
+
+        var ladderCount = await db.OrganizationMemberLevels.CountAsync(l => l.OrganizationId == created.Id);
+        Assert.Equal(5, ladderCount);
     }
 
     [Fact]

@@ -387,6 +387,18 @@ public class OrganizationSecurityServiceRepositoryTests
             .ToListAsync();
 
         Assert.Equal(["Investigation", "Public Event", "Meeting", "Training", "Fundraiser"], eventTypes);
+
+        // …and the member-title ladder (item 157), for the same reason: a founder's group must
+        // be usable from the first moment, and an empty ladder is a feature they cannot find.
+        var ladder = await verify.OrganizationMemberLevels
+            .Where(l => l.OrganizationId == org.Id)
+            .OrderBy(l => l.SortOrder)
+            .Select(l => l.Name)
+            .ToListAsync();
+
+        Assert.Equal(
+            ["Probationary", "Junior Investigator", "Investigator", "Senior Investigator", "Lead Investigator"],
+            ladder);
     }
 
     [Fact]

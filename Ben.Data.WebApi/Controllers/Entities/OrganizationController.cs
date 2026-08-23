@@ -273,6 +273,10 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             .Where(t => t.OrganizationId == id).ToListAsync(ct);
         db.OrgCalendarEventTypes.RemoveRange(birthChildren);
 
+        var birthLevels = await db.OrganizationMemberLevels
+            .Where(l => l.OrganizationId == id).ToListAsync(ct);
+        db.OrganizationMemberLevels.RemoveRange(birthLevels);
+
         var memberships = await db.OrganizationUserMemberships
             .Where(m => m.OrganizationId == id).ToListAsync(ct);
         db.OrganizationUserMemberships.RemoveRange(memberships);
@@ -330,6 +334,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Add(org);
         OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
+        OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, userId.Value);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
@@ -408,7 +413,9 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
                 (m, u) => new OrgRosterEntry(
                     m.Id, m.OrganizationId, m.AppUserId,
                     u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString(),
-                    m.Role, m.IsActive, m.DateCreated, m.DateUpdated))
+                    m.Role, m.IsActive, m.DateCreated, m.DateUpdated,
+                    m.MemberLevelId,
+                    m.MemberLevel != null ? m.MemberLevel.Name : null))
             .ToListAsync(ct);
 
         return Ok(roster);
@@ -436,7 +443,9 @@ public sealed record OrgRosterEntry(
     OrganizationMemberRole Role,
     bool IsActive,
     DateTime DateCreated,
-    DateTime? DateUpdated);
+    DateTime? DateUpdated,
+    Guid? MemberLevelId = null,
+    string? MemberLevelName = null);
 
 public sealed record OrganizationListItemResponse(
     Guid Id,

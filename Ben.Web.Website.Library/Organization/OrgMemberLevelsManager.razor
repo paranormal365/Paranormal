@@ -1,0 +1,152 @@
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+
+@*
+    The group's member-title ladder (item 157). Titles are seniority, never permission: this
+    screen edits labels, and no permission anywhere reads them. The permission roles live on the
+    Roles tab; keeping the two on different screens is deliberate — they answer different
+    questions ("how senior is Sarah" vs "what may Sarah do").
+*@
+
+<div class="mt-4">
+    <h6 class="mb-1 fw-semibold">Member titles<HelpLink Slug="organization-administration" Anchor="member-titles-the-ladder" /></h6>
+    <p class="text-secondary small mb-2">
+        The ladder members climb — titles only. What a member may <em>do</em> is set by roles,
+        not by their title.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2 small">@_error</div>
+    }
+
+    <BenListState TItem="OrgMemberLevelItem" Result="@_result" Loading="@_loading"
+                  LoadingText="Loading the ladder…"
+                  EmptyText="No titles yet — add the first below."
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <ul class="list-group mb-2" style="max-width:480px;">
+                @foreach (var level in _levels.OrderBy(l => l.SortOrder))
+                {
+                    <li class="list-group-item d-flex align-items-center gap-2 py-2">
+                        @if (_editingId == level.Id)
+                        {
+                            <input class="form-control form-control-sm" style="max-width:220px;"
+                                   id="level-edit-name" value="@_formName"
+                                   @oninput="@(e => _formName = e.Value?.ToString() ?? "")" />
+                            <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SaveEditAsync(level))">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _editingId = null)">Cancel</button>
+                        }
+                        else
+                        {
+                            <span class="text-secondary small font-monospace" style="width:2rem;">@level.SortOrder</span>
+                            <span class="fw-semibold flex-grow-1 @(level.IsActive ? "" : "text-decoration-line-through text-secondary")">@level.Name</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Move up"
+                                    disabled="@(level.SortOrder <= _levels.Min(l => l.SortOrder))"
+                                    @onclick="@(() => MoveAsync(level, -1))">↑</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Move down"
+                                    disabled="@(level.SortOrder >= _levels.Max(l => l.SortOrder))"
+                                    @onclick="@(() => MoveAsync(level, +1))">↓</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => BeginEdit(level))">Rename</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => DeleteAsync(level))">Delete</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </ChildContent>
+    </BenListState>
+
+    <div class="d-flex gap-2 align-items-center" style="max-width:480px;">
+        <input class="form-control form-control-sm" placeholder="New title, e.g. Tech Specialist"
+               id="level-new-name" value="@_newName"
+               @oninput="@(e => _newName = e.Value?.ToString() ?? "")" />
+        <button type="button" class="btn btn-primary btn-sm text-nowrap"
+                disabled="@(string.IsNullOrWhiteSpace(_newName))"
+                @onclick="AddAsync">Add title</button>
+    </div>
+    <p class="text-secondary mt-1 mb-0" style="font-size:.75rem;">
+        Deleting a title clears it from members who hold it — nothing else changes.
+    </p>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private IReadOnlyList<OrgMemberLevelItem> _levels = [];
+    private LoadResult<OrgMemberLevelItem> _result;
+    private bool _loading = true;
+    private string? _error;
+    private string _newName = "";
+    private Guid? _editingId;
+    private string _formName = "";
+    private Guid _loadedForOrg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrgId == Guid.Empty || OrgId == _loadedForOrg) return;
+        _loadedForOrg = OrgId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetMemberLevelsAsync(OrgId);
+        _levels = _result.Items;
+        _loading = false;
+    }
+
+    private async Task AddAsync()
+    {
+        _error = null;
+        var next = _levels.Count == 0 ? 1 : _levels.Max(l => l.SortOrder) + 1;
+        var created = await AdminClient.CreateMemberLevelAsync(OrgId, _newName.Trim(), next, isActive: true);
+        if (created is null) { _error = "That title couldn't be added."; return; }
+        _newName = "";
+        await LoadAsync();
+    }
+
+    private void BeginEdit(OrgMemberLevelItem level)
+    {
+        _editingId = level.Id;
+        _formName = level.Name;
+    }
+
+    private async Task SaveEditAsync(OrgMemberLevelItem level)
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_formName)) { _error = "A title needs a name."; return; }
+        var updated = await AdminClient.UpdateMemberLevelAsync(OrgId, level.Id, _formName.Trim(), level.SortOrder, level.IsActive);
+        if (updated is null) { _error = "That rename couldn't be saved."; return; }
+        _editingId = null;
+        await LoadAsync();
+    }
+
+    private async Task MoveAsync(OrgMemberLevelItem level, int direction)
+    {
+        // Swap sort orders with the neighbour — two updates, no bulk reorder endpoint needed.
+        var ordered = _levels.OrderBy(l => l.SortOrder).ToList();
+        var index = ordered.FindIndex(l => l.Id == level.Id);
+        var swapWith = ordered.ElementAtOrDefault(index + direction);
+        if (swapWith is null) return;
+
+        _error = null;
+        var first = await AdminClient.UpdateMemberLevelAsync(OrgId, level.Id, level.Name, swapWith.SortOrder, level.IsActive);
+        var second = await AdminClient.UpdateMemberLevelAsync(OrgId, swapWith.Id, swapWith.Name, level.SortOrder, swapWith.IsActive);
+        if (first is null || second is null) _error = "The reorder didn't fully save — reloading.";
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(OrgMemberLevelItem level)
+    {
+        _error = null;
+        if (!await AdminClient.DeleteMemberLevelAsync(OrgId, level.Id))
+        {
+            _error = "That title couldn't be deleted.";
+            return;
+        }
+        await LoadAsync();
+    }
+}

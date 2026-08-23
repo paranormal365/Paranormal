@@ -50,6 +50,24 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+## Member titles — the ladder
+
+Separate from roles, on purpose: a **title** says how senior somebody is in the group — a
+**role** says what they may do. The two never mix. Giving somebody a grander title changes
+nothing about what they can access, and a brand-new member with the right role can do things a
+ten-year veteran without it cannot.
+
+Every group starts with the same five-rung ladder — **Probationary, Junior Investigator,
+Investigator, Senior Investigator, Lead Investigator** — and it is entirely yours to change:
+rename rungs, reorder them, add your own, or delete the ones you will never use, all under
+**Settings → Member titles**. Deleting a title simply clears it from anyone holding it; nobody
+loses any access, because titles never granted any.
+
+Assign titles from the **Members** tab — each row has a title dropdown if you administer the
+group. A member's title shows as a badge beside their name on the roster. Someone who belongs to
+two groups holds a separate title in each, which is exactly how it should be: seniority is
+earned per group.
+
 ## The Investigations tab
 
 Every visit the group has run, mapped and listed, including ones that belong to no client case.
