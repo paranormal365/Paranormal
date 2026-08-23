@@ -91,6 +91,11 @@
         }
     }
 
+    // CasesPerMonth is genuinely nullable - OrganizationStatsController returns it null for a group
+    // with nothing to chart. The only call site today sits inside an @if that checks it, which the
+    // compiler cannot see across a property, so the ! was silencing a warning rather than answering
+    // it. An empty series is the honest answer if this is ever read from anywhere else, and the
+    // chart already has NoDataText for exactly that.
     private List<ApexChart.ChartSeries> MonthlySeries =>
-        [new("Cases", _stats!.CasesPerMonth.Select(p => (double)p.Count).ToList())];
+        [new("Cases", (_stats?.CasesPerMonth ?? []).Select(p => (double)p.Count).ToList())];
 }
