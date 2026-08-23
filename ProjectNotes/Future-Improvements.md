@@ -8292,3 +8292,27 @@ and self-healing beats blame). Help: "What role grants open today."
 
 Next: **Phase C** — default roles at birth (the seven "… Role" templates), backfill, and the
 grandfathering decision Ben still owes an answer on.
+
+### Item 156 Phase C — SHIPPED 2026-08-23 (grandfathering as recommended, Ben approved)
+
+`OrgRoleDefaults`: the seven "… Role" templates (grants per the amended plan table; Historian
+reads every mapped table via PermissionAreas.Map so it grows with the map) stamped at all three
+creation doors and added to the delete-birth-children list (assignments → grants → roles,
+leaf-first). `OrgRoleSeeder`: backfilled the seven for 13 existing groups (one already had
+roles and was left alone — the two gates are independent, so it was STILL grandfathered);
+grandfathered 29 members across all 14 groups with an **Investigator Role** (Cases +
+Investigations Read). The one-time semantics live in the gate: the whole block runs only where
+the role is absent, so members joining later start at baseline and are handed the role by a
+person, not a seeder. Owners/administrators skipped (D2 bypass — an assignment would only muddy
+the roster). New groups get the role too, created empty, as a hand-out template.
+
+Four OrgRoleSeederTests: the member-not-admin bridge; one-time semantics (a later joiner stays
+at baseline across a reseed); independent gates (custom-role org keeps its list AND gets the
+bridge); and the chain proof — the grandfather grant opens Case Read through the REAL
+HasAccessAsync and correctly refuses Delete. Grandfathering regressed by emptying the bridge
+list. Door tests ×3 + delete test extended. Live: TGH shows exactly the eight roles; e2e
+families green (the TierRoleAreas toggle keeps losing 21s races in loaded family runs while
+passing solo in 2s — its waits are now 45s).
+
+Next: **Phase D** — the enforcement flip. Biggest phase; the bridge this phase built is what
+makes it safe.

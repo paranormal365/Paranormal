@@ -20,7 +20,7 @@ public class TierRoleAreasTests : BenTestBase
 
         var freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
         var calendar = freeRow.Locator("input[type=checkbox][id$='-9']");   // Calendar = 9
-        await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
 
         // ENSURE the starting state rather than asserting it: a previous run that died between
         // uncheck and restore leaves residue in the shared database, and an asserted
@@ -28,7 +28,7 @@ public class TierRoleAreasTests : BenTestBase
         if (!await calendar.IsCheckedAsync())
         {
             await calendar.CheckAsync();
-            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 15_000 });
+            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
             await Page.ReloadAsync();
             await WaitUntilLoadedAsync();
             freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
@@ -43,7 +43,7 @@ public class TierRoleAreasTests : BenTestBase
 
             freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
             calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
-            await Expect(calendar).Not.ToBeCheckedAsync(new() { Timeout = 20_000 });
+            await Expect(calendar).Not.ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
         finally
         {
@@ -51,7 +51,7 @@ public class TierRoleAreasTests : BenTestBase
             calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
             if (!await calendar.IsCheckedAsync())
                 await calendar.CheckAsync();
-            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 15_000 });
+            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
     }
 }

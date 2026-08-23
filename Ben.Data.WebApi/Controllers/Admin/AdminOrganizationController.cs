@@ -59,6 +59,7 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
         OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, GetCurrentUserIdOrThrow());
         OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, GetCurrentUserIdOrThrow());
         OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, GetCurrentUserIdOrThrow());
+        OrgRoleDefaults.AddDefaultRoles(db, org.Id, GetCurrentUserIdOrThrow());
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
