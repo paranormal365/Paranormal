@@ -65,19 +65,34 @@
         // Nothing here can run during prerender: there is no DOM to measure and no JS to call.
         if (!RendererInfo.IsInteractive) return;
 
-        _module ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "./_content/Ben.Web.Website.Library/Shared/ApexChart.razor.js");
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/Ben.Web.Website.Library/Shared/ApexChart.razor.js");
 
-        if (!_created)
-        {
-            await _module.InvokeVoidAsync("create", _containerId, Spec());
-            _created = true;
+            if (!_created)
+            {
+                await _module.InvokeVoidAsync("create", _containerId, Spec());
+                _created = true;
+            }
+            else
+            {
+                // Parameters changed: new numbers into the existing chart rather than a teardown,
+                // which would flash the panel on every refresh.
+                await _module.InvokeVoidAsync("update", _containerId, Spec());
+            }
         }
-        else
+        catch (JSException)
         {
-            // Parameters changed: new numbers into the existing chart rather than a teardown,
-            // which would flash the panel on every refresh.
-            await _module.InvokeVoidAsync("update", _containerId, Spec());
+            // The container can be GONE by the time the JS runs — a tab switched away, a page
+            // navigated — and apexcharts answers "Element not found". A chart nobody is looking
+            // at is nothing to draw, NOT a reason to kill the circuit: unhandled, this took the
+            // whole page down and froze every later click ("An unhandled error has occurred"),
+            // found as an intermittent e2e failure the day the stats panel got slower.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit itself is going away; there is nobody left to draw for.
         }
     }
 
