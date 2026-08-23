@@ -348,4 +348,67 @@ public class OrganizationFileControllerTests
         var (noPermSecurity, _, _) = CreateMocks(hasPermission: false);
         Assert.IsType<ForbidResult>(await Build(factory, userId, security: noPermSecurity).Delete(orgId, fileId, default));
     }
+
+    // ── Item 175: the picker's candidate list = exactly what CopyFromUser accepts ──
+
+    private static async Task<Guid> SeedUserFileAsync(
+        IDbContextFactory<BenDataContext> factory, Guid ownerId, Guid fileTypeId,
+        string name, bool isPublic, Guid? sharedWithOrgId = null, bool shareActive = true)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = id, AppUserId = ownerId, UploadFileTypeId = fileTypeId,
+            FileName = name, StoredFileName = $"{id:N}.png", ContentType = "image/png",
+            FileSize = 2048, IsPublic = isPublic, SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        if (sharedWithOrgId is { } org)
+            db.UploadFileOrganizationShares.Add(new UploadFileOrganizationShare
+            {
+                Id = Guid.NewGuid(), UploadFileId = id, OrganizationId = org,
+                IsActive = shareActive, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task ShareableUserFiles_ListsPublicAndSharedAndNothingElse()
+    {
+        var (factory, orgId, userId, fileTypeId) = await SeedAsync();
+        var otherOrgId = Guid.NewGuid();
+
+        var publicId   = await SeedUserFileAsync(factory, userId, fileTypeId, "public.png", isPublic: true);
+        var sharedId   = await SeedUserFileAsync(factory, userId, fileTypeId, "shared.png", isPublic: false, sharedWithOrgId: orgId);
+        await SeedUserFileAsync(factory, userId, fileTypeId, "private.png",  isPublic: false);
+        await SeedUserFileAsync(factory, userId, fileTypeId, "revoked.png",  isPublic: false, sharedWithOrgId: orgId, shareActive: false);
+        await SeedUserFileAsync(factory, userId, fileTypeId, "elsewhere.png", isPublic: false, sharedWithOrgId: otherOrgId);
+
+        var result = await Build(factory, userId).GetShareableUserFiles(orgId, default);
+
+        var rows = Assert.IsAssignableFrom<IEnumerable<ShareableUserFileRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        Assert.Equal(2, rows.Count);
+        Assert.True(Assert.Single(rows, r => r.Id == sharedId).SharedWithOrganization);
+        Assert.False(Assert.Single(rows, r => r.Id == publicId).SharedWithOrganization);
+        // Files their owners offered to THIS group lead the list.
+        Assert.Equal(sharedId, rows[0].Id);
+    }
+
+    [Fact]
+    public async Task ShareableUserFiles_RefusedWithoutTheCreateGate()
+    {
+        var (factory, orgId, userId, _) = await SeedAsync();
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(x => x.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+                It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await Build(factory, userId, security).GetShareableUserFiles(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
 }

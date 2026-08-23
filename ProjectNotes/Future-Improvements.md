@@ -8859,3 +8859,28 @@ with type/context filters, search, thumbnail and list layouts, single- and multi
 `MediaLibraryGrid` (item 6's universal media library) already renders thumbnails+info — reuse
 its rendering inside the picker rather than building a third grid. First consumer: the group
 Files tab's Share-from-User dialog; then sweep other Guid-asking or hand-rolled pickers.
+
+**Phase 1 built 2026-08-23 — the component and its first consumer.**
+- `ContentPickerItem`/`ContentPickerModel` (Kit): source-agnostic items carrying a type label
+  and arbitrary named FACETS; the model owns search (name/type/meta, case-insensitive), the
+  type filter, per-facet filters, and drops filters a reload orphaned (stale filters would
+  render an empty library) — all pinned in xUnit, the WizardModel pattern.
+- `BenContentPicker`: modal with search, type dropdown, one dropdown per facet present,
+  thumbnail-grid and list layouts (toggle), single- AND multi-select, loader-per-open so the
+  list is never stale. Image thumbnails render through `UserMediaPreview` (the authenticated
+  path — the img-sends-no-bearer trap stays dodged); a failed load renders its own sentence.
+- `GET api/organizations/{orgId}/files/shareable-user-files`: exactly the set CopyFromUser
+  accepts — public, or actively shared with this group — shared-first, gated like the copy
+  itself (probe-regressed: the visibility filter removed fails the test).
+- The Share-from-User dialog lost its Guid box: a Choose-a-file button opens the picker
+  (Source facet = "Shared with this group"/"Public"), the choice fills a chosen-file card.
+  e2e: dialog → picker → search/layout controls → select fills the card, and asserts the
+  Guid box is GONE; closes without sharing so the shared DB keeps nothing. Live: TGH's
+  candidate list serves 24 real files with owners. Help: org-administration gained its first
+  Files-tab section; PDF regenerated.
+
+**Remaining (keeps 175 open):** the sweep — other Guid-asking or hand-rolled selection
+surfaces adopt the picker (case media attachment, CMS media slots, avatar-from-library, the
+equipment photo pickers …), each adding facets its content actually has (investigation,
+location). Also worth wiring: `MediaLibraryGrid`'s video/audio click-to-preview inside the
+picker's grid cells.

@@ -1,0 +1,236 @@
+@using Ben.Web.Website.Library.User
+
+@*
+    Item 175 (Ben): "the modal should have the list of shareable/shared content … filtered by
+    type and investigation or location … thumbnails with information or a grid … searchable …
+    very robust and reusable, because there are many places throughout the site where this
+    type of interface would be useful."
+
+    Source-agnostic: the host supplies a Loader; items carry their own type label and facets,
+    and the picker builds its filters from what actually arrived. Two layouts — thumbnail
+    cards and a list — with search across name/type/meta. Selection hands back the item; the
+    HOST decides what a selection means. Filtering lives in ContentPickerModel (tested in
+    xUnit); this file only renders its answers.
+*@
+
+<BenModal Visible="@Visible" VisibleChanged="@OnVisibleChanged" Title="@Title" Size="xl">
+    <ChildContent>
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3 ben-content-picker-filters">
+            <div class="flex-grow-1" style="min-width:180px;">
+                <label class="form-label small mb-1" for="picker-search">Search</label>
+                <input id="picker-search" type="text" class="form-control form-control-sm"
+                       placeholder="Name, type, owner…"
+                       @bind="Model.Search" @bind:event="oninput" />
+            </div>
+            @if (Model.TypeLabels.Count > 1)
+            {
+                <div>
+                    <label class="form-label small mb-1" for="picker-type">Type</label>
+                    <select id="picker-type" class="form-select form-select-sm" @bind="Model.TypeFilter">
+                        <option value="">All types</option>
+                        @foreach (var type in Model.TypeLabels)
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+            }
+            @foreach (var facet in Model.FacetNames)
+            {
+                <div>
+                    <label class="form-label small mb-1" for="@($"picker-facet-{facet}")">@facet</label>
+                    <select id="@($"picker-facet-{facet}")" class="form-select form-select-sm"
+                            value="@Model.FacetFilters.GetValueOrDefault(facet, "")"
+                            @onchange="@(e => SetFacet(facet, e.Value?.ToString() ?? ""))">
+                        <option value="">All</option>
+                        @foreach (var value in Model.FacetValues(facet))
+                        {
+                            <option value="@value">@value</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="ms-auto">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="picker-layout"
+                        title="@(_gridLayout ? "Switch to list" : "Switch to thumbnails")"
+                        @onclick="@(() => _gridLayout = !_gridLayout)">
+                    <BenIcon Name="@(_gridLayout ? "list" : "grid")" />
+                </button>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
+        }
+        else if (_loadError is not null)
+        {
+            <div class="alert alert-warning py-2 small">@_loadError</div>
+        }
+        else if (Model.Visible() is { Count: 0 })
+        {
+            <p class="text-secondary small my-4 text-center" id="picker-empty">@EmptyText</p>
+        }
+        else if (_gridLayout)
+        {
+            <div class="row g-2 ben-content-picker-grid" style="max-height:55vh;overflow-y:auto;">
+                @foreach (var item in Model.Visible())
+                {
+                    <div class="col-6 col-md-4 col-lg-3">
+                        <div class="card h-100 @(IsSelected(item) ? "border-primary border-2" : "")"
+                             role="button" @onclick="@(() => ToggleSelect(item))">
+                            <div class="d-flex align-items-center justify-content-center p-2" style="height:110px;overflow:hidden;">
+                                @if (item.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true)
+                                {
+                                    <UserMediaPreview FileId="@item.Id" FileName="@item.Name"
+                                                      ContentType="@item.ContentType" FileSize="@(item.FileSize ?? 0)" />
+                                }
+                                else
+                                {
+                                    <BenIcon Name="@IconFor(item)" Class="fs-1 text-secondary" />
+                                }
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="small fw-semibold text-truncate" title="@item.Name">@item.Name</div>
+                                <div class="small text-secondary text-truncate">
+                                    @item.TypeLabel@(item.MetaLine is null ? "" : $" · {item.MetaLine}")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="max-height:55vh;overflow-y:auto;">
+                <table class="table table-sm table-hover align-middle ben-content-picker-list">
+                    <thead><tr><th>Name</th><th>Type</th><th>Details</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in Model.Visible())
+                        {
+                            <tr role="button" class="@(IsSelected(item) ? "table-primary" : "")"
+                                @onclick="@(() => ToggleSelect(item))">
+                                <td class="text-truncate" style="max-width:280px;" title="@item.Name">@item.Name</td>
+                                <td class="text-nowrap">@item.TypeLabel</td>
+                                <td class="small text-secondary">@item.MetaLine</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <div class="d-flex w-100 gap-2 align-items-center">
+            <span class="small text-secondary" id="picker-count">
+                @(MultiSelect && _selected.Count > 0 ? $"{_selected.Count} selected · " : "")@Model.Visible().Count shown
+            </span>
+            <span class="flex-grow-1"></span>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync">Cancel</button>
+            <button type="button" class="btn btn-primary" id="picker-select"
+                    disabled="@(_selected.Count == 0)" @onclick="ConfirmAsync">@SelectText</button>
+        </div>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "Choose content";
+    [Parameter] public string SelectText { get; set; } = "Select";
+    [Parameter] public string EmptyText { get; set; } = "Nothing here matches.";
+    [Parameter] public bool MultiSelect { get; set; }
+
+    /// <summary>Loads the pickable items — called each time the picker opens, so the list is
+    /// never stale from a previous visit.</summary>
+    [Parameter, EditorRequired] public Func<Task<IReadOnlyList<ContentPickerItem>>> Loader { get; set; } = default!;
+
+    /// <summary>Single-select confirmation.</summary>
+    [Parameter] public EventCallback<ContentPickerItem> OnSelected { get; set; }
+    /// <summary>Multi-select confirmation (when <see cref="MultiSelect"/>).</summary>
+    [Parameter] public EventCallback<IReadOnlyList<ContentPickerItem>> OnSelectedMany { get; set; }
+
+    public ContentPickerModel Model { get; } = new();
+
+    private readonly List<ContentPickerItem> _selected = [];
+    private bool _gridLayout = true;
+    private bool _loading;
+    private string? _loadError;
+    private bool _wasVisible;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !_wasVisible)
+        {
+            _wasVisible = true;
+            await LoadAsync();
+        }
+        else if (!Visible)
+        {
+            _wasVisible = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        _selected.Clear();
+        StateHasChanged();
+        try
+        {
+            Model.SetItems(await Loader());
+        }
+        catch
+        {
+            _loadError = "The list couldn't be loaded — close and try again.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsSelected(ContentPickerItem item) => _selected.Any(s => s.Id == item.Id);
+
+    private void ToggleSelect(ContentPickerItem item)
+    {
+        if (IsSelected(item)) { _selected.RemoveAll(s => s.Id == item.Id); return; }
+        if (!MultiSelect) _selected.Clear();
+        _selected.Add(item);
+    }
+
+    private void SetFacet(string facet, string value)
+    {
+        if (string.IsNullOrEmpty(value)) Model.FacetFilters.Remove(facet);
+        else Model.FacetFilters[facet] = value;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_selected.Count == 0) return;
+        await SetVisibleAsync(false);
+        if (MultiSelect) await OnSelectedMany.InvokeAsync([.. _selected]);
+        else await OnSelected.InvokeAsync(_selected[0]);
+    }
+
+    private async Task CancelAsync() => await SetVisibleAsync(false);
+
+    private Task OnVisibleChanged(bool value) => SetVisibleAsync(value);
+
+    private async Task SetVisibleAsync(bool value)
+    {
+        Visible = value;
+        await VisibleChanged.InvokeAsync(value);
+    }
+
+    private static string IconFor(ContentPickerItem item) =>
+        item.ContentType?.Split('/')[0] switch
+        {
+            "video" => "film",
+            "audio" => "music",
+            _ => "file",
+        };
+}

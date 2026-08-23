@@ -353,6 +353,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default)
         => _api.PostMultipartAsync<OrganizationFileRecord>($"/api/organizations/{orgId}/files", content, token);
 
+    /// <summary>The files this group could take a copy of — the picker's list (item 175).</summary>
+    public Task<LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<ShareableUserFileItem>($"/api/organizations/{orgId}/files/shareable-user-files", token);
+
     public async Task<OrgFileCopyClientResult?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool publishImmediately, CancellationToken token = default)
     {
         // The API returns OrgFileCopyResult which matches OrgFileCopyClientResult shape

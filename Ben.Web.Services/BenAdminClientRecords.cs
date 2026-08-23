@@ -509,6 +509,11 @@ public sealed record MyOrgPermissionsItem(bool CanReadCases, bool CanReadInvesti
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
 
+/// <summary>One candidate for the share-from-user picker (item 175).</summary>
+public sealed record ShareableUserFileItem(
+    Guid Id, string FileName, string ContentType, long FileSize, string? Description,
+    string? OwnerDisplayName, DateTime DateCreated, bool SharedWithOrganization);
+
 /// <summary>One group's waiting work, for the action-needed banners (item 161).</summary>
 public sealed record OrgActionNeededItem(
     Guid OrganizationId, string OrganizationName,
