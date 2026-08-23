@@ -74,11 +74,11 @@ preview under the row shows what is live. Uploading a replacement removes the pr
 there is nothing to clean up. The images are stored publicly on purpose, because they render for
 visitors who are not signed in.
 
-Which one a viewer sees follows the person's own profile — the "I am…" choice under their name,
-which is optional and self-declared; the site never guesses from a name. No declaration, or a
-declared preference not to say, gets the generic image; a declared man or woman gets their
-specific image **when you have uploaded one**, and the generic otherwise. A real photo always
-outranks every default.
+Which one a viewer sees follows the person's own profile — the optional **Sex** field under
+their name (Male, Female, Unspecified; blank by default), self-declared and never guessed from
+a name. Blank or Unspecified gets the generic image; Male or Female gets their specific image
+**when you have uploaded one**, and the generic otherwise. A real photo always outranks every
+default.
 
 ### The site-wide announcement
 

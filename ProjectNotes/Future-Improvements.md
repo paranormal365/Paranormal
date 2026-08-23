@@ -8180,9 +8180,11 @@ specific image degrades to generic, never to a broken picture.
 The chain was dead without one more piece the survey caught: **nothing anywhere wrote
 `AppUser.Gender`** (every existing Gender reference was the ClientRequest entity) — the
 settings would have passed the consumer guard while feeding off a field nobody could set,
-the write-only bug one level down. So the profile gained an optional, self-declared **"I am…"**
-select (a man / a woman / prefer not to say), null-means-untouched in the update request,
-NotProvided stored as null so "never asked" and "prefers not to say" read identically. It is
+the write-only bug one level down. So the profile gained an optional, self-declared **Sex**
+select — per Ben's wording: blank by default, with Male / Female / Unspecified as the options —
+null-means-untouched in the update request, blank and Unspecified both stored as null and both
+selecting the generic icon (the two are indistinguishable on purpose; nothing else ever reads
+the field). It is
 used for exactly one thing and the profile says so. 5 avatar-resolution tests (regressed by
 nulling the man branch) + a profile round-trip test; help updated on both pages. Upload
 click-throughs ride the held e2e pass.
