@@ -8796,7 +8796,7 @@ applied-tab is primed at init so a mere re-render never re-applies it). The new
 sidebar, and REPRODUCES Ben's bug with the fix probed off — it fails exactly as reported,
 which is the proof the test discriminates.
 
-## 173. Bell buckets: wrong destination and wrong counts (OPEN — Ben, 2026-08-23)
+## 173. Bell buckets: wrong destination and wrong counts (CLOSED 2026-08-23)
 
 Ben: "In the bell, when I have 21 messages in the Client messages to answer, I click and get
 Organizations. I click the 54 Group messages, I get 18 messages."
@@ -8806,6 +8806,21 @@ isn't the client-messages surface; (2) the Group-messages bucket's badge (54) di
 what the destination lists (18) — either the badge counts a different population (e.g. all
 orgs vs one org, or unread vs total) or the destination filters what the badge does not.
 The item-141 rule applies: a badge must count exactly what its click opens.
+
+**Fixed 2026-08-23.** Both defects were one design flaw: the two cross-org buckets rendered as
+single rows linking to the bare `/organizations` list, counting unread across EVERY group while
+any page they could land on shows one group's. The summary now carries per-group breakdowns
+(`OrgScopedBucket`: id, name, count, oldest) alongside the aggregates; the aggregate is the
+FOLD of the slices, so the bell's total always equals the sum of its rows. The bell and the
+notifications page render one row per group — "Group messages · BenCo (52)" →
+`/organizations/{id}?tab=messages`, "Client messages · BenCo (21)" → `?tab=cases`. Org-less
+unread rows (nothing structurally forbids one, though feed posts create no recipients) are
+deliberately NOT counted: a number no surface can show is a lie on a badge. Verified live:
+sarah's 52 unread were ALL BenCo — the exact 54-vs-18 shape Ben hit, now labeled and routed.
+EF lesson re-learned: a grouped join into a record constructor doesn't translate — two clean
+queries (grouped projection + name lookup) beat one clever untranslatable one. Follow-up worth
+noting: the client-messages row lands on the group's Cases tab; a per-case drill-down (which
+cases hold the unread) would be the next refinement if Ben wants it.
 
 ## 174. GetMine returned an arbitrary membership application when history existed (CLOSED 2026-08-23 — found by Ben's click-test)
 
@@ -8825,3 +8840,19 @@ in-memory FirstOrDefault picks insertion order, so both FAIL with the ordering r
 (probe-verified). The stranded live row was withdrawn through the fixed endpoint as Daniel;
 TGH's queue is clean again. The one-Pending-max rule was never broken — Apply refuses
 duplicates and a filtered unique index backs it.
+
+## 175. Reusable content picker — replace the paste-a-Guid share dialog (OPEN — Ben, 2026-08-23)
+
+Ben, testing live: the "Share from User" button on the group Files tab opens a modal asking for
+a raw file Guid. His spec, in substance: the modal should LIST the shareable/shared content —
+filterable by type and by investigation or location; thumbnails-with-information or a grid
+view; if not thumbnails then filename + type, searchable. And the closing requirement that
+shapes the build: **"This type of content selection should be very robust and reusable because
+there are many places throughout the site where this type of interface would be useful."**
+
+Build shape: one `BenContentPicker` component (Kit or Media), fed by a pluggable source
+(user's own uploads for the share dialog; a group's library elsewhere; case media elsewhere),
+with type/context filters, search, thumbnail and list layouts, single- and multi-select.
+`MediaLibraryGrid` (item 6's universal media library) already renders thumbnails+info — reuse
+its rendering inside the picker rather than building a third grid. First consumer: the group
+Files tab's Share-from-User dialog; then sweep other Guid-asking or hand-rolled pickers.

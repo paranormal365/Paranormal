@@ -284,15 +284,18 @@
                 $"From the group handling your case · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsClient.OldestUnreadUtc)}",
                 "folder", "/my-cases", s.CaseMessagesAsClient);
 
-        if (s.CaseMessagesAsOrgMember.Count > 0)
-            yield return new("Client messages awaiting a reply",
-                $"On cases at your groups · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsOrgMember.OldestUnreadUtc)}",
-                "message-square", "/organizations", s.CaseMessagesAsOrgMember);
+        // Item 173: one row per group, opening exactly what it counts.
+        foreach (var slice in s.CaseMessagesAsOrgMemberByOrg ?? [])
+            yield return new($"Client messages awaiting a reply · {slice.OrganizationName}",
+                $"On this group's cases · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
+                "message-square", $"/organizations/{slice.OrganizationId}?tab=cases",
+                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
 
-        if (s.OrgMessages.Count > 0)
-            yield return new("Unread group messages",
-                $"Internal messages addressed to you · oldest {NotificationBadge.DescribeAge(s.OrgMessages.OldestUnreadUtc)}",
-                "mail", "/organizations", s.OrgMessages);
+        foreach (var slice in s.OrgMessagesByOrg ?? [])
+            yield return new($"Unread group messages · {slice.OrganizationName}",
+                $"Internal messages addressed to you · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
+                "mail", $"/organizations/{slice.OrganizationId}?tab=messages",
+                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
 
         if (s.PendingPermissionRequests.Count > 0)
             yield return new("File permission requests",

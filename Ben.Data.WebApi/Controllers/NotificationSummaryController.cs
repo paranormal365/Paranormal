@@ -46,11 +46,20 @@ public sealed class NotificationSummaryController : BenControllerBase
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-        // ── Internal org messages addressed to me ────────────────────────────
-        var orgMessages = await BucketAsync(
-            db.OrgMessageRecipients.AsNoTracking()
-              .Where(r => r.RecipientAppUserId == userId && r.DateRead == null)
-              .Select(r => (DateTime?)r.OrgMessage.DateCreated), ct);
+        // ── Internal org messages addressed to me, PER GROUP (item 173) ──────
+        // The single cross-org number sent Ben to a page showing a different count: 54 unread
+        // across every group, one group's inbox showing its 18. Each group's slice renders as
+        // its own row linking to that group's Messages tab; the aggregate is the fold of the
+        // slices, so the bell's total always equals what the rows can open. Org-less rows
+        // (feed posts create none, but nothing structurally forbids one) are deliberately NOT
+        // counted — a number no surface can show is a lie on a badge.
+        var orgMessageGroups = await db.OrgMessageRecipients.AsNoTracking()
+            .Where(r => r.RecipientAppUserId == userId && r.DateRead == null
+                     && r.OrgMessage!.OrganizationId != null)
+            .GroupBy(r => r.OrgMessage!.OrganizationId!.Value)
+            .Select(g => new { OrgId = g.Key, Count = g.Count(),
+                               Oldest = g.Min(x => (DateTime?)x.OrgMessage!.DateCreated) })
+            .ToListAsync(ct);
 
         // ── Case messages awaiting an org reply, for orgs I actively belong to ──
         var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
@@ -69,20 +78,42 @@ public sealed class NotificationSummaryController : BenControllerBase
             .Select(m => m.OrganizationId)
             .ToListAsync(ct);
 
-        var caseMessagesAsOrg = myOrgIds.Count == 0
-            ? NotificationBucket.Empty
-            : await BucketAsync(
-                db.CaseMessages.AsNoTracking()
-                  .Where(m => m.SenderSide == CaseMessageSide.Client
-                           && !m.IsReadByOrg
-                           && myOrgIds.Contains(m.Case.OrganizationId)
-                           && (myAdminOrgIds.Contains(m.Case.OrganizationId)
-                               || (db.CaseContacts.Any(cc => cc.CaseId == m.CaseId)
-                                   ? db.CaseContacts.Any(cc => cc.CaseId == m.CaseId && cc.AppUserId == userId)
-                                   : (m.Case.CaseManagerAppUserId != null
-                                       ? m.Case.CaseManagerAppUserId == userId
-                                       : true))))
-                  .Select(m => (DateTime?)m.DateCreated), ct);
+        var caseMessageGroups = myOrgIds.Count == 0
+            ? []
+            : await db.CaseMessages.AsNoTracking()
+                .Where(m => m.SenderSide == CaseMessageSide.Client
+                         && !m.IsReadByOrg
+                         && myOrgIds.Contains(m.Case.OrganizationId)
+                         && (myAdminOrgIds.Contains(m.Case.OrganizationId)
+                             || (db.CaseContacts.Any(cc => cc.CaseId == m.CaseId)
+                                 ? db.CaseContacts.Any(cc => cc.CaseId == m.CaseId && cc.AppUserId == userId)
+                                 : (m.Case.CaseManagerAppUserId != null
+                                     ? m.Case.CaseManagerAppUserId == userId
+                                     : true))))
+                .GroupBy(m => m.Case.OrganizationId)
+                .Select(g => new { OrgId = g.Key, Count = g.Count(),
+                                   Oldest = g.Min(x => (DateTime?)x.DateCreated) })
+                .ToListAsync(ct);
+
+        // Names in one small lookup, joined in memory — EF will not translate a grouped join
+        // into a record constructor, and two clean queries beat one untranslatable clever one.
+        var namedOrgIds = orgMessageGroups.Select(g => g.OrgId)
+            .Union(caseMessageGroups.Select(g => g.OrgId)).ToList();
+        var orgNames = namedOrgIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Organizations.AsNoTracking()
+                .Where(o => namedOrgIds.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.Name, ct);
+
+        var orgMessagesByOrg = orgMessageGroups
+            .Select(g => new OrgScopedBucket(g.OrgId, orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
+            .ToList();
+        var orgMessages = Fold(orgMessagesByOrg);
+
+        var caseMessagesAsOrgByOrg = caseMessageGroups
+            .Select(g => new OrgScopedBucket(g.OrgId, orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
+            .ToList();
+        var caseMessagesAsOrg = Fold(caseMessagesAsOrgByOrg);
 
         // ── Case messages awaiting me as the client ──────────────────────────
         // "My cases" is both the ones I originated and the ones shared with me as a co-client.
@@ -186,8 +217,18 @@ public sealed class NotificationSummaryController : BenControllerBase
 
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
-            investigationInvites, equipmentCheckouts, feedMentions));
+            investigationInvites, equipmentCheckouts, feedMentions,
+            OrgMessagesByOrg: [.. orgMessagesByOrg.OrderBy(b => b.OrganizationName)],
+            CaseMessagesAsOrgMemberByOrg: [.. caseMessagesAsOrgByOrg.OrderBy(b => b.OrganizationName)]));
     }
+
+    /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>
+    private static NotificationBucket Fold(IReadOnlyList<OrgScopedBucket> slices)
+        => slices.Count == 0
+            ? NotificationBucket.Empty
+            : new NotificationBucket(
+                slices.Sum(s => s.Count),
+                slices.Where(s => s.OldestUnreadUtc.HasValue).Select(s => s.OldestUnreadUtc).DefaultIfEmpty(null).Min());
 
     /// <summary>
     /// Collapses a stream of arrival timestamps into a count plus the earliest of them, in one
