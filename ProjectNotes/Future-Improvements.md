@@ -7808,7 +7808,126 @@ Client Manager, Content Manager, Historian, Secretary.
    documented implicit baseline; today it is scattered across is-member checks.
 4. **Role templates** for Ben's candidate list, as starting points a group can edit.
 
-**Open questions (asked of Ben 2026-08-23; answers to be recorded here):** what shape the tier
-gating takes; whether the Administrator membership-role keeps its blanket bypass or becomes
-role-governed; what exactly the baseline member read covers; and what happens to already-granted
-permissions when a group's tier drops below them.
+**Ben's decisions (2026-08-23), locked:**
+- **D1 — Tier gating is per permission AREA.** Each tier carries a checklist of included areas
+  (Equipment, Cases, CMS, …); the role editor grays out sections whose area the group's tier does
+  not include, with an upgrade note. Managed as a checklist per tier in SuperAdmin.
+- **D2 — Owner and org-designated Administrators keep the blanket bypass** within their own
+  organization. Custom roles govern Manager, Member, and Viewer memberships. (Confirmed distinct
+  from the application-wide SuperAdmin/Admin identity roles, which this plan never touches.)
+- **D3 — Baseline read for any accepted member:** group details/profile, member list,
+  calendar/events, group messages, shared-files list. Cases, investigations, equipment, CMS,
+  clients, and settings require a role.
+- **D4 — On downgrade/lapse, uncovered permissions stop applying at runtime** but remain stored;
+  the editor shows them grayed-but-remembered and they resume on upgrade. Nothing is deleted.
+- **D5 — Roles are strictly additive.** A role can only add permission on top of the
+  no-permission default. There is no deny/revoke row and never will be: holding more roles can
+  never reduce access. (The existing resolver is already OR-across-roles, so this is a stated
+  invariant to guard, not a change.)
+
+**Key code fact the plan turns on:** `OrganizationSecurityTable` (36 values, persisted numbers,
+never renumber — append only) has **no Case, no ClientRequest, and no OrgCalendar value**. Case
+access today is enforced purely by is-member checks, which is exactly the "implicit baseline"
+that D3 replaces. So "Case Manager" and "Client Manager" roles require NEW enum values, new
+editor sections, and controller migration — the largest genuinely new work in the plan.
+
+---
+
+### The plan — six phases, each independently shippable
+
+**Phase A — Permission areas + tier inclusion model (zero behavior change).**
+New `OrganizationPermissionArea` enum (explicit numbers, append-only): OrganizationProfile,
+Membership, Cases, Investigations, Equipment, PublicPages, Files, Clients, Calendar. A total
+static map `AreaFor(OrganizationSecurityTable)` — every org-scoped table maps to exactly one
+area (user-scoped values and the dead `AppUser=13` are a documented exclusion list). Append new
+enum values `Case=37`, `ClientRequest=38`, `OrgCalendar=39`. New entity
+`SubscriptionTierPermissionArea` (TierId × Area, unique index) + migration. **Seed every
+existing tier with ALL areas** so deploy changes nothing; Ben unchecks to differentiate later.
+Resolution rides the effective tier the limits already use (better-of contract rule); a group
+with no subscription resolves to the default tier's areas; no tiers configured at all reads as
+all-areas — a billing hiccup must never lock a group out of its own data (same fail-open
+philosophy as SubscriptionLimitGuard; deliberate downgrade is D4's job, not an outage's).
+SuperAdmin UI: area checklist per tier on AdminSubscriptionTiers, audit-logged.
+*Tests:* mapping guard (total, no orphans, every area non-empty); resolver units (no-sub /
+contract better-of / lapsed); SuperAdmin-only endpoint auth; all regressed against un-fixed code.
+
+**Phase B — The new permission surfaces, additively (still no tightening).**
+Role-editor sections for Case, ClientRequest, OrgCalendar with plain-language descriptions
+(`RolePermissionCoverageTests` forces completeness). Controllers gain role checks **in addition
+to** what exists: operations that are admin-only today (e.g. calendar event Create, client
+request accept) become "org-admin OR role grant" — so a Secretary or Client Manager role is
+immediately useful, while member-wide reads stay untouched until Phase D.
+*Tests:* per-endpoint — role grants the write to a non-admin member; no role still Forbids;
+regressed.
+
+**Phase C — Default roles at birth + backfill + grandfathering.**
+`OrgRoleDefaults.AddDefaultRoles` stamped from all three creation doors on the same SaveChanges
+(item 148 pattern), and **added to the org-delete birth-children list** (item 155's lesson —
+role memberships, permissions, then roles). Idempotent name-matched backfill seeder for
+existing groups. Starting grants (every group can edit or delete these afterwards):
+
+| Default role | Grants |
+|---|---|
+| Case Manager | Cases CRUD, Investigations CRUD |
+| Equipment Manager | Equipment CRUD, Checkouts CRUD |
+| CMS Manager | Public pages CRUD, CMS sections CRUD |
+| Client Manager | Client requests CRUD, Cases Read |
+| Content Manager | Org files CRUD, CMS sections RU |
+| Historian | Read on every area |
+| Secretary | Calendar CRUD, Membership requests RU, Org profile RU |
+
+**Grandfathering (recommended, needs Ben's yes):** a one-time migration assigns an
+"Investigator" role (Cases + Investigations Read) to every existing active non-admin member, so
+the Phase D flip strips nobody mid-case; members joining after cutover start at baseline.
+*Tests:* the three creation-door tests extended; delete test extended; backfill idempotence
+(run twice, second adds zero); regressed.
+
+**Phase D — The enforcement flip (the breaking phase).**
+`HasAccessAsync` gains the area gate: role permissions AND direct grants in area X count only
+while X is in the group's effective areas (D4). Baseline read becomes an explicit constant —
+`OrganizationBaseline.ReadTables` — honored for any active membership (Viewer included), with a
+source-scan guard listing exactly which controllers may still use bare is-member checks (the
+baseline surfaces) versus which must call `HasAccessAsync`. Then the migration: the Cases
+cluster (CaseFile, CaseNote, CaseReport, CaseResearch, CaseAudioMix, ScheduleProposal,
+Investigation reads, CaseTransfer, EventEvidence review), equipment reads, and CMS drafts move
+from is-member to `HasAccessAsync(table, Read)`. The UI mirrors the server the same day
+(server-guard-needs-a-UI-path — five strikes already): OrganizationView's Cases /
+Investigations / Equipment tabs and BenNav render from a new lightweight
+"my effective permissions in this org" endpoint, and every refusal renders BenListState
+(item 141), never "nothing here".
+*Tests:* the full HasAccessAsync matrix — Owner/org-admin bypass, baseline × membership kinds,
+area included/excluded, multi-role OR (D5), **multi-org isolation** (a role in group A grants
+nothing in group B), inactive membership/role/permission rows, Viewer; effective-permissions
+endpoint; every case regressed.
+
+**Phase E — Tier-aware role editor + org-facing surfaces.**
+Editor sections grouped by area; an ungated area's toggles are disabled but show their stored
+values (D4 grayed-but-remembered) under a note — "These come with the {tier} plan — upgrade to
+put them into effect," linking to /pricing. The server refuses *changes* to ungated sections
+(400 with a sentence) while preserving stored rows on unrelated edits. Role list shows
+"N permissions inactive on your tier." The public pricing page lists each tier's included role
+areas (verified on the anonymous path — authors-see-what-visitors-cannot). Downgrade notices
+name the areas that will stop applying, through the existing TierChangeNotice machinery.
+*Tests:* editor server guard (refuses the change, preserves the rows) regressed; pricing
+anonymous render.
+
+**Phase F — End-to-end proof, help, and the verification pass.**
+Playwright: (1) `RoleTierJourneyTests` — SuperAdmin unchecks an area → owner's editor grays with
+the note → a role-holding member loses that access at runtime as a rendered refusal → re-check →
+access resumes; everything restored in `finally` (shared DB). (2) `OrdinaryMemberBaselineTests`
+— a role-less member sees exactly the D3 baseline; assign Case Manager → cases appear; unassign
+→ gone (test-as-an-ordinary-member rule, seeded accounts). (3) Fresh group lists the seven
+default roles, and can still be deleted. (4) Multi-org isolation. Help docs in the same branch:
+organization-administration (roles rewrite: additive model, defaults, tier graying),
+getting-started (what a new member sees), site-administration (the tier checklist), plus
+HelpLinks and the PDF regen. Full unit + e2e suites, then a live click-test as owner, org-admin,
+member, and viewer before merge.
+
+**Flagged for Ben, not blocking:** (1) grandfathering yes/no — recommended yes, above;
+(2) Viewer membership semantics — recommended: baseline read only, but roles remain assignable
+to Viewers like anyone else; (3) whether Historian ships as a default role or only as an
+add-from-template option.
+
+**Sizing:** A, B, C, E, F ≈ one session each; D ≈ two (it touches ~16 controllers and every
+member-visible tab). Order is load-bearing: A and B change nothing visible, C prepares the
+safety net, and only then does D flip enforcement.
