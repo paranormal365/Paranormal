@@ -79,6 +79,7 @@ public sealed class MyProfileController : BenControllerBase
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
             SharePrivatePhotoWithClients    = user.SharePrivatePhotoWithClients,
             AnyOrgAllowsPrivatePhotoSharing = anyOrgAllows,
+            Gender                          = user.Gender ?? Ben.Data.Common.Enums.ClientGender.NotProvided,
         });
     }
 
@@ -138,6 +139,12 @@ public sealed class MyProfileController : BenControllerBase
         // actually says so, never as a side effect of editing something else on the page.
         if (request.SharePrivatePhotoWithClients is { } share)
             user.SharePrivatePhotoWithClients = share;
+
+        // Same null-means-untouched rule. Self-declared and optional; NotProvided is a real
+        // choice, stored as null so "never asked" and "prefers not to say" read identically —
+        // both select the generic default avatar, which is the only thing this feeds.
+        if (request.Gender is { } gender)
+            user.Gender = gender == Ben.Data.Common.Enums.ClientGender.NotProvided ? null : gender;
 
         user.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);

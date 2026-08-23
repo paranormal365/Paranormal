@@ -8167,3 +8167,22 @@ driven by the sandboxed browser tool.
 check — any authenticated user can hard-delete anyone's file and its blob. Its sibling Update
 endpoint has the owner-or-SuperAdmin gate; Delete needs the same, plus a regression test. Same
 controller family as the previously flagged GetAll/Download gaps.
+
+## 163. Three default avatars — man, woman, generic (CLOSED 2026-08-23)
+
+Ben: *"break it into 3 kinds: known man, known woman, generic when we do not know."* Two new
+settings (`avatar.default.man.upload-file-id`, `.woman.`) beside the generic, all three
+rendering the item-162 upload control with per-key previews and replace-deletes-old.
+`UserAvatarController` resolves: the person's own photo always first, then the man/woman image
+when their profile declares it AND the image is configured, then the generic — an unset
+specific image degrades to generic, never to a broken picture.
+
+The chain was dead without one more piece the survey caught: **nothing anywhere wrote
+`AppUser.Gender`** (every existing Gender reference was the ClientRequest entity) — the
+settings would have passed the consumer guard while feeding off a field nobody could set,
+the write-only bug one level down. So the profile gained an optional, self-declared **"I am…"**
+select (a man / a woman / prefer not to say), null-means-untouched in the update request,
+NotProvided stored as null so "never asked" and "prefers not to say" read identically. It is
+used for exactly one thing and the profile says so. 5 avatar-resolution tests (regressed by
+nulling the man branch) + a profile round-trip test; help updated on both pages. Upload
+click-throughs ride the held e2e pass.
