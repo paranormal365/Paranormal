@@ -57,6 +57,13 @@ public record MyProfileRecord
     /// because no org allows it is worse than no toggle at all.
     /// </summary>
     public bool AnyOrgAllowsPrivatePhotoSharing { get; init; }
+
+    /// <summary>
+    /// Self-declared, optional, and used for exactly one thing: which of the site's three
+    /// default avatars stands in when this person has no photo (item 163). NotProvided is a
+    /// first-class answer, not a gap — it selects the generic default.
+    /// </summary>
+    public Ben.Data.Common.Enums.ClientGender Gender { get; init; }
 }
 
 /// <param name="DisplayName">
@@ -69,11 +76,13 @@ public record MyProfileRecord
 /// </param>
 /// <param name="FirstName">Null leaves it unchanged; empty or whitespace is refused.</param>
 /// <param name="LastName">Same.</param>
+/// <param name="Gender">Null leaves it unchanged; NotProvided is a real choice that clears it.</param>
 public sealed record UpdateMyProfileRequest(
     string? DisplayName,
     bool? SharePrivatePhotoWithClients = null,
     string? FirstName = null,
-    string? LastName = null);
+    string? LastName = null,
+    Ben.Data.Common.Enums.ClientGender? Gender = null);
 
 /// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
 /// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>

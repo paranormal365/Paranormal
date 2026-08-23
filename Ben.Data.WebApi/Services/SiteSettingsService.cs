@@ -20,6 +20,13 @@ public static class SiteSettingKeys
     /// </summary>
     public const string DefaultAvatarUploadFileId = "avatar.default.upload-file-id";
 
+    /// <summary>Default avatar for someone whose profile says they are a man. Falls back to the
+    /// generic default when unset — three settings, one fallback chain, never a broken image.</summary>
+    public const string DefaultAvatarManUploadFileId = "avatar.default.man.upload-file-id";
+
+    /// <summary>Default avatar for someone whose profile says they are a woman. Same fallback.</summary>
+    public const string DefaultAvatarWomanUploadFileId = "avatar.default.woman.upload-file-id";
+
     /// <summary>Whether new organizations may be registered by ordinary users.</summary>
     public const string AllowOrganizationSelfRegistration = "org.allow-self-registration";
 
@@ -102,7 +109,11 @@ public static class SiteSettingKeys
     public static readonly IReadOnlyList<(string Key, string Label, string Description)> Seed =
     [
         (DefaultAvatarUploadFileId, "Default profile picture",
-            "Image shown in place of initials when someone has no profile photo the viewer is allowed to see. Upload one here; replacing it removes the previous image."),
+            "Shown when someone has no profile photo the viewer is allowed to see and their profile doesn't say whether they are a man or a woman. Upload one here; replacing it removes the previous image."),
+        (DefaultAvatarManUploadFileId, "Default profile picture — man",
+            "Shown instead of the generic default when the person's profile says they are a man. Leave unset to use the generic default for everyone."),
+        (DefaultAvatarWomanUploadFileId, "Default profile picture — woman",
+            "Shown instead of the generic default when the person's profile says they are a woman. Leave unset to use the generic default for everyone."),
         (AllowOrganizationSelfRegistration, "Allow groups to self-register",
             "When on, any signed-in user can register a new group. When off, only a SuperAdmin can create one."),
         (SiteAnnouncement, "Site-wide announcement",

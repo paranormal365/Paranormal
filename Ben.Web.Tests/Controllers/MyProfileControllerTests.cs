@@ -147,6 +147,32 @@ public class MyProfileControllerTests
     }
 
     [Fact]
+    public async Task Gender_RoundTrips_AndNotProvidedClears(
+        )
+    {
+        // Item 163: self-declared, optional, feeds only the default-avatar choice. Null in the
+        // request leaves it alone; NotProvided is a real answer that clears it.
+        var (factory, userId) = await SeedAsync();
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, Gender: Ben.Data.Common.Enums.ClientGender.Female), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.Female,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await Build(factory, userId).UpdateProfile(new UpdateMyProfileRequest(null), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.Female,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, Gender: Ben.Data.Common.Enums.ClientGender.NotProvided), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.NotProvided,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.AppUsers.FindAsync(userId))!.Gender);
+    }
+
+    [Fact]
     public async Task UpdateProfile_SetsDisplayName()
     {
         var (factory, userId) = await SeedAsync();

@@ -67,11 +67,18 @@ exist.
 
 ### The default profile picture
 
-**Default profile picture** is the image shown for anyone who has no photo the viewer is allowed
-to see. It is an ordinary upload: press **Upload image**, pick a JPEG, PNG, GIF or WebP, and it
-takes effect immediately — the preview under the row shows what is live. Uploading a replacement
-removes the previous image; there is nothing to clean up. The image is stored publicly on
-purpose, because it renders for visitors who are not signed in.
+There are **three default pictures**: a generic one, one for members whose profile says they are
+a man, and one for members whose profile says they are a woman. Each is an ordinary upload:
+press **Upload image**, pick a JPEG, PNG, GIF or WebP, and it takes effect immediately — the
+preview under the row shows what is live. Uploading a replacement removes the previous image;
+there is nothing to clean up. The images are stored publicly on purpose, because they render for
+visitors who are not signed in.
+
+Which one a viewer sees follows the person's own profile — the "I am…" choice under their name,
+which is optional and self-declared; the site never guesses from a name. No declaration, or a
+declared preference not to say, gets the generic image; a declared man or woman gets their
+specific image **when you have uploaded one**, and the generic otherwise. A real photo always
+outranks every default.
 
 ### The site-wide announcement
 

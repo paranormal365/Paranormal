@@ -24,6 +24,8 @@ public class UserAvatarControllerTests
     private static readonly byte[] PublicBytes  = [1, 1, 1, 1];
     private static readonly byte[] PrivateBytes = [2, 2, 2, 2];
     private static readonly byte[] DefaultBytes = [3, 3, 3, 3];
+    private static readonly byte[] ManBytes     = [4, 4, 4, 4];
+    private static readonly byte[] WomanBytes   = [5, 5, 5, 5];
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -169,6 +171,8 @@ public class UserAvatarControllerTests
         if (file.FileContents.SequenceEqual(PrivateBytes)) return "private";
         if (file.FileContents.SequenceEqual(PublicBytes))  return "public";
         if (file.FileContents.SequenceEqual(DefaultBytes)) return "site-default";
+        if (file.FileContents.SequenceEqual(ManBytes))     return "man-default";
+        if (file.FileContents.SequenceEqual(WomanBytes))   return "woman-default";
         return "unknown";
     }
 
@@ -522,6 +526,103 @@ public class UserAvatarControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
         });
         await db.SaveChangesAsync();
+    }
+
+    private static async Task ConfigureGenderedDefaultAsync(
+        IDbContextFactory<BenDataContext> factory, string key, byte[] bytes)
+    {
+        var fileId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+            FileName = "g.png", StoredFileName = "g.png", ContentType = "image/png",
+            FileSize = bytes.Length, FileData = bytes, IsPublic = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.SiteSettings.Add(new SiteSetting
+        {
+            Id = Guid.NewGuid(), Key = key, Value = fileId.ToString(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SetGenderAsync(
+        IDbContextFactory<BenDataContext> factory, Guid userId, Ben.Data.Common.Enums.ClientGender gender)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        (await db.AppUsers.FindAsync(userId))!.Gender = gender;
+        await db.SaveChangesAsync();
+    }
+
+    // ── The three defaults (item 163) ─────────────────────────────────────────
+    // Gender is self-declared on the profile; the specific image wins only when BOTH the
+    // declaration and the image exist, and everything else falls to the generic.
+
+    [Fact]
+    public async Task AManWithNoPhotos_GetsTheManDefault()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await SetGenderAsync(factory, subject, Ben.Data.Common.Enums.ClientGender.Male);
+        await ConfigureSiteDefaultAsync(factory);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarManUploadFileId, ManBytes);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarWomanUploadFileId, WomanBytes);
+
+        Assert.Equal("man-default", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task AWomanWithNoPhotos_GetsTheWomanDefault()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await SetGenderAsync(factory, subject, Ben.Data.Common.Enums.ClientGender.Female);
+        await ConfigureSiteDefaultAsync(factory);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarWomanUploadFileId, WomanBytes);
+
+        Assert.Equal("woman-default", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task AnUndeclaredProfile_GetsTheGenericDefault_EvenWhenGenderedOnesExist()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await ConfigureSiteDefaultAsync(factory);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarManUploadFileId, ManBytes);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarWomanUploadFileId, WomanBytes);
+
+        Assert.Equal("site-default", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task AManWhoseImageIsUnset_FallsBackToTheGeneric()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await SetGenderAsync(factory, subject, Ben.Data.Common.Enums.ClientGender.Male);
+        await ConfigureSiteDefaultAsync(factory);
+
+        Assert.Equal("site-default", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task AGenderedDefault_NeverOutranksARealPhoto()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await SetGenderAsync(factory, subject, Ben.Data.Common.Enums.ClientGender.Female);
+        await AddPhotosAsync(factory, subject);
+        await ConfigureGenderedDefaultAsync(factory, SiteSettingKeys.DefaultAvatarWomanUploadFileId, WomanBytes);
+
+        Assert.Equal("public", await ResolveAsync(factory, viewer, subject));
     }
 
     [Fact]

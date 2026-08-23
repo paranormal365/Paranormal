@@ -118,6 +118,20 @@
                                                placeholder="Last name" value="@_lastName"
                                                @oninput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
                                     </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-gender">I am…</label>
+                                        <select id="profile-gender" class="form-select"
+                                                value="@((int)_gender)"
+                                                @onchange="@(e => _gender = Enum.TryParse<Ben.Data.Common.Enums.ClientGender>(e.Value?.ToString(), out var g) ? g : Ben.Data.Common.Enums.ClientGender.NotProvided)">
+                                            <option value="0">Prefer not to say</option>
+                                            <option value="1">A man</option>
+                                            <option value="2">A woman</option>
+                                        </select>
+                                        <div class="form-text" style="font-size:.72rem;">
+                                            Optional. Only used to pick the placeholder image shown
+                                            when you have no photo — never shown or shared itself.
+                                        </div>
+                                    </div>
                                 </div>
 
                                 @if (_nameError is not null)
@@ -250,6 +264,7 @@
     private string _displayName = string.Empty;
     private string _firstName   = string.Empty;
     private string _lastName    = string.Empty;
+    private Ben.Data.Common.Enums.ClientGender _gender = Ben.Data.Common.Enums.ClientGender.NotProvided;
     private string? _nameError;
     private bool   _shareWithClients;
     private bool   _saving;
@@ -384,6 +399,7 @@
                 _displayName      = _profile.DisplayName ?? string.Empty;
                 _firstName        = _profile.FirstName ?? string.Empty;
                 _lastName         = _profile.LastName ?? string.Empty;
+                _gender           = _profile.Gender;
                 _shareWithClients = _profile.SharePrivatePhotoWithClients;
                 await LoadPreviewsAsync();
                 await LoadMapAsync();
@@ -427,7 +443,8 @@
             // change what you've agreed to share.
             var updated = await AdminClient.UpdateMyProfileAsync(
                 new UpdateMyProfileRequest(_displayName, SharePrivatePhotoWithClients: null,
-                                           FirstName: _firstName, LastName: _lastName));
+                                           FirstName: _firstName, LastName: _lastName,
+                                           Gender: _gender));
             if (updated is null) { _error = "Couldn't save your name."; return; }
             _profile = updated;
             _saved = true;

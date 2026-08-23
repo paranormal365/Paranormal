@@ -87,19 +87,20 @@
                                       value="@_drafts[s.Key]"
                                       @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
                         }
-                        else if (s.Key == DefaultAvatarKey)
+                        else if (AvatarKeys.Contains(s.Key))
                         {
                             @* An upload, not a Guid box (Ben, 2026-08-23): the value IS a file id,
                                but asking an administrator to mint one elsewhere and paste it here
                                was the plumbing showing through. Same flow as anyone's avatar —
                                upload as a public file, then point the setting at it; both steps
-                               happen behind this one control. *@
-                            <label class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") mb-0" for="default-avatar-upload">
+                               happen behind this one control. One control per default (item 163):
+                               generic, man, woman. *@
+                            <label class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") mb-0" for="@($"avatar-upload-{s.Key}")">
                                 @(_savingKey == s.Key ? "Uploading…" : "Upload image")
                             </label>
-                            <InputFile id="default-avatar-upload" style="display:none;"
+                            <InputFile id="@($"avatar-upload-{s.Key}")" style="display:none;"
                                        accept="image/png,image/jpeg,image/gif,image/webp"
-                                       OnChange="OnDefaultAvatarSelectedAsync" />
+                                       OnChange="@(e => OnDefaultAvatarSelectedAsync(e, s.Key))" />
                         }
                         else
                         {
@@ -108,7 +109,7 @@
                                    value="@_drafts[s.Key]"
                                    @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                         }
-                        @if (!s.IsBoolean && s.Key != DefaultAvatarKey)
+                        @if (!s.IsBoolean && !AvatarKeys.Contains(s.Key))
                         {
                         <button type="button" class="btn btn-primary" @onclick="@(() => SaveAsync(s.Key))" disabled="@(!(_savingKey != s.Key))">Save</button>
                         }
@@ -120,16 +121,16 @@
 
                     @* The default avatar is a file id, which is unreadable as text — show the
                        image so a wrong or deleted id is obvious rather than silently inert. *@
-                    @if (s.Key == DefaultAvatarKey && _avatarPreview is not null)
+                    @if (AvatarKeys.Contains(s.Key) && _avatarPreviews.GetValueOrDefault(s.Key) is { } preview)
                     {
                         <div class="mt-2 d-flex align-items-center gap-2">
-                            <img src="@_avatarPreview" alt="Default avatar"
+                            <img src="@preview" alt="Default avatar"
                                  class="rounded-circle border"
                                  style="width:56px;height:56px;object-fit:cover;" />
-                            <span class="text-secondary small">Current default</span>
+                            <span class="text-secondary small">Current image</span>
                         </div>
                     }
-                    else if (s.Key == DefaultAvatarKey && !string.IsNullOrWhiteSpace(s.Value))
+                    else if (AvatarKeys.Contains(s.Key) && !string.IsNullOrWhiteSpace(s.Value))
                     {
                         <div class="alert alert-warning py-2 mt-2 mb-0 small">
                             That file id doesn't resolve to a readable image. People with no photo
@@ -146,6 +147,15 @@
 @code {
     private const string DefaultAvatarKey = "avatar.default.upload-file-id";
 
+    /// <summary>The three default-avatar settings (item 163): generic, man, woman. All render
+    /// the same upload control and preview; resolution order lives on the server.</summary>
+    private static readonly IReadOnlySet<string> AvatarKeys = new HashSet<string>
+    {
+        DefaultAvatarKey,
+        "avatar.default.man.upload-file-id",
+        "avatar.default.woman.upload-file-id",
+    };
+
     private List<SiteSettingRecord>? _settings;
     private LoadResult<SiteSettingRecord> _result;
     private bool _loading = true;
@@ -153,7 +163,7 @@
     private string? _savingKey;
     private string? _savedKey;
     private string? _error;
-    private string? _avatarPreview;
+    private readonly Dictionary<string, string> _avatarPreviews = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -202,14 +212,19 @@
     /// </summary>
     private async Task LoadAvatarPreviewAsync()
     {
-        _avatarPreview = null;
-        var raw = _settings?.FirstOrDefault(s => s.Key == DefaultAvatarKey)?.Value;
+        foreach (var key in AvatarKeys) await LoadAvatarPreviewAsync(key);
+    }
+
+    private async Task LoadAvatarPreviewAsync(string key)
+    {
+        _avatarPreviews.Remove(key);
+        var raw = _settings?.FirstOrDefault(s => s.Key == key)?.Value;
         if (!Guid.TryParse(raw, out var fileId)) return;
         try
         {
             var file = await AdminClient.GetFileDataAsync(fileId);
             if (file is { } f)
-                _avatarPreview = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+                _avatarPreviews[key] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
         }
         catch { /* leaves the "doesn't resolve" warning showing, which is the useful signal */ }
     }
@@ -217,9 +232,9 @@
     /// <summary>Ceiling for the default avatar image. Matches the profile-photo limit.</summary>
     private const long MaxDefaultAvatarBytes = 10 * 1024 * 1024;
 
-    private async Task OnDefaultAvatarSelectedAsync(InputFileChangeEventArgs e)
+    private async Task OnDefaultAvatarSelectedAsync(InputFileChangeEventArgs e, string key)
     {
-        _savingKey = DefaultAvatarKey; _error = null; _savedKey = null;
+        _savingKey = key; _error = null; _savedKey = null;
         StateHasChanged();
         try
         {
@@ -251,13 +266,13 @@
             // file that is genuinely in use elsewhere (someone's own photo pointed at by the old
             // Guid workflow) survives because its references make the hard delete refuse, which
             // is exactly the right arbiter.
-            Guid? previous = Guid.TryParse(_drafts.GetValueOrDefault(DefaultAvatarKey), out var prev)
+            Guid? previous = Guid.TryParse(_drafts.GetValueOrDefault(key), out var prev)
                 ? prev : null;
 
-            _drafts[DefaultAvatarKey] = uploaded.Id.ToString();
-            await SaveAsync(DefaultAvatarKey);
+            _drafts[key] = uploaded.Id.ToString();
+            await SaveAsync(key);
 
-            if (previous is { } old && old != uploaded.Id && _savedKey == DefaultAvatarKey)
+            if (previous is { } old && old != uploaded.Id && _savedKey == key)
                 await AdminClient.DeleteUploadFileAdminAsync(old);
         }
         catch (IOException)
@@ -266,7 +281,7 @@
         }
         finally
         {
-            if (_savingKey == DefaultAvatarKey) _savingKey = null;
+            if (_savingKey == key) _savingKey = null;
             StateHasChanged();
         }
     }
@@ -284,7 +299,7 @@
             _drafts[key] = updated.Value ?? string.Empty;
             _savedKey = key;
 
-            if (key == DefaultAvatarKey) await LoadAvatarPreviewAsync();
+            if (AvatarKeys.Contains(key)) await LoadAvatarPreviewAsync(key);
 
             // Feature switches are read from a snapshot that refreshes on its own every 30
             // seconds. That is right for every other reader and wrong for the person who just

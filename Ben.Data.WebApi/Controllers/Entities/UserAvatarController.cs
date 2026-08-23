@@ -75,8 +75,28 @@ public sealed class UserAvatarController : BenControllerBase
         // house image must never take precedence over a photo the person actually chose. It
         // carries no personal information, so it is served to any viewer — the audience rules
         // above decide which of *their* photos you get, not whether you may see a stock image.
-        var fileId = chosen?.UploadFileId
-                  ?? await SiteSettingsService.GetGuidAsync(db, SiteSettingKeys.DefaultAvatarUploadFileId, ct);
+        //
+        // Three defaults, one chain (item 163): the man/woman image when the person's own
+        // profile says so AND that image is configured, the generic otherwise. Gender here is
+        // self-declared on the profile — the site never guesses from a name — and an unset
+        // specific image degrades to the generic rather than to a broken picture.
+        var fileId = chosen?.UploadFileId;
+        if (fileId is null)
+        {
+            var gender = await db.AppUsers.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => u.Gender)
+                .FirstOrDefaultAsync(ct);
+
+            fileId = gender switch
+            {
+                Ben.Data.Common.Enums.ClientGender.Male =>
+                    await SiteSettingsService.GetGuidAsync(db, SiteSettingKeys.DefaultAvatarManUploadFileId, ct),
+                Ben.Data.Common.Enums.ClientGender.Female =>
+                    await SiteSettingsService.GetGuidAsync(db, SiteSettingKeys.DefaultAvatarWomanUploadFileId, ct),
+                _ => null,
+            } ?? await SiteSettingsService.GetGuidAsync(db, SiteSettingKeys.DefaultAvatarUploadFileId, ct);
+        }
         if (fileId is null) return NoContent();
 
         var file = await db.UploadFiles.AsNoTracking()
