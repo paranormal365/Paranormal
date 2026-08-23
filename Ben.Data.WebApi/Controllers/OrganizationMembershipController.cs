@@ -1,4 +1,5 @@
 using Ben.Data.Common.Constants;
+using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -122,6 +123,82 @@ public class OrganizationMembershipController : BenControllerBase
                 Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
                 Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken)));
     }
+
+    /// <summary>
+    /// The caller's action-needed buckets across their groups (item 161): client requests
+    /// awaiting an answer, and membership applications at the door.
+    /// </summary>
+    /// <remarks>
+    /// <para>These are the two decisions that block OTHER people — a client waiting on an
+    /// answer, an applicant waiting at the door — surfaced as banners under the site-wide
+    /// announcement. Membership rows decide which groups are consulted: the token's person,
+    /// so impersonation shows exactly the impersonated person's banners (the item-159
+    /// fidelity rule) and a SuperAdmin sees their own groups' work, not every group's.</para>
+    ///
+    /// <para>Each bucket is counted only when the caller can OPEN the queue it names — the
+    /// same read gates as the Requests and Members tabs — per the item-141 rule: never render
+    /// a bucket the caller cannot open. Groups with nothing waiting are omitted.</para>
+    /// </remarks>
+    [HttpGet("action-needed")]
+    public async Task<ActionResult<IEnumerable<OrgActionNeededResponse>>> GetActionNeeded(
+        CancellationToken cancellationToken)
+    {
+        var appUserId    = GetCurrentUserIdOrThrow();
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+
+        using var scope = HttpContext.RequestServices.CreateScope();
+        var dbFactory = scope.ServiceProvider
+            .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+
+        var orgs = await (
+            from m in db.OrganizationUserMemberships.AsNoTracking()
+            where m.AppUserId == appUserId && m.IsActive
+            join o in db.Organizations.AsNoTracking() on m.OrganizationId equals o.Id
+            select new { OrganizationId = o.Id, o.Name }).ToListAsync(cancellationToken);
+
+        var results = new List<OrgActionNeededResponse>();
+        foreach (var org in orgs)
+        {
+            var canOpenRequests = isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
+                appUserId, org.OrganizationId,
+                Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken);
+            var canOpenApplications = isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
+                appUserId, org.OrganizationId,
+                Ben.Data.Common.Enums.OrganizationSecurityTable.MembershipRequests,
+                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken);
+
+            // "Waiting" mirrors the Requests queue's own definition: everything an org member
+            // still owes an answer on, not just never-opened rows.
+            var clientRequests = canOpenRequests
+                ? await db.ClientRequestOrganizations.AsNoTracking().CountAsync(a =>
+                        a.OrganizationId == org.OrganizationId &&
+                        (a.Status == Ben.Data.Common.Enums.ClientOrgRequestStatus.Pending ||
+                         a.Status == Ben.Data.Common.Enums.ClientOrgRequestStatus.Viewed ||
+                         a.Status == Ben.Data.Common.Enums.ClientOrgRequestStatus.UnderReview),
+                    cancellationToken)
+                : 0;
+
+            var applications = canOpenApplications
+                ? await db.OrganizationMembershipRequests.AsNoTracking().CountAsync(r =>
+                        r.OrganizationId == org.OrganizationId &&
+                        r.Status == Ben.Data.Common.Enums.OrganizationMembershipRequestStatus.Pending,
+                    cancellationToken)
+                : 0;
+
+            if (clientRequests > 0 || applications > 0)
+                results.Add(new OrgActionNeededResponse(
+                    org.OrganizationId, org.Name, clientRequests, applications));
+        }
+
+        return Ok(results);
+    }
+
+    /// <summary>One group's waiting work, for the caller's action-needed banners.</summary>
+    public sealed record OrgActionNeededResponse(
+        Guid OrganizationId, string OrganizationName,
+        int PendingClientRequests, int PendingMembershipRequests);
 
     /// <summary>
     /// The permission areas this group's plan includes (item 156 Phase E) — what the role editor

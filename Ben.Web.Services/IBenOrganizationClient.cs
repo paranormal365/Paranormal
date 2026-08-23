@@ -173,6 +173,7 @@ public interface IBenOrganizationClient
     Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
 
     Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
+    Task<WebApi.LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 

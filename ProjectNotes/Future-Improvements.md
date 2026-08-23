@@ -8135,7 +8135,7 @@ single-threshold case of this matrix — the schema hook is already there. What 
 Not started. Needs a design pass with Ben before building — the capability list per duty is
 product surface, not plumbing.
 
-## 161. Action-needed banners under the site-wide announcement (OPEN — Ben, 2026-08-23)
+## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)
 
 Ben's spec: when an investigation request is waiting, show an info alert **just below the
 site-wide announcement banner** for anyone who can accept and review investigation requests;
@@ -8147,6 +8147,19 @@ the two decisions that block OTHER people: a client waiting on an answer, an app
 at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
 becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
 server-side (the item-141 rule — never render a bucket the caller cannot open).
+
+**Built 2026-08-23 as specified.** `GET api/security/organizations/action-needed` counts the
+two buckets per group the caller belongs to (membership rows decide scope — impersonation-
+faithful, and a SuperAdmin hears about their OWN groups, not everyone's), each bucket only
+behind the same read gate as the tab it links to (client requests → Case read, the Requests
+tab's own gate; applications → MembershipRequests read). "Waiting" mirrors the Requests
+queue's definition: Pending, Viewed, and UnderReview all count. `ActionNeededBanners.razor`
+renders in MainLayout directly under the announcement: one alert per group, each bucket a
+link to its tab, dismiss stored in sessionStorage keyed by group AND counts so a new arrival
+re-shows. Five endpoint unit tests (regressed — ungating both buckets fails two), and an e2e:
+Daniel applies to TGH, Sarah sees the banner with the members-tab link, dismisses it, it
+stays gone across a reload, and Victor — same group, no gates — sees nothing; the
+application is withdrawn in finally. Help note in organization-administration.
 
 ## 162. Default avatar is an upload, not a Guid box (CLOSED 2026-08-23)
 
