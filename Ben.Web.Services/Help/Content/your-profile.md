@@ -23,13 +23,13 @@ The page opens with your name and picture, then three tabs:
 Most visits here are to change one thing, which is why the sections are behind tabs rather than
 stacked down one page. The map in particular only loads when you open its tab.
 
-## The "I am…" choice
+## Sex
 
-Under your name sits an optional **I am…** — a man, a woman, or prefer not to say. It exists for
-exactly one thing: when you have no photo, the site shows a placeholder image, and this choice
-picks which of the three placeholders you get. It is never shown to anyone, never shared, and
-never guessed from your name; leave it at "prefer not to say" and the generic placeholder is
-what stands in.
+Under your name sits an optional **Sex** field — Male, Female, or Unspecified, and it starts
+blank. It exists for exactly one thing: when you have no photo, the site shows a placeholder
+icon, and this choice picks which of the three placeholders you get. It is never shown to
+anyone, never shared, and never guessed from your name; blank and Unspecified both mean the
+generic placeholder stands in.
 
 ## Two photos
 

@@ -119,16 +119,23 @@
                                                @oninput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
                                     </div>
                                     <div class="col-sm-6">
-                                        <label class="form-label small" for="profile-gender">I am…</label>
+                                        <label class="form-label small" for="profile-gender">Sex</label>
+                                        @* Ben's spec (2026-08-23): default is NOTHING — the blank
+                                           row — with Male, Female, Unspecified as the choices.
+                                           Unspecified stores the same null as never-answered:
+                                           the two are indistinguishable on purpose, both select
+                                           the generic placeholder and nothing else ever reads
+                                           this field. *@
                                         <select id="profile-gender" class="form-select"
                                                 value="@((int)_gender)"
                                                 @onchange="@(e => _gender = Enum.TryParse<Ben.Data.Common.Enums.ClientGender>(e.Value?.ToString(), out var g) ? g : Ben.Data.Common.Enums.ClientGender.NotProvided)">
-                                            <option value="0">Prefer not to say</option>
-                                            <option value="1">A man</option>
-                                            <option value="2">A woman</option>
+                                            <option value="0" selected="@(_gender == Ben.Data.Common.Enums.ClientGender.NotProvided)"></option>
+                                            <option value="1">Male</option>
+                                            <option value="2">Female</option>
+                                            <option value="0">Unspecified</option>
                                         </select>
                                         <div class="form-text" style="font-size:.72rem;">
-                                            Optional. Only used to pick the placeholder image shown
+                                            Optional. Only used to pick the placeholder icon shown
                                             when you have no photo — never shown or shared itself.
                                         </div>
                                     </div>
