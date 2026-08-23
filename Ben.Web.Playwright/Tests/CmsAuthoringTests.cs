@@ -86,7 +86,11 @@ public class CmsAuthoringTests : BenTestBase
         // ── Publish it ───────────────────────────────────────────────────────
         // "Published" only appears when editing, so this is a second pass over the same dialog.
         var row = Main.Locator("tr", new() { HasTextString = title }).First;
-        await ClickUntilAsync(row.GetByRole(AriaRole.Button).First, dialog);
+        // Edit lives behind the row's More-actions dropdown since the one-line Actions cell
+        // (item 169) — the row's first button is Sections, which NAVIGATES.
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "More actions" }),
+            row.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }));
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }), dialog);
 
         var publishedToggle = dialog.Locator("#pg-published");
         Assert.That(await publishedToggle.CountAsync(), Is.GreaterThan(0),
@@ -203,7 +207,10 @@ public class CmsAuthoringTests : BenTestBase
         if (await row.CountAsync() == 0) return;
 
         var confirm = Page.Locator(".modal.show");
-        var deleteButton = row.Locator("button.btn-danger, button.btn-outline-danger").First;
+        // Delete sits in the row's More-actions dropdown since item 169.
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "More actions" }),
+            row.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }));
+        var deleteButton = row.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true });
         if (await deleteButton.CountAsync() == 0) return;
 
         await ClickUntilAsync(deleteButton, confirm);

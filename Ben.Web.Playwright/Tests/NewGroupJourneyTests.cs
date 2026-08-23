@@ -82,6 +82,34 @@ public class NewGroupJourneyTests : BenTestBase
         return (email, password);
     }
 
+    /// <summary>
+    /// A cold account's first sign-in lands in onboarding (item 166 W2) — that IS the product
+    /// now, so the journey answers it the way an impatient founder would: Skip. Skipping
+    /// stamps the account, so it never reappears for this person.
+    /// </summary>
+    private async Task SkipOnboardingIfOfferedAsync()
+    {
+        var skip = Page.Locator("#onboarding-skip");
+        try
+        {
+            await skip.WaitForAsync(new() { Timeout = 8_000 });
+        }
+        catch (TimeoutException) { return; }   // already onboarded, or the gate chose not to fire
+
+        // The click's proof is LEAVING /onboarding, so ClickUntil (which waits for an element
+        // to appear) is the wrong tool here.
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            try { await skip.ClickAsync(new() { Timeout = 3_000 }); } catch (TimeoutException) { }
+            try
+            {
+                await Page.WaitForURLAsync(url => !url.Contains("/onboarding"), new() { Timeout = 5_000 });
+                return;
+            }
+            catch (TimeoutException) { /* pre-circuit click was lost — go again */ }
+        }
+    }
+
     // ── the journey ──────────────────────────────────────────────────────────
 
     [Test]
@@ -97,6 +125,7 @@ public class NewGroupJourneyTests : BenTestBase
         // ── 1. The founder arrives cold ──────────────────────────────────────
         var founder = await NewConfirmedUserAsync($"f{run}");
         await LoginAsync(founder.Email, founder.Password);
+        await SkipOnboardingIfOfferedAsync();
 
         // ── 2. Founds the group — through the founder's own door, not the admin's ──
         await Page.GotoAsync($"{BaseUrl}/organizations/new");
@@ -177,6 +206,7 @@ public class NewGroupJourneyTests : BenTestBase
             members.Add(member);
 
             await LoginAsync(member.Email, member.Password);
+            await SkipOnboardingIfOfferedAsync();
             await Page.GotoAsync($"{BaseUrl}/o/{groupSlug}");
             await Expect(Page.Locator("#apply-submit")).ToBeVisibleAsync(new() { Timeout = 15_000 });
             await Page.Locator("#apply-message").FillAsync($"Journey member {i}");
