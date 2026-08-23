@@ -14,6 +14,11 @@ public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc)
     public static readonly NotificationBucket Empty = new(0, null);
 }
 
+/// <summary>One group's slice of a cross-org bucket — enough to render a row that links to
+/// the group surface holding exactly these items (item 173).</summary>
+public sealed record OrgScopedBucket(
+    Guid OrganizationId, string OrganizationName, int Count, DateTime? OldestUnreadUtc);
+
 /// <summary>
 /// Everything the badge system needs, in one round trip. Split by bucket rather than returned as a
 /// single number so the bell popover can say *where* the unread items are and link straight to them.
@@ -46,7 +51,13 @@ public sealed record NotificationSummaryResponse(
     NotificationBucket PendingPermissionRequests,
     NotificationBucket InvestigationInvites,
     NotificationBucket EquipmentCheckouts,
-    NotificationBucket FeedMentions)
+    NotificationBucket FeedMentions,
+    // Item 173 (Ben's report): the two cross-org buckets rendered as single rows whose click
+    // could not open what they counted — 54 unread across every group, a destination showing
+    // one group's 18. Per-group breakdowns let each row open exactly what it counts; the
+    // aggregates above stay for the bell's total. Defaulted so pre-173 payloads deserialize.
+    IReadOnlyList<OrgScopedBucket>? OrgMessagesByOrg = null,
+    IReadOnlyList<OrgScopedBucket>? CaseMessagesAsOrgMemberByOrg = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,

@@ -122,10 +122,16 @@
             yield return new("Equipment requests & overdue gear", "/my-checkouts", s.EquipmentCheckouts);
         if (s.CaseMessagesAsClient.Count > 0)
             yield return new("Replies on your cases", "/my-cases", s.CaseMessagesAsClient);
-        if (s.CaseMessagesAsOrgMember.Count > 0)
-            yield return new("Client messages to answer", "/organizations", s.CaseMessagesAsOrgMember);
-        if (s.OrgMessages.Count > 0)
-            yield return new("Group messages", "/organizations", s.OrgMessages);
+        // Item 173: per-group rows, each opening exactly what it counts — the single
+        // cross-org rows sent people to /organizations with a number no one page matched.
+        foreach (var slice in s.CaseMessagesAsOrgMemberByOrg ?? [])
+            yield return new($"Client messages · {slice.OrganizationName}",
+                $"/organizations/{slice.OrganizationId}?tab=cases",
+                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
+        foreach (var slice in s.OrgMessagesByOrg ?? [])
+            yield return new($"Group messages · {slice.OrganizationName}",
+                $"/organizations/{slice.OrganizationId}?tab=messages",
+                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
         if (s.PendingPermissionRequests.Count > 0)
             yield return new("File permission requests", "/notifications", s.PendingPermissionRequests);
         if (s.SystemMessages.Count > 0)

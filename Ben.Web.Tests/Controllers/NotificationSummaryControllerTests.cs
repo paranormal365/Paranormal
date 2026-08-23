@@ -150,9 +150,10 @@ public class NotificationSummaryControllerTests
 
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var m1 = AddOrgMessage(db, Older);
-            var m2 = AddOrgMessage(db, Newer);
-            var m3 = AddOrgMessage(db, Newer);
+            var orgId = AddOrg(db);
+            var m1 = AddOrgMessage(db, Older, orgId);
+            var m2 = AddOrgMessage(db, Newer, orgId);
+            var m3 = AddOrgMessage(db, Newer, orgId);
 
             db.OrgMessageRecipients.AddRange(
                 new OrgMessageRecipient { Id = Guid.NewGuid(), OrgMessageId = m1, RecipientAppUserId = me,    DateRead = null },
@@ -360,7 +361,9 @@ public class NotificationSummaryControllerTests
 
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var m = AddOrgMessage(db, Newer);
+            // The message needs a group: an org-less unread has no surface that can show it,
+            // so item 173 deliberately keeps it OFF the bell rather than in a count nothing opens.
+            var m = AddOrgMessage(db, Newer, AddOrg(db));
             db.OrgMessageRecipients.Add(new OrgMessageRecipient
             {
                 Id = Guid.NewGuid(), OrgMessageId = m, RecipientAppUserId = me, DateRead = null
@@ -380,12 +383,24 @@ public class NotificationSummaryControllerTests
 
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
-    private static Guid AddOrgMessage(BenDataContext db, DateTime at)
+    private static Guid AddOrg(BenDataContext db, string name = "Org")
+    {
+        var id = Guid.NewGuid();
+        db.Organizations.Add(new Organization
+        {
+            Id = id, Name = name, UrlName = $"org-{id:N}",
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        return id;
+    }
+
+    private static Guid AddOrgMessage(BenDataContext db, DateTime at, Guid? orgId = null)
     {
         var id = Guid.NewGuid();
         db.OrgMessages.Add(new OrgMessage
         {
             Id = id, AuthorAppUserId = Guid.NewGuid(), Body = "hello",
+            OrganizationId = orgId,
             ChannelType = OrgMessageChannel.OrgBroadcast,
             DateCreated = at, CreatedByAppUserId = Guid.NewGuid(),
         });
@@ -532,5 +547,82 @@ public class NotificationSummaryControllerTests
         }
 
         Assert.Equal(0, (await GetSummaryAsync(factory, userId)).InvestigationInvites.Count);
+    }
+
+    // ── Item 173: per-group breakdowns — each row opens exactly what it counts ──
+
+    [Fact]
+    public async Task OrgMessages_BreakdownSlicesPerGroup_AndTheAggregateIsTheirSum()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        Guid orgA = default, orgB = default;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            orgA = AddOrg(db, "Alpha");
+            orgB = AddOrg(db, "Beta");
+            foreach (var (org, when) in new[] { (orgA, Older), (orgA, Newer), (orgB, Newer) })
+            {
+                var m = AddOrgMessage(db, when, org);
+                db.OrgMessageRecipients.Add(new OrgMessageRecipient
+                {
+                    Id = Guid.NewGuid(), OrgMessageId = m, RecipientAppUserId = me, DateRead = null
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, me);
+
+        var slices = summary.OrgMessagesByOrg!;
+        Assert.Equal(2, slices.Count);
+        var alpha = Assert.Single(slices, x => x.OrganizationId == orgA);
+        Assert.Equal("Alpha", alpha.OrganizationName);
+        Assert.Equal(2, alpha.Count);
+        Assert.Equal(Older, alpha.OldestUnreadUtc);
+        var beta = Assert.Single(slices, x => x.OrganizationId == orgB);
+        Assert.Equal(1, beta.Count);
+
+        // The bell's number is the sum of the rows underneath it — never more, never less.
+        Assert.Equal(3, summary.OrgMessages.Count);
+        Assert.Equal(slices.Sum(x => x.Count), summary.OrgMessages.Count);
+    }
+
+    [Fact]
+    public async Task CaseMessagesAsOrgMember_BreakdownSlicesPerGroup()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        Guid orgA = default, orgB = default;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            orgA = AddOrg(db, "Alpha");
+            orgB = AddOrg(db, "Beta");
+            foreach (var org in new[] { orgA, orgB })
+                db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+                {
+                    Id = Guid.NewGuid(), OrganizationId = org, AppUserId = me, IsActive = true,
+                    Role = OrganizationMemberRole.Owner,   // the bypass keeps routing out of the way
+                    DateCreated = Older, CreatedByAppUserId = me,
+                });
+
+            var caseA = AddCase(db, orgA);
+            var caseB = AddCase(db, orgB);
+            db.CaseMessages.AddRange(
+                NewCaseMessage(caseA, CaseMessageSide.Client, isReadByOrg: false, at: Older),
+                NewCaseMessage(caseA, CaseMessageSide.Client, isReadByOrg: false, at: Newer),
+                NewCaseMessage(caseB, CaseMessageSide.Client, isReadByOrg: false, at: Newer));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, me);
+
+        var slices = summary.CaseMessagesAsOrgMemberByOrg!;
+        Assert.Equal(2, slices.Count);
+        Assert.Equal(2, Assert.Single(slices, x => x.OrganizationId == orgA).Count);
+        Assert.Equal(1, Assert.Single(slices, x => x.OrganizationId == orgB).Count);
+        Assert.Equal(3, summary.CaseMessagesAsOrgMember.Count);
     }
 }
