@@ -68,5 +68,14 @@ public sealed class AdminSiteSettingController : BenControllerBase
         => new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
                s.DateUpdated ?? s.DateCreated,
                SiteSettingKeys.MultiLineKeys.Contains(s.Key),
-               SiteSettingKeys.BooleanKeys.Contains(s.Key));
+               SiteSettingKeys.BooleanKeys.Contains(s.Key),
+               DefaultWhenUnset(s.Key));
+
+    /// <summary>
+    /// What an unset on/off setting actually does. Feature flags carry their own declared
+    /// defaults; self-registration has always been allowed and must keep reading that way.
+    /// </summary>
+    private static bool DefaultWhenUnset(string key)
+        => key == SiteSettingKeys.AllowOrganizationSelfRegistration
+        || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }

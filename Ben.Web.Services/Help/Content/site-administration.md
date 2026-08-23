@@ -52,6 +52,19 @@ that group's settings.
 Adding a new setting is a code change, not a database one: settings are declared in
 `SiteSettingKeys.Seed`, and the page renders whatever is declared.
 
+### Allowing groups to sign themselves up
+
+**Allow groups to self-register** decides whether an ordinary signed-in visitor may found a group.
+Left on — the default, and how the site normally runs — anyone can start one from **Organizations
+→ Start a Group** and becomes its owner. Switched off, that button disappears, the address behind
+it explains that new groups are not being accepted and points at the contact form, and the server
+refuses the request even if somebody has the address saved. You are exempt either way: an
+administrator can always create a group from this side of the site.
+
+Reach for it when you want to pause growth — a billing change you are part-way through, or a
+period where each new group needs a conversation first. It has no effect on groups that already
+exist.
+
 ### The site-wide announcement
 
 **Site-wide announcement** is for maintenance windows and known issues. While it has text, an
@@ -66,10 +79,17 @@ Near the bottom of Site Settings is a row of switches labelled **Feature — …
 major section: the video editor, equipment, events and calendars, local discovery and maps, group
 public pages, the media library, group messaging, voting, and the two newer features below.
 
-Turning one off does exactly what it says. The links disappear from the navigation **and the
-addresses stop working** — someone who bookmarked the page, or who is handed a link by a
-colleague, gets the ordinary "page not found" screen rather than a way in. That pairing is the
-point: hiding a link while the page still answers is not switching a feature off.
+Where a switch is fully wired, it does exactly what it says. The links disappear from the
+navigation **and the addresses stop working** — someone who bookmarked the page, or who is handed
+a link by a colleague, gets the ordinary "page not found" screen rather than a way in. That
+pairing is the point: hiding a link while the page still answers is not switching a feature off.
+
+**Four of them are not wired yet, and this page would rather tell you than let you find out.**
+**Local discovery and maps**, **Group public pages** and **Voting** currently change nothing at
+all when switched off — the sections keep working exactly as before. **Events and calendars** is
+half-wired and is the one to be careful with: switching it off stops the reminder emails while
+leaving the calendars, event pages and RSVPs running, so people can still sign up for an event
+and simply never be reminded of it. Leave these four on until they are finished.
 
 What it does **not** do is delete anything. Equipment records, saved videos, messages and votes
 all stay exactly where they are, and turning the switch back on returns the section with its
@@ -84,6 +104,11 @@ Two things worth knowing:
 - **If the site cannot reach its API**, the switches fall back to their normal settings — the
   established sections on, unreleased features off. A connection problem will never make the site
   appear to have lost half its features.
+
+A switch with nothing saved against it shows the setting's own default and is marked
+**(default)** beside On or Off — so the row always describes what the site is doing, not merely
+what has been typed into it. Until recently it showed the stored value alone, which meant seven
+running features reported themselves as switched off simply because nobody had ever touched them.
 
 Two switches start **off**: **Public feed** and **Publications**. Both features are built, but
 neither is something a site should acquire by accident — each one adds a public surface that

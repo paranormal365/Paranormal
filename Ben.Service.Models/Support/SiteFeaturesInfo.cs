@@ -16,8 +16,16 @@ namespace Ben.Service.Models.Support;
 /// <param name="Features">Feature key to on/off, already resolved against each flag's default.</param>
 /// <param name="Announcement">The site-wide announcement, or null when none is set. Named
 /// explicitly rather than smuggled through the dictionary, so the narrow-by-declaration property
-/// above still holds — this is the one non-feature value the endpoint publishes on purpose.</param>
-public sealed record SiteFeaturesInfo(IReadOnlyDictionary<string, bool> Features, string? Announcement = null)
+/// above still holds.</param>
+/// <param name="AllowOrganizationSelfRegistration">Whether an ordinary signed-in user may found a
+/// group. Published for the same reason the flags are: the website has to hide the "Start a Group"
+/// button on first render, not discover the answer after drawing it. Defaults to true — that is
+/// how the product has always worked, and the enforcement must not switch it off for a site that
+/// never set it.</param>
+public sealed record SiteFeaturesInfo(
+    IReadOnlyDictionary<string, bool> Features,
+    string? Announcement = null,
+    bool AllowOrganizationSelfRegistration = true)
 {
     /// <summary>Whether a feature is on. Unknown keys read as off.</summary>
     public bool IsOn(string key) => Features.TryGetValue(key, out var on) && on;

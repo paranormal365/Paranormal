@@ -110,6 +110,39 @@ public sealed class SiteAnnouncementTests
     }
 
     [Fact]
+    public async Task An_unset_switch_reports_what_the_site_actually_does()
+    {
+        // The admin page drew its switches from the stored value alone, so a flag nobody had ever
+        // set rendered "Off" while the feature ran — seven of them at once (item 153).
+        var factory = CreateFactory();
+        var settings = new SiteSettingsService(factory);
+        var ctrl = new Ben.Data.WebApi.Controllers.Entities.AdminSiteSettingController(
+            settings, new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object);
+
+        var result = await ctrl.GetAll(default);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var rows = Assert.IsAssignableFrom<IEnumerable<Ben.Service.Models.Entities.SiteSettingRecord>>(ok.Value)
+            .ToDictionary(r => r.Key, StringComparer.Ordinal);
+
+        // Established sections and self-registration are on when nothing is stored …
+        foreach (var key in new[]
+                 {
+                     SiteSettingKeys.FeatureVideoEditor, SiteSettingKeys.FeatureEvents,
+                     SiteSettingKeys.FeatureDiscovery, SiteSettingKeys.FeatureCmsPages,
+                     SiteSettingKeys.FeatureMediaLibrary, SiteSettingKeys.FeatureOrgMessaging,
+                     SiteSettingKeys.FeatureVoting, SiteSettingKeys.AllowOrganizationSelfRegistration,
+                 })
+        {
+            Assert.Null(rows[key].Value);
+            Assert.True(rows[key].DefaultWhenUnset, $"{key} should read as on while unset.");
+        }
+
+        // … and the two unbuilt features stay off, so the page cannot advertise them either.
+        Assert.False(rows[SiteSettingKeys.FeaturePublicFeed].DefaultWhenUnset);
+        Assert.False(rows[SiteSettingKeys.FeaturePublications].DefaultWhenUnset);
+    }
+
+    [Fact]
     public void MainLayout_renders_the_announcement_the_provider_hands_it()
     {
         // No bUnit here, so the wiring is asserted at the source: the layout must read

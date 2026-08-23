@@ -259,6 +259,14 @@ public sealed class SiteSettingsService
         return bool.TryParse(raw, out var value) ? value : whenUnset;
     }
 
+    /// <summary>Instance overload for callers that have no context of their own — a controller
+    /// enforcing a policy setting, typically.</summary>
+    public async Task<bool> GetBoolAsync(string key, bool whenUnset, CancellationToken ct = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        return await GetBoolAsync(db, key, whenUnset, ct);
+    }
+
     /// <summary>
     /// Every known setting, with current values. Settings declared in <see cref="SiteSettingKeys.Seed"/>
     /// but never yet written appear with a null value rather than being missing, so the admin page

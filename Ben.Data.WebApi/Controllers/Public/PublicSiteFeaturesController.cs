@@ -55,6 +55,13 @@ public sealed class PublicSiteFeaturesController : ControllerBase
         // useful if the people it warns — including anonymous visitors — can read it.
         stored.TryGetValue(SiteSettingKeys.SiteAnnouncement, out var announcement);
 
-        return Ok(new SiteFeaturesInfo(features, announcement));
+        // Same reasoning: a policy the website must apply while rendering, not a secret. Unset
+        // reads as on, matching the enforcement in OrganizationMembershipController.
+        var allowSelfRegistration =
+            !stored.TryGetValue(SiteSettingKeys.AllowOrganizationSelfRegistration, out var rawAllow)
+            || !bool.TryParse(rawAllow, out var parsedAllow)
+            || parsedAllow;
+
+        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration));
     }
 }

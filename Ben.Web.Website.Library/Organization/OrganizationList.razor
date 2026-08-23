@@ -4,6 +4,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject Ben.Web.Services.SiteFeaturesProvider Features
 
 <PageTitle>Organizations</PageTitle>
 
@@ -16,10 +17,13 @@
         <div class="col-auto d-flex gap-2">
             @* Anyone may found a group — the register endpoint always allowed it, and the billing
                model depends on it; only the button was missing. The SuperAdmin keeps the fuller
-               admin create beside it. *@
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/new"))"><BenIcon Name="plus" Class="me-1" />
-                Start a Group
-            </button>
+               admin create beside it, and is exempt from the switch below. *@
+            @if (Features.AllowOrganizationSelfRegistration || UserState.IsSuperAdmin)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/new"))"><BenIcon Name="plus" Class="me-1" />
+                    Start a Group
+                </button>
+            }
             @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
             {
                 <button type="button" class="btn btn-outline-secondary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))">

@@ -3,6 +3,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject Ben.Web.Services.SiteFeaturesProvider Features
 @using Ben.Web.Website.Library.Manage.Icon
 @using Ben.Web.Website.Library.Help
 
@@ -24,6 +25,19 @@
     <div class="card shadow-sm" style="width:100%;max-width:30rem;">
         <div class="card-body p-4">
             <h2 class="h4 mb-1">Start a group<HelpLink Slug="getting-started" Anchor="joining-a-group-or-starting-your-own" /></h2>
+
+            @* Hiding the button is not enough — the address survives in bookmarks and links, and
+               a page that takes a name and a slug and then fails at the server is a worse answer
+               than one that says so up front. *@
+            @if (_closed)
+            {
+                <div class="alert alert-info mb-0" id="newgroup-closed">
+                    New groups are not being accepted at the moment. If you would like to start
+                    one, <a href="/contact">get in touch</a> and we will help you.
+                </div>
+            }
+            else
+            {
             <p class="text-secondary small mb-3">
                 You'll be its owner. You can invite members, take cases, and set everything else
                 up from your group's own page.
@@ -56,6 +70,7 @@
                     @onclick="CreateAsync">
                 @(_busy ? "Creating…" : "Create the group")
             </button>
+            }
         </div>
     </div>
 </div>
@@ -66,12 +81,20 @@
     private bool _urlEdited;
     private bool _busy;
     private string? _error;
+    private bool _closed;
 
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
+        {
             NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/organizations/new")}");
+            return;
+        }
+
+        // Read after AuthReady, so the SuperAdmin exemption is decided with a known identity
+        // rather than against the signed-out default.
+        _closed = !Features.AllowOrganizationSelfRegistration && !UserState.IsSuperAdmin;
     }
 
     /// <summary>Suggests a slug from the name until the person edits the slug themselves.</summary>

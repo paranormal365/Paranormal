@@ -19,6 +19,14 @@ namespace Ben.Service.Models.Entities;
 /// had to carry "Accepts true or false" in its description — an instruction that only existed
 /// because the control was a text box.
 /// </param>
+/// <param name="DefaultWhenUnset">
+/// What an on/off setting <i>does</i> while nothing is stored. Sent because the switch used to be
+/// drawn from the stored value alone: a flag nobody had ever set read as null, rendered "Off", and
+/// so the page reported seven live features — the video editor, events, discovery, group pages,
+/// the media library, group messaging and voting — as switched off while every one of them was
+/// running. A control that misreports the state it controls is the same failure as one that does
+/// nothing. Meaningless for non-boolean settings.
+/// </param>
 public sealed record SiteSettingRecord(
     string Key,
     string Label,
@@ -26,7 +34,8 @@ public sealed record SiteSettingRecord(
     string? Description,
     DateTime DateUpdated,
     bool IsMultiLine = false,
-    bool IsBoolean = false);
+    bool IsBoolean = false,
+    bool DefaultWhenUnset = false);
 
 /// <param name="Value">Empty or whitespace clears the setting.</param>
 public sealed record SetSiteSettingRequest(string? Value);

@@ -1,3 +1,5 @@
+using Ben.Data.Common.Constants;
+using Ben.Data.WebApi.Services;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,11 +20,15 @@ namespace Ben.Data.WebApi.Controllers;
 public class OrganizationMembershipController : BenControllerBase
 {
     private readonly IOrganizationSecurityService _organizationSecurityService;
+    private readonly SiteSettingsService _siteSettings;
 
-    /// <summary>Initialises the controller with its required service dependency.</summary>
-    public OrganizationMembershipController(IOrganizationSecurityService organizationSecurityService)
+    /// <summary>Initialises the controller with its required service dependencies.</summary>
+    public OrganizationMembershipController(
+        IOrganizationSecurityService organizationSecurityService,
+        SiteSettingsService siteSettings)
     {
         _organizationSecurityService = organizationSecurityService;
+        _siteSettings = siteSettings;
     }
 
     /// <summary>Searches for users within the calling user's security scope.</summary>
@@ -72,13 +78,40 @@ public class OrganizationMembershipController : BenControllerBase
     /// <summary>Creates a new organization with the authenticated user as its <see cref="Ben.Data.Common.Enums.OrganizationMemberRole.Owner"/>.</summary>
     /// <param name="request">Name and URL slug for the new organization.</param>
     /// <param name="cancellationToken">Propagates cancellation from the HTTP request.</param>
-    /// <returns>A <c>201 Created</c> response with the new organization summary, or <c>400</c> if the name/urlName is blank or the urlName is already taken.</returns>
+    /// <returns>A <c>201 Created</c> response with the new organization summary, <c>400</c> if the
+    /// name/urlName is blank or the urlName is already taken, or <c>403</c> when self-registration
+    /// is switched off site-wide.</returns>
+    /// <remarks>
+    /// <b>The setting this enforces did nothing for months.</b> Site Settings has offered
+    /// "Allow groups to self-register — when off, only a SuperAdmin can create one" since the
+    /// settings page shipped, and no code anywhere read it: an administrator could switch it off,
+    /// watch the page report "Off", and still have every signed-in visitor founding groups. A
+    /// policy control whose failure mode is believing you closed a door is worse than no control,
+    /// which is why this now refuses here AND the website hides the button
+    /// (<c>SiteFeaturesProvider.AllowOrganizationSelfRegistration</c>) — a server rule the UI
+    /// never surfaces is the same bug wearing a different coat.
+    ///
+    /// <para>Unset reads as ON. Self-registration is how the product has always worked and the
+    /// billing model depends on groups signing themselves up, so introducing the check must not
+    /// switch it off for a site that never touched the setting.</para>
+    /// </remarks>
     [HttpPost("register")]
     public async Task<ActionResult<OrganizationSummaryResponse>> RegisterOrganization(
         [FromBody] RegisterOrganizationRequest request,
         CancellationToken cancellationToken)
     {
         var appUserId = GetCurrentUserIdOrThrow();
+
+        // SuperAdmins are exempt: the switch exists to close the public door, and they create
+        // groups through the admin page regardless.
+        if (!User.IsInRole(RoleNames.SuperAdmin)
+            && !await _siteSettings.GetBoolAsync(
+                    SiteSettingKeys.AllowOrganizationSelfRegistration, whenUnset: true, cancellationToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "New groups are not being accepted at the moment. Please contact us if you would like to start one.");
+        }
+
         var organization = await _organizationSecurityService.RegisterOrganizationAsync(appUserId, request.Name, request.UrlName, cancellationToken);
 
         return CreatedAtAction(
