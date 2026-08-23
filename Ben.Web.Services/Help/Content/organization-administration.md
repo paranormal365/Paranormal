@@ -280,6 +280,16 @@ often different people. Granting **Equipment** does not grant **Equipment Checko
 Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
 always approved by its owner.
 
+## The Files tab
+
+The group's file library: upload directly, or pull in a member's own file with **Share from
+User**. That button opens a picker listing everything the group could take a copy of — files
+their owners have shared with your group first, then public files — with search, a type
+filter, and thumbnail or list views. Choosing one copies it into the group's library; shared
+files arrive **private by default**, and someone with publish permission approves them before
+they ever appear publicly. The original stays the owner's: only a file's owner can delete it,
+and a group removing its copy never touches the member's own file.
+
 ## Editing your public pages
 
 ![The CMS page list](help-media:organization-administration/cms.png)

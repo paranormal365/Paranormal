@@ -207,9 +207,29 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold" for="organizationfiles-user-file-id-guid-e00a">User File ID (Guid)</label>
-                <input id="organizationfiles-user-file-id-guid-e00a" type="text" class="form-control" placeholder="Paste the UploadFile ID..." @bind="@_copySourceId" @bind:event="oninput" />
-                <small class="text-secondary">The file must be public or shared with this organization.</small>
+                <label class="form-label fw-semibold">File to share</label>
+                @if (_copySource is null)
+                {
+                    <div>
+                        <button type="button" id="orgcopy-choose" class="btn btn-outline-primary"
+                                @onclick="@(() => _showFilePicker = true)">
+                            <BenIcon Name="folder" Class="me-1" />Choose a file…
+                        </button>
+                    </div>
+                    <small class="text-secondary">Public files, and files their owners have shared with this group.</small>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-2 border rounded p-2" id="orgcopy-chosen">
+                        <BenIcon Name="file" />
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small text-truncate">@_copySource.Name</div>
+                            <div class="small text-secondary">@_copySource.TypeLabel@(_copySource.MetaLine is null ? "" : $" · {_copySource.MetaLine}")</div>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-decoration-none"
+                                @onclick="@(() => { _copySource = null; _showFilePicker = true; })">Change</button>
+                    </div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="organizationfiles-description-blank-keep-original-55d2">Description <span class="text-secondary small">(blank = keep original)</span></label>
@@ -303,6 +323,14 @@
                    ImageUrl="@_editImageUrl"
                    FileName="@_editImageName" />
 
+@* Item 175: the reusable content picker, replacing the paste-a-Guid box. *@
+<BenContentPicker @bind-Visible="_showFilePicker"
+                      Title="Share a file with this group"
+                      SelectText="Use this file"
+                      EmptyText="No shareable files — a file must be public, or its owner must share it with this group first."
+                      Loader="@LoadShareableFilesAsync"
+                      OnSelected="@OnShareFileChosen" />
+
 @code {
     [Parameter] public Guid OrgId        { get; set; }
     [Parameter] public bool EmbeddedMode  { get; set; }
@@ -341,7 +369,8 @@
 
     // Copy/Share
     private bool   _showCopyDialog;
-    private string _copySourceId    = string.Empty;
+    private bool   _showFilePicker;
+    private Kit.ContentPickerItem? _copySource;
     private string _copyDescription = string.Empty;
     private bool   _copyPublishNow;
     private bool   _copyCanPublish;   // determined by API response
@@ -426,9 +455,43 @@
         finally { _uploading = false; }
     }
 
+    /// <summary>Item 175: the picker's source — every file the copy endpoint would accept,
+    /// with a Source facet separating this group's shared offers from world-public files.</summary>
+    private async Task<IReadOnlyList<Kit.ContentPickerItem>> LoadShareableFilesAsync()
+    {
+        var files = (await AdminClient.GetShareableUserFilesAsync(OrgId)).Items;
+        return [.. files.Select(f => new Kit.ContentPickerItem(
+            f.Id, f.FileName,
+            TypeLabelFor(f.ContentType),
+            $"{f.OwnerDisplayName ?? "?"} · {FormatBytes(f.FileSize)} · {f.DateCreated:MM/dd/yyyy}",
+            new Dictionary<string, string>
+            {
+                ["Source"] = f.SharedWithOrganization ? "Shared with this group" : "Public",
+            },
+            f.ContentType, f.FileSize))];
+    }
+
+    private void OnShareFileChosen(Kit.ContentPickerItem item) => _copySource = item;
+
+    private static string TypeLabelFor(string contentType) => contentType.Split('/')[0] switch
+    {
+        "image" => "Image",
+        "video" => "Video",
+        "audio" => "Audio",
+        _ => contentType == "application/pdf" ? "PDF" : "File",
+    };
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes / (1024.0 * 1024):F1} MB",
+    };
+
     private async Task CopyAsync()
     {
-        if (!Guid.TryParse(_copySourceId.Trim(), out var sourceId)) { _copyError = "Enter a valid GUID."; return; }
+        if (_copySource is null) { _copyError = "Choose a file first."; return; }
+        var sourceId = _copySource.Id;
         _copying = true; _copyError = null;
         try
         {
@@ -437,7 +500,7 @@
             {
                 _copyCanPublish = result.CanPublishImmediately;
                 _showCopyDialog  = false;
-                _copySourceId    = string.Empty;
+                _copySource      = null;
                 _copyDescription = string.Empty;
                 _copyPublishNow  = false;
                 await ReloadAsync();

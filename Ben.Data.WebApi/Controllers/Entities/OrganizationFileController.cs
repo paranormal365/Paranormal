@@ -186,6 +186,47 @@ public sealed class OrganizationFileController : ControllerBase
         return CreatedAtAction(nameof(GetAll), new { orgId }, _mapper.Map<OrganizationFileRecord>(created));
     }
 
+    // GET /api/organizations/{orgId}/files/shareable-user-files
+    /// <summary>
+    /// The user files this group could take a copy of (item 175) — exactly the set
+    /// <see cref="CopyFromUser"/> would accept: public files, and files their owners shared
+    /// with this group. Feeds the content picker that replaced the paste-a-Guid dialog.
+    /// </summary>
+    /// <remarks>Gated like the copy itself (OrganizationFiles Create): browsing the candidates
+    /// is preparation for the copy, and someone the copy would refuse has no business with the
+    /// list. Owner names come through the display name only.</remarks>
+    [HttpGet("shareable-user-files")]
+    public async Task<ActionResult<IEnumerable<ShareableUserFileRecord>>> GetShareableUserFiles(
+        Guid orgId, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
+            if (!ok) return Forbid();
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var candidates = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.IsPublic
+                     || db.UploadFileOrganizationShares.Any(sh =>
+                            sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive))
+            .OrderByDescending(f => db.UploadFileOrganizationShares.Any(sh =>
+                sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive))
+            .ThenByDescending(f => f.DateCreated)
+            .Select(f => new ShareableUserFileRecord(
+                f.Id, f.FileName, f.ContentType, f.FileSize, f.Description,
+                f.AppUser!.DisplayName, f.DateCreated,
+                db.UploadFileOrganizationShares.Any(sh =>
+                    sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive)))
+            .ToListAsync(ct);
+
+        return Ok(candidates);
+    }
+
     // POST /api/organizations/{orgId}/files/copy-from-user/{uploadFileId}
     // Shares a user file into the org. Always non-public by default.
     // If the member has Update permission they may request PublishImmediately.
@@ -379,5 +420,12 @@ public sealed class OrganizationFileController : ControllerBase
 public sealed record OrgFileUploadRequest(IFormFile? File, Guid UploadFileTypeId, string? Description, bool IsPublic, int SortOrder);
 public sealed record OrgFileUpdateRequest(string? Description, int SortOrder);
 public sealed record CopyFromUserRequest(string? Description, bool PublishImmediately = false);
+
+/// <summary>One candidate for the share-from-user picker (item 175). SharedWithOrganization
+/// distinguishes "their owner offered it to this group" from "public to everyone" — the
+/// picker's Source facet.</summary>
+public sealed record ShareableUserFileRecord(
+    Guid Id, string FileName, string ContentType, long FileSize, string? Description,
+    string? OwnerDisplayName, DateTime DateCreated, bool SharedWithOrganization);
 public sealed record OrgFileCopyResult(OrganizationFileRecord File, bool CanPublishImmediately, bool PublishedImmediately);
 public sealed record PublishOrgFileRequest(bool IsPublic);

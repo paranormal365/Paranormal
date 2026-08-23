@@ -174,6 +174,7 @@ public interface IBenOrganizationClient
 
     Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
     Task<WebApi.LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default);
+    Task<WebApi.LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 
