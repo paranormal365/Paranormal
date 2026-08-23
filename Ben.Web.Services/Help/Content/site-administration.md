@@ -240,6 +240,18 @@ on the server, so date and user filters apply to the whole history rather than t
 
 ## Billing
 
+### Role areas on a price band
+
+Each band carries a **Role areas** checklist — which parts of the site a group on that band may
+build custom role permissions for: Cases, Equipment, Public pages, and so on. Every band starts
+with everything checked, which changes nothing; unchecking an area is how bands become different
+products. Changes save as you click and apply to every group on the band.
+
+Today the checklist is stored and shown; the enforcement arrives with the roles work — the role
+editor will gray out excluded areas with an upgrade note, and grants in them will pause until
+the group upgrades (nothing is ever deleted; a paused grant resumes exactly as configured).
+
+
 **Administration → Billing** holds three screens.
 
 **Price Bands** is the price list the public Pricing page renders — member ranges, a price per

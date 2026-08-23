@@ -46,7 +46,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tiers = await db.SubscriptionTiers
-            .AsNoTracking().Include(t => t.Prices).Include(t => t.Limits)
+            .AsNoTracking().Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers)
             .ToListAsync(ct);
 
@@ -109,7 +109,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
 
         if (Invalid(request) is { } bad) return BadRequest(bad);
 
-        var tier = await db.SubscriptionTiers.Include(t => t.Prices).Include(t => t.Limits)
+        var tier = await db.SubscriptionTiers.Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
@@ -160,7 +160,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tier = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
@@ -305,6 +305,55 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         }
     }
 
+    /// <summary>
+    /// Replaces this tier's included-areas checklist (item 156 Phase A, decision D1).
+    /// </summary>
+    /// <remarks>
+    /// Whole-list replace, like the limits: a checklist has no meaningful partial update, and
+    /// replace makes unchecking as first-class as checking. Takes effect immediately for every
+    /// group on the tier — Phase A only renders it (the role editor's graying arrives in Phase
+    /// E; runtime enforcement in Phase D), so a mistake here shows before it ever refuses.
+    /// </remarks>
+    [HttpPut("{id:guid}/permission-areas")]
+    public async Task<ActionResult<SubscriptionTierAdminRecord>> SetPermissionAreas(
+        Guid id, [FromBody] SetTierPermissionAreasRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tier = await db.SubscriptionTiers
+            .Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (tier is null) return NotFound();
+
+        var wanted = request.Areas.Distinct().ToHashSet();
+        var unknown = wanted.Where(a => !Enum.IsDefined(a)).ToList();
+        if (unknown.Count > 0) return BadRequest("Unknown permission area.");
+
+        var now = DateTime.UtcNow;
+        foreach (var row in tier.PermissionAreas.Where(a => !wanted.Contains(a.Area)).ToList())
+            db.SubscriptionTierPermissionAreas.Remove(row);
+        foreach (var area in wanted.Where(a => tier.PermissionAreas.All(r => r.Area != a)))
+        {
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tier.Id, Area = area,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(SubscriptionTier), tier.Id,
+            new SubscriptionTier { Id = tier.Id, Name = tier.Name }, tier, userId, AppSources.WebApi));
+
+        var refreshed = await db.SubscriptionTiers.AsNoTracking()
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.PermissionAreas)
+            .FirstAsync(t => t.Id == id, ct);
+        var orgCount = await db.OrganizationSubscriptions.CountAsync(s2 => s2.SubscriptionTierId == id, ct);
+        return Ok(ToRecord(refreshed, orgCount));
+    }
+
     private static SubscriptionTierAdminRecord ToRecord(SubscriptionTier tier, int organizationCount) =>
         new(tier.Id, tier.Name, tier.MinMembers, tier.MaxMembers, tier.SortOrder, tier.IsActive,
             [.. tier.Prices.OrderBy(p => (int)p.Interval).Select(p =>
@@ -313,5 +362,6 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
                     SubscriptionPricing.SavingPercentAgainstMonthly(tier, p.Interval)))],
             [.. tier.Limits.OrderBy(l => (int)l.Limit)
                 .Select(l => new SubscriptionTierLimitAdminRecord(l.Limit, l.MaxValue))],
-            organizationCount);
+            organizationCount,
+            [.. tier.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)]);
 }

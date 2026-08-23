@@ -132,6 +132,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTier> SubscriptionTiers { get; set; }
         public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
+        public virtual DbSet<SubscriptionTierPermissionArea> SubscriptionTierPermissionAreas { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
@@ -2486,6 +2487,20 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<SubscriptionTierLimit>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── SubscriptionTierPermissionArea (item 156 Phase A) ─────────────
+            modelBuilder.Entity<SubscriptionTierPermissionArea>()
+                .HasOne(e => e.SubscriptionTier).WithMany(t => t.PermissionAreas)
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubscriptionTierPermissionArea>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTierPermissionArea>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One row per (tier, area): "included twice" is a save bug, not a state.
+            modelBuilder.Entity<SubscriptionTierPermissionArea>()
+                .HasIndex(e => new { e.SubscriptionTierId, e.Area }).IsUnique();
 
             // One row per organization, enforced rather than assumed: a second row would make
             // "what does this group pay?" a question with two answers.

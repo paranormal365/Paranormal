@@ -66,5 +66,7 @@ namespace Ben.Data.Source.Entities
         /// cap at all, which is the safe default; see <see cref="SubscriptionTierLimit"/>.
         /// </summary>
         public virtual ICollection<SubscriptionTierLimit> Limits { get; set; } = [];
+
+        public virtual ICollection<SubscriptionTierPermissionArea> PermissionAreas { get; set; } = [];
     }
 }

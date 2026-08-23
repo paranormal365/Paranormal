@@ -53,6 +53,36 @@ internal static class SubscriptionTierSeeder
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
+        // ── Permission areas (item 156 Phase A): every tier starts ALL-INCLUSIVE ──
+        // BEFORE the tiers-exist early return, because it backfills databases whose tiers
+        // predate the areas table. Zero behavior change is the phase's contract: all-checked
+        // gates nothing, and differentiation is a choice Ben makes by UNchecking. Per-tier
+        // gate: a tier with ANY area rows has been edited (or seeded) and is left entirely
+        // alone, so an unchecked box never grows back.
+        {
+            var existingTiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
+            var tiersWithAreas = await db.SubscriptionTierPermissionAreas.AsNoTracking()
+                .Select(a => a.SubscriptionTierId).Distinct().ToListAsync();
+            var bareTiers = existingTiers.Where(t => !tiersWithAreas.Contains(t.Id)).ToList();
+            if (bareTiers.Count > 0)
+            {
+                var seedNow = DateTime.UtcNow;
+                foreach (var tier in bareTiers)
+                foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                {
+                    db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+                    {
+                        SubscriptionTierId = tier.Id,
+                        Area = area,
+                        DateCreated = seedNow,
+                        CreatedByAppUserId = tier.CreatedByAppUserId,
+                    });
+                }
+                await db.SaveChangesAsync();
+                Console.WriteLine($"[SubscriptionTierSeeder] Seeded all permission areas for {bareTiers.Count} tier(s).");
+            }
+        }
+
         // Populated already — including deliberately emptied — is left as it is. See remarks.
         if (await db.SubscriptionTiers.AnyAsync()) return;
 
@@ -84,9 +114,26 @@ internal static class SubscriptionTierSeeder
 
         // The resolver's own rules, checked against what was just written rather than assumed —
         // a seeder that plants an unusable price list is worse than one that plants nothing.
+        // The tiers this run just created get their all-inclusive checklist too.
+        {
+            var justCreated = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
+            var seedNow2 = DateTime.UtcNow;
+            foreach (var tier in justCreated)
+            foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+            {
+                db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+                {
+                    SubscriptionTierId = tier.Id, Area = area,
+                    DateCreated = seedNow2, CreatedByAppUserId = tier.CreatedByAppUserId,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
         var seeded = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
         if (SubscriptionTierResolver.Validate(seeded) is { } problem)
             throw new InvalidOperationException($"Seeded subscription tiers are not usable: {problem}");
+
     }
 
     private static SubscriptionTierPrice NewPrice(
