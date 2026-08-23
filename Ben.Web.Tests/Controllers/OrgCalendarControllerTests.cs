@@ -59,7 +59,7 @@ public class OrgCalendarControllerTests
 
     private static OrgCalendarEventController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new OrgCalendarEventController(factory, CreateMapper());
+        var ctrl = new OrgCalendarEventController(factory, CreateMapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

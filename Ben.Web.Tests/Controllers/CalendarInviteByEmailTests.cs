@@ -43,7 +43,7 @@ public class CalendarInviteByEmailTests
     }
 
     private static OrgCalendarEventController Build(IDbContextFactory<BenDataContext> f)
-        => new(f, Mapper())
+        => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -190,7 +190,7 @@ public class CalendarInviteByEmailTests
     {
         var factory = await SeedAsync(Guid.NewGuid(), "guest@example.com");
 
-        var ctrl = new OrgCalendarEventController(factory, Mapper())
+        var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
         {
             ControllerContext = new ControllerContext
             {
