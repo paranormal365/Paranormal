@@ -298,4 +298,116 @@ public class CaseTransferControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── Item 167: a plan without case transfers blocks both doors ─────────────
+
+    /// <summary>
+    /// Puts one org on a tier that explicitly EXCLUDES case transfers, and the OTHER org on a
+    /// permissive tier via its own subscription row. Both rows are explicit because a lone
+    /// valid tier would otherwise capture the unsubscribed org through member-count resolution
+    /// — the first draft of this helper failed exactly that way.
+    /// </summary>
+    private static async Task ExcludeTransfersAsync(
+        IDbContextFactory<BenDataContext> factory, Guid excludedOrgId, Guid otherOrgId, Guid creatorId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var restrictedId = Guid.NewGuid();
+        var permissiveId = Guid.NewGuid();
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = restrictedId, Name = "No-Transfers Tier", MinMembers = 1, SortOrder = 1, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = creatorId,
+        });
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = permissiveId, Name = "Everything Tier", MinMembers = 1, SortOrder = 2, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = creatorId,
+        });
+        db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+        {
+            SubscriptionTierId = restrictedId, Capability = Ben.Data.Common.Enums.TierCapability.CaseTransfers,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = creatorId,
+        });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = excludedOrgId, SubscriptionTierId = restrictedId,
+            Status = SubscriptionStatus.Free, DateCreated = DateTime.UtcNow, CreatedByAppUserId = creatorId,
+        });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = otherOrgId, SubscriptionTierId = permissiveId,
+            Status = SubscriptionStatus.Free, DateCreated = DateTime.UtcNow, CreatedByAppUserId = creatorId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Propose_SendingOrgWithoutTheCapability_IsRefusedAndNothingChanges()
+    {
+        var (factory, fromOrgId, toOrgId, caseId, fromUserId, _) = await SeedAsync();
+        await ExcludeTransfersAsync(factory, fromOrgId, toOrgId, fromUserId);
+
+        var result = await BuildController(factory, fromUserId)
+            .Propose(fromOrgId, caseId, new ProposeCaseTransferRequest(toOrgId, null), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("case transfers", bad.Value!.ToString());
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseTransferLogs.AnyAsync());
+        Assert.Equal(CaseStatus.Accepted, (await db.Cases.FindAsync(caseId))!.Status);
+    }
+
+    [Fact]
+    public async Task Propose_ReceivingOrgWithoutTheCapability_IsRefused()
+    {
+        var (factory, fromOrgId, toOrgId, caseId, fromUserId, toUserId) = await SeedAsync();
+        await ExcludeTransfersAsync(factory, toOrgId, fromOrgId, toUserId);
+
+        var result = await BuildController(factory, fromUserId)
+            .Propose(fromOrgId, caseId, new ProposeCaseTransferRequest(toOrgId, null), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("cannot be sent", bad.Value!.ToString());
+    }
+
+    [Fact]
+    public async Task Respond_AcceptWithoutTheCapability_IsRefusedAtTheMomentItMatters()
+    {
+        // The plan changes AFTER the proposal: the accept is where the case actually moves,
+        // so the accept is where the receiving door is re-checked.
+        var (factory, fromOrgId, toOrgId, caseId, fromUserId, toUserId) = await SeedAsync();
+        var propResult = await BuildController(factory, fromUserId)
+            .Propose(fromOrgId, caseId, new ProposeCaseTransferRequest(toOrgId, null), default);
+        var logId = ((CaseTransferLogRecord)((CreatedAtActionResult)propResult.Result!).Value!).Id;
+
+        await ExcludeTransfersAsync(factory, toOrgId, fromOrgId, toUserId);
+
+        var result = await BuildController(factory, toUserId)
+            .Respond(toOrgId, caseId, logId, new RespondTransferRequest(true, null), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("cannot be accepted", bad.Value!.ToString());
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(fromOrgId, (await db.Cases.FindAsync(caseId))!.OrganizationId);
+    }
+
+    [Fact]
+    public async Task Respond_RejectWithoutTheCapability_IsStillAllowed()
+    {
+        // Declining work must never require a plan.
+        var (factory, fromOrgId, toOrgId, caseId, fromUserId, toUserId) = await SeedAsync();
+        var propResult = await BuildController(factory, fromUserId)
+            .Propose(fromOrgId, caseId, new ProposeCaseTransferRequest(toOrgId, null), default);
+        var logId = ((CaseTransferLogRecord)((CreatedAtActionResult)propResult.Result!).Value!).Id;
+
+        await ExcludeTransfersAsync(factory, toOrgId, fromOrgId, toUserId);
+
+        var result = await BuildController(factory, toUserId)
+            .Respond(toOrgId, caseId, logId, new RespondTransferRequest(false, "No thanks"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(CaseTransferStatus.Rejected, ((CaseTransferLogRecord)ok.Value!).Status);
+    }
 }

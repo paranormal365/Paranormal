@@ -116,6 +116,27 @@
                         </div>
                     </Template>
                 </GridColumn>
+                @* Item 167: per-tier capabilities — may-or-may-not switches, not role areas.
+                   Same save-on-toggle contract as the areas checklist. *@
+                <GridColumn Title="Capabilities" Width="150px">
+                    <Template>
+                        @{ var tc = (SubscriptionTierAdminRecord)context; }
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
+                            {
+                                var has = (tc.IncludedCapabilities ?? []).Contains(capability);
+                                <div class="form-check form-check-inline m-0" title="@CapabilityLabel(capability)">
+                                    <input type="checkbox" class="form-check-input"
+                                           id="@($"cap-{tc.Id}-{(int)capability}")"
+                                           checked="@has"
+                                           disabled="@(_savingAreasTierId == tc.Id)"
+                                           @onchange="@(e => ToggleCapabilityAsync(tc, capability, e.Value is true))" />
+                                    <label class="form-check-label small" for="@($"cap-{tc.Id}-{(int)capability}")">@CapabilityLabel(capability)</label>
+                                </div>
+                            }
+                        </div>
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.OrganizationCount)" Title="Groups" Width="90px" />
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.IsActive)" Title="Active" Width="80px">
                     <Template>
@@ -415,6 +436,35 @@
         Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
         _ => area.ToString(),
     };
+
+    private static string CapabilityLabel(Ben.Data.Common.Enums.TierCapability capability) => capability switch
+    {
+        Ben.Data.Common.Enums.TierCapability.CaseTransfers => "Case transfers",
+        _ => capability.ToString(),
+    };
+
+    private async Task ToggleCapabilityAsync(
+        SubscriptionTierAdminRecord tier, Ben.Data.Common.Enums.TierCapability capability, bool on)
+    {
+        _savingAreasTierId = tier.Id;
+        try
+        {
+            var next = (tier.IncludedCapabilities ?? []).ToHashSet();
+            if (on) next.Add(capability); else next.Remove(capability);
+
+            var (updated, error) = await AdminClient.SetTierCapabilitiesAsync(tier.Id, next.ToList());
+            if (updated is null)
+            {
+                _saveError = error ?? "The capability change couldn't be saved.";
+                return;
+            }
+            await LoadAsync();
+        }
+        finally
+        {
+            _savingAreasTierId = null;
+        }
+    }
 
     private async Task ToggleAreaAsync(
         SubscriptionTierAdminRecord tier, Ben.Data.Common.Enums.OrganizationPermissionArea area, bool on)

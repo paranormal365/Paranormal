@@ -298,6 +298,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default)
         => _api.GetListAsync<MyMembershipOrgItem>("/api/security/organizations/my-memberships", token);
 
+    /// <summary>The caller's waiting work per group (item 161): client requests to answer and
+    /// membership applications to review, only for groups whose queues the caller can open.</summary>
+    public Task<LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default)
+        => _api.GetListAsync<OrgActionNeededItem>("/api/security/organizations/action-needed", token);
+
     // ── Member-title ladder (item 157) ───────────────────────────────────────
 
     public Task<LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default)

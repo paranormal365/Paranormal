@@ -1,0 +1,98 @@
+@using Ben.Web.Services
+@using Microsoft.JSInterop
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@*
+    Item 161: the two decisions that block OTHER people — a client waiting on an answer, an
+    applicant waiting at the door — surfaced right below the site-wide announcement, for the
+    people who can act on them and nobody else.
+
+    The server (action-needed) already scopes every count to the caller's own gates, so this
+    component renders whatever arrives without re-deriving permissions. Dismissal is per
+    group-and-counts in sessionStorage: quiet for the rest of the tab session, but a NEW
+    arrival changes the counts and the banner returns — it nags without becoming wallpaper.
+*@
+
+@foreach (var item in _visible)
+{
+    <div class="alert alert-info d-flex align-items-start gap-2 mb-3 action-needed-banner" role="status">
+        <span aria-hidden="true">🔔</span>
+        <div class="flex-grow-1">
+            <strong>@item.OrganizationName</strong> has work waiting:
+            @if (item.PendingClientRequests > 0)
+            {
+                <a href="/organizations/@item.OrganizationId?tab=requests">
+                    @item.PendingClientRequests investigation request@(item.PendingClientRequests == 1 ? "" : "s")
+                </a>
+            }
+            @if (item.PendingClientRequests > 0 && item.PendingMembershipRequests > 0)
+            {
+                <span> and </span>
+            }
+            @if (item.PendingMembershipRequests > 0)
+            {
+                <a href="/organizations/@item.OrganizationId?tab=members">
+                    @item.PendingMembershipRequests membership application@(item.PendingMembershipRequests == 1 ? "" : "s")
+                </a>
+            }
+        </div>
+        <button type="button" class="btn-close" aria-label="Dismiss"
+                @onclick="() => DismissAsync(item)"></button>
+    </div>
+}
+
+@code {
+    private readonly List<OrgActionNeededItem> _visible = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+
+        await UserState.AuthReady;
+        if (!UserState.IsAuthenticated) return;
+
+        IReadOnlyList<OrgActionNeededItem> items;
+        try
+        {
+            items = (await AdminClient.GetActionNeededAsync()).Items;
+        }
+        catch
+        {
+            // A banner must never be the reason a page errors; it simply does not appear.
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            if (await IsDismissedAsync(item)) continue;
+            _visible.Add(item);
+        }
+        if (_visible.Count > 0) StateHasChanged();
+    }
+
+    // The key carries the counts, so any CHANGE (a new arrival, or a queue that shrank and
+    // grew again) invalidates an old dismissal and the banner comes back.
+    private static string KeyFor(OrgActionNeededItem item)
+        => $"action-needed:{item.OrganizationId}:{item.PendingClientRequests}:{item.PendingMembershipRequests}";
+
+    private async Task<bool> IsDismissedAsync(OrgActionNeededItem item)
+    {
+        try
+        {
+            return await JS.InvokeAsync<string?>("sessionStorage.getItem", KeyFor(item)) is not null;
+        }
+        catch { return false; }
+    }
+
+    private async Task DismissAsync(OrgActionNeededItem item)
+    {
+        _visible.Remove(item);
+        try
+        {
+            await JS.InvokeVoidAsync("sessionStorage.setItem", KeyFor(item), "1");
+        }
+        catch { /* Dismissal is a courtesy; losing it re-shows a true banner, never hides one. */ }
+    }
+}

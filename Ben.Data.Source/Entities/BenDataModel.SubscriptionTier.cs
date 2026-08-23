@@ -68,5 +68,7 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<SubscriptionTierLimit> Limits { get; set; } = [];
 
         public virtual ICollection<SubscriptionTierPermissionArea> PermissionAreas { get; set; } = [];
+
+        public virtual ICollection<SubscriptionTierExcludedCapability> ExcludedCapabilities { get; set; } = [];
     }
 }

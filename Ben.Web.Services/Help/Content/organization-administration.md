@@ -79,6 +79,14 @@ a role grant now opens the same doors for the members who hold it. Nothing was t
 anyone — the grants only add. The remaining sections' grants become decisive as the later
 phases land; each section's own description says where it stands.
 
+## Banners for work that blocks other people
+
+When a client's investigation request or a membership application is waiting on your group, a
+banner appears under the site-wide announcement on every page — for you and anyone else whose
+permissions let them open that queue, and for nobody else. Each banner names the group and the
+waiting count and links straight to the tab where you act. Dismissing one keeps it away for the
+rest of your session; a new arrival brings it back.
+
 ## Custom-role permissions and your plan
 
 Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,

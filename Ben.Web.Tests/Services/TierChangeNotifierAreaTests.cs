@@ -169,4 +169,44 @@ public sealed class TierChangeNotifierAreaTests
         Assert.Equal(periodEnd - TierChangeNotifier.NoticeWindow, notice.DeliverAtUtc);
         Assert.Empty(await db.UserMessages.ToListAsync());
     }
+
+    // ── Capabilities ride the same netting (item 167) ─────────────────────────
+
+    [Fact]
+    public async Task A_capability_flip_flop_reaches_the_groups_as_silence()
+    {
+        var factory = CreateFactory();
+        var (tierId, _, _) = await SeedAsync(factory, SubscriptionStatus.Free);
+        var notifier = Notifier(factory);
+
+        var with    = new HashSet<TierCapability> { TierCapability.CaseTransfers };
+        var without = new HashSet<TierCapability>();
+
+        await notifier.ApplyCapabilityChangesAsync(tierId, "Band", with, without, Editor, CancellationToken.None);
+        await notifier.ApplyCapabilityChangesAsync(tierId, "Band", without, with, Editor, CancellationToken.None);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.TierChangeNotices.ToListAsync());
+        Assert.Empty(await db.UserMessages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_capability_removal_queues_a_notice_naming_the_consequence()
+    {
+        var factory = CreateFactory();
+        var (tierId, orgId, _) = await SeedAsync(factory, SubscriptionStatus.Free);
+
+        await Notifier(factory).ApplyCapabilityChangesAsync(
+            tierId, "Band",
+            new HashSet<TierCapability> { TierCapability.CaseTransfers },
+            new HashSet<TierCapability>(),
+            Editor, CancellationToken.None);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var notice = Assert.Single(await db.TierChangeNotices.ToListAsync());
+        Assert.Equal(orgId, notice.OrganizationId);
+        Assert.Contains("Case transfers", notice.Sentences);
+        Assert.Contains("neither be sent", notice.Sentences);
+        Assert.Empty(await db.UserMessages.ToListAsync());
+    }
 }

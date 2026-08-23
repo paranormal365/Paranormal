@@ -19,6 +19,31 @@ namespace Ben.Data.Common.Constants;
 /// </remarks>
 public static class PermissionAreas
 {
+    /// <summary>
+    /// Org-scoped tables no org-reachable write path consults (item 170): the five site-wide
+    /// …Type label lookups (no OrganizationId column, SuperAdmin admin screens only) and five
+    /// org tables whose CRUD is likewise admin-only today. A role grant on any of them gates
+    /// nothing, so the role editor offers no toggle and the default roles skip them — a grant
+    /// that does nothing tells a role-builder something untrue. These tables KEEP their area
+    /// mapping (the map stays total); they are excluded from GRANTING, not from existing.
+    /// If a write path arrives for one, remove it here and the coverage guard will demand its
+    /// editor row back.
+    /// </summary>
+    public static readonly IReadOnlySet<OrganizationSecurityTable> UngatedTables =
+        new HashSet<OrganizationSecurityTable>
+        {
+            OrganizationSecurityTable.OrganizationAddressType,
+            OrganizationSecurityTable.OrganizationEmailType,
+            OrganizationSecurityTable.OrganizationPhoneType,
+            OrganizationSecurityTable.OrganizationLinkType,
+            OrganizationSecurityTable.OrganizationNoteType,
+            OrganizationSecurityTable.OrganizationEmail,
+            OrganizationSecurityTable.OrganizationPhone,
+            OrganizationSecurityTable.OrganizationLink,
+            OrganizationSecurityTable.OrganizationNote,
+            OrganizationSecurityTable.OrganizationAddressSearch,
+        };
+
     /// <summary>Values that are user-scoped, not organization-scoped: no area, by design.</summary>
     public static readonly IReadOnlySet<OrganizationSecurityTable> UserScopedTables =
         new HashSet<OrganizationSecurityTable>

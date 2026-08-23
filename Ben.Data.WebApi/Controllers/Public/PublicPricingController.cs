@@ -43,7 +43,7 @@ public sealed class PublicPricingController : ControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tiers = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .Where(t => t.IsActive)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers)
             .ToListAsync(ct);
@@ -65,6 +65,12 @@ public sealed class PublicPricingController : ControllerBase
             // an empty list here would render as "includes nothing", the exact inversion.
             t.PermissionAreas.Count == 0
                 ? null
-                : [.. t.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)])));
+                : [.. t.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)],
+            // Item 167: capabilities. Storage is exclusion rows; the payload speaks in
+            // inclusions with the same null-means-everything contract as the areas.
+            t.ExcludedCapabilities.Count == 0
+                ? null
+                : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>()
+                    .Except(t.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)])));
     }
 }

@@ -133,6 +133,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTierPrice> SubscriptionTierPrices { get; set; }
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
         public virtual DbSet<SubscriptionTierPermissionArea> SubscriptionTierPermissionAreas { get; set; }
+        public virtual DbSet<SubscriptionTierExcludedCapability> SubscriptionTierExcludedCapabilities { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
@@ -2501,6 +2502,18 @@ namespace Ben.Data.Source.Context
             // One row per (tier, area): "included twice" is a save bug, not a state.
             modelBuilder.Entity<SubscriptionTierPermissionArea>()
                 .HasIndex(e => new { e.SubscriptionTierId, e.Area }).IsUnique();
+
+            modelBuilder.Entity<SubscriptionTierExcludedCapability>()
+                .HasOne(e => e.SubscriptionTier).WithMany(t => t.ExcludedCapabilities)
+                .HasForeignKey(e => e.SubscriptionTierId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubscriptionTierExcludedCapability>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTierExcludedCapability>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SubscriptionTierExcludedCapability>()
+                .HasIndex(e => new { e.SubscriptionTierId, e.Capability }).IsUnique();
 
             // One row per organization, enforced rather than assumed: a second row would make
             // "what does this group pay?" a question with two answers.

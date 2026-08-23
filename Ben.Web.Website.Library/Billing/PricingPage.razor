@@ -112,6 +112,14 @@
                                     @string.Join(", ", (tier.IncludedAreas ?? []).Select(AreaLabel))
                                 </p>
                             }
+                            @* Item 167: a capability the plan lacks is said plainly. Shown only
+                               when the plan excludes something, same as the role areas. *@
+                            @if (MissingCapabilities(tier) is { Count: > 0 } missing)
+                            {
+                                <p class="small text-secondary mb-2">
+                                    Not included: @string.Join(", ", missing.Select(CapabilityLabel))
+                                </p>
+                            }
                             @if (tier.Limits.Count > 0)
                             {
                                 <ul class="list-unstyled text-start small mt-auto mb-0">
@@ -199,6 +207,17 @@
 </div>
 
 @code {
+    private static IReadOnlyList<Ben.Data.Common.Enums.TierCapability> MissingCapabilities(PublicSubscriptionTier tier)
+        => tier.IncludedCapabilities is null
+            ? []
+            : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().Except(tier.IncludedCapabilities)];
+
+    private static string CapabilityLabel(Ben.Data.Common.Enums.TierCapability capability) => capability switch
+    {
+        Ben.Data.Common.Enums.TierCapability.CaseTransfers => "Case transfers",
+        _ => capability.ToString(),
+    };
+
     private static string AreaLabel(Ben.Data.Common.Enums.OrganizationPermissionArea area) => area switch
     {
         Ben.Data.Common.Enums.OrganizationPermissionArea.OrganizationProfile => "Group profile",

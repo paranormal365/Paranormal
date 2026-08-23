@@ -96,6 +96,25 @@ public sealed class CaseTransferController : BenControllerBase
         if (!await db.Organizations.AnyAsync(o => o.Id == request.ToOrganizationId, ct))
             return BadRequest("Target organization not found.");
 
+        // ── Item 167, both ends of Ben's rule at the SENDING door ────────────────
+        // A group whose plan lacks case transfers can neither hand a case out nor be handed
+        // one — and the receiving end is re-checked at acceptance, because a plan can change
+        // while a proposal waits. Client-proposed transfers are gated elsewhere and only on
+        // the RECEIVING end: the case is the client's, and a group's plan must not hold it.
+        var (senderMay, senderTier) = await Ben.Data.Source.Services.TierAreaResolution
+            .HasCapabilityAsync(db, orgId, Ben.Data.Common.Enums.TierCapability.CaseTransfers, ct);
+        if (!senderMay)
+            return BadRequest(
+                $"Your group's plan{(senderTier is null ? "" : $" ({senderTier})")} does not include case transfers. "
+                + "See the Pricing page for what each plan includes.");
+
+        var (receiverMay, receiverTier) = await Ben.Data.Source.Services.TierAreaResolution
+            .HasCapabilityAsync(db, request.ToOrganizationId, Ben.Data.Common.Enums.TierCapability.CaseTransfers, ct);
+        if (!receiverMay)
+            return BadRequest(
+                $"That group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
+                + "transfers, so a case cannot be sent to them.");
+
         var log = new CaseTransferLog
         {
             Id = Guid.NewGuid(), CaseId = caseId,
@@ -134,6 +153,20 @@ public sealed class CaseTransferController : BenControllerBase
             .FirstOrDefaultAsync(l => l.Id == logId && l.ToOrganizationId == orgId, ct);
         if (log is null) return NotFound();
         if (log.Status != CaseTransferStatus.Pending) return BadRequest("Already responded.");
+
+        // ── Item 167 at the RECEIVING door ───────────────────────────────────────
+        // Checked at the moment the case actually moves, not just at proposal: the receiving
+        // group's plan may have changed while the proposal waited. Rejecting stays free —
+        // declining work must never require a plan.
+        if (request.Accept)
+        {
+            var (receiverMay, receiverTier) = await Ben.Data.Source.Services.TierAreaResolution
+                .HasCapabilityAsync(db, orgId, Ben.Data.Common.Enums.TierCapability.CaseTransfers, ct);
+            if (!receiverMay)
+                return BadRequest(
+                    $"Your group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
+                    + "transfers, so this case cannot be accepted. See the Pricing page for what each plan includes.");
+        }
 
         log.Status               = request.Accept ? CaseTransferStatus.Accepted : CaseTransferStatus.Rejected;
         log.RespondedByAppUserId = userId == Guid.Empty ? null : userId;

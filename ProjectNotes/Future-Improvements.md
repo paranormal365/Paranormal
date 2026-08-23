@@ -8135,7 +8135,7 @@ single-threshold case of this matrix — the schema hook is already there. What 
 Not started. Needs a design pass with Ben before building — the capability list per duty is
 product surface, not plumbing.
 
-## 161. Action-needed banners under the site-wide announcement (OPEN — Ben, 2026-08-23)
+## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)
 
 Ben's spec: when an investigation request is waiting, show an info alert **just below the
 site-wide announcement banner** for anyone who can accept and review investigation requests;
@@ -8147,6 +8147,19 @@ the two decisions that block OTHER people: a client waiting on an answer, an app
 at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
 becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
 server-side (the item-141 rule — never render a bucket the caller cannot open).
+
+**Built 2026-08-23 as specified.** `GET api/security/organizations/action-needed` counts the
+two buckets per group the caller belongs to (membership rows decide scope — impersonation-
+faithful, and a SuperAdmin hears about their OWN groups, not everyone's), each bucket only
+behind the same read gate as the tab it links to (client requests → Case read, the Requests
+tab's own gate; applications → MembershipRequests read). "Waiting" mirrors the Requests
+queue's definition: Pending, Viewed, and UnderReview all count. `ActionNeededBanners.razor`
+renders in MainLayout directly under the announcement: one alert per group, each bucket a
+link to its tab, dismiss stored in sessionStorage keyed by group AND counts so a new arrival
+re-shows. Five endpoint unit tests (regressed — ungating both buckets fails two), and an e2e:
+Daniel applies to TGH, Sarah sees the banner with the members-tab link, dismisses it, it
+stays gone across a reload, and Victor — same group, no gates — sees nothing; the
+application is withdrawn in finally. Help note in organization-administration.
 
 ## 162. Default avatar is an upload, not a Guid box (CLOSED 2026-08-23)
 
@@ -8432,7 +8445,7 @@ surfaces; PDF regen; item 166 closed with a per-phase record.
 W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
 dependency on 156 at all.
 
-## 167. Free-plan groups cannot transfer or accept transferred cases (OPEN — Ben, 2026-08-23)
+## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
 Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
 out nor accept a case transferred in. Both ends checked — a paid group must not be able to hand
@@ -8443,6 +8456,36 @@ is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
 a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
 the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
 Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
+
+**Built 2026-08-23, with one design correction found before it shipped.** `TierCapability`
+enum + `SubscriptionTierExcludedCapability` EXCLUSION rows — not inclusion rows like the areas,
+because with a single capability defined, an include-model cannot tell "never configured" from
+"explicitly none": unchecking the only capability leaves zero rows, which fail-open reads as
+everything-included, and the uncheck silently does nothing. Exclusions make fail-open
+structural (zero rows = nothing excluded), need no seeding or backfill at all, and excluding
+the one capability writes exactly one row.
+
+- `TierAreaResolution.HasCapabilityAsync` (shared `EffectiveTierAsync` core with the areas).
+- Three gates: org-Propose checks BOTH ends; Respond-accept re-checks the receiver at the
+  moment the case actually moves (the plan may have changed while the proposal waited);
+  rejecting never requires the capability. The client's own move (`MyCaseController.Reassign`)
+  is gated ONLY on the destination — a free plan must not hold a client's case hostage.
+- The refusal sentences actually SURFACE: Propose/Respond adapters moved to
+  `SendExpectingReasonAsync` (they were null-on-refusal → "Proposal failed", the exact
+  server-guard-needs-a-UI-path trap, caught in review); the client-move path already carried
+  reasons.
+- Admin: Capabilities checklist beside the role areas (save-per-toggle), PUT
+  `{id}/capabilities`; notices ride the SAME netting as areas — `ApplyNettedAsync` extracted
+  to a sentence-pair core, capability flip-flops reach groups as silence.
+- Pricing: `IncludedCapabilities` (null = everything) + "Not included: Case transfers" on the
+  card, anonymous-path verified. Help: site-administration checklist section + a case-transfer
+  passage in working-a-case (transfers had NO help coverage at all before); PDF regenerated.
+- Tests: 3 gate tests + reject-allowed (all three gates probe-regressed), netting ×2,
+  pricing projection, 3,000 unit green. Live: the Free tier now genuinely excludes Case
+  transfers — that IS the rule, left in place — and a real transfer proposal to a free-band
+  group answers 400 "That group's plan (Free) does not include case transfers…" with nothing
+  mutated. Test-writing also caught that a lone valid tier captures unsubscribed orgs via
+  member-count resolution — both test orgs get explicit subscription rows.
 
 ### Item 156 Phase D — SHIPPED 2026-08-23 (the enforcement flip)
 
@@ -8572,7 +8615,7 @@ Three strands, all downstream of item 85's billing foundation:
 Sequencing: after item 85's remaining phases (B–F) land — receipts and tax attach to real
 payment flow, and the audit section wants the payment provider integration to exist first.
 
-## 169. Grid action buttons: small, one line, everywhere (OPEN — Ben, 2026-08-23)
+## 169. Grid action buttons: small, one line, everywhere (CLOSED 2026-08-23)
 
 Ben, 2026-08-23: "buttons in grids should be small and not wrap the line." And, on clicking Edit
 in the roles grid: "maybe the editor should scroll into view, or it will look like nothing
@@ -8585,7 +8628,23 @@ two defects — stacked/wrapping buttons, and inline editors or detail panes tha
 fold with no scroll. Candidates: every TelerikGrid with an Actions template column (grep for
 `GridColumn Title="Actions"`).
 
-## 170. Role editor offers grants over site-wide lookup tables (OPEN — found with Ben, 2026-08-23)
+**Swept 2026-08-23** — the sweep looked wider than the Actions title (any grid Template with
+2+ buttons and no nowrap/flex/dropdown), which found more than the title-grep would have:
+
+- **OrgCmsEditor pages grid**: four stacked buttons wrapped to two lines; now the house
+  pattern from OrganizationList — Sections as the primary button, Edit/Preview/Delete behind
+  a More-actions dropdown, one line at 170px.
+- **OrgCmsEditor logos grid**: nowrap wrapper + width.
+- **CaseVideoEditorPage** and **MyVideosPage** project grids: bare button triples wrapped in
+  a nowrap flex row.
+- Already fine (d-flex is nowrap by default): OrganizationList, OrgAddressManager,
+  OrganizationEquipment, AdminEquipmentTaxonomy.
+- Scroll-into-view half: the roles grid (fixed with item 161's session) was the only inline
+  below-the-grid editor; every other candidate (`OrgCmsEditor`, `AdminCoupons`,
+  `AdminFileTypes`, `OrgCmsPageEdit`) turned out to be a modal or an in-place row swap,
+  which bring themselves into view.
+
+## 170. Role editor offers grants over site-wide lookup tables (CLOSED 2026-08-23)
 
 Ben, mid-Phase-E review of the role editor: "Are the 'types' like address types specific to
 groups? I thought they were generalized."
@@ -8607,6 +8666,29 @@ role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warra
 `RolePermissionCoverageTests` to pin the corrected list. Caution: some type-like tables ARE
 per-org (calendar event types were seeded per-group in item 148) — each table needs its own
 verdict from the schema, not from its name.
+
+**Audited and fixed 2026-08-23.** The audit counted `HasAccessAsync`/`OrganizationSecurityTable`
+consumers per table across the WebApi and repository layers, and found TEN dead rows, not five:
+
+- The five `…Type` lookups (Address/Email/Phone/Link/Note Types): no OrganizationId column,
+  entity controllers read-only, writes SuperAdmin-only. Schema verdict pinned by a reflection
+  test (`Site_wide_lookup_tables_really_are_site_wide`).
+- Five more org-scoped tables whose CRUD is ALSO admin-only today with zero grant consumers:
+  **OrganizationEmail, OrganizationPhone, OrganizationLink, OrganizationNote,
+  OrganizationAddressSearch**. (The self-service contact work of 2026-08-15 was USER contact
+  info — `api/me/*` — never org contact rows; the org's public email/phone/website are plain
+  columns on Organization, gated by the Organization table.)
+
+The classification is a shared constant — `PermissionAreas.UngatedTables` — read by all three
+consumers so they cannot drift: the role editor (ten sections removed), `OrgRoleDefaults`
+(Historian now reads mapped-minus-ungated, so new groups stop seeding grants nothing consults),
+and `RolePermissionCoverageTests` (the every-table-assignable test skips them, and a REVERSE
+guard fails if any ungated table reappears in the editor — probe-verified). The area map stays
+total: the tables are excluded from GRANTING, not from existing. Existing groups' Historian
+rows still hold the old dead grants; they gate nothing and the editor's next save drops them.
+
+Restore path is deliberate friction: when a write path arrives for one of these tables, remove
+it from `UngatedTables` and the coverage guard demands its editor row back.
 
 ## 171. The group dashboard shows case counts to seats without case access (CLOSED 2026-08-23 — Ben: "the gates count as tabs")
 

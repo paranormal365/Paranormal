@@ -17,6 +17,13 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Put, $"/api/admin/subscription-tiers/{tierId}/permission-areas",
             new SetTierPermissionAreasRequest(areas), token);
 
+    public async Task<(SubscriptionTierAdminRecord? Result, string? Error)> SetTierCapabilitiesAsync(
+        Guid tierId, IReadOnlyList<Ben.Data.Common.Enums.TierCapability> capabilities,
+        CancellationToken token = default)
+        => await _api.SendExpectingReasonAsync<SetTierCapabilitiesRequest, SubscriptionTierAdminRecord>(
+            HttpMethod.Put, $"/api/admin/subscription-tiers/{tierId}/capabilities",
+            new SetTierCapabilitiesRequest(capabilities), token);
+
     public Task<string?> GetTierValidationAsync(CancellationToken token = default)
         => _api.GetAsync<string?>("/api/admin/subscription-tiers/validation", token);
 

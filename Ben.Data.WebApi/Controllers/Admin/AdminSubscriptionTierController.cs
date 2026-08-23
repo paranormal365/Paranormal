@@ -47,7 +47,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tiers = await db.SubscriptionTiers
-            .AsNoTracking().Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .AsNoTracking().Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers)
             .ToListAsync(ct);
 
@@ -110,7 +110,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
 
         if (Invalid(request) is { } bad) return BadRequest(bad);
 
-        var tier = await db.SubscriptionTiers.Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+        var tier = await db.SubscriptionTiers.Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
@@ -161,7 +161,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tier = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
@@ -323,7 +323,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var tier = await db.SubscriptionTiers
-            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tier is null) return NotFound();
 
@@ -354,7 +354,56 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         await _notifier.ApplyAreaChangesAsync(tier.Id, tier.Name, beforeAreas, wanted, userId, ct);
 
         var refreshed = await db.SubscriptionTiers.AsNoTracking()
-            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas)
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
+            .FirstAsync(t => t.Id == id, ct);
+        var orgCount = await db.OrganizationSubscriptions.CountAsync(s2 => s2.SubscriptionTierId == id, ct);
+        return Ok(ToRecord(refreshed, orgCount));
+    }
+
+    /// <summary>
+    /// Replaces this tier's capabilities checklist (item 167) — same shape and same fan-out
+    /// rules as the areas: whole-list replace, netted notices, takes effect immediately.
+    /// </summary>
+    [HttpPut("{id:guid}/capabilities")]
+    public async Task<ActionResult<SubscriptionTierAdminRecord>> SetCapabilities(
+        Guid id, [FromBody] SetTierCapabilitiesRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tier = await db.SubscriptionTiers
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (tier is null) return NotFound();
+
+        var wanted = request.Capabilities.Distinct().ToHashSet();
+        if (wanted.Any(c => !Enum.IsDefined(c))) return BadRequest("Unknown capability.");
+
+        // The API speaks in inclusions; storage is exclusion rows.
+        var all = Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().ToHashSet();
+        var wantedExclusions = all.Except(wanted).ToHashSet();
+        var beforeCapabilities = all.Except(tier.ExcludedCapabilities.Select(c => c.Capability)).ToHashSet();
+
+        var now = DateTime.UtcNow;
+        foreach (var row in tier.ExcludedCapabilities.Where(c => !wantedExclusions.Contains(c.Capability)).ToList())
+            db.SubscriptionTierExcludedCapabilities.Remove(row);
+        foreach (var capability in wantedExclusions.Where(c => tier.ExcludedCapabilities.All(r => r.Capability != c)))
+        {
+            db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+            {
+                SubscriptionTierId = tier.Id, Capability = capability,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(SubscriptionTier), tier.Id,
+            new SubscriptionTier { Id = tier.Id, Name = tier.Name }, tier, userId, AppSources.WebApi));
+
+        await _notifier.ApplyCapabilityChangesAsync(tier.Id, tier.Name, beforeCapabilities, wanted, userId, ct);
+
+        var refreshed = await db.SubscriptionTiers.AsNoTracking()
+            .Include(t => t.Prices).Include(t => t.Limits).Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
             .FirstAsync(t => t.Id == id, ct);
         var orgCount = await db.OrganizationSubscriptions.CountAsync(s2 => s2.SubscriptionTierId == id, ct);
         return Ok(ToRecord(refreshed, orgCount));
@@ -369,5 +418,9 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             [.. tier.Limits.OrderBy(l => (int)l.Limit)
                 .Select(l => new SubscriptionTierLimitAdminRecord(l.Limit, l.MaxValue))],
             organizationCount,
-            [.. tier.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)]);
+            [.. tier.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)],
+            // The record speaks in INCLUSIONS (what the checklist renders); storage is
+            // exclusion rows — see SubscriptionTierExcludedCapability for why.
+            [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>()
+                .Except(tier.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)]);
 }
