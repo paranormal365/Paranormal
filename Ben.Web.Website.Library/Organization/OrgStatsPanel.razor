@@ -16,26 +16,38 @@
 
 @if (_stats is not null)
 {
+    @* Null parts are HIDDEN, not zeroed: the server sends null for the numbers whose tabs
+       this seat cannot see (the gates count as tabs — Ben, 2026-08-23), and a zero here
+       would read as an idle group. *@
     <div class="row g-2 mb-4">
         <div class="col-6 col-lg-3">
             <StatCard Label="Members" Icon="users" Value="@_stats.Members.ToString("N0")" />
         </div>
-        <div class="col-6 col-lg-3">
-            <StatCard Label="Open cases" Icon="folder" Value="@_stats.OpenCases.ToString("N0")"
-                      Caption="@($"of {_stats.Cases:N0} in total")" />
-        </div>
-        <div class="col-6 col-lg-3">
-            <StatCard Label="Investigations" Icon="calendar"
-                      Value="@_stats.Investigations.ToString("N0")" />
-        </div>
-        <div class="col-6 col-lg-3">
-            <StatCard Label="Cases this year" Icon="trending-up"
-                      Value="@_stats.CasesPerMonth.Sum(p => p.Count).ToString("N0")"
-                      Sparkline="@_stats.CasesPerMonth.Select(p => (double)p.Count).ToList()" />
-        </div>
+        @if (_stats.OpenCases is { } openCases)
+        {
+            <div class="col-6 col-lg-3">
+                <StatCard Label="Open cases" Icon="folder" Value="@openCases.ToString("N0")"
+                          Caption="@($"of {_stats.Cases:N0} in total")" />
+            </div>
+        }
+        @if (_stats.Investigations is { } investigations)
+        {
+            <div class="col-6 col-lg-3">
+                <StatCard Label="Investigations" Icon="calendar"
+                          Value="@investigations.ToString("N0")" />
+            </div>
+        }
+        @if (_stats.CasesPerMonth is not null)
+        {
+            <div class="col-6 col-lg-3">
+                <StatCard Label="Cases this year" Icon="trending-up"
+                          Value="@_stats.CasesPerMonth.Sum(p => p.Count).ToString("N0")"
+                          Sparkline="@_stats.CasesPerMonth.Select(p => (double)p.Count).ToList()" />
+            </div>
+        }
     </div>
 
-    @if (_stats.Cases > 0)
+    @if (_stats.Cases > 0 && _stats.CasesByStatus is not null && _stats.CasesPerMonth is not null)
     {
         <div class="row g-3 mb-4">
             <div class="col-lg-5">

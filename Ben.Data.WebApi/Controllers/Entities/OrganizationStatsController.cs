@@ -2,6 +2,7 @@ using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.Models.Admin;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,11 +13,16 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// One group's own numbers, for the panel on its Details tab.
 /// </summary>
 /// <remarks>
-/// <para>Gated on being able to read that group's cases, not on any administrator role: these are
-/// counts of things a member can already open one by one in the tabs beside the panel. Someone
-/// who cannot read the cases cannot read how many there are either — otherwise the count becomes
-/// a side channel that answers "is anything happening here" for a group you were removed from.
-/// </para>
+/// <para>The member count is baseline — the roster is a tab every member holds. The case and
+/// investigation numbers follow the same gate as the tabs that list them (Ben, 2026-08-23:
+/// "the gates count as tabs"): SuperAdmin, the Owner/Administrator bypass, or a role grant,
+/// through the same <c>HasAccessAsync</c> chain <c>CaseController.CanReadAsync</c> uses.
+/// Someone the Cases tab is hidden from cannot read how many cases there are either —
+/// otherwise the count is a side channel that answers "is anything happening here" for work
+/// you were not given.</para>
+///
+/// <para>The refused parts arrive as NULL, never zero: the panel hides a null widget, and a
+/// zero would read as "an idle group", which is a lie.</para>
 /// </remarks>
 [ApiController]
 [Authorize]
@@ -24,27 +30,49 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class OrganizationStatsController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
+    private readonly IOrganizationSecurityService _security;
 
-    public OrganizationStatsController(IDbContextFactory<BenDataContext> dbContextFactory)
-        => _dbContextFactory = dbContextFactory;
+    public OrganizationStatsController(
+        IDbContextFactory<BenDataContext> dbContextFactory, IOrganizationSecurityService security)
+    {
+        _dbContextFactory = dbContextFactory;
+        _security         = security;
+    }
 
     [HttpGet]
     public async Task<ActionResult<OrgStatsSummary>> Get(Guid orgId, CancellationToken ct)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-        // Active membership, or SuperAdmin — the same bar CaseController.CanReadAsync sets for
-        // reading the cases these numbers count. Cases have no OrganizationSecurityTable entry,
-        // so membership is the check, not a grant.
-        if (!User.IsInRole(RoleNames.SuperAdmin))
-        {
-            var userId = GetCurrentUserId();
-            if (userId == Guid.Empty) return Unauthorized();
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+        var userId       = GetCurrentUserId();
+        if (!isSuperAdmin && userId == Guid.Empty) return Unauthorized();
 
+        if (!isSuperAdmin)
+        {
             var isMember = await db.OrganizationUserMemberships.AnyAsync(
                 m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
 
             if (!isMember) return Forbid();
+        }
+
+        var canReadCases = isSuperAdmin || await _security.HasAccessAsync(
+            userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
+        var canReadInvestigations = isSuperAdmin || await _security.HasAccessAsync(
+            userId, orgId, OrganizationSecurityTable.Investigation, OrganizationSecurityAction.Read, ct);
+
+        var members = await db.OrganizationUserMemberships
+            .CountAsync(m => m.OrganizationId == orgId && m.IsActive, ct);
+
+        var investigations = canReadInvestigations
+            ? await db.Investigations.CountAsync(i => i.OrganizationId == orgId, ct)
+            : (int?)null;
+
+        if (!canReadCases)
+        {
+            return Ok(new OrgStatsSummary(
+                Members: members, Cases: null, Investigations: investigations,
+                OpenCases: null, CasesByStatus: null, CasesPerMonth: null));
         }
 
         var byStatus = await db.Cases
@@ -80,10 +108,9 @@ public sealed class OrganizationStatsController : BenControllerBase
         var openStatuses = new[] { CaseStatus.Closed, CaseStatus.Transferred, CaseStatus.Paused };
 
         return Ok(new OrgStatsSummary(
-            Members: await db.OrganizationUserMemberships
-                .CountAsync(m => m.OrganizationId == orgId && m.IsActive, ct),
+            Members: members,
             Cases: byStatus.Sum(s => s.Count),
-            Investigations: await db.Investigations.CountAsync(i => i.OrganizationId == orgId, ct),
+            Investigations: investigations,
             OpenCases: byStatus.Where(s => !openStatuses.Contains(s.Key)).Sum(s => s.Count),
             CasesByStatus: byStatus
                 .OrderBy(s => s.Key)
