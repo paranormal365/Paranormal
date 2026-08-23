@@ -8106,3 +8106,16 @@ single-threshold case of this matrix — the schema hook is already there. What 
 
 Not started. Needs a design pass with Ben before building — the capability list per duty is
 product surface, not plumbing.
+
+## 161. Action-needed banners under the site-wide announcement (OPEN — Ben, 2026-08-23)
+
+Ben's spec: when an investigation request is waiting, show an info alert **just below the
+site-wide announcement banner** for anyone who can accept and review investigation requests;
+likewise a waiting membership application shows the alert to anyone with permission to accept
+members. Per-viewer, permission-aware banners in the MainLayout slot the announcement (item 151)
+already owns — the same render position, driven by the caller's own pending-work counts (the
+notification summary already carries some of these buckets; the banner is a louder surface for
+the two decisions that block OTHER people: a client waiting on an answer, an applicant waiting
+at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
+becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
+server-side (the item-141 rule — never render a bucket the caller cannot open).
