@@ -124,9 +124,9 @@
             yield return new("Replies on your cases", "/my-cases", s.CaseMessagesAsClient);
         // Item 173: per-group rows, each opening exactly what it counts — the single
         // cross-org rows sent people to /organizations with a number no one page matched.
-        foreach (var slice in s.CaseMessagesAsOrgMemberByOrg ?? [])
-            yield return new($"Client messages · {slice.OrganizationName}",
-                $"/organizations/{slice.OrganizationId}?tab=cases",
+        foreach (var slice in s.CaseMessagesAsOrgMemberByCase ?? [])
+            yield return new($"Client messages · {slice.CaseTitle}",
+                $"/organizations/{slice.OrganizationId}/cases/{slice.CaseId}",
                 new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
         foreach (var slice in s.OrgMessagesByOrg ?? [])
             yield return new($"Group messages · {slice.OrganizationName}",
