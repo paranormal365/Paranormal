@@ -95,27 +95,32 @@
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(CmsPageListItem.SectionCount)" Title="Sections" Width="90px" />
-                        <GridColumn Title="Actions" Width="260px">
+                        @* Item 169: four stacked buttons wrapped to two lines here. The house
+                           pattern for a busy Actions cell is OrganizationList's — the primary
+                           action as a button, the rest behind a More-actions dropdown — which
+                           also keeps the pair on ONE line at a sane width. *@
+                        <GridColumn Title="Actions" Width="170px">
                             <Template>
                                 @{ var pg = (CmsPageListItem)context; }
-                                @if (pg.CanEdit)
-                                {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditPageDialog(pg))"><BenIcon Name="edit-2" Class="me-1" />
-                                        Edit
-                                    </button>
-                                }
+                                <span class="text-nowrap">
                                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))"><BenIcon Name="layout" Class="me-1" />
                                     Sections
                                 </button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenPreview(pg))"><BenIcon Name="eye" Class="me-1" />
-                                    Preview
-                                </button>
-                                @if (pg.CanDelete)
-                                {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RequestDeletePage(pg))"><BenIcon Name="trash-2" Class="me-1" />
-                                        Delete
-                                    </button>
-                                }
+                                <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="160px">
+                                    <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
+                                    <ChildContent>
+                                        @if (pg.CanEdit)
+                                        {
+                                            <li><button class="dropdown-item" type="button" @onclick="@(() => OpenEditPageDialog(pg))">Edit</button></li>
+                                        }
+                                        <li><button class="dropdown-item" type="button" @onclick="@(() => OpenPreview(pg))">Preview</button></li>
+                                        @if (pg.CanDelete)
+                                        {
+                                            <li><button class="dropdown-item text-danger" type="button" @onclick="@(() => RequestDeletePage(pg))">Delete</button></li>
+                                        }
+                                    </ChildContent>
+                                </BenDropdown>
+                                </span>
                             </Template>
                         </GridColumn>
                     </GridColumns>
@@ -163,18 +168,20 @@
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationLogoRecord.AltText)" Title="Alt Text" />
-                        <GridColumn Title="Actions" Width="160px">
+                        <GridColumn Title="Actions" Width="200px">
                             <Template>
                                 @{ var logo = (OrganizationLogoRecord)context; }
+                                <span class="text-nowrap">
                                 @if (!logo.IsActive)
                                 {
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => SetLogoActive(logo))">
                                         Set Active
                                     </button>
                                 }
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => DeleteLogo(logo))"><BenIcon Name="trash-2" Class="me-1" />
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm ms-1" @onclick="@(() => DeleteLogo(logo))"><BenIcon Name="trash-2" Class="me-1" />
                                     Remove
                                 </button>
+                                </span>
                             </Template>
                         </GridColumn>
                     </GridColumns>

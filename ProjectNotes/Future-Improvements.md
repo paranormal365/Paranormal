@@ -8615,7 +8615,7 @@ Three strands, all downstream of item 85's billing foundation:
 Sequencing: after item 85's remaining phases (B–F) land — receipts and tax attach to real
 payment flow, and the audit section wants the payment provider integration to exist first.
 
-## 169. Grid action buttons: small, one line, everywhere (OPEN — Ben, 2026-08-23)
+## 169. Grid action buttons: small, one line, everywhere (CLOSED 2026-08-23)
 
 Ben, 2026-08-23: "buttons in grids should be small and not wrap the line." And, on clicking Edit
 in the roles grid: "maybe the editor should scroll into view, or it will look like nothing
@@ -8627,6 +8627,22 @@ editor card into view. Remaining: a sweep of every other grid with action button
 two defects — stacked/wrapping buttons, and inline editors or detail panes that open below the
 fold with no scroll. Candidates: every TelerikGrid with an Actions template column (grep for
 `GridColumn Title="Actions"`).
+
+**Swept 2026-08-23** — the sweep looked wider than the Actions title (any grid Template with
+2+ buttons and no nowrap/flex/dropdown), which found more than the title-grep would have:
+
+- **OrgCmsEditor pages grid**: four stacked buttons wrapped to two lines; now the house
+  pattern from OrganizationList — Sections as the primary button, Edit/Preview/Delete behind
+  a More-actions dropdown, one line at 170px.
+- **OrgCmsEditor logos grid**: nowrap wrapper + width.
+- **CaseVideoEditorPage** and **MyVideosPage** project grids: bare button triples wrapped in
+  a nowrap flex row.
+- Already fine (d-flex is nowrap by default): OrganizationList, OrgAddressManager,
+  OrganizationEquipment, AdminEquipmentTaxonomy.
+- Scroll-into-view half: the roles grid (fixed with item 161's session) was the only inline
+  below-the-grid editor; every other candidate (`OrgCmsEditor`, `AdminCoupons`,
+  `AdminFileTypes`, `OrgCmsPageEdit`) turned out to be a modal or an in-place row swap,
+  which bring themselves into view.
 
 ## 170. Role editor offers grants over site-wide lookup tables (OPEN — found with Ben, 2026-08-23)
 

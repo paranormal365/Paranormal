@@ -96,9 +96,11 @@
                         <GridColumn Width="160px">
                             <Template>
                                 @{ var row2 = (VideoProjectRecord)context; }
+                                <span class="d-flex gap-1 text-nowrap">
                                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row2))">Open</button>
                                 <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row2))" disabled="@(!(!_publishing))" title="Publish rendered video to case"><BenIcon Name="upload" /></button>
                                 <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(row2))"><BenIcon Name="trash-2" /></button>
+                                </span>
                             </Template>
                         </GridColumn>
                     </GridColumns>
