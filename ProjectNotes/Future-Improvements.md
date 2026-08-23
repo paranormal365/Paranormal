@@ -8968,3 +8968,21 @@ Fix shape: on Make-Public (CaseDetail edit save), warn — not block — when th
 the client's first/last name or the street address, with a sentence naming what leaked and a
 suggestion to retitle by place. The W4 tour already teaches place-named titles; the warning
 makes the teaching enforceable at the moment it matters.
+
+## 177. Action-needed banners rendered every row twice (CLOSED 2026-08-23 — Ben's live report, fixed same hour)
+
+Ben: two investigation-request notifications on login, "separated by 1 and 1, then BenCo the
+same 1 investigation request and another BenCo 1 investigation request. Clicking it, there is
+only 1 for each." (And no — it was not his two accounts: the endpoint scopes to the one token
+that asks; a second account's rows cannot blend in.)
+
+The W2 hardening gave `ActionNeededBanners` two triggers — first interactive render AND the
+sign-in StateChanged — and its loaded-guard yielded to `await UserState.AuthReady` BEFORE
+setting its flag, so both triggers could pass the check and each appended the full list: every
+banner exactly twice, which is precisely the shape Ben saw. `OnboardingGate` had the
+re-entrancy flag from day one; the banners didn't — the asymmetry was the bug.
+
+Fix: the same `_loading` re-entrancy guard, `_loaded` set only after a successful authenticated
+fetch (so a pre-auth pass still retries on sign-in), and the visible list rebuilt rather than
+appended as the belt to the guard's braces. The e2e now asserts EXACTLY ONE banner per bucket;
+green ×3.
