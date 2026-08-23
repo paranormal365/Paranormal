@@ -83,6 +83,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 
+    public Task<LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/me/tours", token);
+
+    public async Task DismissTourAsync(string tourName, bool completed, CancellationToken token = default)
+        => await _api.PutAsync<object, object>($"/api/me/tours/{Uri.EscapeDataString(tourName)}",
+               new { Completed = completed }, token);
+
     public Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SupportFormTokenResponse>("/api/public/support-tickets/form-token", token);
 

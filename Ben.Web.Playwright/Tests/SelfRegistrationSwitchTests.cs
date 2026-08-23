@@ -60,7 +60,7 @@ public class SelfRegistrationSwitchTests : BenTestBase
             // … and so is the address behind it, with a reason rather than a dead form.
             await Page.GotoAsync($"{BaseUrl}/organizations/new");
             await Expect(Page.Locator("#newgroup-closed")).ToBeVisibleAsync(new() { Timeout = 20_000 });
-            await Expect(Page.Locator("#newgroup-create")).ToHaveCountAsync(0);
+            await Expect(Page.Locator("#newgroup-name")).ToHaveCountAsync(0);   // the wizard's first field
 
             // Back on, the member can found a group again.
             await LogoutAsync();
@@ -70,7 +70,7 @@ public class SelfRegistrationSwitchTests : BenTestBase
             await LogoutAsync();
             await LoginAsync(MemberEmail, MemberPassword);
             await Page.GotoAsync($"{BaseUrl}/organizations/new");
-            await Expect(Page.Locator("#newgroup-create")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await Expect(Page.Locator("#newgroup-name")).ToBeVisibleAsync(new() { Timeout = 20_000 });
         }
         finally
         {

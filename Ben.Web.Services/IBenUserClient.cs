@@ -29,6 +29,13 @@ public interface IBenUserClient
     /// </summary>
     Task<MyProfileRecord?> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken token = default);
 
+    /// <summary>Whether the caller has answered first-run onboarding (item 166 W2). Null — e.g.
+    /// a transport failure — reads as onboarded: the gate must never trap someone in a wizard
+    /// it cannot verify they need.</summary>
+    Task<bool?> GetMyOnboardingStateAsync(CancellationToken token = default);
+    /// <summary>Stamps the caller onboarded. Finishing and skipping both call this.</summary>
+    Task CompleteMyOnboardingAsync(CancellationToken token = default);
+
     /// <summary>Every photo the current user has set, newest first — including inactive ones.</summary>
     Task<LoadResult<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
 

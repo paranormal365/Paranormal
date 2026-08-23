@@ -134,6 +134,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTierLimit> SubscriptionTierLimits { get; set; }
         public virtual DbSet<SubscriptionTierPermissionArea> SubscriptionTierPermissionAreas { get; set; }
         public virtual DbSet<SubscriptionTierExcludedCapability> SubscriptionTierExcludedCapabilities { get; set; }
+        public virtual DbSet<UserTourState> UserTourStates { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
@@ -2514,6 +2515,21 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SubscriptionTierExcludedCapability>()
                 .HasIndex(e => new { e.SubscriptionTierId, e.Capability }).IsUnique();
+
+            modelBuilder.Entity<UserTourState>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserTourState>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserTourState>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserTourState>()
+                .Property(e => e.TourName).HasMaxLength(64);
+            // One row per (person, tour): dismissed twice is an upsert, not a second row.
+            modelBuilder.Entity<UserTourState>()
+                .HasIndex(e => new { e.AppUserId, e.TourName }).IsUnique();
 
             // One row per organization, enforced rather than assumed: a second row would make
             // "what does this group pay?" a question with two answers.

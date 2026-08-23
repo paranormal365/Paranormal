@@ -61,6 +61,14 @@ namespace Ben.Data.Source.Entities
         public Ben.Data.Common.Enums.ClientGender? Gender { get; set; }
 
         /// <summary>
+        /// When this person finished (or skipped) first-run onboarding (item 166 W2). Null means
+        /// the onboarding wizard has never been offered-and-answered; the gate shows it once.
+        /// Existing accounts were stamped by the migration that added the column — they are
+        /// already onboard, and a wizard nagging a two-year member would be worse than none.
+        /// </summary>
+        public DateTime? DateOnboarded { get; set; }
+
+        /// <summary>
         /// Year of birth. Optional, and never the thing an age gate depends on.
         /// </summary>
         /// <remarks>

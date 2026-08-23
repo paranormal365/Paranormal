@@ -3,6 +3,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject IJSRuntime JS
+@implements IDisposable
 
 @*
     Item 161: the two decisions that block OTHER people — a client waiting on an answer, an
@@ -45,13 +46,32 @@
 
 @code {
     private readonly List<OrgActionNeededItem> _visible = [];
+    private bool _loaded;
+
+    // Same two triggers as OnboardingGate, for the same reason: login happens INSIDE a
+    // circuit, so a first-render-only fetch never runs for someone who just signed in.
+    protected override void OnInitialized()
+        => UserState.StateChanged += OnAuthChanged;
+
+    private void OnAuthChanged()
+        => _ = InvokeAsync(LoadAsync);
+
+    public void Dispose()
+        => UserState.StateChanged -= OnAuthChanged;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || !RendererInfo.IsInteractive) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_loaded) return;
 
         await UserState.AuthReady;
         if (!UserState.IsAuthenticated) return;
+        _loaded = true;
 
         IReadOnlyList<OrgActionNeededItem> items;
         try

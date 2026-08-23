@@ -8445,6 +8445,59 @@ surfaces; PDF regen; item 166 closed with a per-phase record.
 W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
 dependency on 156 at all.
 
+---
+
+### W0+W1 — SHIPPED 2026-08-23
+
+**W0, the primitives.** `WizardModel`/`TourModel` are plain classes holding every decision
+(step order, refusal-blocks-Next, back-never-validates, draft-restore clamps, skip-vs-complete)
+— six xUnit tests. `BenWizard` renders progress/step/refusal/buttons and keeps a localStorage
+draft `{step, data}` under `wizard:{key}`; the HOST clears the draft only after its Finish work
+succeeds, because a draft cleared before the create lands eats the person's answers on a failed
+submit. `BenTour` renders a highlight ring + step card positioned by `BenTour.razor.js` (which
+scrolls with the item-169 measured fallback — smooth scrollIntoView silently no-ops on inner
+scrollers); a missing target centers the card rather than stranding the person. Dismissal is a
+`UserTourState` ROW (unique per person+tour; migration applied) via `GET/PUT api/me/tours` —
+never localStorage, so impersonation shows the real person's state and a cleared browser
+replays nothing. `BenTabs` buttons now carry `id="tab-{Id}"` so tours (and tests) can address
+tabs. A source-scan selector guard fails when any TourStep points at an element its razor no
+longer contains (probe-regressed).
+
+**W1, the founder's wizard.** StartGroupPage is four steps — Identity (name + suggested slug,
+format-gated), Where-you-work (optional all-or-nothing address, kept private, feeds discovery),
+First settings (applications toggle default-on + public email), Review — finishing with
+register + best-effort follow-up writes (settings PUT; first address using the first address
+type), then the hub at `?welcome=1`. A failed register keeps the draft and walks the person
+back to step 1 with the sentence. The self-registration switch still closes the whole door.
+The hub grew the **owner-first-steps tour** (Members/Cases/Roles/Settings), auto-launched only
+from `?welcome=1` when never dismissed, relaunchable forever from the `?` button beside Edit.
+e2e: the full founding journey through all four steps with a tour walk + skip, and a
+draft-resume across reload (both green); NewGroupJourney + SelfRegistrationSwitch updated for
+the wizard flow and green (one cold-start congestion flake, passed solo). The item-141 guard
+caught the wizard's own address-type fetch — recorded as a Decoration with its reason.
+getting-started rewritten for the wizard; PDF regenerated.
+
+### W2 — SHIPPED 2026-08-23
+
+`AppUser.DateOnboarded` (nullable; the SAME migration stamps every existing row — nobody who
+predates the column is ever nagged, pinned by the journey e2e's seed-account leg).
+`GET/POST api/me/onboarding` with an idempotent stamp; finishing AND skipping both stamp,
+because a skip is an answer and the wizard must never nag twice (unit-pinned). The /onboarding
+page: three skippable steps — profile (pre-filled, item 163's Sex select), what-brought-you-
+here (the `OnboardingRouting` map is a plain tested class: request→/my-requests/new,
+join→/find, run→/organizations/new W1 wizard, looking→/), and a layout tour (#nav-menu,
+#nav-bell — BenTabs-independent ids added; the selector guard now searches BOTH web projects
+because a tour may teach the LAYOUT from a page elsewhere).
+
+**The bug the e2e caught:** `OnboardingGate` (MainLayout) originally checked on first
+interactive render only — but LOGIN HAPPENS INSIDE A CIRCUIT, so the gate never fired for the
+exact person it exists for; the journey e2e failed and a probe showed authed=false on every
+firing. The gate (and `ActionNeededBanners`, which had the same latent gap) now also
+subscribes to `IBenUserState.StateChanged`. Journey e2e green: cold signup → gate → wizard →
+routed to /find → never again; James never gated at all.
+
+Remaining: W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
+
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
 Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
@@ -8720,3 +8773,36 @@ Ben ruled the second reading: **"the gates count as tabs."** Built same day:
   cases", Victor (viewer, no roles) sees Members only, no case widgets, no donut. Verified
   live against both seats' tokens: victor gets `{"members":9,"cases":null,...}`, james the
   full numbers.
+
+## 172. Sidebar group links stop working after opening a pending request (CLOSED 2026-08-23 — fixed same day)
+
+Ben: "When I click a pending message like request for joining a group, I cannot click out into
+another group — it causes some kind of glitch where I cannot swap groups clicking them in the
+main sidebar menu."
+
+Suspected class: OrganizationView loads its data only on first render; when navigation changes
+only the ROUTE PARAMETER (org A's page → org B's page via the sidebar), Blazor reuses the
+component instance, no reload happens, and the page keeps showing the old group — which reads
+as "clicking does nothing". The pending-request path (action-needed banner / bell → org page
+with ?tab=) is simply the way Ben lands on an org page before trying to swap. Fix:
+observe parameter changes (OnParametersSetAsync) and reload when OrgId differs from the loaded
+org; e2e that walks org A → sidebar → org B and asserts B's name renders.
+
+**Fixed as diagnosed.** `OrganizationView.OnParametersSetAsync` reloads when `OrgId` differs
+from the loaded group (resetting edit mode and honoring the new ?tab=), and applies a CHANGED
+?tab= deep link on the same group without clobbering tabs the person clicked since (the
+applied-tab is primed at init so a mere re-render never re-applies it). The new
+`SidebarOrgSwapTests` e2e lands with a ?tab= deep link, swaps groups both ways through the
+sidebar, and REPRODUCES Ben's bug with the fix probed off — it fails exactly as reported,
+which is the proof the test discriminates.
+
+## 173. Bell buckets: wrong destination and wrong counts (OPEN — Ben, 2026-08-23)
+
+Ben: "In the bell, when I have 21 messages in the Client messages to answer, I click and get
+Organizations. I click the 54 Group messages, I get 18 messages."
+
+Two defects to verify separately: (1) the Client-messages bucket navigates somewhere that
+isn't the client-messages surface; (2) the Group-messages bucket's badge (54) disagrees with
+what the destination lists (18) — either the badge counts a different population (e.g. all
+orgs vs one org, or unread vs total) or the destination filters what the badge does not.
+The item-141 rule applies: a badge must count exactly what its click opens.

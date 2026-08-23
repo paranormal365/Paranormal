@@ -138,6 +138,13 @@ address reaches a person.
 
 If the link has expired, sign up again.
 
+## Your first minute
+
+Right after your first sign-in, a short welcome walks you through the basics: what people
+should call you, what brought you here (it drops you at the right door — requesting an
+investigation, finding a group, or starting one), and a ten-second tour of where everything
+lives. Every step is skippable, and skipping means it never asks again.
+
 ## Two-step sign-in
 
 You can ask us for a code from your phone as well as your password. It is **entirely optional** and
@@ -265,9 +272,12 @@ On a group's public page, signed in, there's an **Apply to join** box (when the 
 applications). Say a line about yourself if you like, send it, and the group answers — you'll see
 the state of your application right there on their page.
 
-Or found your own: **Organizations → Start a Group** asks only for a name and a web address;
-everything else — members, cases, settings, your public page — is set up from the group's own hub
-once it exists. You're the owner from the first moment.
+Or found your own: **Organizations → Start a Group** walks you through it in four short steps —
+your group's name and web address, where you work (optional, it feeds the "near you" search),
+whether you're taking applications, then a review. Only the first step is required, and closing
+the tab keeps a draft so you can pick up where you left off. You're the owner from the first
+moment, and your new group's page offers a quick tour of what to do next — relaunch it any time
+from the **?** button on your group's page.
 
 ### What you'll see as a new member
 

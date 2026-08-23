@@ -16,7 +16,7 @@
 {
     <div class="dropdown notification-bell">
         <button type="button" class="btn btn-system no-arrow @(_open ? "show ben-dropdown-open" : null)" title="@TooltipText"
-                aria-label="Open Notifications" aria-expanded="@_open.ToString().ToLowerInvariant()"
+                id="nav-bell" aria-label="Open Notifications" aria-expanded="@_open.ToString().ToLowerInvariant()"
                 @onclick="Toggle">
             @if (_summary.TotalCount > 0)
             {

@@ -1,0 +1,61 @@
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@implements IDisposable
+
+@*
+    Item 166 W2: sends a never-onboarded person to /onboarding, once. Renders nothing itself.
+
+    Two triggers, both needed: the first interactive render covers arriving at the site already
+    signed in (a fresh circuit restoring a stored token), and the StateChanged subscription
+    covers SIGNING IN, because login happens INSIDE a circuit — the layout does not re-render
+    from scratch, so a first-render-only gate never fires for the person it exists for. That
+    exact miss was caught by the W2 journey e2e.
+
+    Null from the state call reads as onboarded — the gate must never trap someone in a wizard
+    it cannot verify they need — and the wizard stamps on skip as well as finish, so this
+    navigation can only ever happen before the person's first answer.
+*@
+
+@code {
+    private bool _done;      // verified onboarded, or already sent — either way, this circuit is finished gating
+    private bool _checking;
+
+    protected override void OnInitialized()
+        => UserState.StateChanged += OnAuthChanged;
+
+    private void OnAuthChanged()
+        => _ = InvokeAsync(CheckAsync);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await CheckAsync();
+    }
+
+    private async Task CheckAsync()
+    {
+        if (_done || _checking) return;
+        _checking = true;
+        try
+        {
+            await UserState.AuthReady;
+            if (!UserState.IsAuthenticated) return;   // not done — a later sign-in re-enters here
+
+            var path = new Uri(NavManager.Uri).AbsolutePath;
+            if (path.StartsWith("/onboarding", StringComparison.OrdinalIgnoreCase)) { _done = true; return; }
+
+            var state = await AdminClient.GetMyOnboardingStateAsync();
+            if (state is null) return;                // unknown state = no gate, and another chance later
+
+            _done = true;
+            if (state == false) NavManager.NavigateTo("/onboarding");
+        }
+        catch { /* see the note above: never trap, never crash the layout */ }
+        finally { _checking = false; }
+    }
+
+    public void Dispose()
+        => UserState.StateChanged -= OnAuthChanged;
+}

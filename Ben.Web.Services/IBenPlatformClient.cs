@@ -90,6 +90,11 @@ public interface IBenPlatformClient
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 
+    /// <summary>Tour names the caller has dismissed (item 166) — nothing listed auto-launches.</summary>
+    Task<WebApi.LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default);
+    /// <summary>Dismisses one tour; completed says seen-through vs skipped. Idempotent.</summary>
+    Task DismissTourAsync(string tourName, bool completed, CancellationToken token = default);
+
     /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
     Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
 

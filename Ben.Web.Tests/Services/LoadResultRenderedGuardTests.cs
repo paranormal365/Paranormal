@@ -89,6 +89,12 @@ public sealed class LoadResultRenderedGuardTests
     /// </summary>
     private static readonly Dictionary<string, string> Decorations = new()
     {
+        ["StartGroupPage.razor"] =
+            "The address-type lookup runs inside the wizard's best-effort follow-up block AFTER "
+          + "the group exists: a failure skips creating the optional first address, which the "
+          + "founder adds from the hub in a minute — an error panel over a freshly founded group "
+          + "would be a worse answer than a missing optional row (item 166 W1).",
+
         ["MyCaseDetail.razor"] =
             "Reads the experience taxonomy purely to turn type ids into names. A failed lookup "
           + "shows ids instead of labels, which is worse than labels and far better than an error "

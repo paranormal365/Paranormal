@@ -1,0 +1,161 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+@*
+    Item 166 W0: the multi-step wizard shell. The DECISIONS live in WizardModel (tested in
+    xUnit); this component renders the progress header, the current step's content (the host
+    switches on Model.CurrentIndex inside ChildContent), the refusal line, and the buttons —
+    and it keeps a draft in localStorage so a closed tab resumes where it left off.
+
+    Draft contract: the host supplies CaptureDraft/RestoreDraft over its own form state; the
+    wizard stores { step, data } under wizard:{DraftKey} on every step change, restores once on
+    first interactive render, and clears on ClearDraftAsync() — which the HOST calls after its
+    Finish work actually succeeds, because a draft cleared before the create lands would eat
+    the person's answers on a failed submit.
+*@
+
+<div class="ben-wizard">
+    <ol class="ben-wizard-progress d-flex list-unstyled gap-2 mb-3 flex-wrap" aria-label="Steps">
+        @for (var i = 0; i < Model.Steps.Count; i++)
+        {
+            var index = i;
+            <li class="d-flex align-items-center gap-1 small
+                       @(index == Model.CurrentIndex ? "fw-semibold" : "text-secondary")">
+                <span class="badge rounded-pill @(index < Model.CurrentIndex ? "bg-success" : index == Model.CurrentIndex ? "bg-primary" : "bg-secondary")">
+                    @(index + 1)
+                </span>
+                <span>@Model.Steps[index].Title</span>
+                @if (index < Model.Steps.Count - 1)
+                {
+                    <span class="text-secondary" aria-hidden="true">›</span>
+                }
+            </li>
+        }
+    </ol>
+
+    @ChildContent
+
+    @if (Model.Refusal is { } refusal)
+    {
+        <div class="alert alert-warning py-2 small mt-3 ben-wizard-refusal" role="alert">@refusal</div>
+    }
+
+    <div class="d-flex gap-2 mt-3">
+        @if (!Model.IsFirst)
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="BackAsync"
+                    disabled="@_busy">Back</button>
+        }
+        <span class="flex-grow-1"></span>
+        @if (!Model.IsLast)
+        {
+            <button type="button" class="btn btn-primary" @onclick="NextAsync"
+                    disabled="@_busy">Next</button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-primary" @onclick="FinishAsync"
+                    disabled="@_busy">@FinishText</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public WizardModel Model { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string FinishText { get; set; } = "Finish";
+
+    /// <summary>localStorage key stem. Null disables drafts entirely.</summary>
+    [Parameter] public string? DraftKey { get; set; }
+    /// <summary>The host's form state as a JSON string, captured on every step change.</summary>
+    [Parameter] public Func<string?>? CaptureDraft { get; set; }
+    /// <summary>Hands a saved draft's data back to the host, once, before the first render with it.</summary>
+    [Parameter] public Action<string>? RestoreDraft { get; set; }
+    /// <summary>Fires after the last step's gate passes. The host does its real work here and
+    /// calls <see cref="ClearDraftAsync"/> only when that work succeeds.</summary>
+    [Parameter] public EventCallback OnFinish { get; set; }
+    /// <summary>Fires whenever the visible step changes, so the host can re-render its switch.</summary>
+    [Parameter] public EventCallback OnStepChanged { get; set; }
+
+    private bool _busy;
+    private bool _draftChecked;
+
+    private string StorageKey => $"wizard:{DraftKey}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive || DraftKey is null || _draftChecked) return;
+        _draftChecked = true;
+
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (raw is null) return;
+
+            var draft = System.Text.Json.JsonSerializer.Deserialize<WizardDraft>(raw);
+            if (draft is null) return;
+
+            if (draft.Data is { } data) RestoreDraft?.Invoke(data);
+            Model.Restore(draft.Step);
+            await OnStepChanged.InvokeAsync();
+            StateHasChanged();
+        }
+        catch { /* A corrupt draft must never block the wizard; it simply starts fresh. */ }
+    }
+
+    private async Task NextAsync()
+    {
+        _busy = true;
+        try
+        {
+            if (await Model.NextAsync())
+            {
+                await SaveDraftAsync();
+                await OnStepChanged.InvokeAsync();
+            }
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task BackAsync()
+    {
+        if (Model.Back())
+        {
+            await SaveDraftAsync();
+            await OnStepChanged.InvokeAsync();
+        }
+    }
+
+    private async Task FinishAsync()
+    {
+        _busy = true;
+        try
+        {
+            if (await Model.FinishAsync())
+                await OnFinish.InvokeAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>The host calls this after its Finish work SUCCEEDS. Never called by the wizard
+    /// itself — see the note at the top.</summary>
+    public async Task ClearDraftAsync()
+    {
+        if (DraftKey is null) return;
+        try { await JS.InvokeVoidAsync("localStorage.removeItem", StorageKey); } catch { }
+    }
+
+    private async Task SaveDraftAsync()
+    {
+        if (DraftKey is null) return;
+        try
+        {
+            var draft = new WizardDraft(Model.CurrentIndex, CaptureDraft?.Invoke());
+            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey,
+                System.Text.Json.JsonSerializer.Serialize(draft));
+        }
+        catch { /* Draft-keeping is a courtesy; losing one restarts a wizard, never breaks it. */ }
+    }
+
+    private sealed record WizardDraft(int Step, string? Data);
+}

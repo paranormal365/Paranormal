@@ -15,6 +15,7 @@
         var index = _tabs.IndexOf(tab);
         <li class="nav-item" role="presentation">
             <button type="button"
+                    id="@(tab.Id is null ? null : $"tab-{tab.Id}")"
                     class="nav-link @(index == ActiveIndex ? "active" : null) @(tab.Disabled ? "disabled" : null)"
                     role="tab"
                     aria-selected="@((index == ActiveIndex).ToString().ToLowerInvariant())"
