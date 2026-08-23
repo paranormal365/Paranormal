@@ -277,4 +277,67 @@ public class OrganizationMembershipRequestControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── Item 174: GetMine with history — the Pending row wins, then the newest ──
+
+    [Fact]
+    public async Task GetMine_WithHistory_ReturnsThePendingRowNotAnArbitraryOne()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var pendingId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Withdrawn FIRST, so an unordered FirstOrDefault picks it — exactly how a live
+            // cleanup once withdrew the wrong row and left a Pending application stranded.
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Withdrawn,
+                DateCreated = DateTime.UtcNow.AddDays(-1), CreatedByAppUserId = applicantId,
+            });
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = pendingId, OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Pending,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = applicantId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, applicantId).GetMine(orgId, default);
+
+        var record = Assert.IsType<OrganizationMembershipRequestRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(pendingId, record.Id);
+        Assert.Equal(OrganizationMembershipRequestStatus.Pending, record.Status);
+    }
+
+    [Fact]
+    public async Task GetMine_WithOnlyHistory_ReturnsTheNewestRow()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var newestId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Denied,
+                DateCreated = DateTime.UtcNow.AddDays(-2), CreatedByAppUserId = applicantId,
+            });
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = newestId, OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Withdrawn,
+                DateCreated = DateTime.UtcNow.AddDays(-1), CreatedByAppUserId = applicantId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, applicantId).GetMine(orgId, default);
+
+        var record = Assert.IsType<OrganizationMembershipRequestRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(newestId, record.Id);
+    }
 }
