@@ -8316,3 +8316,25 @@ passing solo in 2s — its waits are now 45s).
 
 Next: **Phase D** — the enforcement flip. Biggest phase; the bridge this phase built is what
 makes it safe.
+
+## 166. Wizards and walkthroughs — guided paths through the site's big jobs (OPEN — Ben, 2026-08-23)
+
+Ben's list, in substance; the closing rule matters most: **where the underlying functionality
+does not exist yet, we build the functionality AND its wizard/walkthrough together.**
+
+1. **A multi-step wizard for creating a new organization** — replacing/wrapping the two-field
+   founder door (item 146's StartGroupPage) with guided steps: identity, address, first
+   settings, first members, likely ending on the group hub with pointers.
+2. **Onboarding steps for new site users** — a guided first-run after signup: profile, sex/photo,
+   what to do first depending on whether they came to request an investigation or join a group.
+3. **Organization ads** — an owner creates an ad promoting their group, with a walkthrough of
+   suggestions for building it and making it successful. NOTE: no ad feature exists today — this
+   is the clearest case of the closing rule; needs design (where ads display, who sees them,
+   whether they tie into tiers/billing as a monetization lever — cross-reference item 143).
+4. **A CMS editor walkthrough** — how pages are made and linked, and what to include.
+5. **A public-case-pages walkthrough** — how to build case pages for the public, and specifically
+   how locations and the names of people involved are hidden (the pseudonym and address-privacy
+   machinery already exists — the walkthrough teaches it; audit for gaps while writing it).
+
+Shape suggestion for the build: one reusable step-wizard component (the site has none) plus a
+walkthrough/tour affordance, then the five applications. Sequencing after the item-156 arc.
