@@ -8431,3 +8431,15 @@ surfaces; PDF regen; item 166 closed with a per-phase record.
 **Sizing:** W0+W1 one session; W2 one; W3 one to two (it is a real feature + review queue);
 W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
 dependency on 156 at all.
+
+## 167. Free-plan groups cannot transfer or accept transferred cases (OPEN — Ben, 2026-08-23)
+
+Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
+out nor accept a case transferred in. Both ends checked — a paid group must not be able to hand
+a case TO a free group either, or the rule leaks through the receiving door. Design note: this
+is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
+(SubscriptionTierPermissionArea) — likely a third keyed concept, per-tier boolean capabilities
+("case transfers"), so future rules of this shape ("publications", "API access") are a row not
+a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
+the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
+Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
