@@ -7,7 +7,8 @@ namespace Ben.Data.WebApi.Services.Billing;
 /// Reads a band's price for a cadence, and the arithmetic around offering a yearly discount.
 /// </summary>
 /// <remarks>
-/// Separate from <see cref="SubscriptionTierResolver"/>, which answers "which band?" — a different
+/// Separate from <see cref="Ben.Data.Source.Services.SubscriptionTierResolver"/>, which answers
+/// "which band?" — a different
 /// question with different inputs. Splitting them keeps the band-tiling rules testable without a
 /// price list and the price arithmetic testable without member counts.
 /// </remarks>
