@@ -138,6 +138,13 @@ address reaches a person.
 
 If the link has expired, sign up again.
 
+## Your first minute
+
+Right after your first sign-in, a short welcome walks you through the basics: what people
+should call you, what brought you here (it drops you at the right door — requesting an
+investigation, finding a group, or starting one), and a ten-second tour of where everything
+lives. Every step is skippable, and skipping means it never asks again.
+
 ## Two-step sign-in
 
 You can ask us for a code from your phone as well as your password. It is **entirely optional** and

@@ -8477,7 +8477,26 @@ the wizard flow and green (one cold-start congestion flake, passed solo). The it
 caught the wizard's own address-type fetch — recorded as a Decoration with its reason.
 getting-started rewritten for the wizard; PDF regenerated.
 
-Remaining: W2 (onboarding), W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
+### W2 — SHIPPED 2026-08-23
+
+`AppUser.DateOnboarded` (nullable; the SAME migration stamps every existing row — nobody who
+predates the column is ever nagged, pinned by the journey e2e's seed-account leg).
+`GET/POST api/me/onboarding` with an idempotent stamp; finishing AND skipping both stamp,
+because a skip is an answer and the wizard must never nag twice (unit-pinned). The /onboarding
+page: three skippable steps — profile (pre-filled, item 163's Sex select), what-brought-you-
+here (the `OnboardingRouting` map is a plain tested class: request→/my-requests/new,
+join→/find, run→/organizations/new W1 wizard, looking→/), and a layout tour (#nav-menu,
+#nav-bell — BenTabs-independent ids added; the selector guard now searches BOTH web projects
+because a tour may teach the LAYOUT from a page elsewhere).
+
+**The bug the e2e caught:** `OnboardingGate` (MainLayout) originally checked on first
+interactive render only — but LOGIN HAPPENS INSIDE A CIRCUIT, so the gate never fired for the
+exact person it exists for; the journey e2e failed and a probe showed authed=false on every
+firing. The gate (and `ActionNeededBanners`, which had the same latent gap) now also
+subscribes to `IBenUserState.StateChanged`. Journey e2e green: cold signup → gate → wizard →
+routed to /find → never again; James never gated at all.
+
+Remaining: W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
 
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
@@ -8754,3 +8773,28 @@ Ben ruled the second reading: **"the gates count as tabs."** Built same day:
   cases", Victor (viewer, no roles) sees Members only, no case widgets, no donut. Verified
   live against both seats' tokens: victor gets `{"members":9,"cases":null,...}`, james the
   full numbers.
+
+## 172. Sidebar group links stop working after opening a pending request (OPEN — Ben, 2026-08-23)
+
+Ben: "When I click a pending message like request for joining a group, I cannot click out into
+another group — it causes some kind of glitch where I cannot swap groups clicking them in the
+main sidebar menu."
+
+Suspected class: OrganizationView loads its data only on first render; when navigation changes
+only the ROUTE PARAMETER (org A's page → org B's page via the sidebar), Blazor reuses the
+component instance, no reload happens, and the page keeps showing the old group — which reads
+as "clicking does nothing". The pending-request path (action-needed banner / bell → org page
+with ?tab=) is simply the way Ben lands on an org page before trying to swap. Fix:
+observe parameter changes (OnParametersSetAsync) and reload when OrgId differs from the loaded
+org; e2e that walks org A → sidebar → org B and asserts B's name renders.
+
+## 173. Bell buckets: wrong destination and wrong counts (OPEN — Ben, 2026-08-23)
+
+Ben: "In the bell, when I have 21 messages in the Client messages to answer, I click and get
+Organizations. I click the 54 Group messages, I get 18 messages."
+
+Two defects to verify separately: (1) the Client-messages bucket navigates somewhere that
+isn't the client-messages surface; (2) the Group-messages bucket's badge (54) disagrees with
+what the destination lists (18) — either the badge counts a different population (e.g. all
+orgs vs one org, or unread vs total) or the destination filters what the badge does not.
+The item-141 rule applies: a badge must count exactly what its click opens.

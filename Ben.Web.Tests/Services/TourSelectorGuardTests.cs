@@ -20,10 +20,15 @@ public sealed class TourSelectorGuardTests
         return dir!;
     }
 
+    private static readonly string[] RazorRoots = ["Ben.Web.Website.Library", "Ben.Web.Website"];
+
+    private static IEnumerable<string> AllRazorFiles()
+        => RazorRoots.SelectMany(r => Directory.EnumerateFiles(
+               Path.Combine(RepoRoot().FullName, r), "*.razor", SearchOption.AllDirectories));
+
     private static IEnumerable<(string File, string Selector)> AllTourSelectors()
     {
-        var root = Path.Combine(RepoRoot().FullName, "Ben.Web.Website.Library");
-        foreach (var file in Directory.EnumerateFiles(root, "*.razor", SearchOption.AllDirectories))
+        foreach (var file in AllRazorFiles())
         {
             var source = File.ReadAllText(file);
             foreach (Match m in Regex.Matches(source, @"TourStep\(\s*""([^""]+)"""))
@@ -45,8 +50,10 @@ public sealed class TourSelectorGuardTests
                 // Tab ids come from BenTab Id="…" via BenTabs rendering id="tab-…".
                 ? Regex.IsMatch(source, $@"Id=""{Regex.Escape(selector["#tab-".Length..])}""")
                 : selector.StartsWith('#')
-                    // A plain id must be a literal id="…" in the same file.
-                    ? source.Contains($"id=\"{selector[1..]}\"", StringComparison.Ordinal)
+                    // A plain id must be a literal id="…" somewhere in the site's razors — a
+                    // tour may teach the LAYOUT (nav, bell) from a page in another project.
+                    ? AllRazorFiles().Any(f => File.ReadAllText(f)
+                        .Contains($"id=\"{selector[1..]}\"", StringComparison.Ordinal))
                     // Non-id selectors are allowed but must at least name a class present here.
                     : selector.StartsWith('.')
                         && source.Contains(selector[1..], StringComparison.Ordinal);

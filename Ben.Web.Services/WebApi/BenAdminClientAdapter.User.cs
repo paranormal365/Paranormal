@@ -281,4 +281,12 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/user-notes/{id}", token);
+
+    public async Task<bool?> GetMyOnboardingStateAsync(CancellationToken token = default)
+        => (await _api.GetAsync<OnboardingStateItem>("/api/me/onboarding", token))?.Onboarded;
+
+    public async Task CompleteMyOnboardingAsync(CancellationToken token = default)
+        => await _api.PostAsync<object, object>("/api/me/onboarding/complete", new { }, token);
+
+    private sealed record OnboardingStateItem(bool Onboarded);
 }

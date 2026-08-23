@@ -1,0 +1,189 @@
+@page "/onboarding"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage
+
+<PageTitle>Welcome</PageTitle>
+
+@*
+    Item 166 W2: first-run onboarding. Three short steps — who you are, what brought you here,
+    and a look around — every one of them skippable, and skipping stamps DateOnboarded exactly
+    like finishing, because a skip is an answer and this wizard must never nag twice. The gate
+    (OnboardingGate in MainLayout) is what brings people here; this page never traps anyone.
+*@
+
+<div class="d-flex align-items-center justify-content-center p-3">
+    <div class="card shadow-sm" style="width:100%;max-width:38rem;">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-start justify-content-between">
+                <h2 class="h4 mb-1">Welcome to @SiteOptions.Value.Name</h2>
+                <button type="button" id="onboarding-skip" class="btn btn-link btn-sm text-decoration-none"
+                        @onclick="SkipAsync">Skip for now</button>
+            </div>
+            <p class="text-secondary small mb-3">A minute of setup, then the site is yours.</p>
+
+            <BenWizard Model="@_wizard" OnFinish="@FinishAsync" OnStepChanged="@StateHasChanged"
+                       FinishText="Let's go">
+                @switch (_wizard.CurrentIndex)
+                {
+                    case 0:
+                        <div class="mb-3">
+                            <label class="form-label" for="onboard-name">What should people call you? <span class="text-danger">*</span></label>
+                            <input id="onboard-name" type="text" class="form-control" maxlength="100" @bind="_displayName" />
+                            <div class="form-text">Shown wherever your account appears — you can change it any time.</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="onboard-sex">Sex</label>
+                            <select id="onboard-sex" class="form-select" @bind="_gender">
+                                <option value="">—</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="NotProvided">Unspecified</option>
+                            </select>
+                            <div class="form-text">
+                                Optional. Only used to pick the placeholder icon shown until you
+                                add a photo — photos live on <a href="/profile">your profile</a>.
+                            </div>
+                        </div>
+                        break;
+
+                    case 1:
+                        <p class="small text-secondary mb-2">What brought you here? We'll drop you at the right door.</p>
+                        <div class="list-group" id="onboard-intents">
+                            @foreach (var (intent, title, blurb) in IntentOptions)
+                            {
+                                <label class="list-group-item d-flex gap-2 align-items-start">
+                                    <input class="form-check-input mt-1" type="radio" name="onboard-intent"
+                                           checked="@(_intent == intent)"
+                                           @onchange="@(() => _intent = intent)" />
+                                    <span>
+                                        <span class="fw-semibold d-block">@title</span>
+                                        <span class="small text-secondary">@blurb</span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                        break;
+
+                    case 2:
+                        <p class="small text-secondary">
+                            One last thing: a ten-second look at where everything lives. The tour
+                            runs right here — or skip it and just start.
+                        </p>
+                        <button type="button" id="onboard-tour-launch" class="btn btn-outline-secondary"
+                                @onclick="StartTourAsync">
+                            Show me around
+                        </button>
+                        break;
+                }
+            </BenWizard>
+        </div>
+    </div>
+</div>
+
+<BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+
+@code {
+    private readonly WizardModel _wizard;
+    private BenTour? _tourRef;
+
+    private string _displayName = "";
+    private string _gender = "";
+    private OnboardingRouting.Intent _intent = OnboardingRouting.Intent.JustLooking;
+
+    private static readonly (OnboardingRouting.Intent, string, string)[] IntentOptions =
+    [
+        (OnboardingRouting.Intent.RequestInvestigation, "Something is happening at my place",
+            "Request an investigation — local groups will answer."),
+        (OnboardingRouting.Intent.JoinGroup, "I want to investigate with a group",
+            "Find groups near you and apply to join."),
+        (OnboardingRouting.Intent.RunGroup, "I run a group",
+            "Set your group up here — members, cases, a public page."),
+        (OnboardingRouting.Intent.JustLooking, "Just looking around",
+            "Browse published cases and groups; everything else can wait."),
+    ];
+
+    // The tour teaches the layout, so its targets live in the layout (#nav-menu, #nav-bell) —
+    // the selector guard searches the site's razors, not just this file. On screens where the
+    // sidebar is collapsed the target is missing and BenTour centers the card instead.
+    private readonly TourModel _tour = new(
+    [
+        new TourModel.TourStep("#nav-menu",
+            "Everything starts here",
+            "The menu is the whole site: your groups appear near the top as you join them, and My Work gathers what needs you."),
+        new TourModel.TourStep("#nav-bell",
+            "The bell knows",
+            "Messages, invitations, and things waiting on you land here. If the bell is quiet, you're caught up."),
+    ]);
+
+    public OnboardingPage()
+    {
+        _wizard = new WizardModel(
+        [
+            new WizardModel.WizardStep("You", NameGateAsync),
+            new WizardModel.WizardStep("Your first stop"),
+            new WizardModel.WizardStep("Look around"),
+        ]);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+
+        // Pre-fill from the profile so the wizard confirms rather than interrogates.
+        try
+        {
+            if (await AdminClient.GetMyProfileAsync() is { } me)
+            {
+                _displayName = me.DisplayName ?? "";
+                _gender = me.Gender is { } g and not Ben.Data.Common.Enums.ClientGender.NotProvided
+                    ? g.ToString() : "";
+            }
+        }
+        catch { /* an empty form is a fine starting point */ }
+    }
+
+    private Task<string?> NameGateAsync()
+        => Task.FromResult(string.IsNullOrWhiteSpace(_displayName)
+            ? "Tell us what to call you — one word is fine."
+            : (string?)null);
+
+    private async Task FinishAsync()
+    {
+        try
+        {
+            await AdminClient.UpdateMyProfileAsync(new UpdateMyProfileRequest(
+                _displayName.Trim(),
+                Gender: Enum.TryParse<Ben.Data.Common.Enums.ClientGender>(_gender, out var g) ? g : null));
+        }
+        catch { /* the profile page can fix anything this misses */ }
+
+        await StampAndLeaveAsync(OnboardingRouting.DestinationFor(_intent));
+    }
+
+    private async Task SkipAsync()
+        => await StampAndLeaveAsync("/");
+
+    private async Task StampAndLeaveAsync(string destination)
+    {
+        try { await AdminClient.CompleteMyOnboardingAsync(); }
+        catch { /* worst case the gate offers once more next visit */ }
+        NavManager.NavigateTo(destination);
+    }
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private Task OnTourEndedAsync(bool _) => Task.CompletedTask;   // in-page tour; the wizard's stamp is the persistence
+}
