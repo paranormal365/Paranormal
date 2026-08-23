@@ -8039,3 +8039,20 @@ migrations (run against seeded legacy rows); unfilled-duty rendering; contact fa
 manager; notification routing; Playwright: assign duties across a 3-attendee visit and verify
 the roster, client sees their point of contact on the case page. Independent of item 156;
 depends lightly on 157 only for shared UI patterns.
+
+## 159. Impersonation-faithful bell + your-organizations links in the sidebar (OPEN — Ben, 2026-08-23)
+
+Two navigation-shell asks from Ben, verbatim in substance:
+
+1. **Impersonation fidelity for the bell.** When impersonating someone, the notification bell in
+   the top bar must reflect exactly what the impersonated person sees — their counts, their
+   buckets — not the SuperAdmin's own. (Audit which other shell surfaces read the real identity
+   while impersonating; the bell is the named one, but the fix should sweep the header.)
+
+2. **Sidebar links to your groups.** A member of one organization gets a link to that
+   organization's page, with its name, directly below Home in the main navigation sidebar. A
+   member of several gets the list. A member of MORE THAN FIVE gets a "Your Organizations"
+   expandable group holding the links — same collapse behaviour as the existing grouped menu.
+   (BenNav already renders grouped entries with chevrons and badge roll-ups; this reuses that
+   machinery, fed from the person's memberships — and under impersonation it must show the
+   impersonated person's groups, which is the same fidelity rule as the bell.)
