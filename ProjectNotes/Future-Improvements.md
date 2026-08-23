@@ -8338,3 +8338,96 @@ does not exist yet, we build the functionality AND its wizard/walkthrough togeth
 
 Shape suggestion for the build: one reusable step-wizard component (the site has none) plus a
 walkthrough/tour affordance, then the five applications. Sequencing after the item-156 arc.
+
+---
+
+### The implementation plan (written 2026-08-23 at Ben's request, ready to start when free)
+
+Six phases, W0–W5. W0 builds the two reusable primitives; each following phase applies them to
+one of Ben's five asks and ships independently. Throughout: help docs + HelpLinks in the same
+branch as each feature (house rule), every guard regressed against un-fixed code before being
+trusted, all e2e written to ENSURE starting state and restore in `finally` (shared database).
+
+**W0 — The two primitives: BenWizard and BenTour.**
+- `BenWizard` (Kit): a multi-step container owning step order, back/next/finish, per-step
+  validation gates (a step exposes `CanLeaveAsync` returning null-or-refusal-sentence), progress
+  header, and draft persistence to localStorage keyed by wizard name (a founder who closes the
+  tab resumes where they left off; Finish clears the draft). Plain-Blazor inputs inside — the
+  Telerik binding traps are documented reasons.
+- `BenTour` (Kit): a walkthrough overlay — an ordered list of (selector, title, body) steps,
+  highlighting the target element, next/back/skip, "don't show again" persisted per-tour-name
+  per-user (a `UserTourState` table row, not localStorage — Ben impersonating a user must see
+  their real tour state, and a cleared browser must not replay every tour). Tours can be
+  launched from a `?` affordance and auto-launch at most once.
+- *Tests:* bUnit is absent, so component logic lives in testable plain classes
+  (`WizardModel`, `TourModel`) covering step transitions, validation refusal blocking Next,
+  draft round-trip, tour-dismiss persistence; Playwright: a fixture page exercising both
+  primitives (walk a 3-step wizard incl. a refused Next; run a tour, dismiss it, reload, assert
+  it stays dismissed). *Validation:* the primitives ship WITH W1 so they are never
+  speculative code.
+
+**W1 — The organization-creation wizard.**
+Replaces StartGroupPage's two-field card with steps: (1) Identity — name + slug with the live
+refusal from OrganizationUrlNames; (2) Where you work — city/state + area of operation, feeding
+the map/discovery settings; (3) First settings — accepting applications?, contact email; (4)
+Review + create. On Finish: the existing RegisterOrganizationAsync + follow-up PUTs, then land
+on the hub with the owner's first-steps tour (see W4 list) offered. The self-registration
+switch (item 152) still short-circuits the whole wizard with the closed message.
+- *Tests:* WizardModel units for the flow; controller tests unchanged (no new endpoints);
+  Playwright: full wizard journey creating a real group (reusing the NewGroupJourney cleanup
+  discipline), a mid-wizard tab-close + resume via draft, and the switch-off closed path.
+- *Validation:* run the existing NewGroupJourneyTests family — the wizard must not break the
+  journey; click-test as an ordinary user.
+
+**W2 — New-user onboarding.**
+After first sign-in (flag: `AppUser.DateOnboarded` null), a 3-step wizard: (1) your profile —
+display name, sex (item 163's field), photo; (2) what brought you here — "I need investigators"
+routes toward the request wizard, "I want to join a group" toward /find, "I run a group" toward
+W1; (3) finding your way — launches the getting-started tour of the sidebar/bell. Skippable at
+every step; skipping stamps DateOnboarded too (never nag twice).
+- *Tests:* unit — the routing choice map; the stamp set on finish AND skip; migration adds the
+  column (nullable, no backfill: existing users are already onboard, so seed the stamp for all
+  existing rows in the same migration — assert in a seeder test).
+- *Validation:* Playwright — a cold signup (email-confirm via BEN_API_LOG) lands in onboarding,
+  completes it, never sees it again on relog; an existing seed account never sees it at all.
+
+**W3 — Organization ads (the functionality does not exist; build feature + wizard together).**
+Smallest honest feature first: an `OrganizationAd` (org, headline ≤80, body ≤300, image via the
+item-162 upload path, target URL constrained to the org's own public page or /find, Status
+Draft→Submitted→Approved/Rejected by SuperAdmin — the site must never render an unreviewed ad),
+displayed in two placements: a rotating card on /find ("Featured groups") and one on the home
+page's discovery section, weighted evenly, marked "Promoted". Monetization hooks deferred to
+item 143 (the entity carries the org, so tier-gating or paid placement bolts on later).
+The creation WIZARD is the walkthrough: each step teaches while collecting (headline step shows
+good/bad examples; image step states dimensions and the public-file rule; success step explains
+review + where it will appear + linking their public page's quality to ad performance).
+- *Tests:* controller units (owner-only create for own org, SuperAdmin-only approve, unapproved
+  never served by the public endpoint — regress that one hard; the public serve endpoint is
+  anonymous and must leak nothing but approved content); WizardModel units; Playwright — owner
+  drafts via wizard, SuperAdmin approves, the ad renders on /find with the Promoted badge,
+  rejected ad never renders; cleanup deletes the ad.
+- *Validation:* the authors-vs-visitors rule — verify the placement on the ANONYMOUS path.
+
+**W4 — The two CMS walkthroughs (tours over existing machinery).**
+(a) *Editor tour* on OrgCmsEditor: how pages are made, linked (nav + inter-page links), section
+types, layouts (copy-not-reference, item 80 2b), publish vs draft, and what belongs on a public
+page. (b) *Public-case-pages tour* on the case-slots flow: publishing a case, choosing the
+pseudonym (names hidden by design — the client's chosen name replaces theirs), how addresses
+are generalized on public surfaces, which case media may go public (the item-80 publication
+rule), and where the anonymous visitor actually sees it. While WRITING (b), audit the privacy
+claims live on the anonymous path — any gap found becomes its own backlog item before the tour
+asserts the promise.
+- *Tests:* TourModel units; a source-scan guard asserting every tour step's selector exists in
+  the razor it names (a tour pointing at a renamed element is a silently broken walkthrough —
+  same class as the HelpLink anchor guard, regress by renaming a selector); Playwright — launch
+  each tour, walk it to the end, dismiss-persists.
+- *Validation:* screenshot pass of each tour step for the help docs; the case-pages tour's
+  privacy claims verified logged-out.
+
+**W5 — Polish + docs sweep.**
+Wire "restart this tour" entries into the help pages; capture generators extended for the new
+surfaces; PDF regen; item 166 closed with a per-phase record.
+
+**Sizing:** W0+W1 one session; W2 one; W3 one to two (it is a real feature + review queue);
+W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
+dependency on 156 at all.
