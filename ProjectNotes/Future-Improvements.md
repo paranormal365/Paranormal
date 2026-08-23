@@ -8056,3 +8056,33 @@ Two navigation-shell asks from Ben, verbatim in substance:
    (BenNav already renders grouped entries with chevrons and badge roll-ups; this reuses that
    machinery, fed from the person's memberships — and under impersonation it must show the
    impersonated person's groups, which is the same fidelity rule as the bell.)
+
+## 160. Title-to-duty eligibility matrix, owner-configured per org (OPEN — Ben, 2026-08-23)
+
+Ben's spec, given while item 158 was being built, in substance: a new organization tab where the
+owner decides which investigation-level duties each TITLE is eligible for — a matrix, not just a
+minimum. His worked example: a Junior Investigator may ASSIST with equipment; an Investigator
+may RUN the equipment but may not be a point of contact for the investigation; a Lead
+Investigator may run equipment AND be a point of contact AND send invites to members for the
+investigation — but may not schedule or reschedule it. The CASE LEAD acts as the investigation's
+administrator: always a point of contact, schedules investigations, assigns and re-assigns
+duties from the member list (for the investigation and the case itself), provides history, and
+assigns adequately-titled members to historical research — with "adequate" being the org admin's
+determination via this matrix.
+
+What this builds on (158, shipped): `InvestigationDuty.MinimumMemberLevelId` is the degenerate
+single-threshold case of this matrix — the schema hook is already there. What is genuinely new:
+- an **eligibility matrix** (title × duty) replacing/augmenting the single minimum, edited on a
+  new org tab;
+- **capability semantics attached to duties** — point-of-contact-for-the-visit, may-invite,
+  may-schedule are capabilities a duty confers, which is a step beyond "duties grant nothing"
+  and must be reconciled with that principle deliberately (they are per-visit capabilities, like
+  the Lead's manage right — scoped, expiring, not standing CRUD);
+- a **"Case Lead" duty/position** with defined powers (the investigation-admin bundle above),
+  overlapping the existing case manager and item 158's case contacts — the design must say
+  which of those three the client sees and which schedules;
+- interaction with item 156's permission areas (scheduling is also a CRUD permission — the
+  matrix and the role system must not give two different answers to "may Sarah schedule this").
+
+Not started. Needs a design pass with Ben before building — the capability list per duty is
+product surface, not plumbing.
