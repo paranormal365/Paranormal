@@ -1,5 +1,7 @@
 @using Ben.Service.Models.Entities
+@using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
+@inject IJSRuntime JSRuntime
 @inject IBenUserState UserState
 
 @if (_loading)
@@ -84,16 +86,20 @@ else
                 </Template>
             </GridColumn>
             <GridColumn Field="@nameof(OrganizationRoleRecord.SortOrder)" Title="Order" Width="80px" />
-            <GridColumn Title="Actions" Width="160px">
+            <GridColumn Title="Actions" Width="200px">
                 <Template>
                     @{
                         var row = (OrganizationRoleRecord)context;
+                        @* text-nowrap keeps the pair on one line; stacked grid buttons read as
+                           two rows of a different table (Ben, 2026-08-23). *@
+                        <span class="text-nowrap">
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => EditRole(row))"><BenIcon Name="edit-2" Class="me-1" />
                             Edit
                         </button>
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm ms-1" @onclick="@(() => ConfirmDelete(row))"><BenIcon Name="trash-2" Class="me-1" />
                             Delete
                         </button>
+                        </span>
                     }
                 </Template>
             </GridColumn>
@@ -103,7 +109,7 @@ else
 
     @if (_editingRole is not null)
     {
-        <div class="card mt-3">
+        <div class="card mt-3" id="role-edit-card">
             <div class="card-body">
                 <h6 class="card-title">Edit Role: @_editingRole.Name</h6>
                 <OrgRoleEditor OrgId="@OrgId" RoleId="@_editingRole.Id" OnSaved="OnRoleSaved" OnCancelled="CancelEdit" />
@@ -223,6 +229,26 @@ else
         _showCreateForm = false;
         _editingRole    = role;
         _successMessage = null;
+        // The editor renders below a grid that can be taller than the viewport; without the
+        // scroll, Edit looks like it did nothing (Ben, 2026-08-23).
+        _scrollToEditorPending = true;
+    }
+
+    private bool _scrollToEditorPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToEditorPending) return;
+        _scrollToEditorPending = false;
+
+        try
+        {
+            await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", "role-edit-card", "start");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { /* The editor is still on the page; scrolling is a courtesy. */ }
     }
 
     private void CancelEdit()

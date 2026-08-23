@@ -52,14 +52,25 @@ public sealed class TierChangeNoticeJob : IScheduledJob
         {
             var recipients = await _messages.BillingRecipientsAsync(notice.OrganizationId, ct);
 
-            var body = $"Your group's plan, {notice.SubscriptionTier.Name}, is changing when your "
-                     + $"current period ends on {notice.EffectiveAtUtc:MM/dd/yyyy}:\n\n"
-                     + string.Join('\n', notice.Sentences.Split('\n').Select(s => "• " + s))
-                     + "\n\nNothing changes before then — you keep the terms you signed up for "
-                     + "until your renewal.";
+            // A notice whose change is already live (free-band area removals arrive here after
+            // a short grace) must not promise a renewal that protects nothing.
+            var alreadyLive = notice.EffectiveAtUtc <= notice.DeliverAtUtc;
+
+            var lines = string.Join('\n', notice.Sentences.Split('\n').Select(s => "• " + s));
+            var body = alreadyLive
+                ? $"Your group's plan, {notice.SubscriptionTier.Name}, has changed:\n\n"
+                  + lines
+                  + "\n\nThese changes are already in effect."
+                : $"Your group's plan, {notice.SubscriptionTier.Name}, is changing when your "
+                  + $"current period ends on {notice.EffectiveAtUtc:MM/dd/yyyy}:\n\n"
+                  + lines
+                  + "\n\nNothing changes before then — you keep the terms you signed up for "
+                  + "until your renewal.";
 
             var sent = await _messages.SendAsync(
-                $"Upcoming change to your {notice.SubscriptionTier.Name} plan",
+                alreadyLive
+                    ? $"Your {notice.SubscriptionTier.Name} plan has changed"
+                    : $"Upcoming change to your {notice.SubscriptionTier.Name} plan",
                 body, recipients, notice.CreatedByAppUserId, ct);
 
             notice.DeliveredAtUtc = DateTime.UtcNow;

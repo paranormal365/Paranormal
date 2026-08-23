@@ -197,4 +197,37 @@ public sealed class TierChangeAnalyzerTests
 
         Assert.Equal(EffectiveTermsResolver.IsAtLeastAsGood(newMax, oldMax), change.IsImprovement);
     }
+
+    // ── included-areas checklist (item 156 Phase E) ───────────────────────────
+
+    [Fact]
+    public void A_removed_area_is_a_reduction_that_names_the_area_and_promises_resumption()
+    {
+        var change = Single(TierChangeAnalyzer.AnalyzeAreas(
+            new HashSet<OrganizationPermissionArea> { OrganizationPermissionArea.Cases, OrganizationPermissionArea.Calendar },
+            new HashSet<OrganizationPermissionArea> { OrganizationPermissionArea.Calendar }));
+
+        Assert.False(change.IsImprovement);
+        Assert.Contains("cases", change.Sentence);
+        Assert.Contains("resume", change.Sentence);
+    }
+
+    [Fact]
+    public void An_added_area_is_an_improvement_that_names_the_area()
+    {
+        var change = Single(TierChangeAnalyzer.AnalyzeAreas(
+            new HashSet<OrganizationPermissionArea> { OrganizationPermissionArea.Calendar },
+            new HashSet<OrganizationPermissionArea> { OrganizationPermissionArea.Calendar, OrganizationPermissionArea.PublicPages }));
+
+        Assert.True(change.IsImprovement);
+        Assert.Contains("public pages", change.Sentence);
+    }
+
+    [Fact]
+    public void An_unchanged_checklist_produces_no_changes()
+    {
+        var areas = new HashSet<OrganizationPermissionArea>
+            { OrganizationPermissionArea.Cases, OrganizationPermissionArea.Files };
+        Assert.Empty(TierChangeAnalyzer.AnalyzeAreas(areas, areas));
+    }
 }

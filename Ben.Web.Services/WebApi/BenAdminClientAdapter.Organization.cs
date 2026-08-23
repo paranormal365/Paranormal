@@ -282,6 +282,11 @@ public sealed partial class BenAdminClientAdapter
         return result.Map(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName, m.MemberLevelId, m.MemberLevelName));
     }
 
+    /// <summary>The plan's included role areas (item 156 Phase E). Null degrades to
+    /// everything-included — graying is a courtesy; the server enforces regardless.</summary>
+    public Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<OrgIncludedAreasItem>($"/api/security/organizations/{orgId}/included-areas", token);
+
     /// <summary>The caller's per-area read verdicts in one group (item 156 Phase D). Null —
     /// e.g. signed out — reads as nothing-visible; the tabs simply do not render.</summary>
     public Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default)

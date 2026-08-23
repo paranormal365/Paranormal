@@ -499,6 +499,10 @@ public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMembe
 public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null,
     Guid? MemberLevelId = null, string? MemberLevelName = null);
 
+/// <summary>The plan's included role areas + name, for the editor's graying (item 156 Phase E).</summary>
+public sealed record OrgIncludedAreasItem(
+    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas, string? TierName);
+
 /// <summary>Per-area read verdicts for the caller in one group (item 156 Phase D).</summary>
 public sealed record MyOrgPermissionsItem(bool CanReadCases, bool CanReadInvestigations);
 

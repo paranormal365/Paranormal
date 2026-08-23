@@ -123,6 +123,30 @@ public class OrganizationMembershipController : BenControllerBase
                 Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken)));
     }
 
+    /// <summary>
+    /// The permission areas this group's plan includes (item 156 Phase E) — what the role editor
+    /// grays against, with the plan's name for the upgrade note.
+    /// </summary>
+    [HttpGet("{organizationId:guid}/included-areas")]
+    public async Task<ActionResult<OrgIncludedAreasResponse>> GetIncludedAreas(
+        Guid organizationId, CancellationToken cancellationToken)
+    {
+        _ = GetCurrentUserIdOrThrow();
+        using var scope = HttpContext.RequestServices.CreateScope();
+        var dbFactory = scope.ServiceProvider
+            .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+
+        var (areas, tierName) = await Ben.Data.Source.Services.TierAreaResolution
+            .ResolveAsync(db, organizationId, cancellationToken);
+
+        return Ok(new OrgIncludedAreasResponse([.. areas.OrderBy(a => (int)a)], tierName));
+    }
+
+    /// <summary>The plan's included role areas, and its name for the upgrade note.</summary>
+    public sealed record OrgIncludedAreasResponse(
+        IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas, string? TierName);
+
     /// <summary>Per-area read verdicts for one member in one group.</summary>
     public sealed record MyOrgPermissionsResponse(bool CanReadCases, bool CanReadInvestigations);
 

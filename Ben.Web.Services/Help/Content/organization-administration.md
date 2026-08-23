@@ -79,6 +79,26 @@ a role grant now opens the same doors for the members who hold it. Nothing was t
 anyone — the grants only add. The remaining sections' grants become decisive as the later
 phases land; each section's own description says where it stands.
 
+## Custom-role permissions and your plan
+
+Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,
+files, and so on — and the **Pricing** page lists exactly which areas each plan includes, so
+what an upgrade buys is never a surprise. Most plans include everything; when yours excludes an
+area, the role editor says so rather than hiding it:
+
+- Sections the plan does not include are **grayed out with their toggles disabled**, under a
+  note naming the areas and the plan.
+- **Nothing is deleted.** Grants you configured in an excluded area are kept exactly as you set
+  them — the note counts them — and apply again the moment a plan change includes the area. A
+  downgrade pauses; it never erases.
+- The rule holds server-side too: a save can change only the sections your plan includes, and
+  everything else is carried forward untouched.
+
+When an administrator changes what a plan includes, groups on that plan are told: newly included
+areas are announced right away, and removals arrive as a notice — before the renewal that
+applies them for paid groups. Owners and group administrators are unaffected by area
+exclusions, exactly as they are unaffected by role grants: they always hold every permission.
+
 ## Member titles — the ladder
 
 Separate from roles, on purpose: a **title** says how senior somebody is in the group — a
