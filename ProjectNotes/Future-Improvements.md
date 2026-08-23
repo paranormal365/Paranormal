@@ -7984,7 +7984,7 @@ answering, which produced a phantom 404 on the new endpoint. Kill by PID from
 `lsof -sTCP:LISTEN` before trusting any live check (feedback_dotnet_run_stale_process_trap,
 third occurrence).
 
-## 158. Engagement assignments — investigation duties + case contacts (PROPOSED — 2026-08-23)
+## 158. Engagement assignments — investigation duties + case contacts (CLOSED 2026-08-23 — built as proposed)
 
 The third people-concept, from Ben's scenario: ten people RSVP to a scheduled investigation —
 who is lead investigator *for that visit*, who is in charge of equipment, who collects the
@@ -8034,8 +8034,75 @@ override path and its audit trail, SetNull on rung deletion, SortOrder-not-name 
 Investigator" (tonight's lead) share words on purpose — that is how groups talk, a junior can
 lead a small visit, and context (profile vs. roster) disambiguates.
 
-Tests: duty CRUD auth; single-holder enforcement for Lead; the IsLead and AssignedRole
-migrations (run against seeded legacy rows); unfilled-duty rendering; contact fallback to case
-manager; notification routing; Playwright: assign duties across a 3-attendee visit and verify
-the roster, client sees their point of contact on the case page. Independent of item 156;
-depends lightly on 157 only for shared UI patterns.
+**Built 2026-08-23, one session.** `InvestigationDuty` (per-org, IsSingleHolder,
+MinimumMemberLevelId SetNull) + `InvestigationDutyAssignment` (attendee × duty, unique,
+EligibilityOverridden recorded) + `CaseContact`; migration applied. Defaults (Lead
+Investigator solo / Equipment / Evidence Collection / Documentation, no minimums) stamped at
+all three creation doors, in the delete birth-children list, backfilled for 14 existing groups;
+the legacy structurer turned 7 IsLead/AssignedRole values into assignments idempotently, and
+free text that matches no duty survives untouched. The Lead duty writes through to
+`InvestigationAttendee.IsLead`, so InvestigationAccess and every lead badge keep one source of
+truth. Duty board on the roster's Team panel (unfilled duties badged, per-duty assign picker,
+soft-eligibility refusal with an Assign-anyway confirm, ⚠ on overridden holders); duty manager
+in group Settings (solo flag + minimum-title select, cross-org level refused); case contacts
+panel on the case Detail column and on the client's case view with the case-manager fallback
+badge; client-message notification bucket routed contacts → manager → members (org admins
+always see it). Two of the house guards caught the build mid-session — a `?? []` in the new
+adapter method and a dropped LoadResult in the contacts panel — both fixed, not excused.
+
+14 new unit tests (duty rules incl. eligibility regressed by disabling the gate; contact
+fallback and gates) + door/delete tests extended; Playwright
+InvestigationDutyAndContactTests green ×3 with shared-DB cleanup in finally. Two e2e lessons:
+a retrying click on a TOGGLE alternately opens and closes the thing it waits for — click once
+and wait; and when a mid-load re-render can bounce a clicked tab strip, arrive by the item-149
+?tab= deep link instead — the deep link IS the state. Help: working-a-case (two sections) +
+organization-administration (duties). Deliberately deferred to item 160 (Ben's matrix spec):
+per-title duty ELIGIBILITY beyond the single minimum, capability semantics (PoC/invite/
+schedule per duty), and the Case Lead position.
+
+## 159. Impersonation-faithful bell + your-organizations links in the sidebar (OPEN — Ben, 2026-08-23)
+
+Two navigation-shell asks from Ben, verbatim in substance:
+
+1. **Impersonation fidelity for the bell.** When impersonating someone, the notification bell in
+   the top bar must reflect exactly what the impersonated person sees — their counts, their
+   buckets — not the SuperAdmin's own. (Audit which other shell surfaces read the real identity
+   while impersonating; the bell is the named one, but the fix should sweep the header.)
+
+2. **Sidebar links to your groups.** A member of one organization gets a link to that
+   organization's page, with its name, directly below Home in the main navigation sidebar. A
+   member of several gets the list. A member of MORE THAN FIVE gets a "Your Organizations"
+   expandable group holding the links — same collapse behaviour as the existing grouped menu.
+   (BenNav already renders grouped entries with chevrons and badge roll-ups; this reuses that
+   machinery, fed from the person's memberships — and under impersonation it must show the
+   impersonated person's groups, which is the same fidelity rule as the bell.)
+
+## 160. Title-to-duty eligibility matrix, owner-configured per org (OPEN — Ben, 2026-08-23)
+
+Ben's spec, given while item 158 was being built, in substance: a new organization tab where the
+owner decides which investigation-level duties each TITLE is eligible for — a matrix, not just a
+minimum. His worked example: a Junior Investigator may ASSIST with equipment; an Investigator
+may RUN the equipment but may not be a point of contact for the investigation; a Lead
+Investigator may run equipment AND be a point of contact AND send invites to members for the
+investigation — but may not schedule or reschedule it. The CASE LEAD acts as the investigation's
+administrator: always a point of contact, schedules investigations, assigns and re-assigns
+duties from the member list (for the investigation and the case itself), provides history, and
+assigns adequately-titled members to historical research — with "adequate" being the org admin's
+determination via this matrix.
+
+What this builds on (158, shipped): `InvestigationDuty.MinimumMemberLevelId` is the degenerate
+single-threshold case of this matrix — the schema hook is already there. What is genuinely new:
+- an **eligibility matrix** (title × duty) replacing/augmenting the single minimum, edited on a
+  new org tab;
+- **capability semantics attached to duties** — point-of-contact-for-the-visit, may-invite,
+  may-schedule are capabilities a duty confers, which is a step beyond "duties grant nothing"
+  and must be reconciled with that principle deliberately (they are per-visit capabilities, like
+  the Lead's manage right — scoped, expiring, not standing CRUD);
+- a **"Case Lead" duty/position** with defined powers (the investigation-admin bundle above),
+  overlapping the existing case manager and item 158's case contacts — the design must say
+  which of those three the client sees and which schedules;
+- interaction with item 156's permission areas (scheduling is also a CRUD permission — the
+  matrix and the role system must not give two different answers to "may Sarah schedule this").
+
+Not started. Needs a design pass with Ben before building — the capability list per duty is
+product surface, not plumbing.

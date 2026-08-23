@@ -84,6 +84,17 @@ public interface IBenPlacesClient
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
+    // ── Investigation duties + case contacts (item 158) ──────────────────────
+    Task<InvestigationDutyBoard?> GetInvestigationDutyBoardAsync(Guid orgId, Guid investigationId, CancellationToken token = default);
+    Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility, CancellationToken token = default);
+    Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default);
+    Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
+    Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
+    Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default);
+    Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<(IReadOnlyList<CaseContactItem> Contacts, string? Error)> SetCaseContactsAsync(Guid orgId, Guid caseId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default);
+
     Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
 

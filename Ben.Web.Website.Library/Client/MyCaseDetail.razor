@@ -40,7 +40,18 @@
             </div>
             <h3 class="mb-0 mt-1">@_case.Title<HelpLink Slug="your-case" /></h3>
             <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()</div>
-            @if (!string.IsNullOrWhiteSpace(_case.CaseManagerDisplayName))
+            @* Item 158: the client's named humans. Contacts when the group chose them, the
+               case manager standing in when not — never a blank where "who do I talk to"
+               should be. *@
+            @if (_case.Contacts is { Count: > 0 } contacts)
+            {
+                <div class="text-secondary small mt-1">
+                    Your contact@(contacts.Count > 1 ? "s" : ""):
+                    <strong>@string.Join(", ", contacts.Select(c => c.DisplayName))</strong>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_case.CaseManagerDisplayName)
+                 && (_case.Contacts is not { Count: > 0 } cs || cs.All(c => !c.IsFallback)))
             {
                 <div class="text-secondary small mt-1">Case Manager: <strong>@_case.CaseManagerDisplayName</strong></div>
             }

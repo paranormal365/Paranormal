@@ -649,6 +649,7 @@ public class OrganizationControllerTests
         {
             Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(seed, org.Id, userId);
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(seed, org.Id, userId);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(seed, org.Id, userId);
             seed.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
                 Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
@@ -666,6 +667,7 @@ public class OrganizationControllerTests
         Assert.Null(await db.Organizations.FindAsync(org.Id));
         Assert.Empty(await db.OrgCalendarEventTypes.Where(t => t.OrganizationId == org.Id).ToListAsync());
         Assert.Empty(await db.OrganizationMemberLevels.Where(l => l.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.InvestigationDuties.Where(d => d.OrganizationId == org.Id).ToListAsync());
         Assert.Empty(await db.OrganizationUserMemberships.Where(m => m.OrganizationId == org.Id).ToListAsync());
     }
 
@@ -760,6 +762,9 @@ public class OrganizationControllerTests
 
         var ladderCount = await db.OrganizationMemberLevels.CountAsync(l => l.OrganizationId == created.Id);
         Assert.Equal(5, ladderCount);
+
+        var dutyCount = await db.InvestigationDuties.CountAsync(d => d.OrganizationId == created.Id);
+        Assert.Equal(4, dutyCount);
     }
 
     [Fact]

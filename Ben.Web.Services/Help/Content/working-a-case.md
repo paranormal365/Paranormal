@@ -87,6 +87,35 @@ A place is only suggested when the address matches **and** it is within about a 
 Both have to agree, because an address alone cannot tell two flats apart and a map position alone
 would suggest the house next door.
 
+## Duties — who's doing what tonight
+
+Every visit has jobs: somebody leads, somebody owns the equipment, somebody collects the
+evidence at the end. The roster's **Who's doing what** panel makes those explicit — each duty is
+a row, each holder a badge, and a duty nobody holds shows **Unfilled**, which is the gap to
+close before the night of.
+
+Duties belong to one visit only. They are not titles (a junior investigator can lead a small
+visit) and they are not roles (holding Equipment tonight grants no standing permission). The one
+duty with teeth is **Lead Investigator**: the visit's lead can edit the investigation, exactly
+as before — handing that duty to someone is the same act as naming them lead.
+
+Your group defines its own duty list under **Settings → Investigation duties**, and a duty can
+ask for a **minimum title** from the ladder. That ask is soft: assigning someone below it shows
+a warning with an **Assign anyway** button, because the senior calls in sick and the capable
+junior steps up. The exception is recorded, so it was a decision rather than an accident — the
+holder's badge carries a small ⚠.
+
+## Who the client talks to
+
+Every case answers "who do I talk to" with a name. On the case's **Details** column, **Points of
+contact** lists the members the client sees on their side of the case, and their messages are
+what land in those members' notifications. Choose contacts with the button there — the case
+manager and group admins can save the choice.
+
+With no explicit contact chosen, the **case manager stands in** automatically, marked as such.
+Clearing everyone returns to that fallback; the client's view is never blank while the case has
+a manager.
+
 ## Arriving on site
 
 The investigation's **Team** panel shows who is expected and who has turned up. Open it from the

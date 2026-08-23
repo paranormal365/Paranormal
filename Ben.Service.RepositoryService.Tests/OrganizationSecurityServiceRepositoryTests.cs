@@ -399,6 +399,15 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.Equal(
             ["Probationary", "Junior Investigator", "Investigator", "Senior Investigator", "Lead Investigator"],
             ladder);
+
+        // …and the duty list (item 158) — same reasoning again.
+        var duties = await verify.InvestigationDuties
+            .Where(d => d.OrganizationId == org.Id)
+            .OrderBy(d => d.SortOrder)
+            .Select(d => d.Name)
+            .ToListAsync();
+
+        Assert.Equal(["Lead Investigator", "Equipment", "Evidence Collection", "Documentation"], duties);
     }
 
     [Fact]

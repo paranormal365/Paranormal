@@ -1,0 +1,118 @@
+@namespace Ben.Web.Website.Library.Organization.Cases
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+
+@*
+    Who the client talks to (item 158). Reads for every member; saving follows this page's
+    convention — the server decides (case manager, org admin), and a refusal renders as its
+    sentence rather than the panel pretending nothing happened. With no explicit contact the
+    case manager stands in, so the client's side of this can never be empty while a manager
+    exists.
+*@
+
+<div class="card mt-3">
+    <div class="card-header fw-semibold d-flex align-items-center">
+        Points of contact<HelpLink Slug="working-a-case" Anchor="who-the-client-talks-to" />
+    </div>
+    <div class="card-body small">
+        @if (_error is not null)
+        {
+            <div class="alert alert-warning py-1 px-2 small">@_error</div>
+        }
+
+        @if (!_editing)
+        {
+            @if (_contacts.Count == 0)
+            {
+                <p class="text-secondary mb-2">Nobody yet — and no case manager to stand in.</p>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-2">
+                    @foreach (var contact in _contacts)
+                    {
+                        <li class="d-flex align-items-center gap-1">
+                            <span>@contact.DisplayName</span>
+                            @if (contact.IsFallback)
+                            {
+                                <span class="badge bg-secondary" title="The case manager, standing in — no explicit contact is set">case manager</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="case-contacts-edit"
+                    @onclick="BeginEditAsync">Choose contacts</button>
+        }
+        else
+        {
+            @foreach (var member in _members)
+            {
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="contact-@member.AppUserId"
+                           checked="@_selected.Contains(member.AppUserId)"
+                           @onchange="@(e => Toggle(member.AppUserId, e.Value is true))" />
+                    <label class="form-check-label" for="contact-@member.AppUserId">@(member.DisplayName ?? "—")</label>
+                </div>
+            }
+            <div class="d-flex gap-2 mt-2">
+                <button type="button" class="btn btn-primary btn-sm" id="case-contacts-save" @onclick="SaveAsync">Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _editing = false)">Cancel</button>
+            </div>
+            <p class="text-secondary mt-1 mb-0" style="font-size:.72rem;">
+                Clearing everyone falls back to the case manager.
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    private IReadOnlyList<CaseContactItem> _contacts = [];
+    private IReadOnlyList<OrgMembershipItem> _members = [];
+    private HashSet<Guid> _selected = [];
+    private bool _editing;
+    private string? _error;
+    private Guid _loadedForCase;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CaseId == Guid.Empty || CaseId == _loadedForCase) return;
+        _loadedForCase = CaseId;
+        _contacts = (await AdminClient.GetCaseContactsAsync(OrgId, CaseId)).Items;
+    }
+
+    private async Task BeginEditAsync()
+    {
+        _error = null;
+        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        if (members.Failed)
+        {
+            // A refused roster must not open an empty picker — saving from it would clear every
+            // contact, which is the swallowed-refusal bug wearing an editor.
+            _error = members.Reason ?? "The member list couldn't be loaded.";
+            return;
+        }
+
+        _members = members.Items.Where(m => m.IsActive).ToList();
+        _selected = _contacts.Where(c => !c.IsFallback).Select(c => c.AppUserId).ToHashSet();
+        _editing = true;
+    }
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) _selected.Add(id); else _selected.Remove(id);
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        var (contacts, error) = await AdminClient.SetCaseContactsAsync(OrgId, CaseId, _selected.ToList());
+        if (error is not null) { _error = error; return; }
+        _contacts = contacts;
+        _editing = false;
+    }
+}
