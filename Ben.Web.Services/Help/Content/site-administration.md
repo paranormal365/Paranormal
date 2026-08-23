@@ -247,9 +247,18 @@ build custom role permissions for: Cases, Equipment, Public pages, and so on. Ev
 with everything checked, which changes nothing; unchecking an area is how bands become different
 products. Changes save as you click and apply to every group on the band.
 
-Today the checklist is stored and shown; the enforcement arrives with the roles work — the role
-editor will gray out excluded areas with an upgrade note, and grants in them will pause until
-the group upgrades (nothing is ever deleted; a paused grant resumes exactly as configured).
+The checklist is fully enforced. For a group whose band excludes an area: the role editor
+grays that area's section with a note naming the plan, the server refuses changes to it while
+carrying the stored grants forward untouched, and at runtime those grants simply stop answering
+— members lose the tabs the grants opened, owners and group administrators notice nothing.
+Nothing is ever deleted; a paused grant resumes exactly as configured the moment the area
+returns. The public Pricing page lists each band's included areas whenever any band excludes
+something.
+
+Unchecking saves per click, so the group-facing notices are **netted**: a removal is queued
+(free-band groups hear after a short grace, paid groups ahead of their renewal), and re-checking
+the area before delivery cancels the pending notice — an accidental toggle reaches the groups as
+silence, not as two contradictory messages. Newly included areas are announced right away.
 
 
 **Administration → Billing** holds three screens.

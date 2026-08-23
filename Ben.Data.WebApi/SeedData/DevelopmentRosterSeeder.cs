@@ -54,6 +54,10 @@ internal static class DevelopmentRosterSeeder
         var priya  = await UserAsync(userManager, "priya.sharma@benco.dev",    "Priya Sharma",   "Pr!ya!Sharma26");
         var nathan = await UserAsync(userManager, "nathan.cole@benco.dev",     "Nathan Cole",    "N@than!Cole2026");
         var grace  = await UserAsync(userManager, "grace.delgado@benco.dev",   "Grace Delgado",  "Gr@ce!Delgado26");
+        // Victor exists so the Viewer membership tier has a seat that is ALWAYS there — before
+        // him, every four-seat verification pass had to mutate a real member into a Viewer and
+        // remember to put them back. The seat nobody can sit in is the seat nobody tests.
+        var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes",   "V!ctor!Reyes26");
 
         var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell",  "L!nda!Maxwell26");
         var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes",   "R0bert!Hayes26");
@@ -85,6 +89,7 @@ internal static class DevelopmentRosterSeeder
         await MemberAsync(db, tgh, olivia, OrganizationMemberRole.Member, now);
         await MemberAsync(db, tgh, tyler,  OrganizationMemberRole.Member, now);
         await MemberAsync(db, tgh, david,  OrganizationMemberRole.Member, now);
+        await MemberAsync(db, tgh, victor, OrganizationMemberRole.Viewer, now);
 
         await MemberAsync(db, nps, priya,  OrganizationMemberRole.Member, now);
         await MemberAsync(db, nps, nathan, OrganizationMemberRole.Member, now);

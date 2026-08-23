@@ -434,6 +434,13 @@ the state of your application right there on their page.</p>
 <p>Or found your own: <strong>Organizations → Start a Group</strong> asks only for a name and a web address;
 everything else — members, cases, settings, your public page — is set up from the group's own hub
 once it exists. You're the owner from the first moment.</p>
+<h3>What you'll see as a new member</h3>
+<p>Once a group accepts you, its hub shows you the member baseline: the group's details, the
+member list, the calendar, messages, and files. <strong>Cases and investigations are not part of the
+baseline</strong> — those tabs appear when the group hands you a role that opens them (many groups use
+an "Investigator Role" for exactly this). Titles like <em>Probationary</em> or <em>Senior Investigator</em>
+are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
+role you're missing, not a bug — ask whoever runs your group.</p>
 <h2>Going to a group's public event</h2>
 <p>Public events are open to anyone — you'll find them on a group's page and under <strong>Join a Group</strong>.
 Say you're coming with your email address, click the link we send, and you're on the list (that
@@ -1609,6 +1616,47 @@ has decided its people stay unidentified to clients.</p>
 </tr>
 </tbody>
 </table>
+<h2>The roles every group starts with</h2>
+<p>Every group begins with seven ready-made roles — <strong>Case Manager Role, Equipment Manager Role,
+CMS Manager Role, Client Manager Role, Content Manager Role, Historian Role, Secretary Role</strong> —
+each a starting point you can edit, rename, or delete like any role you build yourself. The
+"Role" suffix is deliberate: member <em>titles</em> (the ladder below) say how senior somebody is,
+roles say what they may do, and the naming keeps the two impossible to confuse.</p>
+<p>Groups that existed before role-based case access arrived also carry an <strong>Investigator Role</strong>
+(read cases and investigations), assigned automatically — once — to everyone who was already an
+ordinary member, so the change took nothing from anyone. Members who join later start with no
+roles; hand them the Investigator Role, or any other, as they earn it.</p>
+<h2>What role grants open today</h2>
+<p><strong>Since the enforcement flip:</strong> reading the group's cases and investigations follows role
+grants, not bare membership. Everyone who was already an ordinary member when the flip arrived
+holds the Investigator Role and noticed nothing; a member without any case-reading role no
+longer sees the Cases and Investigations tabs at all — the tabs and the server give the same
+answer. Owners and administrators always see everything.</p>
+<p>Three of the role editor's sections started doing real work with the roles arc's Phase B:
+<strong>Cases</strong> (creating a case, and editing one you don't manage), <strong>Client Requests</strong> (accepting or
+declining what clients send in), and <strong>Calendar</strong> (event types, and managing other people's
+attendance). Each is strictly additive: owners and administrators keep everything they had, and
+a role grant now opens the same doors for the members who hold it. Nothing was taken from
+anyone — the grants only add. The remaining sections' grants become decisive as the later
+phases land; each section's own description says where it stands.</p>
+<h2>Custom-role permissions and your plan</h2>
+<p>Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,
+files, and so on — and the <strong>Pricing</strong> page lists exactly which areas each plan includes, so
+what an upgrade buys is never a surprise. Most plans include everything; when yours excludes an
+area, the role editor says so rather than hiding it:</p>
+<ul>
+<li>Sections the plan does not include are <strong>grayed out with their toggles disabled</strong>, under a
+  note naming the areas and the plan.</li>
+<li><strong>Nothing is deleted.</strong> Grants you configured in an excluded area are kept exactly as you set
+  them — the note counts them — and apply again the moment a plan change includes the area. A
+  downgrade pauses; it never erases.</li>
+<li>The rule holds server-side too: a save can change only the sections your plan includes, and
+  everything else is carried forward untouched.</li>
+</ul>
+<p>When an administrator changes what a plan includes, groups on that plan are told: newly included
+areas are announced right away, and removals arrive as a notice — before the renewal that
+applies them for paid groups. Owners and group administrators are unaffected by area
+exclusions, exactly as they are unaffected by role grants: they always hold every permission.</p>
 <h2>Member titles — the ladder</h2>
 <p>Separate from roles, on purpose: a <strong>title</strong> says how senior somebody is in the group — a
 <strong>role</strong> says what they may do. The two never mix. Giving somebody a grander title changes
@@ -2191,6 +2239,22 @@ installation id the sidecar generates for itself.</p>
 <p><strong>Administration → Audit Log</strong> records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.</p>
 <h2>Billing</h2>
+<h3>Role areas on a price band</h3>
+<p>Each band carries a <strong>Role areas</strong> checklist — which parts of the site a group on that band may
+build custom role permissions for: Cases, Equipment, Public pages, and so on. Every band starts
+with everything checked, which changes nothing; unchecking an area is how bands become different
+products. Changes save as you click and apply to every group on the band.</p>
+<p>The checklist is fully enforced. For a group whose band excludes an area: the role editor
+grays that area's section with a note naming the plan, the server refuses changes to it while
+carrying the stored grants forward untouched, and at runtime those grants simply stop answering
+— members lose the tabs the grants opened, owners and group administrators notice nothing.
+Nothing is ever deleted; a paused grant resumes exactly as configured the moment the area
+returns. The public Pricing page lists each band's included areas whenever any band excludes
+something.</p>
+<p>Unchecking saves per click, so the group-facing notices are <strong>netted</strong>: a removal is queued
+(free-band groups hear after a short grace, paid groups ahead of their renewal), and re-checking
+the area before delivery cancels the pending notice — an accidental toggle reaches the groups as
+silence, not as two contradictory messages. Newly included areas are announced right away.</p>
 <p><strong>Administration → Billing</strong> holds three screens.</p>
 <p><strong>Price Bands</strong> is the price list the public Pricing page renders — member ranges, a price per
 billing cadence, and the caps each band includes. Every save is validated as a whole list: the

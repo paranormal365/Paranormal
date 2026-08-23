@@ -7768,7 +7768,7 @@ default event types, neither of which is anyone's reason to keep it — and catc
 that still has cases, files or events is correct; doing it with a 500 was not. Live-verified by
 deleting the probe group cleanly, and covered by a regression test that seeds both birth children.
 
-## 156. Organization roles & permissions, tier-aware — the full plan (OPEN — planning with Ben, 2026-08-23)
+## 156. Organization roles & permissions, tier-aware — the full plan (CLOSED 2026-08-23 — all six phases shipped)
 
 Ben's request, near-verbatim, plus what the codebase already has so the plan builds on it
 instead of beside it.
@@ -8507,7 +8507,47 @@ bare membership. The pieces:
   takes a `block` argument because centering a taller-than-viewport card puts its title
   off-screen.
 
-Remaining: **Phase F** (e2e journeys, help sweep, the four-seat click-test) closes item 156.
+**Phase F — SHIPPED 2026-08-23. Item 156 is CLOSED.**
+
+- **`RoleTierJourneyTests`**: SuperAdmin unchecks Cases on the tier TGH actually resolves to
+  (asked of the same included-areas endpoint the UI uses); James — an ordinary member holding
+  the bridged Investigator Role — loses the Cases tab at runtime, gets it back when the area
+  returns; everything restored in finally. Phase E's netting is what makes this test safe to
+  run at all: the uncheck-then-recheck reaches subscribed groups as silence.
+- **`OrdinaryMemberBaselineTests`**: role-stripped James sees exactly the D3 baseline
+  (Details/Members/Calendar/Messages/Files) and no Cases/Investigations; one Case Manager
+  Role grant opens both tabs; removal closes them. Second test: removing his TGH role leaves
+  his BenCo access untouched (multi-org isolation). Arrangement through the API as SuperAdmin,
+  every verification from James's own browser; teardown ENSUREs his normal bridged state.
+- **`FreshGroupDefaultsTests`**: a just-registered group lists the seven default roles AND can
+  be deleted (item 155's class of bug — birth children blocking the delete — now has a test
+  that tries the delete). Learned: the roles endpoint answers an empty 200 to a SuperAdmin for
+  any org id, so the post-delete proof is the EMPTY list, not a 404.
+- **`FourSeatSmokeTests`** — the four-seat pass as a fixture instead of a memory: owner
+  (Emma@MCSS), administrator (Sarah@TGH), member (James@TGH), viewer each assert exactly the
+  tabs their seat is owed. **Victor Reyes (victor.reyes@benco.dev) is now permanently seeded
+  as a TGH Viewer** and `BenTestBase.ViewerEmail/ViewerPassword` exists — before him, every
+  four-seat pass had to mutate a real member and remember to undo it. Emma's password lives
+  only in gitignored dev config, so the owner test takes `BEN_OWNER_PASSWORD` from the
+  environment and Assert.Ignores loudly when unset.
+- **Viewer seat also click-tested live**: baseline tabs render with content (roster, messages),
+  no Cases/Investigations, no admin tabs; profile page (item 163's Sex field included) works
+  for the brand-new account. Found item 171 (dashboard case counts visible to case-less seats
+  — Ben's call, recorded, not changed).
+- **Help**: getting-started gains "What you'll see as a new member" (baseline + roles-open-
+  doors + titles-open-nothing); site-administration's tier-checklist section rewritten from
+  "enforcement arrives later" to the shipped reality including the netted notices;
+  organization-administration got its roles/graying coverage in Phase E. PDF regenerated
+  AFTER the edits (verified: new passages present in the HTML).
+- **Suites**: 2,986 unit tests green. Full e2e: 329 passed / 3 failed / 15 deliberate skips —
+  all 3 failures were congestion (a WASM-host build was compiling mid-suite), each passes
+  solo ×2; the NewGroupJourney passes with BEN_API_LOG set.
+
+Whole-item recap: Phases A (checklist + editor sections), B (additive grants doing real
+work), C (defaults + grandfather bridge), D (the enforcement flip across ~10 controllers),
+E (visibility: graying, pricing, netted notices), F (proof). Decisions D1-D5 all landed as
+locked. Spun off along the way: items 160 (title×duty matrix), 167 (free-plan transfer
+block), 170 (role editor offers grants over site-wide lookup tables), 171 (dashboard counts).
 
 ## 168. Billing paperwork: receipts, tax, and an audited money trail (OPEN — Ben, 2026-08-23)
 
@@ -8567,3 +8607,20 @@ role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warra
 `RolePermissionCoverageTests` to pin the corrected list. Caution: some type-like tables ARE
 per-org (calendar event types were seeded per-group in item 148) — each table needs its own
 verdict from the schema, not from its name.
+
+## 171. The group dashboard shows case counts to seats without case access (OPEN — flagged for Ben, 2026-08-23)
+
+Found during the Phase F four-seat pass, from the Viewer seat: a member (or viewer) WITHOUT any
+case-reading role no longer sees the Cases or Investigations tabs — but the Details tab's
+dashboard still shows "Open cases: 4", "Investigations: 6", "Cases this year" and the
+cases-by-status donut, all computed from the tables the seat cannot read.
+
+Two defensible readings, so it is Ben's call, not a unilateral fix:
+- **Counts are group-profile facts** (like the member count) and belong to the D3 baseline —
+  fine as-is, nothing leaks but aggregates.
+- **Counts are case data** and should follow the same gate as the tabs — the dashboard would
+  show member/calendar stats to the baseline and add the case widgets only when
+  `my-permissions` grants case read.
+
+If the second: the summary endpoint feeding the dashboard needs the same area/role gate as
+CaseController.CanReadAsync, and the widgets hide rather than zero (a zero is a lie).
