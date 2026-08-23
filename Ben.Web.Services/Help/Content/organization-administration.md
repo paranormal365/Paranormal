@@ -50,6 +50,19 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+## The roles every group starts with
+
+Every group begins with seven ready-made roles — **Case Manager Role, Equipment Manager Role,
+CMS Manager Role, Client Manager Role, Content Manager Role, Historian Role, Secretary Role** —
+each a starting point you can edit, rename, or delete like any role you build yourself. The
+"Role" suffix is deliberate: member *titles* (the ladder below) say how senior somebody is,
+roles say what they may do, and the naming keeps the two impossible to confuse.
+
+Groups that existed before role-based case access arrived also carry an **Investigator Role**
+(read cases and investigations), assigned automatically — once — to everyone who was already an
+ordinary member, so the change took nothing from anyone. Members who join later start with no
+roles; hand them the Investigator Role, or any other, as they earn it.
+
 ## What role grants open today
 
 Three of the role editor's sections started doing real work with the roles arc's Phase B:

@@ -281,6 +281,17 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             .Where(d => d.OrganizationId == id).ToListAsync(ct);
         db.InvestigationDuties.RemoveRange(birthDuties);
 
+        // Roles and their dependents are birth children too (item 156 Phase C) — removed
+        // leaf-first: assignments, then grants, then the roles themselves.
+        var birthRoleIds = await db.OrganizationRoles
+            .Where(r => r.OrganizationId == id).Select(r => r.Id).ToListAsync(ct);
+        db.OrganizationRoleMemberships.RemoveRange(
+            db.OrganizationRoleMemberships.Where(m => birthRoleIds.Contains(m.OrganizationRoleId)));
+        db.OrganizationRolePermissions.RemoveRange(
+            db.OrganizationRolePermissions.Where(p => birthRoleIds.Contains(p.OrganizationRoleId)));
+        db.OrganizationRoles.RemoveRange(
+            db.OrganizationRoles.Where(r => r.OrganizationId == id));
+
         var memberships = await db.OrganizationUserMemberships
             .Where(m => m.OrganizationId == id).ToListAsync(ct);
         db.OrganizationUserMemberships.RemoveRange(memberships);
@@ -340,6 +351,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
         OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, userId.Value);
         OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, userId.Value);
+        OrgRoleDefaults.AddDefaultRoles(db, org.Id, userId.Value);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
