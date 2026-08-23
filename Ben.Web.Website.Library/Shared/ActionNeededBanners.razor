@@ -47,6 +47,7 @@
 @code {
     private readonly List<OrgActionNeededItem> _visible = [];
     private bool _loaded;
+    private bool _loading;
 
     // Same two triggers as OnboardingGate, for the same reason: login happens INSIDE a
     // circuit, so a first-render-only fetch never runs for someone who just signed in.
@@ -67,29 +68,39 @@
 
     private async Task LoadAsync()
     {
-        if (_loaded) return;
-
-        await UserState.AuthReady;
-        if (!UserState.IsAuthenticated) return;
-        _loaded = true;
-
-        IReadOnlyList<OrgActionNeededItem> items;
+        // Re-entrancy guard, same as OnboardingGate's: BOTH triggers (first render and the
+        // sign-in StateChanged) can arrive before either finishes, and the old loaded-check
+        // yielded to an await before setting its flag — so both proceeded and every banner
+        // rendered twice (Ben's live report: each request showing as two identical rows).
+        if (_loaded || _loading) return;
+        _loading = true;
         try
         {
-            items = (await AdminClient.GetActionNeededAsync()).Items;
-        }
-        catch
-        {
-            // A banner must never be the reason a page errors; it simply does not appear.
-            return;
-        }
+            await UserState.AuthReady;
+            if (!UserState.IsAuthenticated) return;   // not loaded — a later sign-in retries
 
-        foreach (var item in items)
-        {
-            if (await IsDismissedAsync(item)) continue;
-            _visible.Add(item);
+            IReadOnlyList<OrgActionNeededItem> items;
+            try
+            {
+                items = (await AdminClient.GetActionNeededAsync()).Items;
+            }
+            catch
+            {
+                // A banner must never be the reason a page errors; it simply does not appear.
+                return;
+            }
+            _loaded = true;
+
+            // Rebuild rather than append — belt to the guard's braces.
+            _visible.Clear();
+            foreach (var item in items)
+            {
+                if (await IsDismissedAsync(item)) continue;
+                _visible.Add(item);
+            }
+            if (_visible.Count > 0) StateHasChanged();
         }
-        if (_visible.Count > 0) StateHasChanged();
+        finally { _loading = false; }
     }
 
     // The key carries the counts, so any CHANGE (a new arrival, or a queue that shrank and

@@ -41,6 +41,12 @@ public class ActionNeededBannerTests : BenTestBase
             var banner = Main.Locator(".action-needed-banner",
                 new() { HasTextString = "membership application" }).First;
             await Expect(banner).ToBeVisibleAsync(new() { Timeout = 45_000 });
+
+            // Exactly ONE banner per group's bucket — the double-trigger race once rendered
+            // the whole list twice (Ben's report: every "1 investigation request" shown as
+            // two identical rows).
+            await Expect(Main.Locator(".action-needed-banner",
+                new() { HasTextString = "membership application" })).ToHaveCountAsync(1);
             await Expect(banner.Locator($"a[href*='{TghId}'][href*='tab=members']"))
                 .ToBeVisibleAsync(new() { Timeout = 45_000 });
 
