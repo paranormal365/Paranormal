@@ -8608,7 +8608,7 @@ role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warra
 per-org (calendar event types were seeded per-group in item 148) — each table needs its own
 verdict from the schema, not from its name.
 
-## 171. The group dashboard shows case counts to seats without case access (OPEN — flagged for Ben, 2026-08-23)
+## 171. The group dashboard shows case counts to seats without case access (CLOSED 2026-08-23 — Ben: "the gates count as tabs")
 
 Found during the Phase F four-seat pass, from the Viewer seat: a member (or viewer) WITHOUT any
 case-reading role no longer sees the Cases or Investigations tabs — but the Details tab's
@@ -8622,5 +8622,19 @@ Two defensible readings, so it is Ben's call, not a unilateral fix:
   show member/calendar stats to the baseline and add the case widgets only when
   `my-permissions` grants case read.
 
-If the second: the summary endpoint feeding the dashboard needs the same area/role gate as
-CaseController.CanReadAsync, and the widgets hide rather than zero (a zero is a lie).
+Ben ruled the second reading: **"the gates count as tabs."** Built same day:
+
+- `OrganizationStatsController` now runs the case and investigation numbers through the same
+  `HasAccessAsync` chain as `CaseController.CanReadAsync` (SuperAdmin → Owner/Admin bypass →
+  tier gate → role grants), independently per table. The membership gate stays in front for
+  the panel as a whole; the two read gates shape what is in it. Notably, the controller's own
+  remarks had CLAIMED this gate all along ("gated on being able to read that group's cases")
+  while the code checked bare membership — the doc promised Phase D before Phase D existed.
+- `OrgStatsSummary`'s case/investigation parts became **nullable** — a refused number arrives
+  as null, never zero, because a zero reads as "an idle group". The panel hides null widgets;
+  the member count stays for every member.
+- Tests: 5 controller unit tests (regressed — ungating cases fails the two null-assertions),
+  and the FourSeatSmoke e2e now pins the rendered result: James (role-holder) sees "Open
+  cases", Victor (viewer, no roles) sees Members only, no case widgets, no donut. Verified
+  live against both seats' tokens: victor gets `{"members":9,"cases":null,...}`, james the
+  full numbers.

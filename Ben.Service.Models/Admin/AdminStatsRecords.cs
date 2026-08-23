@@ -57,13 +57,16 @@ public sealed record AdminStatsCharts(
 /// A single group's numbers, for the group's own Details tab.
 /// </summary>
 /// <remarks>
-/// Visible to members of that group, not just SuperAdmins — it is their own activity, and the
-/// counts contain nothing a member cannot already see by opening the tabs beside it.
+/// <para>Visible to members of that group, and shaped by what the caller may read: the member
+/// count is baseline, but the case and investigation numbers follow the same gate as the Cases
+/// and Investigations tabs (Ben, 2026-08-23: "the gates count as tabs"). A seat the tabs are
+/// hidden from receives NULL for those parts — never zero, because a zero is a lie the reader
+/// cannot distinguish from an idle group.</para>
 /// </remarks>
 public sealed record OrgStatsSummary(
     int Members,
-    int Cases,
-    int Investigations,
-    int OpenCases,
-    IReadOnlyList<StatSlice> CasesByStatus,
-    IReadOnlyList<StatPoint> CasesPerMonth);
+    int? Cases,
+    int? Investigations,
+    int? OpenCases,
+    IReadOnlyList<StatSlice>? CasesByStatus,
+    IReadOnlyList<StatPoint>? CasesPerMonth);

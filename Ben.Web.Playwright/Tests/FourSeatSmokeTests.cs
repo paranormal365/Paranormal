@@ -62,6 +62,10 @@ public class FourSeatSmokeTests : BenTestBase
             await Expect(Tab(tab)).ToBeVisibleAsync(new() { Timeout = 45_000 });
         await Expect(Tab("Roles")).ToHaveCountAsync(0);
         await Expect(Tab("Settings")).ToHaveCountAsync(0);
+
+        // Item 171: his role opens the Cases tab, so the dashboard's case numbers are his too.
+        await Expect(Main.GetByText("Open cases", new() { Exact = true }))
+            .ToBeVisibleAsync(new() { Timeout = 45_000 });
     }
 
     [Test]
@@ -74,6 +78,13 @@ public class FourSeatSmokeTests : BenTestBase
             await Expect(Tab(tab)).ToBeVisibleAsync(new() { Timeout = 45_000 });
         foreach (var tab in new[] { "Cases", "Investigations", "Roles", "Settings" })
             await Expect(Tab(tab)).ToHaveCountAsync(0);
+
+        // Item 171 (Ben: "the gates count as tabs"): the dashboard must not answer "is anything
+        // happening here" for the tabs this seat cannot see. Members stays; the case widgets go.
+        await Expect(Main.GetByText("Members", new() { Exact = true }).First)
+            .ToBeVisibleAsync(new() { Timeout = 45_000 });
+        await Expect(Main.GetByText("Open cases", new() { Exact = true })).ToHaveCountAsync(0);
+        await Expect(Main.GetByText("Cases by status", new() { Exact = true })).ToHaveCountAsync(0);
     }
 
     private ILocator Tab(string name)
