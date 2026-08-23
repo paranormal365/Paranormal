@@ -89,6 +89,14 @@ public abstract class BenTestBase : PageTest
     protected static string MemberPassword     => Environment.GetEnvironmentVariable("BEN_MEMBER_PASSWORD")     ?? "J@mes!Thornton26";
 
     /// <summary>
+    /// Victor — a <c>Viewer</c> of Tennessee Ghost Hunters: belongs to the group, may look,
+    /// changes nothing. The fourth seat of the four-seat pass (owner, administrator, member,
+    /// viewer); seeded permanently so using it never requires mutating a real member's tier.
+    /// </summary>
+    protected static string ViewerEmail        => Environment.GetEnvironmentVariable("BEN_VIEWER_EMAIL")        ?? "victor.reyes@benco.dev";
+    protected static string ViewerPassword     => Environment.GetEnvironmentVariable("BEN_VIEWER_PASSWORD")     ?? "V!ctor!Reyes26";
+
+    /// <summary>
     /// Daniel — has an account and belongs to no group. The client seat: cases of his own, and no
     /// membership anywhere.
     /// </summary>

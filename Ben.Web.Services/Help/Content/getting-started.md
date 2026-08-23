@@ -269,6 +269,15 @@ Or found your own: **Organizations → Start a Group** asks only for a name and 
 everything else — members, cases, settings, your public page — is set up from the group's own hub
 once it exists. You're the owner from the first moment.
 
+### What you'll see as a new member
+
+Once a group accepts you, its hub shows you the member baseline: the group's details, the
+member list, the calendar, messages, and files. **Cases and investigations are not part of the
+baseline** — those tabs appear when the group hands you a role that opens them (many groups use
+an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior Investigator*
+are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
+role you're missing, not a bug — ask whoever runs your group.
+
 ## Going to a group's public event
 
 Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
