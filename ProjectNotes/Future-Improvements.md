@@ -8147,3 +8147,23 @@ the two decisions that block OTHER people: a client waiting on an answer, an app
 at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
 becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
 server-side (the item-141 rule — never render a bucket the caller cannot open).
+
+## 162. Default avatar is an upload, not a Guid box (CLOSED 2026-08-23)
+
+Ben: *"Instead of having to provide a Guid for the missing user icon in the admin settings, I
+would rather it be an upload like is currently used for uploading anyone's avatar"* — and
+*"replacing it removes the old icon."* The Site Settings row for `avatar.default.upload-file-id`
+now renders an **Upload image** control instead of a free-text Guid input: pick a JPEG/PNG/GIF/
+WebP and it uploads through the same path profile photos use (public on purpose — the image
+renders for signed-out visitors), points the setting at the new file, and refreshes the preview.
+**Replacing deletes the previous image** best-effort after a successful save; a file that is
+genuinely referenced elsewhere survives because its foreign keys make the hard delete refuse,
+which is the right arbiter. Browser-file streams are buffered before upload (the
+RemoteBrowserFileStream freeze). Seed description + help updated ("there is nothing to clean
+up"). Upload click-through verification rides the held e2e pass — the file picker cannot be
+driven by the sandboxed browser tool.
+
+**Flagged in passing (spawn-task chip raised):** `UploadFileController.Delete` has NO ownership
+check — any authenticated user can hard-delete anyone's file and its blob. Its sibling Update
+endpoint has the owner-or-SuperAdmin gate; Delete needs the same, plus a regression test. Same
+controller family as the previously flagged GetAll/Download gaps.

@@ -65,6 +65,14 @@ Reach for it when you want to pause growth — a billing change you are part-way
 period where each new group needs a conversation first. It has no effect on groups that already
 exist.
 
+### The default profile picture
+
+**Default profile picture** is the image shown for anyone who has no photo the viewer is allowed
+to see. It is an ordinary upload: press **Upload image**, pick a JPEG, PNG, GIF or WebP, and it
+takes effect immediately — the preview under the row shows what is live. Uploading a replacement
+removes the previous image; there is nothing to clean up. The image is stored publicly on
+purpose, because it renders for visitors who are not signed in.
+
 ### The site-wide announcement
 
 **Site-wide announcement** is for maintenance windows and known issues. While it has text, an
