@@ -7868,13 +7868,19 @@ existing groups. Starting grants (every group can edit or delete these afterward
 
 | Default role | Grants |
 |---|---|
-| Case Manager | Cases CRUD, Investigations CRUD |
-| Equipment Manager | Equipment CRUD, Checkouts CRUD |
-| CMS Manager | Public pages CRUD, CMS sections CRUD |
-| Client Manager | Client requests CRUD, Cases Read |
-| Content Manager | Org files CRUD, CMS sections RU |
-| Historian | Read on every area |
-| Secretary | Calendar CRUD, Membership requests RU, Org profile RU |
+| Case Manager Role | Cases CRUD, Investigations CRUD |
+| Equipment Manager Role | Equipment CRUD, Checkouts CRUD |
+| CMS Manager Role | Public pages CRUD, CMS sections CRUD |
+| Client Manager Role | Client requests CRUD, Cases Read |
+| Content Manager Role | Org files CRUD, CMS sections RU |
+| Historian Role | Read on every area |
+| Secretary Role | Calendar CRUD, Membership requests RU, Org profile RU |
+
+Naming decided by Ben 2026-08-23: every permission role carries the **"… Role" suffix**, because
+the member-title ladder (item 157) legitimately uses overlapping words — "Case Manager" the
+title-adjacent word and "Case Manager Role" the permission set must never be confusable in the
+UI. Titles are seniority; roles are permission sets; the suffix is what keeps that boundary
+visible to a group owner reading a screen.
 
 **Grandfathering (recommended, needs Ben's yes):** a one-time migration assigns an
 "Investigator" role (Cases + Investigations Read) to every existing active non-admin member, so
@@ -7931,3 +7937,77 @@ add-from-template option.
 **Sizing:** A, B, C, E, F ≈ one session each; D ≈ two (it touches ~16 controllers and every
 member-visible tab). Order is load-bearing: A and B change nothing visible, C prepares the
 safety net, and only then does D flip enforcement.
+
+## 157. Member title ladder — seniority, not permissions (AGREED, ready to build — 2026-08-23)
+
+Ben's concept, agreed after discussion: a per-organization ladder of member **titles** —
+seniority within the group, deliberately and permanently distinct from permission roles (item
+156) and from the membership security kinds (Owner/Administrator/Manager/Member/Viewer).
+**Titles define the level a member is within the group; roles define sets of permissions.**
+Titles grant nothing, ever.
+
+Decisions locked:
+- **Ladder ends at Lead Investigator.** Ben's default rungs: Probationary, Junior Investigator,
+  Investigator, Senior Investigator, Lead Investigator. "Case Manager" is NOT a rung — it is a
+  permission role (Case Manager Role, item 156) designating who actually manages cases.
+- **Additive purity preserved:** "probationary" is a label, never a restriction. A group that
+  wants a genuinely restricted newcomer already has the Viewer membership kind — probation-as-
+  title plus Viewer-as-restriction covers both meanings without ever inventing a deny mechanism.
+- **Per-org and editable**, same pattern as calendar event types (item 148): an
+  `OrganizationMemberLevel` lookup (Name, SortOrder, IsActive) seeded with the five defaults at
+  every creation door on the same SaveChanges — and added to the org-delete birth-children list
+  (item 155's lesson). Idempotent backfill for existing groups.
+- **A nullable `MemberLevelId` on `OrganizationUserMembership`** (no title is fine, and a
+  deleted level nulls out rather than blocking). Displayed wherever the member displays: roster,
+  member list, profile's group section, investigation team lists; public team page only if the
+  group opts in.
+- **Deferred on purpose:** any bridge from level to auto-assigned roles ("Investigator and above
+  get Case Read"). Useful someday; reintroduces the title/permission entanglement today.
+
+Independent of item 156 — one-session scale, could ship before any of it. Tests: seeding at all
+three doors, delete-birth-children, backfill idempotence, assignment endpoint auth (org admins
+manage levels and assignments), a source-scan-free UI check that the title renders on the
+roster; Playwright: owner renames a rung and assigns it, member sees it on their profile.
+
+## 158. Engagement assignments — investigation duties + case contacts (PROPOSED — 2026-08-23)
+
+The third people-concept, from Ben's scenario: ten people RSVP to a scheduled investigation —
+who is lead investigator *for that visit*, who is in charge of equipment, who collects the
+evidence when finished? And every case needs **at least one point of contact besides the case
+manager**. Neither titles (seniority) nor roles (standing permissions): a duty for one specific
+engagement.
+
+**What already exists** (this feature is half-gestured-at in the schema):
+`InvestigationAttendee.IsLead` (bool) and `InvestigationAttendee.AssignedRole` (**free text** —
+no consistency, nothing to filter on, no way to see an unfilled duty), and
+`Case.CaseManagerAppUserId` (real, assigned, tested). Missing: structured duties, and any case
+contact besides the manager.
+
+**Investigation duties:**
+- Per-org `InvestigationDuty` lookup (calendar-event-types pattern), seeded: Lead Investigator,
+  Equipment, Evidence Collection, Documentation — editable per group, birth-children rules apply.
+- `InvestigationDutyAssignment`: attendee × duty. Lead Investigator is single-holder; others
+  allow several. Migration: `IsLead = true` becomes a Lead assignment; existing `AssignedRole`
+  strings migrate to a matching duty where the name matches, otherwise survive as a note field.
+- Scheduling screen gets a "who's doing what" panel over RSVP'd attendees, **showing unfilled
+  duties** — the organizer sees the gap before the night of, which is the point of structuring
+  this at all.
+- **Duties grant nothing** — coordination, not permission (additive rule stays pure) — with one
+  scoped exception: the Lead duty feeds the existing InvestigationAccess manage-this-
+  investigation logic, which already honors leads.
+
+**Case point of contact:**
+- Per-case contact assignment (one or more members), shown on the case header for investigators
+  **and on the client's view** — the client finally has a named human. Client-message
+  notifications route to contacts + case manager. With no explicit contact, the case manager IS
+  the contact, so the client-facing surface never renders empty.
+
+**Naming note, accepted:** the title "Lead Investigator" (rank, item 157) and the duty "Lead
+Investigator" (tonight's lead) share words on purpose — that is how groups talk, a junior can
+lead a small visit, and context (profile vs. roster) disambiguates.
+
+Tests: duty CRUD auth; single-holder enforcement for Lead; the IsLead and AssignedRole
+migrations (run against seeded legacy rows); unfilled-duty rendering; contact fallback to case
+manager; notification routing; Playwright: assign duties across a 3-attendee visit and verify
+the roster, client sees their point of contact on the case page. Independent of item 156;
+depends lightly on 157 only for shared UI patterns.
