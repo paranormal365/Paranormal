@@ -8316,3 +8316,168 @@ passing solo in 2s — its waits are now 45s).
 
 Next: **Phase D** — the enforcement flip. Biggest phase; the bridge this phase built is what
 makes it safe.
+
+## 166. Wizards and walkthroughs — guided paths through the site's big jobs (OPEN — Ben, 2026-08-23)
+
+Ben's list, in substance; the closing rule matters most: **where the underlying functionality
+does not exist yet, we build the functionality AND its wizard/walkthrough together.**
+
+1. **A multi-step wizard for creating a new organization** — replacing/wrapping the two-field
+   founder door (item 146's StartGroupPage) with guided steps: identity, address, first
+   settings, first members, likely ending on the group hub with pointers.
+2. **Onboarding steps for new site users** — a guided first-run after signup: profile, sex/photo,
+   what to do first depending on whether they came to request an investigation or join a group.
+3. **Organization ads** — an owner creates an ad promoting their group, with a walkthrough of
+   suggestions for building it and making it successful. NOTE: no ad feature exists today — this
+   is the clearest case of the closing rule; needs design (where ads display, who sees them,
+   whether they tie into tiers/billing as a monetization lever — cross-reference item 143).
+4. **A CMS editor walkthrough** — how pages are made and linked, and what to include.
+5. **A public-case-pages walkthrough** — how to build case pages for the public, and specifically
+   how locations and the names of people involved are hidden (the pseudonym and address-privacy
+   machinery already exists — the walkthrough teaches it; audit for gaps while writing it).
+
+Shape suggestion for the build: one reusable step-wizard component (the site has none) plus a
+walkthrough/tour affordance, then the five applications. Sequencing after the item-156 arc.
+
+---
+
+### The implementation plan (written 2026-08-23 at Ben's request, ready to start when free)
+
+Six phases, W0–W5. W0 builds the two reusable primitives; each following phase applies them to
+one of Ben's five asks and ships independently. Throughout: help docs + HelpLinks in the same
+branch as each feature (house rule), every guard regressed against un-fixed code before being
+trusted, all e2e written to ENSURE starting state and restore in `finally` (shared database).
+
+**W0 — The two primitives: BenWizard and BenTour.**
+- `BenWizard` (Kit): a multi-step container owning step order, back/next/finish, per-step
+  validation gates (a step exposes `CanLeaveAsync` returning null-or-refusal-sentence), progress
+  header, and draft persistence to localStorage keyed by wizard name (a founder who closes the
+  tab resumes where they left off; Finish clears the draft). Plain-Blazor inputs inside — the
+  Telerik binding traps are documented reasons.
+- `BenTour` (Kit): a walkthrough overlay — an ordered list of (selector, title, body) steps,
+  highlighting the target element, next/back/skip, "don't show again" persisted per-tour-name
+  per-user (a `UserTourState` table row, not localStorage — Ben impersonating a user must see
+  their real tour state, and a cleared browser must not replay every tour). Tours can be
+  launched from a `?` affordance and auto-launch at most once.
+- *Tests:* bUnit is absent, so component logic lives in testable plain classes
+  (`WizardModel`, `TourModel`) covering step transitions, validation refusal blocking Next,
+  draft round-trip, tour-dismiss persistence; Playwright: a fixture page exercising both
+  primitives (walk a 3-step wizard incl. a refused Next; run a tour, dismiss it, reload, assert
+  it stays dismissed). *Validation:* the primitives ship WITH W1 so they are never
+  speculative code.
+
+**W1 — The organization-creation wizard.**
+Replaces StartGroupPage's two-field card with steps: (1) Identity — name + slug with the live
+refusal from OrganizationUrlNames; (2) Where you work — city/state + area of operation, feeding
+the map/discovery settings; (3) First settings — accepting applications?, contact email; (4)
+Review + create. On Finish: the existing RegisterOrganizationAsync + follow-up PUTs, then land
+on the hub with the owner's first-steps tour (see W4 list) offered. The self-registration
+switch (item 152) still short-circuits the whole wizard with the closed message.
+- *Tests:* WizardModel units for the flow; controller tests unchanged (no new endpoints);
+  Playwright: full wizard journey creating a real group (reusing the NewGroupJourney cleanup
+  discipline), a mid-wizard tab-close + resume via draft, and the switch-off closed path.
+- *Validation:* run the existing NewGroupJourneyTests family — the wizard must not break the
+  journey; click-test as an ordinary user.
+
+**W2 — New-user onboarding.**
+After first sign-in (flag: `AppUser.DateOnboarded` null), a 3-step wizard: (1) your profile —
+display name, sex (item 163's field), photo; (2) what brought you here — "I need investigators"
+routes toward the request wizard, "I want to join a group" toward /find, "I run a group" toward
+W1; (3) finding your way — launches the getting-started tour of the sidebar/bell. Skippable at
+every step; skipping stamps DateOnboarded too (never nag twice).
+- *Tests:* unit — the routing choice map; the stamp set on finish AND skip; migration adds the
+  column (nullable, no backfill: existing users are already onboard, so seed the stamp for all
+  existing rows in the same migration — assert in a seeder test).
+- *Validation:* Playwright — a cold signup (email-confirm via BEN_API_LOG) lands in onboarding,
+  completes it, never sees it again on relog; an existing seed account never sees it at all.
+
+**W3 — Organization ads (the functionality does not exist; build feature + wizard together).**
+Smallest honest feature first: an `OrganizationAd` (org, headline ≤80, body ≤300, image via the
+item-162 upload path, target URL constrained to the org's own public page or /find, Status
+Draft→Submitted→Approved/Rejected by SuperAdmin — the site must never render an unreviewed ad),
+displayed in two placements: a rotating card on /find ("Featured groups") and one on the home
+page's discovery section, weighted evenly, marked "Promoted". Monetization hooks deferred to
+item 143 (the entity carries the org, so tier-gating or paid placement bolts on later).
+The creation WIZARD is the walkthrough: each step teaches while collecting (headline step shows
+good/bad examples; image step states dimensions and the public-file rule; success step explains
+review + where it will appear + linking their public page's quality to ad performance).
+- *Tests:* controller units (owner-only create for own org, SuperAdmin-only approve, unapproved
+  never served by the public endpoint — regress that one hard; the public serve endpoint is
+  anonymous and must leak nothing but approved content); WizardModel units; Playwright — owner
+  drafts via wizard, SuperAdmin approves, the ad renders on /find with the Promoted badge,
+  rejected ad never renders; cleanup deletes the ad.
+- *Validation:* the authors-vs-visitors rule — verify the placement on the ANONYMOUS path.
+
+**W4 — The two CMS walkthroughs (tours over existing machinery).**
+(a) *Editor tour* on OrgCmsEditor: how pages are made, linked (nav + inter-page links), section
+types, layouts (copy-not-reference, item 80 2b), publish vs draft, and what belongs on a public
+page. (b) *Public-case-pages tour* on the case-slots flow: publishing a case, choosing the
+pseudonym (names hidden by design — the client's chosen name replaces theirs), how addresses
+are generalized on public surfaces, which case media may go public (the item-80 publication
+rule), and where the anonymous visitor actually sees it. While WRITING (b), audit the privacy
+claims live on the anonymous path — any gap found becomes its own backlog item before the tour
+asserts the promise.
+- *Tests:* TourModel units; a source-scan guard asserting every tour step's selector exists in
+  the razor it names (a tour pointing at a renamed element is a silently broken walkthrough —
+  same class as the HelpLink anchor guard, regress by renaming a selector); Playwright — launch
+  each tour, walk it to the end, dismiss-persists.
+- *Validation:* screenshot pass of each tour step for the help docs; the case-pages tour's
+  privacy claims verified logged-out.
+
+**W5 — Polish + docs sweep.**
+Wire "restart this tour" entries into the help pages; capture generators extended for the new
+surfaces; PDF regen; item 166 closed with a per-phase record.
+
+**Sizing:** W0+W1 one session; W2 one; W3 one to two (it is a real feature + review queue);
+W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
+dependency on 156 at all.
+
+## 167. Free-plan groups cannot transfer or accept transferred cases (OPEN — Ben, 2026-08-23)
+
+Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
+out nor accept a case transferred in. Both ends checked — a paid group must not be able to hand
+a case TO a free group either, or the rule leaks through the receiving door. Design note: this
+is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
+(SubscriptionTierPermissionArea) — likely a third keyed concept, per-tier boolean capabilities
+("case transfers"), so future rules of this shape ("publications", "API access") are a row not
+a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
+the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
+Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
+
+### Item 156 Phase D — SHIPPED 2026-08-23 (the enforcement flip)
+
+Reading a group's cases and investigations answers to `HasAccessAsync(table, Read)` instead of
+bare membership. The pieces:
+
+- **The tier area gate inside HasAccessAsync** (via the new shared
+  `TierAreaResolution` core, which also serves the WebApi resolver — one implementation of the
+  fail-open rules, because two copies would eventually disagree; `SubscriptionTierResolver`
+  moved down to Ben.Data.Source where it always belonged). Placed after the Owner/Administrator
+  bypass: a plan narrows what ROLES may do, never what the owner may do. Regressed.
+- **Ten controllers converted** — CaseFile, CaseAudioMix, CaseReport, CaseResearch,
+  ScheduleProposal, CaseNote, CaseTransfer, CaseController.CanReadAsync (→ Case), and
+  InvestigationController + OrgInvestigationsController (→ Investigation). Each helper is now a
+  one-line delegation, with the CLAIMS-based SuperAdmin bypass kept in front — dropping it was a
+  real regression the item-150 tests caught in flight (HasAccessAsync checks DB roles; the
+  claims principal is what production tokens carry).
+- **Deliberately NOT flipped, recorded as decisions:** equipment reads stay member-open (the
+  role editor has documented that as the product's promise since item 83 — flipping it would
+  need its own bridge, and the one-time grandfather gate is already consumed); calendar events
+  member-open by design; EventEvidence review stays member-gated pending its own decision.
+- **The UI mirrors the server the same day**: a `my-permissions` endpoint (per-area read
+  verdicts) now decides whether the hub's Cases and Investigations tabs render at all — a member
+  the server would refuse is never handed the tab (the sixth application of the
+  server-guard-needs-a-UI-path rule, this time BEFORE anyone hit it live).
+- **Test fallout, honestly handled**: 133 unit tests modeled the pre-flip world; their seeds now
+  run `TestSeeds.BridgeAsync` — the same bridge production members got — rather than weakening
+  assertions. `PhaseDFlipTests` pins the flip itself (a role-less member is refused; the bridge
+  opens it) plus a source scan that fails if any converted helper regrows a membership query.
+- **Live**: sarah (ordinary bridged member) answers `canReadCases:true` and reads TGH
+  investigations with a 200 — the flip is invisible to existing members, which was the entire
+  point of Phase C's bridge. e2e: 321/338 passed; the two failures were shared-DB residue
+  (triplicate ladder rungs breaking a strict-mode cleanup locator — purged, test now
+  self-heals) and the known tier-checklist congestion case — both pass solo ×2.
+
+Remaining: **Phase E** (role editor grays excluded areas with the upgrade note, inactive-grant
+badges, tier areas on the public pricing page, downgrade notices naming areas) and **Phase F**
+(e2e journeys, help, the four-seat click-test).

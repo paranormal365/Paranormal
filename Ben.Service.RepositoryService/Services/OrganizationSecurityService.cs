@@ -85,6 +85,20 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             return true;
         }
 
+        // ── The tier area gate (item 156 Phase D, decision D4) ────────────────
+        // Role permissions and direct grants in an area the group's plan does not include stop
+        // applying HERE, at runtime — stored untouched, grayed-but-remembered in the editor,
+        // resuming the moment the plan includes the area again. Placed after the bypasses on
+        // purpose: a plan can narrow what ROLES may do, never what the owner may do. The
+        // resolution fails open in every ambiguous case (no tiers, invalid list, unconfigured
+        // checklist), so only a checklist that SAYS so excludes anything.
+        if (!await Ben.Data.Source.Services.TierAreaResolution.IsIncludedAsync(
+                dbContext, organizationId, tableName, token))
+        {
+            return false;
+        }
+
+
         var hasDirectGrant = await dbContext.OrganizationAccessGrants
             .AsNoTracking()
             .AnyAsync(g =>

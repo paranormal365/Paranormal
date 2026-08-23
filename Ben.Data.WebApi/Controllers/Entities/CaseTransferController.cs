@@ -23,8 +23,11 @@ public sealed class CaseTransferController : BenControllerBase
     private readonly Services.PlatformMessageService _messages;
 
     public CaseTransferController(
-        IDbContextFactory<BenDataContext> db, IMapper mapper, Services.PlatformMessageService messages)
-    { _db = db; _mapper = mapper; _messages = messages; }
+        IDbContextFactory<BenDataContext> db, IMapper mapper, Services.PlatformMessageService messages,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _mapper = mapper; _messages = messages; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseTransferLogRecord>>> GetAll(
@@ -242,13 +245,12 @@ public sealed class CaseTransferController : BenControllerBase
         return Ok(_mapper.Map<CaseTransferLogRecord>(log));
     }
 
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
     {

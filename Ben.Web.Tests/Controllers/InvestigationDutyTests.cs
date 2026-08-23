@@ -71,6 +71,7 @@ public sealed class InvestigationDutyTests
         db.InvestigationDuties.AddRange(lead, evidence);
 
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return new World(factory, orgId, adminId, invId, attJunior.Id, attSenior.Id, lead.Id, evidence.Id, junior.Id, senior.Id);
     }
 
@@ -78,7 +79,7 @@ public sealed class InvestigationDutyTests
     {
         var ctrl = new OrgInvestigationsController(
             factory, new Mock<IMapper>().Object,
-            new Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object);
+            new Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

@@ -26,8 +26,11 @@ public sealed class InvestigationController : BenControllerBase
 
     public InvestigationController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
-        Services.Billing.SubscriptionLimitGuard limits)
-    { _db = db; _mapper = mapper; _limits = limits; }
+        Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _mapper = mapper; _limits = limits; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvestigationRecord>>> GetAll(
@@ -374,13 +377,12 @@ public sealed class InvestigationController : BenControllerBase
         return NoContent();
     }
 
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     /// <summary>
     /// Whether the caller may change this particular investigation. See

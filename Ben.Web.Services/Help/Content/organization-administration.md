@@ -65,6 +65,12 @@ roles; hand them the Investigator Role, or any other, as they earn it.
 
 ## What role grants open today
 
+**Since the enforcement flip:** reading the group's cases and investigations follows role
+grants, not bare membership. Everyone who was already an ordinary member when the flip arrived
+holds the Investigator Role and noticed nothing; a member without any case-reading role no
+longer sees the Cases and Investigations tabs at all — the tabs and the server give the same
+answer. Owners and administrators always see everything.
+
 Three of the role editor's sections started doing real work with the roles arc's Phase B:
 **Cases** (creating a case, and editing one you don't manage), **Client Requests** (accepting or
 declining what clients send in), and **Calendar** (event types, and managing other people's

@@ -32,12 +32,16 @@ public sealed class OrgInvestigationsController : BenControllerBase
     private readonly IAuditLogService _auditLog;
 
     public OrgInvestigationsController(
-        IDbContextFactory<BenDataContext> db, IMapper mapper, IAuditLogService auditLog)
+        IDbContextFactory<BenDataContext> db, IMapper mapper, IAuditLogService auditLog,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _mapper = mapper;
         _auditLog = auditLog;
+        _security = security;
     }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     /// <summary>
     /// Every investigation this organization ran, with or without a case, each carrying what the
@@ -714,12 +718,12 @@ public sealed class OrgInvestigationsController : BenControllerBase
     /// Membership check, delegating to the shared helper rather than adding a seventh hand-copied
     /// <c>IsOrgMemberAsync</c> — the duplication a previous dedupe pass was cleaning up.
     /// </summary>
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, GetCurrentUserId(), ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 }
 
 /// <summary>

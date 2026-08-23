@@ -38,7 +38,7 @@ public class CaseResearchControllerTests
         storage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseResearchController(factory, storage.Object);
+        var ctrl = new CaseResearchController(factory, storage.Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -77,6 +77,7 @@ public class CaseResearchControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return (factory, orgId, caseId, userId);
     }
 
@@ -274,6 +275,7 @@ public class CaseResearchControllerTests
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Manager, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
             await db.SaveChangesAsync();
         }
+        await TestSeeds.BridgeAsync(factory, attackerOrgId);
         var attacker = BuildController(factory, attackerId);
 
         Assert.IsType<NotFoundResult>((await attacker.GetAll(attackerOrgId, victimCaseId, default)).Result);

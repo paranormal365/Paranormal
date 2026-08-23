@@ -43,7 +43,7 @@ public class InvestigationAttendanceGatingTests
     }
 
     private static InvestigationController Build(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, Mapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f))
+        => new(f, Mapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -113,6 +113,7 @@ public class InvestigationAttendanceGatingTests
             });
 
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, OrgId);
         return new World(factory, caseId, invId, creator, plain, plainRow, creatorRow);
     }
 

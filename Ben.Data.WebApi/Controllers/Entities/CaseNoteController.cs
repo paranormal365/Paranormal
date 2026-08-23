@@ -21,8 +21,11 @@ public sealed class CaseNoteController : BenControllerBase
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
-    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper, Services.Billing.SubscriptionLimitGuard limits)
-    { _db = db; _mapper = mapper; _limits = limits; }
+    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper, Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _mapper = mapper; _limits = limits; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseNoteRecord>>> GetAll(
@@ -114,14 +117,12 @@ public sealed class CaseNoteController : BenControllerBase
         return NoContent();
     }
 
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return false;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
     {

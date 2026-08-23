@@ -30,13 +30,17 @@ public sealed class CaseFileController : BenControllerBase
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
     public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
-        IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits)
+        IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
         _limits = limits;
+        _security = security;
     }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseFileRecord>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -183,13 +187,14 @@ public sealed class CaseFileController : BenControllerBase
         return NoContent();
     }
 
-    // SuperAdmin first, membership second — the same shape as CaseNoteController and
-    // InvestigationController. Without the bypass, half a case page loaded for the site
-    // administrator and the other half said Forbid (the audio-mix bug, 2026-08-22).
+    // Item 156 Phase D: bare membership stopped being the rule here. Case surfaces answer to
+    // HasAccessAsync(Case, Read) — which carries the SuperAdmin and owner/admin bypasses, the
+    // tier area gate, and the grants (the grandfather bridge included), all in one place.
     private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
-        || await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        || await _security.HasAccessAsync(userId, orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     private static CaseFileRecord ToRecord(CaseFile f) => new()
     {

@@ -1,3 +1,4 @@
+using Ben.Data.Source.Services;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
@@ -35,41 +36,14 @@ public sealed class IncludedAreasResolver
         Guid organizationId, CancellationToken ct = default)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
-
-        var sub = await db.OrganizationSubscriptions.AsNoTracking()
-            .Where(s => s.OrganizationId == organizationId)
-            .OrderByDescending(s => s.DateCreated)
-            .FirstOrDefaultAsync(ct);
-
-        Guid? tierId = sub?.SubscriptionTierId;
-        if (tierId is null)
-        {
-            var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
-            if (tiers.Count == 0 || SubscriptionTierResolver.Validate(tiers) is not null)
-                return All;   // nothing configured, or misconfigured: fail open
-
-            var members = await db.OrganizationUserMemberships.AsNoTracking()
-                .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-            tierId = SubscriptionTierResolver.Resolve(tiers, members).Id;
-        }
-
-        var areas = await db.SubscriptionTierPermissionAreas.AsNoTracking()
-            .Where(a => a.SubscriptionTierId == tierId)
-            .Select(a => a.Area)
-            .ToListAsync(ct);
-
-        // Zero rows is "nobody has configured this tier's checklist", not "this tier includes
-        // nothing" — the seed writes all areas, so an empty set only occurs on a tier created
-        // outside the seed and never edited. Fail open.
-        return areas.Count == 0 ? All : areas.ToHashSet();
+        return await TierAreaResolution.IncludedAreasAsync(db, organizationId, ct);
     }
 
     /// <summary>Whether one table's area is included for this group. The Phase-D enforcement hook.</summary>
     public async Task<bool> IsIncludedAsync(
         Guid organizationId, OrganizationSecurityTable table, CancellationToken ct = default)
     {
-        // A user-scoped table belongs to no area and is never tier-gated.
-        if (PermissionAreas.AreaFor(table) is not { } area) return true;
-        return (await ForOrganizationAsync(organizationId, ct)).Contains(area);
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await TierAreaResolution.IsIncludedAsync(db, organizationId, table, ct);
     }
 }

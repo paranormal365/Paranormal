@@ -349,6 +349,115 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.Equal("Test Org", result[0].Name);
     }
 
+    // ── The tier area gate (item 156 Phase D) ─────────────────────────────────
+
+    /// <summary>Gives the member a role holding one grant, and pins the org to a tier whose
+    /// checklist includes exactly <paramref name="included"/>.</summary>
+    private static async Task<Guid> GrantWithTierAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid ownerId, Guid memberId,
+        DataTable table, DataAction actions, params OrganizationPermissionArea[] included)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var membership = await db.OrganizationUserMemberships
+            .FirstAsync(m => m.OrganizationId == orgId && m.AppUserId == memberId);
+
+        var role = new OrganizationRole
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, Name = "R", IsActive = true, SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        };
+        db.OrganizationRoles.Add(role);
+        db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+        {
+            Id = Guid.NewGuid(), OrganizationRoleId = role.Id, TableName = table, Actions = actions,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+        {
+            Id = Guid.NewGuid(), OrganizationRoleId = role.Id, OrganizationUserMembershipId = membership.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+
+        var tier = new SubscriptionTier
+        {
+            Id = Guid.NewGuid(), Name = "T", MinMembers = 1, SortOrder = 1, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        };
+        db.SubscriptionTiers.Add(tier);
+        foreach (var area in included)
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tier.Id, Area = area,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, SubscriptionTierId = tier.Id,
+            Status = SubscriptionStatus.Active,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return tier.Id;
+    }
+
+    [Fact]
+    public async Task A_grant_in_an_included_area_works_and_in_an_excluded_one_stops()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+        var tierId = await GrantWithTierAsync(factory, orgId, ownerId, memberId,
+            DataTable.Equipment, DataAction.Create,
+            OrganizationPermissionArea.Equipment);
+
+        var svc = CreateService(factory);
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+
+        // The plan narrows: Equipment leaves the checklist. The grant is stored untouched and
+        // simply stops applying (decision D4) …
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.SubscriptionTierPermissionAreas
+                .FirstAsync(a => a.SubscriptionTierId == tierId && a.Area == OrganizationPermissionArea.Equipment);
+            db.SubscriptionTierPermissionAreas.Remove(row);
+            // Another area stays, so the checklist is CONFIGURED-and-excluding rather than empty.
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tierId, Area = OrganizationPermissionArea.Cases,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.False(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+
+        // … and resumes the moment the area returns.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tierId, Area = OrganizationPermissionArea.Equipment,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+    }
+
+    [Fact]
+    public async Task The_owner_is_never_narrowed_by_the_plan()
+    {
+        // A plan decides what ROLES may do, never what the owner may do (decision D2's bypass
+        // sits in front of the gate on purpose).
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+        await GrantWithTierAsync(factory, orgId, ownerId, memberId,
+            DataTable.Equipment, DataAction.Create,
+            OrganizationPermissionArea.Cases);   // Equipment deliberately excluded
+
+        var svc = CreateService(factory);
+        Assert.True(await svc.HasAccessAsync(ownerId, orgId, DataTable.Equipment, DataAction.Create));
+        Assert.False(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+    }
+
     // ── GetMembershipOrganizationsAsync (item 159) ────────────────────────────
 
     [Fact]

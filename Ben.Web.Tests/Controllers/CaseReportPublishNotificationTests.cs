@@ -26,7 +26,7 @@ public class CaseReportPublishNotificationTests
 
     private static CaseReportController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseReportController(factory);
+        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
