@@ -8806,3 +8806,22 @@ isn't the client-messages surface; (2) the Group-messages bucket's badge (54) di
 what the destination lists (18) — either the badge counts a different population (e.g. all
 orgs vs one org, or unread vs total) or the destination filters what the badge does not.
 The item-141 rule applies: a badge must count exactly what its click opens.
+
+## 174. GetMine returned an arbitrary membership application when history existed (CLOSED 2026-08-23 — found by Ben's click-test)
+
+Ben, testing live: "If Daniel Park withdrew, why does he still appear in the list waiting for
+approval or denial?" — the TGH Members tab showed the same person Pending AND Withdrawn.
+
+The withdrawn row was fine (history). The bug: `GET membership-requests/my` used an unordered
+`FirstOrDefaultAsync` over (org, person) — with a withdrawn row and a pending row both present,
+it returned an ARBITRARY one. The action-needed banner e2e's cleanup asked "what's my request?",
+was handed the already-withdrawn row, withdrew it again, and its actual Pending application
+survived — the exact stranded row Ben found. The same arbitrariness would show an applicant the
+wrong state on the group's public page.
+
+Fix: `/my` now returns the Pending row when one exists, else the most recent (`OrderByDescending
+(Pending).ThenByDescending(DateCreated)`). Two unit tests seeded with the withdrawn row FIRST —
+in-memory FirstOrDefault picks insertion order, so both FAIL with the ordering removed
+(probe-verified). The stranded live row was withdrawn through the fixed endpoint as Daniel;
+TGH's queue is clean again. The one-Pending-max rule was never broken — Apply refuses
+duplicates and a filtered unique index backs it.

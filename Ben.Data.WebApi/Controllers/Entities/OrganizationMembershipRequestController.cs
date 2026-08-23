@@ -84,12 +84,19 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // A person can have HISTORY here — withdrawn or denied applications alongside a live
+        // one. The row that matters is the Pending one when it exists, else the most recent:
+        // an unordered FirstOrDefault returned an arbitrary row, which once handed a caller
+        // the old Withdrawn application while a Pending one sat unanswered (item 174).
         var request = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
             .Include(r => r.Applicant)
             .Include(r => r.UpdatedByAppUser)
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.OrganizationId == orgId && r.AppUserId == userId.Value, ct);
+            .Where(r => r.OrganizationId == orgId && r.AppUserId == userId.Value)
+            .OrderByDescending(r => r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ThenByDescending(r => r.DateCreated)
+            .FirstOrDefaultAsync(ct);
 
         if (request is null) return NotFound();
         return Ok(_mapper.Map<OrganizationMembershipRequestRecord>(request));
