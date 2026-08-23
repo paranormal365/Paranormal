@@ -8445,6 +8445,40 @@ surfaces; PDF regen; item 166 closed with a per-phase record.
 W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
 dependency on 156 at all.
 
+---
+
+### W0+W1 — SHIPPED 2026-08-23
+
+**W0, the primitives.** `WizardModel`/`TourModel` are plain classes holding every decision
+(step order, refusal-blocks-Next, back-never-validates, draft-restore clamps, skip-vs-complete)
+— six xUnit tests. `BenWizard` renders progress/step/refusal/buttons and keeps a localStorage
+draft `{step, data}` under `wizard:{key}`; the HOST clears the draft only after its Finish work
+succeeds, because a draft cleared before the create lands eats the person's answers on a failed
+submit. `BenTour` renders a highlight ring + step card positioned by `BenTour.razor.js` (which
+scrolls with the item-169 measured fallback — smooth scrollIntoView silently no-ops on inner
+scrollers); a missing target centers the card rather than stranding the person. Dismissal is a
+`UserTourState` ROW (unique per person+tour; migration applied) via `GET/PUT api/me/tours` —
+never localStorage, so impersonation shows the real person's state and a cleared browser
+replays nothing. `BenTabs` buttons now carry `id="tab-{Id}"` so tours (and tests) can address
+tabs. A source-scan selector guard fails when any TourStep points at an element its razor no
+longer contains (probe-regressed).
+
+**W1, the founder's wizard.** StartGroupPage is four steps — Identity (name + suggested slug,
+format-gated), Where-you-work (optional all-or-nothing address, kept private, feeds discovery),
+First settings (applications toggle default-on + public email), Review — finishing with
+register + best-effort follow-up writes (settings PUT; first address using the first address
+type), then the hub at `?welcome=1`. A failed register keeps the draft and walks the person
+back to step 1 with the sentence. The self-registration switch still closes the whole door.
+The hub grew the **owner-first-steps tour** (Members/Cases/Roles/Settings), auto-launched only
+from `?welcome=1` when never dismissed, relaunchable forever from the `?` button beside Edit.
+e2e: the full founding journey through all four steps with a tour walk + skip, and a
+draft-resume across reload (both green); NewGroupJourney + SelfRegistrationSwitch updated for
+the wizard flow and green (one cold-start congestion flake, passed solo). The item-141 guard
+caught the wizard's own address-type fetch — recorded as a Decoration with its reason.
+getting-started rewritten for the wizard; PDF regenerated.
+
+Remaining: W2 (onboarding), W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
+
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
 Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case

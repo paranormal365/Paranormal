@@ -103,18 +103,34 @@ public class NewGroupJourneyTests : BenTestBase
         await FillAndConfirmAsync("#newgroup-name", groupName);
         await FillAndConfirmAsync("#newgroup-url", groupSlug);
 
-        // The completion signal is the URL, not page text: creation navigates to the new hub, and
-        // under full-suite load the hub's own render can outlast a text-based retry budget — the
-        // one flake the first suite-context run produced. The URL changes the moment the create
-        // succeeds; the heading gets its own generous wait after that.
+        // The door is a WIZARD since item 166 W1: identity, then two skippable steps, then the
+        // review's Create. Steps 2 and 3 are walked with ClickUntil because each Next is only
+        // real once the circuit is live.
+        await ClickUntilAsync(
+            Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
+            Main.Locator("#newgroup-city"));
+        await ClickUntilAsync(
+            Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
+            Main.Locator("#newgroup-applications"));
+        await ClickUntilAsync(
+            Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
+            Main.Locator("#newgroup-review"));
+
+        // The completion signal is the URL, not page text: creation navigates to the new hub
+        // (with the wizard's ?welcome=1), and under full-suite load the hub's own render can
+        // outlast a text-based retry budget. The URL changes the moment the create succeeds.
         var created = false;
         for (var attempt = 0; attempt < 5 && !created; attempt++)
         {
-            try { await Page.Locator("#newgroup-create").ClickAsync(new() { Timeout = 5_000 }); }
+            try
+            {
+                await Main.GetByRole(AriaRole.Button, new() { Name = "Create the group", Exact = true })
+                    .ClickAsync(new() { Timeout = 5_000 });
+            }
             catch (TimeoutException) { }
             try
             {
-                await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex("/organizations/[0-9a-f-]{36}$"),
+                await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"/organizations/[0-9a-f-]{36}(\?.*)?$"),
                     new() { Timeout = 8_000 });
                 created = true;
             }

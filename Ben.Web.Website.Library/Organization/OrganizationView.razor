@@ -23,7 +23,12 @@
         </div>
         @if (_canEdit && !_editMode)
         {
-            <div class="col-auto">
+            <div class="col-auto d-flex gap-2">
+                <button type="button" id="org-tour-launch" class="btn btn-outline-secondary"
+                        title="Show me around" @onclick="StartTourAsync">
+                    <BenIcon Name="help-circle" />
+                    <span class="visually-hidden">Show me around</span>
+                </button>
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="BeginEdit"><BenIcon Name="edit-2" Class="me-1" />
                     Edit
                 </button>
@@ -295,6 +300,13 @@
             }
 
         </BenTabs>
+
+        @* Item 166 W1: the owner's first-steps tour. Auto-launches once after founding
+           (?welcome=1 from the wizard) unless already dismissed; the ? relaunches it. *@
+        @if (_canManageRoles)
+        {
+            <BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+        }
     }
 </div>
 
@@ -350,11 +362,63 @@
             NavManager.NavigateTo("/login");
     }
 
+    // ── The owner's first-steps tour (item 166 W1) ────────────────────────────
+
+    private const string TourName = "owner-first-steps";
+    private Kit.BenTour? _tourRef;
+    private readonly Kit.TourModel _tour = new(
+    [
+        new Kit.TourModel.TourStep("#tab-members",
+            "Invite your people",
+            "The Members tab is your roster: invite people, review applications, and give each member a title from your group's own ladder."),
+        new Kit.TourModel.TourStep("#tab-cases",
+            "Cases live here",
+            "When a client's request is accepted it becomes a case. The Cases tab is the case record and everything that hangs off it — investigations, files, reports."),
+        new Kit.TourModel.TourStep("#tab-roles",
+            "Roles open doors",
+            "A role is a named set of permissions. Members start with the baseline; hand them roles — like the ready-made Case Manager Role — as they earn them. Titles are seniority; roles are access."),
+        new Kit.TourModel.TourStep("#tab-settings",
+            "Make it yours",
+            "Settings holds your member-title ladder, investigation duties, calendar event types, and the group's own details. Everything the wizard skipped lives here."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(TourName, completed); }
+        catch { /* Losing a dismissal replays a tour once; it never breaks the page. */ }
+    }
+
+    /// <summary>Auto-launch: only from the wizard's ?welcome=1 landing, only for someone who can
+    /// manage the group, and only if this person has never dismissed it.</summary>
+    private async Task MaybeAutoLaunchTourAsync()
+    {
+        if (!_canManageRoles || _tourRef is null) return;
+
+        var uri = new Uri(NavManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (query["welcome"] != "1") return;
+
+        try
+        {
+            var dismissed = (await AdminClient.GetMyDismissedToursAsync()).Items;
+            if (dismissed.Contains(TourName)) return;
+        }
+        catch { return; }   // cannot know the state: stay quiet rather than nag
+
+        await _tourRef.StartAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
+        await MaybeAutoLaunchTourAsync();
     }
 
     private async Task LoadAsync()

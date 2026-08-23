@@ -265,9 +265,12 @@ On a group's public page, signed in, there's an **Apply to join** box (when the 
 applications). Say a line about yourself if you like, send it, and the group answers — you'll see
 the state of your application right there on their page.
 
-Or found your own: **Organizations → Start a Group** asks only for a name and a web address;
-everything else — members, cases, settings, your public page — is set up from the group's own hub
-once it exists. You're the owner from the first moment.
+Or found your own: **Organizations → Start a Group** walks you through it in four short steps —
+your group's name and web address, where you work (optional, it feeds the "near you" search),
+whether you're taking applications, then a review. Only the first step is required, and closing
+the tab keeps a draft so you can pick up where you left off. You're the owner from the first
+moment, and your new group's page offers a quick tour of what to do next — relaunch it any time
+from the **?** button on your group's page.
 
 ### What you'll see as a new member
 
