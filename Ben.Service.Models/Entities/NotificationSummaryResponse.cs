@@ -19,6 +19,12 @@ public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc)
 public sealed record OrgScopedBucket(
     Guid OrganizationId, string OrganizationName, int Count, DateTime? OldestUnreadUtc);
 
+/// <summary>One case's slice — the row links to the case whose thread holds exactly these
+/// messages (item 173, second pass).</summary>
+public sealed record CaseScopedBucket(
+    Guid CaseId, Guid OrganizationId, string CaseTitle, string OrganizationName,
+    int Count, DateTime? OldestUnreadUtc);
+
 /// <summary>
 /// Everything the badge system needs, in one round trip. Split by bucket rather than returned as a
 /// single number so the bell popover can say *where* the unread items are and link straight to them.
@@ -57,7 +63,9 @@ public sealed record NotificationSummaryResponse(
     // one group's 18. Per-group breakdowns let each row open exactly what it counts; the
     // aggregates above stay for the bell's total. Defaulted so pre-173 payloads deserialize.
     IReadOnlyList<OrgScopedBucket>? OrgMessagesByOrg = null,
-    IReadOnlyList<OrgScopedBucket>? CaseMessagesAsOrgMemberByOrg = null)
+    // Ben, same day: "show the cases — if they are messages from cases." Case messages break
+    // down to the CASE, because the case's own thread is the only surface that answers them.
+    IReadOnlyList<CaseScopedBucket>? CaseMessagesAsOrgMemberByCase = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,

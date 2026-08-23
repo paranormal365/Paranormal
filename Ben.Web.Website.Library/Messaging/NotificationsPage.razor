@@ -285,10 +285,10 @@
                 "folder", "/my-cases", s.CaseMessagesAsClient);
 
         // Item 173: one row per group, opening exactly what it counts.
-        foreach (var slice in s.CaseMessagesAsOrgMemberByOrg ?? [])
-            yield return new($"Client messages awaiting a reply · {slice.OrganizationName}",
-                $"On this group's cases · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
-                "message-square", $"/organizations/{slice.OrganizationId}?tab=cases",
+        foreach (var slice in s.CaseMessagesAsOrgMemberByCase ?? [])
+            yield return new($"Client messages awaiting a reply · {slice.CaseTitle}",
+                $"{slice.OrganizationName} · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
+                "message-square", $"/organizations/{slice.OrganizationId}/cases/{slice.CaseId}",
                 new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
 
         foreach (var slice in s.OrgMessagesByOrg ?? [])

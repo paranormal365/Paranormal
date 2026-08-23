@@ -590,7 +590,7 @@ public class NotificationSummaryControllerTests
     }
 
     [Fact]
-    public async Task CaseMessagesAsOrgMember_BreakdownSlicesPerGroup()
+    public async Task CaseMessagesAsOrgMember_BreakdownSlicesPerCase()
     {
         var factory = CreateFactory();
         var me = Guid.NewGuid();
@@ -619,10 +619,16 @@ public class NotificationSummaryControllerTests
 
         var summary = await GetSummaryAsync(factory, me);
 
-        var slices = summary.CaseMessagesAsOrgMemberByOrg!;
+        // One row per CASE (Ben: "show the cases"), each carrying its group's name, and the
+        // aggregate is still the fold of the slices.
+        var slices = summary.CaseMessagesAsOrgMemberByCase!;
         Assert.Equal(2, slices.Count);
-        Assert.Equal(2, Assert.Single(slices, x => x.OrganizationId == orgA).Count);
+        var sliceA = Assert.Single(slices, x => x.OrganizationId == orgA);
+        Assert.Equal(2, sliceA.Count);
+        Assert.Equal("Case", sliceA.CaseTitle);
+        Assert.Equal("Alpha", sliceA.OrganizationName);
         Assert.Equal(1, Assert.Single(slices, x => x.OrganizationId == orgB).Count);
         Assert.Equal(3, summary.CaseMessagesAsOrgMember.Count);
+        Assert.Equal(slices.Sum(x => x.Count), summary.CaseMessagesAsOrgMember.Count);
     }
 }

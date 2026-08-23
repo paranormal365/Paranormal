@@ -90,9 +90,9 @@ public sealed class NotificationSummaryController : BenControllerBase
                                  : (m.Case.CaseManagerAppUserId != null
                                      ? m.Case.CaseManagerAppUserId == userId
                                      : true))))
-                .GroupBy(m => m.Case.OrganizationId)
-                .Select(g => new { OrgId = g.Key, Count = g.Count(),
-                                   Oldest = g.Min(x => (DateTime?)x.DateCreated) })
+                .GroupBy(m => new { m.CaseId, m.Case.OrganizationId, m.Case.Title })
+                .Select(g => new { g.Key.CaseId, OrgId = g.Key.OrganizationId, g.Key.Title,
+                                   Count = g.Count(), Oldest = g.Min(x => (DateTime?)x.DateCreated) })
                 .ToListAsync(ct);
 
         // Names in one small lookup, joined in memory — EF will not translate a grouped join
@@ -110,10 +110,16 @@ public sealed class NotificationSummaryController : BenControllerBase
             .ToList();
         var orgMessages = Fold(orgMessagesByOrg);
 
-        var caseMessagesAsOrgByOrg = caseMessageGroups
-            .Select(g => new OrgScopedBucket(g.OrgId, orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
+        var caseMessagesAsOrgByCase = caseMessageGroups
+            .Select(g => new CaseScopedBucket(g.CaseId, g.OrgId, g.Title,
+                orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
             .ToList();
-        var caseMessagesAsOrg = Fold(caseMessagesAsOrgByOrg);
+        var caseMessagesAsOrg = caseMessagesAsOrgByCase.Count == 0
+            ? NotificationBucket.Empty
+            : new NotificationBucket(
+                caseMessagesAsOrgByCase.Sum(c => c.Count),
+                caseMessagesAsOrgByCase.Where(c => c.OldestUnreadUtc.HasValue)
+                    .Select(c => c.OldestUnreadUtc).DefaultIfEmpty(null).Min());
 
         // ── Case messages awaiting me as the client ──────────────────────────
         // "My cases" is both the ones I originated and the ones shared with me as a co-client.
@@ -219,7 +225,8 @@ public sealed class NotificationSummaryController : BenControllerBase
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
             investigationInvites, equipmentCheckouts, feedMentions,
             OrgMessagesByOrg: [.. orgMessagesByOrg.OrderBy(b => b.OrganizationName)],
-            CaseMessagesAsOrgMemberByOrg: [.. caseMessagesAsOrgByOrg.OrderBy(b => b.OrganizationName)]));
+            CaseMessagesAsOrgMemberByCase:
+                [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)]));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>

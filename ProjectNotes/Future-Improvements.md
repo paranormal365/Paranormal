@@ -8818,9 +8818,12 @@ unread rows (nothing structurally forbids one, though feed posts create no recip
 deliberately NOT counted: a number no surface can show is a lie on a badge. Verified live:
 sarah's 52 unread were ALL BenCo — the exact 54-vs-18 shape Ben hit, now labeled and routed.
 EF lesson re-learned: a grouped join into a record constructor doesn't translate — two clean
-queries (grouped projection + name lookup) beat one clever untranslatable one. Follow-up worth
-noting: the client-messages row lands on the group's Cases tab; a per-case drill-down (which
-cases hold the unread) would be the next refinement if Ben wants it.
+queries (grouped projection + name lookup) beat one clever untranslatable one. **Second pass, same day — Ben: "show the cases — if they are messages from cases."** The
+client-message breakdown went one level deeper: `CaseScopedBucket` (case id + title + group),
+one bell row per CASE, each opening the case's own page — the only surface where the message
+can actually be answered. Verified live: sarah's 21 resolve to "AverageBen, Nashville TN (1)"
+and "Park, Nashville TN (20)". Group messages stay per-group (they live on the group's
+Messages tab). The aggregate remains the fold of the slices in both breakdowns.
 
 ## 174. GetMine returned an arbitrary membership application when history existed (CLOSED 2026-08-23 — found by Ben's click-test)
 
