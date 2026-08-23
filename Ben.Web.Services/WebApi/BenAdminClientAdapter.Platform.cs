@@ -83,6 +83,36 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 
+    public Task<LoadResult<AdminOrganizationAdRecord>> GetAdminOrgAdsAsync(CancellationToken token = default)
+        => _api.GetListAsync<AdminOrganizationAdRecord>("/api/admin/organization-ads", token);
+
+    public async Task<(bool Ok, string? Error)> ApproveOrgAdAsync(Guid adId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/admin/organization-ads/{adId}/approve", new { }, token);
+        return (error is null, error);
+    }
+
+    public async Task<(bool Ok, string? Error)> RejectOrgAdAsync(Guid adId, string reason, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/admin/organization-ads/{adId}/reject", new { Reason = reason }, token);
+        return (error is null, error);
+    }
+
+    public async Task<LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(int take = 3, CancellationToken token = default)
+    {
+        // Null means the FETCH failed (an empty placement list deserializes as an empty
+        // list, not null) — reported as Failure so no caller mistakes an outage for
+        // "no ads exist". The card component treats failure as render-nothing, on record
+        // in LoadResultRenderedGuardTests.Decorations.
+        var cards = await _api.GetAnonymousAsync<List<PromotedGroupCard>>(
+            $"/api/public/promoted-groups?take={take}", token);
+        return cards is null
+            ? LoadResult<PromotedGroupCard>.Failure()
+            : LoadResult<PromotedGroupCard>.Ok(cards);
+    }
+
     public Task<LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default)
         => _api.GetListAsync<string>("/api/me/tours", token);
 

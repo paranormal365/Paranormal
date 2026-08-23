@@ -62,7 +62,12 @@
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
                     🎚 Audio Mixer
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
+                <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
+                        title="How cases go public" @onclick="StartTourAsync">
+                    <BenIcon Name="help-circle" />
+                    <span class="visually-hidden">How cases go public</span>
+                </button>
+                <button type="button" id="case-edit" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
             </div>
         </div>
 
@@ -315,7 +320,40 @@
     </ChildContent>
 </BenModal>
 
+<BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+
 @code {
+    // ── Item 166 W4(b): how a case goes public — and what stays hidden when it does. ──
+    // NOT auto-launched: case pages are visited constantly, and a tour ambushing the first
+    // case someone opens would teach at the worst moment. The ? beside Edit Case launches it.
+    private const string PublishTourName = "public-case-pages";
+    private BenTour? _tourRef;
+    private readonly TourModel _tour = new(
+    [
+        new TourModel.TourStep("#case-edit",
+            "Publishing starts in Edit",
+            "A case reaches the public in two moves, both in Edit Case: set the status, and tick Make Public. Until then, nothing about it exists outside your group."),
+        new TourModel.TourStep("#casedetail-public-pseudonym-88c6",
+            "Nobody's real name",
+            "The Public Pseudonym replaces the client's name on every public surface — pick something like \"The Henderson Family\". Addresses are generalized the same way: public pages show the area, never the street. (This field lives in the Edit Case dialog.)"),
+        new TourModel.TourStep("#tab-files",
+            "What media may go public",
+            "Publishing the case publishes its story, not its files. A photo appears publicly only when it's placed in a case slot on one of your CMS pages and approved for publication — the general Files tab is never publishable."),
+        new TourModel.TourStep("#tab-overview",
+            "Where visitors see it",
+            "Published cases appear on your group's public site — the pages you build under CMS. Check the result signed out: the public sees less than you do, and that's the point."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(PublishTourName, completed); } catch { }
+    }
+
     /// <summary>Tab label with its unread count. A property, not an inline expression: an
     /// interpolated string nested in an attribute's own quotes does not parse.</summary>
     private string MessagesTabTitle => _unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages";

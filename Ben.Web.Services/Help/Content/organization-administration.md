@@ -292,6 +292,9 @@ and a group removing its copy never touches the member's own file.
 
 ## Editing your public pages
 
+*The CMS editor has a built-in walkthrough — the **?** button beside New Page runs it any
+time, and it runs itself once for first-time editors.*
+
 ![The CMS page list](help-media:organization-administration/cms.png)
 *Your public pages. A page is not visible to anyone until you publish it.*
 
@@ -379,6 +382,9 @@ readable by anyone who visits, including the person it is about.
 You can only show your own group's work. Everything is looked up fresh each time somebody views the
 page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
 you do not have to remember which ones.
+
+*On any case page, the **?** button beside Edit Case walks through exactly how a case goes
+public — the pseudonym, generalized addresses, and which media may appear.*
 
 ## Putting a case's photos on a page
 
@@ -483,6 +489,20 @@ When **Accepting Membership Applications** is on (the group's Edit screen), your
 an apply box to signed-in visitors. Applications land on the **Members** tab, where any member
 with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
 sees your answer.
+
+## Promoting your group
+
+**Settings → Promote your group** builds a promotional card that rotates through the group
+finder's Featured groups and the home page, always marked "Promoted". The builder walks you
+through it — headline (say who you help and where), a short message (what you do, what it
+costs, what to do next), an optional picture from your media library, and where the card
+leads: your public page or the group finder. Send your people to the public page only once
+it's worth arriving at — a striking headline over an empty page loses the person you just won.
+
+Every card goes through review before anyone sees it: submit, and a platform administrator
+approves it or declines it with a reason (you're messaged either way). Any later edit comes
+back through review — the approved text is the only text that ever shows. One card per group;
+withdraw it any time and it leaves the placements immediately.
 
 ## Your group's plan
 

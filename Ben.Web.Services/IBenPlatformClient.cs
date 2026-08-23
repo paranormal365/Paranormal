@@ -90,6 +90,12 @@ public interface IBenPlatformClient
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 
+    // ── Group-ad review + public placements (item 166 W3) ────────────────────
+    Task<WebApi.LoadResult<AdminOrganizationAdRecord>> GetAdminOrgAdsAsync(CancellationToken token = default);
+    Task<(bool Ok, string? Error)> ApproveOrgAdAsync(Guid adId, CancellationToken token = default);
+    Task<(bool Ok, string? Error)> RejectOrgAdAsync(Guid adId, string reason, CancellationToken token = default);
+    Task<WebApi.LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(int take = 3, CancellationToken token = default);
+
     /// <summary>Tour names the caller has dismissed (item 166) — nothing listed auto-launches.</summary>
     Task<WebApi.LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default);
     /// <summary>Dismisses one tour; completed says seen-through vs skipped. Idempotent.</summary>

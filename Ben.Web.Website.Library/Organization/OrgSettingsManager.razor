@@ -11,6 +11,18 @@ else
     @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
     @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
 
+    @* Item 166 W3: the door to the promotion wizard. *@
+    <div class="card mb-3">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="star" Class="fs-4 text-warning" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Promote your group</h6>
+                <span class="small text-secondary">A reviewed card in the group finder and on the home page.</span>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" id="org-promote-link" href="@($"/organizations/{OrgId}/promote")">Open</a>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <h6 class="card-title mb-3">Address Display Features</h6>

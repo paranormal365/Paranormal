@@ -89,6 +89,7 @@ public sealed class LoadResultRenderedGuardTests
     /// </summary>
     private static readonly Dictionary<string, string> Decorations = new()
     {
+
         ["StartGroupPage.razor"] =
             "The address-type lookup runs inside the wizard's best-effort follow-up block AFTER "
           + "the group exists: a failure skips creating the optional first address, which the "

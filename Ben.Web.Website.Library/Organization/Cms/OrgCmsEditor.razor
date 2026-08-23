@@ -38,10 +38,15 @@
     <BenTabs>
 
         @* ── Pages tab ─────────────────────────────────────────────────────── *@
-        <BenTab Title="Pages">
+        <BenTab Title="Pages" Id="cms-pages">
 
             <div class="d-flex justify-content-end mb-2">
-                <button type="button" class="btn btn-primary" @onclick="OpenNewPageDialogAsync"><BenIcon Name="plus" Class="me-1" />
+                <button type="button" id="cms-tour-launch" class="btn btn-outline-secondary me-2"
+                        title="How pages work" @onclick="StartTourAsync">
+                    <BenIcon Name="help-circle" />
+                    <span class="visually-hidden">How pages work</span>
+                </button>
+                <button type="button" id="cms-new-page" class="btn btn-primary" @onclick="OpenNewPageDialogAsync"><BenIcon Name="plus" Class="me-1" />
                     New Page
                 </button>
             </div>
@@ -129,7 +134,7 @@
         </BenTab>
 
         @* ── Logos tab ─────────────────────────────────────────────────────── *@
-        <BenTab Title="Logos">
+        <BenTab Title="Logos" Id="cms-logos">
 
             <div class="d-flex justify-content-end mb-2">
                 <button type="button" class="btn btn-primary" @onclick="OpenLogoDialog"><BenIcon Name="plus" Class="me-1" />
@@ -535,7 +540,50 @@
     </ChildContent>
 </BenModal>
 
+<BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+
 @code {
+    // ── Item 166 W4(a): the editor tour — how pages are made, linked and published. ──
+    private const string TourName = "cms-editor";
+    private BenTour? _tourRef;
+    private readonly TourModel _tour = new(
+    [
+        new TourModel.TourStep("#cms-new-page",
+            "Pages are born here",
+            "A page gets a title and a web address. Give it a parent and it nests under that page in your public site's menu — that's how pages link into a structure rather than a pile."),
+        new TourModel.TourStep("#tab-cms-pages",
+            "Content lives in sections",
+            "Each page is a stack of sections — text, pictures, your cases, your calendar. The Sections button on a page's row opens the builder. A layout you like can be saved and reused: reusing copies the arrangement onto the new page, so editing one page never rewrites another."),
+        new TourModel.TourStep("#tab-cms-pages",
+            "Draft first, publish when ready",
+            "A page has two switches: visible to the public, and published. Until both are on, only your editors see it. Put on a public page only what you'd hand a stranger — contact details you actually answer, cases you've chosen to publish."),
+        new TourModel.TourStep("#tab-cms-logos",
+            "Logos",
+            "The active logo appears on your public pages. Upload several, switch the active one whenever you like."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(TourName, completed); } catch { }
+    }
+
+    private async Task MaybeAutoLaunchTourAsync()
+    {
+        if (_tourRef is null) return;
+        try
+        {
+            var dismissed = (await AdminClient.GetMyDismissedToursAsync()).Items;
+            if (dismissed.Contains(TourName)) return;
+        }
+        catch { return; }
+        await _tourRef.StartAsync();
+    }
+
     /// <summary>Dialog heading. A property because literal text plus a C# expression is mixed
     /// content in a component attribute.</summary>
     private string PreviewTitle => $"Preview — {_previewPage?.PageTitle}";
@@ -606,6 +654,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
         StateHasChanged();
+        await MaybeAutoLaunchTourAsync();   // once per person; the ? replays it forever
     }
 
     private async Task LoadAsync()

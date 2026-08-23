@@ -8496,7 +8496,60 @@ firing. The gate (and `ActionNeededBanners`, which had the same latent gap) now 
 subscribes to `IBenUserState.StateChanged`. Journey e2e green: cold signup → gate → wizard →
 routed to /find → never again; James never gated at all.
 
-Remaining: W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
+### W3 — SHIPPED 2026-08-23 (the feature and its wizard, built together)
+
+`OrganizationAd` (headline ≤80, body ≤300, optional image, target locked to the group's page
+or /find — never a free URL) with the Draft→Submitted→Approved/Rejected chain. **The public
+endpoints serve Approved and nothing else, ever** — the list AND the image route (the image
+travels through its own approved-gated anonymous route, never the general file routes, whose
+audience rules know nothing about ad review); both gates probe-regressed. One non-rejected ad
+per group; any edit of a submitted/approved ad drops it back to Draft (the reviewed text is
+the approved text). Review messages the group's admins either way — a decision sitting
+silently in a table is the write-only shape.
+
+Surfaces: the `/organizations/{id}/promote` teaching wizard (each step teaches while it
+collects: headline do/don'ts, message structure, picture advice, destination choice with the
+fill-your-page-first warning, review card rendered exactly as the placements render);
+Settings-tab entry card; `/admin/org-ads` review queue (approve / reject-with-reason);
+`PromotedGroupsCard` on the home page and /find — server-randomized per load, always marked
+"Promoted". The image step is the content picker's SECOND consumer (own media, images only).
+
+Found live while testing: `BenPageHeader` has no ChildContent, and a stray child fragment is
+a runtime 500 — extras go in its Actions slot. The render-debt guards caught two more of my
+own: the failed ads-fetch now renders its sentence, and a refused media library throws into
+the picker's own error line rather than reading as "no images yet".
+
+e2e: wizard → queue check (unapproved absent from the public endpoint) → approve → ANONYMOUS
+/find shows the card marked Promoted → cleanup. 3,036 unit green.
+
+### W4 — SHIPPED 2026-08-23 (the two walkthroughs, and what auditing them found)
+
+**(a) CMS editor tour** on `/organizations/{id}/cms`: four steps — pages are born (title/slug/
+parent = nav nesting), content lives in sections (layouts copy, never reference), draft vs
+publish (two switches; what belongs on a public page), logos. Auto-launches once per person
+(UserTourState), replayable forever from the ? beside New Page. The CMS tabs gained Ids for
+the selectors.
+
+**(b) Public-case-pages tour** on the case page: publishing starts in Edit, the pseudonym
+replaces the client's name everywhere public (addresses generalized to the area), case media
+only reaches the public through approved CMS case slots (the general Files tab never
+publishes), and check-it-signed-out. Deliberately NOT auto-launched: case pages are visited
+constantly, and a tour ambushing the first case someone opens teaches at the worst moment —
+the ? beside Edit Case launches it.
+
+**The privacy audit** (the plan's requirement while writing (b)) ran on the anonymous path:
+public case lists show pseudonyms ("The Hargrove Family", "Hotel Guest #2024-7"), place-named
+titles, city-level coordinates — clean. The one gap found is recorded as **item 176**: a case
+TITLE is free text and several internal cases are titled with the client's surname; nothing
+warns when such a case is made public. Warn-not-block at Make-Public is the proposed shape.
+
+e2e: both tours walked end to end from their ? affordances, every step's teaching asserted,
+dismissals verified in the tour-state API. 3,036 unit green; the selector guard covers all
+four tours now (owner-first-steps, layout, cms-editor, public-case-pages).
+
+**W5 essentials folded in**: help pages point at both ? affordances; PDF regenerated. Still
+open under W5's banner: extending the screenshot capture generators to the new surfaces —
+deferred with the help-media pass rather than half-done here.
 
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
@@ -8884,3 +8937,17 @@ surfaces adopt the picker (case media attachment, CMS media slots, avatar-from-l
 equipment photo pickers …), each adding facets its content actually has (investigation,
 location). Also worth wiring: `MediaLibraryGrid`'s video/audio click-to-preview inside the
 picker's grid cells.
+
+## 176. A case title can leak the client's name onto public pages (OPEN — found by W4's privacy audit, 2026-08-23)
+
+The pseudonym machinery replaces the client's NAME on public surfaces, and addresses are
+generalized — verified anonymously during the W4 case-pages tour audit (public list shows
+"The Hargrove Family", "Hotel Guest #2024-7", place-named titles, city-level coordinates).
+But the case TITLE is free text the org writes, and several internal cases are titled with
+the client's surname ("Park, Nashville TN"). Nothing warns when such a case is made public —
+the title would carry the real name straight past the pseudonym.
+
+Fix shape: on Make-Public (CaseDetail edit save), warn — not block — when the title contains
+the client's first/last name or the street address, with a sentence naming what leaked and a
+suggestion to retitle by place. The W4 tour already teaches place-named titles; the warning
+makes the teaching enforceable at the moment it matters.

@@ -1,0 +1,47 @@
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@*
+    Item 166 W3: one promoted group card, for the public placements (home page discovery,
+    the group finder's "Featured groups"). The server randomizes per request, so every load
+    rotates; failure or emptiness renders NOTHING — promotion is garnish on its host page.
+    Always marked "Promoted": a paid-for-looking card that hides what it is burns trust.
+*@
+
+@if (_card is not null)
+{
+    <div class="card promoted-group-card mb-3">
+        @if (_card.HasImage)
+        {
+            <img src="@AdminClient.GetPromotedAdImageUrl(_card.AdId)"
+                 class="card-img-top" style="max-height:180px;object-fit:cover;"
+                 alt="@_card.OrganizationName" />
+        }
+        <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between gap-2">
+                <h6 class="card-title mb-1">@_card.Headline</h6>
+                <span class="badge bg-info" title="This group promotes itself here">Promoted</span>
+            </div>
+            <p class="card-text small mb-2">@_card.Body</p>
+            <a class="stretched-link small"
+               href="@(_card.TargetKind == "find" ? "/find" : $"/o/{_card.OrganizationUrlName}")">
+                @_card.OrganizationName →
+            </a>
+        </div>
+    </div>
+}
+
+@code {
+    private PromotedGroupCard? _card;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        try
+        {
+            _card = (await AdminClient.GetPromotedGroupsAnonymousAsync(1)).Items.FirstOrDefault();
+            if (_card is not null) StateHasChanged();
+        }
+        catch { /* garnish — see the note at the top */ }
+    }
+}

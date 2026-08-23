@@ -238,6 +238,8 @@ public sealed partial class BenAdminClientAdapter
 
     public string GetFileThumbnailUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/thumbnail";
+    public string GetPromotedAdImageUrl(Guid adId)
+        => $"{_webApiBaseUrl}/api/public/promoted-groups/{adId}/image";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
         => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 
@@ -356,6 +358,31 @@ public sealed partial class BenAdminClientAdapter
     /// <summary>The files this group could take a copy of — the picker's list (item 175).</summary>
     public Task<LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<ShareableUserFileItem>($"/api/organizations/{orgId}/files/shareable-user-files", token);
+
+    // ── Group ads (item 166 W3). Refusal-carrying throughout: length limits, the
+    // one-ad rule and the state machine all answer with sentences worth showing. ──
+
+    public Task<LoadResult<OrganizationAdRecord>> GetOrgAdsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrganizationAdRecord>($"/api/organizations/{orgId}/ads", token);
+
+    public Task<(OrganizationAdRecord? Result, string? Error)> CreateOrgAdAsync(Guid orgId, SaveOrganizationAdRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveOrganizationAdRequest, OrganizationAdRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/ads", request, token);
+
+    public Task<(OrganizationAdRecord? Result, string? Error)> UpdateOrgAdAsync(Guid orgId, Guid adId, SaveOrganizationAdRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveOrganizationAdRequest, OrganizationAdRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/ads/{adId}", request, token);
+
+    public Task<(OrganizationAdRecord? Result, string? Error)> SubmitOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationAdRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/ads/{adId}/submit", new { }, token);
+
+    public Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationAdRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/ads/{adId}/withdraw", new { }, token);
+
+    public async Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default)
+        => await _api.DeleteAsync($"/api/organizations/{orgId}/ads/{adId}", token);
 
     public async Task<OrgFileCopyClientResult?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool publishImmediately, CancellationToken token = default)
     {
