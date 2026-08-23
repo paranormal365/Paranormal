@@ -1,0 +1,127 @@
+@page "/admin/org-ads"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Web.Website.Library.Kit
+
+<PageTitle>Group Ads</PageTitle>
+
+@*
+    Item 166 W3: the review queue. The card renders EXACTLY as the placements will render it —
+    a reviewer approving a preview that differs from the real thing is approving nothing.
+    Rejection requires a reason; the group is messaged either way by the API.
+*@
+
+<div class="container py-3" style="max-width:52rem;">
+    <BenPageHeader Title="Group ads" />
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_ads.Count == 0)
+    {
+        <p class="text-secondary">No ads yet — nothing has been submitted.</p>
+    }
+    else
+    {
+        @foreach (var ad in _ads)
+        {
+            <div class="card mb-3 admin-org-ad">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div>
+                            <h5 class="card-title mb-1">@ad.Headline <span class="badge bg-info">Promoted</span></h5>
+                            <p class="small text-secondary mb-1">@ad.OrganizationName · leads to
+                                @(ad.TargetKind == "find" ? "the group finder" : "their public page")
+                                @(ad.ImageUploadFileId is null ? "" : " · with picture")</p>
+                        </div>
+                        <span class="badge @(ad.Status switch {
+                            Ben.Data.Common.Enums.OrganizationAdStatus.Submitted => "bg-info",
+                            Ben.Data.Common.Enums.OrganizationAdStatus.Approved  => "bg-success",
+                            Ben.Data.Common.Enums.OrganizationAdStatus.Rejected  => "bg-warning text-dark",
+                            _ => "bg-secondary" })">@ad.Status</span>
+                    </div>
+                    <p class="card-text">@ad.Body</p>
+
+                    @if (ad.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Submitted)
+                    {
+                        @if (_rejectingId == ad.Id)
+                        {
+                            <div class="d-flex gap-2 align-items-start">
+                                <input type="text" class="form-control form-control-sm" placeholder="Why not — the group reads this"
+                                       @bind="_rejectReason" @bind:event="oninput" />
+                                <button type="button" class="btn btn-warning btn-sm text-nowrap"
+                                        disabled="@(string.IsNullOrWhiteSpace(_rejectReason))"
+                                        @onclick="@(() => RejectAsync(ad))">Send rejection</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _rejectingId = null)">Cancel</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-nowrap">
+                            <button type="button" class="btn btn-success btn-sm" @onclick="@(() => ApproveAsync(ad))">Approve</button>
+                            <button type="button" class="btn btn-outline-warning btn-sm ms-1"
+                                    @onclick="@(() => { _rejectingId = ad.Id; _rejectReason = ""; })">Reject…</button>
+                            </span>
+                        }
+                    }
+                    else if (ad.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Rejected)
+                    {
+                        <p class="small text-secondary mb-0">Declined: @ad.RejectionReason</p>
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2">@_error</div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<AdminOrganizationAdRecord> _ads = [];
+    private Guid? _rejectingId;
+    private string _rejectReason = "";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin) { NavManager.NavigateTo("/"); return; }
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        var result = await AdminClient.GetAdminOrgAdsAsync();
+        if (result.Failed) _error = result.Reason ?? "The queue couldn't be loaded.";
+        else _ads = result.Items;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ApproveAsync(AdminOrganizationAdRecord ad)
+    {
+        var (ok, error) = await AdminClient.ApproveOrgAdAsync(ad.Id);
+        if (!ok) { _error = error ?? "Approving failed."; return; }
+        Toasts.Success($"\"{ad.Headline}\" is live.");
+        await ReloadAsync();
+    }
+
+    private async Task RejectAsync(AdminOrganizationAdRecord ad)
+    {
+        var (ok, error) = await AdminClient.RejectOrgAdAsync(ad.Id, _rejectReason.Trim());
+        if (!ok) { _error = error ?? "Rejecting failed."; return; }
+        _rejectingId = null;
+        Toasts.Success("Rejection sent to the group.");
+        await ReloadAsync();
+    }
+}

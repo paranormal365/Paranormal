@@ -118,6 +118,8 @@ public interface IBenOrganizationClient
     /// non-image falls through to the real file.
     /// </remarks>
     string GetFileThumbnailUrl(Guid uploadFileId);
+    /// <summary>The approved-only public route for an ad's picture (item 166 W3).</summary>
+    string GetPromotedAdImageUrl(Guid adId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     /// <summary>
@@ -175,6 +177,14 @@ public interface IBenOrganizationClient
     Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
     Task<WebApi.LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default);
     Task<WebApi.LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Group ads (item 166 W3) ──────────────────────────────────────────────
+    Task<WebApi.LoadResult<OrganizationAdRecord>> GetOrgAdsAsync(Guid orgId, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> CreateOrgAdAsync(Guid orgId, SaveOrganizationAdRequest request, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> UpdateOrgAdAsync(Guid orgId, Guid adId, SaveOrganizationAdRequest request, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> SubmitOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
+    Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 

@@ -484,6 +484,20 @@ an apply box to signed-in visitors. Applications land on the **Members** tab, wh
 with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
 sees your answer.
 
+## Promoting your group
+
+**Settings → Promote your group** builds a promotional card that rotates through the group
+finder's Featured groups and the home page, always marked "Promoted". The builder walks you
+through it — headline (say who you help and where), a short message (what you do, what it
+costs, what to do next), an optional picture from your media library, and where the card
+leads: your public page or the group finder. Send your people to the public page only once
+it's worth arriving at — a striking headline over an empty page loses the person you just won.
+
+Every card goes through review before anyone sees it: submit, and a platform administrator
+approves it or declines it with a reason (you're messaged either way). Any later edit comes
+back through review — the approved text is the only text that ever shows. One card per group;
+withdraw it any time and it leaves the placements immediately.
+
 ## Your group's plan
 
 Plans are priced by **active members, per group** — the price list is on the **Pricing** page,

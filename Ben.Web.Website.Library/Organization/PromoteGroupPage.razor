@@ -1,0 +1,415 @@
+@page "/organizations/{OrgId:guid}/promote"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+@using System.Text.Json
+
+<PageTitle>Promote your group</PageTitle>
+
+@*
+    Item 166 W3: the ad-creation wizard IS the walkthrough — every step teaches while it
+    collects, which is what Ben asked for ("a walkthrough with suggestions for creating their
+    ad and how to make it be successful"). One card per group; everything goes through
+    SuperAdmin review before an anonymous visitor ever sees a word of it.
+*@
+
+<div class="container py-3" style="max-width:44rem;">
+    @* BenPageHeader has no ChildContent — a stray child fragment is a RUNTIME 500, found
+       live. Extras go in its Actions slot. *@
+    <BenPageHeader Title="Promote your group">
+        <Actions>
+            <HelpLink Slug="organization-administration" Anchor="promoting-your-group" />
+        </Actions>
+    </BenPageHeader>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (!_editing && _current is not null)
+    {
+        @* ── The standing card and its review state ── *@
+        <div class="card mb-3" id="promote-status">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between gap-2">
+                    <h5 class="card-title mb-1">@_current.Headline</h5>
+                    <span class="badge @StatusBadge(_current.Status)">@StatusLabel(_current.Status)</span>
+                </div>
+                <p class="card-text">@_current.Body</p>
+                <p class="small text-secondary mb-2">
+                    Leads to: @(_current.TargetKind == "find" ? "the group finder" : "your public page")
+                </p>
+                @if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Rejected)
+                {
+                    <div class="alert alert-warning py-2 small" id="promote-rejection">
+                        Not approved: @_current.RejectionReason
+                    </div>
+                }
+                else if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Submitted)
+                {
+                    <p class="small text-secondary">Waiting for review — you'll get a message either way.</p>
+                }
+                else if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Approved)
+                {
+                    <p class="small text-secondary">
+                        Live: your card rotates through the group finder's Featured groups and
+                        the home page, marked "Promoted".
+                    </p>
+                }
+
+                <div class="d-flex gap-2 mt-2">
+                    <button type="button" class="btn btn-primary btn-sm" id="promote-edit" @onclick="BeginEdit">
+                        @(_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Rejected ? "Revise and resubmit" : "Edit")
+                    </button>
+                    @if (_current.Status is Ben.Data.Common.Enums.OrganizationAdStatus.Submitted
+                                          or Ben.Data.Common.Enums.OrganizationAdStatus.Approved)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="WithdrawAsync">Withdraw</button>
+                    }
+                    @if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Draft)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="promote-submit-draft" @onclick="SubmitDraftAsync">Submit for review</button>
+                    }
+                    <span class="flex-grow-1"></span>
+                    <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DeleteAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_editing || _current is null)
+    {
+        <p class="text-secondary small mb-3">
+            One card, shown to people browsing for groups. A reviewer approves it before it
+            appears anywhere — write it like the first sentence a stranger reads about you.
+        </p>
+
+        <BenWizard @ref="_wizardRef" Model="@_wizard" DraftKey="@($"promote-{OrgId}")"
+                   CaptureDraft="@CaptureDraft" RestoreDraft="@RestoreDraft"
+                   OnFinish="@FinishAsync" OnStepChanged="@StateHasChanged"
+                   FinishText="Submit for review">
+            @switch (_wizard.CurrentIndex)
+            {
+                case 0:
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" for="ad-headline">Headline <span class="text-danger">*</span></label>
+                        <input id="ad-headline" type="text" class="form-control" maxlength="80"
+                               @bind="_headline" @bind:event="oninput" />
+                        <div class="form-text">@(_headline.Length)/80</div>
+                    </div>
+                    <div class="small text-secondary">
+                        <p class="mb-1"><strong>What works:</strong> say who you help and where.</p>
+                        <p class="mb-1">✓ <em>"Nashville's ghost hunters — free investigations, real equipment"</em></p>
+                        <p class="mb-0">✗ <em>"Welcome to our organization's page"</em> — says nothing a stranger can act on.</p>
+                    </div>
+                    break;
+
+                case 1:
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" for="ad-body">Your message <span class="text-danger">*</span></label>
+                        <textarea id="ad-body" class="form-control" rows="4" maxlength="300"
+                                  @bind="_body" @bind:event="oninput"></textarea>
+                        <div class="form-text">@(_body.Length)/300</div>
+                    </div>
+                    <div class="small text-secondary">
+                        <p class="mb-1"><strong>Three things, in order:</strong> what you do, what it costs
+                        (free counts double — say it), and what to do next ("request a visit", "come to an open night").</p>
+                        <p class="mb-0">Skip the mission statement — a card this small is an invitation, not an About page.</p>
+                    </div>
+                    break;
+
+                case 2:
+                    <label class="form-label fw-semibold">Picture <span class="text-secondary fw-normal">(optional)</span></label>
+                    @if (_imageId is null)
+                    {
+                        <div>
+                            <button type="button" id="ad-choose-image" class="btn btn-outline-primary"
+                                    @onclick="@(() => _showImagePicker = true)">
+                                <BenIcon Name="image" Class="me-1" />Choose from your media…
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex align-items-center gap-2 border rounded p-2">
+                            <BenIcon Name="image" />
+                            <span class="flex-grow-1 small text-truncate">@(_imageName ?? "Chosen image")</span>
+                            <button type="button" class="btn btn-link btn-sm text-decoration-none" @onclick="@(() => { _imageId = null; _imageName = null; })">Remove</button>
+                        </div>
+                    }
+                    <div class="small text-secondary mt-2">
+                        <p class="mb-1">A real photo of your team or a location beats a logo — cards with faces get read.</p>
+                        <p class="mb-0">Landscape works best; the card crops to roughly 3:2. Upload new images from
+                        <a href="/media">your media library</a> first, then choose here. Approved ads show their
+                        image publicly — pick one you'd put on a flyer.</p>
+                    </div>
+                    break;
+
+                case 3:
+                    <label class="form-label fw-semibold">Where should the card lead?</label>
+                    <div class="list-group mb-2" id="ad-target">
+                        <label class="list-group-item d-flex gap-2">
+                            <input class="form-check-input mt-1" type="radio" name="ad-target"
+                                   checked="@(_targetKind == "org")" @onchange="@(() => _targetKind = "org")" />
+                            <span><span class="fw-semibold d-block">Your public page</span>
+                            <span class="small text-secondary">Best when your page is ready: cases published, contact info set.</span></span>
+                        </label>
+                        <label class="list-group-item d-flex gap-2">
+                            <input class="form-check-input mt-1" type="radio" name="ad-target"
+                                   checked="@(_targetKind == "find")" @onchange="@(() => _targetKind = "find")" />
+                            <span><span class="fw-semibold d-block">The group finder</span>
+                            <span class="small text-secondary">Sends people to search near them — useful while your page is still thin.</span></span>
+                        </label>
+                    </div>
+                    <p class="small text-secondary mb-0">
+                        The card's success rides on where it lands: a striking headline over an empty
+                        public page loses the person you just won. Fill the page first, then promote it.
+                    </p>
+                    break;
+
+                case 4:
+                    <div class="card mb-2" id="ad-review">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h5 class="card-title mb-1">@_headline</h5>
+                                <span class="badge bg-info">Promoted</span>
+                            </div>
+                            <p class="card-text mb-1">@_body</p>
+                            <p class="small text-secondary mb-0">
+                                @(_imageId is null ? "No picture" : "With your chosen picture") ·
+                                leads to @(_targetKind == "find" ? "the group finder" : "your public page")
+                            </p>
+                        </div>
+                    </div>
+                    <p class="small text-secondary mb-0">
+                        Submitting sends this exact card for review. You'll get a message when it's
+                        approved (it then rotates through the group finder and the home page) or
+                        declined with the reason. Any later edit comes back through review.
+                    </p>
+                    break;
+            }
+        </BenWizard>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3" id="promote-error">@_error</div>
+        }
+    }
+</div>
+
+<BenContentPicker @bind-Visible="_showImagePicker"
+                  Title="Choose a picture"
+                  SelectText="Use this picture"
+                  EmptyText="No images in your media library yet — upload one there first."
+                  Loader="@LoadMyImagesAsync"
+                  OnSelected="@OnImageChosen" />
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private readonly WizardModel _wizard;
+    private BenWizard? _wizardRef;
+
+    private bool _loading = true;
+    private bool _editing;
+    private string? _error;
+    private OrganizationAdRecord? _current;
+
+    private string _headline = "";
+    private string _body = "";
+    private Guid?  _imageId;
+    private string? _imageName;
+    private string _targetKind = "org";
+    private bool _showImagePicker;
+
+    public PromoteGroupPage()
+    {
+        _wizard = new WizardModel(
+        [
+            new WizardModel.WizardStep("Headline", HeadlineGateAsync),
+            new WizardModel.WizardStep("Message", BodyGateAsync),
+            new WizardModel.WizardStep("Picture"),
+            new WizardModel.WizardStep("Destination"),
+            new WizardModel.WizardStep("Review"),
+        ]);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        var result = await AdminClient.GetOrgAdsAsync(OrgId);
+        if (result.Failed)
+        {
+            _error = result.Reason ?? "Your ad couldn't be loaded — reload to try again.";
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+        var ads = result.Items;
+        // The standing card: the live chain first, else the latest rejection (its reason is
+        // the most useful thing on the page).
+        _current = ads.FirstOrDefault(a => a.Status != Ben.Data.Common.Enums.OrganizationAdStatus.Rejected)
+                ?? ads.FirstOrDefault();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private Task<string?> HeadlineGateAsync()
+        => Task.FromResult(string.IsNullOrWhiteSpace(_headline)
+            ? "Write the headline first — it's what makes anyone read the rest."
+            : (string?)null);
+
+    private Task<string?> BodyGateAsync()
+        => Task.FromResult(string.IsNullOrWhiteSpace(_body)
+            ? "Say something — three short sentences beat an empty card."
+            : (string?)null);
+
+    private void BeginEdit()
+    {
+        if (_current is not null)
+        {
+            _headline   = _current.Headline;
+            _body       = _current.Body;
+            _imageId    = _current.ImageUploadFileId;
+            _imageName  = _current.ImageUploadFileId is null ? null : "Current picture";
+            _targetKind = _current.TargetKind;
+        }
+        _wizard.Restore(0);
+        _editing = true;
+    }
+
+    // ── Draft round-trip ──────────────────────────────────────────────────────
+
+    private sealed record Draft(string Headline, string Body, Guid? ImageId, string? ImageName, string TargetKind);
+
+    private string? CaptureDraft()
+        => JsonSerializer.Serialize(new Draft(_headline, _body, _imageId, _imageName, _targetKind));
+
+    private void RestoreDraft(string data)
+    {
+        try
+        {
+            if (JsonSerializer.Deserialize<Draft>(data) is not { } d) return;
+            _headline = d.Headline; _body = d.Body; _imageId = d.ImageId;
+            _imageName = d.ImageName; _targetKind = d.TargetKind;
+            _editing = true;
+        }
+        catch { }
+    }
+
+    // ── The picker's second consumer: the caller's own images ────────────────
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadMyImagesAsync()
+    {
+        var result = await AdminClient.GetMediaLibraryFilesAsync(["image/"]);
+        // A refused library must not read as an empty one: throwing hands the picker its own
+        // load-failure sentence instead of "no images yet".
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        var files = result.Items;
+        return [.. files.Select(f => new ContentPickerItem(
+            f.Id, f.FileName, "Image",
+            $"{FormatBytes(f.FileSize)} · {f.DateCreated:MM/dd/yyyy}",
+            null, f.ContentType, f.FileSize))];
+    }
+
+    private void OnImageChosen(ContentPickerItem item)
+    {
+        _imageId = item.Id;
+        _imageName = item.Name;
+    }
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes / (1024.0 * 1024):F1} MB",
+    };
+
+    // ── Finish: save (create or update), then submit ─────────────────────────
+
+    private async Task FinishAsync()
+    {
+        _error = null;
+        var request = new SaveOrganizationAdRequest(_headline.Trim(), _body.Trim(), _imageId, _targetKind);
+
+        var (saved, error) = _current is null
+            ? await AdminClient.CreateOrgAdAsync(OrgId, request)
+            : await AdminClient.UpdateOrgAdAsync(OrgId, _current.Id, request);
+        if (saved is null)
+        {
+            _error = error ?? "The ad couldn't be saved.";
+            _wizard.Restore(0);
+            return;
+        }
+
+        var (submitted, submitError) = await AdminClient.SubmitOrgAdAsync(OrgId, saved.Id);
+        if (submitted is null)
+        {
+            _error = submitError ?? "Saved as a draft, but submitting failed — try Submit from the card.";
+        }
+        else
+        {
+            Toasts.Success("Sent for review — you'll get a message with the answer.");
+        }
+
+        if (_wizardRef is not null) await _wizardRef.ClearDraftAsync();
+        _editing = false;
+        await ReloadAsync();
+    }
+
+    private async Task SubmitDraftAsync()
+    {
+        if (_current is null) return;
+        var (result, error) = await AdminClient.SubmitOrgAdAsync(OrgId, _current.Id);
+        if (result is null) { _error = error ?? "Submitting failed."; return; }
+        Toasts.Success("Sent for review.");
+        await ReloadAsync();
+    }
+
+    private async Task WithdrawAsync()
+    {
+        if (_current is null) return;
+        var (result, error) = await AdminClient.WithdrawOrgAdAsync(OrgId, _current.Id);
+        if (result is null) { _error = error ?? "Withdrawing failed."; return; }
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_current is null) return;
+        if (await AdminClient.DeleteOrgAdAsync(OrgId, _current.Id))
+        {
+            _current = null;
+            _editing = false;
+            Toasts.Success("Ad deleted.");
+            await ReloadAsync();
+        }
+    }
+
+    private static string StatusBadge(Ben.Data.Common.Enums.OrganizationAdStatus status) => status switch
+    {
+        Ben.Data.Common.Enums.OrganizationAdStatus.Approved  => "bg-success",
+        Ben.Data.Common.Enums.OrganizationAdStatus.Submitted => "bg-info",
+        Ben.Data.Common.Enums.OrganizationAdStatus.Rejected  => "bg-warning text-dark",
+        _ => "bg-secondary",
+    };
+
+    private static string StatusLabel(Ben.Data.Common.Enums.OrganizationAdStatus status) => status switch
+    {
+        Ben.Data.Common.Enums.OrganizationAdStatus.Approved  => "Live",
+        Ben.Data.Common.Enums.OrganizationAdStatus.Submitted => "In review",
+        Ben.Data.Common.Enums.OrganizationAdStatus.Rejected  => "Declined",
+        _ => "Draft",
+    };
+}

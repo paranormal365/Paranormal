@@ -135,6 +135,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionTierPermissionArea> SubscriptionTierPermissionAreas { get; set; }
         public virtual DbSet<SubscriptionTierExcludedCapability> SubscriptionTierExcludedCapabilities { get; set; }
         public virtual DbSet<UserTourState> UserTourStates { get; set; }
+        public virtual DbSet<OrganizationAd> OrganizationAds { get; set; }
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
@@ -2530,6 +2531,28 @@ namespace Ben.Data.Source.Context
             // One row per (person, tour): dismissed twice is an upsert, not a second row.
             modelBuilder.Entity<UserTourState>()
                 .HasIndex(e => new { e.AppUserId, e.TourName }).IsUnique();
+
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(e => e.ImageUploadFile).WithMany()
+                .HasForeignKey(e => e.ImageUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(e => e.ReviewedByAppUser).WithMany()
+                .HasForeignKey(e => e.ReviewedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAd>()
+                .Property(e => e.Headline).HasMaxLength(80);
+            modelBuilder.Entity<OrganizationAd>()
+                .Property(e => e.Body).HasMaxLength(300);
+            modelBuilder.Entity<OrganizationAd>()
+                .Property(e => e.TargetKind).HasMaxLength(16);
 
             // One row per organization, enforced rather than assumed: a second row would make
             // "what does this group pay?" a question with two answers.

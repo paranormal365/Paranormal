@@ -8496,7 +8496,33 @@ firing. The gate (and `ActionNeededBanners`, which had the same latent gap) now 
 subscribes to `IBenUserState.StateChanged`. Journey e2e green: cold signup → gate → wizard →
 routed to /find → never again; James never gated at all.
 
-Remaining: W3 (ads), W4 (CMS + case-pages tours), W5 (polish).
+### W3 — SHIPPED 2026-08-23 (the feature and its wizard, built together)
+
+`OrganizationAd` (headline ≤80, body ≤300, optional image, target locked to the group's page
+or /find — never a free URL) with the Draft→Submitted→Approved/Rejected chain. **The public
+endpoints serve Approved and nothing else, ever** — the list AND the image route (the image
+travels through its own approved-gated anonymous route, never the general file routes, whose
+audience rules know nothing about ad review); both gates probe-regressed. One non-rejected ad
+per group; any edit of a submitted/approved ad drops it back to Draft (the reviewed text is
+the approved text). Review messages the group's admins either way — a decision sitting
+silently in a table is the write-only shape.
+
+Surfaces: the `/organizations/{id}/promote` teaching wizard (each step teaches while it
+collects: headline do/don'ts, message structure, picture advice, destination choice with the
+fill-your-page-first warning, review card rendered exactly as the placements render);
+Settings-tab entry card; `/admin/org-ads` review queue (approve / reject-with-reason);
+`PromotedGroupsCard` on the home page and /find — server-randomized per load, always marked
+"Promoted". The image step is the content picker's SECOND consumer (own media, images only).
+
+Found live while testing: `BenPageHeader` has no ChildContent, and a stray child fragment is
+a runtime 500 — extras go in its Actions slot. The render-debt guards caught two more of my
+own: the failed ads-fetch now renders its sentence, and a refused media library throws into
+the picker's own error line rather than reading as "no images yet".
+
+e2e: wizard → queue check (unapproved absent from the public endpoint) → approve → ANONYMOUS
+/find shows the card marked Promoted → cleanup. 3,036 unit green.
+
+Remaining: W4 (CMS + case-pages tours), W5 (polish).
 
 ## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
 
