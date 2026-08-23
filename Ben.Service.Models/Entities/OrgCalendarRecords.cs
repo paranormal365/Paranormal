@@ -33,6 +33,23 @@ public record OrganizationMemberLevelRecord
 /// <summary>Create/update body for a ladder rung.</summary>
 public sealed record UpsertMemberLevelRequest(string Name, int SortOrder, bool IsActive);
 
+/// <summary>One investigation duty (item 158) — a job handed out per visit, never a permission.</summary>
+public record InvestigationDutyRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public required string Name { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+    public bool IsSingleHolder { get; init; }
+    public Guid? MinimumMemberLevelId { get; init; }
+    public string? MinimumMemberLevelName { get; init; }
+}
+
+/// <summary>Create/update body for an investigation duty.</summary>
+public sealed record UpsertInvestigationDutyRequest(
+    string Name, int SortOrder, bool IsActive, bool IsSingleHolder, Guid? MinimumMemberLevelId);
+
 public record OrgCalendarEventRecord
 {
     public Guid Id { get; init; }

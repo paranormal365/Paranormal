@@ -203,7 +203,8 @@ public sealed class MyCaseController : BenControllerBase
             Occurrences:             occurrences,
             Investigations:          invItems,
             UnreadMessageCount:      unreadCount,
-            IsPrimaryClient:         c.ClientRequest?.AppUserId == userId));
+            IsPrimaryClient:         c.ClientRequest?.AppUserId == userId,
+            Contacts: await Entities.CaseContactController.ResolveAsync(db, c.OrganizationId, caseId, ct)));
     }
 
     /// <summary>
@@ -1364,7 +1365,10 @@ public sealed record ClientCaseDetail(
     // list rather than throwing, so every co-client (old AddCoClient flow or a new invite) saw the
     // primary-only admin controls too. Surfaced only once co-clients could reach this page at all
     // (see the GetMyCase/GetMyCases fix above) — previously unreachable, now a real bug.
-    bool      IsPrimaryClient = false);
+    bool      IsPrimaryClient = false,
+    // Item 158: who the client actually talks to. Explicit contacts when the group set them,
+    // otherwise the case manager stands in — never empty while a manager exists.
+    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,

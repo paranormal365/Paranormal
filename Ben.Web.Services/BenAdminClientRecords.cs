@@ -852,7 +852,28 @@ public sealed record ClientCaseDetail(
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
     IReadOnlyList<ClientCaseInvestigation> Investigations,
     int       UnreadMessageCount = 0,
-    bool      IsPrimaryClient = false);
+    bool      IsPrimaryClient = false,
+    IReadOnlyList<CaseContactItem>? Contacts = null);
+
+/// <summary>Someone the client can talk to about their case. <c>IsFallback</c> marks the case
+/// manager standing in because the group set no explicit contact.</summary>
+public sealed record CaseContactItem(Guid AppUserId, string DisplayName, bool IsFallback);
+
+/// <summary>The duty board for one visit (item 158): the group's duties and who holds each.</summary>
+public sealed record InvestigationDutyBoard(
+    IReadOnlyList<InvestigationDutyInfo> Duties,
+    IReadOnlyList<InvestigationDutyAssignmentInfo> Assignments);
+
+public sealed record InvestigationDutyInfo(
+    Guid Id, string Name, bool IsSingleHolder, string? MinimumLevelName, int? MinimumLevelSortOrder);
+
+public sealed record InvestigationDutyAssignmentInfo(
+    Guid AttendeeId, Guid DutyId, bool EligibilityOverridden);
+
+/// <summary>One of a group's investigation duties, as managed in Settings.</summary>
+public sealed record OrgInvestigationDutyItem(
+    Guid Id, string Name, int SortOrder, bool IsActive, bool IsSingleHolder,
+    Guid? MinimumMemberLevelId, string? MinimumMemberLevelName);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,

@@ -277,6 +277,10 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             .Where(l => l.OrganizationId == id).ToListAsync(ct);
         db.OrganizationMemberLevels.RemoveRange(birthLevels);
 
+        var birthDuties = await db.InvestigationDuties
+            .Where(d => d.OrganizationId == id).ToListAsync(ct);
+        db.InvestigationDuties.RemoveRange(birthDuties);
+
         var memberships = await db.OrganizationUserMemberships
             .Where(m => m.OrganizationId == id).ToListAsync(ct);
         db.OrganizationUserMemberships.RemoveRange(memberships);
@@ -335,6 +339,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         db.Organizations.Add(org);
         OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
         OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, userId.Value);
+        OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, userId.Value);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 

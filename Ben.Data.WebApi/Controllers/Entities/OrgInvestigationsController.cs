@@ -376,6 +376,171 @@ public sealed class OrgInvestigationsController : BenControllerBase
         return Ok(await RosterAsync(db, id, ct));
     }
 
+    // ── Duties (item 158) ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The duty board for one visit: the group's duties, who holds each, and which are unfilled.
+    /// </summary>
+    /// <remarks>
+    /// One payload on purpose — the point of structuring duties at all is that the organizer can
+    /// see the gap ("nobody has Evidence Collection") before the night of, and that reading
+    /// requires joining duties to assignments, which the server does once rather than every
+    /// screen doing it differently.
+    /// </remarks>
+    [HttpGet("{id:guid}/duties")]
+    public async Task<ActionResult<InvestigationDutyBoard>> GetDutyBoard(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var duties = await db.InvestigationDuties.AsNoTracking()
+            .Where(d => d.OrganizationId == orgId && d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .Select(d => new InvestigationDutyInfo(
+                d.Id, d.Name, d.IsSingleHolder,
+                d.MinimumMemberLevel != null ? d.MinimumMemberLevel.Name : null,
+                d.MinimumMemberLevel != null ? d.MinimumMemberLevel.SortOrder : (int?)null))
+            .ToListAsync(ct);
+
+        var assignments = await db.InvestigationDutyAssignments.AsNoTracking()
+            .Where(x => x.InvestigationAttendee.InvestigationId == id)
+            .Select(x => new InvestigationDutyAssignmentInfo(
+                x.InvestigationAttendeeId, x.InvestigationDutyId, x.EligibilityOverridden))
+            .ToListAsync(ct);
+
+        return Ok(new InvestigationDutyBoard(duties, assignments));
+    }
+
+    /// <summary>Hands an attendee a duty for this visit.</summary>
+    /// <remarks>
+    /// <para>Same gate as naming a lead: whoever may manage the visit hands out its duties.</para>
+    ///
+    /// <para><b>Eligibility is soft.</b> A duty may carry a minimum title
+    /// (<see cref="Ben.Data.Source.Entities.InvestigationDuty.MinimumMemberLevelId"/>); an
+    /// attendee below it is refused with a sentence naming the gap — unless the caller sets
+    /// <c>Override</c>, which assigns anyway and records that it was deliberate. The senior calls
+    /// in sick and the capable junior steps up; a hard wall here would just push the group back
+    /// to organising by text message.</para>
+    ///
+    /// <para><b>Single-holder duties displace.</b> Assigning one clears the previous holder on
+    /// this visit, mirroring the lead semantics. The seeded "Lead Investigator" duty also writes
+    /// through to <c>InvestigationAttendee.IsLead</c>, so the existing manage-this-visit logic
+    /// and every lead badge keep working with no second source of truth. A group that renames
+    /// that duty keeps a working duty; only the write-through is tied to the name.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/attendees/{attendeeId:guid}/duties/{dutyId:guid}")]
+    public async Task<ActionResult<InvestigationDutyBoard>> AssignDuty(
+        Guid orgId, Guid id, Guid attendeeId, Guid dutyId,
+        [FromBody] AssignDutyRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        var attendee = await db.InvestigationAttendees
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id
+                                   && a.Investigation.OrganizationId == orgId, ct);
+        if (attendee is null) return NotFound();
+
+        var duty = await db.InvestigationDuties.AsNoTracking()
+            .Include(d => d.MinimumMemberLevel)
+            .FirstOrDefaultAsync(d => d.Id == dutyId && d.OrganizationId == orgId && d.IsActive, ct);
+        if (duty is null) return NotFound();
+
+        var overridden = false;
+        if (duty.MinimumMemberLevel is { } minimum)
+        {
+            var holderLevel = await db.OrganizationUserMemberships.AsNoTracking()
+                .Where(m => m.OrganizationId == orgId && m.AppUserId == attendee.AppUserId && m.IsActive)
+                .Select(m => m.MemberLevel)
+                .FirstOrDefaultAsync(ct);
+
+            var belowMinimum = holderLevel is null || holderLevel.SortOrder < minimum.SortOrder;
+            if (belowMinimum && !request.Override)
+            {
+                return Conflict(
+                    $"This duty asks for {minimum.Name} or above; "
+                    + $"{(holderLevel is null ? "this member has no title yet" : $"this member is {holderLevel.Name}")}. "
+                    + "Assign anyway to confirm the exception.");
+            }
+            overridden = belowMinimum;
+        }
+
+        if (duty.IsSingleHolder)
+        {
+            var displaced = await db.InvestigationDutyAssignments
+                .Where(x => x.InvestigationDutyId == dutyId
+                         && x.InvestigationAttendee.InvestigationId == id)
+                .ToListAsync(ct);
+            db.InvestigationDutyAssignments.RemoveRange(displaced);
+        }
+
+        var already = await db.InvestigationDutyAssignments
+            .AnyAsync(x => x.InvestigationAttendeeId == attendeeId && x.InvestigationDutyId == dutyId, ct);
+        if (!already)
+        {
+            db.InvestigationDutyAssignments.Add(new InvestigationDutyAssignment
+            {
+                InvestigationAttendeeId = attendeeId,
+                InvestigationDutyId = dutyId,
+                EligibilityOverridden = overridden,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+        }
+
+        if (duty.IsSingleHolder && duty.Name.Equals(
+                Ben.Data.Source.Services.OrgInvestigationDutyDefaults.LeadDutyName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var attendees = await db.InvestigationAttendees
+                .Where(a => a.InvestigationId == id).ToListAsync(ct);
+            foreach (var other in attendees) other.IsLead = other.Id == attendeeId;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetDutyBoard(orgId, id, ct);
+    }
+
+    /// <summary>Takes a duty back from an attendee.</summary>
+    [HttpDelete("{id:guid}/attendees/{attendeeId:guid}/duties/{dutyId:guid}")]
+    public async Task<ActionResult<InvestigationDutyBoard>> UnassignDuty(
+        Guid orgId, Guid id, Guid attendeeId, Guid dutyId, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        var assignment = await db.InvestigationDutyAssignments
+            .Include(x => x.InvestigationDuty)
+            .FirstOrDefaultAsync(x => x.InvestigationAttendeeId == attendeeId
+                                   && x.InvestigationDutyId == dutyId
+                                   && x.InvestigationAttendee.InvestigationId == id, ct);
+        if (assignment is null) return NotFound();
+
+        db.InvestigationDutyAssignments.Remove(assignment);
+
+        if (assignment.InvestigationDuty.IsSingleHolder && assignment.InvestigationDuty.Name.Equals(
+                Ben.Data.Source.Services.OrgInvestigationDutyDefaults.LeadDutyName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var attendee = await db.InvestigationAttendees.FirstOrDefaultAsync(a => a.Id == attendeeId, ct);
+            if (attendee is not null) attendee.IsLead = false;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetDutyBoard(orgId, id, ct);
+    }
+
     // ── Findings ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -605,6 +770,20 @@ public sealed record OrgInvestigationRow(
 /// recording is not exposed here — the roster is read by the whole team, and the part that matters
 /// to them is that it came from somewhere other than the attendee.
 /// </remarks>
+/// <summary>The duty board: the group's duties and who holds each on this visit.</summary>
+public sealed record InvestigationDutyBoard(
+    IReadOnlyList<InvestigationDutyInfo> Duties,
+    IReadOnlyList<InvestigationDutyAssignmentInfo> Assignments);
+
+public sealed record InvestigationDutyInfo(
+    Guid Id, string Name, bool IsSingleHolder, string? MinimumLevelName, int? MinimumLevelSortOrder);
+
+public sealed record InvestigationDutyAssignmentInfo(
+    Guid AttendeeId, Guid DutyId, bool EligibilityOverridden);
+
+/// <summary>Assign a duty. <c>Override</c> confirms past the duty's minimum title.</summary>
+public sealed record AssignDutyRequest(bool Override = false);
+
 public sealed record InvestigationRosterEntry(
     Guid AttendeeId,
     Guid AppUserId,

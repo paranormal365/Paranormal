@@ -68,6 +68,19 @@ group. A member's title shows as a badge beside their name on the roster. Someon
 two groups holds a separate title in each, which is exactly how it should be: seniority is
 earned per group.
 
+## Investigation duties
+
+Under **Settings → Investigation duties** lives the list of jobs your group hands out per visit
+— every group starts with Lead Investigator, Equipment, Evidence Collection, and Documentation,
+and the list is yours: rename, add, retire. A duty marked **one holder** (like the lead) can
+only be held by a single person per visit; assigning it to someone takes it from the previous
+holder.
+
+A duty can ask for a **minimum title** from the member ladder — "Evidence Collection wants
+Investigator or above." The ask is deliberately soft: whoever manages a visit can assign past it
+with an explicit *Assign anyway*, and the exception is marked on the assignment. Duties never
+grant standing permissions; they exist so the visit's roster says who is doing what.
+
 ## The Investigations tab
 
 Every visit the group has run, mapped and listed, including ones that belong to no client case.

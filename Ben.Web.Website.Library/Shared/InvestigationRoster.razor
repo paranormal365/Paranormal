@@ -96,6 +96,81 @@
                 }
             </div>
 
+            @* ── Who's doing what (item 158) ──────────────────────────────── *@
+            @if (_board is { } board && board.Duties.Count > 0)
+            {
+                <div class="mt-4">
+                    <h6 class="fw-semibold mb-1">
+                        Who's doing what<HelpLink Slug="working-a-case" Anchor="duties-whos-doing-what-tonight" />
+                    </h6>
+                    <p class="text-secondary small mb-2">
+                        Duties for this visit only. An unfilled duty is the gap to close before
+                        the night of.
+                    </p>
+
+                    @if (_dutyError is not null)
+                    {
+                        <div class="alert alert-warning py-2 small d-flex align-items-center gap-2 flex-wrap">
+                            <span>@_dutyError</span>
+                            @if (_pendingOverride is { } pending)
+                            {
+                                <button type="button" class="btn btn-warning btn-sm"
+                                        @onclick="@(() => AssignDutyAsync(pending.AttendeeId, pending.DutyId, overrideEligibility: true))">
+                                    Assign anyway
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <div class="d-flex flex-column gap-2" style="max-width:560px;">
+                        @foreach (var duty in board.Duties)
+                        {
+                            var holders = board.Assignments.Where(a => a.DutyId == duty.Id).ToList();
+                            <div class="d-flex align-items-center gap-2 flex-wrap border rounded px-2 py-1" @key="duty.Id">
+                                <span class="fw-semibold" style="min-width:10rem;">@duty.Name</span>
+                                @if (duty.MinimumLevelName is not null)
+                                {
+                                    <span class="badge bg-secondary" title="Minimum title to hold this duty">@duty.MinimumLevelName+</span>
+                                }
+                                @if (holders.Count == 0)
+                                {
+                                    <span class="badge bg-warning text-dark">Unfilled</span>
+                                }
+                                @foreach (var holder in holders)
+                                {
+                                    var entry = _roster.FirstOrDefault(r => r.AttendeeId == holder.AttendeeId);
+                                    <span class="badge bg-info text-dark d-inline-flex align-items-center gap-1" @key="holder.AttendeeId">
+                                        @(entry?.DisplayName ?? "—")
+                                        @if (holder.EligibilityOverridden)
+                                        {
+                                            <span title="Assigned past the duty's minimum title, deliberately">⚠</span>
+                                        }
+                                        @if (CanManage)
+                                        {
+                                            <a href="#" class="text-reset text-decoration-none" title="Take this duty back"
+                                               @onclick:preventDefault
+                                               @onclick="@(() => UnassignDutyAsync(holder.AttendeeId, duty.Id))">✕</a>
+                                        }
+                                    </span>
+                                }
+                                @if (CanManage && _roster.Count > 0)
+                                {
+                                    <select class="form-select form-select-sm ms-auto" style="max-width:12rem;"
+                                            id="duty-assign-@duty.Id" value=""
+                                            @onchange="@(e => OnDutyPick(duty.Id, e.Value?.ToString()))">
+                                        <option value="">assign…</option>
+                                        @foreach (var entry in _roster.Where(r => holders.All(h => h.AttendeeId != r.AttendeeId)))
+                                        {
+                                            <option value="@entry.AttendeeId">@entry.DisplayName</option>
+                                        }
+                                    </select>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
             @* ── What people saw ──────────────────────────────────────────── *@
             <div class="mt-4">
                 <h6 class="fw-semibold mb-1">
@@ -241,6 +316,9 @@
     [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
 
     private List<InvestigationRosterEntry> _roster = [];
+    private InvestigationDutyBoard? _board;
+    private string? _dutyError;
+    private (Guid AttendeeId, Guid DutyId)? _pendingOverride;
     private LoadResult<InvestigationRosterEntry> _rosterResult;
     private InvestigationRosterEntry? _myEntry;
     private int _arrivedCount;
@@ -301,6 +379,8 @@
             _arrivedCount = _roster.Count(r => r.DidAttend == true);
             _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
 
+            _board = await AdminClient.GetInvestigationDutyBoardAsync(OrgId, InvestigationId);
+
             _findings = (await AdminClient.GetInvestigationFindingsAsync(OrgId, InvestigationId)).Items.ToList();
             _myFinding = _findings.FirstOrDefault(f => f.AppUserId == UserState.UserId);
 
@@ -315,6 +395,45 @@
             // A failed poll is not worth an error banner that appears and vanishes on its own —
             // the previous roster stays on screen and the next tick tries again.
         }
+    }
+
+    private async Task OnDutyPick(Guid dutyId, string? raw)
+    {
+        if (!Guid.TryParse(raw, out var attendeeId)) return;
+        await AssignDutyAsync(attendeeId, dutyId, overrideEligibility: false);
+    }
+
+    private async Task AssignDutyAsync(Guid attendeeId, Guid dutyId, bool overrideEligibility)
+    {
+        _dutyError = null;
+        _pendingOverride = null;
+
+        var (board, refusal) = await AdminClient.AssignInvestigationDutyAsync(
+            OrgId, InvestigationId, attendeeId, dutyId, overrideEligibility);
+
+        if (board is null)
+        {
+            // The eligibility sentence, with the confirm the server asked for. Any other refusal
+            // renders without one — there is nothing to confirm past a Forbid.
+            _dutyError = refusal;
+            if (refusal?.Contains("Assign anyway", StringComparison.OrdinalIgnoreCase) == true)
+                _pendingOverride = (attendeeId, dutyId);
+            return;
+        }
+
+        _board = board;
+        // Assigning the lead duty writes through to IsLead, which reorders the chips above —
+        // refresh the roster so both tellings agree.
+        await LoadAsync();
+    }
+
+    private async Task UnassignDutyAsync(Guid attendeeId, Guid dutyId)
+    {
+        _dutyError = null;
+        _pendingOverride = null;
+        _board = await AdminClient.UnassignInvestigationDutyAsync(OrgId, InvestigationId, attendeeId, dutyId)
+                 ?? _board;
+        await LoadAsync();
     }
 
     private async Task SaveMyFindingAsync()

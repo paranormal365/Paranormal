@@ -58,13 +58,30 @@ public sealed class NotificationSummaryController : BenControllerBase
             .Select(m => m.OrganizationId)
             .ToListAsync(ct);
 
+        // Routed to the people responsible for the case (item 158), not the whole roster:
+        // explicit contacts when set, else the case manager, else every member (the pre-contact
+        // behaviour, kept as the floor so a case nobody claimed still nags somebody). Org owners
+        // and administrators always see them — the bypass rule, same as everywhere else.
+        var myAdminOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive
+                     && (m.Role == OrganizationMemberRole.Owner
+                      || m.Role == OrganizationMemberRole.Administrator))
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+
         var caseMessagesAsOrg = myOrgIds.Count == 0
             ? NotificationBucket.Empty
             : await BucketAsync(
                 db.CaseMessages.AsNoTracking()
                   .Where(m => m.SenderSide == CaseMessageSide.Client
                            && !m.IsReadByOrg
-                           && myOrgIds.Contains(m.Case.OrganizationId))
+                           && myOrgIds.Contains(m.Case.OrganizationId)
+                           && (myAdminOrgIds.Contains(m.Case.OrganizationId)
+                               || (db.CaseContacts.Any(cc => cc.CaseId == m.CaseId)
+                                   ? db.CaseContacts.Any(cc => cc.CaseId == m.CaseId && cc.AppUserId == userId)
+                                   : (m.Case.CaseManagerAppUserId != null
+                                       ? m.Case.CaseManagerAppUserId == userId
+                                       : true))))
                   .Select(m => (DateTime?)m.DateCreated), ct);
 
         // ── Case messages awaiting me as the client ──────────────────────────

@@ -55,6 +55,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationAreaOfOperation> OrganizationAreaOfOperations { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationMemberLevel> OrganizationMemberLevels { get; set; }
+        public virtual DbSet<InvestigationDuty> InvestigationDuties { get; set; }
+        public virtual DbSet<InvestigationDutyAssignment> InvestigationDutyAssignments { get; set; }
+        public virtual DbSet<CaseContact> CaseContacts { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationUrlNameAlias> OrganizationUrlNameAliases { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
@@ -1702,6 +1705,57 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationUserMembership>()
                 .HasOne(e => e.MemberLevel).WithMany()
                 .HasForeignKey(e => e.MemberLevelId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            // ── InvestigationDuty + assignments (item 158) ────────────────────
+            modelBuilder.Entity<InvestigationDuty>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            // Deleting a ladder rung nulls the eligibility requirement rather than blocking.
+            modelBuilder.Entity<InvestigationDuty>()
+                .HasOne(e => e.MinimumMemberLevel).WithMany()
+                .HasForeignKey(e => e.MinimumMemberLevelId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<InvestigationDuty>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDuty>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDuty>()
+                .Property(e => e.Name).HasMaxLength(128);
+            modelBuilder.Entity<InvestigationDuty>()
+                .HasIndex(e => new { e.OrganizationId, e.SortOrder });
+
+            modelBuilder.Entity<InvestigationDutyAssignment>()
+                .HasOne(e => e.InvestigationAttendee).WithMany()
+                .HasForeignKey(e => e.InvestigationAttendeeId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDutyAssignment>()
+                .HasOne(e => e.InvestigationDuty).WithMany()
+                .HasForeignKey(e => e.InvestigationDutyId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDutyAssignment>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDutyAssignment>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One attendee holds a given duty once; "holds it twice" is a UI bug, not a state.
+            modelBuilder.Entity<InvestigationDutyAssignment>()
+                .HasIndex(e => new { e.InvestigationAttendeeId, e.InvestigationDutyId }).IsUnique();
+
+            // ── CaseContact (item 158) ────────────────────────────────────────
+            modelBuilder.Entity<CaseContact>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseContact>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseContact>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseContact>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseContact>()
+                .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
 
             // ── OrgCalendarEvent ──────────────────────────────────────────────
             modelBuilder.Entity<OrgCalendarEvent>()

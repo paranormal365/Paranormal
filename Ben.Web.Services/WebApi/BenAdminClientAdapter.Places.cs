@@ -98,6 +98,78 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, Guid investigationId, CancellationToken token = default)
         => _api.GetListAsync<InvestigationRosterEntry>($"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
 
+    // ── Investigation duties (item 158) ──────────────────────────────────────
+
+    public Task<InvestigationDutyBoard?> GetInvestigationDutyBoardAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetAsync<InvestigationDutyBoard>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/duties", token);
+
+    /// <summary>Assigns a duty; a 409 carries the eligibility sentence (assign again with
+    /// <paramref name="overrideEligibility"/> to confirm the exception).</summary>
+    public async Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility,
+        CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, InvestigationDutyBoard>(
+            HttpMethod.Put,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/duties/{dutyId}",
+            new { Override = overrideEligibility }, token);
+        return (result, result is null ? error ?? "The duty could not be assigned." : null);
+    }
+
+    public async Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default)
+    {
+        var (result, _) = await _api.SendExpectingReasonAsync<object?, InvestigationDutyBoard>(
+            HttpMethod.Delete,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/duties/{dutyId}",
+            null, token);
+        return result;
+    }
+
+    // ── Duty definitions (group Settings) ────────────────────────────────────
+
+    public Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties", token);
+
+    public Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(
+        Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId,
+        CancellationToken token = default)
+        => _api.PostAsync<object, OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive, IsSingleHolder = isSingleHolder, MinimumMemberLevelId = minimumLevelId }, token);
+
+    public Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(
+        Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId,
+        CancellationToken token = default)
+        => _api.PutAsync<object, OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties/{dutyId}",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive, IsSingleHolder = isSingleHolder, MinimumMemberLevelId = minimumLevelId }, token);
+
+    public Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/investigation-duties/{dutyId}", token);
+
+    // ── Case contacts (item 158) ─────────────────────────────────────────────
+
+    public Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<CaseContactItem>($"/api/orgs/{orgId}/cases/{caseId}/contacts", token);
+
+    public async Task<(IReadOnlyList<CaseContactItem> Contacts, string? Error)> SetCaseContactsAsync(
+        Guid orgId, Guid caseId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, IReadOnlyList<CaseContactItem>>(
+            HttpMethod.Put, $"/api/orgs/{orgId}/cases/{caseId}/contacts",
+            new { AppUserIds = appUserIds }, token);
+
+        // A refused save answers with the empty list AND the reason together, never the empty
+        // list alone — the tuple is what keeps this from being the swallowed-refusal pattern.
+        if (result is null)
+            return (Array.Empty<CaseContactItem>(), error ?? "The contacts could not be saved.");
+
+        return (result, null);
+    }
+
     public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
         Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
         => _api.PostAsync<object, InvestigationRosterEntry>(
