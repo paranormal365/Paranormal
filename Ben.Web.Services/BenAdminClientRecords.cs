@@ -496,7 +496,11 @@ public sealed record SetRolePermissionRequest(OrganizationSecurityTable TableNam
 public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMemberGroupId, CmsPageAction Actions);
 
 /// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
-public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null);
+public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null,
+    Guid? MemberLevelId = null, string? MemberLevelName = null);
+
+/// <summary>One rung of a group's member-title ladder (item 157). Seniority, never permission.</summary>
+public sealed record OrgMemberLevelItem(Guid Id, string Name, int SortOrder, bool IsActive);
 
 /// <summary>Minimal member-directory entry — see <c>IBenAdminClient.GetOrgUserDirectoryAsync</c>.</summary>
 public sealed record OrgUserDirectoryItem(Guid Id, string DisplayName);

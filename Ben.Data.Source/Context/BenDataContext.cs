@@ -54,6 +54,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<ExperienceType> ExperienceTypes { get; set; }
         public virtual DbSet<OrganizationAreaOfOperation> OrganizationAreaOfOperations { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
+        public virtual DbSet<OrganizationMemberLevel> OrganizationMemberLevels { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationUrlNameAlias> OrganizationUrlNameAliases { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
@@ -1680,6 +1681,27 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrgCalendarEventType>()
                 .Property(e => e.Name).HasMaxLength(128);
+
+            // ── OrganizationMemberLevel (item 157) ────────────────────────────
+            modelBuilder.Entity<OrganizationMemberLevel>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMemberLevel>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMemberLevel>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMemberLevel>()
+                .Property(e => e.Name).HasMaxLength(128);
+            modelBuilder.Entity<OrganizationMemberLevel>()
+                .HasIndex(e => new { e.OrganizationId, e.SortOrder });
+
+            // Deleting a rung clears the title from members who held it rather than blocking —
+            // a ladder edit must never be refused because somebody is standing on the rung.
+            modelBuilder.Entity<OrganizationUserMembership>()
+                .HasOne(e => e.MemberLevel).WithMany()
+                .HasForeignKey(e => e.MemberLevelId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
 
             // ── OrgCalendarEvent ──────────────────────────────────────────────
             modelBuilder.Entity<OrgCalendarEvent>()

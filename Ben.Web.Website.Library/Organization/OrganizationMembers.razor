@@ -58,6 +58,32 @@
                         <UserNameLink AppUserId="@m2.AppUserId" DisplayName="@m2.DisplayName" ShowAvatar="true" />
                     </Template>
                 </GridColumn>
+                @* The member's title on the group's ladder (item 157). Seniority, never
+                   permission. Admins assign from a plain-Blazor select (Telerik inputs set by
+                   script never bind — and a dropdown per row is exactly the kind of place that
+                   trap bites); everyone else reads a badge. *@
+                <GridColumn Title="Title" Width="190px">
+                    <Template>
+                        @{ var m3 = (OrgMembershipItem)context; }
+                        @if (_canManage && _levels.Count > 0)
+                        {
+                            <select class="form-select form-select-sm" style="max-width:170px;"
+                                    id="member-level-@m3.MembershipId"
+                                    value="@(m3.MemberLevelId?.ToString() ?? "")"
+                                    @onchange="@(e => AssignLevelAsync(m3, e.Value?.ToString()))">
+                                <option value="">— none —</option>
+                                @foreach (var level in _levels.Where(l => l.IsActive || l.Id == m3.MemberLevelId))
+                                {
+                                    <option value="@level.Id" selected="@(level.Id == m3.MemberLevelId)">@level.Name</option>
+                                }
+                            </select>
+                        }
+                        else if (m3.MemberLevelName is not null)
+                        {
+                            <span class="badge bg-info text-dark">@m3.MemberLevelName</span>
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
             </GridColumns>
         </TelerikGrid>
@@ -86,6 +112,24 @@
     private string _orgName = string.Empty;
     private IReadOnlyList<OrgMembershipItem> _members = [];
     private LoadResult<OrgMembershipItem>   _result;
+    private IReadOnlyList<OrgMemberLevelItem> _levels = [];
+
+    private async Task AssignLevelAsync(OrgMembershipItem m, string? raw)
+    {
+        Guid? levelId = Guid.TryParse(raw, out var id) ? id : null;
+        if (!await AdminClient.AssignMemberLevelAsync(OrgId, m.MembershipId, levelId))
+        {
+            _error = "The title couldn't be saved. Please try again.";
+            return;
+        }
+
+        // Update in place rather than refetching the roster: the change is this one cell.
+        var name = levelId is null ? null : _levels.FirstOrDefault(l => l.Id == levelId)?.Name;
+        _members = _members
+            .Select(x => x.MembershipId == m.MembershipId
+                ? x with { MemberLevelId = levelId, MemberLevelName = name } : x)
+            .ToList();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -105,6 +149,7 @@
         {
             _result   = await AdminClient.GetOrganizationMembersAsync(OrgId);
             _members  = _result.Items;
+            _levels   = (await AdminClient.GetMemberLevelsAsync(OrgId)).Items;
             var orgs  = (await AdminClient.GetOrganizationsAsync()).Items;
 
             // Still falls back to the id when the name genuinely cannot be resolved — a member of

@@ -59,6 +59,8 @@ public sealed class OrganizationUserMembershipResponse
     public bool IsActive { get; set; }
     public DateTime DateCreated { get; set; }
     public DateTime? DateUpdated { get; set; }
+    public Guid? MemberLevelId { get; set; }
+    public string? MemberLevelName { get; set; }
 }
 
 public sealed class OrganizationAccessGrantResponse

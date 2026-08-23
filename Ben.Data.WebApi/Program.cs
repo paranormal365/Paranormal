@@ -439,6 +439,7 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.EquipmentTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.SubscriptionTierSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.MemberLevelSeeder.SeedAsync(app.Services, app.Configuration);
     // DevelopmentDataSeeder runs late — depends on all users/orgs above being present.
     // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
     await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);

@@ -171,6 +171,13 @@ public interface IBenOrganizationClient
     /// empty when the truth was a refusal, twice (items 119, 122).
     /// </remarks>
     Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Member-title ladder (item 157) — seniority, never permission ─────────
+    Task<WebApi.LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgMemberLevelItem?> CreateMemberLevelAsync(Guid orgId, string name, int sortOrder, bool isActive, CancellationToken token = default);
+    Task<OrgMemberLevelItem?> UpdateMemberLevelAsync(Guid orgId, Guid levelId, string name, int sortOrder, bool isActive, CancellationToken token = default);
+    Task<bool> DeleteMemberLevelAsync(Guid orgId, Guid levelId, CancellationToken token = default);
+    Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId, CancellationToken token = default);
     Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────

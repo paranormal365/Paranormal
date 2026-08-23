@@ -279,8 +279,28 @@ public sealed partial class BenAdminClientAdapter
         // reason across but dropped SessionExpired, so a signed-out roster asked the reader to
         // "try again" instead of to sign in.
         var result = await _api.GetListAsync<OrganizationUserMembershipResponse>($"/api/organizations/{orgId}/roster", token);
-        return result.Map(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName));
+        return result.Map(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName, m.MemberLevelId, m.MemberLevelName));
     }
+
+    // ── Member-title ladder (item 157) ───────────────────────────────────────
+
+    public Task<LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgMemberLevelItem>($"/api/organizations/{orgId}/member-levels", token);
+
+    public Task<OrgMemberLevelItem?> CreateMemberLevelAsync(Guid orgId, string name, int sortOrder, bool isActive, CancellationToken token = default)
+        => _api.PostAsync<object, OrgMemberLevelItem>($"/api/organizations/{orgId}/member-levels",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive }, token);
+
+    public Task<OrgMemberLevelItem?> UpdateMemberLevelAsync(Guid orgId, Guid levelId, string name, int sortOrder, bool isActive, CancellationToken token = default)
+        => _api.PutAsync<object, OrgMemberLevelItem>($"/api/organizations/{orgId}/member-levels/{levelId}",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive }, token);
+
+    public Task<bool> DeleteMemberLevelAsync(Guid orgId, Guid levelId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/member-levels/{levelId}", token);
+
+    public Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId, CancellationToken token = default)
+        => _api.PutVoidAsync($"/api/organizations/{orgId}/member-levels/assign/{membershipId}",
+            new { MemberLevelId = levelId }, token);
 
     public async Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)
     {

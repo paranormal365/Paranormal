@@ -7938,7 +7938,7 @@ add-from-template option.
 member-visible tab). Order is load-bearing: A and B change nothing visible, C prepares the
 safety net, and only then does D flip enforcement.
 
-## 157. Member title ladder — seniority, not permissions (AGREED, ready to build — 2026-08-23)
+## 157. Member title ladder — seniority, not permissions (CLOSED 2026-08-23 — built as agreed)
 
 Ben's concept, agreed after discussion: a per-organization ladder of member **titles** —
 seniority within the group, deliberately and permanently distinct from permission roles (item
@@ -7964,10 +7964,25 @@ Decisions locked:
 - **Deferred on purpose:** any bridge from level to auto-assigned roles ("Investigator and above
   get Case Read"). Useful someday; reintroduces the title/permission entanglement today.
 
-Independent of item 156 — one-session scale, could ship before any of it. Tests: seeding at all
-three doors, delete-birth-children, backfill idempotence, assignment endpoint auth (org admins
-manage levels and assignments), a source-scan-free UI check that the title renders on the
-roster; Playwright: owner renames a rung and assigns it, member sees it on their profile.
+**Built 2026-08-23, one session, exactly as specified above.** `OrganizationMemberLevel` +
+nullable `OrganizationUserMembership.MemberLevelId` (SetNull — deleting a rung clears, never
+blocks), migration applied; `OrgMemberLevelDefaults` stamped at all three creation doors on the
+same SaveChanges and added to the org-delete birth-children list; `MemberLevelSeeder` backfilled
+every existing group (skips any group that has ANY levels, so an edited ladder is never
+touched); CRUD + assign endpoints (members read, admins write, cross-org assignment refused
+with a sentence — that guard watched failing); ladder manager in group Settings (add, rename,
+reorder by swap, delete) and a per-row assignment dropdown on the Members tab (plain-Blazor
+select — the Telerik synthetic-event trap bites exactly here), badge for non-admin readers.
+Six controller unit tests + all three door tests and the delete test extended (ladder assertion
+regressed); Playwright MemberTitleLadderTests passes ×4 including cleanup in finally. Help:
+organization-administration → "Member titles — the ladder" + HelpLink. Verified live in the
+browser and via API: TGH answers the five seeded rungs in order.
+
+One operational relearning while verifying: BOTH hosts on :5252/:5078 were stale from a
+previous session — `dotnet run` on an occupied port dies silently and the old binary keeps
+answering, which produced a phantom 404 on the new endpoint. Kill by PID from
+`lsof -sTCP:LISTEN` before trusting any live check (feedback_dotnet_run_stale_process_trap,
+third occurrence).
 
 ## 158. Engagement assignments — investigation duties + case contacts (PROPOSED — 2026-08-23)
 

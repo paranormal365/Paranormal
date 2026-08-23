@@ -22,6 +22,14 @@ public class OrgCalendarEventTypeProfile : Profile
     }
 }
 
+public class OrganizationMemberLevelProfile : Profile
+{
+    public OrganizationMemberLevelProfile()
+    {
+        CreateMap<OrganizationMemberLevel, OrganizationMemberLevelRecord>();
+    }
+}
+
 public class OrgCalendarEventProfile : Profile
 {
     public OrgCalendarEventProfile()
