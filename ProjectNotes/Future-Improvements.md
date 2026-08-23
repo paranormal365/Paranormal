@@ -8002,6 +8002,19 @@ contact besides the manager.
   notifications route to contacts + case manager. With no explicit contact, the case manager IS
   the contact, so the client-facing surface never renders empty.
 
+**Title-to-duty eligibility (Ben, 2026-08-23):** *"the higher the title, the more responsibility
+they can take on during an investigation."* Built in as an optional per-duty **minimum title**:
+each InvestigationDuty may name a minimum member level from the group's own ladder (item 157);
+null = anyone. Comparison is by the ladder's SortOrder at assignment time, so it survives
+renames and follows each group's own ordering. **Soft enforcement**: under-level attendees
+render grayed with the reason, and whoever manages the visit may override with an explicit,
+recorded confirm — the senior calls in sick, the capable junior steps up. Seeded duties ship
+with **no minimums** (no surprise behavior; groups opt in). A deleted rung nulls the
+requirement (SetNull) rather than blocking. This is the one sanctioned title→responsibility
+bridge, and it is deliberately eligibility-not-permission: titles still grant no CRUD, ever —
+the level→auto-role bridge stays deferred (item 157). Tests: eligibility rendering, the
+override path and its audit trail, SetNull on rung deletion, SortOrder-not-name comparison.
+
 **Naming note, accepted:** the title "Lead Investigator" (rank, item 157) and the duty "Lead
 Investigator" (tonight's lead) share words on purpose — that is how groups talk, a junior can
 lead a small visit, and context (profile vs. roster) disambiguates.
