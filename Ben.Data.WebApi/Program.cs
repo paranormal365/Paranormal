@@ -193,6 +193,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);

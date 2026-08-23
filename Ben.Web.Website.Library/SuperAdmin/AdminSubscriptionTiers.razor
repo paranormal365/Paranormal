@@ -91,6 +91,31 @@
                         }
                     </Template>
                 </GridColumn>
+                @* Item 156 Phase A: which permission AREAS this tier's groups may use in
+                   custom roles. Checkbox-per-area, saved on toggle like the settings switches —
+                   a checklist with a separate Save button reads as already applied. All-checked
+                   is the seeded default and gates nothing; unchecking is how Ben differentiates
+                   tiers. Enforcement arrives in later phases; today this renders truthfully and
+                   stores the choice. *@
+                <GridColumn Title="Role areas" Width="260px">
+                    <Template>
+                        @{ var ta = (SubscriptionTierAdminRecord)context; }
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                            {
+                                var included = (ta.IncludedAreas ?? []).Contains(area);
+                                <div class="form-check form-check-inline m-0" title="@AreaLabel(area)">
+                                    <input type="checkbox" class="form-check-input"
+                                           id="@($"area-{ta.Id}-{(int)area}")"
+                                           checked="@included"
+                                           disabled="@(_savingAreasTierId == ta.Id)"
+                                           @onchange="@(e => ToggleAreaAsync(ta, area, e.Value is true))" />
+                                    <label class="form-check-label small" for="@($"area-{ta.Id}-{(int)area}")">@AreaLabel(area)</label>
+                                </div>
+                            }
+                        </div>
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.OrganizationCount)" Title="Groups" Width="90px" />
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.IsActive)" Title="Active" Width="80px">
                     <Template>
@@ -374,6 +399,47 @@
         BillingInterval.Yearly     => "yearly",
         _                          => interval.ToString(),
     };
+
+    private Guid? _savingAreasTierId;
+
+    private static string AreaLabel(Ben.Data.Common.Enums.OrganizationPermissionArea area) => area switch
+    {
+        Ben.Data.Common.Enums.OrganizationPermissionArea.OrganizationProfile => "Profile",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Membership          => "Membership",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Cases               => "Cases",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations      => "Investigations",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Equipment           => "Equipment",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.PublicPages         => "Public pages",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Files               => "Files",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Clients             => "Clients",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
+        _ => area.ToString(),
+    };
+
+    private async Task ToggleAreaAsync(
+        SubscriptionTierAdminRecord tier, Ben.Data.Common.Enums.OrganizationPermissionArea area, bool on)
+    {
+        _savingAreasTierId = tier.Id;
+        try
+        {
+            var next = (tier.IncludedAreas ?? []).ToHashSet();
+            if (on) next.Add(area); else next.Remove(area);
+
+            var (updated, error) = await AdminClient.SetTierPermissionAreasAsync(tier.Id, next.ToList());
+            if (updated is null)
+            {
+                _saveError = error ?? "The area change couldn't be saved.";
+                return;
+            }
+            // Reload rather than patch in place: LoadResult items are immutable snapshots, and
+            // the list is small.
+            await LoadAsync();
+        }
+        finally
+        {
+            _savingAreasTierId = null;
+        }
+    }
 
     private static string LimitLabel(SubscriptionLimit limit) => limit switch
     {

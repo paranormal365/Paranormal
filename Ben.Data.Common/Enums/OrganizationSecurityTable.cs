@@ -96,4 +96,14 @@ public enum OrganizationSecurityTable
     /// its owner, never by this permission.
     /// </remarks>
     EquipmentCheckout = 36,
+
+    /// <summary>The case record and its dependents (item 156 Phase A; enforcement arrives in
+    /// later phases — until then case access remains the historical is-member rule).</summary>
+    Case = 37,
+
+    /// <summary>Client requests — accepting, declining, corresponding.</summary>
+    ClientRequest = 38,
+
+    /// <summary>The group calendar and its events.</summary>
+    OrgCalendar = 39,
 }

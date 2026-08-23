@@ -8247,3 +8247,26 @@ Final sheet: **322 e2e passed, 0 failed**, the only 15 skips being the capture g
 themselves; 5,255 unit tests; zero warnings. Baseline run had two 30-second GotoAsync timeouts
 under full-machine load (both pass in 2s solo) — congestion, recorded here so the next reader
 doesn't chase them.
+
+### Item 156 Phase A — SHIPPED 2026-08-23
+
+Permission areas exist end to end, gating nothing yet, exactly per the phase contract:
+`OrganizationPermissionArea` (9 areas, numbered, append-only); the TOTAL table→area map in
+`PermissionAreas` with its guard (every OrganizationSecurityTable value mapped or in the
+declared user-scoped exclusion list — never neither, never both; every area non-empty; the tier
+admin endpoint's SuperAdmin policy asserted by reflection); `Case=37 / ClientRequest=38 /
+OrgCalendar=39` appended to the security-table enum, which the item-83 coverage guard
+immediately caught until the role editor gained their three described sections (grants storable
+now, becoming decisive as later phases land — the descriptions say so);
+`SubscriptionTierPermissionArea` rows (unique tier×area) with cascade from the tier;
+`IncludedAreasResolver` mirroring SubscriptionLimitGuard's tier resolution and failing OPEN in
+every ambiguous case (no tiers, invalid list, zero rows) — only a checklist that SAYS so may
+exclude; the all-areas seed placed BEFORE the tiers-exist early-return (first attempt sat after
+it and never ran on an existing database — caught live, the zero-behavior-change promise almost
+shipped as zero-rows-fail-open instead); whole-list-replace endpoint + save-on-toggle checklist
+on Price Bands. 11 new unit tests (map totality, resolver incl. regressed checklist case,
+endpoint replace semantics) + TierRoleAreasTests e2e round-trip ×2 with restore. Help updated.
+Live-verified: 3 tiers × 9 areas seeded; an uncheck survives reload; restored.
+
+Next: **Phase B** — role checks added ADDITIVELY to admin-only writes (calendar create, client
+request accept) so Secretary/Client Manager roles become useful with zero tightening.
