@@ -66,11 +66,15 @@
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input" type="checkbox" role="switch"
                                        id="@($"sw-{s.Key}")"
-                                       checked="@IsTrue(_drafts[s.Key])"
+                                       checked="@IsOn(s)"
                                        disabled="@(_savingKey == s.Key)"
                                        @onchange="@(e => ToggleAsync(s.Key, e.Value is true))" />
                                 <label class="form-check-label" for="@($"sw-{s.Key}")">
-                                    @(IsTrue(_drafts[s.Key]) ? "On" : "Off")
+                                    @(IsOn(s) ? "On" : "Off")
+                                    @if (string.IsNullOrWhiteSpace(_drafts[s.Key]))
+                                    {
+                                        <span class="text-secondary small ms-1">(default)</span>
+                                    }
                                 </label>
                             </div>
                         }
@@ -226,6 +230,16 @@
 
     /// <summary>A stored value is text; "true" in any casing is on, everything else is off.</summary>
     private static bool IsTrue(string? raw) => bool.TryParse(raw, out var v) && v;
+
+    /// <summary>
+    /// What the switch should show: the stored value when there is one, otherwise what the site
+    /// actually does with nothing stored. Drawing this from the stored value alone made the page
+    /// report seven running features as "Off" — the switch has to describe the site, not the row.
+    /// </summary>
+    private bool IsOn(SiteSettingRecord s)
+        => string.IsNullOrWhiteSpace(_drafts[s.Key])
+            ? s.DefaultWhenUnset
+            : IsTrue(_drafts[s.Key]);
 
     /// <summary>Writes a switch immediately — see the note on the switch markup.</summary>
     private async Task ToggleAsync(string key, bool on)

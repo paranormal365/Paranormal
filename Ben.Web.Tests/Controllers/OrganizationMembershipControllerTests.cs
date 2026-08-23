@@ -1,5 +1,9 @@
+using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
+using Ben.Data.WebApi.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,17 +26,45 @@ public class OrganizationMembershipControllerTests
     private static Mock<IOrganizationSecurityService> ServiceMock()
         => new Mock<IOrganizationSecurityService>();
 
-    private static OrganizationMembershipController Build(
-        Mock<IOrganizationSecurityService> svc, Guid userId)
+    private static IDbContextFactory<BenDataContext> CreateFactory()
     {
-        var ctrl = new OrganizationMembershipController(svc.Object);
+        var options = new DbContextOptionsBuilder<BenDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new PooledDbContextFactory<BenDataContext>(options);
+    }
+
+    /// <summary>
+    /// Builds the controller. <paramref name="allowSelfRegistration"/> is null for "nobody has
+    /// ever touched the setting", which must read as allowed — see the endpoint's own remarks.
+    /// </summary>
+    private static OrganizationMembershipController Build(
+        Mock<IOrganizationSecurityService> svc, Guid userId,
+        bool? allowSelfRegistration = null, bool isSuperAdmin = false)
+    {
+        var factory = CreateFactory();
+        if (allowSelfRegistration is { } allow)
+        {
+            using var db = factory.CreateDbContext();
+            db.SiteSettings.Add(new SiteSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = SiteSettingKeys.AllowOrganizationSelfRegistration,
+                Value = allow.ToString(),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.SaveChanges();
+        }
+
+        var ctrl = new OrganizationMembershipController(svc.Object, new SiteSettingsService(factory));
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity([
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString())
-                ], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    claims, "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
@@ -121,6 +153,59 @@ public class OrganizationMembershipControllerTests
     }
 
     // ── RegisterOrganization ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RegisterOrganization_WhenSelfRegistrationIsOff_IsRefused()
+    {
+        // The setting was declared, shown as a switch, described as "when off, only a SuperAdmin
+        // can create one" — and read by nothing at all until 2026-08-22. An administrator could
+        // switch it off and every visitor kept founding groups.
+        var userId = Guid.NewGuid();
+        var svc    = ServiceMock();
+        var ctrl   = Build(svc, userId, allowSelfRegistration: false);
+
+        var result = await ctrl.RegisterOrganization(
+            new RegisterOrganizationRequest { Name = "Acme", UrlName = "acme" }, default);
+
+        var refused = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, refused.StatusCode);
+
+        // Refused means not created, not "created and then complained about".
+        svc.Verify(x => x.RegisterOrganizationAsync(
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterOrganization_WhenSelfRegistrationIsOff_SuperAdminMayStillCreate()
+    {
+        var userId = Guid.NewGuid();
+        var svc    = ServiceMock();
+        svc.Setup(x => x.RegisterOrganizationAsync(userId, It.IsAny<string>(), It.IsAny<string>(), default))
+           .ReturnsAsync(new Organization { Id = Guid.NewGuid(), Name = "Acme", UrlName = "acme" });
+        var ctrl = Build(svc, userId, allowSelfRegistration: false, isSuperAdmin: true);
+
+        var result = await ctrl.RegisterOrganization(
+            new RegisterOrganizationRequest { Name = "Acme", UrlName = "acme" }, default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task RegisterOrganization_WhenTheSettingWasNeverSet_IsAllowed()
+    {
+        // Introducing the check must not close a door that has been open since launch.
+        var userId = Guid.NewGuid();
+        var svc    = ServiceMock();
+        svc.Setup(x => x.RegisterOrganizationAsync(userId, It.IsAny<string>(), It.IsAny<string>(), default))
+           .ReturnsAsync(new Organization { Id = Guid.NewGuid(), Name = "Acme", UrlName = "acme" });
+        var ctrl = Build(svc, userId);
+
+        var result = await ctrl.RegisterOrganization(
+            new RegisterOrganizationRequest { Name = "Acme", UrlName = "acme" }, default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
 
     [Fact]
     public async Task RegisterOrganization_Returns201_WithNewOrgData()

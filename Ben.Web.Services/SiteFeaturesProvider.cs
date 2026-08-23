@@ -58,6 +58,7 @@ public sealed class SiteFeaturesProvider
 
     private volatile IReadOnlyDictionary<string, bool> _snapshot = Defaults;
     private volatile string? _announcement;
+    private volatile bool _allowOrgSelfRegistration = true;
     private long _nextRefreshTicks;
     private int _refreshing;
 
@@ -81,6 +82,13 @@ public sealed class SiteFeaturesProvider
     public string? Announcement
     {
         get { EnsureFresh(); return _announcement; }
+    }
+
+    /// <summary>Whether an ordinary signed-in user may found a group. True until told otherwise,
+    /// so an unreachable API leaves the product working the way it always has.</summary>
+    public bool AllowOrganizationSelfRegistration
+    {
+        get { EnsureFresh(); return _allowOrgSelfRegistration; }
     }
 
     /// <summary>
@@ -123,6 +131,7 @@ public sealed class SiteFeaturesProvider
                 // Inside the same validity check: only a response that names features may also
                 // set OR CLEAR the announcement, so a failed fetch cannot wipe a live notice.
                 _announcement = string.IsNullOrWhiteSpace(info.Announcement) ? null : info.Announcement;
+                _allowOrgSelfRegistration = info.AllowOrganizationSelfRegistration;
             }
         }
         catch (Exception ex)

@@ -7694,3 +7694,121 @@ controller — plus a Playwright test that saves a notice, sees the banner on ho
 page, clears it, sees it leave, and restores whatever announcement was set beforehand in a
 finally, because the database is shared with the public site. Help doc updated
 (site-administration → The site-wide announcement).
+
+## 152. "Allow groups to self-register" was a switch that did nothing (CLOSED 2026-08-22)
+
+Found by auditing every declared site setting after item 151. `org.allow-self-registration` was
+declared, rendered as a switch, and described as *"When off, only a SuperAdmin can create one"* —
+and **read by nothing anywhere in the codebase**. An administrator could switch it off, watch the
+page report Off, and every signed-in visitor kept founding groups. Worse than item 151: this one
+is a policy control, so its failure mode is believing you closed a door. Worse still, the
+Start-a-Group founder door added for item 146 is exactly what it is meant to gate — the hole was
+widened while the switch sat there looking authoritative.
+
+Now enforced in `OrganizationMembershipController.RegisterOrganization` (403 with a sentence, not
+a bare refusal) **and** given a UI path, because a server rule the UI never surfaces is the same
+bug wearing a different coat: the "Start a Group" button is hidden and `/organizations/new`
+explains itself and points at the contact form. SuperAdmins are exempt at both layers. Unset
+reads as **on** — self-registration is how the product has always worked and the billing model
+depends on it, so introducing the check must not close the door for a site that never set it.
+Carried to the website on the existing anonymous site-features response, like the announcement.
+
+Verified live end to end: switch off → member gets 403 and no button, SuperAdmin still gets 201.
+Three unit tests plus a Playwright test that restores the switch in a `finally` (shared database).
+
+**The guard that stops the next one:** `SiteSettingConsumerGuardTests` asserts every setting in
+`SiteSettingKeys.Seed` is read somewhere outside its declaration and outside the admin page that
+edits it — editing a setting is not consuming it, which is the exact failure. Regressed by
+declaring an unread probe setting and watching the test name it.
+
+## 153. Seven feature switches reported "Off" while their features were running (CLOSED 2026-08-22)
+
+Caught by the item-152 Playwright test refusing to toggle a switch it believed was already off.
+The admin page drew each switch from the **stored** value, but an unset flag's real behaviour is
+its declared default — and the established sections default **on**. So Site Settings was telling
+Ben that the video editor, events, discovery, group public pages, the media library, group
+messaging and voting were all switched off, while every one of them was running.
+
+`SiteSettingRecord` now carries `DefaultWhenUnset`, the admin page renders the effective state,
+and a row with nothing stored is marked **(default)** beside On/Off so "nobody has set this" stays
+distinguishable from "somebody set this". Same class as 151 and 152: a control that misreports the
+state it controls is as bad as one that does nothing.
+
+## 154. Four feature switches still gate nothing (OPEN — ratcheted, 2026-08-22)
+
+The sweep behind 152 found the flags themselves half-built. `features.discovery`,
+`features.cms-pages` and `features.voting` are read by **no code at all**, so switching them off
+changes nothing. `features.events` is read only by `EventReminderJob`, which is worse than
+untouched: switching it off silently stops the reminder emails while leaving calendars, event
+pages and RSVPs working, so people sign up for events and are never reminded.
+
+Not fixed here because closing them is a product decision per feature — whether
+`features.cms-pages` also takes down `/o/{group}/cases`, for instance — across roughly two dozen
+surfaces and an anonymous read path, and `SiteSettingKeys`'s own rule ("turning one off must kill
+the URLs, not just the navigation links") means each one is real work rather than a one-line gate.
+
+`FeatureFlagGatesSomethingTests` records the four as a shrinking list, the same shape as the
+item-120 ratchet: an eleventh switch that gates nothing cannot ship, and fixing one requires
+deleting its line. The test also documents what it cannot see — it measures whether a flag is read
+*at all*, not whether the gate is complete, which is why `features.events` passes it while being
+the most misleading of the four. **The help documentation now warns administrators off all four
+rather than promising behaviour they do not have.**
+
+## 155. No group created after item 148 could be deleted (CLOSED 2026-08-22)
+
+Found while cleaning up a probe group: `DELETE /api/organizations/{id}` answered **500**. Every
+foreign key onto `Organizations` is `NoAction` by convention, so deleting a group has never
+cascaded — and item 148 gave every new group five default calendar event types **at birth**, which
+turned that latent weakness into a certainty: from that commit on, no newly created group could
+ever be deleted, and the failure surfaced as an unhandled server error.
+
+Delete now removes the rows created *with* the organization — the founder's membership and the
+default event types, neither of which is anyone's reason to keep it — and catches the remaining
+`DbUpdateException` to answer **409 with a sentence** naming what to do. Refusing to delete a group
+that still has cases, files or events is correct; doing it with a 500 was not. Live-verified by
+deleting the probe group cleanly, and covered by a regression test that seeds both birth children.
+
+## 156. Organization roles & permissions, tier-aware — the full plan (OPEN — planning with Ben, 2026-08-23)
+
+Ben's request, near-verbatim, plus what the codebase already has so the plan builds on it
+instead of beside it.
+
+**The ask.** CRUD settings per role per organization. Users can belong to several organizations;
+roles are per organization, and a person in two groups counts against BOTH groups' member-count
+tiers (already true — memberships are per-org rows). All CRUD settings are shown when creating a
+role, but where the organization's tier does not include a given capability, those toggles are
+**grayed out with a note that upgrading the tier would make them apply**. Defaults are
+**no permission**. Every new organization gets **several roles created for it** at birth. The
+**owner always has access to everything**. Members may hold **one or more roles**. An accepted
+member gets a **baseline read of the obvious parts** of the organization; beyond that, nothing
+unless a role they hold grants it. Candidate roles: Equipment Manager, Case Manager, CMS Manager,
+Client Manager, Content Manager, Historian, Secretary.
+
+**Already built (do not rebuild):**
+- `OrganizationRole` + `OrganizationRolePermission` (per-table CRUD bitmask,
+  `OrganizationSecurityTable` × `OrganizationSecurityAction`) + `OrganizationRoleMembership`
+  (a member may hold many roles; OR across them).
+- The role editor (`OrgRolesManager`/`OrgRoleEditor`) with 22 permission sections, each with a
+  plain-language description (item 83) and a coverage guard test.
+- Enforcement: `OrganizationSecurityService.HasAccessAsync` — SuperAdmin, then Owner/Administrator
+  bypass, then direct grants, then role permissions. Default deny, exactly Ben's "none unless
+  covered". ~38 call sites; a further ~16 controllers use plain is-member/is-admin checks — the
+  de-facto "baseline member read" today, implicit rather than declared.
+- Tier machinery: keyed `SubscriptionLimit` rows incl. a dormant `CustomRoles` cap;
+  `SubscriptionLimitGuard`; better-of contract rule.
+
+**Genuinely new:**
+1. **Default roles at organization creation** — same pattern as item 148's calendar event types
+   (`OrgCalendarDefaults`, stamped from all three creation doors on the same SaveChanges).
+   Backfill decision needed for existing orgs.
+2. **Tier-gated capabilities in the role editor** — a mapping from (permission section × action)
+   to "included in your tier?", grayed toggles + upgrade note when not. Nothing like this exists;
+   the tier system caps counts, not capabilities. Shape needs Ben's answers below.
+3. **Baseline member read made explicit** — either a seeded, protected "Member" role or a
+   documented implicit baseline; today it is scattered across is-member checks.
+4. **Role templates** for Ben's candidate list, as starting points a group can edit.
+
+**Open questions (asked of Ben 2026-08-23; answers to be recorded here):** what shape the tier
+gating takes; whether the Administrator membership-role keeps its blanket bypass or becomes
+role-governed; what exactly the baseline member read covers; and what happens to already-granted
+permissions when a group's tier drops below them.

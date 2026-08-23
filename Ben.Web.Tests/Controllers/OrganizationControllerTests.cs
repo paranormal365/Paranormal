@@ -635,6 +635,39 @@ public class OrganizationControllerTests
     }
 
     [Fact]
+    public async Task Delete_RemovesTheRowsCreatedWithTheOrganization()
+    {
+        // Item 148 gave every new group five default calendar event types at birth. Foreign keys
+        // onto Organizations are NoAction by convention, so from that moment no newly created
+        // group could be deleted at all — the delete threw a FK violation and surfaced as a 500.
+        var factory    = CreateFactory();
+        var userId     = Guid.NewGuid();
+        var org        = await SeedOrgAsync(factory);
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(seed, org.Id, userId);
+            seed.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Owner, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var result = await controller.Delete(org.Id, default);
+
+        Assert.IsType<NoContentResult>(result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null(await db.Organizations.FindAsync(org.Id));
+        Assert.Empty(await db.OrgCalendarEventTypes.Where(t => t.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.OrganizationUserMemberships.Where(m => m.OrganizationId == org.Id).ToListAsync());
+    }
+
+    [Fact]
     public async Task Delete_AsMember_WithDeleteAccess_RemovesOrg()
     {
         var factory  = CreateFactory();

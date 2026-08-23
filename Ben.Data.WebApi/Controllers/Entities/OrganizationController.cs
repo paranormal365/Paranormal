@@ -263,8 +263,37 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
+        // The rows created WITH the organization, which therefore cannot be anyone's reason to
+        // keep it: the founder's own membership, and the default calendar event types stamped at
+        // registration. Every foreign key onto Organizations is NoAction by convention here, so
+        // these have to go explicitly — and until they did, a group created after the default
+        // event types shipped (item 148) could never be deleted at all: five rows nobody asked
+        // for, arriving at birth, turning every delete into a 500.
+        var birthChildren = await db.OrgCalendarEventTypes
+            .Where(t => t.OrganizationId == id).ToListAsync(ct);
+        db.OrgCalendarEventTypes.RemoveRange(birthChildren);
+
+        var memberships = await db.OrganizationUserMemberships
+            .Where(m => m.OrganizationId == id).ToListAsync(ct);
+        db.OrganizationUserMemberships.RemoveRange(memberships);
+
         db.Organizations.Remove(org);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Everything else hanging off a group — cases, files, events, publications — is real
+            // work, and refusing to delete a group that still has some is right. Saying so is the
+            // part that was missing: this used to surface as an unhandled 500, which tells the
+            // administrator nothing about what to do next.
+            return Conflict(
+                "This group still has records attached to it — cases, files, events or similar. "
+                + "Remove or transfer those first, then delete the group.");
+        }
+
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
