@@ -87,6 +87,20 @@
                                       value="@_drafts[s.Key]"
                                       @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
                         }
+                        else if (s.Key == DefaultAvatarKey)
+                        {
+                            @* An upload, not a Guid box (Ben, 2026-08-23): the value IS a file id,
+                               but asking an administrator to mint one elsewhere and paste it here
+                               was the plumbing showing through. Same flow as anyone's avatar —
+                               upload as a public file, then point the setting at it; both steps
+                               happen behind this one control. *@
+                            <label class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") mb-0" for="default-avatar-upload">
+                                @(_savingKey == s.Key ? "Uploading…" : "Upload image")
+                            </label>
+                            <InputFile id="default-avatar-upload" style="display:none;"
+                                       accept="image/png,image/jpeg,image/gif,image/webp"
+                                       OnChange="OnDefaultAvatarSelectedAsync" />
+                        }
                         else
                         {
                             <input class="form-control" style="max-width:420px;"
@@ -94,7 +108,7 @@
                                    value="@_drafts[s.Key]"
                                    @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                         }
-                        @if (!s.IsBoolean)
+                        @if (!s.IsBoolean && s.Key != DefaultAvatarKey)
                         {
                         <button type="button" class="btn btn-primary" @onclick="@(() => SaveAsync(s.Key))" disabled="@(!(_savingKey != s.Key))">Save</button>
                         }
@@ -198,6 +212,63 @@
                 _avatarPreview = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
         }
         catch { /* leaves the "doesn't resolve" warning showing, which is the useful signal */ }
+    }
+
+    /// <summary>Ceiling for the default avatar image. Matches the profile-photo limit.</summary>
+    private const long MaxDefaultAvatarBytes = 10 * 1024 * 1024;
+
+    private async Task OnDefaultAvatarSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _savingKey = DefaultAvatarKey; _error = null; _savedKey = null;
+        StateHasChanged();
+        try
+        {
+            var file = e.File;
+            var typeId = await AdminClient.GetProfilePhotoFileTypeIdAsync();
+            if (typeId is null) { _error = "Photo uploads aren't configured."; return; }
+
+            // Buffered before it goes anywhere: a RemoteBrowserFileStream fed straight into
+            // request content freezes the page and replays the click on reconnect.
+            using var ms = new MemoryStream();
+            await using (var browserStream = file.OpenReadStream(MaxDefaultAvatarBytes))
+                await browserStream.CopyToAsync(ms);
+
+            // Public on purpose: this image renders for people with no photo, to viewers who may
+            // not be signed in at all. A private default would be a broken image for exactly the
+            // audience it exists for.
+            var uploaded = await AdminClient.UploadUserFileAsync(
+                typeId.Value, UserState.UserId ?? Guid.Empty,
+                file.Name, file.ContentType, ms.ToArray(),
+                description: "Site default avatar", isPublic: true);
+            if (uploaded is null)
+            {
+                _error = "Upload failed — the image must be JPEG, PNG, GIF or WebP.";
+                return;
+            }
+
+            // Replace, not accumulate (Ben): once the setting points at the new image, the old
+            // one has no job left. Remembered before the save, deleted best-effort after it — a
+            // file that is genuinely in use elsewhere (someone's own photo pointed at by the old
+            // Guid workflow) survives because its references make the hard delete refuse, which
+            // is exactly the right arbiter.
+            Guid? previous = Guid.TryParse(_drafts.GetValueOrDefault(DefaultAvatarKey), out var prev)
+                ? prev : null;
+
+            _drafts[DefaultAvatarKey] = uploaded.Id.ToString();
+            await SaveAsync(DefaultAvatarKey);
+
+            if (previous is { } old && old != uploaded.Id && _savedKey == DefaultAvatarKey)
+                await AdminClient.DeleteUploadFileAdminAsync(old);
+        }
+        catch (IOException)
+        {
+            _error = "That image is too large — 10 MB at most.";
+        }
+        finally
+        {
+            if (_savingKey == DefaultAvatarKey) _savingKey = null;
+            StateHasChanged();
+        }
     }
 
     private async Task SaveAsync(string key)

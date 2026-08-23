@@ -102,7 +102,7 @@ public static class SiteSettingKeys
     public static readonly IReadOnlyList<(string Key, string Label, string Description)> Seed =
     [
         (DefaultAvatarUploadFileId, "Default profile picture",
-            "Image shown in place of initials when someone has no profile photo the viewer is allowed to see. Upload it as a public file first, then paste its file id here."),
+            "Image shown in place of initials when someone has no profile photo the viewer is allowed to see. Upload one here; replacing it removes the previous image."),
         (AllowOrganizationSelfRegistration, "Allow groups to self-register",
             "When on, any signed-in user can register a new group. When off, only a SuperAdmin can create one."),
         (SiteAnnouncement, "Site-wide announcement",
