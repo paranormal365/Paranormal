@@ -8208,3 +8208,12 @@ same gate as Update; SuperAdmin retains it for moderation, the one deliberate ex
 Three tests: non-owner gets Forbid with the row AND the blob surviving (the blob check matters —
 a Forbid that still deleted from disk would be the same hole in a different layer); owner
 deletes both; SuperAdmin may. The non-owner test was watched failing against the ungated code.
+
+**The full lifecycle, Ben's rules, verified 2026-08-23 as already-shipped behavior:** an
+organization EXCLUDES a file from its collection (Files-Delete permission removes the org's own
+copy; the person's original survives). The end user may RE-SUBMIT it by sharing the file with
+the organization — the share is owner-controlled. Re-ADDING it to the collection then requires
+someone with the org's Files-Create permission (`copy-from-user`, which also verifies the
+source is public or actively shared with this org), and publishing it publicly requires
+Files-Update on top. Every step is a real HasAccessAsync permission, not mere membership, so
+the item-156 roles arc will govern these gates without further work.
