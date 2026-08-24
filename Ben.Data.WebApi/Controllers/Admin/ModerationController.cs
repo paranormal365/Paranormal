@@ -35,11 +35,14 @@ public sealed class ModerationController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFeedMediaScreener _screener;
+    private readonly FeedLearningService _learning;
 
-    public ModerationController(IDbContextFactory<BenDataContext> db, IFeedMediaScreener screener)
+    public ModerationController(
+        IDbContextFactory<BenDataContext> db, IFeedMediaScreener screener, FeedLearningService learning)
     {
         _db = db;
         _screener = screener;
+        _learning = learning;
     }
 
     /// <summary>
@@ -79,6 +82,9 @@ public sealed class ModerationController : BenControllerBase
                 m.MediaReviewState,
                 m.MediaReviewNote,
                 m.MediaReviewedUtc,
+                m.FeedExperienceTypeId,
+                ExperienceTypeName = m.FeedExperienceType != null ? m.FeedExperienceType.Name : null,
+                m.CategoryMatchScore,
                 ContentType = m.MediaUploadFile!.ContentType,
                 ReviewerName = m.MediaReviewedByAppUserId == null
                     ? null
@@ -100,7 +106,38 @@ public sealed class ModerationController : BenControllerBase
                 : FeedMediaKind.Image,
             $"/api/moderation/feed-media/{r.Id}/file",
             r.MediaReviewedUtc,
-            r.ReviewerName)).ToList());
+            r.ReviewerName,
+            r.FeedExperienceTypeId,
+            r.ExperienceTypeName,
+            r.CategoryMatchScore)).ToList());
+    }
+
+    /// <summary>
+    /// The moderator's judgment on a post's CATEGORY (item 186 F6): does the content match what
+    /// the author says it shows? Separate from the safety decision on purpose — "safe to show"
+    /// and "is what it says" are different questions, and this one writes a labelled example the
+    /// re-fit learns from. The post itself is untouched: a mismatch is the author's to fix.
+    /// </summary>
+    [HttpPost("feed-categories/{postId:guid}")]
+    public async Task<IActionResult> JudgeCategory(
+        Guid postId, [FromBody] FeedCategoryVerdictRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var post = await db.OrgMessages.AsNoTracking()
+            .Where(m => m.Id == postId && m.ChannelType == OrgMessageChannel.PublicFeed)
+            .Select(m => new { m.FeedExperienceTypeId })
+            .FirstOrDefaultAsync(ct);
+        if (post is null) return NotFound();
+        if (post.FeedExperienceTypeId is not { } typeId)
+            return BadRequest("That post has no category to judge.");
+
+        await _learning.AddExampleAsync(db, postId, typeId,
+            request.Matches ? FeedLabel.Confirmed : FeedLabel.Mismatch,
+            FeedLabelSource.Moderator, userId, ct);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     /// <summary>

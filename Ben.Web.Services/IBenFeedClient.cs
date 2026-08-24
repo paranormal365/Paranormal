@@ -29,9 +29,10 @@ public interface IBenFeedClient
     /// <param name="cursor">From a previous page. Opaque.</param>
     /// <param name="token">Cancellation.</param>
     /// <param name="author">One person's posts. Overrides <paramref name="mode"/>.</param>
+    /// <param name="experienceType">One experience type's posts (item 186 F6). Combines like a tag.</param>
     Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null);
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null);
 
     // ── Moderation (item 186 F5) ─────────────────────────────────────────────
 
@@ -74,9 +75,24 @@ public interface IBenFeedClient
     /// <param name="media">Optional photo or video. Null for a text post.</param>
     /// <param name="mediaFileName">Its file name — required when <paramref name="media"/> is given.</param>
     /// <param name="mediaContentType">Its content type.</param>
+    /// <param name="experienceTypeId">What the post shows, from the taxonomy (item 186 F6).</param>
     Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
         string body, Guid? parentPostId = null, CancellationToken token = default,
-        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null);
+        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
+        Guid? experienceTypeId = null);
+
+    /// <summary>
+    /// The author changes what a post claims to show (item 186 F6) — the nudge's one-click
+    /// answer. Null clears the category. Returns the re-read post, or the refusal.
+    /// </summary>
+    Task<(FeedPostRecord? Post, string? Error)> RecategorizeAsync(
+        Guid postId, Guid? experienceTypeId, CancellationToken token = default);
+
+    /// <summary>
+    /// A moderator's category judgment (item 186 F6): the content matches its type, or it
+    /// doesn't. Writes a labelled example; touches nothing on the post itself.
+    /// </summary>
+    Task<bool> JudgeFeedCategoryAsync(Guid postId, bool matches, CancellationToken token = default);
 
     /// <summary>Reports a post. Idempotent — reporting twice is one report.</summary>
     Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default);

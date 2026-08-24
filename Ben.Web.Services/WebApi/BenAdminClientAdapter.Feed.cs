@@ -18,13 +18,14 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null)
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null)
     {
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(mode))    query.Add($"mode={Uri.EscapeDataString(mode)}");
         if (!string.IsNullOrWhiteSpace(hashtag)) query.Add($"hashtag={Uri.EscapeDataString(hashtag)}");
         if (!string.IsNullOrWhiteSpace(cursor))  query.Add($"cursor={Uri.EscapeDataString(cursor)}");
         if (author is { } authorId)              query.Add($"author={authorId}");
+        if (experienceType is { } typeId)        query.Add($"type={typeId}");
 
         var url = "/api/feed" + (query.Count > 0 ? "?" + string.Join("&", query) : string.Empty);
         return _api.GetAsync<FeedPageRecord>(url, token);
@@ -88,12 +89,15 @@ public sealed partial class BenAdminClientAdapter
     /// </remarks>
     public async Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
         string body, Guid? parentPostId = null, CancellationToken token = default,
-        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null)
+        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
+        Guid? experienceTypeId = null)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(body), nameof(CreateFeedPostRequest.Body));
         if (parentPostId is { } parentId)
             form.Add(new StringContent(parentId.ToString()), nameof(CreateFeedPostRequest.ParentMessageId));
+        if (experienceTypeId is { } typeId)
+            form.Add(new StringContent(typeId.ToString()), nameof(CreateFeedPostRequest.ExperienceTypeId));
 
         StreamContent? mediaContent = null;
         if (media is not null && mediaFileName is not null)
@@ -115,6 +119,16 @@ public sealed partial class BenAdminClientAdapter
             mediaContent?.Dispose();
         }
     }
+
+    public Task<(FeedPostRecord? Post, string? Error)> RecategorizeAsync(
+        Guid postId, Guid? experienceTypeId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecategorizeFeedPostRequest, FeedPostRecord>(
+            HttpMethod.Put, $"/api/feed/posts/{postId}/experience-type",
+            new RecategorizeFeedPostRequest(experienceTypeId), token);
+
+    public Task<bool> JudgeFeedCategoryAsync(Guid postId, bool matches, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/feed-categories/{postId}",
+                              new FeedCategoryVerdictRequest(matches), token);
 
     public Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/feed/posts/{postId}/report", new ReportFeedPostRequest(reason), token);

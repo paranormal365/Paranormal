@@ -51,17 +51,23 @@ public sealed class FeedController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IMediaIngestService _mediaIngest;
     private readonly IFeedMediaScreener _screener;
+    private readonly FeedLearningService _learning;
+    private readonly ILogger<FeedController> _logger;
 
     public FeedController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
-        IFeedMediaScreener screener)
+        IFeedMediaScreener screener,
+        FeedLearningService learning,
+        ILogger<FeedController> logger)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
         _screener = screener;
+        _learning = learning;
+        _logger = logger;
     }
 
     /// <summary>What a feed post may carry, by content type.</summary>
@@ -89,12 +95,13 @@ public sealed class FeedController : BenControllerBase
     /// the only question a profile page asks.
     /// </param>
     /// <param name="cursor">From a previous page's <c>NextCursor</c>. Opaque.</param>
+    /// <param name="type">One experience type's posts (item 186 F6). Combines like a hashtag.</param>
     /// <param name="ct">Cancellation.</param>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<FeedPageRecord>> GetFeed(
         [FromQuery] string? mode, [FromQuery] string? hashtag, [FromQuery] string? cursor,
-        CancellationToken ct, [FromQuery] Guid? author = null)
+        CancellationToken ct, [FromQuery] Guid? author = null, [FromQuery] Guid? type = null)
     {
         // Guid.Empty for a visitor: they follow nobody and wrote nothing, so every per-reader flag
         // resolves false through the same queries a signed-in reader uses.
@@ -123,6 +130,14 @@ public sealed class FeedController : BenControllerBase
         {
             var tag = hashtag.TrimStart('#').ToLowerInvariant();
             query = query.Where(m => m.Hashtags.Any(h => h.Tag == tag));
+        }
+
+        // One experience type's posts (item 186 F6) — the "show me apparition footage" page.
+        // Combines with mode/hashtag the way hashtag does. An unknown id is an empty page, not
+        // an error: the type may have been retired since the link was shared.
+        if (type is { } experienceTypeId)
+        {
+            query = query.Where(m => m.FeedExperienceTypeId == experienceTypeId);
         }
 
         // Top-level only. Replies are read with the post they answer.
@@ -245,6 +260,15 @@ public sealed class FeedController : BenControllerBase
             if (!parentExists) return NotFound("That post is no longer there.");
         }
 
+        // The chosen experience type (item 186 F6) — optional, and validated against the live
+        // taxonomy so a stale client cannot pin a post to a retired or unapproved entry.
+        if (request.ExperienceTypeId is { } chosenTypeId)
+        {
+            var typeOk = await db.ExperienceTypes.AsNoTracking()
+                .AnyAsync(t => t.Id == chosenTypeId && t.IsActive && t.IsApproved, ct);
+            if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
+        }
+
         var post = new OrgMessage
         {
             Id = Guid.NewGuid(),
@@ -254,6 +278,7 @@ public sealed class FeedController : BenControllerBase
             ChannelType = OrgMessageChannel.PublicFeed,
             Body = body,
             IsPublic = true,
+            FeedExperienceTypeId = request.ExperienceTypeId,
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -337,6 +362,72 @@ public sealed class FeedController : BenControllerBase
             });
         }
 
+        await db.SaveChangesAsync(ct);
+
+        // ── Features + category-match score (item 186 F6) ────────────────────
+        // After the save so the extractor reads the committed metadata row. Fails OPEN into an
+        // unscored post: "we could not measure your video" must never become "your post failed".
+        if (post.MediaUploadFileId is not null)
+        {
+            try
+            {
+                await _learning.ScoreAsync(db, post, ct);
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Feature scoring failed for post {PostId}; posted unscored.", post.Id);
+            }
+        }
+
+        var records = await ToRecordsAsync(db, [post], userId, ct);
+        return Ok(records[0]);
+    }
+
+    /// <summary>
+    /// The author changes their mind about what a post shows (item 186 F6) — usually because
+    /// the mismatch nudge asked.
+    /// </summary>
+    /// <remarks>
+    /// Writes labelled examples on the way through: a Mismatch for the type being left (when the
+    /// nudge fired — leaving a well-matched type teaches nothing) and a Confirmed for the one
+    /// chosen. That is the poster's half of the learning loop.
+    /// </remarks>
+    [HttpPut("posts/{id:guid}/experience-type")]
+    [Authorize]
+    public async Task<ActionResult<FeedPostRecord>> Recategorize(
+        Guid id, [FromBody] RecategorizeFeedPostRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await db.OrgMessages
+            .FirstOrDefaultAsync(m => m.Id == id && m.ChannelType == OrgMessageChannel.PublicFeed
+                                   && m.HiddenUtc == null, ct);
+        if (post is null) return NotFound();
+        if (post.AuthorAppUserId != userId)
+            return BadRequest("Only the author can recategorize a post.");
+
+        if (request.ExperienceTypeId is { } newTypeId)
+        {
+            var typeOk = await db.ExperienceTypes.AsNoTracking()
+                .AnyAsync(t => t.Id == newTypeId && t.IsActive && t.IsApproved, ct);
+            if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
+        }
+
+        var previousTypeId = post.FeedExperienceTypeId;
+        var nudgeHadFired = post.CategoryMatchScore is { } s && s < CategoryMatchScoring.NudgeThreshold;
+
+        if (previousTypeId is { } oldType && oldType != request.ExperienceTypeId && nudgeHadFired)
+            await _learning.AddExampleAsync(db, post.Id, oldType,
+                FeedLabel.Mismatch, FeedLabelSource.PosterCorrection, userId, ct);
+        if (request.ExperienceTypeId is { } confirmedType && confirmedType != previousTypeId)
+            await _learning.AddExampleAsync(db, post.Id, confirmedType,
+                FeedLabel.Confirmed, FeedLabelSource.PosterCorrection, userId, ct);
+
+        post.FeedExperienceTypeId = request.ExperienceTypeId;
+        await _learning.ScoreAsync(db, post, ct);
         await db.SaveChangesAsync(ct);
 
         var records = await ToRecordsAsync(db, [post], userId, ct);
@@ -751,6 +842,19 @@ public sealed class FeedController : BenControllerBase
                 .Select(l => l.OrgMessageId)
                 .ToListAsync(ct);
 
+        // Type names for the page's chips (item 186 F6), one lookup. Resolved at read so a
+        // taxonomy rename shows everywhere immediately.
+        var typeIds = posts.Where(p => p.FeedExperienceTypeId is not null)
+                           .Select(p => p.FeedExperienceTypeId!.Value)
+                           .Distinct()
+                           .ToList();
+        var typeNames = typeIds.Count == 0
+            ? []
+            : await db.ExperienceTypes.AsNoTracking()
+                .Where(t => typeIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Name })
+                .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
         return posts.Select(p => new FeedPostRecord(
             p.Id,
             p.AuthorAppUserId,
@@ -783,7 +887,15 @@ public sealed class FeedController : BenControllerBase
                 && p.AuthorAppUserId == readerId,
             // Likewise the kind: an unapproved post reports None, so not even "there is a video
             // here somewhere" escapes.
-            p.MediaReviewState == FeedMediaReviewState.Approved ? KindOf(p) : FeedMediaKind.None))
+            p.MediaReviewState == FeedMediaReviewState.Approved ? KindOf(p) : FeedMediaKind.None,
+            p.FeedExperienceTypeId,
+            p.FeedExperienceTypeId is { } feedType ? typeNames.GetValueOrDefault(feedType) : null,
+            // AUTHOR-ONLY, like the awaiting-review note and for the same reason: the nudge
+            // helps the author fix a label; shown to anyone else it is an asterisk on them.
+            readerId != Guid.Empty
+                && p.AuthorAppUserId == readerId
+                && p.CategoryMatchScore is { } matchScore
+                && matchScore < CategoryMatchScoring.NudgeThreshold))
             .ToList();
     }
 
@@ -817,11 +929,13 @@ public sealed class FeedController : BenControllerBase
                 m.DateCreated,
                 Likes = m.Likes.Count,
                 Replies = m.Replies.Count(r => r.HiddenUtc == null),
+                m.CategoryMatchScore,
             })
             .ToListAsync(ct);
 
         var ranked = FeedRanking.Rank(
-            window.Select(w => new RankableFeedPost(w.Id, w.DateCreated, w.Likes, w.Replies)), now);
+            window.Select(w => new RankableFeedPost(
+                w.Id, w.DateCreated, w.Likes, w.Replies, w.CategoryMatchScore)), now);
 
         var offset = ReadOffsetCursor(cursor);
         var pageIds = ranked.Skip(offset).Take(PageSize).Select(p => p.Id).ToList();

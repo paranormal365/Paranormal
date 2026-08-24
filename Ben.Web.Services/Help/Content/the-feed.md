@@ -43,6 +43,20 @@ Capitals do not matter: `#EVP`, `#evp` and `#Evp` are one tag, so they all gathe
 Tags cannot start with a number, because `#1` and `#2026` are almost always a list or a year rather
 than a subject.
 
+### Saying what a post shows
+
+When you attach a photo or video, the composer offers a **category** — the same list of experience
+types used everywhere else on the site (Apparition, Voices / Whispering, EMF Spike, and so on).
+It is always optional, and a plain chat post does not need one.
+
+Picking one does two things: the category appears as a small label on your post that readers can
+click to see everything else of its kind, and it tells the site what your footage claims to be.
+If the site's own measurements disagree — a clip tagged as voices that carries no audio track, for
+instance — **you, and only you**, will see a gentle note on your post offering to change the
+category. Nothing is blocked and nobody else sees the note; an honest mislabel is not misconduct,
+and changing it is one click. Posts whose content clearly does not match their label rank a little
+lower in **For You** until it is sorted out.
+
 ## Reading
 
 | | |
