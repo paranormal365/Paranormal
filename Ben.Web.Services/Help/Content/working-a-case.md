@@ -204,6 +204,29 @@ Investigations at a **private residence cannot be made public**. Publishing what
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
 
+## Applying privacy protections to an older case
+
+If your group took a case on before you had the protections — or before your plan included them —
+**Apply privacy protections** in Edit Case brings that case up to date in one action. It:
+
+- makes the case private, if it was not already;
+- removes the exact coordinates of the property, leaving the address in your own records where
+  your investigators still need it;
+- cleans the location data out of every file on the case that has not been cleaned already,
+  rebuilding each from the original, which was kept untouched for exactly this reason.
+
+Then it tells you two things it did **not** do.
+
+**It does not rewrite anybody's words.** If your client's name appears in a report, a timeline
+entry or the case label, it lists every place and leaves the text exactly as written. An account
+of a night belongs to the person who wrote it, and a find-and-replace through it can change what
+a sentence means or break a quotation. Edit the ones that should read as the pseudonym instead.
+
+**It cannot undo publication.** If the case was public, the report says so plainly. Anything a
+visitor already read, a search engine already indexed, or somebody already saved is out, and
+making the case private now stops it going further rather than calling it back. That is worth
+knowing before you tell a client the problem is solved.
+
 ## The case label when a case goes public
 
 A case reaches the public through **Edit Case** — set the status and tick **Make Public** — and

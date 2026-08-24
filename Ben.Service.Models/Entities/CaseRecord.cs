@@ -37,3 +37,18 @@ public record CaseRecord
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
 }
+
+
+/// <summary>One place a client's real name appears in prose somebody typed (item 182).</summary>
+public sealed record ClientNameOccurrence(
+    string Where, string Field, string Matched, Guid EntityId, string Kind);
+
+/// <summary>What applying a case's privacy protections after the fact did — and did not do.</summary>
+public sealed record CasePrivacyRetrofitResult(
+    bool MadePrivate,
+    bool LocationGeneralized,
+    int FilesStripped,
+    int FilesAlreadyClean,
+    int FilesUnstrippable,
+    IReadOnlyList<ClientNameOccurrence> NameOccurrences,
+    bool WasEverPublic);

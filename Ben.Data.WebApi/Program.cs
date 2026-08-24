@@ -192,6 +192,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.SubscriptionLapseJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.CasePrivacyRetrofit>();
 // Item 181: audio/video metadata stripping. No configured ffmpeg means the feature reports
 // itself unavailable rather than failing an upload.
 builder.Services.Configure<Ben.Data.WebApi.Services.MediaToolOptions>(

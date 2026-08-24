@@ -93,6 +93,14 @@ public interface IBenCaseClient
     /// for an advisory, failure must never block publishing.
     /// </summary>
     Task<LoadResult<string>> GetPublishLeakWarningsAsync(Guid orgId, Guid caseId, string title, string? pseudonym, CancellationToken token = default);
+
+    /// <summary>
+    /// Applies this case's privacy protections after the fact (item 182) — for a group that took
+    /// it on a plan without them and has since upgraded. Returns a report of what changed, what
+    /// still needs a person, and whether the case was ever public.
+    /// </summary>
+    Task<(CasePrivacyRetrofitResult? Result, string? Error)> ApplyCasePrivacyAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
