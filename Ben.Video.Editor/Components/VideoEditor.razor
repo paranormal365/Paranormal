@@ -347,7 +347,9 @@
                              SizeBytes="@(_retainedExport?.OutputSizeBytes ?? 0)"
                              OnUpload="PublishExportAsync"
                              OnSaveToDevice="SaveExportToDeviceAsync"
-                             OnDiscard="DiscardExportAsync" />
+                             OnDiscard="DiscardExportAsync"
+                             ShowPostToFeed="@(EnablePostToFeed && OnPostToFeed.HasDelegate)"
+                             OnPostToFeed="PostExportToFeedAsync" />
 
     <!-- ── Post-export save prompt (immediate exports only — see OnExportComplete) ─── -->
     <ExportSavePrompt @bind-Visible="_showExportSavePrompt"
@@ -438,6 +440,16 @@
     /// is safely on the server" and the only remaining copy is discarded.</para>
     /// </summary>
     [Parameter] public EventCallback<ExportedVideo> OnPublishExport { get; set; }
+
+    /// <summary>
+    /// The feed destination (item 186 F7). Same contract as <see cref="OnPublishExport"/>:
+    /// throws on failure so the prompt keeps the render. The HOST owns the confirmation dialog —
+    /// case lineage, privacy wording and consent are its knowledge, not the editor's.
+    /// </summary>
+    [Parameter] public EventCallback<ExportedVideo> OnPostToFeed { get; set; }
+
+    /// <summary>Host answers from the server's CanPost; the button never invites a refusal.</summary>
+    [Parameter] public bool EnablePostToFeed { get; set; }
 
     // ── Child component references ────────────────────────────────────────────
 
@@ -1889,6 +1901,16 @@
         // decide whether to close. Swallowing it here would close the prompt on a failed upload
         // and discard the user's only copy — see OnPublishExport's remarks.
         await Exporter.TakeRetainedExportAsync(job, exported => OnPublishExport.InvokeAsync(exported));
+        FinishExportDestination();
+    }
+
+    private async Task PostExportToFeedAsync()
+    {
+        if (_retainedExport is not { } job) return;
+
+        // Same no-try/catch contract as PublishExportAsync: the destination prompt needs the
+        // exception (a refused consent, a screening-path failure) to stay open with the render.
+        await Exporter.TakeRetainedExportAsync(job, exported => OnPostToFeed.InvokeAsync(exported));
         FinishExportDestination();
     }
 

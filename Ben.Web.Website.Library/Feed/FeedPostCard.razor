@@ -49,14 +49,41 @@
         </div>
 
         @* The category chip (item 186 F6): what the author says this shows, linking to the
-           type's page. Rendered for everybody — the NUDGE below is author-only, the label is not. *@
-        @if (Post.ExperienceTypeName is not null)
+           type's page. Rendered for everybody — the NUDGE below is author-only, the label is not.
+           Beside it, the F7 marks: the claimed group's name (ONLY when claimed — the record
+           carries nothing otherwise) and the badges that vouch for the footage. *@
+        @if (Post.ExperienceTypeName is not null || Post.GroupVerified || Post.ModeratorReviewed)
         {
-            <div class="mt-1">
-                <a href="@($"/feed/types/{Post.ExperienceTypeId}")"
-                   class="badge rounded-pill bg-body-secondary text-body-emphasis text-decoration-none bv-feed-category">
-                    @Post.ExperienceTypeName
-                </a>
+            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap small">
+                @if (Post.ExperienceTypeName is not null)
+                {
+                    <a href="@($"/feed/types/{Post.ExperienceTypeId}")"
+                       class="badge rounded-pill bg-body-secondary text-body-emphasis text-decoration-none bv-feed-category">
+                        @Post.ExperienceTypeName
+                    </a>
+                }
+                @if (Post.AttributedOrgName is not null)
+                {
+                    <a href="@($"/o/{Post.AttributedOrgUrlName}")"
+                       class="text-decoration-none bv-feed-attribution"
+                       title="The group whose investigation this came from">
+                        @Post.AttributedOrgName
+                    </a>
+                }
+                @if (Post.GroupVerified)
+                {
+                    <span class="badge rounded-pill text-bg-success bv-feed-badge"
+                          title="The group that worked this case vouches the footage is what it says">
+                        Group verified
+                    </span>
+                }
+                @if (Post.ModeratorReviewed)
+                {
+                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis bv-feed-badge"
+                          title="A site moderator reviewed this media">
+                        Moderator reviewed
+                    </span>
+                }
             </div>
         }
 

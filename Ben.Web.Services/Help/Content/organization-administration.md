@@ -512,6 +512,22 @@ approves it or declines it with a reason (you're messaged either way). Any later
 back through review — the approved text is the only text that ever shows. One card per group;
 withdraw it any time and it leaves the placements immediately.
 
+## Feed posts made from your cases
+
+When a member (or a client) renders a video from one of your cases in the video editor and
+posts it to the public feed, the post is credited to *them* — **your group's name appears on
+nothing until you say so**. **Settings → Feed attribution** lists that footage for your
+decision:
+
+- **Claim** puts your group's name and a link to your public page on the post, plus a
+  **Group verified** badge — you vouching that the footage is what it says. That badge also
+  lifts the post's standing in the feed.
+- **Decline** leaves the post up, credited to the person, with no link to you — ever.
+
+Either decision can be changed later. Footage from a **private engagement** additionally
+required the poster's explicit, recorded confirmation before it could be posted at all —
+claiming or declining is only about your name, never about whether the post exists.
+
 ## Location data in your photos, audio and video
 
 Cameras and phones write the coordinates of wherever they were into the file itself. On a case at

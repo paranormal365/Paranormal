@@ -57,6 +57,20 @@ category. Nothing is blocked and nobody else sees the note; an honest mislabel i
 and changing it is one click. Posts whose content clearly does not match their label rank a little
 lower in **For You** until it is sorted out.
 
+### Posting straight from the video editor
+
+When you export a finished video in the editor, **Post to the feed** appears beside "Upload to
+server" and "Save to my machine" (if you're someone who may post at all). A render made from a
+case names that case before anything goes public, and footage from a **private engagement**
+requires an explicit confirmation — the client was promised privacy, and publishing any of it is
+a deliberate, recorded choice.
+
+The group that worked the case decides separately whether the post carries **their** name: until
+they claim it, the post is credited to you alone. A claimed post wears the group's name, a link
+to their page, and a **Group verified** badge — the group vouching that the footage is what it
+says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
+badges lift a post's standing in **For You**.
+
 ## Reading
 
 | | |

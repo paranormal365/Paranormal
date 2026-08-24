@@ -72,6 +72,8 @@ builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryScopeSource>(s
 // Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
 // first when it has never been saved (the publish endpoint attaches to an existing project row).
 builder.Services.AddScoped<VideoExportPublisher>();
+// Its feed sibling (item 186 F7): the editor's "Post to the feed" destination.
+builder.Services.AddScoped<FeedExportPublisher>();
 // Records a sidecar pairing against the signed-in account, using the circuit's token. The WASM
 // host registers its own implementation; the editor calls whichever it finds, or none.
 builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter,

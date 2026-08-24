@@ -90,7 +90,8 @@ public sealed partial class BenAdminClientAdapter
     public async Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
         string body, Guid? parentPostId = null, CancellationToken token = default,
         Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
-        Guid? experienceTypeId = null)
+        Guid? experienceTypeId = null,
+        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(body), nameof(CreateFeedPostRequest.Body));
@@ -98,6 +99,10 @@ public sealed partial class BenAdminClientAdapter
             form.Add(new StringContent(parentId.ToString()), nameof(CreateFeedPostRequest.ParentMessageId));
         if (experienceTypeId is { } typeId)
             form.Add(new StringContent(typeId.ToString()), nameof(CreateFeedPostRequest.ExperienceTypeId));
+        if (sourceCaseId is { } caseId)
+            form.Add(new StringContent(caseId.ToString()), nameof(CreateFeedPostRequest.SourceCaseId));
+        if (consentToPublishPrivateEngagement)
+            form.Add(new StringContent("true"), nameof(CreateFeedPostRequest.ConsentToPublishPrivateEngagement));
 
         StreamContent? mediaContent = null;
         if (media is not null && mediaFileName is not null)
@@ -129,6 +134,16 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> JudgeFeedCategoryAsync(Guid postId, bool matches, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/moderation/feed-categories/{postId}",
                               new FeedCategoryVerdictRequest(matches), token);
+
+    public Task<LoadResult<FeedAttributionItem>> GetFeedAttributionsAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<FeedAttributionItem>($"/api/organizations/{orgId}/feed-attributions", token);
+
+    public Task<bool> ClaimFeedAttributionAsync(Guid orgId, Guid postId, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/organizations/{orgId}/feed-attributions/{postId}/claim", new { }, token);
+
+    public Task<bool> DeclineFeedAttributionAsync(Guid orgId, Guid postId, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/organizations/{orgId}/feed-attributions/{postId}/decline", new { }, token);
 
     public Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/feed/posts/{postId}/report", new ReportFeedPostRequest(reason), token);

@@ -37,6 +37,19 @@
                            Size="@ThemeConstants.Button.Size.Small">
                 @(_busy ? "Uploading…" : "Upload to server")
             </TelerikButton>
+            @if (ShowPostToFeed)
+            {
+                @* Item 186 F7 — the third destination. Offered only when the host confirmed this
+                   person may post (the server's CanPost), so the button is never an invitation
+                   to a refusal. The host's handler owns the confirmation dialog — case lineage
+                   and privacy wording are the host's knowledge, not the editor's. *@
+                <TelerikButton OnClick="PostToFeedAsync"
+                               Enabled="@(!_busy)"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               Size="@ThemeConstants.Button.Size.Small">
+                    @(_busy ? "Posting…" : "Post to the feed")
+                </TelerikButton>
+            }
             <TelerikButton OnClick="SaveToDeviceAsync"
                            Enabled="@(!_busy)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
@@ -71,6 +84,13 @@
     [Parameter] public EventCallback OnSaveToDevice { get; set; }
     [Parameter] public EventCallback OnDiscard      { get; set; }
 
+    /// <summary>Offers the feed destination (item 186 F7). Same throw-on-failure contract as
+    /// <see cref="OnUpload"/> — a cancelled or refused post keeps the prompt (and the render).</summary>
+    [Parameter] public EventCallback OnPostToFeed { get; set; }
+
+    /// <summary>Host's call, from the server's own CanPost — the editor never guesses.</summary>
+    [Parameter] public bool ShowPostToFeed { get; set; }
+
     private bool    _busy;
     private string? _error;
 
@@ -100,6 +120,28 @@
             // VideoEditor.PublishExportAsync), so "Save to my machine" is still a live escape
             // hatch rather than a dead button next to a lost file.
             _error = $"Upload failed: {ex.Message}. You can still save it to your machine.";
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PostToFeedAsync()
+    {
+        _busy  = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            await OnPostToFeed.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            // Same escape hatch as UploadAsync: the render is untouched, the prompt stays.
+            _error = $"{ex.Message} You can still save it to your machine.";
         }
         finally
         {

@@ -23,6 +23,20 @@ else
         </div>
     </div>
 
+    @* Item 186 F7: the door to the feed-attribution queue — a link always shows something,
+       so this leads to the page's own honest empty state rather than hiding until needed. *@
+    <div class="card mb-3">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="film" Class="fs-4 text-info" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Feed attribution</h6>
+                <span class="small text-secondary">Decide which feed videos from your cases link back to this group.</span>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" id="org-feed-attributions-link"
+               href="@($"/organizations/{OrgId}/feed-attributions")">Open</a>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <h6 class="card-title mb-3">Address Display Features</h6>

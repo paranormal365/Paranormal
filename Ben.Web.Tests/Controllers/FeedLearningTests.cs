@@ -156,6 +156,25 @@ public sealed class FeedLearningTests
         Assert.True(FeedRanking.Score(mismatched, now) > 0);
     }
 
+    [Fact]
+    public void Badges_lift_and_stack_but_do_not_swamp_engagement()
+    {
+        var now = DateTime.UtcNow;
+        var plain = new RankableFeedPost(Guid.NewGuid(), now.AddHours(-1), 2, 1);
+        var verified = plain with { GroupVerified = true };
+        var both = plain with { GroupVerified = true, ModeratorReviewed = true };
+
+        Assert.Equal(FeedRanking.Score(plain, now) * FeedRanking.BadgeLift,
+                     FeedRanking.Score(verified, now), precision: 10);
+        Assert.Equal(FeedRanking.Score(plain, now) * FeedRanking.BadgeLift * FeedRanking.BadgeLift,
+                     FeedRanking.Score(both, now), precision: 10);
+
+        // A double-badged post with no engagement still loses to a genuinely liked one —
+        // the badges are a thumb on the scale, not a bypass.
+        var likedPlain = plain with { Likes = 5 };
+        Assert.True(FeedRanking.Score(likedPlain, now) > FeedRanking.Score(both, now));
+    }
+
     // ── Luma ────────────────────────────────────────────────────────────────
 
     [Fact]
