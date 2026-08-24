@@ -1,5 +1,6 @@
 @page "/feed"
 @page "/feed/tags/{Tag}"
+@page "/feed/types/{TypeId:guid}"
 @namespace Ben.Web.Website.Library.Feed
 @using Ben.Service.Models.Feed
 @using Ben.Web.Services
@@ -10,7 +11,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>@(Tag is null ? "Feed" : $"#{Tag}")</PageTitle>
+<PageTitle>@(Tag is not null ? $"#{Tag}" : _typeName ?? "Feed")</PageTitle>
 
 @*
     The feed.
@@ -32,18 +33,24 @@
 
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h3 class="mb-0">
-                @if (Tag is null)
+                @if (Tag is not null)
                 {
-                    <text>Feed</text>
+                    <text>#@Tag</text>
+                }
+                else if (TypeId is not null)
+                {
+                    @* The type's name arrives with the first page's posts; the id is an ugly
+                       heading for the beat before that. *@
+                    <text>@(_typeName ?? "Category")</text>
                 }
                 else
                 {
-                    <text>#@Tag</text>
+                    <text>Feed</text>
                 }
                 <HelpLink Slug="the-feed" />
             </h3>
 
-            @if (Tag is not null)
+            @if (Tag is not null || TypeId is not null)
             {
                 <a class="btn btn-outline-secondary btn-sm" href="/feed">All posts</a>
             }
@@ -126,7 +133,8 @@
                               CanAct="@(_participationKnown && _canPost)"
                               OnLikeToggled="ToggleLikeAsync"
                               OnFollowToggled="ToggleFollowAsync"
-                              OnReportRequested="ReportAsync" />
+                              OnReportRequested="ReportAsync"
+                              OnRecategorized="SwapPost" />
             }
 
             @if (_nextCursor is not null)
@@ -148,6 +156,12 @@
 @code {
     /// <summary>Set when the page is a tag page.</summary>
     [Parameter] public string? Tag { get; set; }
+
+    /// <summary>One experience type's posts (item 186 F6) — the chip's landing page.</summary>
+    [Parameter] public Guid? TypeId { get; set; }
+
+    /// <summary>The type's display name, learned from the first post that carries it.</summary>
+    private string? _typeName;
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
@@ -235,7 +249,7 @@
 
         try
         {
-            var page = await Feed.GetFeedAsync(_mode, Tag);
+            var page = await Feed.GetFeedAsync(_mode, Tag, experienceType: TypeId);
             if (page is null)
             {
                 _error = "Couldn't load the feed.";
@@ -246,6 +260,7 @@
             _nextCursor = page.NextCursor;
             _canPost = page.CanPost;
             _participationKnown = true;
+            _typeName ??= page.Posts.FirstOrDefault(p => p.ExperienceTypeId == TypeId)?.ExperienceTypeName;
         }
         finally
         {
@@ -261,7 +276,7 @@
         _loadingMore = true;
         try
         {
-            var page = await Feed.GetFeedAsync(_mode, Tag, _nextCursor);
+            var page = await Feed.GetFeedAsync(_mode, Tag, _nextCursor, experienceType: TypeId);
             if (page is null) return;
 
             _posts.AddRange(page.Posts);
@@ -351,6 +366,13 @@
     /// wrote if they follow nobody, which reads as the post having failed.
     /// </remarks>
     private void OnPosted(FeedPostRecord post) => _posts.Insert(0, post);
+
+    /// <summary>Swaps in a post the server re-read — a recategorize's fresh copy.</summary>
+    private void SwapPost(FeedPostRecord post)
+    {
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index >= 0) _posts[index] = post;
+    }
 
     /// <summary>
     /// Likes or unlikes, optimistically.

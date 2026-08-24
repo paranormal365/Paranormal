@@ -45,6 +45,38 @@
             </div>
         }
 
+        @* What the post shows, from the platform's experience taxonomy (item 186 F6). Optional
+           always; surfaced only once media is attached, because "what does this show" is a
+           question about footage, not about chatter. Grouped by category the way the taxonomy
+           is — a native select handles optgroups without a component in the way. *@
+        @if (_media is not null && _taxonomy is { Count: > 0 })
+        {
+            <div class="mt-2" id="feed-composer-category">
+                <select class="form-select form-select-sm" value="@(_experienceTypeId?.ToString() ?? string.Empty)"
+                        @onchange="OnTypeChosen" disabled="@_busy"
+                        aria-label="What does this show?">
+                    <option value="">What does this show? (optional)</option>
+                    @foreach (var group in _taxonomy)
+                    {
+                        <optgroup label="@group.Category.Name">
+                            @foreach (var type in group.Types)
+                            {
+                                <option value="@type.Id">@type.Name</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </div>
+        }
+        else if (_media is not null && _taxonomyFailed)
+        {
+            @* The refusal, rendered rather than swallowed: the picker being optional does not
+               make its absence self-explanatory. Posting still works — the category is extra. *@
+            <div class="mt-2 small text-secondary" id="feed-composer-category-unavailable">
+                Categories couldn't load — you can post without one.
+            </div>
+        }
+
         <div class="d-flex align-items-center gap-2 mt-2">
             @* A label styled as a button: the file input itself is hidden because no browser
                lets its default rendering be styled, and every one of them renders it differently. *@
@@ -121,14 +153,33 @@
     private const long MaxMediaBytes = 200L * 1024 * 1024;
 
     private IBrowserFile? _media;
+    private Guid? _experienceTypeId;
+    private IReadOnlyList<ExperienceCategoryWithTypesResponse>? _taxonomy;
+    private bool _taxonomyFailed;
 
-    private void OnMediaChosen(InputFileChangeEventArgs e)
+    private async Task OnMediaChosen(InputFileChangeEventArgs e)
     {
         _media = e.FileCount > 0 ? e.File : null;
         _error = null;
+
+        // Fetched the first time media is attached, not on page load: the select isn't shown
+        // until then, and most feed visits never open the composer at all.
+        if (_media is not null && _taxonomy is null)
+        {
+            var taxonomy = await Feed.GetExperienceTaxonomyAsync();
+            _taxonomyFailed = taxonomy.Failed;
+            _taxonomy = taxonomy.Failed ? null : taxonomy.Items;
+        }
     }
 
-    private void ClearMedia() => _media = null;
+    private void OnTypeChosen(ChangeEventArgs e)
+        => _experienceTypeId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void ClearMedia()
+    {
+        _media = null;
+        _experienceTypeId = null;
+    }
 
     private static string FormatSize(long bytes) => bytes switch
     {
@@ -161,7 +212,8 @@
                     string.IsNullOrWhiteSpace(_body) ? _media!.Name : _body.Trim(), ParentPostId,
                     media: media,
                     mediaFileName: _media?.Name,
-                    mediaContentType: _media?.ContentType);
+                    mediaContentType: _media?.ContentType,
+                    experienceTypeId: _experienceTypeId);
             }
             catch (IOException)
             {
@@ -186,6 +238,7 @@
 
             _body = string.Empty;
             _media = null;
+            _experienceTypeId = null;
             await OnPosted.InvokeAsync(post);
         }
         finally

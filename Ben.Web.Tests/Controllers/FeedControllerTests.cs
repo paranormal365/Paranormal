@@ -42,7 +42,11 @@ public sealed class FeedControllerTests
 
     private static FeedController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
         => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
-               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
+               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
+               new Ben.Data.WebApi.Services.Feed.FeedLearningService(
+                   Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
+                   Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -57,7 +61,11 @@ public sealed class FeedControllerTests
     /// <summary>A controller with no signed-in user at all — a visitor (item 186).</summary>
     private static FeedController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
         => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
-               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
+               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
+               new Ben.Data.WebApi.Services.Feed.FeedLearningService(
+                   Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
+                   Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

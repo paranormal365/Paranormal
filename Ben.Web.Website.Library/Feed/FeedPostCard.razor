@@ -48,6 +48,18 @@
             <FeedText Body="@Post.Body" Mentions="@Post.Mentions" />
         </div>
 
+        @* The category chip (item 186 F6): what the author says this shows, linking to the
+           type's page. Rendered for everybody — the NUDGE below is author-only, the label is not. *@
+        @if (Post.ExperienceTypeName is not null)
+        {
+            <div class="mt-1">
+                <a href="@($"/feed/types/{Post.ExperienceTypeId}")"
+                   class="badge rounded-pill bg-body-secondary text-body-emphasis text-decoration-none bv-feed-category">
+                    @Post.ExperienceTypeName
+                </a>
+            </div>
+        }
+
         @* The photo or video (item 186 F4). Served from the post's own route, which refuses
            anything unscreened — so there is no file id here to try against the general file
            endpoints, and a held photo simply has no URL. *@
@@ -76,6 +88,57 @@
                 <BenIcon Name="clock" />
                 <span>Your photo is being checked before it appears.</span>
             </div>
+        }
+
+        @* The mismatch nudge (item 186 F6). AUTHOR-ONLY, like the pending note, and phrased as
+           help rather than accusation: an honest mislabel is the common case. Never blocks —
+           the post is already up. One click opens the same picker the composer uses. *@
+        @if (Post.CategoryMatchDegraded && Post.IsOwnPost && CanAct)
+        {
+            <div class="mt-2 small d-flex align-items-center gap-2 flex-wrap alert alert-light border py-2 mb-0"
+                 id="feed-category-nudge">
+                <BenIcon Name="tags" />
+                <span>This doesn't look like <strong>@Post.ExperienceTypeName</strong> to us — want to recategorize?</span>
+                <button type="button" class="btn btn-link btn-sm p-0"
+                        @onclick="() => _recategorizing = !_recategorizing">
+                    @(_recategorizing ? "Never mind" : "Change category")
+                </button>
+            </div>
+            @if (_recategorizing)
+            {
+                <div class="mt-2" id="feed-category-repick">
+                    @if (_taxonomyFailed)
+                    {
+                        @* The refusal, said rather than spun forever on "Loading…". *@
+                        <span class="small text-danger">Categories couldn't load — try again shortly.</span>
+                    }
+                    else if (_taxonomy is null)
+                    {
+                        <span class="small text-secondary">Loading categories…</span>
+                    }
+                    else
+                    {
+                        <select class="form-select form-select-sm" @onchange="RecategorizeAsync">
+                            <option value="">No category</option>
+                            @foreach (var group in _taxonomy)
+                            {
+                                <optgroup label="@group.Category.Name">
+                                    @foreach (var type in group.Types)
+                                    {
+                                        <option value="@type.Id" selected="@(type.Id == Post.ExperienceTypeId)">
+                                            @type.Name
+                                        </option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    }
+                    @if (_recategorizeError is not null)
+                    {
+                        <div class="small text-danger mt-1">@_recategorizeError</div>
+                    }
+                </div>
+            }
         }
 
         <div class="d-flex align-items-center gap-3 mt-2 small">
@@ -140,4 +203,40 @@
 
     /// <summary>Where the post's media is served from. Only ever asked for when HasMedia.</summary>
     private string MediaUrl => Feed.GetFeedMediaUrl(Post.Id);
+
+    /// <summary>Raised with the re-read post after a recategorize, so the page swaps it in.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnRecategorized { get; set; }
+
+    private bool _recategorizing;
+    private string? _recategorizeError;
+    private IReadOnlyList<ExperienceCategoryWithTypesResponse>? _taxonomy;
+    private bool _taxonomyFailed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The picker's options, fetched only when the nudge is actually showing.
+        if (Post.CategoryMatchDegraded && Post.IsOwnPost && _taxonomy is null)
+        {
+            var taxonomy = await Feed.GetExperienceTaxonomyAsync();
+            _taxonomyFailed = taxonomy.Failed;
+            _taxonomy = taxonomy.Failed ? null : taxonomy.Items;
+        }
+    }
+
+    private async Task RecategorizeAsync(ChangeEventArgs e)
+    {
+        _recategorizeError = null;
+        Guid? typeId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+        var (post, error) = await Feed.RecategorizeAsync(Post.Id, typeId);
+        if (post is null)
+        {
+            // The server's sentence where it wrote one — never a silently ignored refusal.
+            _recategorizeError = error ?? "Couldn't change the category. Try again in a moment.";
+            return;
+        }
+
+        _recategorizing = false;
+        await OnRecategorized.InvokeAsync(post);
+    }
 }

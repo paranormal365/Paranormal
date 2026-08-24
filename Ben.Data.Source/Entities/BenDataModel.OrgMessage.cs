@@ -103,6 +103,30 @@ namespace Ben.Data.Source.Entities
         /// <summary>The file itself.</summary>
         public virtual UploadFile? MediaUploadFile { get; set; }
 
+        /// <summary>
+        /// What the author says this post shows, from the platform's experience taxonomy
+        /// (item 186 F6). Null for chatter — a category is encouraged for media, never required.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately the SAME taxonomy cases and evidence use, not a feed-only list: every
+        /// judgment about whether content matches its type (<see cref="FeedLabelledExample"/>)
+        /// then accumulates against the taxonomy of record.
+        /// </remarks>
+        public Guid? FeedExperienceTypeId { get; set; }
+
+        /// <summary>
+        /// How well the media's measured features fit the chosen type, 0–1, scored at post time
+        /// (and re-scored on recategorize). Null when unscored: no media, no type, or no
+        /// features. A low score NUDGES the author and gently lowers ranking — it never blocks
+        /// and is never shown to other readers.
+        /// </summary>
+        public double? CategoryMatchScore { get; set; }
+
+        public virtual ExperienceType? FeedExperienceType { get; set; }
+
+        /// <summary>The post's measured media facts. Null until extracted (or for text posts).</summary>
+        public virtual FeedMediaFeatureSet? MediaFeatures { get; set; }
+
         /// <summary>Feed likes (item 186 F3). Empty for every non-feed message.</summary>
         public virtual ICollection<OrgMessageLike> Likes { get; set; } = new List<OrgMessageLike>();
         public virtual ICollection<OrgMessageMention> Mentions { get; set; } = new List<OrgMessageMention>();

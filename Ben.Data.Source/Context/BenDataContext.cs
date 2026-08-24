@@ -90,6 +90,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgMessageMention> OrgMessageMentions { get; set; }
         public virtual DbSet<OrgMessageHashtag> OrgMessageHashtags { get; set; }
         public virtual DbSet<OrgMessageReport> OrgMessageReports { get; set; }
+        public virtual DbSet<FeedMediaFeatureSet> FeedMediaFeatureSets { get; set; }
+        public virtual DbSet<FeedLabelledExample> FeedLabelledExamples { get; set; }
+        public virtual DbSet<FeedTypeWeightSet> FeedTypeWeightSets { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
@@ -1705,6 +1708,52 @@ namespace Ben.Data.Source.Context
             // but the ranking window counts across many posts at once, so the date is worth having.
             modelBuilder.Entity<OrgMessageLike>()
                 .HasIndex(e => new { e.OrgMessageId, e.DateLiked });
+
+            // ── Feed categories + the learning loop (item 186 F6) ─────────────
+            // The post's chosen type. SetNull on type delete: a retired taxonomy entry must not
+            // take posts down with it — the post just becomes uncategorized.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.FeedExperienceType).WithMany()
+                .HasForeignKey(e => e.FeedExperienceTypeId).IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            // The type page ("show me apparition posts") — type leads, date orders.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.FeedExperienceTypeId, e.DateCreated });
+
+            // One feature row per post; dies with its post (the labelled examples carry their
+            // own denormalized copy of the features precisely so this can cascade).
+            modelBuilder.Entity<FeedMediaFeatureSet>()
+                .HasKey(e => e.OrgMessageId);
+            modelBuilder.Entity<FeedMediaFeatureSet>()
+                .HasOne(e => e.OrgMessage).WithOne(e => e.MediaFeatures)
+                .HasForeignKey<FeedMediaFeatureSet>(e => e.OrgMessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FeedMediaFeatureSet>()
+                .Property(e => e.CameraManufacturer).HasMaxLength(128);
+
+            // APPEND-ONLY (guarded in FeedLearningService). SetNull from the post: the example
+            // outlives what it judged — that is the point of keeping it.
+            modelBuilder.Entity<FeedLabelledExample>()
+                .HasOne(e => e.OrgMessage).WithMany()
+                .HasForeignKey(e => e.OrgMessageId).IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<FeedLabelledExample>()
+                .HasOne(e => e.ExperienceType).WithMany()
+                .HasForeignKey(e => e.ExperienceTypeId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FeedLabelledExample>()
+                .HasOne(e => e.DecidedByAppUser).WithMany()
+                .HasForeignKey(e => e.DecidedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // The re-fit reads one type's examples in decision order.
+            modelBuilder.Entity<FeedLabelledExample>()
+                .HasIndex(e => new { e.ExperienceTypeId, e.DecidedUtc });
+
+            modelBuilder.Entity<FeedTypeWeightSet>()
+                .HasOne(e => e.ExperienceType).WithMany()
+                .HasForeignKey(e => e.ExperienceTypeId).OnDelete(DeleteBehavior.Cascade);
+            // "The active set" is a lookup by type for the max version — served by this index;
+            // unique because two fits at the same version would make "active" ambiguous.
+            modelBuilder.Entity<FeedTypeWeightSet>()
+                .HasIndex(e => new { e.ExperienceTypeId, e.FitVersion }).IsUnique();
 
             // ── OrgCalendarEventType ──────────────────────────────────────────
             modelBuilder.Entity<OrgCalendarEventType>()

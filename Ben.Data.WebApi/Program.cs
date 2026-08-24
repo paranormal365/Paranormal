@@ -310,6 +310,11 @@ else
 // died mid-create, or the F4→F5b backlog. No-ops under the manual screener.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.PendingMediaScreeningJob>();
+// The learning loop (item 186 F6): feature extraction + category-match scoring at post time,
+// labelled examples from every human judgment, and the nightly re-fit that closes the loop.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Feed.FeedLearningService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.WeightRefitJob>();
 
 builder.Services.AddAuthorization(options =>
 {

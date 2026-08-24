@@ -5,7 +5,10 @@ namespace Ben.Data.WebApi.Services.Feed;
 /// <param name="DateCreated">When it was written, UTC.</param>
 /// <param name="Likes">How many people liked it.</param>
 /// <param name="Replies">How many visible replies it drew.</param>
-public readonly record struct RankableFeedPost(Guid Id, DateTime DateCreated, int Likes, int Replies);
+/// <param name="MatchScore">The category-match score (item 186 F6), when the post has one. Null
+/// leaves ranking untouched — text posts and unscored media are neither rewarded nor punished.</param>
+public readonly record struct RankableFeedPost(
+    Guid Id, DateTime DateCreated, int Likes, int Replies, double? MatchScore = null);
 
 /// <summary>
 /// The "For You" ordering (item 186 F3): fresh things surface, engaging things stay up, and
@@ -52,12 +55,22 @@ public static class FeedRanking
     /// <summary>How sharply a post sinks with age.</summary>
     public const double Gravity = 1.5;
 
+    /// <summary>
+    /// How much a category mismatch can cost (item 186 F6): the multiplier runs from
+    /// <c>MatchFloor</c> (score 0) to 1.0 (score 1). A signal, not a verdict — a certainly
+    /// mislabelled post ranks like one with a quarter fewer eyes on it, it does not vanish.
+    /// </summary>
+    public const double MatchFloor = 0.75;
+
     /// <summary>One post's score. Higher is better. Never negative.</summary>
     public static double Score(RankableFeedPost post, DateTime nowUtc)
     {
         var ageHours = Math.Max(0, (nowUtc - post.DateCreated).TotalHours);
         var engagement = 1 + (LikeWeight * post.Likes) + (ReplyWeight * post.Replies);
-        return engagement / Math.Pow(ageHours + AgeCushionHours, Gravity);
+        var match = post.MatchScore is { } score
+            ? MatchFloor + ((1 - MatchFloor) * Math.Clamp(score, 0, 1))
+            : 1.0;
+        return match * engagement / Math.Pow(ageHours + AgeCushionHours, Gravity);
     }
 
     /// <summary>
