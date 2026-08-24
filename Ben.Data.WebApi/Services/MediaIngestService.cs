@@ -36,6 +36,22 @@ public interface IMediaIngestService
     Task DeleteAllAsync(string storagePath, CancellationToken ct);
 
     /// <summary>
+    /// The metadata row for a DERIVED file — a clip, an edit, a mix, a copy — carrying the
+    /// source's capture details forward (Ben's rule, 2026-08-24). Null when the source has no
+    /// metadata row to carry.
+    /// </summary>
+    /// <remarks>
+    /// Only the facts that stay true of a derivative travel: where and when the recording was
+    /// made, and on what device. Duration, sample rate, channels and pixel dimensions belong to
+    /// the NEW bytes — a thirty-second clip of a ten-minute recording is thirty seconds — so they
+    /// are left for the caller to set from what it actually produced, and the raw dump is not
+    /// copied because it describes a file this is not.
+    /// </remarks>
+    Task<UploadFileMetadata?> DeriveMetadataAsync(
+        BenDataContext db, Guid sourceUploadFileId, Guid derivedUploadFileId,
+        string mediaKind, CancellationToken ct);
+
+    /// <summary>
     /// Opens the thumbnail, generating and storing it first if it is missing. Null when the file
     /// is not something we can shrink (video, audio, SVG) — the caller serves the real thing.
     /// </summary>
@@ -107,6 +123,34 @@ public sealed class MediaIngestService(
         }
 
         return new IngestedMedia(metadata, sanitized.LongLength, "image/jpeg", WasSanitized: true);
+    }
+
+    public async Task<UploadFileMetadata?> DeriveMetadataAsync(
+        BenDataContext db, Guid sourceUploadFileId, Guid derivedUploadFileId,
+        string mediaKind, CancellationToken ct)
+    {
+        var source = await db.UploadFileMetadata.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UploadFileId == sourceUploadFileId, ct);
+        if (source is null) return null;
+
+        return new UploadFileMetadata
+        {
+            Id             = Guid.NewGuid(),
+            UploadFileId   = derivedUploadFileId,
+            MediaKind      = mediaKind,
+
+            // Where and when it was recorded, and on what — all still true of a clip cut from it.
+            CapturedAtUtc      = source.CapturedAtUtc,
+            GpsLatitude        = source.GpsLatitude,
+            GpsLongitude       = source.GpsLongitude,
+            GpsAltitudeMeters  = source.GpsAltitudeMeters,
+            CameraManufacturer = source.CameraManufacturer,
+            CameraModel        = source.CameraModel,
+
+            // Said plainly: these values were carried, not measured off these bytes.
+            InheritedFromUploadFileId = sourceUploadFileId,
+            ExtractedAtUtc            = DateTime.UtcNow,
+        };
     }
 
     public string ServingPathFor(string storagePath)

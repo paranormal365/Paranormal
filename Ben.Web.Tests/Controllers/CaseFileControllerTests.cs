@@ -38,7 +38,7 @@ public class CaseFileControllerTests
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
@@ -51,13 +51,39 @@ public class CaseFileControllerTests
         return ctrl;
     }
 
+    /// <summary>
+    /// A form file with REAL bytes. Since 2026-08-24 this door ingests what it is given — it
+    /// decodes an image to strip its EXIF — so a buffer of zeros claiming to be a JPEG is now a
+    /// 400, not an upload. Images get a genuinely encodable 2x2 bitmap; everything else keeps the
+    /// cheap filler, which is all a non-image upload path ever reads.
+    /// </summary>
     private static IFormFile MakeFile(string fileName = "evidence.jpg", string contentType = "image/jpeg", long size = 256)
     {
         var fileMock = new Mock<IFormFile>();
-        var bytes    = new byte[size];
+
+        byte[] bytes;
+        if (size == 0)
+        {
+            // An explicitly empty upload stays empty — that is what the empty-file guard is for.
+            bytes = [];
+        }
+        else if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            using var bitmap = new SkiaSharp.SKBitmap(2, 2);
+            bitmap.SetPixel(0, 0, SkiaSharp.SKColors.Red);
+            using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+            using var data  = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+            bytes = data.ToArray();
+        }
+        else
+        {
+            bytes = new byte[size];
+        }
+
         fileMock.Setup(f => f.FileName).Returns(fileName);
-        fileMock.Setup(f => f.Length).Returns(size);
+        fileMock.Setup(f => f.Length).Returns(bytes.Length);
         fileMock.Setup(f => f.ContentType).Returns(contentType);
+        fileMock.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
         fileMock.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                 .Returns<Stream, CancellationToken>((s, _) =>
                 {

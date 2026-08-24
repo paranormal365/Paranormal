@@ -37,12 +37,16 @@ public sealed class EventEvidenceController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly PlatformMessageService _messages;
 
+    private readonly IMediaIngestService _mediaIngest;
+
     public EventEvidenceController(
-        IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, PlatformMessageService messages)
+        IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        PlatformMessageService messages, IMediaIngestService mediaIngest)
     {
         _db          = db;
         _fileStorage = fileStorage;
         _messages    = messages;
+        _mediaIngest = mediaIngest;
     }
 
     public sealed record EvidenceSubmissionRecord(
@@ -79,17 +83,29 @@ public sealed class EventEvidenceController : BenControllerBase
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.OrgFilePath(evt.OrganizationId, $"event-evidence/{storedName}");
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off in the metadata table.
+        // The ORIGINAL stays untouched; the derivative is what serve paths return (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id = Guid.NewGuid(), UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
+            Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = file.Length,
+            ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var submission = new EventEvidenceSubmission
         {

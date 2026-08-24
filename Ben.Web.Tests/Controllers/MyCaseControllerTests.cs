@@ -59,7 +59,7 @@ public class MyCaseControllerTests
             auditLog ?? new Mock<IAuditLogService>().Object,
             emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
-            new Ben.Data.WebApi.Services.PlatformMessageService(factory));
+            new Ben.Data.WebApi.Services.PlatformMessageService(factory), new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -77,7 +77,7 @@ public class MyCaseControllerTests
             new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object,
             CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
-            new Ben.Data.WebApi.Services.PlatformMessageService(factory));
+            new Ben.Data.WebApi.Services.PlatformMessageService(factory), new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }

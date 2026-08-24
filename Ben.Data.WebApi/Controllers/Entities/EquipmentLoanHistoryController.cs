@@ -33,16 +33,19 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IOrganizationSecurityService _security;
     private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
     private readonly IAuditLogService _auditLog;
 
     public EquipmentLoanHistoryController(
         IDbContextFactory<BenDataContext> db,
         IOrganizationSecurityService security,
         IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
         IAuditLogService auditLog)
     {
         _db          = db;
         _security    = security;
+        _mediaIngest = mediaIngest;
         _fileStorage = fileStorage;
         _auditLog    = auditLog;
     }
@@ -124,24 +127,34 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
 
         var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
-        await using (var stream = file.OpenReadStream())
-            await _fileStorage.WriteAsync(storagePath, stream, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off beside the record.
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var photo = new EquipmentCheckoutPhoto
         {

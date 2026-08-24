@@ -25,11 +25,15 @@ public sealed class VideoProjectController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
 
-    public VideoProjectController(IDbContextFactory<BenDataContext> db, IMapper mapper, IFileStorageService fileStorage)
+    private readonly IMediaIngestService _mediaIngest;
+
+    public VideoProjectController(IDbContextFactory<BenDataContext> db, IMapper mapper,
+        IFileStorageService fileStorage, IMediaIngestService mediaIngest)
     {
         _db          = db;
         _mapper      = mapper;
         _fileStorage = fileStorage;
+        _mediaIngest = mediaIngest;
     }
 
     // GET /api/video-projects[?caseId=...]
@@ -156,24 +160,35 @@ public sealed class VideoProjectController : BenControllerBase
             ? _fileStorage.CaseFilePath(project.CaseId.Value, storedName)
             : _fileStorage.UserFilePath(userId, storedName);
 
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off beside the record.
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var upload = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.PublishedVideoFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
             StoragePath        = storagePath,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             IsPublic           = false,
             SortOrder          = 0,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(upload);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         project.PublishedUploadFileId = upload.Id;
         project.DateUpdated           = DateTime.UtcNow;

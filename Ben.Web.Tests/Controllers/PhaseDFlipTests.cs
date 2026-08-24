@@ -54,7 +54,7 @@ public sealed class PhaseDFlipTests
             new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
             new Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
-            new OrganizationSecurityService(factory));
+            new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance), new OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
