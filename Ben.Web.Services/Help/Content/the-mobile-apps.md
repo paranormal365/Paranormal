@@ -24,20 +24,32 @@ Signing in works the same way it does in a browser, including two-step codes if 
 switched on. Your phone stays signed in afterwards; you will not be asked again every time you
 open the app.
 
+Setting two-step **up** on the phone works a little differently from the website, for a good
+reason: on a phone the app is itself the second device, so there is no QR code to scan. Instead
+the app shows you the key to copy, and offers a link that hands it straight to your authenticator
+app. Your recovery codes are shown once, with a button to save or send them — the site cannot
+show them to you again.
+
 ## What's in the app today
 
 | | |
 |---|---|
 | **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
 | **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
-| **Your account** | Sign in and out, and see which account you are signed in as. |
+| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
+| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. Who to contact is a tap away: their email opens Mail, their number dials. |
+| **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
+| **Events** | Public events, readable without an account, and you can reserve a place. **Add to calendar** puts one straight into your own calendar. |
+| **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
 
-Anything the app cannot do yet says so plainly rather than showing you an empty screen.
+Anything the app cannot do yet says so plainly rather than showing you an empty screen. A count
+with no screen behind it yet is still listed on Notifications — it just isn't tappable, rather
+than pretending to lead somewhere.
 
 ## Coming to the app next
 
-Notifications, your cases, your investigations and events with RSVP, and full account management
-(registering, password and two-step setup). Each arrives as its own update.
+Logging a new occurrence on your case from the phone, reading case reports, group messaging, and
+**Sign in with Apple**. Each arrives as its own update.
 
 ## A note on what the app shows you
 
