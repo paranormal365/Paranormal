@@ -224,4 +224,10 @@ public sealed record FeedModerationSummary(
     int MediaAwaitingReview,
     int MediaHeld,
     int ReportsPending,
-    bool ScreeningIsAutomatic);
+    bool ScreeningIsAutomatic,
+    /// <summary>Whether the public feed feature is switched on (item 186 F10) — the fact the
+    /// dark-launch reminder pivots on.</summary>
+    bool FeedIsOn = false,
+    /// <summary>How many feed posts exist, visible or not. Content accumulating while the
+    /// feature is dark is the reminder's reason to exist.</summary>
+    int FeedPostCount = 0);

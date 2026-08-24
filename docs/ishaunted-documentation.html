@@ -918,6 +918,34 @@ carrying it.</p>
 <p>Capitals do not matter: <code>#EVP</code>, <code>#evp</code> and <code>#Evp</code> are one tag, so they all gather in the same place.
 Tags cannot start with a number, because <code>#1</code> and <code>#2026</code> are almost always a list or a year rather
 than a subject.</p>
+<h3>Saying what a post shows</h3>
+<p>When you attach a photo or video, the composer offers a <strong>category</strong> — the same list of experience
+types used everywhere else on the site (Apparition, Voices / Whispering, EMF Spike, and so on).
+It is always optional, and a plain chat post does not need one.</p>
+<p>Picking one does two things: the category appears as a small label on your post that readers can
+click to see everything else of its kind, and it tells the site what your footage claims to be.
+If the site's own measurements disagree — a clip tagged as voices that carries no audio track, for
+instance — <strong>you, and only you</strong>, will see a gentle note on your post offering to change the
+category. Nothing is blocked and nobody else sees the note; an honest mislabel is not misconduct,
+and changing it is one click. Posts whose content clearly does not match their label rank a little
+lower in <strong>For You</strong> until it is sorted out.</p>
+<h3>Posting straight from the video editor</h3>
+<p>When you export a finished video in the editor, <strong>Post to the feed</strong> appears beside "Upload to
+server" and "Save to my machine" (if you're someone who may post at all). A render made from a
+case names that case before anything goes public, and footage from a <strong>private engagement</strong>
+requires an explicit confirmation — the client was promised privacy, and publishing any of it is
+a deliberate, recorded choice.</p>
+<p>The group that worked the case decides separately whether the post carries <strong>their</strong> name: until
+they claim it, the post is credited to you alone. A claimed post wears the group's name, a link
+to their page, and a <strong>Group verified</strong> badge — the group vouching that the footage is what it
+says. <strong>Moderator reviewed</strong> appears when a site moderator personally cleared the video. Both
+badges lift a post's standing in <strong>For You</strong>.</p>
+<h2>Promoted cards</h2>
+<p>Every eighth spot in the main feed carries a card instead of a post — alternating between a
+group promoting itself (always marked <strong>Promoted</strong>) and the site's own pointer to the group
+finder. If you choose <strong>Show groups near you</strong> on a promoted card, your browser asks your
+permission and the cards re-order nearest-first. Your location is used for that one ordering
+and is never stored — leave, and it's forgotten.</p>
 <h2>Reading</h2>
 <table>
 <thead>
@@ -939,6 +967,9 @@ than a subject.</p>
 </table>
 <p>Click a post's reply count to open it and read the replies. Opening a post is what clears a
 "mentioned you" badge from your <strong>Feed</strong> menu entry, so nothing disappears before you have seen it.</p>
+<p>While the page is open it quietly checks for newer posts; a <strong>"new posts"</strong> button appears when
+there are some, and clicking it brings them in without losing your place. The site's home page
+also shows a small taste of the feed's current top posts — the front door on the front page.</p>
 <h2>Following</h2>
 <p>Press <strong>Follow</strong> beside somebody's name on a post, or on their feed page. It is one-directional and
 nobody is asked: following changes what you are shown, not what you are allowed to see. Everything
@@ -2070,7 +2101,10 @@ with the requests permission can Accept or Deny — a denial asks for a reason, 
 sees your answer.</p>
 <h2>Promoting your group</h2>
 <p><strong>Settings → Promote your group</strong> builds a promotional card that rotates through the group
-finder's Featured groups and the home page, always marked "Promoted". The builder walks you
+finder's Featured groups, the home page, and the public feed, always marked "Promoted". In the
+feed, cards are fed to the people nearest your group's public address first — a group with no
+public address still rotates, just unranked. Once approved, the page shows two honest numbers:
+how many times the card was shown, and how many people clicked through. The builder walks you
 through it — headline (say who you help and where), a short message (what you do, what it
 costs, what to do next), an optional picture from your media library, and where the card
 leads: your public page or the group finder. Send your people to the public page only once
@@ -2079,6 +2113,20 @@ it's worth arriving at — a striking headline over an empty page loses the pers
 approves it or declines it with a reason (you're messaged either way). Any later edit comes
 back through review — the approved text is the only text that ever shows. One card per group;
 withdraw it any time and it leaves the placements immediately.</p>
+<h2>Feed posts made from your cases</h2>
+<p>When a member (or a client) renders a video from one of your cases in the video editor and
+posts it to the public feed, the post is credited to <em>them</em> — <strong>your group's name appears on
+nothing until you say so</strong>. <strong>Settings → Feed attribution</strong> lists that footage for your
+decision:</p>
+<ul>
+<li><strong>Claim</strong> puts your group's name and a link to your public page on the post, plus a
+  <strong>Group verified</strong> badge — you vouching that the footage is what it says. That badge also
+  lifts the post's standing in the feed.</li>
+<li><strong>Decline</strong> leaves the post up, credited to the person, with no link to you — ever.</li>
+</ul>
+<p>Either decision can be changed later. Footage from a <strong>private engagement</strong> additionally
+required the poster's explicit, recorded confirmation before it could be posted at all —
+claiming or declining is only about your name, never about whether the post exists.</p>
 <h2>Location data in your photos, audio and video</h2>
 <p>Cameras and phones write the coordinates of wherever they were into the file itself. On a case at
 somebody's home, that file knows the address — and the site's careful, deliberately vague map pin
@@ -2317,8 +2365,15 @@ neither is something a site should acquire by accident — each one adds a publi
 members and visitors will start using the moment it appears, so switching it on is a decision
 somebody makes deliberately rather than a default they inherit.</p>
 <ul>
-<li><strong>Public feed</strong> — short public posts from anyone signed in. Turning it on means signing up to
-  moderate it; see <a href="/help/moderating-the-feed">Moderating the Feed</a>.</li>
+<li><strong>Public feed</strong> — the full arc: anyone reads without an account; members and clients post text,
+  photos and video; posts carry experience-type categories the site learns from; groups decide
+  which case-derived videos link back to them; promoted cards rotate through it, fed nearest-first
+  to viewers who share their location. Turning it on means signing up to moderate it — see
+  <a href="/help/moderating-the-feed">Moderating the Feed</a> — and the <strong>Feed Media</strong> page states plainly
+  whether screening is <strong>automatic</strong> (the on-server model is installed) or <strong>manual-only</strong> (every
+  photo and video waits for a person). Do not launch on manual-only without meaning to.
+  While the feed is off but has content, every SuperAdmin sees a reminder banner naming this
+  switch — the feature cannot be forgotten in the dark by accident.</li>
 <li><strong>Publications</strong> — long-form writing by groups, readable by visitors with no account. Turning it
   on adds the <strong>Publications</strong> entry to the menu for everyone, and a <strong>Publications</strong> tab to each
   group's page for its administrators. Nothing appears in the public directory until a group
@@ -2562,6 +2617,24 @@ person reported the same post — how many. Treat that number as context, not as
 <p>Both resolve <strong>every</strong> waiting report against that post together. Five people reporting one post is
 one decision, and leaving the rest waiting would put it back in front of a colleague with no sign
 it had already been dealt with.</p>
+<h2>Photos and videos waiting for a look</h2>
+<p><strong>Administration → Content → Feed Media</strong> is the other queue: photos and videos that have not been
+cleared for the feed. Nothing anybody uploads is shown to readers until it has been screened —
+automatically where the site's screening model is installed, and by a person here otherwise. The
+page says plainly which of those is the case.</p>
+<p>A file the automatic screener held carries its reason ("blocked", or "borderline, needs a person")
+with a confidence score. <strong>Approve</strong> publishes it; <strong>Hold</strong> keeps it unpublished with your note.
+Neither deletes anything, and the author is only ever told their upload is being checked — never
+which check it tripped, because that would be a manual for dressing up the next one.</p>
+<h3>The category question</h3>
+<p>Beside the safety question sits a different one: <strong>is this what it says it is?</strong> A post's category
+label (Apparition, Voices / Whispering…) is the author's claim, shown with the site's own
+match score. <strong>Is what it says</strong> and <strong>Category is wrong</strong> each record your judgment — that is all
+they do. A wrong category never hides a post; it nudges the author to fix the label and gently
+lowers the post's ranking.</p>
+<p>Those judgments are worth the click even when nothing is wrong: every one becomes a labelled
+example the site's classifier learns from, and the classifier is only ever as good as the record
+of what people who looked actually decided.</p>
 <h2>Hidden, not deleted</h2>
 <p>A hidden post is still there. Nothing is destroyed: its replies, its reports and the record of who
 decided what all survive, so the next person asking "what happened here" can find out. Deleting it
