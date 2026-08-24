@@ -40,24 +40,30 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
     }
 
     /// <summary>
-    /// The caller's OWN overflow seat in this group (item 144), or null. Gated on being the
-    /// holder, not on settings permission: a seat is a bill addressed to one person, and an
-    /// ordinary member paying for their own seat must be able to see it without being able to
-    /// read the group's billing.
+    /// The caller's OWN overflow seat in this group (item 144) — a list of at most one. Gated on
+    /// being the holder, not on settings permission: a seat is a bill addressed to one person,
+    /// and an ordinary member paying for their own seat must be able to see it without being
+    /// able to read the group's billing.
     /// </summary>
-    [HttpGet("my-seat")]
-    public async Task<ActionResult<MyMemberSeatRecord?>> GetMySeat(Guid organizationId, CancellationToken ct)
+    /// <remarks>
+    /// A LIST rather than a nullable single, deliberately: <c>Ok(null)</c> answers 204, which a
+    /// client cannot tell apart from a refusal or a server error, and this is somebody's BILL —
+    /// silently showing nothing is the worst of the three. The list shape carries the difference
+    /// through <c>LoadResult</c> all the way to the page (item 178's smaller note).
+    /// </remarks>
+    [HttpGet("my-seats")]
+    public async Task<ActionResult<IEnumerable<MyMemberSeatRecord>>> GetMySeats(
+        Guid organizationId, CancellationToken ct)
     {
         if (GetCurrentUserId() is not { } userId) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        var seat = await db.MemberSeatSubscriptions.AsNoTracking()
+        return Ok(await db.MemberSeatSubscriptions.AsNoTracking()
             .Where(s => s.OrganizationId == organizationId && s.AppUserId == userId)
             .Select(s => new MyMemberSeatRecord(
                 s.OrganizationId, s.Organization.Name, s.Status, s.Interval,
                 s.PriceAtStart, s.CurrentPeriodEnd))
-            .FirstOrDefaultAsync(ct);
-        return Ok(seat);
+            .ToListAsync(ct));
     }
 
     [HttpGet("history")]

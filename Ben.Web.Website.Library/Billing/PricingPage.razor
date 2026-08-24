@@ -143,6 +143,14 @@
     </BenListState>
 
     @* ── Item 144: your own paid seat, if you hold one ────────────────────── *@
+    @if (_seatLoadFailed)
+    {
+        <hr class="my-5" />
+        <div class="alert alert-warning" id="my-seats-failed">
+            We couldn't check whether you hold a paid seat in any of your groups just now.
+            If you were told you have one, it is still there — please try again shortly.
+        </div>
+    }
     @if (_mySeats.Count > 0)
     {
         <hr class="my-5" />
@@ -345,6 +353,10 @@
     private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
     private readonly List<Ben.Service.Models.Admin.MyMemberSeatRecord> _mySeats = [];
 
+    // A seat is somebody's BILL. If the fetch failed we say so rather than drawing no card,
+    // which is indistinguishable from "you owe nothing" (item 178).
+    private bool _seatLoadFailed;
+
     // Item 168: the inline billing-history panel, one group at a time.
     private Guid? _historyOrgId;
     private string _historyOrgName = "";
@@ -398,8 +410,9 @@
                 // Item 144: a seat is a bill addressed to THIS person, so it is fetched for every
                 // group they belong to — independently of the group-billing cards below, which
                 // need settings permission an ordinary seat-holder does not have.
-                if (await Client.GetMySeatAsync(org.Id) is { } seat)
-                    _mySeats.Add(seat);
+                var seatResult = await Client.GetMySeatAsync(org.Id);
+                if (seatResult.Failed) _seatLoadFailed = true;
+                else _mySeats.AddRange(seatResult.Items);
 
                 // Null covers both "may not see billing" and "could not load" — either way there
                 // is no honest card to draw for this group on a pricing page.

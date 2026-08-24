@@ -127,8 +127,11 @@ public interface IBenBillingClient
     Task<(MemberSeatAdminRecord? Result, string? Error)> SetMemberSeatAsync(
         Guid seatId, SetMemberSeatRequest request, CancellationToken token = default);
 
-    /// <summary>The caller's own seat in one group, or null when they hold none.</summary>
-    Task<MyMemberSeatRecord?> GetMySeatAsync(Guid organizationId, CancellationToken token = default);
+    /// <summary>
+    /// The caller's own seat in one group — empty when they hold none, FAILED when the answer
+    /// could not be had. A bill must never be hidden by a fetch that quietly returned nothing.
+    /// </summary>
+    Task<LoadResult<MyMemberSeatRecord>> GetMySeatAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>A payment row's receipt as bytes, for the downloadFileFromBase64 hand-off.
     /// Null when the row is not a payment or the caller may not see it.</summary>
