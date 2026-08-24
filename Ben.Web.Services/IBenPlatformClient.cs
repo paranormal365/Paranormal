@@ -94,7 +94,9 @@ public interface IBenPlatformClient
     Task<WebApi.LoadResult<AdminOrganizationAdRecord>> GetAdminOrgAdsAsync(CancellationToken token = default);
     Task<(bool Ok, string? Error)> ApproveOrgAdAsync(Guid adId, CancellationToken token = default);
     Task<(bool Ok, string? Error)> RejectOrgAdAsync(Guid adId, string reason, CancellationToken token = default);
-    Task<WebApi.LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(int take = 3, CancellationToken token = default);
+    Task<WebApi.LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(
+        int take = 3, CancellationToken token = default,
+        double? lat = null, double? lon = null);
 
     /// <summary>Tour names the caller has dismissed (item 166) — nothing listed auto-launches.</summary>
     Task<WebApi.LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default);

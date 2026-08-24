@@ -55,7 +55,8 @@ public sealed class OrganizationAdController : BenControllerBase
 
     private static OrganizationAdRecord ToRecord(OrganizationAd ad) => new(
         ad.Id, ad.OrganizationId, ad.Headline, ad.Body, ad.ImageUploadFileId, ad.TargetKind,
-        ad.Status, ad.RejectionReason, ad.DateSubmitted, ad.DateReviewed, ad.DateCreated);
+        ad.Status, ad.RejectionReason, ad.DateSubmitted, ad.DateReviewed, ad.DateCreated,
+        ad.Impressions, ad.Clicks);
 
     private static string? Validate(SaveOrganizationAdRequest request)
     {

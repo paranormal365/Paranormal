@@ -56,9 +56,15 @@
                 else if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Approved)
                 {
                     <p class="small text-secondary">
-                        Live: your card rotates through the group finder's Featured groups and
-                        the home page, marked "Promoted".
+                        Live: your card rotates through the group finder's Featured groups,
+                        the home page, and the public feed — always marked "Promoted", and
+                        fed to the people nearest your public address first.
                     </p>
+                    @* The numbers (item 186 F8). Serves, not eyeballs — said plainly. *@
+                    <div class="d-flex gap-4 small" id="promote-counters">
+                        <span><strong>@_current.Impressions.ToString("N0")</strong> times shown</span>
+                        <span><strong>@_current.Clicks.ToString("N0")</strong> clicks through</span>
+                    </div>
                 }
 
                 <div class="d-flex gap-2 mt-2">

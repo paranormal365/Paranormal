@@ -12,6 +12,7 @@ final class AppDependencies {
     private(set) var environment: APIEnvironment
     let tokens: TokenSession
     let api: APIClient
+    let session: SessionStore
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -27,10 +28,15 @@ final class AppDependencies {
             transport: transport,
             environment: { box.value })
         self.tokens = tokens
-        self.api = APIClient(
+        let api = APIClient(
             environment: { box.value },
             transport: transport,
             tokens: tokens)
+        self.api = api
+        self.session = SessionStore(
+            auth: IdentityAuthClient(environment: { box.value }, transport: transport),
+            tokens: tokens,
+            api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means
@@ -39,7 +45,7 @@ final class AppDependencies {
         environmentBox.value = newEnvironment
         environment = newEnvironment
         environmentStore.save(newEnvironment)
-        await tokens.endSession()
+        await session.signOut()
         URLSession.benShared.configuration.urlCache?.removeAllCachedResponses()
     }
 }

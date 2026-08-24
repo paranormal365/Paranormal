@@ -8,13 +8,55 @@ import BenKit
 struct RootShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Router.self) private var router
+    @Environment(AppDependencies.self) private var dependencies
+    @State private var showSignInFromBanner = false
 
     var body: some View {
-        if sizeClass == .regular {
-            splitView
-        } else {
-            tabView
+        Group {
+            if sizeClass == .regular {
+                splitView
+            } else {
+                tabView
+            }
         }
+        // Cold start: tokens in the Keychain mean quiet optimistic sign-in.
+        .task { await dependencies.session.restore() }
+        // The session-ended INTERRUPT: a banner over whatever the user was
+        // doing — anonymous surfaces keep working, never a sign-in wall.
+        .safeAreaInset(edge: .top) {
+            if dependencies.session.sessionEndedBanner {
+                sessionEndedBanner
+            }
+        }
+        .sheet(isPresented: $showSignInFromBanner) {
+            SignInView().environment(dependencies)
+        }
+    }
+
+    private var sessionEndedBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.xmark")
+            Text("Your session ended.")
+                .font(.callout)
+            Spacer()
+            Button("Sign in") {
+                dependencies.session.dismissSessionEndedBanner()
+                showSignInFromBanner = true
+            }
+            .font(.callout.bold())
+            Button {
+                dependencies.session.dismissSessionEndedBanner()
+            } label: {
+                Image(systemName: "xmark")
+                    .accessibilityLabel("Dismiss")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warning.opacity(0.5)))
+        .padding(.horizontal, 12)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     private var tabView: some View {
