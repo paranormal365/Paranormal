@@ -221,6 +221,12 @@ public sealed class ModerationController : BenControllerBase
             await media.CountAsync(m => m.MediaReviewState == FeedMediaReviewState.Held, ct),
             await db.OrgMessageReports.AsNoTracking()
                 .CountAsync(r => r.Outcome == FeedReportOutcome.Pending, ct),
-            _screener.IsAutomatic));
+            _screener.IsAutomatic,
+            // The dark-launch facts (item 186 F10): is the feature on, and is content
+            // accumulating behind it. The reminder banner pivots on exactly these two.
+            await Services.SiteSettingsService.GetBoolAsync(
+                db, Services.SiteSettingKeys.FeaturePublicFeed, whenUnset: false, ct),
+            await db.OrgMessages.AsNoTracking()
+                .CountAsync(m => m.ChannelType == OrgMessageChannel.PublicFeed, ct)));
     }
 }
