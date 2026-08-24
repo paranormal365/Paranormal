@@ -338,32 +338,35 @@
 @* ── Add Logo dialog ──────────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showLogoDialog" Title="Add Logo" Size="lg">
     <ChildContent>
-        @if (_orgImageFiles is null)
-        {
-            <div class="p-3 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
-        }
-        else
-        {
+            @* Item 175 sweep: the last hand-rolled thumbnail grid becomes the picker. *@
             <BenTabs>
                 <BenTab Title="From Library">
-                    @if (_orgImageFiles.Count == 0)
-                    {
-                        <p class="text-secondary p-3 mb-0">No image files are shared with this organization yet. Use the Upload tab to add one.</p>
-                    }
-                    else
-                    {
-                        <div class="d-flex flex-wrap gap-2 p-2" style="max-height:260px;overflow-y:auto;">
-                            @foreach (var f in _orgImageFiles)
+                    <div class="d-flex align-items-center gap-3 p-2">
+                        @if (_selectedLogoFileId is { } chosenLogoId)
+                        {
+                            <div class="border rounded p-1" id="logo-chosen">
+                                <CmsFileThumbnail FileId="@chosenLogoId" Width="110px" Height="75px" Alt="@_selectedLogoName" />
+                            </div>
+                            @if (_selectedLogoName is not null)
                             {
-                                var fId = f.Id;
-                                var selected = _selectedLogoFileId == fId;
-                                <div style="cursor:pointer;width:120px;text-align:center;" @onclick="@(() => _selectedLogoFileId = fId)">
-                                    <div class="@(selected ? "border border-primary border-2 rounded" : "border rounded")" style="padding:3px;">
-                                        <CmsFileThumbnail FileId="@fId" Width="110px" Height="75px" Alt="@f.FileName" />
-                                    </div>
-                                    <small class="text-truncate d-block mt-1" style="max-width:120px;" title="@f.FileName">@f.FileName</small>
-                                </div>
+                                <small class="text-truncate" style="max-width:16rem;">@_selectedLogoName</small>
                             }
+                        }
+                        else
+                        {
+                            <span class="text-secondary small">No image chosen yet.</span>
+                        }
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="logo-choose"
+                                @onclick="@(() => _showLogoPicker = true)">
+                            Choose from library…
+                        </button>
+                    </div>
+                    @if (_selectedLogoNotPublic)
+                    {
+                        <div class="alert alert-warning py-2 mx-2 mb-0" id="logo-visibility-warning">
+                            This image is <strong>members only</strong>, so the logo renders for members and
+                            shows a broken picture to visitors. Pick a public image, or make this one public
+                            on its file page first.
                         </div>
                     }
                 </BenTab>
@@ -389,7 +392,6 @@
                     </div>
                 </BenTab>
             </BenTabs>
-        }
 
         <hr class="my-3" />
         <div class="row g-3">
@@ -416,6 +418,13 @@
         </div>
     </ChildContent>
 </BenModal>
+
+<BenContentPicker @bind-Visible="_showLogoPicker"
+                  Title="Choose a logo image"
+                  SelectText="Use this image"
+                  EmptyText="No images are shared with this group yet — use the Upload New tab instead."
+                  Loader="@LoadLogoImagesAsync"
+                  OnSelected="@OnLogoImageChosen" />
 
 @* ── Page preview window ──────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showPreview" Title="@PreviewTitle" Size="xl">
@@ -613,7 +622,6 @@
     private string? _uploadedLogoName;
     private string? _logoAltText;
     private bool _logoIsActive = true;
-    private IList<UploadFileRecord>? _orgImageFiles;
     private IReadOnlyList<UploadFileTypeRecord>? _fileTypes;
     private Guid _uploadFileTypeId;
 
@@ -857,21 +865,18 @@
     private async Task OpenLogoDialog()
     {
         // Reset dialog state
-        _selectedLogoFileId = null;
-        _uploadedLogoName   = null;
-        _logoAltText        = null;
-        _logoIsActive       = true;
-        _logoError          = null;
+        _selectedLogoFileId    = null;
+        _selectedLogoName      = null;
+        _selectedLogoNotPublic = false;
+        _uploadedLogoName      = null;
+        _logoAltText           = null;
+        _logoIsActive          = true;
+        _logoError             = null;
 
-        // Load data BEFORE opening the dialog — avoids the TelerikDialog portal
-        // not seeing StateHasChanged() calls made after the dialog is already open.
+        // The library itself now loads inside the picker, per open; only the upload tab's
+        // file-type lookup still needs to happen up front.
         try
         {
-            var allFiles = (await AdminClient.GetOrgSharedFilesAsync(OrgId)).Items;
-            _orgImageFiles = allFiles
-                .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
             if (_fileTypes is null)
                 _fileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
 
@@ -885,20 +890,53 @@
         }
         catch
         {
-            _orgImageFiles ??= [];
-            _logoError = "Could not load the file library. You can still upload a new image using the Upload tab.";
+            _logoError = "Could not load the file types. You can still choose from the library.";
         }
 
-        // Open the dialog now that all data is ready — content renders correctly on first paint.
         _showLogoDialog = true;
+    }
+
+    // Item 175 sweep: the picker replacing the dialog's hand-rolled thumbnail grid. Same
+    // visitor-visibility concern as the banner: the logo shows on the group's PUBLIC page,
+    // and the anonymous thumbnail route only serves IsPublic files.
+    private bool _showLogoPicker;
+    private string? _selectedLogoName;
+    private bool _selectedLogoNotPublic;
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadLogoImagesAsync()
+    {
+        var result = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+        // A refused library must not read as an empty one — throwing hands the picker its own
+        // load-failure sentence instead of "no images yet".
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items
+            .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new ContentPickerItem(
+                f.Id, f.FileName, "Image",
+                $"{f.DateCreated:MM/dd/yyyy}",
+                new Dictionary<string, string>
+                {
+                    ["Visibility"] = f.IsPublic ? "Public" : "Members only",
+                },
+                f.ContentType, f.FileSize))];
+    }
+
+    private void OnLogoImageChosen(ContentPickerItem item)
+    {
+        _selectedLogoFileId    = item.Id;
+        _selectedLogoName      = item.Name;
+        _selectedLogoNotPublic = item.Facets?.GetValueOrDefault("Visibility") == "Members only";
+        _uploadedLogoName      = null;
     }
 
     private void CloseLogoDialog()
     {
-        _showLogoDialog   = false;
-        _selectedLogoFileId = null;
-        _uploadedLogoName   = null;
-        _logoError          = null;
+        _showLogoDialog        = false;
+        _selectedLogoFileId    = null;
+        _selectedLogoName      = null;
+        _selectedLogoNotPublic = false;
+        _uploadedLogoName      = null;
+        _logoError             = null;
     }
 
     private async Task OnLogoFileSelected(InputFileChangeEventArgs e)
@@ -935,11 +973,10 @@
             }
             else
             {
-                _selectedLogoFileId = uploaded.Id;
-                _uploadedLogoName   = file.Name;
-                // Refresh the library list so the new image appears
-                var allFiles = (await AdminClient.GetOrgSharedFilesAsync(OrgId)).Items;
-                _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+                _selectedLogoFileId    = uploaded.Id;
+                _selectedLogoName      = file.Name;
+                _selectedLogoNotPublic = false; // UploadImageAsync uploads as public
+                _uploadedLogoName      = file.Name;
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)

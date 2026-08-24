@@ -199,6 +199,46 @@ public class ContentPickerTests : BenTestBase
     /// test stayed green), leaving orphan pages in the shared DB. A cleanup must be the most
     /// boring, least breakable path available — and it must be verified once, not trusted.
     /// </summary>
+    /// <summary>
+    /// The Add Logo dialog's From-Library tab was the last hand-rolled thumbnail grid — now the
+    /// picker, same Visibility facet as the banner (the logo renders on the PUBLIC page through
+    /// the same IsPublic-gated anonymous route). Cancelled without saving: no logo rows written.
+    /// </summary>
+    [Test]
+    public async Task The_logo_dialog_offers_the_picker_instead_of_its_own_grid()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/organizations/{TghId}/cms");
+        await WaitUntilLoadedAsync();
+
+        await OpenTabAsync("Logos", Main.GetByRole(AriaRole.Button, new() { Name = "Add Logo" }));
+
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Add Logo" }), dialog);
+
+        var choose = Page.Locator("#logo-choose");
+        await Expect(choose).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await ClickUntilAsync(choose, Page.Locator("#picker-search"));
+
+        var cards = Page.Locator(".ben-content-picker-grid .card");
+        var empty = Page.Locator("#picker-empty");
+        await Expect(cards.First.Or(empty)).ToBeVisibleAsync(new() { Timeout = 45_000 });
+
+        if (await cards.CountAsync() > 0)
+        {
+            await cards.First.ClickAsync();
+            await Page.Locator("#picker-select").ClickAsync();
+            await Expect(Page.Locator("#logo-chosen")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        }
+        else
+        {
+            await Page.Keyboard.PressAsync("Escape");
+        }
+
+        // Cancel — the dialog's Save is never clicked, so no logo row is created.
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).First.ClickAsync();
+    }
+
     private async Task DeleteCmsPageAsync(string orgId, string title)
     {
         try

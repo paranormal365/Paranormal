@@ -8914,7 +8914,7 @@ in-memory FirstOrDefault picks insertion order, so both FAIL with the ordering r
 TGH's queue is clean again. The one-Pending-max rule was never broken — Apply refuses
 duplicates and a filtered unique index backs it.
 
-## 175. Reusable content picker — replace the paste-a-Guid share dialog (OPEN — Ben, 2026-08-23)
+## 175. Reusable content picker — replace the paste-a-Guid share dialog (CLOSED 2026-08-23 — every GUID box and hand-rolled grid replaced)
 
 Ben, testing live: the "Share from User" button on the group Files tab opens a modal asking for
 a raw file Guid. His spec, in substance: the modal should LIST the shareable/shared content —
@@ -8981,8 +8981,15 @@ Ben.Web.Website/wwwroot; a repo-wide scan confirmed no other Library-referenced 
 path is missing from the host. The e2e now pins the distinction: a decode error on the seed's
 8-byte .wav stubs is data, the missing-module error is product and fails the test.
 
-**Remaining (keeps 175 open, small):** the logo dialog's hand-rolled From-Library grid could
-become the picker for consistency.
+**Final piece (same day): the logo dialog.** Its From-Library tab — the last hand-rolled
+thumbnail grid — is now the picker too, with the same Visibility facet and members-only
+warning as the banner: the logo renders on the group's PUBLIC page through the same
+IsPublic-gated anonymous thumbnail route. The Upload New tab stays (uploads are public by
+construction, so a fresh upload never warns). Four picker e2e tests now cover all four
+consumers: share-from-user, CMS banner, clipart library, logo dialog. **Item closed** — the
+picker has five consumers (those four plus the group-ad wizard's image step), every
+paste-a-GUID box on the site is gone, and Ben's closing requirement ("very robust and
+reusable") is what the five consumers demonstrate.
 
 ## 176. A case title can leak the client's name onto public pages (CLOSED 2026-08-23 — warn-not-block leak check, pseudonyms covered too)
 
