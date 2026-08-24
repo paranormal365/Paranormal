@@ -30,6 +30,9 @@ public record CaseRecord
     public decimal? Longitude { get; init; }
     public string? PublicPseudonym { get; init; }
     public bool IsPublic { get; init; }
+
+    /// <summary>Item 184: private-lane work — public prose substitutes names, publication is plan-gated.</summary>
+    public bool IsPrivateEngagement { get; init; }
     public DateTime DateCaseOpened { get; init; }
     public DateTime? DateCaseClosed { get; init; }
     public DateTime DateCreated { get; init; }

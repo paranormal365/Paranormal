@@ -678,13 +678,11 @@
                 EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState),
                 Visibility:        _form.Visibility);
 
-            InvestigationRecord? result;
-            if (_editInv is null)
-                result = await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req);
-            else
-                result = await AdminClient.UpdateInvestigationAsync(OrgId, CaseId, _editInv.Id, req);
+            var (result, error) = _editInv is null
+                ? await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req)
+                : await AdminClient.UpdateInvestigationAsync(OrgId, CaseId, _editInv.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else { _showDialog = false; await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }

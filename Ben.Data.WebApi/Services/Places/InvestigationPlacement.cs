@@ -90,6 +90,24 @@ internal static class InvestigationPlacement
             return new PlacementResult(null, null);
         }
 
+        // ── Item 184: binding a residence to a case is the moment it becomes private-lane ──
+        // Gated HERE, in the one shared helper, so all three placement doors answer alike. An
+        // already-designated case is never re-gated (grandfathering): the plan governs taking
+        // on new private work, not work in hand.
+        if (place.Kind == PlaceKind.PrivateResidence && investigation.CaseId is { } boundCaseId)
+        {
+            var boundCase = await db.Cases.FirstOrDefaultAsync(c => c.Id == boundCaseId, ct);
+            if (boundCase is not null && !boundCase.IsPrivateEngagement)
+            {
+                if (await Ben.Data.WebApi.Services.PrivateCaseGate.RefusalAsync(
+                        db, investigation.OrganizationId, ct) is { } refusalMessage)
+                    return new PlacementResult(null, refusalMessage);
+
+                // Designation setter b: the case is now private-lane work, permanently.
+                boundCase.IsPrivateEngagement = true;
+            }
+        }
+
         investigation.PlaceId = place.Id;
         investigation.Latitude = place.Latitude;
         investigation.Longitude = place.Longitude;

@@ -72,17 +72,19 @@ public class Phase5AdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Post,
                 InvBase(orgId, caseId),
                 It.IsAny<UpsertInvestigationRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new InvestigationRecord { Id = Guid.NewGuid(), CaseId = caseId, Title = "Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow });
+           .ReturnsAsync((new InvestigationRecord { Id = Guid.NewGuid(), CaseId = caseId, Title = "Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }, null));
 
         var req = new UpsertInvestigationRequest("Inv", null, null, DateTime.UtcNow, null, InvestigationStatus.Scheduled, null, null);
-        var result = await Build(api).CreateInvestigationAsync(orgId, caseId, req);
+        var (result, _) = await Build(api).CreateInvestigationAsync(orgId, caseId, req);
 
         Assert.NotNull(result);
-        api.Verify(x => x.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Post,
             InvBase(orgId, caseId), req, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -95,14 +97,15 @@ public class Phase5AdapterTests
         var caseId = Guid.NewGuid();
         var invId  = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PutAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Put,
                 $"{InvBase(orgId, caseId)}/{invId}",
                 It.IsAny<UpsertInvestigationRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new InvestigationRecord { Id = invId, CaseId = caseId, Title = "Updated", Status = InvestigationStatus.Completed, ScheduledDateTime = DateTime.UtcNow });
+           .ReturnsAsync((new InvestigationRecord { Id = invId, CaseId = caseId, Title = "Updated", Status = InvestigationStatus.Completed, ScheduledDateTime = DateTime.UtcNow }, null));
 
         var req = new UpsertInvestigationRequest("Updated", null, null, DateTime.UtcNow, null, InvestigationStatus.Completed, "<p>Done.</p>", null);
-        var result = await Build(api).UpdateInvestigationAsync(orgId, caseId, invId, req);
+        var (result, _) = await Build(api).UpdateInvestigationAsync(orgId, caseId, invId, req);
 
         Assert.Equal(InvestigationStatus.Completed, result!.Status);
     }

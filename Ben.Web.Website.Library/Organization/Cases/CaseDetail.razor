@@ -355,6 +355,17 @@
                 <input type="checkbox" class="form-check-input" id="case-public" @bind="@_editIsPublic" />
                 <label for="case-public" class="form-label mb-0">Make Public</label>
             </div>
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="case-private-engagement" @bind="@_editIsPrivate" />
+                <div>
+                    <label for="case-private-engagement" class="form-label mb-0">Private engagement</label>
+                    <div class="form-text">
+                        A client's home rather than a public place. Real names are replaced on every
+                        public page, and publishing the case requires a plan that includes
+                        private-residence work.
+                    </div>
+                </div>
+            </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Case Manager</label>
                 <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
@@ -468,6 +479,7 @@
     private string _editDescription  = "";
     private string _editPseudonym    = "";
     private bool _editIsPublic;
+    private bool _editIsPrivate;
     private Guid? _editCaseManagerId;
     private string? _editError;
     private List<MemberOption> _memberOptions = [];
@@ -548,6 +560,7 @@
         _editDescription    = _case.Description ?? "";
         _editPseudonym      = _case.PublicPseudonym ?? "";
         _editIsPublic       = _case.IsPublic;
+        _editIsPrivate      = _case.IsPrivateEngagement;
         _editCaseManagerId  = _case.CaseManagerAppUserId;
         _editError          = null;
         _leakWarnings       = [];
@@ -625,10 +638,11 @@
                 Status:               _editStatus,
                 PublicPseudonym:      string.IsNullOrWhiteSpace(_editPseudonym) ? null : _editPseudonym.Trim(),
                 IsPublic:             _editIsPublic,
-                CaseManagerAppUserId: _editCaseManagerId);
+                CaseManagerAppUserId: _editCaseManagerId,
+                IsPrivateEngagement:  _editIsPrivate);
 
-            var result = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, req);
-            if (result is null) { _editError = "Save failed."; }
+            var (result, error) = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, req);
+            if (result is null) { _editError = error ?? "Save failed."; }
             else { _case = result; _showEdit = false; }
         }
         catch (Exception ex) { _editError = ex.Message; }

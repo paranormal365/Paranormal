@@ -366,6 +366,11 @@ public sealed class CaseController : BenControllerBase
         // one, and a cap only on the other door would simply move the traffic.
         if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
+        // Item 184: a client's case is private-lane work by definition — somebody's home, with
+        // the privacy machinery attached — and taking it on is what the paid plan governs.
+        if (await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPrivate)
+            return BadRequest(noPrivate);
+
         // Validate the org application exists and is pending
         var application = await db.ClientRequestOrganizations
             .Include(a => a.ClientRequest)
@@ -421,6 +426,8 @@ public sealed class CaseController : BenControllerBase
             Country               = clientReq.Country,
             Latitude              = clientReq.Latitude,
             Longitude             = clientReq.Longitude,
+            // Born from a client request, so born private-lane (item 184, designation setter a).
+            IsPrivateEngagement   = true,
             DateCaseOpened        = now,
             DateCreated           = now,
             CreatedByAppUserId    = userId,
@@ -464,6 +471,24 @@ public sealed class CaseController : BenControllerBase
         // Case manager can update their own case; org admin/super can update any
         bool isCaseManager = entity.CaseManagerAppUserId == userId;
         if (!isCaseManager && !await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        // ── Item 184: the plan a group holds TODAY governs what it may publish today ──
+        // Making a private-engagement case public is publication of private-lane work; gated at
+        // the flip, never on a case that is already public (grandfathered until it lapses).
+        if (request.IsPublic && !entity.IsPublic && entity.IsPrivateEngagement)
+        {
+            if (await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPublish)
+                return BadRequest(noPublish);
+        }
+
+        // Manual designation (setter c). Setting it needs the plan; CLEARING it is free to the
+        // people allowed to edit the case at all — recorded as open question 5 for Ben.
+        if (request.IsPrivateEngagement is { } designation && designation != entity.IsPrivateEngagement)
+        {
+            if (designation && await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noDesignate)
+                return BadRequest(noDesignate);
+            entity.IsPrivateEngagement = designation;
+        }
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
         entity.Description          = request.Description?.Trim();
@@ -785,7 +810,9 @@ public sealed record UpdateCaseRequest(
     Ben.Data.Common.Enums.CaseStatus Status,
     string? PublicPseudonym,
     bool IsPublic,
-    Guid? CaseManagerAppUserId);
+    Guid? CaseManagerAppUserId,
+    // Item 184: null = leave the designation alone (what every pre-184 caller sends).
+    bool? IsPrivateEngagement = null);
 
 public sealed record UpsertTimelineEntryRequest(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,

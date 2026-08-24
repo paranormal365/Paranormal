@@ -829,7 +829,9 @@ public sealed record UpdateCaseRequest(
     Ben.Data.Common.Enums.CaseStatus Status,
     string? PublicPseudonym,
     bool IsPublic,
-    Guid? CaseManagerAppUserId);
+    Guid? CaseManagerAppUserId,
+    // Item 184: null = leave the private-engagement designation unchanged.
+    bool? IsPrivateEngagement = null);
 
 public sealed record UpsertTimelineEntryRequest(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
