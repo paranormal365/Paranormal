@@ -51,6 +51,16 @@ public sealed class FeedControllerTests
             },
         };
 
+    /// <summary>A controller with no signed-in user at all — a visitor (item 186).</summary>
+    private static FeedController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
+        => new(factory)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) },
+            },
+        };
+
     private static AppUser MakeUser(string handle, string? displayName = null) => new()
     {
         Id = Guid.NewGuid(),
@@ -91,9 +101,9 @@ public sealed class FeedControllerTests
     }
 
     private static async Task<List<FeedPostRecord>> ReadFeedAsync(
-        FeedController controller, string? mode = null, string? hashtag = null)
+        FeedController controller, string? mode = null, string? hashtag = null, Guid? author = null)
     {
-        var result = await controller.GetFeed(mode, hashtag, null, CancellationToken.None);
+        var result = await controller.GetFeed(mode, hashtag, null, CancellationToken.None, author);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         return ((FeedPageRecord)ok.Value!).Posts.ToList();
     }
@@ -412,5 +422,151 @@ public sealed class FeedControllerTests
         await Build(factory, reader.Id).ReportPost(id, new ReportFeedPostRequest(null), default);
 
         Assert.True((await ReadFeedAsync(Build(factory, reader.Id)))[0].ReportedByCurrentUser);
+    }
+
+    // ── item 186 F1: anyone reads ─────────────────────────────────────────────
+
+    /// <summary>
+    /// A visitor with no account reads the same posts a member does.
+    /// </summary>
+    /// <remarks>
+    /// The front door. A feed that demands sign-in before showing anything gives a visitor nothing
+    /// to sign up FOR, which is the whole reason the arc exists.
+    /// </remarks>
+    [Fact]
+    public async Task A_visitor_reads_the_feed()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        await PostAsync(Build(factory, sarah.Id), "Knocking in the upstairs hall #EVP");
+
+        var posts = await ReadFeedAsync(BuildAnonymous(factory));
+
+        Assert.Single(posts);
+        Assert.Equal("Knocking in the upstairs hall #EVP", posts[0].Body);
+        Assert.Contains("evp", posts[0].Hashtags);
+    }
+
+    /// <summary>Every per-reader flag is false for somebody who is not a reader we know.</summary>
+    [Fact]
+    public async Task A_visitors_per_reader_flags_are_all_false()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+
+        var postId = await PostAsync(Build(factory, sarah.Id), "Something happened here.");
+        await Build(factory, james.Id).Follow(sarah.Id, CancellationToken.None);
+        await Build(factory, james.Id).ReportPost(
+            postId, new ReportFeedPostRequest(null), CancellationToken.None);
+
+        var posts = await ReadFeedAsync(BuildAnonymous(factory));
+
+        Assert.False(posts[0].IsOwnPost);
+        Assert.False(posts[0].AuthorIsFollowedByCurrentUser);
+        Assert.False(posts[0].ReportedByCurrentUser);
+    }
+
+    /// <summary>A shared link to a thread opens for the person it was shared with.</summary>
+    [Fact]
+    public async Task A_visitor_reads_a_thread_and_a_profile()
+    {
+        var sarah = MakeUser("sarahmitchell", "Sarah Mitchell");
+        var factory = await SeedAsync(users: sarah);
+        var rootId = await PostAsync(Build(factory, sarah.Id), "The recorder caught something.");
+        await PostAsync(Build(factory, sarah.Id), "Uploading it now.", rootId);
+
+        var thread = await BuildAnonymous(factory).GetThread(rootId, CancellationToken.None);
+        var threadPosts = (IReadOnlyList<FeedPostRecord>)Assert.IsType<OkObjectResult>(thread.Result).Value!;
+        Assert.Equal(2, threadPosts.Count);
+
+        var profile = await BuildAnonymous(factory).GetProfile(sarah.Id, CancellationToken.None);
+        var record = (FeedProfileRecord)Assert.IsType<OkObjectResult>(profile.Result).Value!;
+        Assert.Equal("Sarah Mitchell", record.DisplayName);
+        Assert.Equal(2, record.PostCount);
+        Assert.False(record.IsSelf);
+        Assert.False(record.IsFollowedByCurrentUser);
+    }
+
+    /// <summary>
+    /// Opening a thread as a visitor records no view.
+    /// </summary>
+    /// <remarks>
+    /// OrgMessageView is keyed by viewer, and Guid.Empty is not a person — writing one would put a
+    /// row against a user that does not exist and, worse, could clear a real reader's bell if the
+    /// key ever collided.
+    /// </remarks>
+    [Fact]
+    public async Task A_visitor_opening_a_thread_marks_nothing_seen()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var rootId = await PostAsync(Build(factory, sarah.Id), "Anyone else hear that?");
+
+        await BuildAnonymous(factory).GetThread(rootId, CancellationToken.None);
+
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(0, await db.OrgMessageViews.CountAsync());
+    }
+
+    /// <summary>The feed is still 404 for a visitor when it is switched off.</summary>
+    [Fact]
+    public async Task A_visitor_gets_nothing_when_the_feed_is_off()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(feedOn: false, users: sarah);
+        var anonymous = BuildAnonymous(factory);
+
+        Assert.IsType<NotFoundResult>(
+            (await anonymous.GetFeed(null, null, null, CancellationToken.None)).Result);
+        Assert.IsType<NotFoundResult>(
+            (await anonymous.GetThread(Guid.NewGuid(), CancellationToken.None)).Result);
+        Assert.IsType<NotFoundResult>(
+            (await anonymous.GetProfile(sarah.Id, CancellationToken.None)).Result);
+    }
+
+    // ── item 186 F1: one person's posts ───────────────────────────────────────
+
+    [Fact]
+    public async Task The_author_filter_returns_only_that_persons_posts_and_ignores_mode()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+
+        await PostAsync(Build(factory, sarah.Id), "Sarah's first.");
+        await PostAsync(Build(factory, james.Id), "James's only.");
+        await PostAsync(Build(factory, sarah.Id), "Sarah's second.");
+
+        // "following" would normally mean James's own posts plus those he follows — but an author
+        // filter is a question about one person, so the mode must not narrow it further.
+        var posts = await ReadFeedAsync(Build(factory, james.Id), mode: "following", author: sarah.Id);
+
+        Assert.Equal(2, posts.Count);
+        Assert.All(posts, p => Assert.Equal(sarah.Id, p.AuthorAppUserId));
+    }
+
+    [Fact]
+    public async Task The_author_filter_leaves_out_replies_and_hidden_posts()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var controller = Build(factory, sarah.Id);
+
+        var rootId = await PostAsync(controller, "Top level.");
+        await PostAsync(controller, "A reply of mine.", rootId);
+        var hiddenId = await PostAsync(controller, "This one gets hidden.");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var hidden = await db.OrgMessages.SingleAsync(m => m.Id == hiddenId);
+            hidden.HiddenUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var posts = await ReadFeedAsync(BuildAnonymous(factory), author: sarah.Id);
+
+        Assert.Single(posts);
+        Assert.Equal(rootId, posts[0].Id);
     }
 }

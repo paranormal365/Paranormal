@@ -43,7 +43,7 @@
                         </div>
                     </div>
 
-                    @if (!_profile.IsSelf)
+                    @if (!_profile.IsSelf && IsSignedIn)
                     {
                         <button type="button"
                                 class="btn btn-sm @(_profile.IsFollowedByCurrentUser ? "btn-outline-secondary" : "btn-primary")"
@@ -71,7 +71,18 @@
                    per post would be three answers to the same question on one screen. *@
                 @foreach (var post in _posts)
                 {
-                    <FeedPostCard Post="@post" ShowFollow="false" OnReportRequested="ReportAsync" />
+                    <FeedPostCard Post="@post" ShowFollow="false" CanAct="@IsSignedIn"
+                                  OnReportRequested="ReportAsync" />
+                }
+
+                @if (_nextCursor is not null)
+                {
+                    <div class="text-center my-3">
+                        <button type="button" class="btn btn-outline-secondary" disabled="@_loadingMore"
+                                @onclick="LoadMoreAsync">
+                            @(_loadingMore ? "Loading…" : "Load more")
+                        </button>
+                    </div>
                 }
             }
         }
@@ -87,10 +98,15 @@
     private bool _loading = true;
     private bool _busy;
 
+    /// <summary>Read at render time — auth restores after the circuit starts. See FeedPage.</summary>
+    private bool IsSignedIn => UserState.IsAuthenticated;
+    private string? _nextCursor;
+    private bool _loadingMore;
+
     protected override async Task OnParametersSetAsync()
     {
+        // Item 186: readable by anyone. Following still needs an account, so the button hides.
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
 
         await LoadAsync();
     }
@@ -99,6 +115,7 @@
     {
         _loading = true;
         _posts.Clear();
+        _nextCursor = null;
         StateHasChanged();
 
         try
@@ -106,19 +123,37 @@
             _profile = await Feed.GetFeedProfileAsync(AppUserId);
             if (_profile is null) return;
 
-            // There is no per-person feed endpoint: the feed is filtered by mode and tag, not by
-            // author. Rather than add one, this reads a page and keeps this person's posts — which
-            // is honest for a profile with recent activity and thin for one without. A dedicated
-            // endpoint is the fix if profiles turn out to be somewhere people actually browse.
-            var page = await Feed.GetFeedAsync();
+            // Item 186 added the author filter this page always wanted. Before it, this read the
+            // first page of EVERYTHING and kept the matches — thin for anyone who had not posted
+            // in the last 25 posts site-wide, and unpageable past that.
+            var page = await Feed.GetFeedAsync(author: AppUserId);
             if (page is not null)
-                _posts.AddRange(page.Posts.Where(p => p.AuthorAppUserId == AppUserId));
+            {
+                _posts.AddRange(page.Posts);
+                _nextCursor = page.NextCursor;
+            }
         }
         finally
         {
             _loading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_nextCursor is null || _loadingMore) return;
+
+        _loadingMore = true;
+        try
+        {
+            var page = await Feed.GetFeedAsync(cursor: _nextCursor, author: AppUserId);
+            if (page is null) return;
+
+            _posts.AddRange(page.Posts);
+            _nextCursor = page.NextCursor;
+        }
+        finally { _loadingMore = false; }
     }
 
     private async Task ToggleFollowAsync()

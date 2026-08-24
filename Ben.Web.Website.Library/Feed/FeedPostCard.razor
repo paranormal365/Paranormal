@@ -12,6 +12,15 @@
     Report is offered once. After that the control says so rather than disappearing — a control
     that vanishes leaves somebody wondering whether their report registered, and inviting a second
     one would only be refused.
+
+    A visitor who is not signed in gets neither control (item 186). Both endpoints are
+    [Authorize]d, so offering the button would be offering a 401 — and the join card at the top of
+    the feed already explains what an account is for. Reading needs no account; acting does.
+
+    CanAct arrives from the page rather than being read here. The pages await auth resolution
+    before claiming anything about the reader; a card reading the state for itself would answer
+    from whatever was true at prerender and never revise it — which is exactly what
+    AuthReadyPrerenderGuardTests exists to stop, and what it caught when this did read it.
 *@
 
 <article class="card mb-2 bv-feed-post">
@@ -25,7 +34,7 @@
                 @Post.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
             </span>
 
-            @if (!Post.IsOwnPost && ShowFollow)
+            @if (!Post.IsOwnPost && ShowFollow && CanAct)
             {
                 <button type="button" class="btn btn-link btn-sm p-0 ms-auto"
                         @onclick="() => OnFollowToggled.InvokeAsync(Post)">
@@ -43,7 +52,7 @@
                 @(Post.ReplyCount == 1 ? "1 reply" : $"{Post.ReplyCount} replies")
             </a>
 
-            @if (!Post.IsOwnPost)
+            @if (!Post.IsOwnPost && CanAct)
             {
                 @if (Post.ReportedByCurrentUser)
                 {
@@ -69,4 +78,10 @@
 
     [Parameter] public EventCallback<FeedPostRecord> OnFollowToggled { get; set; }
     [Parameter] public EventCallback<FeedPostRecord> OnReportRequested { get; set; }
+
+    /// <summary>
+    /// Whether this reader may act on a post — follow or report. False for a visitor, and false
+    /// until the page knows, so a control never appears before the page can honour it.
+    /// </summary>
+    [Parameter] public bool CanAct { get; set; }
 }

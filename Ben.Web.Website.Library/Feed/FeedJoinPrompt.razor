@@ -1,0 +1,45 @@
+@namespace Ben.Web.Website.Library.Feed
+
+@*
+    What stands where the composer stands, for somebody who cannot post yet (item 186).
+
+    The feed is the front door: anyone reads it, and a voice in it is what belonging buys. So the
+    slot the composer would occupy is never empty — it says who may write here and offers the two
+    doors, rather than leaving a visitor to work out why everyone else has a box and they do not.
+
+    Two audiences, one component. A signed-out visitor needs an account first; a signed-in person
+    with no group and no case needs a group or a case. The doors are the same two either way,
+    which is why this is one card and not two.
+*@
+
+<div class="card mb-3 bv-feed-join" id="feed-join-prompt">
+    <div class="card-body">
+        <h5 class="card-title mb-1">@Heading</h5>
+        <p class="card-text text-secondary small mb-3">@Explanation</p>
+
+        <div class="d-flex flex-wrap gap-2">
+            @if (!IsAuthenticated)
+            {
+                <a class="btn btn-primary btn-sm" href="/signup">Create an account</a>
+            }
+            <a class="btn btn-outline-primary btn-sm" href="/find">Find a group near you</a>
+            <a class="btn btn-outline-secondary btn-sm" href="/organizations">Start your own group</a>
+            <a class="btn btn-outline-secondary btn-sm" href="/my-requests/new">Request an investigation</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Whether the reader is signed in — decides the heading and whether sign-up is offered.</summary>
+    [Parameter] public bool IsAuthenticated { get; set; }
+
+    private string Heading => IsAuthenticated
+        ? "Join a group to post here"
+        : "Read anything. Join to join in.";
+
+    private string Explanation => IsAuthenticated
+        ? "Posting, replying and following are for people who belong here — members of an "
+          + "investigation group, and clients whose case is being worked. Both doors are open."
+        : "Anyone can read the feed. Posting, replying and following come with an account and a "
+          + "group — or with a case of your own.";
+}

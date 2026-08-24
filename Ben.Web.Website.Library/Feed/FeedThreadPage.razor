@@ -47,11 +47,23 @@
         }
         else
         {
-            <FeedPostCard Post="@_root" OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync" />
+            <FeedPostCard Post="@_root" CanAct="@(_authKnown && IsSignedIn)"
+                          OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync" />
 
             <div class="ms-3 ps-3 border-start">
-                <FeedComposer ParentPostId="@PostId" Placeholder="Write a reply…" ButtonText="Reply"
-                              OnPosted="OnReplied" />
+                @* Held until auth is known, exactly as on the feed page. *@
+                @if (_authKnown)
+                {
+                    @if (IsSignedIn)
+                    {
+                        <FeedComposer ParentPostId="@PostId" Placeholder="Write a reply…" ButtonText="Reply"
+                                      OnPosted="OnReplied" />
+                    }
+                    else
+                    {
+                        <FeedJoinPrompt IsAuthenticated="false" />
+                    }
+                }
 
                 @if (_threadResult.Failed)
                 {
@@ -66,7 +78,7 @@
                 {
                     @foreach (var reply in _replies)
                     {
-                        <FeedPostCard Post="@reply" OnFollowToggled="ToggleFollowAsync"
+                        <FeedPostCard Post="@reply" CanAct="@(_authKnown && IsSignedIn)" OnFollowToggled="ToggleFollowAsync"
                                       OnReportRequested="ReportAsync" />
                     }
                 }
@@ -88,11 +100,17 @@
     private LoadResult<FeedPostRecord> _threadResult;
     private string? _error;
     private bool _loading = true;
+    private bool _authKnown;
+
+    /// <summary>Read at render time — auth restores after the circuit starts. See FeedPage.</summary>
+    private bool IsSignedIn => UserState.IsAuthenticated;
 
     protected override async Task OnParametersSetAsync()
     {
+        // Item 186: a thread is readable by anyone — a shared link has to land somewhere real for
+        // the person it was shared with, who is exactly the person the feed is trying to recruit.
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        _authKnown = true;
 
         await LoadAsync();
     }

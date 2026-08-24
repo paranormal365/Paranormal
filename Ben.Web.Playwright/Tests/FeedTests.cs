@@ -27,6 +27,17 @@ public class FeedTests : BenTestBase
     /// <summary>Was the feed already on before this fixture touched it?</summary>
     private static bool _wasAlreadyOn;
 
+    /// <summary>Browser-side errors, kept so a failure can say what the page complained about.</summary>
+    private readonly List<string> _consoleErrors = [];
+
+    [SetUp]
+    public void WatchTheConsole()
+    {
+        _consoleErrors.Clear();
+        Page.Console += (_, msg) => { if (msg.Type == "error") _consoleErrors.Add(msg.Text); };
+        Page.PageError += (_, err) => _consoleErrors.Add("[pageerror] " + err);
+    }
+
     [OneTimeSetUp]
     public async Task TurnTheFeedOn()
     {
@@ -216,9 +227,18 @@ public class FeedTests : BenTestBase
     {
         var there = await FeedPageIsAsync(present: true);
 
-        Assert.That(there, Is.True,
-            "The feed page never appeared. If a previous test switched the flag, the website's "
-            + "cached snapshot can take up to SiteFeaturesProvider.RefreshInterval (30s) to catch up.");
+        if (!there)
+        {
+            // What the page actually said, rather than a guess about why. The old message blamed
+            // the feature snapshot for every failure, which sent an entire debugging session down
+            // the wrong path when the real cause was on the page in plain text.
+            var text = await Page.Locator("body").InnerTextAsync();
+            var console = string.Join(" | ", _consoleErrors.TakeLast(5));
+            Assert.Fail($"The feed page never showed its composer.\n"
+                        + $"  url: {Page.Url}\n"
+                        + $"  console errors: {(console.Length == 0 ? "(none)" : console)}\n"
+                        + $"  page text: {text.Replace("\n", " / ")}");
+        }
     }
 
     /// <summary>
@@ -241,6 +261,20 @@ public class FeedTests : BenTestBase
         while (DateTime.UtcNow < deadline)
         {
             await Page.GotoAsync($"{BaseUrl}/feed");
+
+            // The composer is behind the circuit now (item 186: nothing is claimed about the
+            // reader until auth resolves), so counting straight after load asks before the page
+            // can possibly have answered. Give the circuit a moment to render its verdict —
+            // either the composer or the join card is that verdict.
+            try
+            {
+                await Page.Locator("#feed-composer, #feed-join-prompt").First
+                    .WaitForAsync(new() { State = WaitForSelectorState.Attached, Timeout = 8_000 });
+            }
+            catch (TimeoutException)
+            {
+                // Neither appeared: the page is off, or still catching up. Loop.
+            }
 
             var count = await Page.Locator("#feed-composer").CountAsync();
             if (present == count > 0) return true;
@@ -320,5 +354,108 @@ public class FeedTests : BenTestBase
 
         using var _ = await http.PutAsJsonAsync(
             $"/api/admin/site-settings/{FeedFlag}", new { value = on ? "true" : "false" });
+    }
+
+    // ── item 186 F1: the open door ────────────────────────────────────────────
+
+    /// <summary>
+    /// A visitor with no account reads the feed, and is invited rather than blocked.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of the arc: this page used to redirect a signed-out visitor to /login,
+    /// which gave them nothing to sign up FOR. Note the signal is the join card, not the
+    /// composer — a visitor has no composer, which is the other half of what this asserts.
+    /// </remarks>
+    [Test]
+    [Description("Signed out: posts render, the join card stands where the composer would, no composer.")]
+    public async Task AVisitorReadsTheFeedAndIsInvitedToJoin()
+    {
+        // Seed something to read as a member first, then leave.
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"Reading is open to everyone now #t{Guid.NewGuid():N}"[..48]);
+        await LogoutAsync();
+
+        await GoToFeedAsVisitorAsync();
+
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.Locator("#feed-join-prompt")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        Assert.That(await Page.Locator("#feed-composer").CountAsync(), Is.Zero,
+            "a visitor was offered a composer they cannot post with");
+
+        // Controls that would only 401 are not offered at all.
+        Assert.That(await Page.GetByRole(AriaRole.Button, new() { Name = "Report" }).CountAsync(), Is.Zero,
+            "a visitor was offered Report, which the API refuses without an account");
+        Assert.That(await Page.GetByRole(AriaRole.Button, new() { Name = "Follow" }).CountAsync(), Is.Zero,
+            "a visitor was offered Follow, which the API refuses without an account");
+
+        // Following is a signed-in idea; the tab has nothing to say to a visitor.
+        Assert.That(await Page.GetByRole(AriaRole.Button, new() { Name = "Following" }).CountAsync(), Is.Zero);
+    }
+
+    /// <summary>A visitor may open a thread from a shared link, and read a profile.</summary>
+    [Test]
+    [Description("Signed out: a thread and a profile both open, with no reply composer.")]
+    public async Task AVisitorOpensAThreadAndAProfile()
+    {
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"A thread anyone can open #t{Guid.NewGuid():N}"[..40]);
+
+        // The anchor, not the text inside it: GetByText resolves to the text node's element,
+        // which here is the <a> only by luck of markup — asking for the link by its href shape
+        // is what stays true when the card's footer changes.
+        var threadHref = await Page.Locator(".bv-feed-post").First
+            .Locator("a[href^='/feed/']").First.GetAttributeAsync("href");
+        Assert.That(threadHref, Is.Not.Null, "no thread link on the post just written");
+
+        var authorHref = await Page.Locator(".bv-feed-post").First
+            .Locator("a[href^='/feed/people/']").First.GetAttributeAsync("href");
+
+        await LogoutAsync();
+
+        await Page.GotoAsync($"{BaseUrl}{threadHref}");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        Assert.That(await Page.Locator("#feed-composer").CountAsync(), Is.Zero,
+            "a visitor was offered a reply box");
+
+        await Page.GotoAsync($"{BaseUrl}{authorHref}");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// Navigates to the feed as a visitor, allowing for the website's cached feature snapshot.
+    /// </summary>
+    /// <remarks>
+    /// The signed-in helper polls for the composer, which a visitor never gets. The join card is
+    /// the visitor's equivalent signal that the page rendered rather than 404ing.
+    /// </remarks>
+    private async Task GoToFeedAsVisitorAsync()
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(50);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            await Page.GotoAsync($"{BaseUrl}/feed");
+
+            // Behind the circuit, exactly like the composer: the page claims nothing about the
+            // reader until auth resolves, so counting straight after load asks too early.
+            try
+            {
+                await Page.Locator("#feed-join-prompt")
+                    .WaitForAsync(new() { State = WaitForSelectorState.Attached, Timeout = 8_000 });
+                return;
+            }
+            catch (TimeoutException)
+            {
+                await Task.Delay(2000);
+            }
+        }
+
+        var text = await Page.Locator("body").InnerTextAsync();
+        Assert.Fail("The feed page never showed its join card to a signed-out visitor.\n"
+                    + $"  url: {Page.Url}\n  page text: {text.Replace("\n", " / ")}");
     }
 }
