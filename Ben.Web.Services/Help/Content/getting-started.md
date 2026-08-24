@@ -273,9 +273,23 @@ applications). Say a line about yourself if you like, send it, and the group ans
 the state of your application right there on their page.
 
 Or found your own: **Organizations → Start a Group** walks you through it in four short steps —
-your group's name and web address, where you work (optional, it feeds the "near you" search),
-whether you're taking applications, then a review. Only the first step is required, and closing
-the tab keeps a draft so you can pick up where you left off. You're the owner from the first
+what you're starting and its name and web address, where you work (optional, it feeds the "near
+you" search), whether you're taking applications, then a review. Only the first step is required,
+and closing the tab keeps a draft so you can pick up where you left off.
+
+The first question is **what kind of group this is**, because it decides what everything else
+starts as:
+
+| | |
+|---|---|
+| **Investigation group** | Starts **private**: your address is hidden from the public and your calendar is members-only. Cases stay between you and your clients. This is what most groups are, and it's the default. |
+| **Ghost walking tour** | Starts **public**: your meeting point is shown and searchable, and the tours you schedule are visible to everyone with no account needed. A tour nobody can find is worth nothing, so it doesn't start hidden. |
+
+Neither choice locks anything away — a tour company can take investigation requests, and an
+investigation group can run public tours. It's a starting point, and every part of it is
+changeable from your group's settings afterwards. If you run tours as well as investigations,
+turn on **runs public tours** in your settings and you'll be listed under walking tours in the
+group finder while your badge still says what you mainly are. You're the owner from the first
 moment, and your new group's page offers a quick tour of what to do next — relaunch it any time
 from the **?** button on your group's page.
 

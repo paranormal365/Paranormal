@@ -4,6 +4,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject Ben.Web.Services.SiteFeaturesProvider Features
+@using Ben.Data.Common.Enums
 @using Ben.Web.Website.Library.Help
 @using Ben.Web.Website.Library.Kit
 @using System.Text.Json
@@ -45,6 +46,41 @@
                     @switch (_wizard.CurrentIndex)
                     {
                         case 0:
+                            @* The first question, because it decides the defaults every later
+                               step starts from (2026-08-24). Not a permanent classification —
+                               the hub can change it — but getting it right here means a tour
+                               operator never has to undo privacy they never asked for. *@
+                            <div class="mb-3">
+                                <label class="form-label d-block">What are you starting?</label>
+                                <div class="btn-group w-100" role="group" aria-label="Kind of group">
+                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-investigation"
+                                           checked="@(_kind == OrganizationKind.InvestigationGroup)"
+                                           @onchange="@(() => SetKind(OrganizationKind.InvestigationGroup))" />
+                                    <label class="btn btn-outline-primary" for="newgroup-kind-investigation">
+                                        <BenIcon Name="search" Class="me-1" />Investigation group
+                                    </label>
+                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
+                                           checked="@(_kind == OrganizationKind.GhostWalkingTour)"
+                                           @onchange="@(() => SetKind(OrganizationKind.GhostWalkingTour))" />
+                                    <label class="btn btn-outline-primary" for="newgroup-kind-tour">
+                                        <BenIcon Name="map" Class="me-1" />Ghost walking tour
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    @if (_kind == OrganizationKind.GhostWalkingTour)
+                                    {
+                                        <text>Tours are <strong>public by default</strong>: your meeting
+                                        point is shown and searchable, and the tours you schedule are
+                                        visible to everyone. You can change any of it later.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Investigation groups start <strong>private</strong>: your
+                                        address is hidden and cases stay between you and your clients.
+                                        You can run public events too.</text>
+                                    }
+                                </div>
+                            </div>
                             <div class="mb-3">
                                 <label class="form-label" for="newgroup-name">Group name <span class="text-danger">*</span></label>
                                 <input id="newgroup-name" type="text" class="form-control" maxlength="200"
@@ -63,11 +99,22 @@
                             break;
 
                         case 1:
-                            <p class="small text-secondary">
-                                Where does your group operate? This feeds the "near you" search so
-                                clients can find you. <strong>Optional</strong> — leave it empty to
-                                add an address later, and it starts private either way.
-                            </p>
+                            @if (_kind == OrganizationKind.GhostWalkingTour)
+                            {
+                                <p class="small text-secondary">
+                                    Where do your tours meet? This is shown publicly and feeds the
+                                    "near you" search, so visitors can find you.
+                                    <strong>Optional</strong> — you can add it later.
+                                </p>
+                            }
+                            else
+                            {
+                                <p class="small text-secondary">
+                                    Where does your group operate? This feeds the "near you" search so
+                                    clients can find you. <strong>Optional</strong> — leave it empty to
+                                    add an address later, and it starts private either way.
+                                </p>
+                            }
                             <div class="mb-2">
                                 <label class="form-label" for="newgroup-street">Street address</label>
                                 <input id="newgroup-street" type="text" class="form-control" maxlength="200" @bind="_street" />
@@ -237,6 +284,11 @@
 
     // ── Finish: register, then the follow-up writes, then the hub with its tour ──
 
+    /// <summary>What the founder says they are starting. Drives every default below.</summary>
+    private OrganizationKind _kind = OrganizationKind.InvestigationGroup;
+
+    private void SetKind(OrganizationKind kind) => _kind = kind;
+
     private async Task CreateAsync()
     {
         if (_busy) return;
@@ -249,7 +301,7 @@
             var slug = _urlName.Trim().ToLowerInvariant();
 
             var created = await AdminClient.RegisterOrganizationAsync(
-                new RegisterOrganizationRequest { Name = name, UrlName = slug });
+                new RegisterOrganizationRequest { Name = name, UrlName = slug, Kind = _kind });
 
             if (created is null)
             {
@@ -280,9 +332,16 @@
                     var typeId = types.FirstOrDefault()?.Id;
                     if (typeId is { } t)
                     {
+                        // The kind's address defaults, from the one definition both sides
+                        // share — a tour's meeting point is shown, a group's HQ is not.
+                        var defaults = OrganizationKindDefaults.AddressDefaults(_kind);
                         await AdminClient.CreateOrgAddressAsync(created.OrganizationId,
                             new OrgAddressUpsertRequest(t, _street.Trim(), null, _city.Trim(),
-                                _state.Trim(), _zip.Trim(), "US", SortOrder: 1));
+                                _state.Trim(), _zip.Trim(), "US", SortOrder: 1,
+                                Visibility: defaults.Visibility,
+                                PublicDisplayMode: defaults.PublicDisplayMode,
+                                IsSearchable: defaults.IsSearchable,
+                                SearchVisibility: defaults.SearchVisibility));
                     }
                 }
             }

@@ -69,11 +69,18 @@ public sealed record OrganizationListItemResponse(
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
 public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    // Ghost walking tours (2026-08-24): what this group primarily is. It decides the
+    // DEFAULTS the new group starts with — see OrgKindDefaults — and nothing else.
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
+    // Null means "leave as-is" — an older caller that omits these must not silently
+    // reclassify a group or switch its tours off.
+    Ben.Data.Common.Enums.OrganizationKind? Kind = null,
+    bool? RunsPublicTours = null,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
@@ -116,7 +123,11 @@ public sealed record OrgPublicHomeResponse(
     IReadOnlyList<OrgPublicLogoItem> Logos,
     OrgPublicPageItem? HomePage,
     IReadOnlyList<OrgPublicNavItem> NavPages,
-    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
+    /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
+    bool RunsPublicTours = false);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
@@ -624,7 +635,9 @@ public sealed record OrgBrowseResult(
     string? AreaLabel,
     double? RadiusMiles,
     bool IsAcceptingClients,
-    Guid? ActiveLogoFileId);
+    Guid? ActiveLogoFileId,
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    bool RunsPublicTours = false);
 
 /// <summary>One page of the browse listing.</summary>
 public sealed record OrgBrowsePage(

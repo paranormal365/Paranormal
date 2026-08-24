@@ -163,7 +163,9 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             .ToListAsync(token);
     }
 
-    public async Task<Organization> RegisterOrganizationAsync(Guid appUserId, string name, string urlName, CancellationToken token = default)
+    public async Task<Organization> RegisterOrganizationAsync(Guid appUserId, string name, string urlName,
+        Ben.Data.Common.Enums.OrganizationKind kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+        CancellationToken token = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
 
@@ -200,6 +202,10 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             Id = Guid.NewGuid(),
             Name = normalizedName,
             UrlName = normalizedUrlName,
+            // What the founder said they are starting decides the defaults they start with
+            // — a tour is public by nature, an investigation group is not (2026-08-24).
+            Kind = kind,
+            RunsPublicTours = Ben.Data.Common.Enums.OrganizationKindDefaults.RunsPublicTours(kind),
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = appUserId
         };

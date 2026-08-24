@@ -498,6 +498,19 @@ an apply box to signed-in visitors. Applications land on the **Members** tab, wh
 with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
 sees your answer.
 
+## What kind of group you are
+
+Every group is either an **investigation group** or a **ghost walking tour**, chosen when it was
+created and changeable in **Settings**. The choice decides what a NEW group starts with — a tour
+starts with a public, searchable meeting point and public events; an investigation group starts
+private — and after that it is a label, never a restriction. Nothing is withheld from either kind.
+
+Alongside it sits **runs public tours**, which is a separate switch on purpose. Plenty of
+investigation groups run paid public tours as a sideline, and none of them should have to
+register a second group to be found for it. Turn it on and your group appears under **Walking
+tours** in the group finder while its badge still says investigation group — which is the truth
+about both facts at once.
+
 ## Promoting your group
 
 **Settings → Promote your group** builds a promotional card that rotates through the group

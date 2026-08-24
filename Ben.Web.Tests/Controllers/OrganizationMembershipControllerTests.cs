@@ -172,7 +172,8 @@ public class OrganizationMembershipControllerTests
 
         // Refused means not created, not "created and then complained about".
         svc.Verify(x => x.RegisterOrganizationAsync(
-            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<Ben.Data.Common.Enums.OrganizationKind>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

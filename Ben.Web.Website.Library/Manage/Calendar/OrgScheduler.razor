@@ -341,6 +341,10 @@
 
 @code {
     [Parameter] public Guid OrgId        { get; set; }
+
+    /// <summary>This group's kind — read once, only to default a new event's publicity.</summary>
+    private Ben.Data.Common.Enums.OrganizationKind _orgKind
+        = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
     [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<OrgCalendarAppointment>? _appointments;
@@ -557,6 +561,11 @@
             // changes, and fetching it while a dialog is opening is a visible stutter.
             _addresses = (await AdminClient.GetOrgAddressesAsync(OrgId)).Items;
             _members = (await AdminClient.GetOrgUserDirectoryAsync(OrgId)).Items;
+            // Only to decide what a NEW event's public checkbox starts as (2026-08-24). A
+            // failed fetch leaves the pre-existing private default, which is the safe way
+            // round to be wrong.
+            _orgKind = (await AdminClient.GetOrganizationAsync(OrgId))?.Kind
+                ?? Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
             await LoadEventsAsync();
         }
         catch { _error = "Failed to load calendar."; }
@@ -636,6 +645,11 @@
                 Start    = args.Start,
                 End      = args.Start.AddHours(1),
                 IsAllDay = args.IsAllDay,
+                // A walking tour's events ARE its product, so they start public; an
+                // investigation group's calendar is mostly internal and starts private
+                // (2026-08-24). A default either way — the checkbox is right there.
+                IsPublic = Ben.Data.Common.Enums.OrganizationKindDefaults
+                    .EventsArePublicByDefault(_orgKind),
             };
         }
         else if (_editingEvent is not null)
