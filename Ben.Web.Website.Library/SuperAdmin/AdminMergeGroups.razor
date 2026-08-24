@@ -1,0 +1,161 @@
+@page "/admin/merge-groups"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Merge Groups</PageTitle>
+
+@*
+    Item 110. The flow is deliberately three-gated: choose the two groups, READ the preview (a
+    mutation-free call that says exactly what will move and what collides), then type the merged
+    group's name to confirm. A merge reparents someone else's records and cannot be undone — the
+    preview and the typed confirmation are the guard rails Ben asked for in place of an undo.
+*@
+
+<div class="container px-3 py-3" style="max-width:52rem;">
+    <h3 class="mb-1">Merge Groups<HelpLink Slug="site-administration" Anchor="merging-two-groups" /></h3>
+    <p class="text-secondary small mb-4">
+        Everything the merged group owns — members, cases, files, equipment, pages — moves onto the
+        base group. The merged group's URL becomes a permanent alias, so old links keep working.
+        This cannot be undone.
+    </p>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Base group (survives)</label>
+                    <BenSelect Data="@_orgOptions" @bind-Value="@_baseId" TextField="@nameof(OrgOption.Name)"
+                               ValueField="@nameof(OrgOption.Id)" DefaultText="— Choose —" Width="100%" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Group to merge in (disappears)</label>
+                    <BenSelect Data="@_orgOptions" @bind-Value="@_mergedId" TextField="@nameof(OrgOption.Name)"
+                               ValueField="@nameof(OrgOption.Id)" DefaultText="— Choose —" Width="100%" />
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-primary" id="merge-preview"
+                            @onclick="PreviewAsync"
+                            disabled="@(_busy || _baseId == Guid.Empty || _mergedId == Guid.Empty || _baseId == _mergedId)">
+                        @(_busy && _preview is null ? "Computing…" : "Preview the merge")
+                    </button>
+                </div>
+            </div>
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger mt-3 mb-0">@_error</div>
+            }
+        </div>
+    </div>
+
+    @if (_preview is { } p)
+    {
+        <div class="card mb-3" id="merge-preview-panel">
+            <div class="card-header fw-semibold">What merging @p.MergedName into @p.BaseName will do</div>
+            <div class="card-body">
+                <ul class="mb-3">
+                    @foreach (var note in p.Notes)
+                    {
+                        <li>@note</li>
+                    }
+                </ul>
+                @if (p.Reparented.Count > 0)
+                {
+                    <p class="small fw-semibold mb-1">Rows that move to @p.BaseName:</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var c in p.Reparented)
+                        {
+                            <span class="badge bg-secondary">@c.Table: @c.Rows</span>
+                        }
+                    </div>
+                }
+
+                <hr />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="merge-new-name">Name after the merge</label>
+                        <input id="merge-new-name" type="text" class="form-control" @bind="@_newName" @bind:event="oninput" />
+                        <div class="form-text">Defaults to the base group's name; it can be either name or a new one.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="merge-confirm">
+                            Type <code>@p.MergedName</code> to confirm
+                        </label>
+                        <input id="merge-confirm" type="text" class="form-control" @bind="@_confirmText" @bind:event="oninput" />
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-danger" id="merge-execute" @onclick="MergeAsync"
+                                disabled="@(_busy || _confirmText.Trim() != p.MergedName)">
+                            @(_busy ? "Merging…" : $"Merge {p.MergedName} into {p.BaseName}")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private List<OrgOption> _orgOptions = [];
+    private Guid _baseId;
+    private Guid _mergedId;
+    private MergePreview? _preview;
+    private string _newName = "";
+    private string _confirmText = "";
+    private string? _error;
+
+    private record OrgOption(Guid Id, string Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        var orgs = await AdminClient.GetOrganizationSubscriptionsAsync();
+        if (!orgs.Failed)
+            _orgOptions = [.. orgs.Items.Select(o => new OrgOption(o.OrganizationId, o.OrganizationName)).OrderBy(o => o.Name)];
+    }
+
+    private async Task PreviewAsync()
+    {
+        _busy = true; _error = null; _preview = null;
+        try
+        {
+            var (result, error) = await AdminClient.PreviewOrgMergeAsync(_baseId, _mergedId);
+            if (result is null) { _error = error; return; }
+            _preview = result;
+            _newName = result.BaseName;
+            _confirmText = "";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task MergeAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var error = await AdminClient.MergeOrganizationsAsync(
+                new OrganizationMergeRequest(_baseId, _mergedId, _newName));
+            if (error is not null) { _error = error; return; }
+
+            Toasts.Success($"{_preview!.MergedName} is now part of {_newName}.");
+            _preview = null;
+            _baseId = _mergedId = Guid.Empty;
+            _confirmText = "";
+            // The org list changed under us — reload the options.
+            var orgs = await AdminClient.GetOrganizationSubscriptionsAsync();
+            if (!orgs.Failed)
+                _orgOptions = [.. orgs.Items.Select(o => new OrgOption(o.OrganizationId, o.OrganizationName)).OrderBy(o => o.Name)];
+        }
+        finally { _busy = false; }
+    }
+}

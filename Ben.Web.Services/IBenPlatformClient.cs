@@ -235,4 +235,14 @@ public interface IBenPlatformClient
     Task<NearbyResults?> GetNearbyAsync(
         double latitude, double longitude, double radiusMiles, string? query = null,
         CancellationToken token = default);
+
+    // ── Merging groups (item 110) ─────────────────────────────────────────────
+
+    /// <summary>What merging one group into another WOULD do — mutation-free. SuperAdmin.</summary>
+    Task<(Ben.Service.Models.Admin.MergePreview? Result, string? Error)> PreviewOrgMergeAsync(
+        Guid baseId, Guid mergedId, CancellationToken token = default);
+
+    /// <summary>Performs the merge. Null on success, otherwise the refusal sentence.</summary>
+    Task<string?> MergeOrganizationsAsync(
+        Ben.Service.Models.Admin.OrganizationMergeRequest request, CancellationToken token = default);
 }
