@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–5 complete and verified live (kernel, auth, feed, participation, notifications).**
+**Status: Slices 1–6 complete and verified live (kernel, auth, feed, participation, notifications, cases).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -125,9 +125,24 @@ the OS confirmation dialog — used by automation and the future UI test target.
   and when the session changes; a timer would add battery cost for a badge nobody is watching
   while the app is closed. Real push (APNs) is the honest answer and needs server work.
 
+## Verified (Slice 6, 2026-08-24)
+
+- 107 unit tests. Live fixtures for the list and the detail; the timeline is ordered by when
+  things HAPPENED (falling back to when they were written), so somebody logging three months
+  of experiences in one sitting doesn't have them read as all happening that evening.
+- `AuthenticatedImageLoader` + `APIClient.loadData`: case files sit behind a bearer token, and
+  `AsyncImage` issues its own unauthenticated request — it would render every case photo as a
+  broken frame. Bounded cache; a failure shows a "couldn't load" glyph rather than a spinner
+  that never ends.
+- A 404 on a case reads "That case isn't available" — one answer for gone and not-yours alike,
+  because "that case isn't yours" would confirm to a prober that the case exists.
+- Live on iPhone: the list renders the real case with its reference, status chip and location.
+  Also seen working: a 429 during a concurrent e2e run rendered as "Too many requests — try
+  again shortly" with a retry, which is the honest-states design doing its job.
+- Not yet: logging a new occurrence from the app, and case reports → PDFKit. Reading first.
+
 ## Slices remaining (Phase 1)
 
-6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)
 7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)
 8. Account completeness (register, confirm-email deep link, 2FA setup QR)
 9. **Sign in with Apple** (required by Ben, and by App Review once any

@@ -121,7 +121,7 @@ struct RootShell: View {
     private func sectionRoot(_ section: AppSection) -> some View {
         switch section {
         case .feed: FeedListView()
-        case .cases: PlaceholderScreen(section: .cases, slice: "Slice 6")
+        case .cases: CasesListView()
         case .investigations: PlaceholderScreen(section: .investigations, slice: "Slice 7")
         case .events: PublicEventsPreview()
         case .profile: SettingsHomeView()
@@ -141,6 +141,8 @@ struct RootShell: View {
             FeedListView(fixedFilter: filter)
         case .notifications:
             NotificationsView()
+        case .caseDetail(let id):
+            CaseDetailView(caseId: id)
         default:
             PlaceholderScreen(title: "Coming soon", icon: "hammer", slice: "a later slice")
         }

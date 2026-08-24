@@ -36,6 +36,27 @@ public actor APIClient {
         }
     }
 
+    /// Fetch RAW bytes from an authenticated route — images and other binaries that are not
+    /// JSON and are too small to be worth a file on disk. Refusals map exactly as elsewhere,
+    /// so a 401 still ends the session rather than looking like an empty image.
+    public func loadData(_ endpoint: Endpoint) async -> LoadResult<Data> {
+        guard let request = await buildRequest(endpoint) else {
+            return .failed(reason: nil)
+        }
+        do {
+            let (data, response) = try await transport.send(request)
+            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            guard (200..<300).contains(response.statusCode) else {
+                return ResponseMapping.failure(
+                    statusCode: response.statusCode, data: data,
+                    headers: response.allHeaderFields)
+            }
+            return .ok(data)
+        } catch {
+            return .failed(reason: nil)
+        }
+    }
+
     /// Fire an operation whose success needs no payload (204s, empty 200s).
     public func send(_ endpoint: Endpoint) async -> LoadResult<EmptyBody> {
         await load(endpoint, as: EmptyBody.self)

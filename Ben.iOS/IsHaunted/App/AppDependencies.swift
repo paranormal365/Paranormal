@@ -19,6 +19,8 @@ final class AppDependencies {
     /// What's waiting on the signed-in person — shared, because the tab badge and the
     /// notifications screen must never show different numbers.
     let notifications: NotificationsStore
+    /// Images behind a bearer token (case files) — AsyncImage cannot carry one.
+    let imageLoader: AuthenticatedImageLoader
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -45,6 +47,7 @@ final class AppDependencies {
             api: api)
         self.feedActions = FeedActions(api: api)
         self.notifications = NotificationsStore(api: api)
+        self.imageLoader = AuthenticatedImageLoader(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means
