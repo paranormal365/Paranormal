@@ -116,8 +116,10 @@ public sealed class UploadFileController : BenControllerBase
         {
             var servingPath = mediaIngest.ServingPathFor(entity.StoragePath);
             var stream = await _fileStorage.OpenReadAsync(servingPath, cancellationToken);
-            var servingType = servingPath == entity.StoragePath ? entity.ContentType : "image/jpeg";
-            return File(stream, servingType, entity.FileName);
+            // The row's ContentType already describes the SERVED copy — ingest records the
+            // derivative's type, not the original's — so it is right for a cleaned JPEG, a
+            // remuxed MP4 (item 181) and an unsanitized original alike.
+            return File(stream, entity.ContentType, entity.FileName);
         }
 
         if (entity.FileData is not null)

@@ -41,7 +41,7 @@ public class OrganizationSettingsControllerTests
 
         var ctrl = new OrganizationSettingsController(
             factory, new Mock<IMapper>().Object, security.Object,
-            new Mock<IAuditLogService>().Object);
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Stripper());
 
         ctrl.ControllerContext = new ControllerContext
         {

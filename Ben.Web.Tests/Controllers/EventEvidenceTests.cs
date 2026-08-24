@@ -88,7 +88,7 @@ public sealed class EventEvidenceTests
                 "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role)
             : new ClaimsIdentity();
 
-        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance))
+        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper())
         {
             ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(claims) } }

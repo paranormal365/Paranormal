@@ -28,6 +28,7 @@ public sealed class SanitizedCopyIsServedTests
             storage.Object,
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
+            Ben.Web.Tests.TestMedia.Stripper(),
             NullLogger<MediaIngestService>.Instance);
     }
 

@@ -47,7 +47,7 @@ public class EquipmentLoanHistoryTests
         // No org-owned gear in this fixture, so the security service is never the deciding voice —
         // personal items resolve to their owner.
         return new EquipmentLoanHistoryController(
-            f, new Mock<IOrganizationSecurityService>().Object, storage.Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance), new Mock<IAuditLogService>().Object)
+            f, new Mock<IOrganizationSecurityService>().Object, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), new Mock<IAuditLogService>().Object)
         {
             ControllerContext = new ControllerContext
             {

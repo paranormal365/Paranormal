@@ -26,6 +26,7 @@ public sealed class UploadMetadataCoverageTests
         new(new Mock<IFileStorageService>().Object,
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
+            TestMedia.Stripper(),
             NullLogger<MediaIngestService>.Instance);
 
     // ── Derived files carry the recording's place forward ────────────────────

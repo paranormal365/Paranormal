@@ -39,6 +39,13 @@ public interface IMediaSanitizationService
     /// <summary>The conventional path of the sanitized copy that sits beside an original.</summary>
     string SanitizedPathFor(string storagePath);
 
+    /// <summary>
+    /// The conventional path of a STRIPPED audio/video copy (item 181). It keeps the original's
+    /// extension, because a remuxed MP4 is still an MP4 — unlike a sanitized image, which is
+    /// always re-encoded to JPEG and named accordingly.
+    /// </summary>
+    string StrippedPathFor(string storagePath);
+
     /// <summary>The conventional path of the thumbnail that sits beside an original.</summary>
     string ThumbnailPathFor(string storagePath);
 
@@ -110,6 +117,9 @@ public sealed class MediaSanitizationService : IMediaSanitizationService
     }
 
     public string SanitizedPathFor(string storagePath) => storagePath + ".clean.jpg";
+
+    public string StrippedPathFor(string storagePath)
+        => storagePath + ".clean" + Path.GetExtension(storagePath);
 
     public string ThumbnailPathFor(string storagePath) => storagePath + ".thumb.jpg";
 }

@@ -60,7 +60,7 @@ public class UploadFileAudioEditControllerTests
     {
         var ctrl = new UploadFileAudioEditController(factory, CreateMapper(),
             new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -90,7 +90,7 @@ public class UploadFileAudioEditControllerTests
                })
                .Returns(Task.CompletedTask);
 
-        var ctrl = new UploadFileAudioEditController(factory, CreateMapper(), storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
+        var ctrl = new UploadFileAudioEditController(factory, CreateMapper(), storage.Object, new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

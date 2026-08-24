@@ -105,6 +105,7 @@ public class MyEquipmentControllerTests
             (storage ?? new Mock<IFileStorageService>()).Object,
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
+            Ben.Web.Tests.TestMedia.Stripper(),
             NullLogger<MediaIngestService>.Instance);
 
     [Fact]

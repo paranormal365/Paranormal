@@ -9327,3 +9327,58 @@ ownership moves to the org, the person stops being the owner, it leaves their pe
 it appears only to those with the right permission in that organization. Needs: an owner-org column
 on `UploadFile`, a usage endpoint so the UI can ask the two questions, ownership checks that read
 org-ownership, and personal-file listings that exclude reassigned files.
+
+---
+
+## 181. A/V metadata stripping as an org setting, gated by plan (Ben, 2026-08-24 — BUILT)
+
+Ben: *"Make stripping the EXIF-like data from audio and video files a setting at the org level. It
+may be a paid-for feature."* And, clarifying the split: *"every file reads and has a row entered
+into the table containing EXIF-like data, but removal is what you are working on knowing that
+might require a REMUX."*
+
+**The split, which is the whole design.** READING is unconditional and ungated — every file, of
+every kind, gets its `UploadFileMetadata` row whatever the group's plan says. Selling a group its
+own facts back would be indefensible, and the extraction is nearly free. REMOVAL is what costs: an
+image is re-encoded (already paid for on every upload, so images are stripped for everyone,
+always), while audio and video need an **ffmpeg remux per file**, which is real compute. So only
+A/V removal is a capability a plan can withhold. A test pins the ordering in the ingest source, so
+a future change that gated extraction fails rather than ships.
+
+**Three things must agree** before A/V is stripped, and each refusal names itself:
+1. **The host** has a configured ffmpeg (`MediaTools:FfmpegPath`). Absent, the feature reports
+   itself unavailable and uploads carry on exactly as before — never a failed upload.
+2. **The plan** includes `TierCapability.MediaMetadataStripping` (capability #2, stored as
+   exclusions, so fail-open is structural).
+3. **The group** has left `Organization.StripMediaMetadata` on. It defaults **ON**, including for
+   every existing row: a privacy protection nobody has to discover is worth more than one everyone
+   has to find. A group documenting landmarks may legitimately turn it off.
+
+`MediaStrippingPolicy` returns `(Strips, Reason, NeedsUpgrade, CanChoose)` — `CanChoose` is
+explicit rather than inferred by the UI, so a switch is never offered where nothing could honour
+it, and `NeedsUpgrade` distinguishes the one refusal a group can act on. The settings page grays
+the toggle with the sentence and a link to plans.
+
+**Remux, not re-encode** (`-map_metadata -1 -c copy -map 0`): the streams are copied byte-for-byte
+and only the container is rebuilt, so a two-hour recording costs a file copy rather than an hour of
+CPU — and, for an investigation platform, the evidence is not degraded. Every failure path keeps
+the original: no tool, timeout, non-zero exit, empty output. Losing evidence to a failed strip
+would be far worse than keeping metadata the group can still see in its own table.
+
+Stripped A/V is stored as `.clean{ext}` beside the original (a remuxed MP4 is still an MP4, unlike
+a cleaned image which is always JPEG), and `ServingPathFor` checks both, so item 179's serve-path
+fix covers it with no further change. The row's ContentType already describes the served copy,
+which fixed a bug introduced by item 179's first draft: a stripped MP4 would have been served as
+`image/jpeg`.
+
+7 policy tests + the ordering pin; 3,088 unit tests green. Verified live with no ffmpeg configured:
+the setting reports "no media tool is configured", `CanChoose` false, uploads unaffected.
+
+**Ben's follow-on thought, NOT built — see the assessment given 2026-08-24:** *"maybe the free tier
+cannot guarantee privacy and has only the way to take on a case that is allowed to be completely
+public and unguarded. Then paid versions are where cases are allowed that are guarded."* The
+recommendation given was to invert it: not "free cases are unprotected" (which puts the cost on the
+CLIENT, who never chose the plan) but **"free groups may only take public-place work; a private
+residence requires a paid plan"**. Same revenue driver, no third party bearing the risk, and
+`PlaceKind.PrivateResidence` already exists and is already enforced for event publication and
+investigation visibility. Ben's decision.
