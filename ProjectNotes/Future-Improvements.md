@@ -9175,16 +9175,24 @@ failures.**
 
 1. **Nine e2e "failures" were a stale WASM host, not the product.** Every video-editor test failed
    until :5180 was restarted against the current build; all 22 pass after. This is the recurring
-   trap ([[feedback_restart_hosts_after_rebuild]]) and it cost the first full run. **A suite that
-   can fail for an environmental reason should say so** — worth a fixture that asserts the editor
-   host is serving the current build before the editor tests run, rather than 9 red tests that
-   mean "you forgot to restart something".
+   trap ([[feedback_restart_hosts_after_rebuild]]) and it cost the first full run.
+   **CLOSED same day:** `EditorHostFreshnessTests` compares the fingerprinted entry script the
+   host serves against the one this checkout built, and fails FIRST (`[Order(-1)]`) with the
+   restart command, so the nine downstream failures are read as what they are. Unreachable host
+   or unbuilt project is Inconclusive, not red — "I have not built the WASM host" is not a
+   product defect. Probe-regressed by renaming the built entry script: it fires, and the message
+   names both sides. The first version cried wolf on `dotnet.native.js`, which is referenced
+   un-fingerprinted too; the check now uses the entry script alone, which never is.
 
 2. **The seeded demo case is titled "Park Residence, Nashville TN" for client Daniel Park** — the
    exact leak item 176 exists to warn about. Not published, so nothing leaked, and the live check
    correctly returns the warning for it. But the seed teaches the wrong habit on every fresh
-   database. **Suggest: retitle the seeded cases to place names** (the pseudonym was already fixed
-   during item 176; the title was not).
+   database. **CLOSED same day:** both seeded client cases are now named for their place —
+   "Belmont Boulevard Residence" (was Park, client Daniel Park) and "Fatherland Street Workshop"
+   (was Maxwell, client Linda Maxwell) — along with the investigation locations that echoed them.
+   The rows already in the shared database keep their old titles on purpose: they are not public,
+   and the publish-time warning is exactly the safety net that should catch them if Ben ever
+   publishes one. Changing demo content under him would be the more surprising move.
 
 3. **The ledger cannot be smoke-tested without permanently marking the money trail.** It is
    append-only by design (no update, no delete, enforced by a test), and dev/UAT share ONE database
