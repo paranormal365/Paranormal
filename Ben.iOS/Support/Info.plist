@@ -63,5 +63,9 @@
 	<string>Save investigation media you download to your photo library.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record audio when capturing video for feed posts and case evidence.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add public events and investigations you're attending to your own calendar.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Add public events and investigations you're attending to your own calendar.</string>
 </dict>
 </plist>

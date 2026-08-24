@@ -122,8 +122,8 @@ struct RootShell: View {
         switch section {
         case .feed: FeedListView()
         case .cases: CasesListView()
-        case .investigations: PlaceholderScreen(section: .investigations, slice: "Slice 7")
-        case .events: PublicEventsPreview()
+        case .investigations: InvestigationsView()
+        case .events: EventsView()
         case .profile: SettingsHomeView()
         }
     }

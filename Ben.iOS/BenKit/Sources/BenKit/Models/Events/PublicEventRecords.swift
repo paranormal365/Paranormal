@@ -66,3 +66,32 @@ public struct PublicEventListItem: Sendable, Codable, Equatable, Identifiable {
     public var attendeeCapacity: Int?
     public var isOnline: Bool
 }
+
+extension PublicEventListItem {
+    public var placeLabel: String? {
+        let parts = [city, state].compactMap { $0?.isEmpty == false ? $0 : nil }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    public var hasCoordinates: Bool { approximateLatitude != nil && approximateLongitude != nil }
+
+    /// Coordinates as a map wants them. APPROXIMATE by design — the server snaps a public
+    /// event's position to a grid so a listing cannot become an address lookup. Never label
+    /// a pin drawn from these as the venue.
+    public var mapCoordinate: (latitude: Double, longitude: Double)? {
+        guard let lat = approximateLatitude, let lon = approximateLongitude else { return nil }
+        return (Double(truncating: lat as NSNumber), Double(truncating: lon as NSNumber))
+    }
+
+    /// A null capacity is UNLIMITED, not a cap of zero — treating it as zero would show
+    /// every uncapped event as full.
+    public var isFull: Bool {
+        guard let capacity = attendeeCapacity else { return false }
+        return attendingCount >= capacity
+    }
+
+    /// Never negative: a cap lowered after sign-ups leaves an overbooked event at zero left.
+    public var spacesLeft: Int? {
+        attendeeCapacity.map { max(0, $0 - attendingCount) }
+    }
+}

@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–6 complete and verified live (kernel, auth, feed, participation, notifications, cases).**
+**Status: Slices 1–7 complete (kernel, auth, feed, participation, notifications, cases, investigations + events).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -141,9 +141,27 @@ the OS confirmation dialog — used by automation and the future UI test target.
   again shortly" with a retry, which is the honest-states design doing its job.
 - Not yet: logging a new occurrence from the app, and case reports → PDFKit. Reading first.
 
+## Verified (Slice 7, 2026-08-24)
+
+- 117 unit tests. Live fixtures for the roster, the attended list and public events.
+- The roster splits by whether an investigation has HAPPENED, and an investigation that has
+  started but not ended still counts as upcoming — a roster that buries the one you are
+  currently at is useless.
+- The attended map draws only visits that have coordinates, and the screen SAYS how many it
+  could not draw. A place with no coordinates is a real visit with no pin; dropping it from
+  the map is right, dropping it from the list would be losing it.
+- A null attendee capacity is UNLIMITED, not zero — treating it as zero would mark every
+  uncapped event full. Pinned by a test, along with an overbooked event reporting zero left
+  rather than a negative.
+- RSVP refusals carry the server's own sentence: "This event is full" sends somebody to
+  another date; "Couldn't RSVP" sends them to press the same button again.
+- Native counterparts per the design rule: MapKit for where you've been, and EventKit's own
+  add-event sheet (so the person picks the calendar and the app never needs full access).
+  The calendar entry names the TOWN, because the server's public coordinates are deliberately
+  approximate and the app must not imply it knows the venue.
+
 ## Slices remaining (Phase 1)
 
-7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)
 8. Account completeness (register, confirm-email deep link, 2FA setup QR)
 9. **Sign in with Apple** (required by Ben, and by App Review once any
    third-party login exists). Client: `SignInWithAppleButton` →
