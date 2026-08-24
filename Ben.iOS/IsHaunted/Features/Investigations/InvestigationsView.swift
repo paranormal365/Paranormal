@@ -95,8 +95,12 @@ struct InvestigationsView: View {
                     }
                     .disabled(mappable == 0)
                     if mappable < total {
-                        Text("\(total - mappable) visit\(total - mappable == 1 ? "" : "s") "
-                             + "have no coordinates recorded, so they can't be drawn.")
+                        // Agreement across the whole sentence, not just the noun: "1 visit
+                        // have … so they can't" is the classic half-pluralised string.
+                        let undrawn = total - mappable
+                        Text(undrawn == 1
+                             ? "1 visit has no coordinates recorded, so it can't be drawn."
+                             : "\(undrawn) visits have no coordinates recorded, so they can't be drawn.")
                             .font(.caption).foregroundStyle(Theme.fog)
                     }
                 } header: {
