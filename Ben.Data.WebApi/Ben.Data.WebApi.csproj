@@ -24,6 +24,7 @@
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="NLayer.NAudioSupport" Version="2.0.1" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
         <PackageReference Include="SkiaSharp" Version="4.151.1" />
         <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
@@ -51,6 +52,14 @@
          something real to show. Not shipped to production: the seeder they feed is itself gated
          behind SeedData:DevData:Enabled. -->
     <Content Include="SeedData\Media\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The NSFW screening model (item 186 F5b) is fetched, not committed - 87 MB; see
+         scripts/get-screener-model.sh (.ps1 for the Windows host). When present it must reach
+         BOTH build output and publish output, or the deployed API silently degrades to
+         manual-only screening. Condition keeps a model-less checkout building clean. -->
+    <Content Include="Models\nsfw\model_quantized.onnx"
+             Condition="Exists('Models\nsfw\model_quantized.onnx')"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
