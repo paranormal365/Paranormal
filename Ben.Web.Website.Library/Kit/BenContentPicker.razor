@@ -85,6 +85,23 @@
                                     <UserMediaPreview FileId="@item.Id" FileName="@item.Name"
                                                       ContentType="@item.ContentType" FileSize="@(item.FileSize ?? 0)" />
                                 }
+                                else if (IsPlayable(item) && _previewLoaded.Contains(item.Id))
+                                {
+                                    <UserMediaPreview FileId="@item.Id" FileName="@item.Name"
+                                                      ContentType="@item.ContentType" FileSize="@(item.FileSize ?? 0)" />
+                                }
+                                else if (IsPlayable(item))
+                                {
+                                    @* On demand, one item at a time — a grid page of eager video
+                                       players is a fetch storm (the MediaLibraryGrid lesson).
+                                       stopPropagation: previewing is not choosing. *@
+                                    <div class="d-flex flex-column align-items-center gap-1">
+                                        <BenIcon Name="@IconFor(item)" Class="fs-2 text-secondary" />
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                                                @onclick="@(() => _previewLoaded.Add(item.Id))"
+                                                @onclick:stopPropagation="true">Preview</button>
+                                    </div>
+                                }
                                 else
                                 {
                                     <BenIcon Name="@IconFor(item)" Class="fs-1 text-secondary" />
@@ -177,6 +194,7 @@
         _loading = true;
         _loadError = null;
         _selected.Clear();
+        _previewLoaded.Clear();
         StateHasChanged();
         try
         {
@@ -225,6 +243,12 @@
         Visible = value;
         await VisibleChanged.InvokeAsync(value);
     }
+
+    private readonly HashSet<Guid> _previewLoaded = [];
+
+    private static bool IsPlayable(ContentPickerItem item)
+        => item.ContentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true
+        || item.ContentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
 
     private static string IconFor(ContentPickerItem item) =>
         item.ContentType?.Split('/')[0] switch

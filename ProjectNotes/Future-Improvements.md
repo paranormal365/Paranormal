@@ -8970,9 +8970,19 @@ the grid's More-actions dropdown, failed silently BOTH runs (best-effort catch),
 pages in the shared prod DB — cleanup now goes through the API and logs its 204, and the DB was
 verified clean. A cleanup is code too; verify it deleted once before trusting it forever.
 
-**Remaining (keeps 175 open, all small):** the logo dialog's hand-rolled From-Library grid
-could become the picker for consistency; `MediaLibraryGrid`'s video/audio click-to-preview
-could wire into the picker's grid cells.
+**Preview wiring (same day) — and the regression it flushed out.** The picker's grid cells now
+load video/audio previews on demand (per-item Preview button, stopPropagation so previewing is
+not choosing; the MediaLibraryGrid fetch-storm lesson). The e2e that asserts a working player
+found that **every audio preview on the site had said "Player init failed" since 2026-08-19**:
+the `/js/wavesurfer/` asset folder (core + 9 plugins + spectrogram workers + noise gate) lived
+only in Ben.Web.WebApp's wwwroot and was deleted with that host — WaveSurferPlayer imports it
+by absolute path and nothing asserted the path resolved. Restored from git history into
+Ben.Web.Website/wwwroot; a repo-wide scan confirmed no other Library-referenced absolute asset
+path is missing from the host. The e2e now pins the distinction: a decode error on the seed's
+8-byte .wav stubs is data, the missing-module error is product and fails the test.
+
+**Remaining (keeps 175 open, small):** the logo dialog's hand-rolled From-Library grid could
+become the picker for consistency.
 
 ## 176. A case title can leak the client's name onto public pages (CLOSED 2026-08-23 — warn-not-block leak check, pseudonyms covered too)
 

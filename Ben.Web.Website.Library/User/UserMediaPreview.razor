@@ -65,6 +65,7 @@ else
     private bool _isImage => ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isVideo => ContentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isAudio => ContentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
+    // No audio here: audio is delegated to AudioFilePreview above, which fetches its own bytes.
     private bool _hasPreview => _isImage || _isVideo;
 
     protected override async Task OnParametersSetAsync()
