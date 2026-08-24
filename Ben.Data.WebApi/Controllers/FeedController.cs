@@ -121,7 +121,11 @@ public sealed class FeedController : BenControllerBase
         var posts = await ToRecordsAsync(db, page, userId, ct);
         var next = hasMore && page.Count > 0 ? WriteCursor(page[^1].DateCreated, page[^1].Id) : null;
 
-        return Ok(new FeedPageRecord(posts, next));
+        // Asked once per page rather than per post: the answer is about the reader, not the row.
+        var canPost = userId != Guid.Empty
+                   && await FeedParticipation.RefusalAsync(db, userId, ct) is null;
+
+        return Ok(new FeedPageRecord(posts, next, canPost));
     }
 
     /// <summary>One post and its replies, oldest reply first.</summary>
@@ -190,6 +194,10 @@ public sealed class FeedController : BenControllerBase
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        // Item 186 F2: anyone reads, people who belong here write.
+        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+            return BadRequest(refusal);
 
         var body = request.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body)) return BadRequest("A post needs something in it.");
@@ -288,6 +296,11 @@ public sealed class FeedController : BenControllerBase
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
         if (!await db.AppUsers.AsNoTracking().AnyAsync(u => u.Id == appUserId, ct)) return NotFound();
+
+        // Following builds somebody's audience, so it is participation (item 186 F2). Reporting
+        // is not, and is deliberately left open to any signed-in reader.
+        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+            return BadRequest(refusal);
 
         if (await db.UserFollows.AnyAsync(
                 f => f.FollowerAppUserId == userId && f.FollowedAppUserId == appUserId, ct))

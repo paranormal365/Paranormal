@@ -22,6 +22,10 @@ public interface IMediaIngestService
     /// <exception cref="UnreadableImageException">
     /// The content type says image but the bytes will not decode.
     /// </exception>
+    /// <param name="file">The uploaded file, as received.</param>
+    /// <param name="storagePath">Where the original is to be written.</param>
+    /// <param name="uploadFileId">The row this ingest belongs to; the metadata is keyed to it.</param>
+    /// <param name="ct">Cancellation.</param>
     /// <param name="stripAudioVideo">
     /// Whether this group's plan and settings say audio and video should have their embedded
     /// metadata removed (item 181). Images are stripped regardless. Defaults to false so that a

@@ -69,14 +69,41 @@ public sealed class FeedControllerTests
         DisplayName = displayName ?? handle, Handle = handle, DateCreated = DateTime.UtcNow,
     };
 
-    /// <summary>A database with the feed switched on and the given people in it.</summary>
+    /// <summary>
+    /// A database with the feed switched on, the given people in it, and — unless told otherwise —
+    /// every one of them a member of a group so they may post (item 186 F2).
+    /// </summary>
+    /// <remarks>
+    /// Belonging is the default here because almost every test in this class is about what the
+    /// feed DOES, not about who may write in it. The gate's own tests opt out with
+    /// <paramref name="everybodyBelongs"/> false and grant standing deliberately.
+    /// </remarks>
     private static async Task<IDbContextFactory<BenDataContext>> SeedAsync(
-        bool feedOn = true, params AppUser[] users)
+        bool feedOn = true, bool everybodyBelongs = true, params AppUser[] users)
     {
         var factory = CreateFactory();
         await using var db = factory.CreateDbContext();
 
         db.Users.AddRange(users);
+
+        if (everybodyBelongs && users.Length > 0)
+        {
+            var orgId = Guid.NewGuid();
+            db.Organizations.Add(new Organization
+            {
+                Id = orgId, Name = "Feed Org", UrlName = $"feed-org-{Guid.NewGuid():N}"[..18],
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = users[0].Id,
+            });
+            foreach (var u in users)
+            {
+                db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+                {
+                    Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = u.Id,
+                    Role = OrganizationMemberRole.Member, IsActive = true,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = u.Id,
+                });
+            }
+        }
 
         // The flag defaults to OFF when no row exists, so switching it on is an explicit row —
         // which is also what production looks like once a SuperAdmin has turned it on.
@@ -122,7 +149,7 @@ public sealed class FeedControllerTests
     public async Task With_the_feed_switched_off_every_route_is_not_found()
     {
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(feedOn: false, sarah);
+        var factory = await SeedAsync(feedOn: false, users: sarah);
         var controller = Build(factory, sarah.Id);
 
         Assert.IsType<NotFoundResult>((await controller.GetFeed(null, null, null, default)).Result);
@@ -154,7 +181,7 @@ public sealed class FeedControllerTests
     {
         var sarah = MakeUser("sarahmitchell");
         var james = MakeUser("jamesthornton");
-        var factory = await SeedAsync(true, sarah, james);
+        var factory = await SeedAsync(users: [sarah, james]);
 
         var id = await PostAsync(Build(factory, sarah.Id), "clear #EVP with @jamesthornton at the #bellwitch cave");
 
@@ -179,7 +206,7 @@ public sealed class FeedControllerTests
     public async Task A_mention_of_nobody_is_left_as_text()
     {
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
 
         var id = await PostAsync(Build(factory, sarah.Id), "thanks @nobodyhere");
 
@@ -191,7 +218,7 @@ public sealed class FeedControllerTests
     public async Task An_empty_post_is_refused()
     {
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
 
         var result = await Build(factory, sarah.Id).CreatePost(new CreateFeedPostRequest("   "), default);
 
@@ -203,7 +230,7 @@ public sealed class FeedControllerTests
     {
         // Short-form is the point. A wall of text belongs in a publication.
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
 
         var result = await Build(factory, sarah.Id)
             .CreatePost(new CreateFeedPostRequest(new string('a', FeedController.MaxBodyLength + 1)), default);
@@ -221,7 +248,7 @@ public sealed class FeedControllerTests
         var sarah = MakeUser("sarahmitchell");
         var james = MakeUser("jamesthornton");
         var emma = MakeUser("emmarodriguez");
-        var factory = await SeedAsync(true, sarah, james, emma);
+        var factory = await SeedAsync(users: [sarah, james, emma]);
 
         await PostAsync(Build(factory, james.Id), "james posts");
         await PostAsync(Build(factory, emma.Id), "emma posts");
@@ -242,7 +269,7 @@ public sealed class FeedControllerTests
     {
         var sarah = MakeUser("sarahmitchell");
         var james = MakeUser("jamesthornton");
-        var factory = await SeedAsync(true, sarah, james);
+        var factory = await SeedAsync(users: [sarah, james]);
         var controller = Build(factory, sarah.Id);
 
         await controller.Follow(james.Id, default);
@@ -262,7 +289,7 @@ public sealed class FeedControllerTests
     public async Task You_cannot_follow_yourself()
     {
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
 
         Assert.IsType<BadRequestObjectResult>(await Build(factory, sarah.Id).Follow(sarah.Id, default));
     }
@@ -283,7 +310,7 @@ public sealed class FeedControllerTests
         var a = MakeUser("reportera");
         var b = MakeUser("reporterb");
         var c = MakeUser("reporterc");
-        var factory = await SeedAsync(true, author, a, b, c);
+        var factory = await SeedAsync(users: [author, a, b, c]);
 
         var id = await PostAsync(Build(factory, author.Id), "something people dislike");
 
@@ -305,7 +332,7 @@ public sealed class FeedControllerTests
         // Otherwise a single objector could make a post look like a pile-on.
         var author = MakeUser("author");
         var reporter = MakeUser("reporter");
-        var factory = await SeedAsync(true, author, reporter);
+        var factory = await SeedAsync(users: [author, reporter]);
 
         var id = await PostAsync(Build(factory, author.Id), "a post");
         var controller = Build(factory, reporter.Id);
@@ -330,7 +357,7 @@ public sealed class FeedControllerTests
     {
         var author = MakeUser("author");
         var reader = MakeUser("reader");
-        var factory = await SeedAsync(true, author, reader);
+        var factory = await SeedAsync(users: [author, reader]);
 
         var id = await PostAsync(Build(factory, author.Id), "to be hidden");
 
@@ -363,7 +390,7 @@ public sealed class FeedControllerTests
         // Replies are read with the post they answer; a feed that interleaved them would show
         // half a conversation in date order.
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
         var controller = Build(factory, sarah.Id);
 
         var root = await PostAsync(controller, "the post");
@@ -380,7 +407,7 @@ public sealed class FeedControllerTests
     public async Task A_tag_filter_narrows_to_that_tag_however_it_was_typed()
     {
         var sarah = MakeUser("sarahmitchell");
-        var factory = await SeedAsync(true, sarah);
+        var factory = await SeedAsync(users: sarah);
         var controller = Build(factory, sarah.Id);
 
         await PostAsync(controller, "an #EVP night");
@@ -396,7 +423,7 @@ public sealed class FeedControllerTests
     {
         var sarah = MakeUser("sarahmitchell");
         var james = MakeUser("jamesthornton");
-        var factory = await SeedAsync(true, sarah, james);
+        var factory = await SeedAsync(users: [sarah, james]);
 
         var id = await PostAsync(Build(factory, sarah.Id), "over to you @jamesthornton");
 
@@ -413,7 +440,7 @@ public sealed class FeedControllerTests
         // first report registered.
         var author = MakeUser("author");
         var reader = MakeUser("reader");
-        var factory = await SeedAsync(true, author, reader);
+        var factory = await SeedAsync(users: [author, reader]);
 
         var id = await PostAsync(Build(factory, author.Id), "a post");
 
@@ -568,5 +595,166 @@ public sealed class FeedControllerTests
 
         Assert.Single(posts);
         Assert.Equal(rootId, posts[0].Id);
+    }
+
+    // ── item 186 F2: who may write ────────────────────────────────────────────
+
+    /// <summary>Ben's rule: a member of any group may post, whatever their role.</summary>
+    [Fact]
+    public async Task A_member_of_any_group_may_post()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);          // seeded as a Member
+
+        var result = await Build(factory, sarah.Id).CreatePost(
+            new CreateFeedPostRequest("Members write here.", null), CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A client may post — Ben's decision. Both routes to being one are honoured.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]     // the person whose request became the case
+    [InlineData(false)]    // somebody the case was later shared with
+    public async Task A_client_may_post(bool viaOriginalRequest)
+    {
+        var client = MakeUser("danielpark");
+        var factory = await SeedAsync(everybodyBelongs: false, users: client);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var caseId = Guid.NewGuid();
+            var requestId = Guid.NewGuid();
+            db.ClientRequests.Add(new ClientRequest
+            {
+                Id = requestId,
+                AppUserId = viaOriginalRequest ? client.Id : Guid.NewGuid(),
+                Status = ClientRequestStatus.Assigned,
+                StreetAddress1 = "1 Elm", City = "N", State = "TN", ZipCode = "1",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = client.Id,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = Guid.NewGuid(), ClientRequestId = requestId,
+                Title = "Their case", CaseYear = 2026, OrgCaseNumber = 1, Status = CaseStatus.Active,
+                StreetAddress1 = "1 Elm", City = "N", State = "TN", ZipCode = "1", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = client.Id,
+            });
+            if (!viaOriginalRequest)
+            {
+                db.CaseClientAccesses.Add(new CaseClientAccess
+                {
+                    Id = Guid.NewGuid(), CaseId = caseId, AppUserId = client.Id,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = client.Id,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, client.Id).CreatePost(
+            new CreateFeedPostRequest("The knocking started again last night.", null),
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A signed-in stranger — no group, no case — is refused, and told both doors.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_who_belongs_to_nothing_is_refused_with_both_doors()
+    {
+        var stranger = MakeUser("passerby");
+        var factory = await SeedAsync(everybodyBelongs: false, users: stranger);
+
+        var result = await Build(factory, stranger.Id).CreatePost(
+            new CreateFeedPostRequest("Hello?", null), CancellationToken.None);
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var text = refusal.Value!.ToString()!;
+        Assert.Contains("belong here", text);
+        Assert.Contains("Join a group", text);
+        Assert.Contains("request an investigation", text);
+
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(0, await db.OrgMessages.CountAsync());
+    }
+
+    /// <summary>Following builds an audience, so it is participation too.</summary>
+    [Fact]
+    public async Task Somebody_who_belongs_to_nothing_cannot_follow()
+    {
+        var stranger = MakeUser("passerby");
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(everybodyBelongs: false, users: [stranger, sarah]);
+
+        var result = await Build(factory, stranger.Id).Follow(sarah.Id, CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(0, await db.UserFollows.CountAsync());
+    }
+
+    /// <summary>
+    /// Reporting is NOT gated: safety must not require belonging.
+    /// </summary>
+    /// <remarks>
+    /// If a signed-in stranger is the first to see something that should not be on the site, we
+    /// want to hear about it — refusing the report because they have not joined a group would be
+    /// choosing the funnel over the thing the funnel is for.
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_who_belongs_to_nothing_may_still_report()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var stranger = MakeUser("passerby");
+        var factory = await SeedAsync(users: [sarah, stranger]);   // sarah is a member
+        var postId = await PostAsync(Build(factory, sarah.Id), "Something worth reporting.");
+
+        // Strip the stranger's membership so only Sarah belongs.
+        await using (var db = factory.CreateDbContext())
+        {
+            var m = await db.OrganizationUserMemberships.SingleAsync(x => x.AppUserId == stranger.Id);
+            db.OrganizationUserMemberships.Remove(m);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, stranger.Id).ReportPost(
+            postId, new ReportFeedPostRequest("This is not paranormal."), CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var check = factory.CreateDbContext();
+        Assert.Equal(1, await check.OrgMessageReports.CountAsync());
+    }
+
+    /// <summary>
+    /// The page tells the reader whether they may write, from the same rule the create endpoint
+    /// enforces — so the composer is never offered to somebody whose post would be refused.
+    /// </summary>
+    [Fact]
+    public async Task The_page_reports_whether_this_reader_may_post()
+    {
+        var member = MakeUser("sarahmitchell");
+        var stranger = MakeUser("passerby");
+        var factory = await SeedAsync(users: [member, stranger]);
+        await using (var db = factory.CreateDbContext())
+        {
+            var m = await db.OrganizationUserMemberships.SingleAsync(x => x.AppUserId == stranger.Id);
+            db.OrganizationUserMemberships.Remove(m);
+            await db.SaveChangesAsync();
+        }
+
+        async Task<bool> CanPostAsync(FeedController controller)
+        {
+            var result = await controller.GetFeed(null, null, null, CancellationToken.None);
+            return ((FeedPageRecord)Assert.IsType<OkObjectResult>(result.Result).Value!).CanPost;
+        }
+
+        Assert.True(await CanPostAsync(Build(factory, member.Id)));
+        Assert.False(await CanPostAsync(Build(factory, stranger.Id)));
+        Assert.False(await CanPostAsync(BuildAnonymous(factory)));
     }
 }
