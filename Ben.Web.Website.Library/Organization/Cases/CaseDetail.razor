@@ -27,6 +27,25 @@
 {
     <div class="container-fluid py-3" style="max-width:1000px;">
 
+        @* Item 184 Phase D: a lapse took this case off the public site; renewal makes this
+           banner's one click put it back. The click runs through the normal Update gate, so a
+           group still on a plan without private-residence work sees the refusal sentence here. *@
+        @if (_case.WasPublicBeforeLapse == true && !_case.IsPublic)
+        {
+            <div class="alert alert-warning d-flex align-items-center gap-3 flex-wrap" id="case-republish-banner">
+                <div class="flex-grow-1">
+                    <strong>This case came off the public site when the subscription lapsed.</strong>
+                    Its public page returns the moment it is republished.
+                </div>
+                <button type="button" class="btn btn-warning btn-sm text-nowrap" id="case-republish"
+                        disabled="@_isBusy" @onclick="RepublishAsync">Republish</button>
+            </div>
+            @if (_republishError is not null)
+            {
+                <div class="alert alert-danger py-2" id="case-republish-error">@_republishError</div>
+            }
+        }
+
         @* ── Header ────────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
             <div>
@@ -608,6 +627,30 @@
             _showEdit          = false;
             if (await AdminClient.GetOrgCaseAsync(OrgId, CaseId) is { } refreshed) _case = refreshed;
         }
+        finally { _isBusy = false; }
+    }
+
+    private string? _republishError;
+
+    /// <summary>The banner's one click: the same Update the edit dialog performs, flipping only
+    /// IsPublic. A refusal (the plan gate, a slug problem) renders under the banner.</summary>
+    private async Task RepublishAsync()
+    {
+        if (_case is null) return;
+        _isBusy = true; _republishError = null;
+        try
+        {
+            var (result, error) = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, new UpdateCaseRequest(
+                Title:                _case.Title,
+                Description:          _case.Description,
+                Status:               _case.Status,
+                PublicPseudonym:      _case.PublicPseudonym,
+                IsPublic:             true,
+                CaseManagerAppUserId: _case.CaseManagerAppUserId));
+            if (result is null) { _republishError = error ?? "Republish failed."; }
+            else { _case = result; }
+        }
+        catch (Exception ex) { _republishError = ex.Message; }
         finally { _isBusy = false; }
     }
 

@@ -80,6 +80,16 @@ namespace Ben.Data.Source.Entities
         public DateTime? OneWeekNoticeSentForPeriodEnd { get; set; }
 
         /// <summary>
+        /// When the 30-days-lapsed stranded-client notice went out (item 184 Phase D), or null.
+        /// </summary>
+        /// <remarks>
+        /// A timestamp rather than a period-end key because this notice is not tied to a period:
+        /// it fires once per lapse, thirty days in. Reactivation clears it, so a future lapse
+        /// re-arms the notice with no other bookkeeping.
+        /// </remarks>
+        public DateTime? StrandedClientNoticeSentAtUtc { get; set; }
+
+        /// <summary>
         /// When this organization first paid for anything, or null if it never has.
         /// </summary>
         /// <remarks>

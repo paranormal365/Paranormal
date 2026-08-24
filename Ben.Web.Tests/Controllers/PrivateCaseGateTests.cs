@@ -342,6 +342,40 @@ public class PrivateCaseGateTests
         Assert.True((await db.Cases.SingleAsync(c => c.Id == caseId)).IsPrivateEngagement);
     }
 
+    [Fact]
+    public async Task Republishing_consumes_the_lapse_memory()
+    {
+        // Phase D: the banner's one click flips IsPublic back on; the memory that showed the
+        // banner must clear with it, or the banner survives its own purpose.
+        var (factory, orgId, userId) = await SeedOrgAsync();
+        Guid caseId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            caseId = Guid.NewGuid();
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = orgId, Title = "Lapsed Case",
+                CaseYear = 2026, OrgCaseNumber = 8, Status = CaseStatus.Public,
+                IsPublic = false, IsPrivateEngagement = true, WasPublicBeforeLapse = true,
+                UrlName = "lapsed-case",
+                StreetAddress1 = "1 Main", City = "N", State = "TN", ZipCode = "1", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildCaseController(factory, userId).Update(orgId, caseId,
+            new UpdateCaseRequest("Lapsed Case", null, CaseStatus.Public, null, IsPublic: true, null), default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using (var check = await factory.CreateDbContextAsync())
+        {
+            var c = await check.Cases.SingleAsync(x => x.Id == caseId);
+            Assert.True(c.IsPublic);
+            Assert.Null(c.WasPublicBeforeLapse);
+        }
+    }
+
     // ── Receiving a private case (transfer accept + the client's pick) ───────
 
     private static CaseTransferController BuildTransferController(

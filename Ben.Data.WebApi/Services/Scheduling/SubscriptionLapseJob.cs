@@ -53,6 +53,7 @@ public sealed class SubscriptionLapseJob : IScheduledJob
 
         await SendApproachWarningsAsync(now, ct);
         await LapseExpiredAsync(now, ct);
+        await OfferReassignmentToStrandedClientsAsync(now, ct);
     }
 
     // ── the two warnings ──────────────────────────────────────────────────────
@@ -74,6 +75,19 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             var end = sub.CurrentPeriodEnd!.Value;
             var recipients = await _messages.BillingRecipientsAsync(sub.OrganizationId, ct);
 
+            // Item 184 Phase D: a lapse also unpublishes published private-engagement cases, and
+            // that consequence belongs in the warning — nobody should learn it from the lapse.
+            var publishedPrivate = await db.Cases.AsNoTracking()
+                .CountAsync(c => c.OrganizationId == sub.OrganizationId
+                              && c.IsPublic && c.IsPrivateEngagement, ct);
+            var unpublishWarning = publishedPrivate == 0 ? "" :
+                $"\n\nYour group has {publishedPrivate} published private-residence "
+              + (publishedPrivate == 1 ? "case" : "cases")
+              + " — if the period lapses, "
+              + (publishedPrivate == 1 ? "it" : "they")
+              + " will come off the public site until the plan is renewed. Nothing is deleted, "
+              + "and republishing after renewal is one click.";
+
             if (sub.TwoWeekNoticeSentForPeriodEnd != end)
             {
                 await _messages.SendAsync(
@@ -81,7 +95,8 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                     $"Your group's paid period ends on {end:MM/dd/yyyy}.\n\n"
                   + "Renewing before then keeps everything exactly as it is. If the period ends "
                   + "without renewal, your group keeps read access to everything, but nothing new "
-                  + "can be added and open cases are paused for your clients.",
+                  + "can be added and open cases are paused for your clients."
+                  + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
                 sub.TwoWeekNoticeSentForPeriodEnd = end;
@@ -98,7 +113,8 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                   + "If you are not renewing, please tell your clients directly: when the date "
                   + "passes their cases will be paused, and they will be offered the choice of "
                   + "another organization. That news should come from you before it comes from "
-                  + "the platform.",
+                  + "the platform."
+                  + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
                 sub.OneWeekNoticeSentForPeriodEnd = end;
@@ -137,6 +153,21 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                 c.DateUpdated       = now;
             }
 
+            // Item 184 Phase D: published private-engagement cases come off the public site —
+            // ALL of them, not just open ones; a closed case is published just as publicly. The
+            // way back is remembered per case (the StatusBeforePause pattern), and republishing
+            // is a deliberate click after renewal, never automatic.
+            var publishedPrivate = await db.Cases
+                .Where(c => c.OrganizationId == sub.OrganizationId
+                         && c.IsPublic && c.IsPrivateEngagement)
+                .ToListAsync(ct);
+            foreach (var c in publishedPrivate)
+            {
+                c.IsPublic              = false;
+                c.WasPublicBeforeLapse  = true;
+                c.DateUpdated           = now;
+            }
+
             await db.SaveChangesAsync(ct);
 
             // Clients are told per case, after the pause is real — a message about a pause that
@@ -162,8 +193,70 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             }
 
             _logger.LogInformation(
-                "Subscription for organization {OrgId} lapsed; paused {Count} open case(s).",
-                sub.OrganizationId, openCases.Count);
+                "Subscription for organization {OrgId} lapsed; paused {Count} open case(s), unpublished {Unpublished} private case(s).",
+                sub.OrganizationId, openCases.Count, publishedPrivate.Count);
         }
+    }
+
+    // ── the stranded-client notice, thirty days in ────────────────────────────
+
+    /// <summary>
+    /// A month after a lapse, the clients still paused are told about their way out (item 184
+    /// Phase D): the reassignment flow that has been theirs all along.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Thirty days, not immediately:</b> the lapse-day message says the group may renew,
+    /// and most lapses are late payments, not endings. A month of silence is the signal the
+    /// group is not coming back soon — that is when pointing clients elsewhere is a service
+    /// rather than an incitement.</para>
+    ///
+    /// <para>Stamped once per lapse via <c>StrandedClientNoticeSentAtUtc</c>; reactivation clears
+    /// the stamp so a future lapse re-arms it.</para>
+    /// </remarks>
+    private async Task OfferReassignmentToStrandedClientsAsync(DateTime now, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var stranded = await db.OrganizationSubscriptions
+            .Include(s => s.Organization)
+            .Where(s => s.Status == SubscriptionStatus.Lapsed
+                     && s.LapsedAtUtc != null
+                     && s.LapsedAtUtc <= now.AddDays(-30)
+                     && s.StrandedClientNoticeSentAtUtc == null)
+            .ToListAsync(ct);
+
+        foreach (var sub in stranded)
+        {
+            // Exactly the cases the lapse paused — StatusBeforePause is the marker, same as
+            // reactivation's restore. A case paused for any other reason is not this story.
+            var pausedCases = await db.Cases.AsNoTracking()
+                .Where(c => c.OrganizationId == sub.OrganizationId
+                         && c.Status == CaseStatus.Paused
+                         && c.StatusBeforePause != null)
+                .ToListAsync(ct);
+
+            foreach (var c in pausedCases)
+            {
+                var clients = await db.CaseClientAccesses
+                    .Where(a => a.CaseId == c.Id)
+                    .Select(a => a.AppUserId)
+                    .ToListAsync(ct);
+                if (clients.Count == 0) continue;
+
+                await _messages.SendAsync(
+                    $"Your case \"{c.Title}\" — you can move it to another group",
+                    $"Your case \"{c.Title}\" has been paused for a month, because "
+                  + $"{sub.Organization.Name}'s subscription has not been renewed.\n\n"
+                  + "You do not have to keep waiting. From your case page you can propose moving "
+                  + "it to a different organization — you choose the group, and you choose what "
+                  + "carries over. Nothing moves until the new group accepts, and if "
+                  + $"{sub.Organization.Name} renews first, everything simply resumes here.",
+                    clients, sub.CreatedByAppUserId, ct);
+            }
+
+            sub.StrandedClientNoticeSentAtUtc = now;
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 }

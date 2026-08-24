@@ -235,7 +235,11 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         // a case paused for any other future reason has no marker and is left alone. This is the
         // "everything comes back exactly as it was" half of item 84's promise.
         if (before.Status == SubscriptionStatus.Lapsed && request.Status == SubscriptionStatus.Active)
+        {
             await PeriodOpener.RestorePausedCasesAsync(db, organizationId, now, ct);
+            // Re-arm the stranded-client notice for any future lapse (item 184 Phase D).
+            sub.StrandedClientNoticeSentAtUtc = null;
+        }
 
         await db.SaveChangesAsync(ct);
 
