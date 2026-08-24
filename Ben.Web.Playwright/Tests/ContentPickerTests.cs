@@ -41,6 +41,35 @@ public class ContentPickerTests : BenTestBase
         var empty = Page.Locator("#picker-empty");
         await Expect(cards.First.Or(empty)).ToBeVisibleAsync(new() { Timeout = 45_000 });
 
+        // Audio/video cells load their player on demand — audio renders the WaveSurfer
+        // .ws-player, video a plain <video>. This assertion is what exposed the lost
+        // /js/wavesurfer assets: the folder died with Ben.Web.WebApp and every audio preview
+        // on the site had said "Player init failed" since, so a working player must be
+        // asserted, not just any rendering. The selection check is the other half: Preview
+        // sits inside the selectable card, so without stopPropagation every preview click
+        // would also toggle the selection.
+        var previewButton = cards.GetByRole(AriaRole.Button, new() { Name = "Preview" }).First;
+        if (await previewButton.CountAsync() > 0)
+        {
+            await previewButton.ClickAsync();
+            await Expect(Page.Locator(".ben-content-picker-grid .ws-player, .ben-content-picker-grid video").First)
+                .ToBeVisibleAsync(new() { Timeout = 45_000 });
+
+            // The seed's 8-byte .wav stubs cannot decode, so a decode error is data, not product.
+            // What must never appear again is the missing-module error — the whole
+            // /js/wavesurfer folder was lost with Ben.Web.WebApp and nothing asserted it.
+            var playerError = Page.Locator(".ben-content-picker-grid .ws-player-error");
+            if (await playerError.CountAsync() > 0)
+            {
+                var text = await playerError.First.InnerTextAsync();
+                TestContext.Out.WriteLine($"player reported: {text}");
+                Assert.That(text, Does.Not.Contain("imported module"),
+                    "the wavesurfer module itself failed to load — its assets are missing from the host");
+            }
+
+            await Expect(Page.Locator("#picker-select")).ToBeDisabledAsync();
+        }
+
         if (await cards.CountAsync() > 0)
         {
             // Choose the first candidate; the dialog's chosen-file card takes its name.
