@@ -48,6 +48,7 @@
         else
         {
             <FeedPostCard Post="@_root" CanAct="@(_authKnown && IsSignedIn)"
+                          OnLikeToggled="ToggleLikeAsync"
                           OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync" />
 
             <div class="ms-3 ps-3 border-start">
@@ -78,7 +79,8 @@
                 {
                     @foreach (var reply in _replies)
                     {
-                        <FeedPostCard Post="@reply" CanAct="@(_authKnown && IsSignedIn)" OnFollowToggled="ToggleFollowAsync"
+                        <FeedPostCard Post="@reply" CanAct="@(_authKnown && IsSignedIn)"
+                                      OnLikeToggled="ToggleLikeAsync" OnFollowToggled="ToggleFollowAsync"
                                       OnReportRequested="ReportAsync" />
                     }
                 }
@@ -146,6 +148,39 @@
         // Keep the count on the root card honest without a round trip — it is displayed right
         // above, and a reply that appears while the count still says none looks like a bug.
         if (_root is not null) _root = _root with { ReplyCount = _root.ReplyCount + 1 };
+    }
+
+    /// <summary>Likes or unlikes, optimistically — the root and the replies share the handler.</summary>
+    private async Task ToggleLikeAsync(FeedPostRecord post)
+    {
+        var nowLiked = !post.LikedByCurrentUser;
+        ApplyLike(post.Id, nowLiked);
+
+        var ok = nowLiked ? await Feed.LikeAsync(post.Id) : await Feed.UnlikeAsync(post.Id);
+        if (!ok)
+        {
+            ApplyLike(post.Id, !nowLiked);
+            _error = "Couldn't record that. Try again in a moment.";
+        }
+    }
+
+    private void ApplyLike(Guid postId, bool liked)
+    {
+        static FeedPostRecord Shift(FeedPostRecord p, bool liked) => p with
+        {
+            LikedByCurrentUser = liked,
+            LikeCount = Math.Max(0, p.LikeCount + (liked ? 1 : -1)),
+        };
+
+        if (_root is { } root && root.Id == postId && root.LikedByCurrentUser != liked)
+        {
+            _root = Shift(root, liked);
+            return;
+        }
+
+        var index = _replies.FindIndex(r => r.Id == postId);
+        if (index >= 0 && _replies[index].LikedByCurrentUser != liked)
+            _replies[index] = Shift(_replies[index], liked);
     }
 
     private async Task ToggleFollowAsync(FeedPostRecord post)

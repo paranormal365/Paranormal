@@ -757,4 +757,172 @@ public sealed class FeedControllerTests
         Assert.False(await CanPostAsync(Build(factory, stranger.Id)));
         Assert.False(await CanPostAsync(BuildAnonymous(factory)));
     }
+
+    // ── item 186 F3: likes ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Liking_is_idempotent_and_counted_once()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+        var postId = await PostAsync(Build(factory, sarah.Id), "Worth a look.");
+
+        Assert.IsType<NoContentResult>(await Build(factory, james.Id).LikePost(postId, CancellationToken.None));
+        Assert.IsType<NoContentResult>(await Build(factory, james.Id).LikePost(postId, CancellationToken.None));
+
+        var asJames = (await ReadFeedAsync(Build(factory, james.Id))).Single();
+        Assert.Equal(1, asJames.LikeCount);
+        Assert.True(asJames.LikedByCurrentUser);
+
+        // The count is everybody's; the flag is the reader's own.
+        var asSarah = (await ReadFeedAsync(Build(factory, sarah.Id))).Single();
+        Assert.Equal(1, asSarah.LikeCount);
+        Assert.False(asSarah.LikedByCurrentUser);
+    }
+
+    [Fact]
+    public async Task Unliking_removes_it_and_forgives_a_like_that_was_never_there()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+        var postId = await PostAsync(Build(factory, sarah.Id), "Worth a look.");
+
+        await Build(factory, james.Id).LikePost(postId, CancellationToken.None);
+        Assert.IsType<NoContentResult>(await Build(factory, james.Id).UnlikePost(postId, CancellationToken.None));
+        Assert.IsType<NoContentResult>(await Build(factory, james.Id).UnlikePost(postId, CancellationToken.None));
+
+        Assert.Equal(0, (await ReadFeedAsync(Build(factory, james.Id))).Single().LikeCount);
+    }
+
+    [Fact]
+    public async Task A_visitor_sees_the_count_but_never_the_flag()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+        var postId = await PostAsync(Build(factory, sarah.Id), "Worth a look.");
+        await Build(factory, james.Id).LikePost(postId, CancellationToken.None);
+
+        var asVisitor = (await ReadFeedAsync(BuildAnonymous(factory))).Single();
+        Assert.Equal(1, asVisitor.LikeCount);
+        Assert.False(asVisitor.LikedByCurrentUser);
+    }
+
+    [Fact]
+    public async Task Somebody_who_belongs_to_nothing_cannot_like_but_can_still_unlike()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var stranger = MakeUser("passerby");
+        var factory = await SeedAsync(users: [sarah, stranger]);
+        var postId = await PostAsync(Build(factory, sarah.Id), "Worth a look.");
+
+        // Liked while they still belonged...
+        await Build(factory, stranger.Id).LikePost(postId, CancellationToken.None);
+
+        // ...then their membership went away.
+        await using (var db = factory.CreateDbContext())
+        {
+            var m = await db.OrganizationUserMemberships.SingleAsync(x => x.AppUserId == stranger.Id);
+            db.OrganizationUserMemberships.Remove(m);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(factory, stranger.Id).LikePost(postId, CancellationToken.None));
+
+        // Taking back what you already did is not participation, and must never be trapped.
+        Assert.IsType<NoContentResult>(
+            await Build(factory, stranger.Id).UnlikePost(postId, CancellationToken.None));
+        await using var check = factory.CreateDbContext();
+        Assert.Equal(0, await check.OrgMessageLikes.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_hidden_post_cannot_be_liked()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var factory = await SeedAsync(users: [sarah, james]);
+        var postId = await PostAsync(Build(factory, sarah.Id), "This gets hidden.");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+            post.HiddenUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>(
+            await Build(factory, james.Id).LikePost(postId, CancellationToken.None));
+    }
+
+    // ── item 186 F3: the ranked feed ──────────────────────────────────────────
+
+    [Fact]
+    public async Task For_you_puts_the_engaging_post_above_the_newer_silent_one()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var james = MakeUser("jamesthornton");
+        var emma = MakeUser("emmablake");
+        var factory = await SeedAsync(users: [sarah, james, emma]);
+
+        var older = await PostAsync(Build(factory, sarah.Id), "Older, but people cared.");
+        var newer = await PostAsync(Build(factory, sarah.Id), "Newest, and nobody looked.");
+
+        // Four hours old with two likes. Deliberately modest numbers: an earlier draft of this
+        // test used one like against a ten-hour gap and failed, which is the ranking working —
+        // a single like is not supposed to outweigh most of a day. Two likes at four hours is
+        // the everyday case the tab exists to surface.
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == older);
+            post.DateCreated = DateTime.UtcNow.AddHours(-4);
+            await db.SaveChangesAsync();
+        }
+        await Build(factory, james.Id).LikePost(older, CancellationToken.None);
+        await Build(factory, emma.Id).LikePost(older, CancellationToken.None);
+
+        var ranked = await ReadFeedAsync(Build(factory, james.Id), mode: "foryou");
+        Assert.Equal(older, ranked[0].Id);
+
+        // Latest is untouched by ranking — that is what it is for.
+        var latest = await ReadFeedAsync(Build(factory, james.Id), mode: "all");
+        Assert.Equal(newer, latest[0].Id);
+    }
+
+    [Fact]
+    public async Task For_you_leaves_out_hidden_posts_and_replies()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var controller = Build(factory, sarah.Id);
+
+        var rootId = await PostAsync(controller, "Top level.");
+        await PostAsync(controller, "A reply.", rootId);
+        var hiddenId = await PostAsync(controller, "Hidden one.");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var hidden = await db.OrgMessages.SingleAsync(m => m.Id == hiddenId);
+            hidden.HiddenUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var ranked = await ReadFeedAsync(controller, mode: "foryou");
+        Assert.Single(ranked);
+        Assert.Equal(rootId, ranked[0].Id);
+    }
+
+    [Fact]
+    public async Task An_unknown_mode_still_reads_as_latest()
+    {
+        // Every link and client written before ranking existed must keep working.
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        await PostAsync(Build(factory, sarah.Id), "Still here.");
+
+        Assert.Single(await ReadFeedAsync(Build(factory, sarah.Id), mode: "whatever"));
+    }
 }

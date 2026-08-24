@@ -3,6 +3,7 @@ using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Feed;
 using Ben.Service.Models.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -54,8 +55,9 @@ public sealed class FeedController : BenControllerBase
     /// A page of the feed, newest first.
     /// </summary>
     /// <param name="mode">
-    /// <c>all</c> — everybody's posts. <c>following</c> — only people the reader follows, plus
-    /// their own. Anything else reads as <c>all</c>.
+    /// <c>foryou</c> — ranked by <see cref="FeedRanking"/>. <c>all</c> — everybody's posts,
+    /// newest first. <c>following</c> — only people the reader follows, plus their own. Anything
+    /// else reads as <c>all</c>, which keeps every link and client written before ranking existed.
     /// </param>
     /// <param name="hashtag">Narrow to one tag. Combines with <paramref name="mode"/>.</param>
     /// <param name="author">
@@ -101,6 +103,13 @@ public sealed class FeedController : BenControllerBase
 
         // Top-level only. Replies are read with the post they answer.
         query = query.Where(m => m.ParentMessageId == null);
+
+        // ── For You: score a bounded window, then page by offset ─────────────
+        // A keyset cursor cannot work here: the sort key is a score that changes as people like
+        // things, so "everything after post X" has no stable meaning. An offset over a freshly
+        // ranked window does, and the page de-dupes what it has already shown.
+        if (author is null && string.Equals(mode, "foryou", StringComparison.OrdinalIgnoreCase))
+            return Ok(await RankedPageAsync(db, query, userId, cursor, ct));
 
         if (TryReadCursor(cursor, out var beforeUtc, out var beforeId))
         {
@@ -279,6 +288,78 @@ public sealed class FeedController : BenControllerBase
             DateCreated = DateTime.UtcNow,
         });
         await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    // ── Liking ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Likes a post. Idempotent: liking twice is liking once.
+    /// </summary>
+    /// <remarks>
+    /// Participation-gated like posting — a like is a small act of authorship, it lifts what it
+    /// touches in the ranking, and a feed whose scores can be moved by anybody with an email
+    /// address is a feed whose scores mean nothing.
+    /// </remarks>
+    [HttpPost("posts/{id:guid}/like")]
+    [Authorize]
+    public async Task<IActionResult> LikePost(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+            return BadRequest(refusal);
+
+        // A hidden post cannot be liked: VisiblePosts is the one place that knows what "there"
+        // means, and a like on something an administrator removed would resurrect it in the
+        // ranking the moment it came back.
+        if (!await VisiblePosts(db).AnyAsync(m => m.Id == id, ct)) return NotFound();
+
+        if (await db.OrgMessageLikes.AnyAsync(
+                l => l.OrgMessageId == id && l.LikerAppUserId == userId, ct))
+        {
+            return NoContent();
+        }
+
+        db.OrgMessageLikes.Add(new OrgMessageLike
+        {
+            OrgMessageId = id, LikerAppUserId = userId, DateLiked = DateTime.UtcNow,
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Two taps, two circuits, one composite key. The post is liked either way.
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>Takes a like back. Forgiving: unliking what was never liked is a no-op.</summary>
+    [HttpDelete("posts/{id:guid}/like")]
+    [Authorize]
+    public async Task<IActionResult> UnlikePost(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        // Deliberately NOT participation-gated. Taking back something you already did is not
+        // participation, and somebody whose standing lapsed must still be able to undo it.
+        var like = await db.OrgMessageLikes
+            .FirstOrDefaultAsync(l => l.OrgMessageId == id && l.LikerAppUserId == userId, ct);
+
+        if (like is not null)
+        {
+            db.OrgMessageLikes.Remove(like);
+            await db.SaveChangesAsync(ct);
+        }
 
         return NoContent();
     }
@@ -498,6 +579,22 @@ public sealed class FeedController : BenControllerBase
                 .Select(r => r.OrgMessageId)
                 .ToListAsync(ct);
 
+        // Counted per page beside the replies, for the reason OrgMessageLike documents: one
+        // source of truth. A cached counter drifts the first time an unlike races a like.
+        var likeCounts = (await db.OrgMessageLikes.AsNoTracking()
+            .Where(l => ids.Contains(l.OrgMessageId))
+            .GroupBy(l => l.OrgMessageId)
+            .Select(g => new { PostId = g.Key, Count = g.Count() })
+            .ToListAsync(ct))
+            .ToDictionary(x => x.PostId, x => x.Count);
+
+        var liked = readerId == Guid.Empty
+            ? []
+            : await db.OrgMessageLikes.AsNoTracking()
+                .Where(l => ids.Contains(l.OrgMessageId) && l.LikerAppUserId == readerId)
+                .Select(l => l.OrgMessageId)
+                .ToListAsync(ct);
+
         return posts.Select(p => new FeedPostRecord(
             p.Id,
             p.AuthorAppUserId,
@@ -515,13 +612,103 @@ public sealed class FeedController : BenControllerBase
             // Never "own post" for a visitor: Guid.Empty is nobody, and an author id could not be
             // Guid.Empty anyway, but saying so here keeps the intent legible.
             readerId != Guid.Empty && p.AuthorAppUserId == readerId,
-            reported.Contains(p.Id))).ToList();
+            reported.Contains(p.Id),
+            likeCounts.GetValueOrDefault(p.Id),
+            liked.Contains(p.Id))).ToList();
     }
+
+    /// <summary>
+    /// A page of the ranked feed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Bounded window, not the whole table.</b> Only the most recent
+    /// <see cref="RankingWindowSize"/> posts from the last <see cref="RankingWindowDays"/> days are
+    /// candidates. Scoring is per-row work, so an unbounded window would get slower every day the
+    /// site succeeded — and nothing older than the window could win on score anyway, because
+    /// gravity has already pushed it below anything from this month.</para>
+    ///
+    /// <para>Two queries: one for the window's engagement counts, one for the page's bodies. The
+    /// counts are grouped in SQL rather than loaded and counted here.</para>
+    /// </remarks>
+    private static async Task<FeedPageRecord> RankedPageAsync(
+        BenDataContext db, IQueryable<OrgMessage> query, Guid userId, string? cursor,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var since = now.AddDays(-RankingWindowDays);
+
+        var window = await query
+            .Where(m => m.DateCreated >= since)
+            .OrderByDescending(m => m.DateCreated).ThenByDescending(m => m.Id)
+            .Take(RankingWindowSize)
+            .Select(m => new
+            {
+                m.Id,
+                m.DateCreated,
+                Likes = m.Likes.Count,
+                Replies = m.Replies.Count(r => r.HiddenUtc == null),
+            })
+            .ToListAsync(ct);
+
+        var ranked = FeedRanking.Rank(
+            window.Select(w => new RankableFeedPost(w.Id, w.DateCreated, w.Likes, w.Replies)), now);
+
+        var offset = ReadOffsetCursor(cursor);
+        var pageIds = ranked.Skip(offset).Take(PageSize).Select(p => p.Id).ToList();
+        var hasMore = ranked.Count > offset + pageIds.Count;
+
+        // Fetched by id, then put back into ranked order — a WHERE IN says nothing about sequence.
+        var posts = await db.OrgMessages.AsNoTracking()
+            .Where(m => pageIds.Contains(m.Id))
+            .ToListAsync(ct);
+        var byId = posts.ToDictionary(p => p.Id);
+        var ordered = pageIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+
+        var records = await ToRecordsAsync(db, ordered, userId, ct);
+        var canPost = userId != Guid.Empty
+                   && await FeedParticipation.RefusalAsync(db, userId, ct) is null;
+
+        return new FeedPageRecord(
+            records, hasMore ? WriteOffsetCursor(offset + pageIds.Count) : null, canPost);
+    }
+
+    /// <summary>How far back For You looks. Gravity has buried anything older regardless.</summary>
+    private const int RankingWindowDays = 30;
+
+    /// <summary>How many candidates are scored. Per-row work, so it is capped.</summary>
+    private const int RankingWindowSize = 500;
 
     // ── Cursor ───────────────────────────────────────────────────────────────
     // Timestamp plus id, because two posts can share a timestamp and a date-only cursor either
     // repeats one across the page boundary or skips it. Opaque to callers by contract, so the
     // format can change; not encrypted, because it encodes nothing a reader could not already see.
+
+    /// <summary>
+    /// The For You cursor: an offset into a freshly ranked window, prefixed so it can never be
+    /// mistaken for a keyset cursor by whichever branch reads it next.
+    /// </summary>
+    private static string WriteOffsetCursor(int offset)
+        => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"f:{offset}"));
+
+    /// <summary>Reads a For You cursor. Anything unreadable is page one — never an error.</summary>
+    private static int ReadOffsetCursor(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor)) return 0;
+
+        try
+        {
+            var text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            return text.StartsWith("f:", StringComparison.Ordinal)
+                && int.TryParse(text[2..], out var offset)
+                && offset >= 0
+                    ? offset
+                    : 0;
+        }
+        catch (FormatException)
+        {
+            return 0;
+        }
+    }
 
     private static string WriteCursor(DateTime dateCreated, Guid id)
         => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{dateCreated.Ticks}:{id}"));

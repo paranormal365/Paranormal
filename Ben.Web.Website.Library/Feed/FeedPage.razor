@@ -67,10 +67,11 @@
         @* No composer on a tag page. A post written there would not carry the tag unless the
            author typed it, and a composer that silently does not do what its context implies is
            worse than no composer. *@
-        @* Nothing is claimed about the reader until auth is known. During prerender it is not:
-           guessing "signed out" would flash the join card at a member and — worse for the tests
-           that watch this page — would put the wrong thing in the server-rendered HTML. *@
-        @if (Tag is null && _authKnown)
+        @* Nothing is claimed about the reader until the SERVER has said whether they may post.
+           Auth resolving is not enough: CanPost arrives with the first page, a beat later, and
+           rendering on auth alone flashed "Join a group to post here" at members before their own
+           composer appeared. Caught by the e2e walk, which saw the join card and gave up waiting. *@
+        @if (Tag is null && _participationKnown)
         {
             @if (_canPost)
             {
@@ -105,7 +106,7 @@
                     <p class="mb-1">Nothing from the people you follow.</p>
                     <p class="mb-0 small">Follow somebody from their name on a post, or read
                         <button type="button" class="btn btn-link btn-sm p-0 align-baseline"
-                                @onclick="@(() => SwitchModeAsync("all"))">all posts</button>.</p>
+                                @onclick="@(() => SwitchModeAsync("all"))">the latest posts</button>.</p>
                 }
                 else if (IsSignedIn)
                 {
@@ -122,7 +123,8 @@
             @foreach (var post in _posts)
             {
                 <FeedPostCard Post="@post"
-                              CanAct="@(_authKnown && IsSignedIn)"
+                              CanAct="@(_participationKnown && _canPost)"
+                              OnLikeToggled="ToggleLikeAsync"
                               OnFollowToggled="ToggleFollowAsync"
                               OnReportRequested="ReportAsync" />
             }
@@ -151,12 +153,13 @@
 
     private static readonly (string Mode, string Label)[] Modes =
     [
-        ("all", "All posts"),
+        ("foryou", "For You"),
+        ("all", "Latest"),
         ("following", "Following"),
     ];
 
     private readonly List<FeedPostRecord> _posts = [];
-    private string _mode = "all";
+    private string _mode = "foryou";
     private string? _nextCursor;
     private string? _error;
     private bool _loading = true;
@@ -164,6 +167,12 @@
 
     /// <summary>True once the auth state has actually resolved — see the markup comment.</summary>
     private bool _authKnown;
+
+    /// <summary>
+    /// True once the server has answered whether this reader may post. Strictly later than
+    /// <see cref="_authKnown"/>, and the thing the composer slot waits for.
+    /// </summary>
+    private bool _participationKnown;
 
     /// <summary>
     /// Whether this reader may write here, as answered by the server (item 186 F2).
@@ -236,6 +245,7 @@
             _posts.AddRange(page.Posts);
             _nextCursor = page.NextCursor;
             _canPost = page.CanPost;
+            _participationKnown = true;
         }
         finally
         {
@@ -341,6 +351,45 @@
     /// wrote if they follow nobody, which reads as the post having failed.
     /// </remarks>
     private void OnPosted(FeedPostRecord post) => _posts.Insert(0, post);
+
+    /// <summary>
+    /// Likes or unlikes, optimistically.
+    /// </summary>
+    /// <remarks>
+    /// The count moves before the server answers because a heart that waits a round trip feels
+    /// broken, and puts back exactly what it changed if the call fails — the post is found by id
+    /// rather than by reference, since the list may have been rebuilt underneath.
+    /// </remarks>
+    private async Task ToggleLikeAsync(FeedPostRecord post)
+    {
+        var nowLiked = !post.LikedByCurrentUser;
+        ApplyLike(post.Id, nowLiked);
+
+        var ok = nowLiked
+            ? await Feed.LikeAsync(post.Id)
+            : await Feed.UnlikeAsync(post.Id);
+
+        if (!ok)
+        {
+            ApplyLike(post.Id, !nowLiked);
+            _error = "Couldn't record that. Try again in a moment.";
+        }
+    }
+
+    private void ApplyLike(Guid postId, bool liked)
+    {
+        var index = _posts.FindIndex(p => p.Id == postId);
+        if (index < 0) return;
+
+        var post = _posts[index];
+        if (post.LikedByCurrentUser == liked) return;
+
+        _posts[index] = post with
+        {
+            LikedByCurrentUser = liked,
+            LikeCount = Math.Max(0, post.LikeCount + (liked ? 1 : -1)),
+        };
+    }
 
     private async Task ToggleFollowAsync(FeedPostRecord post)
     {

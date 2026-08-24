@@ -48,6 +48,27 @@
         </div>
 
         <div class="d-flex align-items-center gap-3 mt-2 small">
+            @* The like. A visitor sees the count and a link to join rather than a dead control:
+               the number is the social proof, and the invitation is the point of showing it. *@
+            @if (CanAct)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none bv-feed-like"
+                        title="@(Post.LikedByCurrentUser ? "You liked this" : "Like this post")"
+                        aria-pressed="@(Post.LikedByCurrentUser ? "true" : "false")"
+                        @onclick="() => OnLikeToggled.InvokeAsync(Post)">
+                    <span aria-hidden="true">@(Post.LikedByCurrentUser ? "♥" : "♡")</span>
+                    <span class="visually-hidden">@(Post.LikedByCurrentUser ? "Unlike" : "Like")</span>
+                    @if (Post.LikeCount > 0) { <span class="ms-1">@Post.LikeCount</span> }
+                </button>
+            }
+            else if (Post.LikeCount > 0)
+            {
+                <a href="/signup" class="text-decoration-none text-secondary bv-feed-like"
+                   title="Sign in to like posts">
+                    <span aria-hidden="true">♡</span> <span class="ms-1">@Post.LikeCount</span>
+                </a>
+            }
+
             <a href="@($"/feed/{Post.Id}")" class="text-decoration-none text-secondary">
                 @(Post.ReplyCount == 1 ? "1 reply" : $"{Post.ReplyCount} replies")
             </a>
@@ -76,6 +97,7 @@
     /// <summary>Hidden on a profile page, where one follow button at the top says it better.</summary>
     [Parameter] public bool ShowFollow { get; set; } = true;
 
+    [Parameter] public EventCallback<FeedPostRecord> OnLikeToggled { get; set; }
     [Parameter] public EventCallback<FeedPostRecord> OnFollowToggled { get; set; }
     [Parameter] public EventCallback<FeedPostRecord> OnReportRequested { get; set; }
 

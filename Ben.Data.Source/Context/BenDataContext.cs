@@ -86,6 +86,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgMessage> OrgMessages { get; set; }
         public virtual DbSet<OrgMessageRecipient> OrgMessageRecipients { get; set; }
         public virtual DbSet<OrgMessageView> OrgMessageViews { get; set; }
+        public virtual DbSet<OrgMessageLike> OrgMessageLikes { get; set; }
         public virtual DbSet<OrgMessageMention> OrgMessageMentions { get; set; }
         public virtual DbSet<OrgMessageHashtag> OrgMessageHashtags { get; set; }
         public virtual DbSet<OrgMessageReport> OrgMessageReports { get; set; }
@@ -1678,6 +1679,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessageView>()
                 .HasOne(e => e.ViewerAppUser).WithMany()
                 .HasForeignKey(e => e.ViewerAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrgMessageLike (item 186 F3) ──────────────────────────────────
+            // The composite key is the idempotency rule: a second like has nowhere to go.
+            modelBuilder.Entity<OrgMessageLike>()
+                .HasKey(e => new { e.OrgMessageId, e.LikerAppUserId });
+            modelBuilder.Entity<OrgMessageLike>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Likes)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageLike>()
+                .HasOne(e => e.LikerAppUser).WithMany()
+                .HasForeignKey(e => e.LikerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // Counting a post's likes is the hot read; the PK's leading column already serves it,
+            // but the ranking window counts across many posts at once, so the date is worth having.
+            modelBuilder.Entity<OrgMessageLike>()
+                .HasIndex(e => new { e.OrgMessageId, e.DateLiked });
 
             // ── OrgCalendarEventType ──────────────────────────────────────────
             modelBuilder.Entity<OrgCalendarEventType>()

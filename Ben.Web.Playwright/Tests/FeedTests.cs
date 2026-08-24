@@ -458,4 +458,70 @@ public class FeedTests : BenTestBase
         Assert.Fail("The feed page never showed its join card to a signed-out visitor.\n"
                     + $"  url: {Page.Url}\n  page text: {text.Replace("\n", " / ")}");
     }
+
+    // ── item 186 F3 ───────────────────────────────────────────────────────────
+
+    /// <summary>A like sticks, and survives a reload rather than living in the page's head.</summary>
+    [Test]
+    [Description("Liking a post persists across a reload, and unliking takes it back.")]
+    public async Task ALikePersistsAndCanBeTakenBack()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"Something worth liking #t{Guid.NewGuid():N}"[..44]);
+
+        var card = Page.Locator(".bv-feed-post").First;
+        var like = card.Locator(".bv-feed-like");
+        await Expect(like).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await like.ClickAsync();
+        await Expect(card.Locator(".bv-feed-like[aria-pressed='true']"))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The reload is the point: an optimistic count that never reached the server would
+        // look identical until the page came back.
+        await GoToFeedAsync();
+        var reloaded = Page.Locator(".bv-feed-post").First;
+        await Expect(reloaded.Locator(".bv-feed-like[aria-pressed='true']"))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await reloaded.Locator(".bv-feed-like").ClickAsync();
+        await Expect(reloaded.Locator(".bv-feed-like[aria-pressed='false']"))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    /// <summary>The three tabs are there, and For You is where the reader lands.</summary>
+    [Test]
+    [Description("For You is the default tab; Latest and Following are both offered.")]
+    public async Task ForYouIsTheDefaultTab()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "For You" }))
+            .ToHaveClassAsync(new System.Text.RegularExpressions.Regex("active"));
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Latest" })).ToBeVisibleAsync();
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Following" })).ToBeVisibleAsync();
+
+        // Switching tabs actually re-reads rather than just restyling the tab.
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Latest" }).ClickAsync();
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>A visitor sees the count but is offered a way in rather than a dead control.</summary>
+    [Test]
+    [Description("Signed out: no like button, and the feed still reads.")]
+    public async Task AVisitorGetsNoLikeButton()
+    {
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"Visitors cannot like this #t{Guid.NewGuid():N}"[..46]);
+        await LogoutAsync();
+
+        await GoToFeedAsVisitorAsync();
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        Assert.That(await Page.Locator("button.bv-feed-like").CountAsync(), Is.Zero,
+            "a visitor was offered a like button the API would refuse");
+    }
 }

@@ -203,23 +203,47 @@ public sealed class NotificationSummaryController : BenControllerBase
                               && checkoutOrgIds.Contains(c.EquipmentItem.OwningOrganizationId.Value)))))
               .Select(c => (DateTime?)c.DateCreated), ct);
 
-        // ── Public-feed mentions ─────────────────────────────────────────────
+        // ── Public-feed activity: mentions, and replies to your posts ────────
         // Only asked for when the feed is switched on. A site that has never turned it on should
         // show no trace of it on the bell, and should not pay for the query either.
-        var feedMentions = await FeedController.FeedEnabledAsync(db, ct)
-            ? await BucketAsync(
-                db.OrgMessageMentions.AsNoTracking()
-                    .Where(m => m.MentionedAppUserId == userId
-                             // Their own post naming themselves is not a notification.
-                             && m.OrgMessage.AuthorAppUserId != userId
-                             // A hidden post's mention is withdrawn with it.
-                             && m.OrgMessage.HiddenUtc == null
-                             // Read exactly when the post carrying it has been opened. The same
-                             // marker the rest of messaging uses — a second one would drift.
-                             && !db.OrgMessageViews.Any(v =>
-                                    v.OrgMessageId == m.OrgMessageId && v.ViewerAppUserId == userId))
-                    .Select(m => (DateTime?)m.DateCreated), ct)
-            : NotificationBucket.Empty;
+        //
+        // Item 186 F3 added replies to what counts as activity. Likes are DELIBERATELY not here:
+        // being named and being answered are addressed to you, while a like is applause — and a
+        // badge that ticks on every like is a badge nobody reads within a week.
+        var feedActivity = NotificationBucket.Empty;
+        if (await FeedController.FeedEnabledAsync(db, ct))
+        {
+            var mentionTimes = db.OrgMessageMentions.AsNoTracking()
+                .Where(m => m.MentionedAppUserId == userId
+                         // Their own post naming themselves is not a notification.
+                         && m.OrgMessage.AuthorAppUserId != userId
+                         // A hidden post's mention is withdrawn with it.
+                         && m.OrgMessage.HiddenUtc == null
+                         // Read exactly when the post carrying it has been opened. The same
+                         // marker the rest of messaging uses — a second one would drift.
+                         && !db.OrgMessageViews.Any(v =>
+                                v.OrgMessageId == m.OrgMessageId && v.ViewerAppUserId == userId))
+                .Select(m => (DateTime?)m.DateCreated);
+
+            var replyTimes = db.OrgMessages.AsNoTracking()
+                .Where(r => r.ChannelType == OrgMessageChannel.PublicFeed
+                         && r.HiddenUtc == null
+                         && r.ParentMessageId != null
+                         // Somebody else answering something you wrote.
+                         && r.AuthorAppUserId != userId
+                         && r.ParentMessage!.AuthorAppUserId == userId
+                         && r.ParentMessage.HiddenUtc == null
+                         // Cleared by opening the thread, exactly like a mention: the view marker
+                         // is recorded against the ROOT post, which is the thing you open.
+                         && !db.OrgMessageViews.Any(v =>
+                                v.OrgMessageId == r.ParentMessageId!.Value
+                                && v.ViewerAppUserId == userId))
+                .Select(r => (DateTime?)r.DateCreated);
+
+            feedActivity = await BucketAsync(mentionTimes.Concat(replyTimes), ct);
+        }
+
+        var feedMentions = feedActivity;
 
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
