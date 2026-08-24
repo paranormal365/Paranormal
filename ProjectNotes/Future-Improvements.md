@@ -9150,3 +9150,69 @@ Fix: the same `_loading` re-entrancy guard, `_loaded` set only after a successfu
 fetch (so a pre-auth pass still retries on sign-in), and the visible list rebuilt rather than
 appended as the belt to the guard's braces. The e2e now asserts EXACTLY ONE banner per bucket;
 green ×3.
+
+---
+
+## 178. Site-wide audit as every kind of user (DONE 2026-08-24 — Ben's request; findings below)
+
+Ben: *"run through the site as every kind of user and verify each step and process. make notes of
+any found gaps or issues."*
+
+Walked seven personas — **anonymous, client, group member, viewer, group administrator, group
+owner, SuperAdmin** — across their real surfaces, then probed the same ground at the API level as
+each of them, then ran the whole e2e suite. Two new fixtures keep it repeatable:
+`SiteWideAuditTests` (does every surface this role uses render?) and `RefusalHonestyAuditTests`
+(when a role is refused, does the page SAY so rather than claim emptiness?). Both pass.
+
+**The product came out clean.** No unhandled errors, no dead routes, no refusal rendered as an
+empty state, and the permission matrix is coherent in both directions: SuperAdmin-only endpoints
+answer 403 to every group seat and 401 anonymous; group billing answers 403 to members without
+settings permission; a Viewer is refused cases *and* the Cases tab is correctly hidden from them
+(item 156 Phase D already closed that one). Full e2e: **353 passed, 18 deliberate skips, 0 real
+failures.**
+
+### What the audit actually found
+
+1. **Nine e2e "failures" were a stale WASM host, not the product.** Every video-editor test failed
+   until :5180 was restarted against the current build; all 22 pass after. This is the recurring
+   trap ([[feedback_restart_hosts_after_rebuild]]) and it cost the first full run. **A suite that
+   can fail for an environmental reason should say so** — worth a fixture that asserts the editor
+   host is serving the current build before the editor tests run, rather than 9 red tests that
+   mean "you forgot to restart something".
+
+2. **The seeded demo case is titled "Park Residence, Nashville TN" for client Daniel Park** — the
+   exact leak item 176 exists to warn about. Not published, so nothing leaked, and the live check
+   correctly returns the warning for it. But the seed teaches the wrong habit on every fresh
+   database. **Suggest: retitle the seeded cases to place names** (the pseudonym was already fixed
+   during item 176; the title was not).
+
+3. **The ledger cannot be smoke-tested without permanently marking the money trail.** It is
+   append-only by design (no update, no delete, enforced by a test), and dev/UAT share ONE database
+   (`IsHauntedDb` on 192.168.1.71 — UAT testers mutate dev data, decided knowingly). So any
+   end-to-end billing rehearsal writes rows that can never be removed, only offset by adjustments.
+   The receipt path is proven at unit level instead. **Before real billing starts, either give
+   production its own database or accept that rehearsal rows live in the ledger forever** — this is
+   the one finding with money attached.
+
+4. **No band sells overflow seats yet, and no tax rule exists.** Both are deliberate — item 144's
+   machinery and item 168's rates are data entry Ben owns — but it means neither path has run
+   against real configuration. The tax line was verified live once (TN 9.75% → $15.00 + $1.46 =
+   $16.46) and the rule deleted again so it would not tax real quotes.
+
+5. **Several routes I assumed exist do not**, which is worth recording because the next person will
+   assume the same: sign-up is `/signup` (not `/register`), messages are org-scoped
+   (`/organizations/{id}/messages`, not `/messages`), the admin home is `/admin/dashboard`, and
+   group settings/roles/places are TABS rather than pages. Now encoded in the audit fixture.
+
+### Smaller notes
+
+- `GET .../billing/my-seat` answers **204** when the caller holds no seat, which the client reads
+  as null correctly — but `GetAsync` also returns null on 403 or 500, so a seat-holder whose fetch
+  fails sees no seat card and no explanation. Additive surface, low harm, but it is the same
+  silent-failure shape the LoadResult work exists to remove; worth converting if seats become
+  load-bearing.
+- A Viewer can read the duty board, member levels and calendar event types while being refused
+  cases and investigations. Coherent (those are org taxonomy, not case content), but worth a
+  deliberate look when the title×duty matrix (item 160) lands.
+- `experience-types` answers 405 to a plain GET on the collection for every seat — it is
+  write/lookup shaped. Not a bug; noted so the next audit does not re-flag it.
