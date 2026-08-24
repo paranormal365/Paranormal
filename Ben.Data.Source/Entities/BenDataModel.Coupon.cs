@@ -115,6 +115,14 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public Guid? ReferrerAppUserId { get; set; }
 
+        /// <summary>
+        /// The referrer's cut, as a percent of what redeeming groups actually pay (the frozen
+        /// <see cref="CouponRedemption.Payable"/> amounts). Per campaign, because deals differ
+        /// per referrer — Ben's rule. Null means no computed figure: standings show both sides
+        /// and a human settles it.
+        /// </summary>
+        public decimal? ReferralCommissionPercent { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

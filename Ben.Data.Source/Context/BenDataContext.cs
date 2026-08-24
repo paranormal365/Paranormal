@@ -146,6 +146,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CouponRedemption> CouponRedemptions { get; set; }
         public virtual DbSet<BillingLedgerEntry> BillingLedgerEntries { get; set; }
         public virtual DbSet<TaxRateRule> TaxRateRules { get; set; }
+        public virtual DbSet<MemberSeatSubscription> MemberSeatSubscriptions { get; set; }
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
         public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
@@ -2645,6 +2646,30 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<TaxRateRule>().Property(e => e.RatePercent).HasPrecision(5, 2);
             modelBuilder.Entity<TaxRateRule>().Property(e => e.Notes).HasMaxLength(500);
             modelBuilder.Entity<TaxRateRule>().HasIndex(e => e.State).IsUnique();
+
+            // ── Item 144: overflow seats ─────────────────────────────────────
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .Property(e => e.PriceAtStart).HasPrecision(18, 2);
+            // One seat per (group, person) — renewal updates the row, never adds one.
+            modelBuilder.Entity<MemberSeatSubscription>()
+                .HasIndex(e => new { e.OrganizationId, e.AppUserId }).IsUnique();
+
+            modelBuilder.Entity<SubscriptionTierPrice>()
+                .Property(e => e.PricePerExtraMember).HasPrecision(18, 2);
+            modelBuilder.Entity<Coupon>()
+                .Property(e => e.ReferralCommissionPercent).HasPrecision(5, 2);
 
             // Codes are typed by hand, so they are matched case-insensitively and stored upper-
             // cased; the unique index is on the stored form, and it spans every campaign — two

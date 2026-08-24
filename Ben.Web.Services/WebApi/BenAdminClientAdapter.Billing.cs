@@ -134,6 +134,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<OrgBillingHistoryRecord>> GetOrgBillingHistoryAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetListAsync<OrgBillingHistoryRecord>($"/api/organizations/{organizationId}/billing/history", token);
 
+    public Task<LoadResult<MemberSeatAdminRecord>> GetMemberSeatsAsync(Guid? orgId = null, CancellationToken token = default)
+        => _api.GetListAsync<MemberSeatAdminRecord>(
+            orgId is { } o ? $"/api/admin/billing/member-seats?orgId={o}" : "/api/admin/billing/member-seats", token);
+
+    public Task<(MemberSeatAdminRecord? Result, string? Error)> SetMemberSeatAsync(
+        Guid seatId, SetMemberSeatRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetMemberSeatRequest, MemberSeatAdminRecord>(
+            HttpMethod.Put, $"/api/admin/billing/member-seats/{seatId}", request, token);
+
+    public Task<MyMemberSeatRecord?> GetMySeatAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<MyMemberSeatRecord>($"/api/organizations/{organizationId}/billing/my-seat", token);
+
     public async Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(
         Guid organizationId, Guid entryId, CancellationToken token = default)
     {

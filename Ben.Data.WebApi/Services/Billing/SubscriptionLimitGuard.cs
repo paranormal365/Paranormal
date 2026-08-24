@@ -123,7 +123,7 @@ public sealed class SubscriptionLimitGuard
     private static async Task<Data.Source.Entities.SubscriptionTier?> ResolveByMembersAsync(
         BenDataContext db, Guid organizationId, CancellationToken ct)
     {
-        var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Limits).ToListAsync(ct);
+        var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Limits).Include(t => t.Prices).ToListAsync(ct);
 
         if (SubscriptionTierResolver.Validate(tiers) is not null) return null;   // fail open
 

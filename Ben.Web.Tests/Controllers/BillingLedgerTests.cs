@@ -92,9 +92,11 @@ public sealed class BillingLedgerTests
     [Fact]
     public void The_ledger_is_append_only_no_update_or_delete_endpoint_exists()
     {
-        // Tax-rate rules are configuration and may be edited or deleted; ledger rows are the
-        // financial record and may not. The test walks the controller so the invariant survives
-        // every future contributor, including this one.
+        // Tax-rate rules and seat standings are CONFIGURATION and may be edited; ledger rows are
+        // the financial record and may not. The test walks the controller so the invariant
+        // survives every future contributor — it caught item 144's own SetMemberSeat on the day
+        // it was written, which is exactly the moment a list like this earns its keep. Adding a
+        // name here is a deliberate act: it must be a row that is not money.
         var mutating = typeof(AdminBillingController).GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Where(m => m.GetCustomAttribute<HttpPutAttribute>() is not null
                      || m.GetCustomAttribute<HttpDeleteAttribute>() is not null
@@ -102,7 +104,7 @@ public sealed class BillingLedgerTests
             .Select(m => m.Name)
             .ToList();
 
-        Assert.Equal(["DeleteTaxRate", "SaveTaxRate"], mutating.OrderBy(n => n));
+        Assert.Equal(["DeleteTaxRate", "SaveTaxRate", "SetMemberSeat"], mutating.OrderBy(n => n));
     }
 
     // ── Tax ──────────────────────────────────────────────────────────────────

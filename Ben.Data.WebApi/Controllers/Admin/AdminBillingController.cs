@@ -261,6 +261,7 @@ public sealed class AdminBillingController : BenControllerBase
                 Redemptions = c.Redemptions.Count,
                 Revenue = c.Redemptions.Sum(r => (decimal?)r.Payable) ?? 0m,
                 Discount = c.Redemptions.Sum(r => (decimal?)r.Discount) ?? 0m,
+                CommissionPercent = c.ReferralCommissionPercent,
             })
             .ToListAsync(ct);
 
@@ -276,7 +277,12 @@ public sealed class AdminBillingController : BenControllerBase
                 g.Key.ReferrerId, g.Key.Name,
                 g.Count(), g.Sum(x => x.Redemptions),
                 g.Sum(x => x.Revenue), g.Sum(x => x.Discount),
-                payouts.GetValueOrDefault(g.Key.ReferrerId)))
+                payouts.GetValueOrDefault(g.Key.ReferrerId),
+                // Percent of revenue, per campaign (Ben's rule): each campaign's cut on what
+                // its redeemers actually paid, rounded per campaign the way it would be settled.
+                g.Sum(x => x.CommissionPercent is { } pct
+                    ? Math.Round(x.Revenue * pct / 100m, 2, MidpointRounding.AwayFromZero) : 0m),
+                g.All(x => x.CommissionPercent is not null)))
             .OrderByDescending(r => r.RevenueAttributed)
             .ToList();
 
@@ -292,6 +298,65 @@ public sealed class AdminBillingController : BenControllerBase
         }
 
         return Ok(rows);
+    }
+
+    // ── Overflow seats (item 144) ────────────────────────────────────────────
+
+    /// <summary>
+    /// Every overflow seat, newest first — the manual billing worklist. Pending ones are the
+    /// people to invoice; active ones are the people already paying for themselves.
+    /// </summary>
+    [HttpGet("member-seats")]
+    public async Task<ActionResult<IEnumerable<MemberSeatAdminRecord>>> GetMemberSeats(
+        [FromQuery] Guid? orgId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var query = db.MemberSeatSubscriptions.AsNoTracking();
+        if (orgId is { } o) query = query.Where(s => s.OrganizationId == o);
+
+        return Ok(await query
+            .OrderByDescending(s => s.DateCreated)
+            .Select(s => new MemberSeatAdminRecord(
+                s.Id, s.OrganizationId, s.Organization.Name, s.AppUserId,
+                s.AppUser.DisplayName ?? s.AppUser.Email ?? "?",
+                s.Status, s.Interval, s.PriceAtStart,
+                s.CurrentPeriodStart, s.CurrentPeriodEnd, s.DateCreated))
+            .ToListAsync(ct));
+    }
+
+    /// <summary>
+    /// Sets a seat's standing — the manual payment provider again, seat-sized. Activating one is
+    /// what a recorded payment means; the payment itself is a ledger row, recorded separately so
+    /// the money and the entitlement never disagree by being the same write.
+    /// </summary>
+    [HttpPut("member-seats/{seatId:guid}")]
+    public async Task<ActionResult<MemberSeatAdminRecord>> SetMemberSeat(
+        Guid seatId, [FromBody] SetMemberSeatRequest request, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var seat = await db.MemberSeatSubscriptions
+            .Include(s => s.Organization).Include(s => s.AppUser)
+            .FirstOrDefaultAsync(s => s.Id == seatId, ct);
+        if (seat is null) return NotFound();
+
+        if (request.Status == SubscriptionStatus.Active
+            && (request.CurrentPeriodStart is null || request.CurrentPeriodEnd is null))
+            return BadRequest("An active seat needs a period — start and end.");
+        if (request.CurrentPeriodEnd is { } end && request.CurrentPeriodStart is { } start && end <= start)
+            return BadRequest("The period ends before it starts.");
+
+        seat.Status             = request.Status;
+        seat.CurrentPeriodStart = request.CurrentPeriodStart;
+        seat.CurrentPeriodEnd   = request.CurrentPeriodEnd;
+        seat.DateUpdated        = DateTime.UtcNow;
+        seat.UpdatedByAppUserId = GetCurrentUserId();
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new MemberSeatAdminRecord(
+            seat.Id, seat.OrganizationId, seat.Organization.Name, seat.AppUserId,
+            seat.AppUser.DisplayName ?? seat.AppUser.Email ?? "?",
+            seat.Status, seat.Interval, seat.PriceAtStart,
+            seat.CurrentPeriodStart, seat.CurrentPeriodEnd, seat.DateCreated));
     }
 
     [HttpPost("referral-payouts")]

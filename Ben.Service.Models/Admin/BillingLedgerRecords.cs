@@ -66,7 +66,43 @@ public record ReferrerSummaryRecord(
     int RedemptionCount,
     decimal RevenueAttributed,
     decimal DiscountGiven,
-    decimal PaidOut);
+    decimal PaidOut,
+    // Ben's rule: percent of revenue, per campaign. Owed sums only campaigns WITH a percent;
+    // the flag says when some lack one, so a low figure reads as incomplete rather than final.
+    decimal Owed = 0m,
+    bool EveryCampaignHasAPercent = true)
+{
+    public decimal Balance => Owed - PaidOut;
+}
+
+/// <summary>One overflow seat (item 144) as the admin sees it.</summary>
+public record MemberSeatAdminRecord(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    Guid AppUserId,
+    string MemberName,
+    SubscriptionStatus Status,
+    BillingInterval Interval,
+    decimal PriceAtStart,
+    DateTime? CurrentPeriodStart,
+    DateTime? CurrentPeriodEnd,
+    DateTime DateCreated);
+
+/// <summary>Setting a seat's standing — the manual billing flow, same as group subscriptions.</summary>
+public record SetMemberSeatRequest(
+    SubscriptionStatus Status,
+    DateTime? CurrentPeriodStart,
+    DateTime? CurrentPeriodEnd);
+
+/// <summary>A seat as its holder sees it on the Pricing page.</summary>
+public record MyMemberSeatRecord(
+    Guid OrganizationId,
+    string OrganizationName,
+    SubscriptionStatus Status,
+    BillingInterval Interval,
+    decimal PriceAtStart,
+    DateTime? CurrentPeriodEnd);
 
 /// <summary>The org-side view of the same ledger: no referrer rows, no admin names.</summary>
 public record OrgBillingHistoryRecord(

@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>14 documents &middot; 7 sections</div>
-      <div>23 August 2026</div>
+      <div>24 August 2026</div>
     </div>
   </div>
   <div class="status">
@@ -2024,6 +2024,10 @@ raises the limit.</p>
 <p>Have a coupon code? There's a line for it at checkout — type it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
 to a specific account, so if a code is refused the message says why.</p>
+<p><strong>If your group grows past what your plan covers</strong>, your plan does not change and nothing stops
+anyone joining. Each person who joins beyond your member count is billed for their own seat at a
+per-person price, told to them when they are accepted, and shown on their own Pricing page. Your
+group keeps one plan and one renewal date.</p>
 <p><strong>Tax</strong> appears as its own line on the quote when your state taxes the service, computed from
 your group's address — never folded into the price. And every payment your group makes has a
 <strong>receipt</strong>: open <strong>Billing history</strong> on your group's card on the Pricing page to see every
@@ -2394,12 +2398,31 @@ both directions.</p>
 with no row is taxed at <strong>zero</strong> — the honest default, since many states do not tax this
 service, and a visible zero on a bill gets questioned while a silently guessed rate does not.
 Editing a rate never rewrites history: every document froze the rate it used.</p>
+<h2>Overflow seats</h2>
+<p>A band covers a member count. When a group grows past it, the group's own plan does not change:
+each person who joins beyond the band is billed <strong>individually</strong>, at the per-extra-member price
+you set on that band's price row. The group keeps one contract at one renewal date; the extra
+people each hold a seat.</p>
+<p>Set it up by putting a <strong>per-extra-member price</strong> on a band's price row in <strong>Price Bands</strong>. That
+also changes what the price list will accept: a top band is normally required to be unbounded,
+because a group must never outgrow the list — a band that prices extra members is allowed to be
+bounded, since growth past it is priced per seat rather than by a bigger band.</p>
+<p><strong>Member Seats</strong> is the worklist. A new member who takes a group past its band gets a seat marked
+<strong>Awaiting payment</strong>, and is told the price in their acceptance message. Joining is never blocked
+by a seat: they are a member from the moment they are accepted, and the seat is the billing
+record. When they pay, record the payment on the Ledger and set the seat <strong>Active</strong> with its
+period. The two are separate on purpose — the money and the entitlement can never disagree by
+being the same write.</p>
+<h2>Referrals and what they earn</h2>
 <p><strong>Referrals</strong> shows every referrer's standing. A referrer is anyone a coupon campaign is
 attributed to — set on the campaign, by their account email — and every redemption of their
 codes counts as their referral, with the money frozen at redemption time. The screen shows what
-their codes brought in, the discount given, and what has been paid out; it deliberately does
-<strong>not</strong> compute what is owed, because the reward rule is yours to set per arrangement. Record a
-payout from here and it lands on the ledger like everything else.</p>
+their codes brought in, the discount given, what they are <strong>owed</strong>, what has been paid, and the
+outstanding <strong>balance</strong>. Owed is a <strong>percent of what redeemers actually paid</strong>, set per campaign
+on the campaign itself — deals differ per referrer, so the percent does too. A campaign with no
+percent is not counted, and the owed figure wears a <strong>partial</strong> badge when that happens, so a low
+number never reads as a settled one. Recording a payout pre-fills the outstanding balance and
+lands on the ledger like everything else.</p>
 </section>
 <section class="doc" id="moderating-the-feed">
   <div class="doc-head">

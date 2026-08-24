@@ -39,6 +39,27 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
             u, organizationId, OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Read, ct);
     }
 
+    /// <summary>
+    /// The caller's OWN overflow seat in this group (item 144), or null. Gated on being the
+    /// holder, not on settings permission: a seat is a bill addressed to one person, and an
+    /// ordinary member paying for their own seat must be able to see it without being able to
+    /// read the group's billing.
+    /// </summary>
+    [HttpGet("my-seat")]
+    public async Task<ActionResult<MyMemberSeatRecord?>> GetMySeat(Guid organizationId, CancellationToken ct)
+    {
+        if (GetCurrentUserId() is not { } userId) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var seat = await db.MemberSeatSubscriptions.AsNoTracking()
+            .Where(s => s.OrganizationId == organizationId && s.AppUserId == userId)
+            .Select(s => new MyMemberSeatRecord(
+                s.OrganizationId, s.Organization.Name, s.Status, s.Interval,
+                s.PriceAtStart, s.CurrentPeriodEnd))
+            .FirstOrDefaultAsync(ct);
+        return Ok(seat);
+    }
+
     [HttpGet("history")]
     public async Task<ActionResult<IEnumerable<OrgBillingHistoryRecord>>> GetHistory(
         Guid organizationId, CancellationToken ct)

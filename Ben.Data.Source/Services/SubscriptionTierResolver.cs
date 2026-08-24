@@ -46,9 +46,13 @@ public static class SubscriptionTierResolver
 
             if (isLast)
             {
-                if (band.MaxMembers is not null)
+                // Item 144: a band that prices extra members is ALLOWED to be outgrown — growth
+                // past its cap is billed per seat, not by a bigger band. That is the one legal
+                // way for the top band to be bounded.
+                if (band.MaxMembers is not null && !AllowsOverflow(band))
                     return $"The highest band \"{band.Name}\" stops at {band.MaxMembers} members. "
-                         + "The top band must be unbounded, or a group can outgrow the price list.";
+                         + "The top band must be unbounded — or price extra members, so growth "
+                         + "past it is billed per seat.";
                 break;
             }
 
@@ -87,9 +91,15 @@ public static class SubscriptionTierResolver
         // everyone left, or nobody has accepted yet — and it costs whatever one member costs.
         var count = Math.Max(1, memberCount);
 
-        return tiers
-            .Where(t => t.IsActive)
-            .OrderBy(t => t.MinMembers)
-            .First(t => t.MinMembers <= count && (t.MaxMembers is null || count <= t.MaxMembers));
+        var bands = tiers.Where(t => t.IsActive).OrderBy(t => t.MinMembers).ToList();
+
+        // Item 144: a count beyond a bounded-but-overflowing top band still resolves to that
+        // band — the extra members are the overflow seats, not a bigger group price.
+        return bands.FirstOrDefault(t => t.MinMembers <= count && (t.MaxMembers is null || count <= t.MaxMembers))
+            ?? bands[^1];
     }
+
+    /// <summary>Whether growth past this band is priced per extra member (item 144).</summary>
+    public static bool AllowsOverflow(SubscriptionTier tier)
+        => tier.Prices.Any(p => p.IsActive && p.PricePerExtraMember is not null);
 }

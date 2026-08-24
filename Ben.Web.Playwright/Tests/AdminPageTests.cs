@@ -44,6 +44,7 @@ public class AdminPageTests : BenTestBase
         ("/admin/tax-rates",           "Tax Rates"),
         ("/admin/referrals",           "Referrals"),
         ("/admin/merge-groups",        "Merge Groups"),
+        ("/admin/member-seats",        "Member Seats"),
         ("/admin/org-ads",             "Group ads"),
     };
 

@@ -119,6 +119,17 @@ public interface IBenBillingClient
     /// <summary>A group's own billing history — charges, payments, adjustments. Org-gated.</summary>
     Task<LoadResult<OrgBillingHistoryRecord>> GetOrgBillingHistoryAsync(Guid organizationId, CancellationToken token = default);
 
+    // ── Overflow seats (item 144) ─────────────────────────────────────────────
+
+    /// <summary>Every overflow seat — the manual billing worklist. SuperAdmin.</summary>
+    Task<LoadResult<MemberSeatAdminRecord>> GetMemberSeatsAsync(Guid? orgId = null, CancellationToken token = default);
+
+    Task<(MemberSeatAdminRecord? Result, string? Error)> SetMemberSeatAsync(
+        Guid seatId, SetMemberSeatRequest request, CancellationToken token = default);
+
+    /// <summary>The caller's own seat in one group, or null when they hold none.</summary>
+    Task<MyMemberSeatRecord?> GetMySeatAsync(Guid organizationId, CancellationToken token = default);
+
     /// <summary>A payment row's receipt as bytes, for the downloadFileFromBase64 hand-off.
     /// Null when the row is not a payment or the caller may not see it.</summary>
     Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(Guid organizationId, Guid entryId, CancellationToken token = default);

@@ -242,6 +242,15 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
             }
         }
 
+        // Item 144: a join past the group's frozen band creates a PendingPayment overflow seat
+        // for the NEW member — the group's contract stays at its band, the extra person pays for
+        // themselves. Never blocks the join; the seat is the billing record, and the acceptance
+        // message carries the price so nobody learns it from an invoice.
+        var seat = accepted
+            ? await Ben.Data.WebApi.Services.Billing.OverflowSeats.MaybeOfferSeatAsync(
+                db, orgId, membershipRequest.AppUserId, userId.Value, ct)
+            : null;
+
         // Send a UserMessage notification to the applicant
         var orgName = membershipRequest.Organization.Name;
         var subject = accepted
@@ -249,6 +258,11 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
             : $"Membership Application Update: {orgName}";
         var body = accepted
             ? $"Your application to join <strong>{orgName}</strong> has been accepted. Welcome to the organization!"
+              + (seat is null ? string.Empty
+                  : $"<br><br><strong>{orgName}</strong> has grown past its plan's member count, so your "
+                  + $"seat is billed individually: <strong>${seat.PriceAtStart:0.00} per "
+                  + $"{Ben.Data.WebApi.Services.Billing.OverflowSeats.CadenceNoun(seat.Interval)}</strong>. "
+                  + "Your membership is active now; you'll find the seat and its status on the Pricing page.")
             : $"Your application to join <strong>{orgName}</strong> has not been approved at this time. " +
               (string.IsNullOrWhiteSpace(request.ResponseNote)
                   ? string.Empty

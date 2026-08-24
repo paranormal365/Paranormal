@@ -7517,7 +7517,7 @@ Nothing here is decided. This item is the menu; Ben picks.
 
 ---
 
-## 144. Per-member pricing, possibly per-member contracts (OPEN — decision pending, 2026-08-22)
+## 144. Per-member pricing — the overflow-seat model (BUILT 2026-08-24; prices are Ben's to set)
 
 Ben, during the phase-B build: what if a tier charged **per member**, and **each member had their
 own contract**? Answer given: doable, in two shapes with very different costs.
@@ -7546,7 +7546,35 @@ the base group contract stays one row), and the join flow offering "this group i
 plan; join by subscribing yourself for $X/month". The resolver's band-tiling rule needs one
 amendment when this lands: a band with a per-extra-member price is allowed to be outgrown.
 
-**Referral links (Ben's follow-up, same day): SHIPPED in the minimal honest shape.** A referral
+**BUILT 2026-08-24, exactly the shape Ben picked.**
+- `MemberSeatSubscription` — one row per (group, person), status reusing the subscription
+  lifecycle with two new values (`PendingPayment`, `Canceled`), price FROZEN at offer time.
+- `SubscriptionTierPrice.PricePerExtraMember` — nullable, per price row, so a band sells
+  overflow seats per cadence. Setting it is admin data entry; nothing is priced until Ben does.
+- **The resolver amendment landed as predicted:** a bounded top band is legal EXACTLY when it
+  prices extra members, and a group past such a band still resolves to it (rather than throwing
+  or falling off the list). Both pinned; the three Validate callers that loaded tiers without
+  `Include(Prices)` were fixed, since without prices the rule would refuse a sound list.
+- `OverflowSeats.MaybeOfferSeatAsync` at the membership-accept door: judged against the FROZEN
+  band of the group's current period, counting the joiner (tracked-but-unsaved, like the caller
+  has it). **Joining is never blocked** — the seat is a billing record, the member is in
+  immediately, and the acceptance message states the price so nobody learns it from an invoice.
+- Admin **Member Seats** worklist (activate with a period when paid; the payment itself is a
+  separate ledger row on purpose) and a member-facing **Your seats** section on the Pricing page
+  — fetched independently of the group cards, because a seat-holder is an ordinary member with
+  no settings permission and would otherwise never see their own bill.
+- 9 tests (probe-regressed on the band boundary). The append-only ledger guard from item 168
+  caught this item's own `SetMemberSeat` PUT on the day it was written — a seat standing is
+  configuration, not money, so the allowance is deliberate and now documented in that test.
+
+**Referral commission (Ben's decision, 2026-08-24): PERCENT OF REVENUE, per campaign.**
+`Coupon.ReferralCommissionPercent` — a campaign's cut of what its redeemers actually paid
+(the frozen `Payable` amounts). The Referrals screen now shows Owed and Balance beside Paid out,
+pre-fills a payout with the outstanding balance, and badges the owed figure **partial** when
+some of a referrer's campaigns have no percent — an owed number that silently omitted campaigns
+would read as settled.
+
+**Referral links (Ben's follow-up, 2026-08-22): SHIPPED in the minimal honest shape.** A referral
 link is `/pricing?code=X` — the Coupons screen's codes panel has a per-code **Copy link** button.
 The visitor lands with a banner, and signed-in group cards show the code quoted against their own
 cadence (or the refusal sentence, learned there rather than at checkout). Attribution needs no new
