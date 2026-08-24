@@ -22,8 +22,14 @@ public interface IMediaIngestService
     /// <exception cref="UnreadableImageException">
     /// The content type says image but the bytes will not decode.
     /// </exception>
+    /// <param name="stripAudioVideo">
+    /// Whether this group's plan and settings say audio and video should have their embedded
+    /// metadata removed (item 181). Images are stripped regardless. Defaults to false so that a
+    /// caller with no organization — a personal upload — keeps today's behaviour.
+    /// </param>
     Task<IngestedMedia> IngestAsync(
-        IFormFile file, string storagePath, Guid uploadFileId, CancellationToken ct);
+        IFormFile file, string storagePath, Guid uploadFileId, CancellationToken ct,
+        bool stripAudioVideo = false);
 
     /// <summary>
     /// Picks which stored file a read should serve: the sanitized copy when one exists, otherwise
@@ -74,10 +80,12 @@ public sealed class MediaIngestService(
     IFileStorageService fileStorage,
     FileMetadataExtractorService metadataExtractor,
     IMediaSanitizationService sanitizer,
+    IAvMetadataStripper avStripper,
     ILogger<MediaIngestService> logger) : IMediaIngestService
 {
     public async Task<IngestedMedia> IngestAsync(
-        IFormFile file, string storagePath, Guid uploadFileId, CancellationToken ct)
+        IFormFile file, string storagePath, Guid uploadFileId, CancellationToken ct,
+        bool stripAudioVideo = false)
     {
         // Read once: the bytes are needed for extraction, for the original, and for sanitizing,
         // and re-reading an IFormFile stream after it has been consumed is a familiar trap.
@@ -89,7 +97,12 @@ public sealed class MediaIngestService(
             originalBytes = buffer.ToArray();
         }
 
-        // 1. Metadata comes off the ORIGINAL — after sanitizing there would be nothing left to read.
+        // 1. Metadata comes off the ORIGINAL — after sanitizing there would be nothing left to
+        //    read. READING IS UNCONDITIONAL AND UNGATED (Ben, 2026-08-24): every file of every
+        //    kind gets a row, whatever the group's plan says. What a plan can withhold is the
+        //    REMOVAL of that metadata from audio and video, because removal costs a remux —
+        //    knowing where a recording was made is free, hiding it from the served copy is the
+        //    part with a price. Images are stripped for everyone regardless.
         var metadata = metadataExtractor.Extract(uploadFileId, file.ContentType, originalBytes);
 
         // 2. The original is always kept, untouched. It is the evidence.
@@ -98,8 +111,21 @@ public sealed class MediaIngestService(
 
         if (!sanitizer.CanSanitize(file.ContentType))
         {
-            // Video, audio and SVG pass through until the ffmpeg-side phase lands. Their metadata
-            // is still recorded above, so the Admin view is complete; only stripping waits.
+            // Item 181: audio and video are stripped by remuxing through ffmpeg, when the group's
+            // plan includes it, the group has left it on, and the host has the tool. The metadata
+            // was already read off the ORIGINAL above, so the record survives the strip — which is
+            // the whole design: the group keeps the facts, the served file does not carry them.
+            if (stripAudioVideo && avStripper.CanStrip(file.ContentType)
+                && await avStripper.StripAsync(originalBytes, file.FileName, ct) is { } stripped)
+            {
+                // The stripped copy sits beside the original under the sanitized name, so every
+                // serve path finds it through ServingPathFor exactly as it finds a cleaned image.
+                await using var clean = new MemoryStream(stripped, writable: false);
+                await fileStorage.WriteAsync(sanitizer.StrippedPathFor(storagePath), clean, ct);
+                return new IngestedMedia(metadata, stripped.LongLength, file.ContentType, WasSanitized: true);
+            }
+
+            // Not stripped: SVG, a group whose plan or settings say no, or a host with no tool.
             return new IngestedMedia(metadata, file.Length, file.ContentType, WasSanitized: false);
         }
 
@@ -155,8 +181,15 @@ public sealed class MediaIngestService(
 
     public string ServingPathFor(string storagePath)
     {
+        // An image's cleaned copy is a JPEG under .clean.jpg; a stripped audio or video keeps its
+        // own extension under .clean{ext}. Both are checked, so one call answers for every kind.
         var sanitized = sanitizer.SanitizedPathFor(storagePath);
-        return fileStorage.Exists(sanitized) ? sanitized : storagePath;
+        if (fileStorage.Exists(sanitized)) return sanitized;
+
+        var stripped = sanitizer.StrippedPathFor(storagePath);
+        if (stripped != sanitized && fileStorage.Exists(stripped)) return stripped;
+
+        return storagePath;
     }
 
     public async Task<Stream?> OpenThumbnailAsync(string storagePath, CancellationToken ct)

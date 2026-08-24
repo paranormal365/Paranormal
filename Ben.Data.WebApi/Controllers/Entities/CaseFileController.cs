@@ -27,12 +27,13 @@ public sealed class CaseFileController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAvMetadataStripper _avStripper;
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
     public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits,
-        IMediaIngestService mediaIngest,
+        IMediaIngestService mediaIngest, IAvMetadataStripper avStripper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
@@ -40,6 +41,7 @@ public sealed class CaseFileController : BenControllerBase
         _auditLog = auditLog;
         _limits = limits;
         _mediaIngest = mediaIngest;
+        _avStripper  = avStripper;
         _security = security;
     }
 
@@ -87,7 +89,8 @@ public sealed class CaseFileController : BenControllerBase
         IngestedMedia ingested;
         try
         {
-            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct,
+                (await MediaStrippingPolicy.ForOrganizationAsync(db, _avStripper, orgId, ct)).Strips);
         }
         catch (UnreadableImageException ex)
         {

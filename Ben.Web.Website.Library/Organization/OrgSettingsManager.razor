@@ -41,6 +41,32 @@ else
                         <div class="text-secondary small">Shows the Directions button on address lists for org members and admins.</div>
                     </label>
                 </div>
+                @* ── Item 181: media privacy ───────────────────────────────── *@
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1" id="set-strip-av"
+                           @bind="@_stripMediaMetadata" disabled="@(!_stripAvailable)" />
+                    <label for="set-strip-av" class="form-label mb-0">
+                        Remove location data from audio and video
+                        <div class="text-secondary small">
+                            Recordings often carry the coordinates of the place they were made. With this
+                            on, the copy people download has them removed. Photographs are always cleaned,
+                            for every group — and whatever is removed is still recorded for your own
+                            reference, so nothing is lost to you.
+                        </div>
+                        @if (_stripReason is not null)
+                        {
+                            <div class="small mt-1 @(_stripNeedsUpgrade ? "text-warning" : "text-secondary")">
+                                @_stripReason
+                                @if (_stripNeedsUpgrade)
+                                {
+                                    <a href="/pricing" class="ms-1">See plans</a>
+                                }
+                            </div>
+                        }
+                    </label>
+                </div>
+
                 <div class="col-12 mt-2">
                     <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))"><BenIcon Name="save" Class="me-1" />
                         @(_saving ? "Saving…" : "Save Settings")
@@ -65,6 +91,10 @@ else
     private bool    _loading  = true;
     private bool    _saving;
     private bool    _showAddressMap;
+    private bool    _stripMediaMetadata = true;
+    private bool    _stripAvailable;
+    private string? _stripReason;
+    private bool    _stripNeedsUpgrade;
     private bool    _showAddressDirections;
     private string? _errorMessage;
     private string? _successMessage;
@@ -77,6 +107,12 @@ else
         {
             _showAddressMap        = s.ShowAddressMap;
             _showAddressDirections = s.ShowAddressDirections;
+            _stripMediaMetadata    = s.StripMediaMetadata;
+            _stripReason           = s.StripMediaMetadataReason;
+            _stripNeedsUpgrade     = s.StripMediaMetadataNeedsUpgrade;
+            // Editable only where the choice can actually take effect. A control that saves a
+            // preference nothing honours is the write-only shape; the sentence beside it says why.
+            _stripAvailable        = s.StripMediaMetadataCanChoose;
         }
         _loading = false;
     }
@@ -88,7 +124,7 @@ else
         _successMessage = null;
         StateHasChanged();
 
-        var result = await AdminClient.UpdateOrgSettingsAsync(OrgId, new OrgSettingsRequest(_showAddressMap, _showAddressDirections));
+        var result = await AdminClient.UpdateOrgSettingsAsync(OrgId, new OrgSettingsRequest(_showAddressMap, _showAddressDirections, _stripMediaMetadata));
         _saving = false;
 
         if (result is not null) _successMessage = "Settings saved.";

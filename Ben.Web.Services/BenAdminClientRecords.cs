@@ -545,8 +545,15 @@ public sealed record RoutePoint(double Lat, double Lon);
 
 public sealed record RouteStep(string Instruction, double DistanceMiles, double DurationSeconds);
 
-public sealed record OrgSettingsResponse(bool ShowAddressMap, bool ShowAddressDirections);
-public sealed record OrgSettingsRequest(bool ShowAddressMap, bool ShowAddressDirections);
+public sealed record OrgSettingsResponse(
+    bool ShowAddressMap, bool ShowAddressDirections,
+    // Item 181: the group's preference, plus whether it is actually in effect and why not.
+    bool StripMediaMetadata = true, bool StripMediaMetadataInEffect = false,
+    string? StripMediaMetadataReason = null, bool StripMediaMetadataNeedsUpgrade = false,
+    bool StripMediaMetadataCanChoose = false);
+
+public sealed record OrgSettingsRequest(
+    bool ShowAddressMap, bool ShowAddressDirections, bool StripMediaMetadata = true);
 public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);
 
 // ── Experience Taxonomy request records ──────────────────────────────────────

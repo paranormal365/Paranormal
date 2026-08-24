@@ -21,11 +21,13 @@ public sealed class CaseResearchController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAvMetadataStripper _avStripper;
 
     public CaseResearchController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
-        IMediaIngestService mediaIngest,
+        IMediaIngestService mediaIngest, IAvMetadataStripper avStripper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest; _security = security; }
+    { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest;
+        _avStripper  = avStripper; _security = security; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseResearchEntryDto>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -88,7 +90,8 @@ public sealed class CaseResearchController : BenControllerBase
         IngestedMedia ingested;
         try
         {
-            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct,
+                (await MediaStrippingPolicy.ForOrganizationAsync(db, _avStripper, orgId, ct)).Strips);
         }
         catch (UnreadableImageException ex)
         {

@@ -38,7 +38,7 @@ public class CaseFileControllerTests
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext

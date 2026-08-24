@@ -68,7 +68,7 @@ public class CaseAudioMixControllerTests
                    return Task.CompletedTask;
                });
 
-        var ctrl = new CaseAudioMixController(factory, storage.Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseAudioMixController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

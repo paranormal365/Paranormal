@@ -19,4 +19,12 @@ public enum TierCapability
     /// Ben's rule (item 167): a free-plan group can do neither — and both ends are checked,
     /// so a paid group cannot hand a case TO a free group either.</summary>
     CaseTransfers = 1,
+
+    /// <summary>
+    /// Stripping embedded metadata — GPS above all — from AUDIO and VIDEO before they are served
+    /// (item 181). Images are stripped for everyone regardless: a case photo is the commonest way
+    /// a client's address escapes, and the re-encode costs nothing. A/V needs an ffmpeg remux per
+    /// file, which is real compute, so it is a capability a tier can withhold.
+    /// </summary>
+    MediaMetadataStripping = 2,
 }

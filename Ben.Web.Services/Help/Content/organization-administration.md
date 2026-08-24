@@ -512,6 +512,27 @@ approves it or declines it with a reason (you're messaged either way). Any later
 back through review — the approved text is the only text that ever shows. One card per group;
 withdraw it any time and it leaves the placements immediately.
 
+## Location data in your photos, audio and video
+
+Cameras and phones write the coordinates of wherever they were into the file itself. On a case at
+somebody's home, that file knows the address — and the site's careful, deliberately vague map pin
+counts for nothing if the photograph beside it carries the exact spot.
+
+**Photographs are cleaned for every group, always.** The copy anyone downloads is rebuilt from the
+picture alone, so nothing that was not the image survives. There is no setting, because there is no
+reason anyone would want the alternative.
+
+**Audio and video are a setting**, under Settings on your group's page. Cleaning a recording means
+rebuilding the file, so it is offered where a plan includes it — the switch says plainly when it is
+not available, and to whom to talk. Groups working only at landmarks and businesses may reasonably
+leave it off; a group going into people's homes should not.
+
+**Whatever is removed is still yours.** Every file, of every kind, has its details recorded against
+its record when you upload it: where and when it was taken, the device, the technical figures.
+Removing that from the copy people download never removes it from your own records — you keep the
+facts, the public copy does not carry them. And a clip you cut from a recording keeps the
+recording's place, since a clip has no coordinates of its own.
+
 ## Your group's plan
 
 Plans are priced by **active members, per group** — the price list is on the **Pricing** page,

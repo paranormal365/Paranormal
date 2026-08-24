@@ -62,7 +62,7 @@ public class UploadFileAudioClipControllerTests
     {
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(),
             new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
-            new Moq.Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
+            new Moq.Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -560,7 +560,7 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -599,7 +599,7 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

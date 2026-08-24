@@ -38,15 +38,18 @@ public sealed class EventEvidenceController : BenControllerBase
     private readonly PlatformMessageService _messages;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAvMetadataStripper _avStripper;
 
     public EventEvidenceController(
         IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
-        PlatformMessageService messages, IMediaIngestService mediaIngest)
+        PlatformMessageService messages, IMediaIngestService mediaIngest,
+        IAvMetadataStripper avStripper)
     {
         _db          = db;
         _fileStorage = fileStorage;
         _messages    = messages;
         _mediaIngest = mediaIngest;
+        _avStripper  = avStripper;
     }
 
     public sealed record EvidenceSubmissionRecord(
@@ -89,7 +92,8 @@ public sealed class EventEvidenceController : BenControllerBase
         IngestedMedia ingested;
         try
         {
-            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct,
+                (await MediaStrippingPolicy.ForOrganizationAsync(db, _avStripper, evt.OrganizationId, ct)).Strips);
         }
         catch (UnreadableImageException ex)
         {

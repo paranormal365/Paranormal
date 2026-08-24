@@ -82,8 +82,10 @@ public sealed class PublicCaseMediaController : ControllerBase
             // no-op for the files that have no derivative yet.
             var servingPath = _mediaIngest.ServingPathFor(file.StoragePath);
             var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
-            var servingType = servingPath == file.StoragePath ? file.ContentType : "image/jpeg";
-            return File(stream, servingType, file.FileName);
+            // The row's ContentType already describes the SERVED copy — ingest records the
+            // derivative's type, not the original's — so it is right for a cleaned JPEG, a
+            // remuxed MP4 (item 181) and an unsanitized original alike.
+            return File(stream, file.ContentType, file.FileName);
         }
 
         if (file.FileData is not null)
