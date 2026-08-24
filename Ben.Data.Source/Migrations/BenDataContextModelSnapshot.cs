@@ -3485,8 +3485,17 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MediaReviewNote")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("MediaReviewState")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("MediaReviewedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("MediaReviewedUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid?>("MediaUploadFileId")
                         .HasColumnType("uniqueidentifier");

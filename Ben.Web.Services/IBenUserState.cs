@@ -23,6 +23,12 @@ public interface IBenUserState
     /// </summary>
     bool IsAdmin { get; }
 
+    /// <summary>
+    /// Whether this person may moderate — the Moderator role, or SuperAdmin implicitly
+    /// (item 186 F5).
+    /// </summary>
+    bool IsModerator { get; }
+
     /// <summary>Gets whether the current session is an impersonation session started by a SuperAdmin.</summary>
     bool IsImpersonating { get; }
 

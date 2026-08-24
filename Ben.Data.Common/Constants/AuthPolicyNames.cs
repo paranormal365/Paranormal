@@ -33,6 +33,17 @@ public static class AuthPolicyNames
     public const string AppAdministrator = "AppAdministrator";
 
     /// <summary>
+    /// Requires the caller to be able to moderate: <see cref="RoleNames.Moderator"/>, or
+    /// <see cref="RoleNames.SuperAdmin"/> implicitly (item 186 F5).
+    /// </summary>
+    /// <remarks>
+    /// A policy rather than a Roles attribute for the reason spelled out on
+    /// <see cref="AppAdministrator"/>: a bare Roles attribute pins no scheme, so an Entra caller
+    /// comes back unauthenticated rather than unauthorized.
+    /// </remarks>
+    public const string Moderator = "Moderator";
+
+    /// <summary>
     /// The Microsoft Entra JWT bearer scheme, registered in <c>Program.cs</c> only when Entra is
     /// configured. Shared so an endpoint that must authenticate it explicitly — an anonymous one,
     /// which the default scheme alone cannot see — names the same string the registration does.

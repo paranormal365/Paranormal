@@ -1,0 +1,236 @@
+@page "/moderation/media"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Moderation — Media awaiting review</PageTitle>
+
+@*
+    The media review queue (item 186 F5).
+
+    Oldest first, like the report queue, because a queue worked newest-first leaves the oldest
+    item unanswered for ever — and that is the person still waiting for their photo to appear.
+
+    Every item is shown WITH the words it was posted under: the same picture reads differently
+    beneath "the landing at 3am" than beneath something else, and a moderator deciding without the
+    caption is deciding on half the evidence.
+
+    Nothing here deletes. Holding leaves the file where it is with a note, so a decision can be
+    revisited and a mistake undone — which is the difference between moderating and destroying.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-0">Media awaiting review<HelpLink Slug="moderating-the-feed" /></h3>
+            <p class="text-secondary small mb-0">
+                Nothing a member posts appears on the feed until it has been looked at.
+            </p>
+        </div>
+
+        <div class="btn-group btn-group-sm" role="group" aria-label="Which pile to show">
+            @foreach (var (state, label) in Piles)
+            {
+                <button type="button"
+                        class="btn @(_state == state ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => SwitchAsync(state)">
+                    @label
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_summary is { ScreeningIsAutomatic: false })
+    {
+        @* Said plainly rather than left for somebody to infer from a queue that never empties. *@
+        <div class="alert alert-info py-2" id="moderation-manual-notice">
+            <strong>Automatic screening is not configured on this site.</strong>
+            Every photo and video waits here for a person. That is safe — nothing reaches the feed
+            unreviewed — but it does not scale, and the feed should not be switched on for the
+            public until it does.
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_result.Failed)
+    {
+        <BenListState TItem="FeedMediaReviewItem" Result="@_result" />
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="text-center text-secondary py-5">
+            <p class="mb-0">
+                @(_state == FeedMediaReviewState.Pending
+                    ? "Nothing is waiting. The queue is clear."
+                    : "Nothing has been held.")
+            </p>
+        </div>
+    }
+    else
+    {
+        @foreach (var item in _items)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
+                        <strong>@item.AuthorDisplayName</strong>
+                        <span class="text-secondary small">
+                            @item.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </span>
+                        @if (item.State == FeedMediaReviewState.Held)
+                        {
+                            <span class="badge bg-danger">Held</span>
+                        }
+                    </div>
+
+                    <p class="mb-2">@item.Body</p>
+
+                    <div class="mb-2">
+                        @if (item.Kind == FeedMediaKind.Video)
+                        {
+                            <video src="@Feed.GetModerationMediaUrl(item.PostId)" controls preload="metadata"
+                                   class="rounded" style="max-height:22rem;max-width:100%;background:#000;"></video>
+                        }
+                        else
+                        {
+                            <img src="@Feed.GetModerationMediaUrl(item.PostId)" alt=""
+                                 class="rounded" style="max-height:22rem;max-width:100%;object-fit:contain;" />
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(item.Note))
+                    {
+                        <p class="text-secondary small mb-2"><em>@item.Note</em></p>
+                    }
+
+                    @if (item.ReviewedUtc is { } reviewed)
+                    {
+                        <p class="text-secondary small mb-2">
+                            Decided by @(item.ReviewedByDisplayName ?? "a screener")
+                            on @reviewed.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </p>
+                    }
+
+                    <div class="d-flex gap-2">
+                        @if (item.State != FeedMediaReviewState.Approved)
+                        {
+                            <button type="button" class="btn btn-success btn-sm"
+                                    disabled="@(_deciding == item.PostId)"
+                                    @onclick="() => DecideAsync(item, approve: true)">
+                                Approve
+                            </button>
+                        }
+                        @if (item.State != FeedMediaReviewState.Held)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    disabled="@(_deciding == item.PostId)"
+                                    @onclick="() => DecideAsync(item, approve: false)">
+                                Hold
+                            </button>
+                        }
+                        <a class="btn btn-outline-secondary btn-sm ms-auto"
+                           href="@($"/feed/{item.PostId}")" target="_blank">Open the post</a>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private static readonly (FeedMediaReviewState State, string Label)[] Piles =
+    [
+        (FeedMediaReviewState.Pending, "Waiting"),
+        (FeedMediaReviewState.Held, "Held"),
+        (FeedMediaReviewState.Approved, "Approved"),
+    ];
+
+    private readonly List<FeedMediaReviewItem> _items = [];
+    private LoadResult<FeedMediaReviewItem> _result;
+    private FeedModerationSummary? _summary;
+    private FeedMediaReviewState _state = FeedMediaReviewState.Pending;
+    private string? _error;
+    private bool _loading = true;
+    private Guid? _deciding;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Moderators and SuperAdmins. The server refuses either way — this only decides whether
+        // somebody is shown a page they cannot use.
+        if (!UserState.IsModerator) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task SwitchAsync(FeedMediaReviewState state)
+    {
+        if (_state == state) return;
+        _state = state;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _result = await Feed.GetFeedMediaReviewAsync(_state);
+            _items.Clear();
+            _items.AddRange(_result.Items);
+            _summary = await Feed.GetModerationSummaryAsync();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Records a decision and takes the item out of the pile being looked at.
+    /// </summary>
+    /// <remarks>
+    /// Removed locally rather than by reloading: a moderator working a queue of forty wants the
+    /// one they just handled to go away, not the list to jump back to the top.
+    /// </remarks>
+    private async Task DecideAsync(FeedMediaReviewItem item, bool approve)
+    {
+        _deciding = item.PostId;
+        try
+        {
+            if (!await Feed.ReviewFeedMediaAsync(item.PostId, approve))
+            {
+                _error = "Couldn't record that decision. Try again in a moment.";
+                return;
+            }
+
+            _items.Remove(item);
+            _summary = await Feed.GetModerationSummaryAsync();
+        }
+        finally
+        {
+            _deciding = null;
+        }
+    }
+}

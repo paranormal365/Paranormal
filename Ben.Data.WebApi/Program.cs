@@ -286,6 +286,14 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHand
     Ben.Data.WebApi.Authorization.SuperAdminHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.AppAdministratorHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.ModeratorHandler>();
+
+// Feed media screening (item 186 F5). The manual screener approves nothing by itself and routes
+// every upload to the moderation queue — fail-closed, and honest about not being automatic. An
+// automatic classifier replaces this ONE registration; nothing else in the upload path changes.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Feed.IFeedMediaScreener,
+    Ben.Data.WebApi.Services.Feed.ManualReviewScreener>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -316,6 +324,13 @@ builder.Services.AddAuthorization(options =>
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.AppAdministratorRequirement()));
+
+    // Moderation (item 186 F5): the Moderator role, or SuperAdmin implicitly.
+    options.AddPolicy(AuthPolicyNames.Moderator, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.ModeratorRequirement()));
 
     // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
     // EntraAuthController's Register/Link actions — those need to read the caller's OID/email

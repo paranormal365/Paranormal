@@ -38,6 +38,24 @@ public sealed partial class BenAdminClientAdapter
     /// would ask the WEBSITE host for it — which serves static files and would answer 404. The
     /// same reason every other file URL on the site is built this way.
     /// </remarks>
+    // ── Moderation (item 186 F5) ─────────────────────────────────────────────
+
+    public Task<LoadResult<FeedMediaReviewItem>> GetFeedMediaReviewAsync(
+        Ben.Data.Common.Enums.FeedMediaReviewState? state = null, CancellationToken token = default)
+        => _api.GetListAsync<FeedMediaReviewItem>(
+            "/api/moderation/feed-media" + (state is { } s ? $"?state={(int)s}" : string.Empty), token);
+
+    public Task<bool> ReviewFeedMediaAsync(
+        Guid postId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/feed-media/{postId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
+
+    public Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<FeedModerationSummary>("/api/moderation/summary", token);
+
+    public string GetModerationMediaUrl(Guid postId)
+        => $"{_webApiBaseUrl}/api/moderation/feed-media/{postId}/file";
+
     public string GetFeedMediaUrl(Guid postId)
         => $"{_webApiBaseUrl}/api/feed/posts/{postId}/media";
 

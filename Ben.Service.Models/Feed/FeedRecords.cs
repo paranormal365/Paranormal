@@ -122,3 +122,38 @@ public sealed record FeedReportRecord(
 /// decision cannot be "Pending", which is the state a report starts in and is never returned to.
 /// </param>
 public sealed record ResolveFeedReportRequest(FeedReportOutcome Outcome);
+
+/// <summary>
+/// One post's media, as the review queue sees it (item 186 F5).
+/// </summary>
+/// <remarks>
+/// Carries the post's text and the author's name because a moderator deciding about a photograph
+/// needs the sentence it was posted with — the same picture reads differently under "the landing
+/// at 3am" and under something else entirely.
+/// </remarks>
+/// <param name="MediaUrl">Where the moderator's browser fetches it. Served to moderators
+/// regardless of review state; that is what reviewing means.</param>
+public sealed record FeedMediaReviewItem(
+    Guid PostId,
+    Guid AuthorAppUserId,
+    string AuthorDisplayName,
+    string Body,
+    DateTime DateCreated,
+    FeedMediaReviewState State,
+    string? Note,
+    FeedMediaKind Kind,
+    string MediaUrl,
+    DateTime? ReviewedUtc,
+    string? ReviewedByDisplayName);
+
+/// <summary>A moderator's decision about one post's media.</summary>
+/// <param name="Approve">True to publish it, false to hold it.</param>
+/// <param name="Note">Optional note for the record. Never shown to the poster.</param>
+public sealed record ReviewFeedMediaRequest(bool Approve, string? Note = null);
+
+/// <summary>How much is waiting, for the queue's badge and the site-administration screens.</summary>
+public sealed record FeedModerationSummary(
+    int MediaAwaitingReview,
+    int MediaHeld,
+    int ReportsPending,
+    bool ScreeningIsAutomatic);

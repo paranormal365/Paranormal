@@ -45,6 +45,16 @@ internal static class SuperAdminSeeder
                 throw new InvalidOperationException($"Failed to create role '{RoleNames.Admin}': {string.Join(", ", adminRoleResult.Errors.Select(e => e.Description))}");
         }
 
+        // Ensure the Moderator role exists (item 186 F5). Nobody is seeded into it, for the same
+        // reason as Admin: it exists so a SuperAdmin can assign it, and so a check against it is
+        // answering a real question rather than testing for a role no database row backs.
+        if (!await roleManager.RoleExistsAsync(RoleNames.Moderator))
+        {
+            var moderatorRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Moderator));
+            if (!moderatorRoleResult.Succeeded)
+                throw new InvalidOperationException($"Failed to create role '{RoleNames.Moderator}': {string.Join(", ", moderatorRoleResult.Errors.Select(e => e.Description))}");
+        }
+
         // Ensure SuperAdmin user exists
         var user = await userManager.FindByEmailAsync(email);
         if (user is null)

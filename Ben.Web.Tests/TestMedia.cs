@@ -42,25 +42,62 @@ public static class TestMedia
     /// metadata rows and useless for one about whether the serving route finds anything.
     /// </remarks>
     public static IMediaIngestService IngestToDisk(string root)
-    {
-        Directory.CreateDirectory(root);
-
-        var storage = new Mock<IFileStorageService>();
-        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string path, Stream content, CancellationToken ct) =>
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await using var target = File.Create(path);
-                await content.CopyToAsync(target, ct);
-            });
-        storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
-            .Returns<Guid, string>((_, name) => Path.Combine(root, name));
-
-        return new MediaIngestService(
-            storage.Object,
+        => new MediaIngestService(
+            StorageOnDisk(root),
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
             Stripper(),
             NullLogger<MediaIngestService>.Instance);
+
+    /// <summary>
+    /// Storage over real files that behaves like <c>LocalFileStorageService</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The paths it hands out are RELATIVE</b> ("users/{id}/file.jpg"), resolved against
+    /// <paramref name="root"/> inside every method — exactly as the real one does. That detail is
+    /// the whole point of this helper: an earlier version returned absolute paths, so a controller
+    /// that passed a storage path straight to the filesystem passed its tests and then served
+    /// nothing at all in the running site. A stub that is easier to satisfy than the real thing is
+    /// a stub that certifies bugs.</para>
+    /// </remarks>
+    public static IFileStorageService StorageOnDisk(string root)
+    {
+        Directory.CreateDirectory(root);
+        string Absolute(string relative) => Path.Combine(root, relative);
+
+        var storage = new Mock<IFileStorageService>();
+
+        storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+            .Returns<Guid, string>((userId, name) => $"users/{userId}/{name}");
+        storage.Setup(s => s.OrgFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+            .Returns<Guid, string>((orgId, name) => $"orgs/{orgId}/{name}");
+        storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+            .Returns<Guid, string>((caseId, name) => $"cases/{caseId}/{name}");
+
+        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string relative, Stream content, CancellationToken ct) =>
+            {
+                var path = Absolute(relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await using var target = File.Create(path);
+                await content.CopyToAsync(target, ct);
+            });
+
+        storage.Setup(s => s.Exists(It.IsAny<string>()))
+            .Returns<string>(relative => File.Exists(Absolute(relative)));
+
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>((relative, _) =>
+                Task.FromResult<Stream>(File.OpenRead(Absolute(relative))));
+
+        storage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>((relative, _) =>
+            {
+                var path = Absolute(relative);
+                if (File.Exists(path)) File.Delete(path);
+                return Task.CompletedTask;
+            });
+
+        return storage.Object;
     }
 }

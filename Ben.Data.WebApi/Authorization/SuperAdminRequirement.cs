@@ -26,6 +26,16 @@ public sealed class SuperAdminRequirement : IAuthorizationRequirement { }
 public sealed class AppAdministratorRequirement : IAuthorizationRequirement { }
 
 /// <summary>
+/// Satisfied when the caller may moderate: the Moderator role, or SuperAdmin implicitly.
+/// </summary>
+/// <remarks>
+/// SuperAdmin is included rather than required separately so that nobody has to hold two roles to
+/// do one job — and so that a site with no moderators yet is still moderatable by the person who
+/// runs it, which is the state every site starts in.
+/// </remarks>
+public sealed class ModeratorRequirement : IAuthorizationRequirement { }
+
+/// <summary>
 /// Resolves the <see cref="AppUser"/> behind a principal, whichever way it authenticated.
 /// </summary>
 /// <remarks>
@@ -120,6 +130,44 @@ public sealed class AppAdministratorHandler : AuthorizationHandler<AppAdministra
         if (user is null) return;
 
         foreach (var role in RoleNames.AppAdministrators)
+        {
+            if (await _userManager.IsInRoleAsync(user, role))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Handles <see cref="ModeratorRequirement"/> by the same two paths as the handlers above.
+/// </summary>
+public sealed class ModeratorHandler : AuthorizationHandler<ModeratorRequirement>
+{
+    private readonly UserManager<AppUser> _userManager;
+
+    public ModeratorHandler(UserManager<AppUser> userManager)
+    {
+        _userManager = userManager;
+    }
+
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context, ModeratorRequirement requirement)
+    {
+        foreach (var role in RoleNames.Moderators)
+        {
+            if (context.User.IsInRole(role))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+        }
+
+        var user = await AppUserPrincipal.ResolveAsync(context.User, _userManager);
+        if (user is null) return;
+
+        foreach (var role in RoleNames.Moderators)
         {
             if (await _userManager.IsInRoleAsync(user, role))
             {

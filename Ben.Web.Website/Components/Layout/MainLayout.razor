@@ -32,6 +32,7 @@
                    OnSignOut="HandleLogout" />
         <BenNav IsAuthenticated="@TokenStore.IsAuthenticated"
                 IsSuperAdmin="@TokenStore.IsSuperAdmin"
+                IsModerator="@TokenStore.IsModerator"
                 IsImpersonating="@TokenStore.IsImpersonating" />
 
         <main class="app-body">

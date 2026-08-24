@@ -33,6 +33,22 @@ public interface IBenFeedClient
         string? mode = null, string? hashtag = null, string? cursor = null,
         CancellationToken token = default, Guid? author = null);
 
+    // ── Moderation (item 186 F5) ─────────────────────────────────────────────
+
+    /// <summary>Feed media in one review state, oldest first. Moderators only.</summary>
+    Task<LoadResult<FeedMediaReviewItem>> GetFeedMediaReviewAsync(
+        Ben.Data.Common.Enums.FeedMediaReviewState? state = null, CancellationToken token = default);
+
+    /// <summary>Approves or holds one post's media. Returns false when the call was refused.</summary>
+    Task<bool> ReviewFeedMediaAsync(
+        Guid postId, bool approve, string? note = null, CancellationToken token = default);
+
+    /// <summary>How much is waiting, and whether screening is automatic.</summary>
+    Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default);
+
+    /// <summary>Where a moderator's browser fetches a file under review, whatever its state.</summary>
+    string GetModerationMediaUrl(Guid postId);
+
     /// <summary>Where a post's photo or video is served from. Absolute, against the API host.</summary>
     string GetFeedMediaUrl(Guid postId);
 

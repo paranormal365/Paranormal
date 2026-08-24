@@ -85,6 +85,21 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Ben.Data.Common.Enums.FeedMediaReviewState MediaReviewState { get; set; }
 
+        /// <summary>
+        /// What the screener or the moderator said about it. For the queue, never for the poster.
+        /// </summary>
+        /// <remarks>
+        /// Telling somebody exactly which check their upload tripped is telling them exactly how
+        /// to dress the next one.
+        /// </remarks>
+        public string? MediaReviewNote { get; set; }
+
+        /// <summary>Who decided, when a person did. Null when a screener decided, or nobody has.</summary>
+        public Guid? MediaReviewedByAppUserId { get; set; }
+
+        /// <summary>When the decision was made.</summary>
+        public DateTime? MediaReviewedUtc { get; set; }
+
         /// <summary>The file itself.</summary>
         public virtual UploadFile? MediaUploadFile { get; set; }
 

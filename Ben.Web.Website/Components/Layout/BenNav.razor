@@ -82,6 +82,9 @@
     /// parameters rather than reads of the token store.</summary>
     [Parameter] public bool IsAuthenticated { get; set; }
     [Parameter] public bool IsSuperAdmin { get; set; }
+
+    /// <summary>Item 186 F5: may reach the moderation desk. True for a SuperAdmin implicitly.</summary>
+    [Parameter] public bool IsModerator { get; set; }
     [Parameter] public bool IsImpersonating { get; set; }
 
     private string _filter = string.Empty;
@@ -279,6 +282,21 @@
 
             sections.Add(new Section(null, home));
 
+            // Item 186 F5: a moderator who is not an administrator still needs their desk. Shown
+            // as its own entry rather than folded into Administration, which they cannot open —
+            // the whole point of the role is that moderating does not require running the site.
+            if (IsModerator && !IsSuperAdmin && !IsImpersonating)
+            {
+                sections.Add(new Section(null, new[]
+                {
+                    new NavItem("Moderation", "shield", children:
+                    [
+                        new NavItem("Media Review",   "image", "/moderation/media"),
+                        new NavItem("Reported Posts", "flag",  "/admin/feed-reports"),
+                    ]),
+                }));
+            }
+
             if (IsSuperAdmin && !IsImpersonating)
             {
                 // One expandable entry rather than a headed section: the admin tools are a place
@@ -327,6 +345,7 @@
             // feed that has been turned off may still have reports somebody never got to, and
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
+            new NavItem("Media Review",         "image",  "/moderation/media"),
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
         }),
