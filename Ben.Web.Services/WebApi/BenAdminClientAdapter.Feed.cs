@@ -30,6 +30,12 @@ public sealed partial class BenAdminClientAdapter
         return _api.GetAsync<FeedPageRecord>(url, token);
     }
 
+    public Task<bool> LikeAsync(Guid postId, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/feed/posts/{postId}/like", new { }, token);
+
+    public Task<bool> UnlikeAsync(Guid postId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/feed/posts/{postId}/like", token);
+
     public Task<LoadResult<FeedPostRecord>> GetThreadAsync(
         Guid postId, CancellationToken token = default)
             => _api.GetListAsync<FeedPostRecord>($"/api/feed/posts/{postId}", token);

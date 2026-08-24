@@ -25,7 +25,11 @@ public sealed record FeedPostRecord(
     bool AuthorIsFollowedByCurrentUser,
     bool IsOwnPost,
     /// <summary>True when the reader has already reported this post. Hides the report control.</summary>
-    bool ReportedByCurrentUser);
+    bool ReportedByCurrentUser,
+    /// <summary>How many people liked this post (item 186 F3). Counted per page, never cached.</summary>
+    int LikeCount = 0,
+    /// <summary>Whether THIS reader liked it. Always false for a visitor.</summary>
+    bool LikedByCurrentUser = false);
 
 /// <summary>
 /// An account named in a post: the id it resolved to, the <c>@name</c> that was typed, and the

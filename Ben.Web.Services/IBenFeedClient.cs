@@ -33,6 +33,12 @@ public interface IBenFeedClient
         string? mode = null, string? hashtag = null, string? cursor = null,
         CancellationToken token = default, Guid? author = null);
 
+    /// <summary>Likes a post. Idempotent — liking twice is liking once.</summary>
+    Task<bool> LikeAsync(Guid postId, CancellationToken token = default);
+
+    /// <summary>Takes a like back. Forgiving — unliking what was never liked succeeds.</summary>
+    Task<bool> UnlikeAsync(Guid postId, CancellationToken token = default);
+
     /// <summary>One post and its replies, the root first. Empty when the post is gone or hidden.</summary>
     Task<LoadResult<FeedPostRecord>> GetThreadAsync(Guid postId, CancellationToken token = default);
 

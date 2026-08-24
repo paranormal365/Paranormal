@@ -70,6 +70,9 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<OrgMessage> Replies { get; set; } = new List<OrgMessage>();
         public virtual ICollection<OrgMessageRecipient> Recipients { get; set; } = new List<OrgMessageRecipient>();
         public virtual ICollection<OrgMessageView> Views { get; set; } = new List<OrgMessageView>();
+
+        /// <summary>Feed likes (item 186 F3). Empty for every non-feed message.</summary>
+        public virtual ICollection<OrgMessageLike> Likes { get; set; } = new List<OrgMessageLike>();
         public virtual ICollection<OrgMessageMention> Mentions { get; set; } = new List<OrgMessageMention>();
         public virtual ICollection<OrgMessageHashtag> Hashtags { get; set; } = new List<OrgMessageHashtag>();
         public virtual ICollection<OrgMessageReport> Reports { get; set; } = new List<OrgMessageReport>();

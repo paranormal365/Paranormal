@@ -72,6 +72,7 @@
                 @foreach (var post in _posts)
                 {
                     <FeedPostCard Post="@post" ShowFollow="false" CanAct="@IsSignedIn"
+                                  OnLikeToggled="ToggleLikeAsync"
                                   OnReportRequested="ReportAsync" />
                 }
 
@@ -178,6 +179,26 @@
             };
         }
         finally { _busy = false; }
+    }
+
+    private async Task ToggleLikeAsync(FeedPostRecord post)
+    {
+        var nowLiked = !post.LikedByCurrentUser;
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index < 0) return;
+
+        _posts[index] = post with
+        {
+            LikedByCurrentUser = nowLiked,
+            LikeCount = Math.Max(0, post.LikeCount + (nowLiked ? 1 : -1)),
+        };
+
+        var ok = nowLiked ? await Feed.LikeAsync(post.Id) : await Feed.UnlikeAsync(post.Id);
+        if (!ok)
+        {
+            _posts[index] = post;
+            _error = "Couldn't record that. Try again in a moment.";
+        }
     }
 
     private async Task ReportAsync(FeedPostRecord post)

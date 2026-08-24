@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Controllers;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
@@ -630,5 +631,162 @@ public class NotificationSummaryControllerTests
         Assert.Equal(1, Assert.Single(slices, x => x.OrganizationId == orgB).Count);
         Assert.Equal(3, summary.CaseMessagesAsOrgMember.Count);
         Assert.Equal(slices.Sum(x => x.Count), summary.CaseMessagesAsOrgMember.Count);
+    }
+
+    // ── item 186 F3: feed activity ────────────────────────────────────────────
+
+    /// <summary>Turns the feed on and puts two people in the database.</summary>
+    private static async Task<(IDbContextFactory<BenDataContext> Factory, Guid Author, Guid Other)>
+        SeedFeedAsync()
+    {
+        var factory = CreateFactory();
+        Guid author = Guid.NewGuid(), other = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser
+        {
+            Id = author, UserName = "a@t.com", NormalizedUserName = "A@T.COM",
+            Email = "a@t.com", NormalizedEmail = "A@T.COM", DateCreated = DateTime.UtcNow,
+        });
+        db.Users.Add(new AppUser
+        {
+            Id = other, UserName = "b@t.com", NormalizedUserName = "B@T.COM",
+            Email = "b@t.com", NormalizedEmail = "B@T.COM", DateCreated = DateTime.UtcNow,
+        });
+        db.SiteSettings.Add(new SiteSetting
+        {
+            Id = Guid.NewGuid(), Key = SiteSettingKeys.FeaturePublicFeed, Value = "true",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = author,
+        });
+        await db.SaveChangesAsync();
+        return (factory, author, other);
+    }
+
+    private static OrgMessage FeedPost(Guid authorId, Guid? parentId = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        AuthorAppUserId = authorId,
+        ParentMessageId = parentId,
+        ChannelType = OrgMessageChannel.PublicFeed,
+        Body = parentId is null ? "A post." : "An answer.",
+        IsPublic = true,
+        DateCreated = DateTime.UtcNow,
+        CreatedByAppUserId = authorId,
+    };
+
+    /// <summary>
+    /// Somebody answering your post is activity worth a badge (item 186 F3).
+    /// </summary>
+    /// <remarks>
+    /// Before F3 the bucket counted mentions only, so the most ordinary thing that can happen on
+    /// a feed — being replied to — reached nobody.
+    /// </remarks>
+    [Fact]
+    public async Task AReplyToYourPostCountsAsFeedActivity()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(other, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, author);
+        Assert.Equal(1, summary.FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task YourOwnReplyToYourOwnPostIsNotActivity()
+    {
+        var (factory, author, _) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(author, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task OpeningTheThreadClearsTheReply()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+        Guid rootId;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            rootId = root.Id;
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(other, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+
+        // The same marker a mention is cleared by: the view recorded against the ROOT post.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrgMessageViews.Add(new OrgMessageView
+            {
+                OrgMessageId = rootId, ViewerAppUserId = author, DateViewed = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task AHiddenReplyIsWithdrawnFromTheBadge()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            var reply = FeedPost(other, root.Id);
+            reply.HiddenUtc = DateTime.UtcNow;
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(reply);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    /// <summary>
+    /// A like is applause, not a message: deliberately NOT on the badge.
+    /// </summary>
+    /// <remarks>
+    /// A badge that ticks on every like is a badge nobody reads by the end of the week, which
+    /// would cost the mentions their meaning too — they share the bucket.
+    /// </remarks>
+    [Fact]
+    public async Task ALikeIsNotActivity()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            await db.SaveChangesAsync();
+
+            db.OrgMessageLikes.Add(new OrgMessageLike
+            {
+                OrgMessageId = root.Id, LikerAppUserId = other, DateLiked = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
     }
 }
