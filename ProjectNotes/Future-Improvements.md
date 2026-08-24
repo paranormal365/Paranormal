@@ -9378,9 +9378,9 @@ the setting reports "no media tool is configured", `CanChoose` false, uploads un
 take **public-place** work (landmarks, businesses, abandoned buildings, cemeteries); a **private
 residence requires a paid plan**. Not "free cases are unprotected", which would put the cost on a
 client who never chose the plan. `PlaceKind.PrivateResidence` already exists and is already
-enforced for event publication and investigation visibility, so this extends a live rule. Not yet
-built: a `PrivateResidenceCases` capability checked at case creation and when a case is bound to a
-residence place. See item 184 for the redaction model that goes with it.
+enforced for event publication and investigation visibility, so this extends a live rule. Since built: item 184 shipped the
+`PrivateResidenceCases` capability, the designation, the display-time redaction and the lapse
+handling — see item 184 for the whole arc.
 
 **The original follow-on thought and the assessment behind the decision:** *"maybe the free tier
 cannot guarantee privacy and has only the way to take on a case that is allowed to be completely
@@ -9451,3 +9451,79 @@ current state is not a considered rule either; it is an absence. The likely shap
 hard delete for mistakes, an org-level archive/withdraw that hides without destroying, or an
 explicit "this cannot be deleted, close it instead" refusal so the absence is a stated rule rather
 than a missing verb. Ben's call.
+
+## 184. Private engagements: designation, display-time redaction, plan gates, lapse (Ben, 2026-08-24 — BUILT, Phases A–D shipped)
+
+The redaction model item 181's decision pointed at, built end to end across four shipped phases
+(this is the item that closes 181's dangling "See item 184").
+
+**The model.** `Case.IsPrivateEngagement` designates private-lane work, set three ways: born from
+a client request; an investigation placement binds a `PrivateResidence` place; the Private
+engagement toggle in Edit Case. A one-time migration backfilled the flag (client-linked cases,
+cases at residence places). Groups and clients then **write real names freely** — reports,
+timeline entries, notes stay exactly as typed — and every public surface substitutes at display
+time in the API projection: `CaseRedactionRoster` (the who-becomes-what ladder: client → their
+alias → the org's pseudonym → "the family"/"the client"; each related person → their new
+`PublicLabel` → a relationship-derived label → "a resident"/"a witness") and `CaseProseRedactor`
+(whole words ≥3 chars, longest-first, HTML via AngleSharp text nodes only so `<strong>` survives
+a client surnamed Strong; parse failure falls back toward privacy; doubled articles shed —
+"The Vexley house" → "the family house"). Wired into PublicCase list+detail, cross-org discovery,
+PublicInvestigation list+detail, PublicPlace rows, and `CmsEmbed.ResolveAsync` — inside the
+resolver, so the live page and the authenticated preview cannot disagree. A case NOT designated
+renders verbatim everywhere (Ben's scope rule, pinned per surface).
+
+**The gates** (`TierCapability.PrivateResidenceCases = 3`, exclusion rows, fail-open;
+`PrivateCaseGate` sentence-or-null): accepting a client request, binding a residence place (all
+three placement doors via the shared helper — on pass the case is designated), accepting a
+private transfer (receiver end), the client's reassign pick (receiver end ONLY — a free plan
+never holds a client's case hostage), the false→true `IsPublic` flip, and manual designation.
+Grandfathered: an already-designated case is never re-gated; an already-public case stays
+editable. Every refusal renders in its dialog (two clients moved off body-discarding
+Put/PostAsync to reach that).
+
+**The lapse** (plan-governs-publication, decided over back-dating): `SubscriptionLapseJob`
+unpublishes ALL published private cases on lapse (closed ones included) remembering the way back
+in `WasPublicBeforeLapse`; both 14/7-day warnings carry a count-conditional paragraph naming the
+consequence; thirty days into a lapse a third pass tells each paused case's clients about the
+reassignment flow (stamp `StrandedClientNoticeSentAtUtc`, cleared on reactivation so a future
+lapse re-arms). CaseDetail shows a one-click Republish banner off the memory; republishing
+consumes it and runs the normal gate. Landmark publication is untouched by billing.
+
+40+ tests across the arc, each refusal/substitution probe-regressed (gate neutered → tests fail).
+Help: working-a-case "Private engagements" section (+ HelpLink from the Edit Case toggle),
+your-case client-side guarantees, site-administration capabilities list. Playwright
+`PrivateCaseRedactionTests` walks the public pages read-only.
+
+## 185. Private engagements — open questions reserved for Ben (recorded 2026-08-24)
+
+Recorded during item 184's build; none block the shipped arc.
+
+1. **Migration rules for stranded clients** — what carries over by default when a client moves a
+   lapsed case; explicitly reserved by Ben.
+2. **Grandfathering shape** — the built rule (designation setters never re-gate an
+   already-designated case; publication gated only at the flip) is the recommended version; veto
+   open.
+3. **Publication posts can quote case prose unredacted** — `PublicPublicationController` BodyHtml
+   is authored free text; a compose-time warning à la PublishLeakCheck would close the gap.
+4. **Case-less investigations at residence places by free groups** — currently ungated (no case,
+   no designation); gate or leave.
+5. **Clearing `IsPrivateEngagement`** — currently free to anyone who can edit the case;
+   SuperAdmin-only is the alternative.
+6. **Case reports have no anonymous path today** — if one ever ships, it must join the redaction
+   surfaces; add a pinning test then.
+
+## 186. The feed as the front door — engagement arc (Ben, 2026-08-24 — RECORDED, next major arc)
+
+Ben's direction, recorded verbatim from the session that planned item 184: engagement becomes the
+top product goal — an X/Twitter-like feed for paranormal-interested people, "addictive like
+TikTok", pushing people to join or create organizations. DECIDED: **anyone scrolls, members
+post** — the open scroll is the hook; posting/liking/following/commenting require belonging to a
+group. Feed ads: existing groups' ads (item-166 OrganizationAd machinery, currently random
+placement) become LOCATION-fed, interleaved with house ads prompting "create your own
+organization".
+
+Already in hand: the feed exists dark (`features.public-feed`, FeedController, /feed pages,
+hashtags/mentions/follows, moderation queue); org-ad approval flow; geo machinery (item 88's
+nearby search). To design when the arc starts: the ranking/scroll loop, geo-targeting consent
+(reuse the nearby-search geolocation pattern), ad frequency/labeling, and what "members post"
+means for clients vs group members.

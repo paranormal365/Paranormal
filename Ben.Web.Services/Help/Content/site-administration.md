@@ -263,11 +263,17 @@ silence, not as two contradictory messages. Newly included areas are announced r
 
 ### Capabilities on a price band
 
-Beside the role areas sits a **Capabilities** checklist — plain may-or-may-not switches, the
-first being **Case transfers**. A band without it can neither send a case to another group nor
-accept one transferred in, and both ends are enforced: a case can't be handed TO a group whose
-band lacks it either. Existing cases are unaffected; declining an incoming transfer never
-requires the capability. Changes save per click and notify the affected groups through the same
+Beside the role areas sits a **Capabilities** checklist — plain may-or-may-not switches.
+**Case transfers**: a band without it can neither send a case to another group nor accept one
+transferred in, and both ends are enforced — a case can't be handed TO a group whose band lacks
+it either; declining never requires the capability. **Audio/video location stripping**: whether
+the group's media privacy setting may remove location data from audio and video files (photos
+are always cleaned; every file's metadata is always extracted and kept regardless).
+**Private-residence cases**: whether the group may take on client and residence work at all —
+accepting a client request, placing an investigation at a residence, receiving a private case,
+and publishing one are each checked; work a group already holds keeps working, and a client
+moving their own case is only ever limited by the destination's band. Existing cases are
+unaffected by unchecking; changes save per click and notify the affected groups through the same
 netted notices as the role areas, and the public Pricing page says plainly what a band leaves
 out.
 

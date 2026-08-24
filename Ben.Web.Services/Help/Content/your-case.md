@@ -43,17 +43,27 @@ anything you prefer. Set it on your case page under **How You're Named Publicly*
 Your investigators always see your real name. They cannot work a case while blind to who reported
 it, so the alias applies to public pages and shared documents only.
 
+On a private case — yours is one, because it came from your request — the protection goes
+further than the name slot: if an investigator's written report or a timeline entry mentions you
+by name, the public copy substitutes your chosen name (or a neutral phrase like "the client")
+automatically. What they wrote is preserved for the investigation; what the public reads does
+not carry your name.
+
 ## If your case is paused
 
 A paused case means the organization's subscription ended — nothing more. **Nothing you reported
 or they collected has been lost**, and all of it stays readable to you. If the group renews, the
-case resumes exactly where it left off.
+case resumes exactly where it left off. If your case had a public page, it comes off the public
+site while the subscription is lapsed — your privacy does not depend on the group's billing.
 
 You can also **move your case to a different organization**, right from the banner on the case
 page. Pick a group, and choose what they will be able to see:
 
 - the **history** collected so far — reports, notes, evidence
 - the **investigations** the previous group ran
+
+If a month passes with the case still paused, the platform sends you a reminder that the move is
+available — you never have to wait on a group that is not coming back.
 
 Anything you don't share stays with the original case — visible to you, never to the new group,
 and nothing is deleted either way. The findings belong to the original group *and* to you, which
