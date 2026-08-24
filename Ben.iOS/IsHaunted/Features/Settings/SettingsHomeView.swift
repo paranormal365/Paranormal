@@ -1,17 +1,55 @@
 import SwiftUI
 import BenKit
 
-/// The Profile section root. Auth arrives in Slice 2; for now it hosts the
-/// environment picker so every slice can be pointed at Dev or UAT.
+/// The Profile section root: identity when signed in, the sign-in door when
+/// not, and the developer environment picker.
 struct SettingsHomeView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @State private var showSignIn = false
+
+    private var session: SessionStore { dependencies.session }
 
     var body: some View {
         List {
-            Section("Account") {
-                Label("Sign in arrives in Slice 2", systemImage: "person.crop.circle.badge.clock")
-                    .foregroundStyle(Theme.fog)
+            if let me = session.me {
+                Section("Account") {
+                    LabeledContent("Email", value: me.email)
+                    if me.isSuperAdmin {
+                        Label("SuperAdmin", systemImage: "crown")
+                            .foregroundStyle(Theme.haunt)
+                    } else if me.isAdmin {
+                        Label("Admin", systemImage: "checkmark.shield")
+                            .foregroundStyle(Theme.haunt)
+                    }
+                    if me.isEntraOnly {
+                        // Guid.Empty from api/me: an Entra identity with no
+                        // linked local account — account setup comes in Slice 8.
+                        Label("Microsoft account — finish setup on the website",
+                              systemImage: "person.crop.circle.badge.questionmark")
+                            .foregroundStyle(Theme.warning)
+                    }
+                    Button("Sign out", role: .destructive) {
+                        Task { await session.signOut() }
+                    }
+                }
+                Section("Security") {
+                    Label("Password & two-factor arrive in Slice 8", systemImage: "lock")
+                        .foregroundStyle(Theme.fog)
+                }
+            } else {
+                Section {
+                    Button {
+                        showSignIn = true
+                    } label: {
+                        Label("Sign in", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                } header: {
+                    Text("Account")
+                } footer: {
+                    Text("You can browse the feed and public events without an account.")
+                }
             }
+
             Section("Developer") {
                 NavigationLink(value: AppRoute.developerSettings) {
                     LabeledContent("API environment", value: dependencies.environment.name)
@@ -19,12 +57,15 @@ struct SettingsHomeView: View {
             }
         }
         .navigationTitle("Profile")
+        .sheet(isPresented: $showSignIn) {
+            SignInView().environment(dependencies)
+        }
     }
 }
 
 /// Environment picker: Dev (localhost), UAT (ishaunted.com), or a custom base
-/// URL — path-preserving, so `https://host/webapi` works. Switching clears the
-/// session and caches.
+/// URL — path-preserving, so `https://host/webapi` works. Switching signs out
+/// and clears caches.
 struct DeveloperSettingsView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var customURL: String = ""
@@ -75,7 +116,7 @@ struct DeveloperSettingsView: View {
             } header: {
                 Text("Custom")
             } footer: {
-                Text("Switching environments signs you out and clears cached responses.")
+                Text("For a physical iPhone on your Wi-Fi, point this at your Mac's LAN address, e.g. http://192.168.1.50:5252 — see TESTING.md. Switching environments signs you out and clears cached responses.")
             }
         }
         .navigationTitle("API Environment")

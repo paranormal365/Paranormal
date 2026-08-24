@@ -5,7 +5,8 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slice 1 (scaffolding + kernel) complete and verified live.**
+**Status: Slices 1–2 (kernel + auth core) complete and verified live.**
+**How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
 
@@ -64,6 +65,18 @@ Profile → API environment. The simulator reaches the Mac's localhost directly.
 The `-openLink <url>` launch argument routes like an incoming deep link without
 the OS confirmation dialog — used by automation and the future UI test target.
 
+## Verified (Slice 2, 2026-08-24)
+
+- 58/58 unit tests: login outcome mapping (2FA-vs-bad-password from
+  ProblemDetails `detail`), the full SessionStore state machine, single-flight
+  refresh, quiet stale-token restore, deliberate-sign-out vs interrupt banner.
+- Live against the dev API on iPhone 17 Pro: signed in as the ordinary member
+  seed (`james.thornton@benco.dev`), `api/me` resolved, and the session
+  SURVIVED kill + relaunch via the Keychain alone.
+- Lesson recorded: a fully unsigned build (`CODE_SIGNING_ALLOWED=NO`) cannot
+  use the simulator Keychain — persistence silently fails. Only `build.sh`
+  (compile check) disables signing; `run-sim.sh` and Xcode use ad-hoc signing.
+
 ## Verified (Slice 1, 2026-08-24)
 
 - 46/46 BenKit unit tests green (`swift test`), including fixtures captured
@@ -77,13 +90,22 @@ the OS confirmation dialog — used by automation and the future UI test target.
 
 ## Slices remaining (Phase 1)
 
-2. Auth core (Keychain, sign-in + 2FA challenge, api/me, session-ended banner)
 3. Feed read-only (modes, cursor+de-dupe, media, feature-gate-404 state)
 4. Feed participation (composer, camera, multipart upload, likes/replies)
 5. Notifications (60 s foreground polling, summed bucket badge, messages)
 6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)
 7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)
 8. Account completeness (register, confirm-email deep link, 2FA setup QR)
+9. **Sign in with Apple** (required by Ben, and by App Review once any
+   third-party login exists). Client: `SignInWithAppleButton` →
+   Apple identity token. Server (one new endpoint, built when the web side is
+   quiet): validate the Apple JWT (issuer `appleid.apple.com`, audience = the
+   app's bundle id), then link-or-create through the SAME external-login
+   pattern `MeController` uses for Microsoft/Entra — provider `"Apple"`, key =
+   Apple's `sub` claim — and answer with the standard Identity bearer tokens.
+   A brand-new Apple user still needs DisplayName + Handle, so the app collects
+   those before calling create. Needs the paid Apple Developer Program for the
+   entitlement on real devices.
 
 Later phases: equipment + checkout, org-side management, org messaging,
 discovery/places, publications, APNs push (needs server work), universal links

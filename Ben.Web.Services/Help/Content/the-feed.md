@@ -71,6 +71,14 @@ to their page, and a **Group verified** badge — the group vouching that the fo
 says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
 badges lift a post's standing in **For You**.
 
+## Promoted cards
+
+Every eighth spot in the main feed carries a card instead of a post — alternating between a
+group promoting itself (always marked **Promoted**) and the site's own pointer to the group
+finder. If you choose **Show groups near you** on a promoted card, your browser asks your
+permission and the cards re-order nearest-first. Your location is used for that one ordering
+and is never stored — leave, and it's forgotten.
+
 ## Reading
 
 | | |

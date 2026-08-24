@@ -501,7 +501,10 @@ sees your answer.
 ## Promoting your group
 
 **Settings → Promote your group** builds a promotional card that rotates through the group
-finder's Featured groups and the home page, always marked "Promoted". The builder walks you
+finder's Featured groups, the home page, and the public feed, always marked "Promoted". In the
+feed, cards are fed to the people nearest your group's public address first — a group with no
+public address still rotates, just unranked. Once approved, the page shows two honest numbers:
+how many times the card was shown, and how many people clicked through. The builder walks you
 through it — headline (say who you help and where), a short message (what you do, what it
 costs, what to do next), an optional picture from your media library, and where the card
 leads: your public page or the group finder. Send your people to the public page only once

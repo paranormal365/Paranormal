@@ -286,6 +286,36 @@ app.MapStaticAssets();
 app.UseAntiforgery();
 
 
+// ── /go/{adId} — the counted door on a promoted card (item 186 F8) ───────────
+// A minimal endpoint, not a Blazor page: a redirect must not stand up a circuit. The API counts
+// the click and answers where the card leads; the redirect renders from NOTHING but the two
+// fields of that closed-set answer. Any failure lands on /find — a stale ad in an old tab is a
+// person to deliver somewhere honest, never a dead end (item 149's rule).
+app.MapGet("/go/{adId:guid}", async (
+    Guid adId, IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    try
+    {
+        using var http = httpFactory.CreateClient();
+        http.Timeout = TimeSpan.FromSeconds(5);
+        using var response = await http.PostAsync(
+            $"{config["WebApi:BaseUrl"]}/api/public/promoted-groups/{adId}/click", null, ct);
+        if (response.IsSuccessStatusCode)
+        {
+            var target = await response.Content
+                .ReadFromJsonAsync<Ben.Service.Models.Entities.PromotedClickTarget>(cancellationToken: ct);
+            if (target is not null && target.TargetKind == "org"
+                && !string.IsNullOrWhiteSpace(target.OrganizationUrlName))
+                return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}");
+        }
+    }
+    catch (Exception)
+    {
+        // The counter is garnish on the navigation, not the other way round.
+    }
+    return Results.Redirect("/find");
+});
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddAdditionalAssemblies(typeof(Ben.Web.Website.Library.LibraryAssemblyMarker).Assembly);
