@@ -119,6 +119,8 @@ public static class TierChangeAnalyzer
     private static string CapabilityNoun(TierCapability capability) => capability switch
     {
         TierCapability.CaseTransfers => "Case transfers",
+        TierCapability.MediaMetadataStripping => "Audio/video location stripping",
+        TierCapability.PrivateResidenceCases => "Private-residence cases",
         _ => capability.ToString(),
     };
 
@@ -126,6 +128,10 @@ public static class TierChangeAnalyzer
     {
         TierCapability.CaseTransfers =>
             "Cases can neither be sent to another group nor accepted from one; existing cases are unaffected.",
+        TierCapability.MediaMetadataStripping =>
+            "Audio and video uploads keep their embedded location data; photographs are still cleaned for everyone.",
+        TierCapability.PrivateResidenceCases =>
+            "New private-residence and client cases cannot be taken on or published; existing cases keep working.",
         _ => "",
     };
 

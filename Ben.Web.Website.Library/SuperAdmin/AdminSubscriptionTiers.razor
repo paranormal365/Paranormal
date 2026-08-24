@@ -440,6 +440,8 @@
     private static string CapabilityLabel(Ben.Data.Common.Enums.TierCapability capability) => capability switch
     {
         Ben.Data.Common.Enums.TierCapability.CaseTransfers => "Case transfers",
+        Ben.Data.Common.Enums.TierCapability.MediaMetadataStripping => "Audio/video location stripping",
+        Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases => "Private-residence cases",
         _ => capability.ToString(),
     };
 

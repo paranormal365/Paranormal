@@ -15,6 +15,11 @@ public record CaseRelatedPersonRecord
     public bool LivesAtProperty { get; init; }
     public string? Notes { get; init; }
 
+    /// <summary>What public prose calls this person on a private case (item 184), or null for
+    /// the derived fallback ("a family member", "a resident"). Their real name never renders
+    /// publicly on a private case either way.</summary>
+    public string? PublicLabel { get; init; }
+
     /// <summary>Optional photo of this person, or null when none was supplied.</summary>
     public Guid? UploadFileId { get; init; }
 
@@ -27,7 +32,8 @@ public record AddRelatedPersonRequest(
     string? Relationship,
     bool LivesAtProperty,
     string? Notes,
-    Guid? UploadFileId = null);
+    Guid? UploadFileId = null,
+    string? PublicLabel = null);
 
 /// <summary>
 /// Replaces a related person's details. Every field is applied as sent, including
@@ -41,7 +47,8 @@ public record UpdateRelatedPersonRequest(
     string? Relationship,
     bool LivesAtProperty,
     string? Notes,
-    Guid? UploadFileId = null);
+    Guid? UploadFileId = null,
+    string? PublicLabel = null);
 
 /// <summary>
 /// A client's public-facing alias for their case, alongside the org's pseudonym and the name the
