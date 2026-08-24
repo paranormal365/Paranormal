@@ -14,8 +14,8 @@
     <h3 class="mb-1">Clipart Library<HelpLink Slug="site-administration" Anchor="the-clipart-library" /></h3>
     <p class="text-secondary small mb-4">
         Shared artwork every group can use in the video editor. Upload the file first under
-        <a href="/upload-files">Upload Files</a> (the <em>Logo</em> type accepts SVG), then publish
-        it here by its file id.
+        <a href="/upload-files">Upload Files</a> (the <em>Logo</em> type accepts SVG), then choose
+        it here and publish.
     </p>
 
     @if (_error is not null)   { <div class="alert alert-danger">@_error</div> }
@@ -26,10 +26,22 @@
         <div class="card-body">
             <div class="row g-2">
                 <div class="col-12 col-md-5">
-                    <label class="form-label small fw-semibold" for="adminvideoassets-upload-file-id-ace6">Upload file id</label>
-                    <input id="adminvideoassets-upload-file-id-ace6" class="form-control form-control-sm" placeholder="GUID of the uploaded file"
-                           value="@_newFileId"
-                           @oninput="@(e => _newFileId = e.Value?.ToString() ?? string.Empty)" />
+                    <label class="form-label small fw-semibold">File</label>
+                    @* Item 175 sweep: this was a paste-a-GUID box fed from a different page. *@
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="asset-choose-file"
+                                @onclick="@(() => _showFilePicker = true)">
+                            Choose a file…
+                        </button>
+                        @if (_newFileName is not null)
+                        {
+                            <span class="small text-truncate" id="asset-chosen-file" style="max-width:14rem;" title="@_newFileName">@_newFileName</span>
+                        }
+                        else
+                        {
+                            <span class="text-secondary small">none chosen</span>
+                        }
+                    </div>
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small fw-semibold" for="adminvideoassets-name-0e6a">Name</label>
@@ -142,6 +154,13 @@
     }
 </div>
 
+<BenContentPicker @bind-Visible="_showFilePicker"
+                  Title="Choose the artwork file"
+                  SelectText="Use this file"
+                  EmptyText="Nothing suitable in your media library — upload the artwork under Upload Files first."
+                  Loader="@LoadMyAssetCandidatesAsync"
+                  OnSelected="@OnAssetFileChosen" />
+
 @code {
     private List<VideoAssetAdminRecord>? _assets;
     private LoadResult<VideoAssetAdminRecord> _assetsResult;
@@ -155,6 +174,32 @@
     private string _newCategory = string.Empty;
     private string _newTags    = string.Empty;
     private VideoAssetType _newType = VideoAssetType.Clipart;
+
+    // Item 175 sweep: the picker replacing the paste-a-GUID box. The source is the caller's own
+    // media library — the same place the old flow told them to upload to first — filtered to what
+    // the publish endpoint can actually accept (images + Lottie JSON); the server still re-checks.
+    private bool _showFilePicker;
+    private string? _newFileName;
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadMyAssetCandidatesAsync()
+    {
+        var result = await AdminClient.GetMediaLibraryFilesAsync(["image/", "application/json"]);
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items.Select(f => new ContentPickerItem(
+            f.Id, f.FileName,
+            f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? "Image" : "Lottie JSON",
+            $"{f.DateCreated:MM/dd/yyyy}",
+            null, f.ContentType, f.FileSize))];
+    }
+
+    private void OnAssetFileChosen(ContentPickerItem item)
+    {
+        _newFileId   = item.Id.ToString();
+        _newFileName = item.Name;
+        // The asset's display name defaults to the filename stem; typed names are never clobbered.
+        if (string.IsNullOrWhiteSpace(_newName))
+            _newName = System.IO.Path.GetFileNameWithoutExtension(item.Name);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -232,7 +277,7 @@
                 return;
             }
             _notice = $"Published “{created.Name}”.";
-            _newFileId = ""; _newName = ""; _newCategory = ""; _newTags = "";
+            _newFileId = ""; _newFileName = null; _newName = ""; _newCategory = ""; _newTags = "";
             await LoadAsync();
         }
         catch { _error = "Couldn't publish that file."; }

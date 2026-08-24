@@ -75,8 +75,38 @@ else if (SectionType == CmsSectionType.ImageBanner)
 {
     <div class="row g-3 mt-1">
         <div class="col-12">
-            <label class="form-label fw-semibold" for="cmssectioneditor-upload-file-id-8ad5">Upload File ID</label>
-            <input id="cmssectioneditor-upload-file-id-8ad5" type="text" class="form-control" placeholder="GUID of an uploaded image file" value="@_imgFileId" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgFileId = v; PushImageJson(); })" />
+            <label class="form-label fw-semibold">Image</label>
+            @* Item 175 sweep: this was a paste-a-GUID box. The picker lists the same set the
+               logo dialog draws from — files shared with this group. *@
+            <div class="d-flex align-items-center gap-3">
+                @if (Guid.TryParse(_imgFileId, out var chosenId))
+                {
+                    <div class="border rounded p-1" id="cms-banner-chosen">
+                        <CmsFileThumbnail FileId="@chosenId" Width="110px" Height="70px" Alt="@_imgAlt" />
+                    </div>
+                    @if (_imgFileName is not null)
+                    {
+                        <span class="small text-truncate" style="max-width:16rem;">@_imgFileName</span>
+                    }
+                }
+                else
+                {
+                    <span class="text-secondary small">No image chosen yet.</span>
+                }
+                <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="cms-banner-choose"
+                        @onclick="@(() => _showBannerPicker = true)">
+                    Choose an image…
+                </button>
+            </div>
+            @if (_imgChosenNotPublic)
+            {
+                @* The author always sees their own file; the visitor is the one it breaks for. *@
+                <div class="alert alert-warning py-2 mt-2 mb-0" id="cms-banner-visibility-warning">
+                    This image is <strong>members only</strong>, so it renders for you and shows a
+                    broken picture to visitors. Pick a public image, or make this one public on its
+                    file page first.
+                </div>
+            }
         </div>
         <div class="col-12">
             <label class="form-label fw-semibold" for="cmssectioneditor-alt-text-4058">Alt Text</label>
@@ -87,6 +117,13 @@ else if (SectionType == CmsSectionType.ImageBanner)
             <input id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" value="@_imgLink" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
         </div>
     </div>
+
+    <BenContentPicker @bind-Visible="_showBannerPicker"
+                      Title="Choose a banner image"
+                      SelectText="Use this image"
+                      EmptyText="No images are shared with this group yet — add one under Files first."
+                      Loader="@LoadBannerImagesAsync"
+                      OnSelected="@OnBannerImageChosen" />
 }
 else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
 {
@@ -502,6 +539,63 @@ else
     private string _imgAlt    = "";
     private string _imgLink   = "";
 
+    // Item 175 sweep: the picker replacing the paste-a-GUID box, plus the visitor-visibility
+    // warning — the author always sees their own file, the anonymous visitor only sees IsPublic
+    // ones, so a members-only banner renders for exactly the person who can't notice it's broken.
+    private bool _showBannerPicker;
+    private string? _imgFileName;
+    private bool _imgChosenNotPublic;
+    private string _imgResolvedForId = "";
+
+    private const string VisibilityFacet = "Visibility";
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadBannerImagesAsync()
+    {
+        if (OrgId is not { } orgId) return [];
+        var result = await AdminClient.GetOrgSharedFilesAsync(orgId);
+        // A refused library must not read as an empty one — throwing hands the picker its own
+        // load-failure sentence instead of "no images yet".
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items
+            .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new ContentPickerItem(
+                f.Id, f.FileName, "Image",
+                $"{f.DateCreated:MM/dd/yyyy}",
+                new Dictionary<string, string>
+                {
+                    [VisibilityFacet] = f.IsPublic ? "Public" : "Members only",
+                },
+                f.ContentType, f.FileSize))];
+    }
+
+    private void OnBannerImageChosen(ContentPickerItem item)
+    {
+        _imgFileId          = item.Id.ToString();
+        _imgFileName        = item.Name;
+        _imgChosenNotPublic = item.Facets?.GetValueOrDefault(VisibilityFacet) == "Members only";
+        _imgResolvedForId   = _imgFileId;
+        PushImageJson();
+    }
+
+    /// <summary>
+    /// A section opened with a stored file id needs the same name + visibility the picker would
+    /// have supplied — the warning must fire for yesterday's members-only choice, not only
+    /// today's. Unresolvable ids (a file this group can't list) just show the thumbnail.
+    /// </summary>
+    private async Task ResolveBannerFileAsync()
+    {
+        if (OrgId is not { } orgId) return;
+        if (!Guid.TryParse(_imgFileId, out var id) || _imgResolvedForId == _imgFileId) return;
+        _imgResolvedForId = _imgFileId;
+        var result = await AdminClient.GetOrgSharedFilesAsync(orgId);
+        if (result.Failed) return; // advisory only — never let a failed lookup block editing
+        var f = result.Items.FirstOrDefault(x => x.Id == id);
+        if (f is null) return;
+        _imgFileName        = f.FileName;
+        _imgChosenNotPublic = !f.IsPublic;
+        StateHasChanged();
+    }
+
     // ContactInfo
     private bool _contactShowAddresses = true;
     private bool _contactShowEmails    = true;
@@ -734,6 +828,13 @@ else
         if (SectionType == CmsSectionType.CaseMedia && _mediaCaseId != Guid.Empty && !_mediaLoading)
         {
             await LoadMediaChoicesAsync();
+        }
+
+        // A saved banner arrives with a file id but no name or visibility; resolve them so the
+        // members-only warning fires for old choices too. Guarded by id inside.
+        if (SectionType == CmsSectionType.ImageBanner)
+        {
+            await ResolveBannerFileAsync();
         }
 
         if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;

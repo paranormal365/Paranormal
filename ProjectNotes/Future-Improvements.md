@@ -8949,11 +8949,30 @@ Files tab's Share-from-User dialog; then sweep other Guid-asking or hand-rolled 
   candidate list serves 24 real files with owners. Help: org-administration gained its first
   Files-tab section; PDF regenerated.
 
-**Remaining (keeps 175 open):** the sweep — other Guid-asking or hand-rolled selection
-surfaces adopt the picker (case media attachment, CMS media slots, avatar-from-library, the
-equipment photo pickers …), each adding facets its content actually has (investigation,
-location). Also worth wiring: `MediaLibraryGrid`'s video/audio click-to-preview inside the
-picker's grid cells.
+**Sweep slice 2026-08-23 — the last two GUID boxes are gone.** A survey found the sweep
+smaller than feared: case media attachment already runs a real picker (`MediaLibraryGrid`
+PickerMode), and equipment photos are device-uploads by nature (you photograph the physical
+item; there is nothing to "pick"). What actually remained was two more paste-a-GUID boxes:
+
+- **CMS Image-or-banner section** (`CmsSectionEditor`): "GUID of an uploaded image file" is now
+  Choose-an-image → picker over the group's shared files, with a **Visibility facet** (Public /
+  Members only) — and a warning when the chosen image is members-only, because the anonymous
+  `/download` route only serves `IsPublic` files: the banner renders for the author and breaks
+  for visitors, the authors-see-what-visitors-cannot shape. A saved section re-resolves its
+  file on open so the warning fires for yesterday's choice too.
+- **SuperAdmin Clipart Library** (`AdminVideoAssets`): "publish it here by its file id" is now
+  a picker over the caller's own media library (images + Lottie JSON), defaulting the asset
+  name from the filename stem.
+
+e2e: two new ContentPickerTests walk both surfaces and assert the GUID boxes are GONE; the CMS
+one creates and API-deletes a throwaway page. **Lesson paid for here:** the first cleanup drove
+the grid's More-actions dropdown, failed silently BOTH runs (best-effort catch), and left orphan
+pages in the shared prod DB — cleanup now goes through the API and logs its 204, and the DB was
+verified clean. A cleanup is code too; verify it deleted once before trusting it forever.
+
+**Remaining (keeps 175 open, all small):** the logo dialog's hand-rolled From-Library grid
+could become the picker for consistency; `MediaLibraryGrid`'s video/audio click-to-preview
+could wire into the picker's grid cells.
 
 ## 176. A case title can leak the client's name onto public pages (CLOSED 2026-08-23 — warn-not-block leak check, pseudonyms covered too)
 

@@ -333,6 +333,14 @@ own page at that address instead. If you try, you'll be told which word and offe
 If you have an older page marked **Unreachable** in the list, that is one made before this check
 existed. Rename it and it will start working.
 
+### Pictures on a page
+
+An **Image or banner** section takes a picture from your group's files — **Choose an image** opens
+the picker with everything shared with the group; search it or filter by visibility. If the image
+you pick is **members only**, the editor says so on the spot: the page will render the picture for
+you and show visitors a broken frame, because a public page cannot hand out a file its owner kept
+private. Pick a public image, or make that one public on its file page first.
+
 ### Seeing a page before it goes live
 
 **View as visitor** on the editor opens the saved page exactly as the public renderer draws it,
