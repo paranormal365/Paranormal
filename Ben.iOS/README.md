@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–7 complete (kernel, auth, feed, participation, notifications, cases, investigations + events).**
+**Status: Slices 1–8 complete (kernel, auth, feed, participation, notifications, cases, investigations + events, account).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -160,9 +160,22 @@ the OS confirmation dialog — used by automation and the future UI test target.
   The calendar entry names the TOWN, because the server's public coordinates are deliberately
   approximate and the app must not imply it knows the venue.
 
+## Verified (Slice 8, 2026-08-24)
+
+- 126 unit tests, plus a live test proving the sign-up refusal against the REAL endpoint.
+- Found while testing: `api/account/register` answers refusals as a JSON body, not prose, so
+  the generic mapper was replacing "That name is already taken" with a status paraphrase.
+  Added `APIClient.loadRaw` for the few endpoints whose FAILURES carry structured payloads.
+- The @name is checked as you type (debounced, and a failed check answers "can't tell" rather
+  than a wrong yes), and the screen says it is permanent BEFORE you choose it.
+- Two-step: no QR code, deliberately. On the phone the app IS the second device, so there is
+  nothing to scan it — the key is selectable and a link hands the secret straight to the
+  authenticator app. Recovery codes are shown once, say so, and offer a share sheet.
+- The confirm-email screen distinguishes "that link is spent" (a 200 with succeeded:false)
+  from "the server couldn't be reached", and only offers a retry for the second.
+
 ## Slices remaining (Phase 1)
 
-8. Account completeness (register, confirm-email deep link, 2FA setup QR)
 9. **Sign in with Apple** (required by Ben, and by App Review once any
    third-party login exists). Client: `SignInWithAppleButton` →
    Apple identity token. Server (one new endpoint, built when the web side is

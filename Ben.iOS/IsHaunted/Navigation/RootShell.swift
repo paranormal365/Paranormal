@@ -143,6 +143,21 @@ struct RootShell: View {
             NotificationsView()
         case .caseDetail(let id):
             CaseDetailView(caseId: id)
+        case .security:
+            SecurityView()
+        case .confirmEmail(let token):
+            // The website's link carries userId and code as query values; the app's own
+            // /validate-email/{token} form packs them as "userId:code".
+            if let split = token.range(of: ":"),
+               let userId = UUID(uuidString: String(token[..<split.lowerBound])) {
+                ConfirmEmailView(userId: userId, code: String(token[split.upperBound...]))
+            } else {
+                ContentUnavailableView {
+                    Label("That link isn't complete", systemImage: "link.badge.plus")
+                } description: {
+                    Text("Open the link from your email again, or paste the whole address.")
+                }
+            }
         default:
             PlaceholderScreen(title: "Coming soon", icon: "hammer", slice: "a later slice")
         }

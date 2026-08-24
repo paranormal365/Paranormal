@@ -21,6 +21,8 @@ final class AppDependencies {
     let notifications: NotificationsStore
     /// Images behind a bearer token (case files) — AsyncImage cannot carry one.
     let imageLoader: AuthenticatedImageLoader
+    /// Getting an account and looking after it (Slice 8).
+    let accountActions: AccountActions
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -48,6 +50,7 @@ final class AppDependencies {
         self.feedActions = FeedActions(api: api)
         self.notifications = NotificationsStore(api: api)
         self.imageLoader = AuthenticatedImageLoader(api: api)
+        self.accountActions = AccountActions(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means

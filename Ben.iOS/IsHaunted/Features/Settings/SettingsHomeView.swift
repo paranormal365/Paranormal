@@ -6,6 +6,7 @@ import BenKit
 struct SettingsHomeView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var showSignIn = false
+    @State private var showRegister = false
 
     private var session: SessionStore { dependencies.session }
 
@@ -33,8 +34,9 @@ struct SettingsHomeView: View {
                     }
                 }
                 Section("Security") {
-                    Label("Password & two-factor arrive in Slice 8", systemImage: "lock")
-                        .foregroundStyle(Theme.fog)
+                    NavigationLink(value: AppRoute.security) {
+                        Label("Password & two-step sign-in", systemImage: "lock")
+                    }
                 }
             } else {
                 Section {
@@ -42,6 +44,11 @@ struct SettingsHomeView: View {
                         showSignIn = true
                     } label: {
                         Label("Sign in", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                    Button {
+                        showRegister = true
+                    } label: {
+                        Label("Create an account", systemImage: "person.badge.plus")
                     }
                 } header: {
                     Text("Account")
@@ -59,6 +66,9 @@ struct SettingsHomeView: View {
         .navigationTitle("Profile")
         .sheet(isPresented: $showSignIn) {
             SignInView().environment(dependencies)
+        }
+        .sheet(isPresented: $showRegister) {
+            RegisterView().environment(dependencies)
         }
     }
 }
