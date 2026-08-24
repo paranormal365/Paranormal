@@ -189,6 +189,11 @@
                 main.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
                 main.Add(new NavItem("Join a Group", "map-pin", "/find"));
 
+                // Item 186: the feed is the front door, so a visitor gets the link to it. No
+                // badge — a badge counts mentions, and nobody can be mentioned without an account.
+                if (Features.IsOn(SiteFeatures.PublicFeed))
+                    main.Add(new NavItem("Feed", "message-circle", "/feed"));
+
                 // Sections a SuperAdmin can switch off. The links go when the feature does — and
                 // the pages themselves refuse the URL through the same provider, so a hidden link
                 // is never the only thing standing between a visitor and a disabled section.

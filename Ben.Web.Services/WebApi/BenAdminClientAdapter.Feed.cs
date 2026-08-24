@@ -17,12 +17,14 @@ public sealed partial class BenAdminClientAdapter
     // ── Reading ──────────────────────────────────────────────────────────────
 
     public Task<FeedPageRecord?> GetFeedAsync(
-        string? mode = null, string? hashtag = null, string? cursor = null, CancellationToken token = default)
+        string? mode = null, string? hashtag = null, string? cursor = null,
+        CancellationToken token = default, Guid? author = null)
     {
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(mode))    query.Add($"mode={Uri.EscapeDataString(mode)}");
         if (!string.IsNullOrWhiteSpace(hashtag)) query.Add($"hashtag={Uri.EscapeDataString(hashtag)}");
         if (!string.IsNullOrWhiteSpace(cursor))  query.Add($"cursor={Uri.EscapeDataString(cursor)}");
+        if (author is { } authorId)              query.Add($"author={authorId}");
 
         var url = "/api/feed" + (query.Count > 0 ? "?" + string.Join("&", query) : string.Empty);
         return _api.GetAsync<FeedPageRecord>(url, token);

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Controllers;
 
 /// <summary>
-/// The public feed: short posts by any signed-in person, with follows, mentions and tags.
+/// The public feed: anyone may read it, people who belong here may write in it.
 /// </summary>
 /// <remarks>
 /// <para><b>Every route here 404s wholesale when <c>features.public-feed</c> is off</b>, which it
@@ -19,10 +19,15 @@ namespace Ben.Data.WebApi.Controllers;
 /// refusal, and "this does not exist here" is the truthful answer for a site whose administrator
 /// has not turned the feed on.</para>
 ///
-/// <para><b>Posts are by any signed-in person</b>, which was Ben's decision and is what makes
-/// moderation part of the feature rather than an optional extra. Reports never hide anything by
-/// themselves: hiding is an administrator's act, so a group who dislike a post cannot remove it
-/// between them.</para>
+/// <para><b>Reading is anonymous; writing is not</b> (item 186). The open scroll is the front
+/// door — a visitor who has to sign in before seeing anything has nothing to sign up for — so the
+/// three GETs are <c>[AllowAnonymous]</c> and every write carries <c>[Authorize]</c> of its own.
+/// The read path is otherwise IDENTICAL for both: an anonymous reader is <c>Guid.Empty</c>, whose
+/// follows, reports and authorship simply match nothing, so the per-reader flags come back false
+/// without a second code path to keep in step.</para>
+///
+/// <para>Reports never hide anything by themselves: hiding is an administrator's act, so a group
+/// who dislike a post cannot remove it between them.</para>
 ///
 /// <para><b>Storage reuses <c>OrgMessage</c></b> with <c>ChannelType.PublicFeed</c>. That table was
 /// built with a nullable OrganizationId and parent-based threading, which is exactly a feed post
@@ -31,7 +36,6 @@ namespace Ben.Data.WebApi.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/feed")]
-[Authorize]
 public sealed class FeedController : BenControllerBase
 {
     /// <summary>Posts per page. Also the cap a caller may ask for.</summary>
@@ -54,20 +58,31 @@ public sealed class FeedController : BenControllerBase
     /// their own. Anything else reads as <c>all</c>.
     /// </param>
     /// <param name="hashtag">Narrow to one tag. Combines with <paramref name="mode"/>.</param>
+    /// <param name="author">
+    /// One person's posts. Overrides <paramref name="mode"/> — "their posts, followed or not" is
+    /// the only question a profile page asks.
+    /// </param>
     /// <param name="cursor">From a previous page's <c>NextCursor</c>. Opaque.</param>
     /// <param name="ct">Cancellation.</param>
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<FeedPageRecord>> GetFeed(
         [FromQuery] string? mode, [FromQuery] string? hashtag, [FromQuery] string? cursor,
-        CancellationToken ct)
+        CancellationToken ct, [FromQuery] Guid? author = null)
     {
-        var userId = GetCurrentUserIdOrThrow();
+        // Guid.Empty for a visitor: they follow nobody and wrote nothing, so every per-reader flag
+        // resolves false through the same queries a signed-in reader uses.
+        var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
         var query = VisiblePosts(db);
 
-        if (string.Equals(mode, "following", StringComparison.OrdinalIgnoreCase))
+        if (author is { } authorId)
+        {
+            query = query.Where(m => m.AuthorAppUserId == authorId);
+        }
+        else if (string.Equals(mode, "following", StringComparison.OrdinalIgnoreCase))
         {
             // Own posts included. A feed of people you follow that does not contain the thing you
             // just wrote reads as a bug every single time.
@@ -111,9 +126,10 @@ public sealed class FeedController : BenControllerBase
 
     /// <summary>One post and its replies, oldest reply first.</summary>
     [HttpGet("posts/{id:guid}")]
+    [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<FeedPostRecord>>> GetThread(Guid id, CancellationToken ct)
     {
-        var userId = GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
@@ -125,16 +141,18 @@ public sealed class FeedController : BenControllerBase
             .OrderBy(m => m.DateCreated).ThenBy(m => m.Id)
             .ToListAsync(ct);
 
-        await MarkSeenAsync(db, id, userId, ct);
+        // Only a signed-in reader has a bell to clear.
+        if (userId != Guid.Empty) await MarkSeenAsync(db, id, userId, ct);
 
         return Ok(await ToRecordsAsync(db, [root, .. replies], userId, ct));
     }
 
     /// <summary>Somebody's feed profile — their counts, and whether the reader follows them.</summary>
     [HttpGet("profile/{appUserId:guid}")]
+    [AllowAnonymous]
     public async Task<ActionResult<FeedProfileRecord>> GetProfile(Guid appUserId, CancellationToken ct)
     {
-        var userId = GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
@@ -165,6 +183,7 @@ public sealed class FeedController : BenControllerBase
     /// client-side would mean trusting a browser about who gets notified.
     /// </remarks>
     [HttpPost("posts")]
+    [Authorize]
     public async Task<ActionResult<FeedPostRecord>> CreatePost(
         [FromBody] CreateFeedPostRequest request, CancellationToken ct)
     {
@@ -224,6 +243,7 @@ public sealed class FeedController : BenControllerBase
 
     /// <summary>Reports a post to the administrators. Idempotent per person.</summary>
     [HttpPost("posts/{id:guid}/report")]
+    [Authorize]
     public async Task<IActionResult> ReportPost(
         Guid id, [FromBody] ReportFeedPostRequest request, CancellationToken ct)
     {
@@ -258,6 +278,7 @@ public sealed class FeedController : BenControllerBase
     // ── Following ────────────────────────────────────────────────────────────
 
     [HttpPost("follow/{appUserId:guid}")]
+    [Authorize]
     public async Task<IActionResult> Follow(Guid appUserId, CancellationToken ct)
     {
         var userId = GetCurrentUserIdOrThrow();
@@ -287,6 +308,7 @@ public sealed class FeedController : BenControllerBase
     }
 
     [HttpDelete("follow/{appUserId:guid}")]
+    [Authorize]
     public async Task<IActionResult> Unfollow(Guid appUserId, CancellationToken ct)
     {
         var userId = GetCurrentUserIdOrThrow();
@@ -446,15 +468,22 @@ public sealed class FeedController : BenControllerBase
             .ToListAsync(ct))
             .ToDictionary(x => x.ParentId, x => x.Count);
 
-        var followed = await db.UserFollows.AsNoTracking()
-            .Where(f => f.FollowerAppUserId == readerId && authorIds.Contains(f.FollowedAppUserId))
-            .Select(f => f.FollowedAppUserId)
-            .ToListAsync(ct);
+        // An anonymous reader (Guid.Empty) follows nobody and has reported nothing. The queries
+        // would answer that correctly anyway; skipping them saves two round trips on the page a
+        // visitor is most likely to hit, which is the whole front door.
+        var followed = readerId == Guid.Empty
+            ? []
+            : await db.UserFollows.AsNoTracking()
+                .Where(f => f.FollowerAppUserId == readerId && authorIds.Contains(f.FollowedAppUserId))
+                .Select(f => f.FollowedAppUserId)
+                .ToListAsync(ct);
 
-        var reported = await db.OrgMessageReports.AsNoTracking()
-            .Where(r => ids.Contains(r.OrgMessageId) && r.ReportedByAppUserId == readerId)
-            .Select(r => r.OrgMessageId)
-            .ToListAsync(ct);
+        var reported = readerId == Guid.Empty
+            ? []
+            : await db.OrgMessageReports.AsNoTracking()
+                .Where(r => ids.Contains(r.OrgMessageId) && r.ReportedByAppUserId == readerId)
+                .Select(r => r.OrgMessageId)
+                .ToListAsync(ct);
 
         return posts.Select(p => new FeedPostRecord(
             p.Id,
@@ -470,7 +499,9 @@ public sealed class FeedController : BenControllerBase
                     .ToList(),
             hashtags.Where(h => h.OrgMessageId == p.Id).Select(h => h.Tag).ToList(),
             followed.Contains(p.AuthorAppUserId),
-            p.AuthorAppUserId == readerId,
+            // Never "own post" for a visitor: Guid.Empty is nobody, and an author id could not be
+            // Guid.Empty anyway, but saying so here keeps the intent legible.
+            readerId != Guid.Empty && p.AuthorAppUserId == readerId,
             reported.Contains(p.Id))).ToList();
     }
 

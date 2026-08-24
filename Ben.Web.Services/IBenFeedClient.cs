@@ -28,8 +28,10 @@ public interface IBenFeedClient
     /// <param name="hashtag">Narrow to one tag. Combines with <paramref name="mode"/>.</param>
     /// <param name="cursor">From a previous page. Opaque.</param>
     /// <param name="token">Cancellation.</param>
+    /// <param name="author">One person's posts. Overrides <paramref name="mode"/>.</param>
     Task<FeedPageRecord?> GetFeedAsync(
-        string? mode = null, string? hashtag = null, string? cursor = null, CancellationToken token = default);
+        string? mode = null, string? hashtag = null, string? cursor = null,
+        CancellationToken token = default, Guid? author = null);
 
     /// <summary>One post and its replies, the root first. Empty when the post is gone or hidden.</summary>
     Task<LoadResult<FeedPostRecord>> GetThreadAsync(Guid postId, CancellationToken token = default);
