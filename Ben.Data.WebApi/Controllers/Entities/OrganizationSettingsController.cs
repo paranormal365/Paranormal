@@ -70,10 +70,13 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
     }
 }
 
+/// <param name="ShowAddressMap">Whether the group's public page shows a map of its address.</param>
+/// <param name="ShowAddressDirections">Whether that page offers directions to it.</param>
 /// <param name="StripMediaMetadata">The group's stored preference.</param>
 /// <param name="StripMediaMetadataInEffect">Whether it is actually happening — preference AND plan AND host.</param>
 /// <param name="StripMediaMetadataReason">Why not, when it is not. Null when it is in effect.</param>
 /// <param name="StripMediaMetadataNeedsUpgrade">True when the plan is the only thing in the way.</param>
+/// <param name="StripMediaMetadataCanChoose">Whether the group may change the preference at all.</param>
 public sealed record OrgSettingsResponse(
     bool ShowAddressMap, bool ShowAddressDirections,
     bool StripMediaMetadata = true, bool StripMediaMetadataInEffect = false,

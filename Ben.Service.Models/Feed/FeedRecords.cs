@@ -44,7 +44,14 @@ public sealed record FeedMentionRecord(Guid AppUserId, string Handle, string Dis
 /// <paramref name="NextCursor"/> is null when there is nothing more. It is opaque: callers pass it
 /// back unchanged and must not attempt to construct one, because its meaning is free to change.
 /// </remarks>
-public sealed record FeedPageRecord(IReadOnlyList<FeedPostRecord> Posts, string? NextCursor);
+/// <param name="CanPost">
+/// Whether THIS reader may write in the feed (item 186 F2). Answered by the server, from the same
+/// rule the create endpoint enforces, so the composer and the gate can never disagree — the shape
+/// of bug where a UI cheerfully offers a box whose contents are then refused.
+/// False for a visitor, and false for a signed-in person who belongs to no group and has no case.
+/// </param>
+public sealed record FeedPageRecord(
+    IReadOnlyList<FeedPostRecord> Posts, string? NextCursor, bool CanPost = false);
 
 /// <summary>What somebody's feed profile shows.</summary>
 public sealed record FeedProfileRecord(

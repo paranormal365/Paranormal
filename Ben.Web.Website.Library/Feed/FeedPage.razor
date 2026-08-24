@@ -72,13 +72,15 @@
            that watch this page — would put the wrong thing in the server-rendered HTML. *@
         @if (Tag is null && _authKnown)
         {
-            @if (IsSignedIn)
+            @if (_canPost)
             {
                 <FeedComposer OnPosted="OnPosted" />
             }
             else
             {
-                <FeedJoinPrompt IsAuthenticated="false" />
+                @* Same card, two audiences: a visitor needs an account, a signed-in stranger
+                   needs a group or a case. The server decided which — see FeedPageRecord.CanPost. *@
+                <FeedJoinPrompt IsAuthenticated="@IsSignedIn" />
             }
         }
 
@@ -164,6 +166,17 @@
     private bool _authKnown;
 
     /// <summary>
+    /// Whether this reader may write here, as answered by the server (item 186 F2).
+    /// </summary>
+    /// <remarks>
+    /// Not computed in the browser. Membership and client standing are the server's to know, and a
+    /// UI that worked them out for itself would be a second implementation of the rule the create
+    /// endpoint enforces — the two would drift, and the visible symptom would be a composer that
+    /// takes a post and then refuses it.
+    /// </remarks>
+    private bool _canPost;
+
+    /// <summary>
     /// Read at render time, never cached into a field.
     /// </summary>
     /// <remarks>
@@ -222,6 +235,7 @@
 
             _posts.AddRange(page.Posts);
             _nextCursor = page.NextCursor;
+            _canPost = page.CanPost;
         }
         finally
         {
