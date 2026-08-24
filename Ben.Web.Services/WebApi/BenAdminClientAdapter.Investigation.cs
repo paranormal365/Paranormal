@@ -28,11 +28,15 @@ public sealed partial class BenAdminClientAdapter
     public Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.GetAsync<InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", token);
 
-    public Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default)
-        => _api.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(InvBase(orgId, caseId), request, token);
+    // Reason-carrying (item 184): binding a residence place can refuse with the plan sentence,
+    // and the investigation dialog must render it rather than "Save failed."
+    public Task<(InvestigationRecord? Result, string? Error)> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+               HttpMethod.Post, InvBase(orgId, caseId), request, token);
 
-    public Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertInvestigationRequest, InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", request, token);
+    public Task<(InvestigationRecord? Result, string? Error)> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+               HttpMethod.Put, $"{InvBase(orgId, caseId)}/{id}", request, token);
 
     public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);

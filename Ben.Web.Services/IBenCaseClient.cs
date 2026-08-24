@@ -107,7 +107,7 @@ public interface IBenCaseClient
     Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
-    Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
+    Task<(CaseRecord? Result, string? Error)> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
     /// <summary>
     /// The case timeline. Pass <paramref name="investigationId"/> for the binder view — only the
     /// entries recorded during that investigation.

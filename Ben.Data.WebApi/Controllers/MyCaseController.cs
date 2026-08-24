@@ -776,6 +776,13 @@ public sealed class MyCaseController : BenControllerBase
                 $"That group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
                 + "transfers, so they cannot take this case on. Pick a different group, or ask them about upgrading.");
 
+        // Item 184, receiver end only, same as the transfer gate above: the client's move is
+        // never blocked by their CURRENT group's plan, but the destination must be a group
+        // whose plan covers private-residence work when this case is private.
+        if (c.IsPrivateEngagement
+            && await Ben.Data.WebApi.Services.PrivateCaseGate.RefusalForOtherAsync(db, request.ToOrganizationId, ct) is { } noPrivate)
+            return BadRequest(noPrivate + " Pick a different group, or ask them about upgrading.");
+
         db.CaseTransferLogs.Add(new CaseTransferLog
         {
             Id                  = Guid.NewGuid(),

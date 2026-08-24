@@ -169,17 +169,19 @@ public class CaseAdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PutAsync<UpdateCaseRequest, CaseRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpdateCaseRequest, CaseRecord>(
+                HttpMethod.Put,
                 $"/api/organizations/{orgId}/cases/{caseId}",
                 It.IsAny<UpdateCaseRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(MakeCase());
+           .ReturnsAsync((MakeCase(), null));
 
         var req = new UpdateCaseRequest("Smith, Nashville TN", null,
             CaseStatus.Active, null, false, null);
         await Build(api).UpdateOrgCaseAsync(orgId, caseId, req);
 
-        api.Verify(x => x.PutAsync<UpdateCaseRequest, CaseRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<UpdateCaseRequest, CaseRecord>(
+                HttpMethod.Put,
             $"/api/organizations/{orgId}/cases/{caseId}", req, It.IsAny<CancellationToken>()), Times.Once);
     }
 

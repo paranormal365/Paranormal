@@ -166,6 +166,13 @@ public sealed class CaseTransferController : BenControllerBase
                 return BadRequest(
                     $"Your group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
                     + "transfers, so this case cannot be accepted. See the Pricing page for what each plan includes.");
+
+            // Item 184: accepting a PRIVATE case is taking on private-lane work, so the
+            // receiving plan must include it — same moment-of-movement rule as above.
+            var isPrivate = await db.Cases.AsNoTracking()
+                .AnyAsync(x => x.Id == caseId && x.IsPrivateEngagement, ct);
+            if (isPrivate && await Ben.Data.WebApi.Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPrivate)
+                return BadRequest(noPrivate);
         }
 
         log.Status               = request.Accept ? CaseTransferStatus.Accepted : CaseTransferStatus.Rejected;

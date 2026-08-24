@@ -134,8 +134,11 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
                new { Status = (int)status }, token);
 
-    public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
+    // Reason-carrying (item 184): the make-public and designation gates refuse with a sentence
+    // the dialog must show, and PutAsync would discard it — the write-only-guard trap.
+    public Task<(CaseRecord? Result, string? Error)> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpdateCaseRequest, CaseRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/cases/{caseId}", request, token);
 
     public Task<LoadResult<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default)
     {
