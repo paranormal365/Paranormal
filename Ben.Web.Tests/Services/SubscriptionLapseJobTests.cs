@@ -226,4 +226,147 @@ public sealed class SubscriptionLapseJobTests
             Assert.Equal(CaseStatus.Paused, (await check.Cases.SingleAsync(c => c.Id == handPaused)).Status);
         }
     }
+
+    // ── item 184 Phase D: the private-lane consequences of a lapse ───────────
+
+    private static async Task<Guid> SeedPublishedCaseAsync(World w, bool isPrivate)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        var id = Guid.NewGuid();
+        db.Cases.Add(new Case
+        {
+            Id = id, OrganizationId = w.OrgId, Status = CaseStatus.Public, IsPublic = true,
+            IsPrivateEngagement = isPrivate,
+            Title = isPrivate ? "Published home case" : "Published landmark case",
+            StreetAddress1 = "1 Main", City = "N", State = "TN", ZipCode = "1", Country = "US",
+            DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task A_lapse_unpublishes_published_private_cases_and_remembers_the_way_back()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        // Closed-status published cases too: a finished case is published just as publicly.
+        var privateCaseId = await SeedPublishedCaseAsync(w, isPrivate: true);
+        var landmarkCaseId = await SeedPublishedCaseAsync(w, isPrivate: false);
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var privateCase = await db.Cases.SingleAsync(c => c.Id == privateCaseId);
+        var landmark = await db.Cases.SingleAsync(c => c.Id == landmarkCaseId);
+
+        Assert.False(privateCase.IsPublic);
+        Assert.True(privateCase.WasPublicBeforeLapse);
+        // The internal-landmark pin: free-lane publication is untouched by billing.
+        Assert.True(landmark.IsPublic);
+        Assert.Null(landmark.WasPublicBeforeLapse);
+    }
+
+    [Fact]
+    public async Task The_unpublish_survives_repeat_runs_without_touching_a_manual_republish()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        var privateCaseId = await SeedPublishedCaseAsync(w, isPrivate: true);
+
+        await Job(w.F).RunAsync(default);
+
+        // The org talked to SuperAdmin, republished by hand while still lapsed (their call).
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            var c = await db.Cases.SingleAsync(x => x.Id == privateCaseId);
+            c.IsPublic = true; c.WasPublicBeforeLapse = null;
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);   // sub is already Lapsed: the pass must not re-enter
+
+        await using (var check = await w.F.CreateDbContextAsync())
+            Assert.True((await check.Cases.SingleAsync(x => x.Id == privateCaseId)).IsPublic);
+    }
+
+    [Fact]
+    public async Task The_approach_warnings_name_the_unpublish_when_private_cases_are_published()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(3));
+        await SeedPublishedCaseAsync(w, isPrivate: true);
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var bodies = await db.UserMessages.Select(m => m.MessageBody).ToListAsync();
+        Assert.Equal(2, bodies.Count);   // two-week and one-week, both inside the window
+        Assert.All(bodies, b => Assert.Contains("published private-residence", b));
+    }
+
+    [Fact]
+    public async Task The_approach_warnings_stay_quiet_about_unpublishing_when_nothing_is_published()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(3));
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var bodies = await db.UserMessages.Select(m => m.MessageBody).ToListAsync();
+        Assert.All(bodies, b => Assert.DoesNotContain("private-residence", b));
+    }
+
+    // ── the stranded-client notice ───────────────────────────────────────────
+
+    private static async Task MakeLapsedAsync(World w, int daysAgo)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+        sub.Status = SubscriptionStatus.Lapsed;
+        sub.LapsedAtUtc = DateTime.UtcNow.AddDays(-daysAgo);
+        var c = await db.Cases.SingleAsync(x => x.Id == w.ActiveCaseId);
+        c.StatusBeforePause = c.Status;
+        c.Status = CaseStatus.Paused;
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Twenty_nine_days_lapsed_is_too_soon_for_the_stranded_notice()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMonths(2));
+        await MakeLapsedAsync(w, daysAgo: 29);
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        Assert.Equal(0, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == w.ClientId));
+        Assert.Null((await db.OrganizationSubscriptions.SingleAsync()).StrandedClientNoticeSentAtUtc);
+    }
+
+    [Fact]
+    public async Task Thirty_one_days_lapsed_offers_the_move_once_and_the_stamp_re_arms()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMonths(2));
+        await MakeLapsedAsync(w, daysAgo: 31);
+
+        await Job(w.F).RunAsync(default);
+        await Job(w.F).RunAsync(default);   // stamped: the second pass is silent
+
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == w.ClientId));
+            var body = (await db.UserMessages.SingleAsync()).MessageBody;
+            Assert.Contains("move", body);
+            Assert.NotNull((await db.OrganizationSubscriptions.SingleAsync()).StrandedClientNoticeSentAtUtc);
+
+            // Reactivation clears the stamp (the controller's half); a NEW lapse then re-arms.
+            var sub = await db.OrganizationSubscriptions.SingleAsync();
+            sub.StrandedClientNoticeSentAtUtc = null;
+            sub.LapsedAtUtc = DateTime.UtcNow.AddDays(-40);
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using (var check = await w.F.CreateDbContextAsync())
+            Assert.Equal(2, await check.UserMessageTos.CountAsync(t => t.ToAppUserId == w.ClientId));
+    }
 }

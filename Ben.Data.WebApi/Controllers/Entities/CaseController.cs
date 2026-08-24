@@ -494,6 +494,8 @@ public sealed class CaseController : BenControllerBase
         entity.Description          = request.Description?.Trim();
         entity.Status               = request.Status;
         entity.PublicPseudonym      = request.PublicPseudonym?.Trim();
+        // Republishing consumes the lapse memory: the banner offered the click, this is it.
+        if (request.IsPublic && !entity.IsPublic) entity.WasPublicBeforeLapse = null;
         entity.IsPublic             = request.IsPublic;
         entity.CaseManagerAppUserId = request.CaseManagerAppUserId;
         if (request.Status is CaseStatus.Closed or CaseStatus.Haunted or CaseStatus.Public && entity.DateCaseClosed is null)

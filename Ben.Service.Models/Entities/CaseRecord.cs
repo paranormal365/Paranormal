@@ -33,6 +33,9 @@ public record CaseRecord
 
     /// <summary>Item 184: private-lane work — public prose substitutes names, publication is plan-gated.</summary>
     public bool IsPrivateEngagement { get; init; }
+
+    /// <summary>Item 184 Phase D: true when a lapse unpublished this case; the republish banner's switch.</summary>
+    public bool? WasPublicBeforeLapse { get; init; }
     public DateTime DateCaseOpened { get; init; }
     public DateTime? DateCaseClosed { get; init; }
     public DateTime DateCreated { get; init; }
