@@ -94,7 +94,8 @@ public sealed class UploadFileController : BenControllerBase
     /// </summary>
     [HttpGet("{id:guid}/download")]
     [AllowAnonymous]
-    public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Download(
+        [FromServices] IMediaIngestService mediaIngest, Guid id, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.UploadFiles.AsNoTracking()
@@ -106,11 +107,17 @@ public sealed class UploadFileController : BenControllerBase
         if (!await FileAudienceAccess.CanViewFileAsync(db, id, userId, cancellationToken))
             return isAuthenticated ? Forbid() : Unauthorized();
 
-        // Prefer disk; fall back to FileData for rows not yet migrated
+        // Prefer the SANITIZED copy, then disk, then FileData for rows not yet migrated. The
+        // stripped derivative is what every serve path is supposed to return (see
+        // MediaSanitizationService) — this one did not, so a public file handed out its EXIF.
+        // ServingPathFor returns the original when no derivative exists, so nothing changes for
+        // files that were never sanitized.
         if (!string.IsNullOrEmpty(entity.StoragePath))
         {
-            var stream = await _fileStorage.OpenReadAsync(entity.StoragePath, cancellationToken);
-            return File(stream, entity.ContentType, entity.FileName);
+            var servingPath = mediaIngest.ServingPathFor(entity.StoragePath);
+            var stream = await _fileStorage.OpenReadAsync(servingPath, cancellationToken);
+            var servingType = servingPath == entity.StoragePath ? entity.ContentType : "image/jpeg";
+            return File(stream, servingType, entity.FileName);
         }
 
         if (entity.FileData is not null)
@@ -164,7 +171,7 @@ public sealed class UploadFileController : BenControllerBase
             if (thumb is not null) return File(thumb, "image/jpeg");
         }
 
-        return await Download(id, cancellationToken);
+        return await Download(mediaIngest, id, cancellationToken);
     }
 
     [HttpPost]
