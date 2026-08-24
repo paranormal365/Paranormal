@@ -4,6 +4,7 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject SiteFeaturesProvider Features
 
 @*
   Community vote widget for a public case.
@@ -11,73 +12,78 @@
   for authenticated users, buttons to cast or change their vote.
 *@
 
-<div class="case-vote-widget d-flex flex-column gap-2">
-    @if (_summary is null && _loading)
-    {
-        <span class="text-secondary small">Loading votes…</span>
-    }
-    else if (_summary is null && _error is not null)
-    {
-        <span class="text-danger small">@_error</span>
-    }
-    else if (_summary is not null)
-    {
-        @* ── Vote progress bar ──────────────────────────────────────────────── *@
-        @if (_summary.TotalVotes > 0)
+@* Item 154: the voting switch — off means this renders nothing at all. *@
+@if (Features.IsOn(SiteFeatures.Voting))
+{
+    <div class="case-vote-widget d-flex flex-column gap-2">
+        @if (_summary is null && _loading)
         {
-            <div class="mb-1">
-                <div class="progress" style="height:5px; border-radius:3px;">
-                    <div class="progress-bar bg-success" style="width:@ConfirmsPct%" title="@_summary.ConfirmsCount confirms"></div>
-                    <div class="progress-bar bg-danger"  style="width:@DisputesPct%" title="@_summary.DisputesCount disputes"></div>
-                    <div class="progress-bar bg-warning" style="width:@InconclusivePct%" title="@_summary.InconclusiveCount inconclusive"></div>
-                </div>
-            </div>
+            <span class="text-secondary small">Loading votes…</span>
         }
-        <div class="d-flex gap-2 align-items-center" style="font-size:.78rem;">
-            <span class="text-success">✓ @_summary.ConfirmsCount</span>
-            <span class="text-danger">✗ @_summary.DisputesCount</span>
-            <span class="text-warning-emphasis">? @_summary.InconclusiveCount</span>
-            <span class="text-muted ms-auto">@_summary.TotalVotes vote@(_summary.TotalVotes == 1 ? "" : "s")</span>
-            <VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
-        </div>
-
-        @* ── Vote buttons (authenticated users only) ──────────────────────── *@
-        @if (UserState.IsAuthenticated)
+        else if (_summary is null && _error is not null)
         {
-            <div class="d-flex gap-1 flex-wrap">
-                @foreach (var vt in Enum.GetValues<EvidenceVoteType>())
-                {
-                    var v = vt;
-                    var isActive = _summary.CurrentUserVote == v;
-                    @* Solid marks the vote this user has cast, outline the ones they have not —
-                       aria-pressed carries the same fact for anyone not seeing the fill. *@
-                    <button type="button"
-                            class="btn btn-sm @VoteButtonClass(v, isActive)"
-                            aria-pressed="@isActive.ToString().ToLowerInvariant()"
-                            @onclick="@(() => CastVote(v))"
-                            disabled="@_isBusy">
-                        @VoteLabel(v)
-                    </button>
-                }
-                @if (_summary.CurrentUserVote.HasValue)
-                {
-                    <button type="button" class="btn btn-sm btn-link text-decoration-none"
-                            @onclick="RemoveVote" disabled="@_isBusy">
-                        Remove
-                    </button>
-                }
-            </div>
-            @if (_actionError is not null)
+            <span class="text-danger small">@_error</span>
+        }
+        else if (_summary is not null)
+        {
+            @* ── Vote progress bar ──────────────────────────────────────────────── *@
+            @if (_summary.TotalVotes > 0)
             {
-                <span class="text-danger small">@_actionError</span>
+                <div class="mb-1">
+                    <div class="progress" style="height:5px; border-radius:3px;">
+                        <div class="progress-bar bg-success" style="width:@ConfirmsPct%" title="@_summary.ConfirmsCount confirms"></div>
+                        <div class="progress-bar bg-danger"  style="width:@DisputesPct%" title="@_summary.DisputesCount disputes"></div>
+                        <div class="progress-bar bg-warning" style="width:@InconclusivePct%" title="@_summary.InconclusiveCount inconclusive"></div>
+                    </div>
+                </div>
+            }
+            <div class="d-flex gap-2 align-items-center" style="font-size:.78rem;">
+                <span class="text-success">✓ @_summary.ConfirmsCount</span>
+                <span class="text-danger">✗ @_summary.DisputesCount</span>
+                <span class="text-warning-emphasis">? @_summary.InconclusiveCount</span>
+                <span class="text-muted ms-auto">@_summary.TotalVotes vote@(_summary.TotalVotes == 1 ? "" : "s")</span>
+                <VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
+            </div>
+
+            @* ── Vote buttons (authenticated users only) ──────────────────────── *@
+            @if (UserState.IsAuthenticated)
+            {
+                <div class="d-flex gap-1 flex-wrap">
+                    @foreach (var vt in Enum.GetValues<EvidenceVoteType>())
+                    {
+                        var v = vt;
+                        var isActive = _summary.CurrentUserVote == v;
+                        @* Solid marks the vote this user has cast, outline the ones they have not —
+                           aria-pressed carries the same fact for anyone not seeing the fill. *@
+                        <button type="button"
+                                class="btn btn-sm @VoteButtonClass(v, isActive)"
+                                aria-pressed="@isActive.ToString().ToLowerInvariant()"
+                                @onclick="@(() => CastVote(v))"
+                                disabled="@_isBusy">
+                            @VoteLabel(v)
+                        </button>
+                    }
+                    @if (_summary.CurrentUserVote.HasValue)
+                    {
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none"
+                                @onclick="RemoveVote" disabled="@_isBusy">
+                            Remove
+                        </button>
+                    }
+                </div>
+                @if (_actionError is not null)
+                {
+                    <span class="text-danger small">@_actionError</span>
+                }
+            }
+            else
+            {
+                <a href="/login" class="text-secondary text-decoration-none" style="font-size:.75rem;">Sign in to vote</a>
             }
         }
-        else
-        {
-            <a href="/login" class="text-secondary text-decoration-none" style="font-size:.75rem;">Sign in to vote</a>
-        }
-    }
-</div>
+    </div>
+
+}
 
 @code {
     [Parameter, EditorRequired] public Guid CaseId { get; set; }

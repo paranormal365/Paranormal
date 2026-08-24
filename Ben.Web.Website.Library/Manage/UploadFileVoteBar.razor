@@ -12,36 +12,43 @@
 @namespace Ben.Web.Website.Library.Manage
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
+@using Ben.Web.Services
+@inject SiteFeaturesProvider Features
 
-@if (_summary is not null)
+@* Item 154: the voting switch — off means this renders nothing at all. *@
+@if (Features.IsOn(SiteFeatures.Voting))
 {
-    <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:.85rem;">
+    @if (_summary is not null)
+    {
+        <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:.85rem;">
 
-        @* Upvote *@
-        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="UpvoteAsync" disabled="@(!(!_busy && UserState.IsAuthenticated))" title="@(_summary.UserScore > 0 ? "Remove upvote" : "Upvote")">
-            👍 @_summary.UpvoteCount
-        </button>
+            @* Upvote *@
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="UpvoteAsync" disabled="@(!(!_busy && UserState.IsAuthenticated))" title="@(_summary.UserScore > 0 ? "Remove upvote" : "Upvote")">
+                👍 @_summary.UpvoteCount
+            </button>
 
-        @* Score *@
-        <span class="fw-semibold small @ScoreClass" title="Total score">
-            @(_summary.TotalScore > 0 ? "+" : "")@_summary.TotalScore
-        </span>
+            @* Score *@
+            <span class="fw-semibold small @ScoreClass" title="Total score">
+                @(_summary.TotalScore > 0 ? "+" : "")@_summary.TotalScore
+            </span>
 
-        @* Downvote *@
-        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="DownvoteAsync" disabled="@(!(!_busy && UserState.IsAuthenticated))" title="@(_summary.UserScore < 0 ? "Remove downvote" : "Downvote")">
-            👎 @_summary.DownvoteCount
-        </button>
+            @* Downvote *@
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="DownvoteAsync" disabled="@(!(!_busy && UserState.IsAuthenticated))" title="@(_summary.UserScore < 0 ? "Remove downvote" : "Downvote")">
+                👎 @_summary.DownvoteCount
+            </button>
 
-        @if (!UserState.IsAuthenticated)
-        {
-            <span class="text-secondary small fst-italic">Sign in to vote</span>
-        }
+            @if (!UserState.IsAuthenticated)
+            {
+                <span class="text-secondary small fst-italic">Sign in to vote</span>
+            }
 
-        @if (_error is not null)
-        {
-            <span class="text-danger small">@_error</span>
-        }
-    </div>
+            @if (_error is not null)
+            {
+                <span class="text-danger small">@_error</span>
+            }
+        </div>
+    }
+
 }
 
 @code {

@@ -322,4 +322,22 @@ public sealed partial class BenAdminClientAdapter
 
         return _api.GetAnonymousAsync<NearbyResults>(url, token);
     }
+
+    // ── Merging groups (item 110) ─────────────────────────────────────────────
+
+    public async Task<(Ben.Service.Models.Admin.MergePreview? Result, string? Error)> PreviewOrgMergeAsync(
+        Guid baseId, Guid mergedId, CancellationToken token = default)
+    {
+        var preview = await _api.GetAsync<Ben.Service.Models.Admin.MergePreview>(
+            $"/api/admin/organization-merge/preview?baseId={baseId}&mergedId={mergedId}", token);
+        return preview is null ? (null, "The preview could not be computed.") : (preview, null);
+    }
+
+    public async Task<string?> MergeOrganizationsAsync(
+        Ben.Service.Models.Admin.OrganizationMergeRequest request, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<Ben.Service.Models.Admin.OrganizationMergeRequest, object>(
+            HttpMethod.Post, "/api/admin/organization-merge", request, token);
+        return error;
+    }
 }

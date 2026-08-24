@@ -144,6 +144,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Coupon> Coupons { get; set; }
         public virtual DbSet<CouponCode> CouponCodes { get; set; }
         public virtual DbSet<CouponRedemption> CouponRedemptions { get; set; }
+        public virtual DbSet<BillingLedgerEntry> BillingLedgerEntries { get; set; }
+        public virtual DbSet<TaxRateRule> TaxRateRules { get; set; }
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
         public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
@@ -2603,6 +2605,46 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<Coupon>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Restrict, not SetNull: deleting a person whose coupons attribute referrals would
+            // silently orphan the money trail. Deactivate the coupon instead.
+            modelBuilder.Entity<Coupon>()
+                .HasOne(e => e.ReferrerAppUser).WithMany()
+                .HasForeignKey(e => e.ReferrerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // ── Item 168: the money trail ────────────────────────────────────
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasOne(e => e.ReferrerAppUser).WithMany()
+                .HasForeignKey(e => e.ReferrerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<BillingLedgerEntry>().Property(e => e.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<BillingLedgerEntry>().Property(e => e.TaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<BillingLedgerEntry>().Property(e => e.TaxRatePercent).HasPrecision(5, 2);
+            modelBuilder.Entity<BillingLedgerEntry>().Property(e => e.Description).HasMaxLength(500);
+            modelBuilder.Entity<BillingLedgerEntry>().Property(e => e.PaymentReference).HasMaxLength(128);
+            // Two payments racing for the next receipt number: the database decides, the loser retries.
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasIndex(e => e.ReceiptNumber).IsUnique().HasFilter("[ReceiptNumber] IS NOT NULL");
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasIndex(e => new { e.OrganizationId, e.DateCreated });
+
+            modelBuilder.Entity<TaxRateRule>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TaxRateRule>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TaxRateRule>().Property(e => e.State).HasMaxLength(2);
+            modelBuilder.Entity<TaxRateRule>().Property(e => e.RatePercent).HasPrecision(5, 2);
+            modelBuilder.Entity<TaxRateRule>().Property(e => e.Notes).HasMaxLength(500);
+            modelBuilder.Entity<TaxRateRule>().HasIndex(e => e.State).IsUnique();
 
             // Codes are typed by hand, so they are matched case-insensitively and stored upper-
             // cased; the unique index is on the stored form, and it spans every campaign — two

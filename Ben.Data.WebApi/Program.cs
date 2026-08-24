@@ -191,6 +191,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.SubscriptionLapseJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();

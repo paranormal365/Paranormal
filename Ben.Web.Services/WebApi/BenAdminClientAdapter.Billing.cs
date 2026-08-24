@@ -90,4 +90,55 @@ public sealed partial class BenAdminClientAdapter
         Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SubscriptionQuoteRequest, SubscriptionQuoteResponse>(
             HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/quote", request, token);
+
+    // ── the money trail (item 168) ────────────────────────────────────────────
+
+    public Task<LoadResult<BillingLedgerEntryRecord>> GetBillingLedgerAsync(Guid? orgId = null, CancellationToken token = default)
+        => _api.GetListAsync<BillingLedgerEntryRecord>(
+            orgId is { } o ? $"/api/admin/billing/ledger?orgId={o}" : "/api/admin/billing/ledger", token);
+
+    public Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordChargeAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecordBillingEntryRequest, BillingLedgerEntryRecord>(
+            HttpMethod.Post, $"/api/admin/billing/organizations/{orgId}/charges", request, token);
+
+    public Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordPaymentAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecordBillingEntryRequest, BillingLedgerEntryRecord>(
+            HttpMethod.Post, $"/api/admin/billing/organizations/{orgId}/payments", request, token);
+
+    public Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordAdjustmentAsync(
+        Guid orgId, RecordAdjustmentRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecordAdjustmentRequest, BillingLedgerEntryRecord>(
+            HttpMethod.Post, $"/api/admin/billing/organizations/{orgId}/adjustments", request, token);
+
+    public Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordReferralPayoutAsync(
+        RecordReferralPayoutRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecordReferralPayoutRequest, BillingLedgerEntryRecord>(
+            HttpMethod.Post, "/api/admin/billing/referral-payouts", request, token);
+
+    public Task<LoadResult<TaxRateRuleRecord>> GetTaxRatesAsync(CancellationToken token = default)
+        => _api.GetListAsync<TaxRateRuleRecord>("/api/admin/billing/tax-rates", token);
+
+    public Task<(TaxRateRuleRecord? Result, string? Error)> SaveTaxRateAsync(
+        SaveTaxRateRuleRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveTaxRateRuleRequest, TaxRateRuleRecord>(
+            HttpMethod.Put, "/api/admin/billing/tax-rates", request, token);
+
+    public Task<bool> DeleteTaxRateAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/billing/tax-rates/{id}", token);
+
+    public Task<LoadResult<ReferrerSummaryRecord>> GetReferrersAsync(CancellationToken token = default)
+        => _api.GetListAsync<ReferrerSummaryRecord>("/api/admin/billing/referrers", token);
+
+    public Task<LoadResult<OrgBillingHistoryRecord>> GetOrgBillingHistoryAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetListAsync<OrgBillingHistoryRecord>($"/api/organizations/{organizationId}/billing/history", token);
+
+    public async Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(
+        Guid organizationId, Guid entryId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync(
+            $"/api/organizations/{organizationId}/billing/receipts/{entryId}", "receipt.html", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
 }

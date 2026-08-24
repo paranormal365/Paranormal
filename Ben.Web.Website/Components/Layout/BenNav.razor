@@ -323,12 +323,16 @@
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
+            new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
         {
             new NavItem("Price Bands",   "layers",      "/admin/subscription-tiers"),
             new NavItem("Coupons",       "tag",         "/admin/coupons"),
             new NavItem("Subscriptions", "credit-card", "/admin/org-subscriptions"),
+            new NavItem("Ledger",        "book",        "/admin/billing-ledger"),
+            new NavItem("Tax Rates",     "percent",     "/admin/tax-rates"),
+            new NavItem("Referrals",     "users",       "/admin/referrals"),
         }),
         new NavItem("System", "settings", children: new[]
         {

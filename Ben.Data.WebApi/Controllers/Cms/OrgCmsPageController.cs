@@ -13,6 +13,7 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 
 /// <summary>CRUD for organization CMS pages including hierarchy management.</summary>
 [Route("api/organizations/{orgId:guid}/pages")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureCmsPages)]
 public sealed class OrgCmsPageController : OrgCmsControllerBase
 {
     private readonly IAuditLogService _auditLog;

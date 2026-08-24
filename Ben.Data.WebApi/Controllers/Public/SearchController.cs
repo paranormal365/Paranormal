@@ -10,6 +10,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 [ApiController]
 [AllowAnonymous]
 [Route("api/public/search")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureDiscovery)]
 public sealed class SearchController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

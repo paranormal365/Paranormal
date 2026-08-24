@@ -49,7 +49,7 @@ public sealed class AdminCouponController : BenControllerBase
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var coupons = await db.Coupons.AsNoTracking().Include(c => c.Codes)
+        var coupons = await db.Coupons.AsNoTracking().Include(c => c.Codes).Include(c => c.ReferrerAppUser)
             .OrderByDescending(c => c.DateCreated).ToListAsync(ct);
 
         return Ok(coupons.Select(ToRecord));
@@ -60,7 +60,7 @@ public sealed class AdminCouponController : BenControllerBase
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var coupon = await db.Coupons.AsNoTracking().Include(c => c.Codes)
+        var coupon = await db.Coupons.AsNoTracking().Include(c => c.Codes).Include(c => c.ReferrerAppUser)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
         return coupon is null ? NotFound() : Ok(ToRecord(coupon));
@@ -137,6 +137,8 @@ public sealed class AdminCouponController : BenControllerBase
         var coupon = new Coupon { Id = Guid.NewGuid(), DateCreated = now, CreatedByAppUserId = userId };
 
         Apply(coupon, request);
+        if (await ResolveReferrerAsync(db, coupon, request.ReferrerEmail, ct) is { } noSuchReferrer)
+            return BadRequest(noSuchReferrer);
 
         if (CouponMath.Misconfiguration(coupon) is { } bad) return BadRequest(bad);
 
@@ -203,6 +205,8 @@ public sealed class AdminCouponController : BenControllerBase
               + "Retire it and make a new campaign instead.");
 
         Apply(coupon, request);
+        if (await ResolveReferrerAsync(db, coupon, request.ReferrerEmail, ct) is { } noSuchReferrer)
+            return BadRequest(noSuchReferrer);
         coupon.Kind               = request.Kind;
         coupon.DateUpdated        = DateTime.UtcNow;
         coupon.UpdatedByAppUserId = userId;
@@ -339,6 +343,29 @@ public sealed class AdminCouponController : BenControllerBase
             code.RestrictedToAppUserId, ownerName, code.IsActive, code.DateCreated));
     }
 
+    /// <summary>
+    /// Attributes the campaign to a referrer by email, or clears the attribution (item 168).
+    /// Returns the refusal sentence when the email matches nobody — a typo silently dropping the
+    /// attribution would un-track someone's referrals without anyone noticing.
+    /// </summary>
+    private static async Task<string?> ResolveReferrerAsync(
+        BenDataContext db, Coupon coupon, string? referrerEmail, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(referrerEmail))
+        {
+            coupon.ReferrerAppUserId = null;
+            return null;
+        }
+        var normalized = referrerEmail.Trim().ToUpperInvariant();
+        var referrerId = await db.Users.AsNoTracking()
+            .Where(u => u.NormalizedEmail == normalized)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(ct);
+        if (referrerId is null) return $"No account has the email {referrerEmail.Trim()}.";
+        coupon.ReferrerAppUserId = referrerId;
+        return null;
+    }
+
     private static void Apply(Coupon coupon, SaveCouponRequest request)
     {
         coupon.Name              = request.Name.Trim();
@@ -368,6 +395,9 @@ public sealed class AdminCouponController : BenControllerBase
             coupon.IsActive, codes.Count,
             coupon.Kind == CouponKind.Shared ? codes.FirstOrDefault()?.Code : null,
             CouponMath.Misconfiguration(coupon) ?? CouponMath.BatchMisconfiguration(coupon, codes),
-            coupon.DateCreated);
+            coupon.DateCreated,
+            coupon.ReferrerAppUserId,
+            coupon.ReferrerAppUser is { } r ? r.DisplayName ?? r.Email : null,
+            coupon.ReferrerAppUser?.Email);
     }
 }

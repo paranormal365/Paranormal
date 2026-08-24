@@ -1,9 +1,12 @@
 @page "/o/{UrlName}/events/{EventSlug}"
 @namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.Events">
 <PageTitle>@(_event?.Title ?? "Event") — @(_event?.OrganizationName ?? UrlName)</PageTitle>
 
 @* The whole point of a public event is that somebody shares the link. This is what that link looks
@@ -268,6 +271,8 @@ else
         }
     </div>
 }
+
+</FeatureGate>
 
 @code {
     [Parameter] public string UrlName { get; set; } = "";

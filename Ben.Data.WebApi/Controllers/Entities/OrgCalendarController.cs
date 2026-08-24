@@ -16,6 +16,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/organizations/{orgId:guid}/calendar-event-types")]
 [Authorize]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureEvents)]
 public sealed class OrgCalendarEventTypeController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -118,6 +119,7 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
 [ApiController]
 [Route("api/organizations/{orgId:guid}/calendar")]
 [Authorize]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureEvents)]
 public sealed class OrgCalendarEventController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

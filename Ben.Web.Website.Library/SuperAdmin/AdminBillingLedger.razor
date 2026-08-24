@@ -1,0 +1,234 @@
+@page "/admin/billing-ledger"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Billing Ledger</PageTitle>
+
+@*
+    Item 168: the money trail. Append-only on purpose — this screen offers no edit and no
+    delete, and the API behind it has neither. A wrong row is answered with an Adjustment that
+    names the mistake, which is why "who changed this number?" always has the same answer: nobody.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Billing Ledger<HelpLink Slug="site-administration" Anchor="the-money-trail" /></h3>
+            <p class="text-secondary small mb-0">Every charge, payment, adjustment and payout. Rows are never edited — corrections are new rows.</p>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" id="ledger-record" @onclick="OpenRecord">
+                <BenIcon Name="plus" Class="me-1" />Record an entry
+            </button>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-3 align-items-end">
+        <div style="min-width:16rem;">
+            <label class="form-label small mb-1">Group</label>
+            <BenSelect Data="@_orgOptions" @bind-Value="@_filterOrgId" TextField="@nameof(OrgOption.Name)"
+                       ValueField="@nameof(OrgOption.Id)" DefaultText="— All groups —" Width="100%" />
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync">Apply</button>
+    </div>
+
+    <BenListState TItem="BillingLedgerEntryRecord" Result="@_result" Loading="@_loading"
+                  EmptyText="Nothing in the ledger yet" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_result.Items" TItem="BillingLedgerEntryRecord" Sortable="false" Pageable="true" PageSize="25">
+            <GridColumns>
+                <GridColumn Title="Date" Width="100px">
+                    <Template>@(((BillingLedgerEntryRecord)context).DateCreated.ToString("MM/dd/yyyy"))</Template>
+                </GridColumn>
+                <GridColumn Title="Kind" Width="110px">
+                    <Template>
+                        @{ var e = (BillingLedgerEntryRecord)context; }
+                        <span class="badge @(e.Kind switch {
+                            BillingLedgerKind.Charge => "bg-secondary",
+                            BillingLedgerKind.Payment => "bg-success",
+                            BillingLedgerKind.Adjustment => e.AdjustmentIsCredit ? "bg-info text-dark" : "bg-warning text-dark",
+                            _ => "bg-dark" })">
+                            @(e.Kind == BillingLedgerKind.Adjustment ? (e.AdjustmentIsCredit ? "Credit" : "Debit") : e.Kind.ToString())
+                        </span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Who">
+                    <Template>
+                        @{ var e = (BillingLedgerEntryRecord)context; }
+                        @(e.OrganizationName ?? e.ReferrerName ?? "—")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Description">
+                    <Template>@(((BillingLedgerEntryRecord)context).Description)</Template>
+                </GridColumn>
+                <GridColumn Title="Amount" Width="110px">
+                    <Template>@($"${((BillingLedgerEntryRecord)context).Amount:0.00}")</Template>
+                </GridColumn>
+                <GridColumn Title="Tax" Width="110px">
+                    <Template>
+                        @{ var e = (BillingLedgerEntryRecord)context; }
+                        @(e.TaxAmount > 0 ? $"${e.TaxAmount:0.00} ({e.TaxRatePercent:0.##}%)" : "—")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Receipt" Width="110px">
+                    <Template>
+                        @{ var e = (BillingLedgerEntryRecord)context; }
+                        @(e.ReceiptNumber is { } n ? $"R-{n:00000}" : "—")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="By" Width="140px">
+                    <Template>@(((BillingLedgerEntryRecord)context).CreatedByName)</Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+@* ── Record-an-entry dialog ────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showRecord" Title="Record a ledger entry">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Kind</label>
+                <BenSelect Data="@_kindOptions" @bind-Value="@_formKind" TextField="@nameof(KindOption.Label)"
+                           ValueField="@nameof(KindOption.Value)" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Group</label>
+                <BenSelect Data="@_orgOptions" @bind-Value="@_formOrgId" TextField="@nameof(OrgOption.Name)"
+                           ValueField="@nameof(OrgOption.Id)" DefaultText="— Choose a group —" Width="100%" />
+                @if (_formKind == BillingLedgerKind.Charge)
+                {
+                    <div class="form-text">Tax is computed from the group's state and frozen on the row — you enter the pre-tax amount.</div>
+                }
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" for="ledger-amount">Amount ($, pre-tax)</label>
+                <input id="ledger-amount" type="number" step="0.01" min="0" class="form-control" @bind="@_formAmount" />
+            </div>
+            @if (_formKind == BillingLedgerKind.Adjustment)
+            {
+                <div class="col-6 d-flex align-items-end gap-2 pb-2">
+                    <input type="checkbox" class="form-check-input" id="ledger-credit" @bind="@_formIsCredit" />
+                    <label for="ledger-credit" class="form-label mb-0">Credit (reduces what they owe)</label>
+                </div>
+            }
+            else
+            {
+                <div class="col-6">
+                    <label class="form-label fw-semibold" for="ledger-ref">Payment reference (optional)</label>
+                    <input id="ledger-ref" type="text" class="form-control" placeholder="check number, transfer id…" @bind="@_formReference" />
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="ledger-desc">Description</label>
+                <input id="ledger-desc" type="text" class="form-control"
+                       placeholder="What this is — required, this IS the audit" @bind="@_formDescription" @bind:event="oninput" />
+            </div>
+        </div>
+        @if (_formError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_formError</div>
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showRecord = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" id="ledger-save" @onclick="SaveAsync"
+                    disabled="@(_busy || _formOrgId == Guid.Empty || _formAmount <= 0 || string.IsNullOrWhiteSpace(_formDescription))">
+                @(_busy ? "Recording…" : "Record")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private LoadResult<BillingLedgerEntryRecord> _result;
+    private List<OrgOption> _orgOptions = [];
+    private Guid _filterOrgId;
+
+    private bool _showRecord;
+    private BillingLedgerKind _formKind = BillingLedgerKind.Charge;
+    private Guid _formOrgId;
+    private decimal _formAmount;
+    private bool _formIsCredit;
+    private string? _formReference;
+    private string _formDescription = "";
+    private string? _formError;
+
+    private record OrgOption(Guid Id, string Name);
+    private record KindOption(BillingLedgerKind Value, string Label);
+
+    private static readonly List<KindOption> _kindOptions =
+    [
+        new(BillingLedgerKind.Charge, "Charge — the group owes this"),
+        new(BillingLedgerKind.Payment, "Payment — money received (gets a receipt number)"),
+        new(BillingLedgerKind.Adjustment, "Adjustment — a correction, either direction"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        var orgs = await AdminClient.GetOrganizationSubscriptionsAsync();
+        if (!orgs.Failed)
+            _orgOptions = [.. orgs.Items.Select(o => new OrgOption(o.OrganizationId, o.OrganizationName)).OrderBy(o => o.Name)];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _result = await AdminClient.GetBillingLedgerAsync(_filterOrgId == Guid.Empty ? null : _filterOrgId);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenRecord()
+    {
+        _formKind = BillingLedgerKind.Charge;
+        _formOrgId = _filterOrgId;
+        _formAmount = 0;
+        _formIsCredit = false;
+        _formReference = null;
+        _formDescription = "";
+        _formError = null;
+        _showRecord = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _formError = null;
+        try
+        {
+            var (result, error) = _formKind switch
+            {
+                BillingLedgerKind.Charge => await AdminClient.RecordChargeAsync(_formOrgId,
+                    new RecordBillingEntryRequest(_formAmount, _formDescription, _formReference, null, null)),
+                BillingLedgerKind.Payment => await AdminClient.RecordPaymentAsync(_formOrgId,
+                    new RecordBillingEntryRequest(_formAmount, _formDescription, _formReference, null, null)),
+                _ => await AdminClient.RecordAdjustmentAsync(_formOrgId,
+                    new RecordAdjustmentRequest(_formAmount, _formIsCredit, _formDescription)),
+            };
+            if (result is null) { _formError = error ?? "Recording failed."; return; }
+
+            Toasts.Success(result.ReceiptNumber is { } n
+                ? $"Recorded — receipt R-{n:00000}."
+                : "Recorded.");
+            _showRecord = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}

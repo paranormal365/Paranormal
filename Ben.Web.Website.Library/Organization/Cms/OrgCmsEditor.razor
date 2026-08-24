@@ -1,4 +1,5 @@
 @page "/organizations/{OrgId:guid}/cms"
+@using Ben.Web.Services
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -7,6 +8,8 @@
 @using System.Text.Json
 @using Ben.Data.Common.Enums
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.CmsPages">
 @if (!EmbeddedMode)
 {
     <PageTitle>CMS — @(_orgName ?? OrgId.ToString())</PageTitle>
@@ -550,6 +553,8 @@
 </BenModal>
 
 <BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+
+</FeatureGate>
 
 @code {
     // ── Item 166 W4(a): the editor tour — how pages are made, linked and published. ──

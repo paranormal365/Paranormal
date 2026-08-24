@@ -2024,6 +2024,12 @@ raises the limit.</p>
 <p>Have a coupon code? There's a line for it at checkout — type it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
 to a specific account, so if a code is refused the message says why.</p>
+<p><strong>Tax</strong> appears as its own line on the quote when your state taxes the service, computed from
+your group's address — never folded into the price. And every payment your group makes has a
+<strong>receipt</strong>: open <strong>Billing history</strong> on your group's card on the Pricing page to see every
+charge, payment and adjustment, and download any receipt by its number. Receipts are generated
+from the payment record itself, so the one you download in five years says exactly what it said
+on the day.</p>
 </section>
 <section class="doc" id="publishing-with-publications">
   <div class="doc-head">
@@ -2189,12 +2195,13 @@ public pages, the media library, group messaging, voting, and the two newer feat
 navigation <strong>and the addresses stop working</strong> — someone who bookmarked the page, or who is handed
 a link by a colleague, gets the ordinary "page not found" screen rather than a way in. That
 pairing is the point: hiding a link while the page still answers is not switching a feature off.</p>
-<p><strong>Four of them are not wired yet, and this page would rather tell you than let you find out.</strong>
-<strong>Local discovery and maps</strong>, <strong>Group public pages</strong> and <strong>Voting</strong> currently change nothing at
-all when switched off — the sections keep working exactly as before. <strong>Events and calendars</strong> is
-half-wired and is the one to be careful with: switching it off stops the reminder emails while
-leaving the calendars, event pages and RSVPs running, so people can still sign up for an event
-and simply never be reminded of it. Leave these four on until they are finished.</p>
+<p>Every switch is now fully wired. The last four were finished together: <strong>Local discovery and
+maps</strong> takes down the "what's near you" panel, the home-page maps and the nearby search;
+<strong>Group public pages</strong> takes down every /o/{group} page — including for visitors who are not
+signed in — along with the CMS editor and its tab; <strong>Voting</strong> removes the vote controls from
+cases, evidence and files and refuses the endpoints behind them; <strong>Events and calendars</strong>
+removes the Calendar tab, the public What's-on list, event pages, RSVPs, and the reminder
+emails, together — no more signing up for an event nobody will be reminded of.</p>
 <p>What it does <strong>not</strong> do is delete anything. Equipment records, saved videos, messages and votes
 all stay exactly where they are, and turning the switch back on returns the section with its
 contents intact. Use it to take a section down while something is being fixed, or to run the site
@@ -2350,6 +2357,49 @@ record: when a group pays, set their band, cadence and period here. The member c
 frozen from the moment you save, and the group keeps those terms for the whole period whatever
 happens to the price list. The Members column shows the current count beside the frozen one —
 the gap is what the group will be re-banded on at renewal.</p>
+<h2>Merging two groups</h2>
+<p><strong>Administration → Groups → Merge Groups</strong> takes two organizations and ends with one. Choose
+the <strong>base</strong> — the group that survives, keeping its URL and settings — and the group to merge
+into it, then read the preview before anything happens: it lists exactly what will move and
+every collision, and computing it changes nothing.</p>
+<p>What the merge does, in one pass that either completes or leaves both groups untouched:</p>
+<ul>
+<li><strong>Everything the merged group owns moves to the base</strong> — members, cases, investigations,
+  files, equipment, pages, calendar, messages. The list in the preview is generated from the
+  database schema itself, so it is complete by construction.</li>
+<li><strong>A person in both groups</strong> keeps one membership, at the <strong>higher</strong> of their two roles.</li>
+<li><strong>Case numbers collide by design</strong> — both groups started at #1 — so colliding merged cases
+  are renumbered into the base's sequence; page addresses that collide get a suffix.</li>
+<li><strong>The merged group's URL becomes a permanent alias</strong> of the base, so old links keep working
+  and the name can never be captured by a newly created group.</li>
+<li><strong>The merged group's subscription is dropped</strong> — the base's plan governs the combined group.
+  If money is owed back, record it as a ledger adjustment.</li>
+<li><strong>Everyone is told</strong>: former members get a message that their group is now part of the base,
+  and clients with open cases are told the group handling their case has a new name.</li>
+</ul>
+<p>The name after the merge is yours to choose — either group's name or a new one. Confirmation
+requires typing the merged group's name, because there is no undo.</p>
+<h2>The money trail</h2>
+<p>Three more screens under <strong>Administration → Billing</strong> carry the actual money.</p>
+<p><strong>Ledger</strong> is the record: every charge, payment, adjustment and referral payout, newest first.
+It is append-only on purpose — there is no edit and no delete, here or in the API underneath. A
+wrong entry is answered by recording an <strong>adjustment</strong> that names the mistake, exactly the way a
+paper ledger works, so "who changed this number?" always has the same answer: nobody. Recording
+a <strong>charge</strong> computes tax from the group's state and freezes both the rate and the dollars on
+the row; recording a <strong>payment</strong> assigns the next receipt number, which the group can download —
+and re-download, forever — from their own billing history on the Pricing page. A payment carries
+no tax of its own: its tax was on the charge it settles, and counting it twice would be a lie in
+both directions.</p>
+<p><strong>Tax Rates</strong> holds the current rate per state, matched against the group's address. A state
+with no row is taxed at <strong>zero</strong> — the honest default, since many states do not tax this
+service, and a visible zero on a bill gets questioned while a silently guessed rate does not.
+Editing a rate never rewrites history: every document froze the rate it used.</p>
+<p><strong>Referrals</strong> shows every referrer's standing. A referrer is anyone a coupon campaign is
+attributed to — set on the campaign, by their account email — and every redemption of their
+codes counts as their referral, with the money frozen at redemption time. The screen shows what
+their codes brought in, the discount given, and what has been paid out; it deliberately does
+<strong>not</strong> compute what is owed, because the reward rule is yours to set per arrangement. Record a
+payout from here and it lands on the ledger like everything else.</p>
 </section>
 <section class="doc" id="moderating-the-feed">
   <div class="doc-head">

@@ -23,7 +23,14 @@ public record SubscriptionQuoteResponse(
     decimal Discount,
     decimal Payable,
     string? CouponRefusedBecause,
-    int? CouponAppliesForPeriods);
+    int? CouponAppliesForPeriods,
+    // Item 168: tax is its own line, computed on the payable amount from the group's state.
+    // Zero when no rule matches — an honest zero, not an assumption hidden in the total.
+    decimal TaxRatePercent = 0m,
+    decimal Tax = 0m)
+{
+    public decimal TotalWithTax => Payable + Tax;
+}
 
 /// <summary>Asking what a period would cost, optionally with a coupon code typed in.</summary>
 public record SubscriptionQuoteRequest(BillingInterval Interval, string? CouponCode);
