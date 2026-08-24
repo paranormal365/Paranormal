@@ -39,6 +39,12 @@ public class AdminPageTests : BenTestBase
         ("/admin/subscription-tiers",  "Price Bands"),
         ("/admin/coupons",             "Coupons"),
         ("/admin/org-subscriptions",   "Subscriptions"),
+        // The money trail + merge (items 168/110, 2026-08-23).
+        ("/admin/billing-ledger",      "Ledger"),
+        ("/admin/tax-rates",           "Tax Rates"),
+        ("/admin/referrals",           "Referrals"),
+        ("/admin/merge-groups",        "Merge Groups"),
+        ("/admin/org-ads",             "Group ads"),
     };
 
     [Test]
