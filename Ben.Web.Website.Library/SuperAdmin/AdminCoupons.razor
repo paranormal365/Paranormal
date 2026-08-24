@@ -304,6 +304,16 @@
             </div>
         </div>
 
+        <div class="mb-3">
+            <label class="form-label" for="cpn-commission">Referrer's cut (% of what redeemers pay)</label>
+            <input id="cpn-commission" type="number" step="0.01" min="0" max="100" class="form-control"
+                   style="max-width:12rem;" @bind="_form.ReferralCommissionPercent" />
+            <div class="form-text">
+                Leave empty to settle by hand — the Referrals page then shows the standings without an
+                owed figure. Deals differ per referrer, so this is per campaign.
+            </div>
+        </div>
+
         <div class="row mb-3">
             <div class="col-auto">
                 <label class="form-label" for="cpn-disc-kind">Discount</label>
@@ -609,6 +619,7 @@
         // Item 168: attributing the campaign to a referrer, by account email. Round-tripped from
         // the record so editing an attributed campaign keeps the attribution.
         public string? ReferrerEmail;
+        public decimal? ReferralCommissionPercent;
 
         public static CouponForm From(CouponAdminRecord c) => new()
         {
@@ -628,6 +639,7 @@
             AppliesToInterval = c.AppliesToInterval,
             IsActive          = c.IsActive,
             ReferrerEmail     = c.ReferrerEmail,
+            ReferralCommissionPercent = c.ReferralCommissionPercent,
         };
 
         public SaveCouponRequest ToRequest() => new(
@@ -639,6 +651,6 @@
             // The whole redeem-by day counts: a code "valid until the 15th" that dies at midnight
             // the night before is a support ticket. The stored instant is the day's last moment.
             RedeemBy?.Date.AddDays(1).AddTicks(-1),
-            AppliesToInterval, AppliesTo, IsActive, SharedCode, ReferrerEmail);
+            AppliesToInterval, AppliesTo, IsActive, SharedCode, ReferrerEmail, ReferralCommissionPercent);
     }
 }

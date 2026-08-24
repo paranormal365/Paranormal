@@ -15,7 +15,9 @@ public record SubscriptionTierPriceAdminRecord(
     BillingInterval Interval,
     decimal Price,
     bool IsActive,
-    int? SavingPercentAgainstMonthly);
+    int? SavingPercentAgainstMonthly,
+    // Item 144: what one member past the band's cap pays, themselves. Null = band cannot be outgrown.
+    decimal? PricePerExtraMember = null);
 
 /// <summary>One cap on a band. Null max is written-down-unlimited; zero is feature-off.</summary>
 public record SubscriptionTierLimitAdminRecord(SubscriptionLimit Limit, int? MaxValue);
@@ -50,7 +52,7 @@ public sealed record SetTierCapabilitiesRequest(
     IReadOnlyList<Ben.Data.Common.Enums.TierCapability> Capabilities);
 
 /// <summary>A price to write, as the editor sends it.</summary>
-public record SaveTierPriceRequest(BillingInterval Interval, decimal Price, bool IsActive);
+public record SaveTierPriceRequest(BillingInterval Interval, decimal Price, bool IsActive, decimal? PricePerExtraMember = null);
 
 /// <summary>
 /// A band and its whole price list, saved together.
@@ -120,7 +122,9 @@ public record CouponAdminRecord(
     // only the display name would silently CLEAR the referrer on the next save.
     Guid? ReferrerAppUserId = null,
     string? ReferrerName = null,
-    string? ReferrerEmail = null);
+    string? ReferrerEmail = null,
+    // Ben's rule (2026-08-24): the referrer's cut is a percent of revenue, set per campaign.
+    decimal? ReferralCommissionPercent = null);
 
 /// <summary>
 /// Creating or editing a campaign. The codes are managed separately once it exists.
@@ -146,7 +150,8 @@ public record SaveCouponRequest(
     string? SharedCode,
     // Item 168: the referrer's account email; empty clears. Resolved server-side so a typo is a
     // refusal with a sentence, never a silently unattributed campaign.
-    string? ReferrerEmail = null);
+    string? ReferrerEmail = null,
+    decimal? ReferralCommissionPercent = null);
 
 /// <summary>Generating a batch of codes under an existing campaign.</summary>
 /// <param name="Count">How many codes to make.</param>

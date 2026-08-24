@@ -25,7 +25,8 @@
             <h3 class="mb-0">Referrals<HelpLink Slug="site-administration" Anchor="the-money-trail" /></h3>
             <p class="text-secondary small mb-0">
                 Attribute a coupon campaign to a person (on the campaign, by their account email) and every
-                redemption counts as their referral. Payouts land on the ledger.
+                redemption counts as their referral. Owed is their campaign's percent of what redeemers
+                actually paid; payouts land on the ledger, and Balance is what is still outstanding.
             </p>
         </div>
     </div>
@@ -47,8 +48,26 @@
                 <GridColumn Title="Discount given" Width="130px">
                     <Template>@($"${((ReferrerSummaryRecord)context).DiscountGiven:0.00}")</Template>
                 </GridColumn>
+                <GridColumn Title="Owed" Width="130px">
+                    <Template>
+                        @{ var r = (ReferrerSummaryRecord)context; }
+                        @($"${r.Owed:0.00}")
+                        @if (!r.EveryCampaignHasAPercent)
+                        {
+                            @* An owed figure that silently omits campaigns would read as final. *@
+                            <span class="badge bg-warning text-dark ms-1"
+                                  title="Some of this referrer's campaigns have no percent set, so they are not counted here.">partial</span>
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Title="Paid out" Width="110px">
                     <Template>@($"${((ReferrerSummaryRecord)context).PaidOut:0.00}")</Template>
+                </GridColumn>
+                <GridColumn Title="Balance" Width="110px">
+                    <Template>
+                        @{ var r = (ReferrerSummaryRecord)context; }
+                        <strong class="@(r.Balance > 0 ? "text-danger" : "text-secondary")">@($"${r.Balance:0.00}")</strong>
+                    </Template>
                 </GridColumn>
                 <GridColumn Title="Actions" Width="130px">
                     <Template>
@@ -127,7 +146,8 @@
     private void OpenPayout(ReferrerSummaryRecord r)
     {
         _payoutTo = r;
-        _payoutAmount = 0;
+        // Pre-filled with the outstanding balance — the figure being settled, not a blank box.
+        _payoutAmount = r.Balance > 0 ? r.Balance : 0;
         _payoutReference = null;
         _payoutDescription = "";
         _payoutError = null;

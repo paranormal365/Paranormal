@@ -142,6 +142,53 @@
         </div>
     </BenListState>
 
+    @* ── Item 144: your own paid seat, if you hold one ────────────────────── *@
+    @if (_mySeats.Count > 0)
+    {
+        <hr class="my-5" />
+        <h4>Your seat@(_mySeats.Count > 1 ? "s" : "")</h4>
+        <p class="text-secondary small">
+            These groups have grown past the member count their plan covers, so your place in them
+            is billed to you.
+        </p>
+        <div class="row g-3" id="my-seats">
+            @foreach (var seat in _mySeats)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="mb-1">@seat.OrganizationName</h6>
+                            <p class="small mb-1">
+                                @($"{seat.PriceAtStart:C2}") per @CadenceNoun(seat.Interval)
+                                @(seat.CurrentPeriodEnd is { } end ? $" — renews {end:MM/dd/yyyy}" : "")
+                            </p>
+                            @switch (seat.Status)
+                            {
+                                case SubscriptionStatus.PendingPayment:
+                                    <p class="small text-warning mb-0">
+                                        Awaiting payment. Your membership is active in the meantime —
+                                        we will be in touch about the seat.
+                                    </p>
+                                    break;
+                                case SubscriptionStatus.Active:
+                                    <p class="small text-success mb-0">Paid and active.</p>
+                                    break;
+                                case SubscriptionStatus.Lapsed:
+                                    <p class="small text-danger mb-0">
+                                        The paid period ended. Get in touch to renew your seat.
+                                    </p>
+                                    break;
+                                default:
+                                    <p class="small text-secondary mb-0">Canceled.</p>
+                                    break;
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
     @if (_myGroups.Count > 0)
     {
         <hr class="my-5" />
@@ -296,6 +343,7 @@
     private List<BillingInterval> _intervals = [];
     private BillingInterval _selectedInterval = BillingInterval.Monthly;
     private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
+    private readonly List<Ben.Service.Models.Admin.MyMemberSeatRecord> _mySeats = [];
 
     // Item 168: the inline billing-history panel, one group at a time.
     private Guid? _historyOrgId;
@@ -347,6 +395,12 @@
         {
             foreach (var org in (await Client.GetOrganizationsAsync()).Items)
             {
+                // Item 144: a seat is a bill addressed to THIS person, so it is fetched for every
+                // group they belong to — independently of the group-billing cards below, which
+                // need settings permission an ordinary seat-holder does not have.
+                if (await Client.GetMySeatAsync(org.Id) is { } seat)
+                    _mySeats.Add(seat);
+
                 // Null covers both "may not see billing" and "could not load" — either way there
                 // is no honest card to draw for this group on a pricing page.
                 if (await Client.GetMySubscriptionAsync(org.Id) is { } view)

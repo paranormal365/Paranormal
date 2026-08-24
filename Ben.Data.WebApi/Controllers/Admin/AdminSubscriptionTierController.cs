@@ -68,7 +68,9 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
     public async Task<ActionResult<string?>> GetValidation(CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
+        // Prices ride along: a bounded top band is legal exactly when a price row allows overflow
+        // (item 144), so validation without Prices would wrongly refuse a sound list.
+        var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
 
         return Ok(SubscriptionTierResolver.Validate(tiers));
     }
@@ -221,7 +223,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
     private static async Task<string?> WouldBreakThePriceList(
         BenDataContext db, SubscriptionTier changed, CancellationToken ct)
     {
-        var others = await db.SubscriptionTiers.AsNoTracking()
+        var others = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices)
             .Where(t => t.Id != changed.Id).ToListAsync(ct);
 
         others.Add(changed);
@@ -259,6 +261,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             var sent = request.Prices.FirstOrDefault(p => p.Interval == existing.Interval);
 
             existing.Price              = sent?.Price ?? existing.Price;
+            existing.PricePerExtraMember = sent?.PricePerExtraMember;
             existing.IsActive           = sent?.IsActive ?? false;
             existing.DateUpdated        = now;
             existing.UpdatedByAppUserId = userId;
@@ -274,6 +277,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
                 SubscriptionTierId = tier.Id,
                 Interval           = sent.Interval,
                 Price              = sent.Price,
+                PricePerExtraMember = sent.PricePerExtraMember,
                 IsActive           = sent.IsActive,
                 DateCreated        = now,
                 CreatedByAppUserId = userId,
@@ -414,7 +418,8 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             [.. tier.Prices.OrderBy(p => (int)p.Interval).Select(p =>
                 new SubscriptionTierPriceAdminRecord(
                     p.Interval, p.Price, p.IsActive,
-                    SubscriptionPricing.SavingPercentAgainstMonthly(tier, p.Interval)))],
+                    SubscriptionPricing.SavingPercentAgainstMonthly(tier, p.Interval),
+                    p.PricePerExtraMember))],
             [.. tier.Limits.OrderBy(l => (int)l.Limit)
                 .Select(l => new SubscriptionTierLimitAdminRecord(l.Limit, l.MaxValue))],
             organizationCount,

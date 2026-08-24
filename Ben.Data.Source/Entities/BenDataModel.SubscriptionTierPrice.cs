@@ -41,6 +41,14 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public decimal Price { get; set; }
 
+        /// <summary>
+        /// What one member BEYOND the band's cap pays per period, themselves (item 144, the
+        /// overflow-seat model). Null means the band cannot be outgrown — today's behavior. A
+        /// top band with this set is allowed to be bounded: growth past it is priced per seat
+        /// rather than by a bigger band.
+        /// </summary>
+        public decimal? PricePerExtraMember { get; set; }
+
         /// <summary>Retired prices stay for the periods that were billed against them.</summary>
         public bool IsActive { get; set; } = true;
 

@@ -1,0 +1,181 @@
+@page "/admin/member-seats"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Member Seats</PageTitle>
+
+@*
+    Item 144, Ben's overflow-seat model: a group's band covers its member count; people who join
+    PAST the band are billed individually at the tier's per-extra-member price, under the group's
+    contract. This screen is the manual worklist — Pending seats are the people to invoice, and
+    activating one is what a recorded payment means. The payment itself is a ledger row, recorded
+    on the Ledger screen: the money and the entitlement are separate writes on purpose, so they
+    can never disagree by being the same one.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Member Seats<HelpLink Slug="site-administration" Anchor="overflow-seats" /></h3>
+            <p class="text-secondary small mb-0">
+                People who joined a group after it outgrew its plan, paying for their own seat.
+            </p>
+        </div>
+    </div>
+
+    <BenListState TItem="MemberSeatAdminRecord" Result="@_result" Loading="@_loading"
+                  EmptyText="No overflow seats yet — no group has grown past its band" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_result.Items" TItem="MemberSeatAdminRecord" Sortable="false" Pageable="true" PageSize="25">
+            <GridColumns>
+                <GridColumn Field="@nameof(MemberSeatAdminRecord.MemberName)" Title="Member" />
+                <GridColumn Field="@nameof(MemberSeatAdminRecord.OrganizationName)" Title="Group" />
+                <GridColumn Title="Price" Width="130px">
+                    <Template>
+                        @{ var s = (MemberSeatAdminRecord)context; }
+                        @($"${s.PriceAtStart:0.00} / {(s.Interval == BillingInterval.Yearly ? "year" : "month")}")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Status" Width="130px">
+                    <Template>
+                        @{ var s = (MemberSeatAdminRecord)context; }
+                        <span class="badge @(s.Status switch {
+                            SubscriptionStatus.Active => "bg-success",
+                            SubscriptionStatus.PendingPayment => "bg-warning text-dark",
+                            SubscriptionStatus.Lapsed => "bg-danger",
+                            SubscriptionStatus.Canceled => "bg-secondary",
+                            _ => "bg-secondary" })">
+                            @(s.Status == SubscriptionStatus.PendingPayment ? "Awaiting payment" : s.Status.ToString())
+                        </span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Period" Width="200px">
+                    <Template>
+                        @{ var s = (MemberSeatAdminRecord)context; }
+                        @(s.CurrentPeriodStart is { } st && s.CurrentPeriodEnd is { } en
+                            ? $"{st:MM/dd/yyyy} – {en:MM/dd/yyyy}" : "—")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Actions" Width="140px">
+                    <Template>
+                        @{ var s = (MemberSeatAdminRecord)context; }
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
+                                @onclick="@(() => OpenEdit(s))">Set standing…</button>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="@_showEdit" Title="Set a seat's standing">
+    <ChildContent>
+        <p class="mb-3">
+            <strong>@_editing?.MemberName</strong> in <strong>@_editing?.OrganizationName</strong> —
+            @($"${_editing?.PriceAtStart ?? 0:0.00}") per
+            @(_editing?.Interval == BillingInterval.Yearly ? "year" : "month").
+        </p>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Status</label>
+                <BenSelect Data="@_statusOptions" @bind-Value="@_formStatus" TextField="@nameof(StatusOption.Label)"
+                           ValueField="@nameof(StatusOption.Value)" Width="100%" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" for="seat-start">Period start</label>
+                <input id="seat-start" type="date" class="form-control" @bind="@_formStart" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" for="seat-end">Period end</label>
+                <input id="seat-end" type="date" class="form-control" @bind="@_formEnd" />
+            </div>
+        </div>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_error</div>
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showEdit = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" id="seat-save" @onclick="SaveAsync" disabled="@_busy">
+                @(_busy ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private LoadResult<MemberSeatAdminRecord> _result;
+
+    private bool _showEdit;
+    private MemberSeatAdminRecord? _editing;
+    private SubscriptionStatus _formStatus = SubscriptionStatus.Active;
+    private DateTime? _formStart;
+    private DateTime? _formEnd;
+    private string? _error;
+
+    private record StatusOption(SubscriptionStatus Value, string Label);
+
+    private static readonly List<StatusOption> _statusOptions =
+    [
+        new(SubscriptionStatus.PendingPayment, "Awaiting payment"),
+        new(SubscriptionStatus.Active, "Active — paid, with a period"),
+        new(SubscriptionStatus.Lapsed, "Lapsed — period ended unpaid"),
+        new(SubscriptionStatus.Canceled, "Canceled"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _result = await AdminClient.GetMemberSeatsAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenEdit(MemberSeatAdminRecord seat)
+    {
+        _editing = seat;
+        _formStatus = seat.Status == SubscriptionStatus.PendingPayment ? SubscriptionStatus.Active : seat.Status;
+        // Activating a pending seat is the common case, so the period is pre-filled with the
+        // obvious one rather than left for retyping.
+        _formStart = seat.CurrentPeriodStart ?? DateTime.UtcNow.Date;
+        _formEnd = seat.CurrentPeriodEnd ?? (seat.Interval == BillingInterval.Yearly
+            ? DateTime.UtcNow.Date.AddYears(1) : DateTime.UtcNow.Date.AddMonths(1));
+        _error = null;
+        _showEdit = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+        _busy = true; _error = null;
+        try
+        {
+            var (result, error) = await AdminClient.SetMemberSeatAsync(
+                _editing.Id, new SetMemberSeatRequest(_formStatus, _formStart, _formEnd));
+            if (result is null) { _error = error ?? "Saving failed."; return; }
+            Toasts.Success($"{result.MemberName}'s seat is {(result.Status == SubscriptionStatus.PendingPayment ? "awaiting payment" : result.Status.ToString().ToLowerInvariant())}.");
+            _showEdit = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}

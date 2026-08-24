@@ -346,9 +346,33 @@ with no row is taxed at **zero** — the honest default, since many states do no
 service, and a visible zero on a bill gets questioned while a silently guessed rate does not.
 Editing a rate never rewrites history: every document froze the rate it used.
 
+## Overflow seats
+
+A band covers a member count. When a group grows past it, the group's own plan does not change:
+each person who joins beyond the band is billed **individually**, at the per-extra-member price
+you set on that band's price row. The group keeps one contract at one renewal date; the extra
+people each hold a seat.
+
+Set it up by putting a **per-extra-member price** on a band's price row in **Price Bands**. That
+also changes what the price list will accept: a top band is normally required to be unbounded,
+because a group must never outgrow the list — a band that prices extra members is allowed to be
+bounded, since growth past it is priced per seat rather than by a bigger band.
+
+**Member Seats** is the worklist. A new member who takes a group past its band gets a seat marked
+**Awaiting payment**, and is told the price in their acceptance message. Joining is never blocked
+by a seat: they are a member from the moment they are accepted, and the seat is the billing
+record. When they pay, record the payment on the Ledger and set the seat **Active** with its
+period. The two are separate on purpose — the money and the entitlement can never disagree by
+being the same write.
+
+## Referrals and what they earn
+
 **Referrals** shows every referrer's standing. A referrer is anyone a coupon campaign is
 attributed to — set on the campaign, by their account email — and every redemption of their
 codes counts as their referral, with the money frozen at redemption time. The screen shows what
-their codes brought in, the discount given, and what has been paid out; it deliberately does
-**not** compute what is owed, because the reward rule is yours to set per arrangement. Record a
-payout from here and it lands on the ledger like everything else.
+their codes brought in, the discount given, what they are **owed**, what has been paid, and the
+outstanding **balance**. Owed is a **percent of what redeemers actually paid**, set per campaign
+on the campaign itself — deals differ per referrer, so the percent does too. A campaign with no
+percent is not counted, and the owed figure wears a **partial** badge when that happens, so a low
+number never reads as a settled one. Recording a payout pre-fills the outstanding balance and
+lands on the ledger like everything else.

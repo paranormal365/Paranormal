@@ -381,6 +381,8 @@ public sealed class AdminCouponController : BenControllerBase
         coupon.AppliesToInterval = request.AppliesToInterval;
         coupon.AppliesTo         = request.AppliesTo;
         coupon.IsActive          = request.IsActive;
+        coupon.ReferralCommissionPercent =
+            request.ReferralCommissionPercent is { } pct ? decimal.Round(pct, 2) : null;
     }
 
     private static CouponAdminRecord ToRecord(Coupon coupon)
@@ -398,6 +400,7 @@ public sealed class AdminCouponController : BenControllerBase
             coupon.DateCreated,
             coupon.ReferrerAppUserId,
             coupon.ReferrerAppUser is { } r ? r.DisplayName ?? r.Email : null,
-            coupon.ReferrerAppUser?.Email);
+            coupon.ReferrerAppUser?.Email,
+            coupon.ReferralCommissionPercent);
     }
 }

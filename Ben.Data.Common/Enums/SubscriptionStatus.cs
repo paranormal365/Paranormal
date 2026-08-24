@@ -27,4 +27,13 @@ public enum SubscriptionStatus
     /// able to add records, and its cases pause. See item 84.
     /// </summary>
     Lapsed = 2,
+
+    /// <summary>
+    /// Offered but not yet paid. Used by overflow seats (item 144): the seat exists from the
+    /// moment the member joins past the band, and activates when the payment is recorded.
+    /// </summary>
+    PendingPayment = 3,
+
+    /// <summary>Ended on purpose — the holder or an admin closed it rather than letting it lapse.</summary>
+    Canceled = 4,
 }
