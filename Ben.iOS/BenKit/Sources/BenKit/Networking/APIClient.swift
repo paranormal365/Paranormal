@@ -57,6 +57,22 @@ public actor APIClient {
         }
     }
 
+    /// The body and status, UNINTERPRETED — for the few endpoints whose *failures* carry a
+    /// structured payload rather than prose. `api/account/register` is the example: it answers
+    /// with the same JSON shape for success and for "that name is already taken", and the
+    /// prose mapper would replace that sentence with "The server answered 400 (bad request)".
+    /// Everything else should use `load`, which maps refusals consistently.
+    public func loadRaw(_ endpoint: Endpoint) async -> (data: Data, statusCode: Int)? {
+        guard let request = await buildRequest(endpoint) else { return nil }
+        do {
+            let (data, response) = try await transport.send(request)
+            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            return (data, response.statusCode)
+        } catch {
+            return nil
+        }
+    }
+
     /// Fire an operation whose success needs no payload (204s, empty 200s).
     public func send(_ endpoint: Endpoint) async -> LoadResult<EmptyBody> {
         await load(endpoint, as: EmptyBody.self)

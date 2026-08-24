@@ -30,6 +30,11 @@ struct LiveFeedWriteTests {
     }
 
     /// A signed-in client pointed at the dev API, or nil when the environment isn't there.
+    ///
+    /// Also nil when the PUBLIC FEED IS SWITCHED OFF, which is the site's resting state: the
+    /// whole feed controller 404s while it is dark, so these tests have nothing to exercise.
+    /// That is a fact about the site, not a failure — the same reasoning as the .NET suite's
+    /// model-gated screening test. Turn the feed on to run them.
     private func signedIn() async -> (APIClient, FeedActions)? {
         guard Self.enabled else { return nil }
 
@@ -47,6 +52,14 @@ struct LiveFeedWriteTests {
         await tokens.adopt(response)
 
         let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+
+        // Is the feed even on? A 404 here is the switch, not a broken endpoint.
+        if case .failed(_, let statusCode) = await api.load(
+            Endpoint(.get, "api/feed", query: [URLQueryItem(name: "mode", value: "all")]),
+            as: FeedPageRecord.self), statusCode == 404 {
+            return nil
+        }
+
         return (api, FeedActions(api: api))
     }
 
@@ -140,6 +153,31 @@ struct LiveFeedWriteTests {
         // The categories the website's composer shows, from the platform taxonomy.
         #expect(taxonomy.contains { $0.category.name == "Audible" })
         #expect(taxonomy.allSatisfy { !$0.selectableTypes.isEmpty })
+    }
+
+    @Test func theRealRegisterEndpointRefusesWithASentenceNotAStatus() async {
+        guard Self.enabled else { return }
+
+        // Against the REAL endpoint: a taken handle must come back as the server's own
+        // sentence. This is the case the mock could only assume — and the reason
+        // `register` bypasses the prose mapper, since the refusal is JSON, not prose.
+        let transport = URLSessionTransport()
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        let actions = AccountActions(api: APIClient(environment: { .dev }, transport: transport, tokens: tokens))
+
+        // A handle that certainly exists: the seeded member's.
+        let result = await actions.register(RegisterRequest(
+            email: "collision-\(UUID().uuidString.prefix(8))@example.test",
+            password: "N3wUser!Test26",
+            displayName: "Collision Test",
+            handle: "jamesthornton"))
+
+        guard case .failure(let error) = result else {
+            Issue.record("expected the taken handle to be refused"); return
+        }
+        // The point: a real sentence a person can act on, not a status paraphrase.
+        #expect(!error.message.contains("The server answered"))
+        #expect(error.message.count > 10)
     }
 
     /// An 8×8 gray JPEG — small enough to inline, real enough to decode.
