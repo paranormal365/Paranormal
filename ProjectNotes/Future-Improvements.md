@@ -9225,3 +9225,53 @@ failures.**
   deliberate look when the title×duty matrix (item 160) lands.
 - `experience-types` answers 405 to a plain GET on the collection for every seat — it is
   write/lookup shaped. Not a bug; noted so the next audit does not re-flag it.
+
+---
+
+## 179. The stripped copy was built but almost never served (PARTLY CLOSED 2026-08-24 — anonymous paths fixed; ingest coverage and A/V remain)
+
+Found while following up item 178's A/V-metadata note, and it turned out to be bigger than the
+A/V half.
+
+**`MediaSanitizationService` states the contract in its own comments:** the original is kept
+untouched because it is evidence, a stripped derivative (`.clean.jpg`) is written alongside, and
+"this is what every serve path returns". **Exactly one serve path honoured it** —
+`MyEquipmentController`, the only caller of `MediaIngestService.ServingPathFor`. Everything else,
+including all three anonymous byte routes, served `StoragePath` — the original, EXIF intact.
+
+The consequence, in the product's own terms: a case photo published on a public page could hand an
+anonymous visitor the camera's embedded location, while the map beside it showed the deliberately
+vague city-level pin the whole coordinate-generalization machinery exists to produce. The
+authors-see-what-visitors-cannot shape, inverted — the protection existed and the public route
+walked past it.
+
+**Fixed now:** `UploadFileController.Download` and `PublicCaseMediaController.Get` both resolve
+through `ServingPathFor`, which returns the stripped copy when one exists and the original when it
+does not — so the change is a no-op for every file that was never sanitized, and the content type
+follows the copy actually served. Four tests pin it, including one that splices an EXIF segment
+into a real JPEG and proves the re-encode drops it (the mechanism is "decode pixels, re-encode",
+so there is no tag list to keep current).
+
+**Still open, and the reason this is only PARTLY closed:**
+
+1. **Most upload doors never sanitize.** `MediaIngestService` is used by the equipment doors and
+   for thumbnails; `CaseFileController` — case evidence, the most sensitive files on the site —
+   writes raw bytes straight to storage and extracts no metadata at all. On the current dev/UAT
+   data that shows as **102 stored files and zero `.clean.jpg` derivatives**: the fix above is
+   correct but currently has almost nothing to serve. Routing the remaining doors through ingest
+   is the substantive work, and it carries a product decision — a member viewing case evidence
+   would start receiving the re-encoded copy rather than the original, which is right for privacy
+   and arguable for evidence fidelity. **Ben's call.**
+2. **Video and audio are still never stripped** (the original item 86 note): it needs an ffmpeg
+   remux (`-map_metadata -1`) and ffmpeg is reachable from the sidecar, not the API. A design that
+   avoids a hosting decision: strip when a configured ffmpeg path exists, pass through exactly as
+   today when it does not.
+3. **A backfill** for files already stored without a derivative, if the answer to (1) is yes.
+
+**What IS captured, for the record** (Ben asked, 2026-08-24): metadata is extracted into its own
+`UploadFileMetadata` table — one row per file — holding GPS latitude/longitude/altitude, capture
+time, camera make and model, dimensions, duration, sample rate, bitrate, channels and codec, plus
+**`RawMetadataJson`**: every directory and tag verbatim, so nothing is lost even where a field is
+not modelled. Read access is `AdminFileMetadataController`, **SuperAdmin-only** — note the service
+comment says "org Administrator or SuperAdmin", so the doc and the gate disagree; the gate is the
+stricter of the two, which is the safe direction, but one of them should be corrected.

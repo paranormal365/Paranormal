@@ -748,7 +748,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildController(factory, Guid.NewGuid(), storage); // unrelated user
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<ForbidResult>(result);
         storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -775,7 +775,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildAnonymousController(factory, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<UnauthorizedResult>(result);
         storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -804,7 +804,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildAnonymousController(factory, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<FileStreamResult>(result);
     }
@@ -832,7 +832,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildController(factory, ownerId, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<FileStreamResult>(result);
     }
@@ -1157,5 +1157,17 @@ public class UploadFileControllerTests
         // author of their edit. It is server-derived now and the field is gone from the DTO.
         await using var verify = await factory.CreateDbContextAsync();
         Assert.Equal(ownerId, (await verify.UploadFiles.FindAsync(fileId))!.UpdatedByAppUserId);
+    }
+
+    /// <summary>
+    /// An ingest service that serves the original — the production fallback when a file has no
+    /// sanitized derivative, which is every file in these fixtures. Download prefers the stripped
+    /// copy when one exists (2026-08-24); these tests are about the audience gate, not stripping.
+    /// </summary>
+    private static Ben.Data.WebApi.Services.IMediaIngestService PassthroughIngest()
+    {
+        var mock = new Mock<Ben.Data.WebApi.Services.IMediaIngestService>();
+        mock.Setup(m => m.ServingPathFor(It.IsAny<string>())).Returns<string>(p => p);
+        return mock.Object;
     }
 }
