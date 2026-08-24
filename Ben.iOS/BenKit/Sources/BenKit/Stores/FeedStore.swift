@@ -90,6 +90,58 @@ public final class FeedStore {
         }
     }
 
+    /// A new post goes straight to the top of what the reader is looking at. On a filtered
+    /// list it may not belong there at all — the caller decides; this only inserts.
+    public func prepend(_ post: FeedPostRecord) {
+        guard seenIds.insert(post.id).inserted else { return }
+        posts.insert(post, at: 0)
+    }
+
+    /// Toggles a like optimistically and reconciles: the count moves under the reader's
+    /// thumb, and a refused call puts it back rather than leaving a lie on screen.
+    public func toggleLike(_ post: FeedPostRecord, actions: FeedActions) async {
+        let wanted = !post.likedByCurrentUser
+        applyLike(postId: post.id, liked: wanted)
+
+        if !(await actions.setLiked(wanted, postId: post.id)) {
+            applyLike(postId: post.id, liked: !wanted)   // rollback
+        }
+    }
+
+    /// Follow state lives on every card by the same author, so all of them move together —
+    /// a feed where one card says Following and the next says Follow reads as broken.
+    public func toggleFollow(_ post: FeedPostRecord, actions: FeedActions) async {
+        let wanted = !post.authorIsFollowedByCurrentUser
+        applyFollow(authorId: post.authorAppUserId, following: wanted)
+
+        if !(await actions.setFollowing(wanted, appUserId: post.authorAppUserId)) {
+            applyFollow(authorId: post.authorAppUserId, following: !wanted)
+        }
+    }
+
+    /// Reporting is idempotent server-side; the card's control flips to "Reported" and stays.
+    public func report(_ post: FeedPostRecord, reason: String?, actions: FeedActions) async -> Bool {
+        guard await actions.report(postId: post.id, reason: reason) else { return false }
+        if let index = posts.firstIndex(where: { $0.id == post.id }) {
+            posts[index].reportedByCurrentUser = true
+        }
+        return true
+    }
+
+    private func applyLike(postId: UUID, liked: Bool) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        // Counted from the row's own state so a double-tap can't drift the number.
+        guard posts[index].likedByCurrentUser != liked else { return }
+        posts[index].likedByCurrentUser = liked
+        posts[index].likeCount = max(0, posts[index].likeCount + (liked ? 1 : -1))
+    }
+
+    private func applyFollow(authorId: UUID, following: Bool) {
+        for index in posts.indices where posts[index].authorAppUserId == authorId {
+            posts[index].authorIsFollowedByCurrentUser = following
+        }
+    }
+
     private func fetchPage(cursor: String?) async {
         var query = filter.queryItems
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }

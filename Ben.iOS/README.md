@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–3 complete and verified live (kernel, auth core, and the feed — read-only).**
+**Status: Slices 1–4 complete and verified live (kernel, auth, feed, participation).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -98,9 +98,18 @@ the OS confirmation dialog — used by automation and the future UI test target.
   route, linkified tags navigating in-app, the BenCo attribution + Group-verified chip,
   and the flag-off state rendering as "switched off sitewide", with the flag restored dark.
 
+## Verified (Slice 4, 2026-08-24)
+
+- 86 unit tests, plus an opt-in LIVE suite (`BEN_LIVE=1 swift test --package-path BenKit
+  --filter LiveFeedWriteTests`) that signs in for real, uploads real multipart media, and
+  round-trips a like against the running API — the nearest thing to a finger on the screen
+  that does not need one. All 4 live tests pass; they skip silently without the flag.
+- Found live and fixed: the feed asked "may this reader post?" before sign-in resolved and
+  was answered as a visitor, so the compose button never appeared — the website's own
+  `_participationKnown` lesson, in iOS form. The list now re-asks when the session changes.
+
 ## Slices remaining (Phase 1)
 
-4. Feed participation (composer, camera, multipart upload, likes/replies)
 5. Notifications (60 s foreground polling, summed bucket badge, messages)
 6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)
 7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)

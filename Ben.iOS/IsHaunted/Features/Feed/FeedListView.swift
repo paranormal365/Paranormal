@@ -1,9 +1,9 @@
 import SwiftUI
 import BenKit
 
-/// The feed (iOS Slice 3, read-only): For You / Latest / Following, infinite
-/// scroll with the For You de-dupe handled in the store, and the honest states —
-/// including "the feed isn't available", which is a fact, not an error.
+/// The feed: For You / Latest / Following, infinite scroll with the For You de-dupe
+/// handled in the store, participation gated on the server's own CanPost, and the honest
+/// states — including "the feed isn't available", which is a fact, not an error.
 struct FeedListView: View {
     @Environment(AppDependencies.self) private var dependencies
 
@@ -12,6 +12,11 @@ struct FeedListView: View {
 
     @State private var store: FeedStore?
     @State private var mode: FeedFilter = .forYou
+    @State private var composing = false
+    @State private var replyingTo: FeedPostRecord?
+    @State private var recategorizing: FeedPostRecord?
+    @State private var reporting: FeedPostRecord?
+    @State private var toast: String?
 
     init(fixedFilter: FeedFilter? = nil) {
         self.fixedFilter = fixedFilter
@@ -30,8 +35,83 @@ struct FeedListView: View {
             if fixedFilter == nil {
                 ToolbarItem(placement: .principal) { modePicker }
             }
+            // CanPost is the SERVER's answer, so the button never invites a refusal.
+            if store?.canPost == true {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { composing = true } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("New post")
+                    .keyboardShortcut("n", modifiers: .command)   // iPad
+                }
+            }
         }
+        .sheet(isPresented: $composing) {
+            ComposerView(parentPostId: nil) { post in
+                // Straight to the top of what they are looking at — but not onto a
+                // filtered list it may not belong to.
+                if fixedFilter == nil { store?.prepend(post) }
+                toast = post.hasMedia || post.mediaAwaitingReview
+                    ? "Posted — your media appears once it's checked."
+                    : "Posted."
+            }
+            .environment(dependencies)
+        }
+        .sheet(item: $replyingTo) { parent in
+            ComposerView(parentPostId: parent.id) { _ in
+                toast = "Reply posted."
+                Task { await store?.load() }   // reply counts moved
+            }
+            .environment(dependencies)
+        }
+        .sheet(item: $recategorizing) { post in
+            RecategorizeSheet(post: post) { updated in
+                store?.replace(updated)
+                toast = "Category updated."
+            }
+            .environment(dependencies)
+        }
+        .alert("Report this post?", isPresented: Binding(
+            get: { reporting != nil }, set: { if !$0 { reporting = nil } })
+        ) {
+            Button("Cancel", role: .cancel) { reporting = nil }
+            Button("Report", role: .destructive) {
+                if let post = reporting, let store {
+                    Task {
+                        let ok = await store.report(post, reason: nil, actions: dependencies.feedActions)
+                        toast = ok ? "Reported. Thank you." : "Couldn't report that — try again."
+                        reporting = nil
+                    }
+                }
+            }
+        } message: {
+            Text("An administrator will look at it. Reporting twice is one report.")
+        }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.callout)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Theme.mist, in: Capsule())
+                    .foregroundStyle(Theme.bone)
+                    .shadow(radius: 6)
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        self.toast = nil
+                    }
+            }
+        }
+        .animation(.default, value: toast)
         .task(id: taskIdentity) { await reload() }
+        // Sign-in resolves a beat AFTER the first page fetch, so that fetch asked the
+        // server "may this reader post?" as a visitor and was told no. The website learned
+        // this the same way (its _participationKnown flag); here the answer simply gets
+        // asked again the moment the session changes, in either direction.
+        .onChange(of: dependencies.session.me?.userId) { _, _ in
+            Task { await store?.load() }
+        }
         .refreshable { await store?.load() }
     }
 
@@ -88,7 +168,14 @@ struct FeedListView: View {
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(store.posts) { post in
-                        FeedCardView(post: post)
+                        FeedCardView(
+                            post: post,
+                            canAct: store.canPost,
+                            onLike: { Task { await store.toggleLike(post, actions: dependencies.feedActions) } },
+                            onReply: { replyingTo = post },
+                            onFollow: { Task { await store.toggleFollow(post, actions: dependencies.feedActions) } },
+                            onReport: { reporting = post },
+                            onRecategorize: { recategorizing = post })
                     }
                     if store.hasMore {
                         ProgressView()
@@ -118,6 +205,11 @@ struct FeedThreadView: View {
     let postId: UUID
 
     @State private var store: FeedThreadStore?
+    @State private var replyingTo: FeedPostRecord?
+    /// The server's own CanPost, learned from a one-page feed fetch — the thread endpoint
+    /// does not carry it, and guessing from "is signed in" would offer a reply box to
+    /// somebody whose post the API will refuse.
+    @State private var canAct = false
 
     var body: some View {
         Group {
@@ -147,7 +239,15 @@ struct FeedThreadView: View {
                     ScrollView {
                         LazyVStack(spacing: 10) {
                             ForEach(Array(store.posts.enumerated()), id: \.element.id) { index, post in
-                                FeedCardView(post: post)
+                                FeedCardView(
+                                    post: post,
+                                    canAct: canAct,
+                                    onLike: { Task {
+                                        _ = await dependencies.feedActions.setLiked(
+                                            !post.likedByCurrentUser, postId: post.id)
+                                        await store.load()
+                                    } },
+                                    onReply: { replyingTo = post })
                                     .padding(.leading, index == 0 ? 0 : 20)
                             }
                         }
@@ -162,10 +262,21 @@ struct FeedThreadView: View {
             }
         }
         .navigationTitle("Post")
+        .sheet(item: $replyingTo) { parent in
+            ComposerView(parentPostId: parent.id) { _ in
+                Task { await store?.load() }
+            }
+            .environment(dependencies)
+        }
         .task {
             let store = FeedThreadStore(postId: postId, api: dependencies.api)
             self.store = store
             await store.load()
+
+            let page = await dependencies.api.load(
+                Endpoint(.get, "api/feed", query: [URLQueryItem(name: "mode", value: "all")]),
+                as: FeedPageRecord.self)
+            canAct = page.value?.canPost ?? false
         }
     }
 }

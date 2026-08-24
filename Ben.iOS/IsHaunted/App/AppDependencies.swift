@@ -13,6 +13,9 @@ final class AppDependencies {
     let tokens: TokenSession
     let api: APIClient
     let session: SessionStore
+    /// The feed's write surface (item 186 F2–F7) — one instance, shared by every screen
+    /// that can post, like, follow or report.
+    let feedActions: FeedActions
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -37,6 +40,7 @@ final class AppDependencies {
             auth: IdentityAuthClient(environment: { box.value }, transport: transport),
             tokens: tokens,
             api: api)
+        self.feedActions = FeedActions(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means

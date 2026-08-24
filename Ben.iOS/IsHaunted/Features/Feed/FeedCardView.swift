@@ -2,14 +2,24 @@ import SwiftUI
 import AVKit
 import BenKit
 
-/// One post. Mirrors the website's card anatomy: author, body (linkified),
-/// media, then the marks — category chip, attribution, badges — then counts.
-/// Slice 3 is read-only: counts display, actions arrive in Slice 4.
+/// One post. Mirrors the website's card anatomy: author, body (linkified), media, the
+/// marks (category chip, attribution, badges), the author-only nudge, then the actions.
+/// Every control is gated on `canAct` — the server's own CanPost — so the card never
+/// offers a button the API would refuse.
 struct FeedCardView: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(Router.self) private var router
 
     let post: FeedPostRecord
+
+    /// Whether THIS reader may act — the server's own CanPost, passed down rather than
+    /// guessed, so a control never appears that the API would refuse.
+    var canAct: Bool = false
+    var onLike: (() -> Void)?
+    var onReply: (() -> Void)?
+    var onFollow: (() -> Void)?
+    var onReport: (() -> Void)?
+    var onRecategorize: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -17,6 +27,7 @@ struct FeedCardView: View {
             bodyText
             media
             marks
+            nudge
             counts
         }
         .padding(14)
@@ -117,11 +128,84 @@ struct FeedCardView: View {
         }
     }
 
+    /// AUTHOR-ONLY (item 186 F6), phrased as help rather than accusation: an honest
+    /// mislabel is the common case, and nothing about the post is blocked either way.
+    @ViewBuilder
+    private var nudge: some View {
+        if post.categoryMatchDegraded && post.isOwnPost && canAct {
+            Button {
+                onRecategorize?()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "tag")
+                    Text("This doesn't look like \(post.experienceTypeName ?? "that") to us — change it?")
+                        .multilineTextAlignment(.leading)
+                    Spacer()
+                }
+                .font(.caption)
+                .foregroundStyle(Theme.warning)
+                .padding(8)
+                .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// The actions row. A visitor sees the COUNTS — the social proof is the invitation —
+    /// but no dead controls: every button here is one the server would honour.
     private var counts: some View {
-        HStack(spacing: 16) {
-            Label("\(post.likeCount)", systemImage: post.likedByCurrentUser ? "heart.fill" : "heart")
-            Label("\(post.replyCount)", systemImage: "bubble.right")
-            Spacer()
+        HStack(spacing: 18) {
+            if canAct {
+                Button {
+                    onLike?()
+                } label: {
+                    Label("\(post.likeCount)", systemImage: post.likedByCurrentUser ? "heart.fill" : "heart")
+                        .foregroundStyle(post.likedByCurrentUser ? Theme.danger : Theme.fog)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(post.likedByCurrentUser ? "Unlike" : "Like")
+
+                Button { onReply?() } label: {
+                    Label("\(post.replyCount)", systemImage: "bubble.right")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reply")
+
+                Spacer()
+
+                if post.isOwnPost {
+                    // Nothing to offer an author about their own post here — following and
+                    // reporting yourself are both nonsense, and the nudge lives above.
+                    EmptyView()
+                } else {
+                    Menu {
+                        Button {
+                            onFollow?()
+                        } label: {
+                            Label(post.authorIsFollowedByCurrentUser ? "Unfollow" : "Follow",
+                                  systemImage: post.authorIsFollowedByCurrentUser ? "person.badge.minus" : "person.badge.plus")
+                        }
+                        if post.reportedByCurrentUser {
+                            Label("Reported", systemImage: "checkmark")
+                        } else {
+                            Button(role: .destructive) {
+                                onReport?()
+                            } label: {
+                                Label("Report", systemImage: "flag")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(Theme.fog)
+                            .frame(width: 44, height: 30, alignment: .trailing)
+                    }
+                    .accessibilityLabel("More actions")
+                }
+            } else {
+                Label("\(post.likeCount)", systemImage: "heart")
+                Label("\(post.replyCount)", systemImage: "bubble.right")
+                Spacer()
+            }
         }
         .font(.caption)
         .foregroundStyle(Theme.fog)
