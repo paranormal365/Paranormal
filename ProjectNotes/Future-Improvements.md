@@ -9214,11 +9214,12 @@ failures.**
 
 ### Smaller notes
 
-- `GET .../billing/my-seat` answers **204** when the caller holds no seat, which the client reads
-  as null correctly — but `GetAsync` also returns null on 403 or 500, so a seat-holder whose fetch
-  fails sees no seat card and no explanation. Additive surface, low harm, but it is the same
-  silent-failure shape the LoadResult work exists to remove; worth converting if seats become
-  load-bearing.
+- `GET .../billing/my-seat` answered **204** when the caller holds no seat — which `GetAsync`
+  cannot tell apart from a 403 or a 500, so a seat-holder whose fetch failed would have seen no
+  card and no explanation. **CLOSED same day:** the endpoint is now `my-seats` and returns a LIST
+  of at most one, so the answer travels as a `LoadResult` and the page distinguishes "you hold no
+  seat" from "we could not check" — the latter now says so. A seat is somebody's bill; showing
+  nothing is the worst of the three readings.
 - A Viewer can read the duty board, member levels and calendar event types while being refused
   cases and investigations. Coherent (those are org taxonomy, not case content), but worth a
   deliberate look when the title×duty matrix (item 160) lands.

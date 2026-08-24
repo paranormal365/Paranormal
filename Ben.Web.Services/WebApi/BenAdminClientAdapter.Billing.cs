@@ -143,8 +143,8 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<SetMemberSeatRequest, MemberSeatAdminRecord>(
             HttpMethod.Put, $"/api/admin/billing/member-seats/{seatId}", request, token);
 
-    public Task<MyMemberSeatRecord?> GetMySeatAsync(Guid organizationId, CancellationToken token = default)
-        => _api.GetAsync<MyMemberSeatRecord>($"/api/organizations/{organizationId}/billing/my-seat", token);
+    public Task<LoadResult<MyMemberSeatRecord>> GetMySeatAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetListAsync<MyMemberSeatRecord>($"/api/organizations/{organizationId}/billing/my-seats", token);
 
     public async Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(
         Guid organizationId, Guid entryId, CancellationToken token = default)
