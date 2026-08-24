@@ -37,6 +37,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// </remarks>
 [ApiController]
 [Route("api/public/events")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureEvents)]
 public sealed class PublicEventController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

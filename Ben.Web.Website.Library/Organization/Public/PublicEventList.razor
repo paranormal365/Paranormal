@@ -1,8 +1,11 @@
 @page "/events"
 @page "/o/{UrlName}/events"
 @namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.Events">
 <PageTitle>@(UrlName is null ? "What's on" : "Events")</PageTitle>
 
 @* Two routes, one page. Under an organization it is their events; at the top level it is
@@ -99,6 +102,8 @@
         </ChildContent>
     </BenListState>
 </div>
+
+</FeatureGate>
 
 @code {
     /// <summary>Null on the site-wide route, set when showing one group's events.</summary>

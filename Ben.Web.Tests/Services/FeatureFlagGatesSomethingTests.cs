@@ -40,14 +40,13 @@ namespace Ben.Web.Tests.Services;
 public sealed class FeatureFlagGatesSomethingTests
 {
     /// <summary>
-    /// Flags known to gate nothing, recorded 2026-08-22. This list may only shrink.
+    /// Flags known to gate nothing, recorded 2026-08-22. This list may only shrink — and on
+    /// 2026-08-23 (item 154) it reached empty: discovery, cms-pages and voting each got a
+    /// server-side <c>FeatureGated</c> controller refusal, FeatureGate-wrapped pages, and hidden
+    /// entry points, and events got the same treatment beyond its reminder-job read. The list
+    /// stays as scaffolding so an eleventh inert switch still cannot ship.
     /// </summary>
-    private static readonly HashSet<string> _knownUngated = new(StringComparer.Ordinal)
-    {
-        SiteFeatures.Discovery,
-        SiteFeatures.CmsPages,
-        SiteFeatures.Voting,
-    };
+    private static readonly HashSet<string> _knownUngated = new(StringComparer.Ordinal);
 
     private static DirectoryInfo RepoRoot()
     {

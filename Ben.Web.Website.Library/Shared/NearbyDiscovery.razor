@@ -4,6 +4,8 @@
 
 @inject IBenAdminClient  AdminClient
 @inject IJSRuntime       JS
+@using Ben.Web.Services
+@inject SiteFeaturesProvider Features
 
 @* ── What's near you (backlog item #88) ──────────────────────────────────────
    The front door for somebody who has never heard of any of these organizations: pick a distance,
@@ -17,134 +19,139 @@
    and is shown exactly as it chose to be found; an event is an invitation and stays approximate.
    Nothing in this component decides that; it only renders what the server already decided. *@
 
-<div class="container-fluid px-3 mt-5" style="max-width:1000px;">
-    <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
-        <h4 class="mb-0">What's Near You</h4>
-        <div class="d-flex align-items-center gap-2">
-            <label class="text-secondary small mb-0" for="nearby-radius">Within</label>
-            <select id="nearby-radius" class="form-select form-select-sm" style="width:110px;"
-                    value="@_radiusMiles"
-                    @onchange="@(e => OnRadiusChangedAsync(int.Parse(e.Value?.ToString() ?? "0")))">
-                @foreach (var r in _radiusOptions)
-                {
-                    <option value="@r" selected="@(r == _radiusMiles)">@r</option>
-                }
-            </select>
+@* Item 154: the discovery switch — off means this renders nothing at all. *@
+@if (Features.IsOn(SiteFeatures.Discovery))
+{
+    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+        <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
+            <h4 class="mb-0">What's Near You</h4>
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-secondary small mb-0" for="nearby-radius">Within</label>
+                <select id="nearby-radius" class="form-select form-select-sm" style="width:110px;"
+                        value="@_radiusMiles"
+                        @onchange="@(e => OnRadiusChangedAsync(int.Parse(e.Value?.ToString() ?? "0")))">
+                    @foreach (var r in _radiusOptions)
+                    {
+                        <option value="@r" selected="@(r == _radiusMiles)">@r</option>
+                    }
+                </select>
+            </div>
         </div>
-    </div>
 
-    @if (_locationState == LocationState.Asking)
-    {
-        <p class="text-secondary small mb-3">Finding your location…</p>
-    }
-    else if (_locationState == LocationState.Denied)
-    {
-        @* The browser said no, or there simply is no geolocation API — a corporate proxy, an
-           older device, a visitor who declined the prompt. Falling silent here would look like the
-           feature is broken; asking for a place name instead keeps it usable either way. *@
-        <div class="d-flex gap-2 mb-3 flex-wrap">
-            @* @oninput, not @onchange: the button beside this field is gated on its value, and a
-               change event only fires on blur — somebody who types and clicks straight through
-               would find a dead button. (The original hit this with TelerikTextBox, which commits
-               on blur; a Playwright test caught it.) *@
-            @* Stable id, because HomeHero above carries the identical placeholder — a
-               placeholder-based selector matches its box instead of this one. *@
-            <input id="nearby-location" class="form-control" style="max-width:280px;"
-                   placeholder="Enter your city, address, or zip code"
-                   value="@_manualQuery"
-                   @oninput="@(e => { _manualQuery = e.Value?.ToString() ?? string.Empty; _manualError = null; })" />
-            <button type="button" class="btn btn-primary"
-                    @onclick="SearchManualLocationAsync"
-                    disabled="@(_searching || string.IsNullOrWhiteSpace(_manualQuery))">
-                @(_searching ? "Searching…" : "Show what's near there")
-            </button>
-        </div>
-        @if (_manualError is not null)
+        @if (_locationState == LocationState.Asking)
         {
-            <div class="alert alert-warning py-2">@_manualError</div>
+            <p class="text-secondary small mb-3">Finding your location…</p>
         }
-    }
-
-    @* A second, independent chain. It was originally one long if/else-if with the block above,
-       which meant the Denied branch shadowed every results branch: somebody who declined the
-       browser prompt, typed a place and searched got their data loaded and nothing rendered. The
-       manual box has to stay on screen anyway — it is how they search somewhere else — so the two
-       concerns cannot share a chain. Caught by a Playwright test, not by anything else. *@
-    @if (_searching)
-    {
-        <div class="d-flex justify-content-center py-4">
-            <BenLoaderOverlay Visible="true" Text="Looking nearby…" />
-        </div>
-    }
-    else if (_hasSearched && _events.Count == 0 && _groups.Count == 0)
-    {
-        <div class="alert alert-light text-muted text-center py-4">
-            Nothing found within @_radiusMiles miles.
-            <br /><span class="small">Try a wider distance, or <a href="/find" class="text-decoration-none">browse every group</a>.</span>
-        </div>
-    }
-    else if (_hasSearched)
-    {
-        @* ── Public events ────────────────────────────────────────────────── *@
-        @if (_events.Count > 0)
+        else if (_locationState == LocationState.Denied)
         {
-            <h5 class="mb-2">Upcoming Events</h5>
-            <p class="text-secondary small mb-3">
-                Locations shown here are approximate — an area several miles across, not an address.
-            </p>
-            <div class="row g-3 mb-4">
-                @foreach (var ev in _events)
-                {
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title mb-1">@ev.Title</h6>
-                                <p class="card-text text-secondary mb-1" style="font-size:.85rem;">
-                                    @ev.StartDateTime.ToDisplayDateTime()
-                                </p>
-                                @if (!string.IsNullOrWhiteSpace(ev.City))
-                                {
-                                    <p class="card-text text-muted mb-1" style="font-size:.8rem;">
-                                        Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")
-                                        · @ev.DistanceMiles.ToString("F0") mi
+            @* The browser said no, or there simply is no geolocation API — a corporate proxy, an
+               older device, a visitor who declined the prompt. Falling silent here would look like the
+               feature is broken; asking for a place name instead keeps it usable either way. *@
+            <div class="d-flex gap-2 mb-3 flex-wrap">
+                @* @oninput, not @onchange: the button beside this field is gated on its value, and a
+                   change event only fires on blur — somebody who types and clicks straight through
+                   would find a dead button. (The original hit this with TelerikTextBox, which commits
+                   on blur; a Playwright test caught it.) *@
+                @* Stable id, because HomeHero above carries the identical placeholder — a
+                   placeholder-based selector matches its box instead of this one. *@
+                <input id="nearby-location" class="form-control" style="max-width:280px;"
+                       placeholder="Enter your city, address, or zip code"
+                       value="@_manualQuery"
+                       @oninput="@(e => { _manualQuery = e.Value?.ToString() ?? string.Empty; _manualError = null; })" />
+                <button type="button" class="btn btn-primary"
+                        @onclick="SearchManualLocationAsync"
+                        disabled="@(_searching || string.IsNullOrWhiteSpace(_manualQuery))">
+                    @(_searching ? "Searching…" : "Show what's near there")
+                </button>
+            </div>
+            @if (_manualError is not null)
+            {
+                <div class="alert alert-warning py-2">@_manualError</div>
+            }
+        }
+
+        @* A second, independent chain. It was originally one long if/else-if with the block above,
+           which meant the Denied branch shadowed every results branch: somebody who declined the
+           browser prompt, typed a place and searched got their data loaded and nothing rendered. The
+           manual box has to stay on screen anyway — it is how they search somewhere else — so the two
+           concerns cannot share a chain. Caught by a Playwright test, not by anything else. *@
+        @if (_searching)
+        {
+            <div class="d-flex justify-content-center py-4">
+                <BenLoaderOverlay Visible="true" Text="Looking nearby…" />
+            </div>
+        }
+        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0)
+        {
+            <div class="alert alert-light text-muted text-center py-4">
+                Nothing found within @_radiusMiles miles.
+                <br /><span class="small">Try a wider distance, or <a href="/find" class="text-decoration-none">browse every group</a>.</span>
+            </div>
+        }
+        else if (_hasSearched)
+        {
+            @* ── Public events ────────────────────────────────────────────────── *@
+            @if (_events.Count > 0)
+            {
+                <h5 class="mb-2">Upcoming Events</h5>
+                <p class="text-secondary small mb-3">
+                    Locations shown here are approximate — an area several miles across, not an address.
+                </p>
+                <div class="row g-3 mb-4">
+                    @foreach (var ev in _events)
+                    {
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1">@ev.Title</h6>
+                                    <p class="card-text text-secondary mb-1" style="font-size:.85rem;">
+                                        @ev.StartDateTime.ToDisplayDateTime()
                                     </p>
-                                }
-                                <p class="card-text text-muted mb-0" style="font-size:.78rem;">Hosted by @ev.OrgName</p>
-                            </div>
-                            <div class="card-footer bg-transparent d-flex gap-2 pt-2">
-                                @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                {
-                                    <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
-                                       class="btn btn-sm btn-outline-primary">View Event</a>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                {
-                                    <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
-                                }
+                                    @if (!string.IsNullOrWhiteSpace(ev.City))
+                                    {
+                                        <p class="card-text text-muted mb-1" style="font-size:.8rem;">
+                                            Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")
+                                            · @ev.DistanceMiles.ToString("F0") mi
+                                        </p>
+                                    }
+                                    <p class="card-text text-muted mb-0" style="font-size:.78rem;">Hosted by @ev.OrgName</p>
+                                </div>
+                                <div class="card-footer bg-transparent d-flex gap-2 pt-2">
+                                    @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                    {
+                                        <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
+                                           class="btn btn-sm btn-outline-primary">View Event</a>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                    {
+                                        <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </div>
-                }
-            </div>
-        }
+                    }
+                </div>
+            }
 
-        @* ── Groups ────────────────────────────────────────────────────────── *@
-        @if (_groups.Count > 0)
-        {
-            <h5 class="mb-2">Groups Nearby</h5>
-            <div class="row g-3 mb-4">
-                @foreach (var org in _groups)
-                {
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
-                            <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
-                        </OrgCard>
-                    </div>
-                }
-            </div>
+            @* ── Groups ────────────────────────────────────────────────────────── *@
+            @if (_groups.Count > 0)
+            {
+                <h5 class="mb-2">Groups Nearby</h5>
+                <div class="row g-3 mb-4">
+                    @foreach (var org in _groups)
+                    {
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
+                                <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
+                            </OrgCard>
+                        </div>
+                    }
+                </div>
+            }
         }
-    }
-</div>
+    </div>
+
+}
 
 @code {
     private enum LocationState { Asking, Granted, Denied }

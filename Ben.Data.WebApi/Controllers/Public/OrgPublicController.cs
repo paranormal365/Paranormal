@@ -16,6 +16,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 [ApiController]
 [AllowAnonymous]
 [Route("api/public/organizations")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureCmsPages)]
 public sealed class OrgPublicController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

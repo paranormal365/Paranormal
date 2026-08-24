@@ -10,6 +10,8 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.CmsPages">
 <PageTitle>@(_page?.PageTitle ?? "Edit Page") — CMS</PageTitle>
 
 <div class="container-fluid px-3">
@@ -465,6 +467,8 @@
         </div>
     </ChildContent>
 </BenModal>
+
+</FeatureGate>
 
 @code {
     [Parameter] public Guid OrgId  { get; set; }

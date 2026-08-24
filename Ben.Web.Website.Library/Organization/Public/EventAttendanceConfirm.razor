@@ -1,7 +1,10 @@
 @page "/attending/{Token}"
 @namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.Events">
 <PageTitle>You're coming</PageTitle>
 
 @* The other end of the emailed link. Confirms the address, makes an account if there is not one,
@@ -82,6 +85,8 @@
         </div>
     }
 </div>
+
+</FeatureGate>
 
 @code {
     [Parameter] public string Token { get; set; } = "";

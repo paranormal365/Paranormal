@@ -222,7 +222,10 @@
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Item 154: same shape as the Publications tab below — a gated tab must not exist,
+               because FeatureGate's not-found body inside a tab strip is a tab that opens onto
+               an error. The calendar PAGES carry their own gate so the URLs die too. *@
+            @if (_isMember && Features.IsOn(SiteFeatures.Events))
             {
                 <BenTab Title="Calendar" Id="calendar">
                     @* The review queue lives with the events that produce it. Renders nothing
@@ -253,7 +256,7 @@
                 </BenTab>
             }
 
-            @if (_canManageRoles)
+            @if (_canManageRoles && Features.IsOn(SiteFeatures.CmsPages))
             {
                 <BenTab Title="CMS" Id="cms">
                     <OrgCmsEditor OrgId="@OrgId" EmbeddedMode="true" />

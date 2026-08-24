@@ -1,11 +1,14 @@
 @page "/o/{UrlName}"
 @namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
 @using Ben.Data.Common.Enums
 @using System.Text.Json
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.CmsPages">
 <PageTitle>@(_org?.OrgName ?? UrlName)</PageTitle>
 
 @if (_loading)
@@ -86,6 +89,8 @@ else
         <OrgApplyPanel OrgId="@_org.OrgId" OrgName="@_org.OrgName" />
     </div>
 }
+
+</FeatureGate>
 
 @code {
     [Parameter] public string UrlName { get; set; } = "";

@@ -5,202 +5,209 @@
 @inject IBenAdminClient  AdminClient
 @inject IBenUserState    UserState
 @inject IJSRuntime       JS
+@using Ben.Web.Services
+@inject SiteFeaturesProvider Features
 
 @* ── Loading ─────────────────────────────────────────────────────────────── *@
-@if (_loading)
+@* Item 154: the discovery switch — off means this renders nothing at all. *@
+@if (Features.IsOn(SiteFeatures.Discovery))
 {
-    <div class="d-flex justify-content-center py-5">
-        <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
-    </div>
-}
-else
-{
-    @* ── Section header ───────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
-        <div class="d-flex align-items-baseline justify-content-between mb-2">
-            <h4 class="mb-0">Public Investigations</h4>
-            <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
         </div>
-        <p class="text-secondary small mb-3">
-            Click a marker or case below to view details.
-            @if (!UserState.IsAuthenticated)
-            {
-                <a href="/login" class="text-decoration-none">Sign in</a><span> to vote on evidence.</span>
-            }
-        </p>
-    </div>
-
-    @* ── Map ──────────────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
-        <div style="height:420px; border-radius:.5rem; overflow:hidden;">
-            <TelerikMap @ref="_mapRef"
-                        Center="@_mapCenter"
-                        Zoom="@_mapZoom"
-                        Height="420px">
-                <MapLayers>
-                    <MapLayer Type="@MapLayersType.Tile"
-                              Attribution="© OpenStreetMap contributors"
-                              Subdomains="@(new[] {"a","b","c"})"
-                              UrlTemplate="caseMapTileTemplate" />
-
-                    @if (_markers.Count > 0)
-                    {
-                        <MapLayer Type="@MapLayersType.Marker"
-                                  Data="@_markers"
-                                  LocationField="@nameof(CaseMapMarker.LatLng)"
-                                  TitleField="@nameof(CaseMapMarker.Title)">
-                            <MapLayerMarkerSettings Template="caseMapMarkerTemplate" />
-                        </MapLayer>
-                    }
-                </MapLayers>
-            </TelerikMap>
-
-            @* Said plainly, because a pin on a map reads as an address whether or not it is one.
-               These are cell centres several miles across; the property is somewhere nearby. *@
-            <p class="text-secondary small mt-2 mb-0">
-                Pins show an approximate area, not an address. Case locations are deliberately
-                published to within a few miles.
+    }
+    else
+    {
+        @* ── Section header ───────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+            <div class="d-flex align-items-baseline justify-content-between mb-2">
+                <h4 class="mb-0">Public Investigations</h4>
+                <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+            </div>
+            <p class="text-secondary small mb-3">
+                Click a marker or case below to view details.
+                @if (!UserState.IsAuthenticated)
+                {
+                    <a href="/login" class="text-decoration-none">Sign in</a><span> to vote on evidence.</span>
+                }
             </p>
         </div>
-    </div>
 
-    @* ── Case popup ───────────────────────────────────────────────────────── *@
-    @* Was a non-modal, resizable TelerikWindow floating over the map. As a modal, choosing a
-       different pin means dismissing this one first — worth it for a single dialog primitive that
-       is known to keep its inputs bound (the vote widget below is interactive). *@
-    <BenModal @bind-Visible="@_popupVisible"
-              Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
-              Static="false">
-        <ChildContent>
-            @if (_clusterCases.Count > 1 && _selectedCase is null)
-            {
-                @* City cluster list *@
-                <p class="text-secondary small mb-2">@_clusterCases.Count cases in @_selectedCity</p>
-                <div class="list-group list-group-flush">
-                    @foreach (var c in _clusterCases)
-                    {
-                        <button class="list-group-item list-group-item-action py-2 px-0"
-                                @onclick="@(() => _selectedCase = c)">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="font-monospace small text-muted">@c.CaseReference</span>
-                                    @if (c.IsHaunted) { <span class="ms-1">👻</span> }
-                                    <div class="fw-semibold">@c.Title</div>
-                                </div>
-                                <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Score="@c.Score" Compact="true" />
-                            </div>
-                        </button>
-                    }
-                </div>
-            }
-            else if (_selectedCase is not null)
-            {
-                @* Single case detail *@
-                @if (_clusterCases.Count > 1)
-                {
-                    <button class="btn btn-sm btn-link ps-0 mb-2 text-decoration-none"
-                            @onclick="@(() => _selectedCase = null)">← All cases in @_selectedCity</button>
-                }
-                <div class="mb-2">
-                    <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
-                    @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
-                </div>
-                <h6 class="mb-1">@_selectedCase.Title</h6>
-                <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
-                @if (_selectedCase.ClientName is not null)
-                {
-                    <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
-                }
+        @* ── Map ──────────────────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+            <div style="height:420px; border-radius:.5rem; overflow:hidden;">
+                <TelerikMap @ref="_mapRef"
+                            Center="@_mapCenter"
+                            Zoom="@_mapZoom"
+                            Height="420px">
+                    <MapLayers>
+                        <MapLayer Type="@MapLayersType.Tile"
+                                  Attribution="© OpenStreetMap contributors"
+                                  Subdomains="@(new[] {"a","b","c"})"
+                                  UrlTemplate="caseMapTileTemplate" />
 
-                @* Community votes *@
-                <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                        @if (_markers.Count > 0)
+                        {
+                            <MapLayer Type="@MapLayersType.Marker"
+                                      Data="@_markers"
+                                      LocationField="@nameof(CaseMapMarker.LatLng)"
+                                      TitleField="@nameof(CaseMapMarker.Title)">
+                                <MapLayerMarkerSettings Template="caseMapMarkerTemplate" />
+                            </MapLayer>
+                        }
+                    </MapLayers>
+                </TelerikMap>
 
-                <div class="d-flex gap-2 mt-3 flex-wrap">
-                    <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
-                       class="btn btn-sm btn-outline-primary">View Investigation</a>
-                    <a href="/o/@_selectedCase.OrgUrlName"
-                       class="btn btn-sm btn-outline-secondary">View Group</a>
-                </div>
-            }
-        </ChildContent>
-    </BenModal>
-
-    @* ── Paged list ────────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
-        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-            <span class="fw-semibold">Sort by</span>
-            <div class="btn-group" role="group" aria-label="Sort investigations">
-                <button type="button"
-                        class="btn @(_sort == "votes" ? "btn-primary" : "btn-outline-primary")"
-                        aria-pressed="@((_sort == "votes").ToString().ToLowerInvariant())"
-                        @onclick="@(() => SetSort("votes"))">Most Votes</button>
-                <button type="button"
-                        class="btn @(_sort == "date" ? "btn-primary" : "btn-outline-primary")"
-                        aria-pressed="@((_sort == "date").ToString().ToLowerInvariant())"
-                        @onclick="@(() => SetSort("date"))">Newest</button>
+                @* Said plainly, because a pin on a map reads as an address whether or not it is one.
+                   These are cell centres several miles across; the property is somewhere nearby. *@
+                <p class="text-secondary small mt-2 mb-0">
+                    Pins show an approximate area, not an address. Case locations are deliberately
+                    published to within a few miles.
+                </p>
             </div>
         </div>
 
-        @if (_pagedItems.Count == 0)
-        {
-            <div class="alert alert-light text-muted text-center">No public investigations yet.</div>
-        }
-        else
-        {
-            <div class="row g-3">
-                @foreach (var item in _pagedItems)
+        @* ── Case popup ───────────────────────────────────────────────────────── *@
+        @* Was a non-modal, resizable TelerikWindow floating over the map. As a modal, choosing a
+           different pin means dismissing this one first — worth it for a single dialog primitive that
+           is known to keep its inputs bound (the vote widget below is interactive). *@
+        <BenModal @bind-Visible="@_popupVisible"
+                  Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
+                  Static="false">
+            <ChildContent>
+                @if (_clusterCases.Count > 1 && _selectedCase is null)
                 {
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card h-100 @(item.IsHaunted ? "border-warning" : "")">
-                            <div class="card-body pb-1">
-                                <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
-                                    @if (item.IsHaunted)
-                                    { <span class="badge bg-warning text-dark">👻 Haunted</span> }
-                                </div>
-                                <h6 class="card-title mb-1">@item.Title</h6>
-                                <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
-                                <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
-                                <CaseVoteBar Confirms="@item.ConfirmsCount"
-                                         Disputes="@item.DisputesCount"
-                                         Inconclusive="@item.InconclusiveCount"
-                                         Total="@item.TotalVotes"
-                                         Score="@item.Score" />
-                                @if (UserState.IsAuthenticated)
-                                {
-                                    <div class="mt-2">
-                                        <CaseVoteWidget CaseId="@item.CaseId"
-                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                    @* City cluster list *@
+                    <p class="text-secondary small mb-2">@_clusterCases.Count cases in @_selectedCity</p>
+                    <div class="list-group list-group-flush">
+                        @foreach (var c in _clusterCases)
+                        {
+                            <button class="list-group-item list-group-item-action py-2 px-0"
+                                    @onclick="@(() => _selectedCase = c)">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="font-monospace small text-muted">@c.CaseReference</span>
+                                        @if (c.IsHaunted) { <span class="ms-1">👻</span> }
+                                        <div class="fw-semibold">@c.Title</div>
                                     </div>
-                                }
-                            </div>
-                            <div class="card-footer bg-transparent d-flex gap-2 pt-2">
-                                <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
-                                   class="btn btn-sm btn-outline-primary">View</a>
-                                <a href="/o/@item.OrgUrlName"
-                                   class="btn btn-sm btn-outline-secondary">Group</a>
-                            </div>
-                        </div>
+                                    <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Score="@c.Score" Compact="true" />
+                                </div>
+                            </button>
+                        }
                     </div>
                 }
+                else if (_selectedCase is not null)
+                {
+                    @* Single case detail *@
+                    @if (_clusterCases.Count > 1)
+                    {
+                        <button class="btn btn-sm btn-link ps-0 mb-2 text-decoration-none"
+                                @onclick="@(() => _selectedCase = null)">← All cases in @_selectedCity</button>
+                    }
+                    <div class="mb-2">
+                        <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
+                        @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
+                    </div>
+                    <h6 class="mb-1">@_selectedCase.Title</h6>
+                    <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
+                    @if (_selectedCase.ClientName is not null)
+                    {
+                        <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
+                    }
+
+                    @* Community votes *@
+                    <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+
+                    <div class="d-flex gap-2 mt-3 flex-wrap">
+                        <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
+                           class="btn btn-sm btn-outline-primary">View Investigation</a>
+                        <a href="/o/@_selectedCase.OrgUrlName"
+                           class="btn btn-sm btn-outline-secondary">View Group</a>
+                    </div>
+                }
+            </ChildContent>
+        </BenModal>
+
+        @* ── Paged list ────────────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
+            <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+                <span class="fw-semibold">Sort by</span>
+                <div class="btn-group" role="group" aria-label="Sort investigations">
+                    <button type="button"
+                            class="btn @(_sort == "votes" ? "btn-primary" : "btn-outline-primary")"
+                            aria-pressed="@((_sort == "votes").ToString().ToLowerInvariant())"
+                            @onclick="@(() => SetSort("votes"))">Most Votes</button>
+                    <button type="button"
+                            class="btn @(_sort == "date" ? "btn-primary" : "btn-outline-primary")"
+                            aria-pressed="@((_sort == "date").ToString().ToLowerInvariant())"
+                            @onclick="@(() => SetSort("date"))">Newest</button>
+                </div>
             </div>
 
-            @if (_totalCount > _pageSize)
+            @if (_pagedItems.Count == 0)
             {
-                <div class="mt-3 d-flex justify-content-center">
-                    <BenPager Total="@_totalCount"
-                              PageSize="@_pageSize"
-                              Page="@_page"
-                              PageChanged="@OnPageChanged"
-                              AriaLabel="Investigation pages" />
-                </div>
+                <div class="alert alert-light text-muted text-center">No public investigations yet.</div>
             }
-        }
-    </div>
-}
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var item in _pagedItems)
+                    {
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="card h-100 @(item.IsHaunted ? "border-warning" : "")">
+                                <div class="card-body pb-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
+                                        @if (item.IsHaunted)
+                                        { <span class="badge bg-warning text-dark">👻 Haunted</span> }
+                                    </div>
+                                    <h6 class="card-title mb-1">@item.Title</h6>
+                                    <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
+                                    <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
+                                    <CaseVoteBar Confirms="@item.ConfirmsCount"
+                                             Disputes="@item.DisputesCount"
+                                             Inconclusive="@item.InconclusiveCount"
+                                             Total="@item.TotalVotes"
+                                             Score="@item.Score" />
+                                    @if (UserState.IsAuthenticated)
+                                    {
+                                        <div class="mt-2">
+                                            <CaseVoteWidget CaseId="@item.CaseId"
+                                                            PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                                        </div>
+                                    }
+                                </div>
+                                <div class="card-footer bg-transparent d-flex gap-2 pt-2">
+                                    <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
+                                       class="btn btn-sm btn-outline-primary">View</a>
+                                    <a href="/o/@item.OrgUrlName"
+                                       class="btn btn-sm btn-outline-secondary">Group</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
 
-@* ── Vote bar helper ──────────────────────────────────────────────────────── *@
-@* Renders inline vote counts for a case *@
+                @if (_totalCount > _pageSize)
+                {
+                    <div class="mt-3 d-flex justify-content-center">
+                        <BenPager Total="@_totalCount"
+                                  PageSize="@_pageSize"
+                                  Page="@_page"
+                                  PageChanged="@OnPageChanged"
+                                  AriaLabel="Investigation pages" />
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @* ── Vote bar helper ──────────────────────────────────────────────────────── *@
+    @* Renders inline vote counts for a case *@
+
+}
 
 @code {
     // ── Map state ────────────────────────────────────────────────────────────

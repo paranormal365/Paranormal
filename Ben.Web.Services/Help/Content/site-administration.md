@@ -99,12 +99,13 @@ navigation **and the addresses stop working** — someone who bookmarked the pag
 a link by a colleague, gets the ordinary "page not found" screen rather than a way in. That
 pairing is the point: hiding a link while the page still answers is not switching a feature off.
 
-**Four of them are not wired yet, and this page would rather tell you than let you find out.**
-**Local discovery and maps**, **Group public pages** and **Voting** currently change nothing at
-all when switched off — the sections keep working exactly as before. **Events and calendars** is
-half-wired and is the one to be careful with: switching it off stops the reminder emails while
-leaving the calendars, event pages and RSVPs running, so people can still sign up for an event
-and simply never be reminded of it. Leave these four on until they are finished.
+Every switch is now fully wired. The last four were finished together: **Local discovery and
+maps** takes down the "what's near you" panel, the home-page maps and the nearby search;
+**Group public pages** takes down every /o/{group} page — including for visitors who are not
+signed in — along with the CMS editor and its tab; **Voting** removes the vote controls from
+cases, evidence and files and refuses the endpoints behind them; **Events and calendars**
+removes the Calendar tab, the public What's-on list, event pages, RSVPs, and the reminder
+emails, together — no more signing up for an event nobody will be reminded of.
 
 What it does **not** do is delete anything. Equipment records, saved videos, messages and votes
 all stay exactly where they are, and turning the switch back on returns the section with its
@@ -300,3 +301,54 @@ record: when a group pays, set their band, cadence and period here. The member c
 frozen from the moment you save, and the group keeps those terms for the whole period whatever
 happens to the price list. The Members column shows the current count beside the frozen one —
 the gap is what the group will be re-banded on at renewal.
+
+## Merging two groups
+
+**Administration → Groups → Merge Groups** takes two organizations and ends with one. Choose
+the **base** — the group that survives, keeping its URL and settings — and the group to merge
+into it, then read the preview before anything happens: it lists exactly what will move and
+every collision, and computing it changes nothing.
+
+What the merge does, in one pass that either completes or leaves both groups untouched:
+
+- **Everything the merged group owns moves to the base** — members, cases, investigations,
+  files, equipment, pages, calendar, messages. The list in the preview is generated from the
+  database schema itself, so it is complete by construction.
+- **A person in both groups** keeps one membership, at the **higher** of their two roles.
+- **Case numbers collide by design** — both groups started at #1 — so colliding merged cases
+  are renumbered into the base's sequence; page addresses that collide get a suffix.
+- **The merged group's URL becomes a permanent alias** of the base, so old links keep working
+  and the name can never be captured by a newly created group.
+- **The merged group's subscription is dropped** — the base's plan governs the combined group.
+  If money is owed back, record it as a ledger adjustment.
+- **Everyone is told**: former members get a message that their group is now part of the base,
+  and clients with open cases are told the group handling their case has a new name.
+
+The name after the merge is yours to choose — either group's name or a new one. Confirmation
+requires typing the merged group's name, because there is no undo.
+
+## The money trail
+
+Three more screens under **Administration → Billing** carry the actual money.
+
+**Ledger** is the record: every charge, payment, adjustment and referral payout, newest first.
+It is append-only on purpose — there is no edit and no delete, here or in the API underneath. A
+wrong entry is answered by recording an **adjustment** that names the mistake, exactly the way a
+paper ledger works, so "who changed this number?" always has the same answer: nobody. Recording
+a **charge** computes tax from the group's state and freezes both the rate and the dollars on
+the row; recording a **payment** assigns the next receipt number, which the group can download —
+and re-download, forever — from their own billing history on the Pricing page. A payment carries
+no tax of its own: its tax was on the charge it settles, and counting it twice would be a lie in
+both directions.
+
+**Tax Rates** holds the current rate per state, matched against the group's address. A state
+with no row is taxed at **zero** — the honest default, since many states do not tax this
+service, and a visible zero on a bill gets questioned while a silently guessed rate does not.
+Editing a rate never rewrites history: every document froze the rate it used.
+
+**Referrals** shows every referrer's standing. A referrer is anyone a coupon campaign is
+attributed to — set on the campaign, by their account email — and every redemption of their
+codes counts as their referral, with the money frozen at redemption time. The screen shows what
+their codes brought in, the discount given, and what has been paid out; it deliberately does
+**not** compute what is owed, because the reward rule is yours to set per arrangement. Record a
+payout from here and it lands on the ledger like everything else.

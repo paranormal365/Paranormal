@@ -535,3 +535,10 @@ raises the limit.
 Have a coupon code? There's a line for it at checkout — type it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
 to a specific account, so if a code is refused the message says why.
+
+**Tax** appears as its own line on the quote when your state taxes the service, computed from
+your group's address — never folded into the price. And every payment your group makes has a
+**receipt**: open **Billing history** on your group's card on the Pricing page to see every
+charge, payment and adjustment, and download any receipt by its number. Receipts are generated
+from the payment record itself, so the one you download in five years says exactly what it said
+on the day.

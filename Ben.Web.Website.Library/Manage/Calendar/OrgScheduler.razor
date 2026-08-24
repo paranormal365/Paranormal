@@ -5,6 +5,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.Events">
 @if (!EmbeddedMode) { <PageTitle>Calendar</PageTitle> }
 
 <div class="container-fluid py-3">
@@ -334,6 +336,8 @@
         </div>
     </ChildContent>
 </BenModal>
+
+</FeatureGate>
 
 @code {
     [Parameter] public Guid OrgId        { get; set; }
