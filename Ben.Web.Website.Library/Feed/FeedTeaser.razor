@@ -1,0 +1,64 @@
+@namespace Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+
+@inject IBenAdminClient Feed
+
+@*
+    The feed's front door on the front page (item 186 F9): the top of For You, small, with the
+    invitation. Anonymous-visible — the whole point is showing a visitor the conversation they
+    could be in. Renders NOTHING when the feed is off, unreachable, or empty: a teaser for a
+    dead room would be worse than no teaser, and the flag gate is the feed's own 404 answering
+    null here.
+*@
+
+@if (_posts.Count > 0)
+{
+    <div class="container-fluid px-3 py-2" style="max-width:860px;margin:auto;" id="feed-teaser">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-baseline justify-content-between mb-2">
+                    <h5 class="mb-0">From the feed</h5>
+                    <a href="/feed" class="small text-decoration-none">Join the conversation →</a>
+                </div>
+                @foreach (var post in _posts)
+                {
+                    <a href="@($"/feed/{post.Id}")"
+                       class="d-flex gap-2 py-2 border-top text-decoration-none text-body bv-feed-teaser-row">
+                        <UserAvatar AppUserId="@post.AuthorAppUserId"
+                                    DisplayName="@post.AuthorDisplayName" Size="32" />
+                        <div class="flex-grow-1 min-width-0">
+                            <span class="fw-semibold small">@post.AuthorDisplayName</span>
+                            <div class="small text-secondary text-truncate">@post.Body</div>
+                        </div>
+                        <span class="small text-secondary flex-shrink-0" aria-hidden="true">
+                            ♡ @post.LikeCount · @post.ReplyCount ↩
+                        </span>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<FeedPostRecord> _posts = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        try
+        {
+            // The feed's own ranking answers what leads; null covers OFF and unreachable alike.
+            var page = await Feed.GetFeedAsync("foryou");
+            var top = page?.Posts.Take(3).ToList();
+            if (top is { Count: > 0 })
+            {
+                _posts = top;
+                StateHasChanged();
+            }
+        }
+        catch { /* garnish on the landing page — see the note at the top */ }
+    }
+}

@@ -89,6 +89,10 @@ and is never stored — leave, and it's forgotten.
 Click a post's reply count to open it and read the replies. Opening a post is what clears a
 "mentioned you" badge from your **Feed** menu entry, so nothing disappears before you have seen it.
 
+While the page is open it quietly checks for newer posts; a **"new posts"** button appears when
+there are some, and clicking it brings them in without losing your place. The site's home page
+also shows a small taste of the feed's current top posts — the front door on the front page.
+
 ## Following
 
 Press **Follow** beside somebody's name on a post, or on their feed page. It is one-directional and

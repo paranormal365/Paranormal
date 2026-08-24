@@ -127,6 +127,20 @@
         }
         else
         {
+            @* The new-posts pill (item 186 F9): sticky so it's reachable from anywhere in the
+               scroll. On the chronological tabs the click prepends exactly what's new; on
+               For You "new" has no stable position, so the click re-ranks the page. *@
+            @if (_newPostsWaiting > 0)
+            {
+                <div class="sticky-top d-flex justify-content-center py-2" style="z-index:1020;"
+                     id="feed-new-posts">
+                    <button type="button" class="btn btn-primary btn-sm rounded-pill shadow"
+                            @onclick="ShowNewPostsAsync">
+                        @(_newPostsWaiting == 1 ? "1 new post" : $"{_newPostsWaiting} new posts")
+                    </button>
+                </div>
+            }
+
             @for (var i = 0; i < _posts.Count; i++)
             {
                 var post = _posts[i];
@@ -229,6 +243,69 @@
     /// <summary>The card for a promoted slot, round-robin over what the server sent.</summary>
     private Ben.Service.Models.Entities.PromotedGroupCard? NextPromoted(int slot)
         => _promoted.Count == 0 ? null : _promoted[(slot / 2) % _promoted.Count];
+
+    // ── The new-posts pill (item 186 F9) ─────────────────────────────────────
+    /// <summary>How often the head of the feed is re-checked while the page is open.</summary>
+    private static readonly TimeSpan NewPostsCheckEvery = TimeSpan.FromSeconds(45);
+
+    private int _newPostsWaiting;
+    private CancellationTokenSource? _pollCts;
+    private List<FeedPostRecord> _pendingNewPosts = [];
+
+    private void StartNewPostsPolling()
+    {
+        if (_pollCts is not null) return;
+        _pollCts = new CancellationTokenSource();
+        _ = PollForNewPostsAsync(_pollCts.Token);
+    }
+
+    private async Task PollForNewPostsAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(NewPostsCheckEvery);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (_loading || _loadingMore || _posts.Count == 0) continue;
+
+                // "Anything newer than what's on screen?" is asked of the CHRONOLOGICAL head —
+                // even in For You mode, where the answer decides whether re-ranking is offered,
+                // not what position anything lands in.
+                var head = await Feed.GetFeedAsync(
+                    _mode == "foryou" ? "all" : _mode, Tag, experienceType: TypeId);
+                if (head is null) continue;
+
+                var known = _posts.Select(p => p.Id).ToHashSet();
+                var newestSeen = _posts.Max(p => p.DateCreated);
+                _pendingNewPosts = head.Posts
+                    .Where(p => !known.Contains(p.Id) && p.DateCreated > newestSeen)
+                    .ToList();
+
+                if (_pendingNewPosts.Count != _newPostsWaiting)
+                {
+                    _newPostsWaiting = _pendingNewPosts.Count;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException) { /* page going away */ }
+        catch (Exception) { /* a failed poll is a quiet skip — the next tick tries again */ }
+    }
+
+    private async Task ShowNewPostsAsync()
+    {
+        if (_mode == "foryou")
+        {
+            // No stable position for "new" in a ranked list: re-rank the whole page.
+            _newPostsWaiting = 0;
+            _pendingNewPosts = [];
+            await LoadAsync();
+            return;
+        }
+        _posts.InsertRange(0, _pendingNewPosts.OrderByDescending(p => p.DateCreated).ThenByDescending(p => p.Id));
+        _newPostsWaiting = 0;
+        _pendingNewPosts = [];
+    }
 
     private async Task LoadPromotedAsync()
     {
@@ -417,6 +494,9 @@
     {
         if (!RendererInfo.IsInteractive) return;
 
+        // The head re-check that feeds the pill (item 186 F9) — once per page lifetime.
+        StartNewPostsPolling();
+
         var wantsObserver = _nextCursor is not null;
         if (!wantsObserver)
         {
@@ -460,6 +540,8 @@
 
         _self?.Dispose();
         _geoRef?.Dispose();
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
     }
 
     /// <summary>
