@@ -198,15 +198,19 @@ deck — it is a working product with production-grade engineering discipline:</
   <li>Equipment: personal and group inventories, a moderated global catalog, lending with condition photos</li>
   <li>Events: public listings, RSVPs, attendee evidence submission, reminder automation</li>
   <li>Roles &amp; permissions: per-group custom roles with per-table grants, tier-aware</li>
-  <li>Community: profiles, @handles, following, hashtags, a moderated feed</li>
-  <li>Group discovery by location; group-authored promotional ads with platform review</li>
+  <li>Community: profiles, @handles, following, hashtags, and the full public feed — anonymous
+      scroll, ranked timeline, photo and video posts screened on our own servers before they
+      appear, and a classifier that learns from every moderator decision</li>
+  <li>Group discovery by location, by kind (investigation groups and ghost walking tours), and
+      group-authored promotional ads with platform review, served nearest-viewer-first</li>
+  <li>Native iPhone and iPad app on the same API, running on device today</li>
   <li>Billing foundation: tiers by member count, contract-terms freezing, coupons, referral
       tracking, an append-only financial ledger with receipts and per-state tax</li>
   <li>In-app help system with full product documentation, generated to PDF</li>
 </ul>
 </div>
 <div class="callout avoid-break">
-<strong>Engineering discipline as an asset:</strong> 3,000+ automated unit tests and a 350+ scenario
+<strong>Engineering discipline as an asset:</strong> 3,270 automated unit tests and a 350+ scenario
 browser test suite run against every change; an append-only audit trail on financial records;
 additive-only database migrations; and a documented decision record covering 180+ tracked product
 items. The codebase is built to be operated, audited, and grown.
@@ -279,9 +283,21 @@ the activity that grows the community.</p>
 </tr>
 <tr>
   <td><strong>iPhone &amp; iPad app</strong></td>
-  <td>Native companion for investigators in the field — capture, upload, case notes, and the feed
-  on the device they already carry on every investigation.</td>
-  <td>Next major project after the current arc.</td>
+  <td>Native Swift app — one universal build for both devices — for investigators in the field:
+  capture, upload, and the feed on the device they already carry on every investigation. Talks to
+  the same API as the website, so it is the same account and the same data, with the same privacy
+  rules enforced identically.</td>
+  <td><strong>In active development and running on device.</strong> Sign-in with two-step codes,
+  the feed, and posting with camera capture all work against the live API today; notifications,
+  cases and events follow.</td>
+</tr>
+<tr>
+  <td><strong>Ghost walking tours</strong></td>
+  <td>Tour operators are a second kind of business on the same platform — public by default, with
+  their tours listed and reservable, and a filter that lets a visitor in a strange city find them.
+  Investigation groups that also run paid tours are found under both without registering twice.</td>
+  <td>Built. Widens the addressable market beyond investigation groups at essentially no
+  additional platform cost.</td>
 </tr>
 <tr>
   <td><strong>Group white-label</strong></td>
