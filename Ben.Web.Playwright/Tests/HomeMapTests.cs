@@ -122,7 +122,7 @@ public class HomeMapTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Page.WaitForSelectorAsync(".card", new() { Timeout = 15_000 });
         // CaseVoteWidget shows vote buttons when authenticated
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }).First;
+        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First;
         await Expect(confirmBtn).ToBeVisibleAsync(new() { Timeout = 12_000 });
     }
 
