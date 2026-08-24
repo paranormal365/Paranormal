@@ -8955,19 +8955,35 @@ equipment photo pickers …), each adding facets its content actually has (inves
 location). Also worth wiring: `MediaLibraryGrid`'s video/audio click-to-preview inside the
 picker's grid cells.
 
-## 176. A case title can leak the client's name onto public pages (OPEN — found by W4's privacy audit, 2026-08-23)
+## 176. A case title can leak the client's name onto public pages (CLOSED 2026-08-23 — warn-not-block leak check, pseudonyms covered too)
 
 The pseudonym machinery replaces the client's NAME on public surfaces, and addresses are
 generalized — verified anonymously during the W4 case-pages tour audit (public list shows
 "The Hargrove Family", "Hotel Guest #2024-7", place-named titles, city-level coordinates).
 But the case TITLE is free text the org writes, and several internal cases are titled with
-the client's surname ("Park, Nashville TN"). Nothing warns when such a case is made public —
+the client's surname ("Park, Nashville TN"). Nothing warned when such a case was made public —
 the title would carry the real name straight past the pseudonym.
 
-Fix shape: on Make-Public (CaseDetail edit save), warn — not block — when the title contains
-the client's first/last name or the street address, with a sentence naming what leaked and a
-suggestion to retitle by place. The W4 tour already teaches place-named titles; the warning
-makes the teaching enforceable at the moment it matters.
+**Shipped as specified, warn — never block.** `PublicTitleLeakCheck` (WebApi) matches whole
+words of the client's first/last/display name (tokens ≥3 chars; "Parker" is not "Park") and
+the street line minus its house number, case-insensitively. It runs server-side behind
+`GET cases/{id}/publish-leak-check` — necessarily so: the org-facing records deliberately carry
+no client name (`CaseClientRequestRecord` has none), so the check runs where the name lives and
+returns only the sentences. CaseDetail's Edit dialog calls it when Make Public is ticked: first
+Save shows the warnings and stops; Save again on the same text publishes as written. A failed
+check is silence, not a warning — an advisory that can't run must never stand between the org
+and publishing.
+
+**The check grew a second field while being built:** the seed itself had client Daniel Park
+pseudonymized as "The Park Family" — a disguise made of the thing it hides. The check now reads
+the pseudonym for the real name too (and the seeder's pseudonym is fixed; note the first
+replacement attempt, "The Belmont Family", was also wrong — the case sits on Belmont Blvd).
+Existing dev-DB rows keep the old pseudonym; the warning catches them at publish time.
+
+13 unit tests (probe-regressed twice: neutered check fails 6, Contains-instead-of-word-boundary
+fails the Parker test) + 2 e2e walking the real dialog — warn/stop/publish-anyway and the
+clean-title-no-stop path — because a warning the UI discards is the server-guard-with-no-UI-path
+bug, instance six. Help: working-a-case gets "The case label when a case goes public"; PDF regen.
 
 ## 177. Action-needed banners rendered every row twice (CLOSED 2026-08-23 — Ben's live report, fixed same hour)
 

@@ -294,7 +294,10 @@ internal static class DevelopmentDataSeeder
                 State = "TN", ZipCode = "37215", Country = "US",
                 Latitude = 36.1043m, Longitude = -86.7930m,
                 Status = CaseStatus.Accepted, IsPublic = false,
-                PublicPseudonym = "The Park Family",
+                // Not "The Park Family" — a pseudonym built from the client's real surname
+                // defeats itself, and item 176's leak check now warns on exactly that.
+                // (And not "The Belmont Family" either: the case sits on Belmont Blvd.)
+                PublicPseudonym = "The Caldwell Family",
                 DateCaseOpened = now.AddDays(-25),
                 DateCreated = now.AddDays(-25), CreatedByAppUserId = sarah.Id,
             };

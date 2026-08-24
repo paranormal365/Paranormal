@@ -86,6 +86,13 @@ public interface IBenCaseClient
     /// diverges from what the client actually wrote.
     /// </summary>
     Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Advisory warnings when this title or pseudonym would carry the client's name or the street
+    /// address onto the public case page (item 176). The caller decides what a failed check means —
+    /// for an advisory, failure must never block publishing.
+    /// </summary>
+    Task<LoadResult<string>> GetPublishLeakWarningsAsync(Guid orgId, Guid caseId, string title, string? pseudonym, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);

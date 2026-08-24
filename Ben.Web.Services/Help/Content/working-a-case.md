@@ -204,6 +204,23 @@ Investigations at a **private residence cannot be made public**. Publishing what
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
 
+## The case label when a case goes public
+
+A case reaches the public through **Edit Case** — set the status and tick **Make Public** — and
+the pseudonym then stands in for the client's name everywhere the site writes it. Everywhere
+except one place: the **case label**, which is free text your group typed, often in the
+"surname, city" habit that is perfect for private files and wrong for a public page.
+
+So the save checks. If the label about to go public contains the client's name or the street
+address, saving warns you once, names exactly what would leak, and suggests naming the place
+instead — "The Hargrove Farmhouse", not "Hargrove, Franklin TN". It is a warning, not a refusal:
+a surname is also sometimes a street or a town, and only you know which your label means. Save
+again and it publishes as written.
+
+The same save reads the pseudonym itself. "The Park Family" as the pseudonym for the Parks is a
+disguise made of the thing it hides — if the pseudonym contains the client's real name, you will
+be told before it publishes.
+
 ## Place pages
 
 Clicking the location on the Investigations tab opens that **place** — every visit recorded there,
