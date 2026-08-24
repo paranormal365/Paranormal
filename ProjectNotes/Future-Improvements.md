@@ -9374,7 +9374,15 @@ which fixed a bug introduced by item 179's first draft: a stripped MP4 would hav
 7 policy tests + the ordering pin; 3,088 unit tests green. Verified live with no ffmpeg configured:
 the setting reports "no media tool is configured", `CanChoose` false, uploads unaffected.
 
-**Ben's follow-on thought, NOT built — see the assessment given 2026-08-24:** *"maybe the free tier
+**DECIDED 2026-08-24: the public-place gate.** Ben agreed the inverted framing — free groups may
+take **public-place** work (landmarks, businesses, abandoned buildings, cemeteries); a **private
+residence requires a paid plan**. Not "free cases are unprotected", which would put the cost on a
+client who never chose the plan. `PlaceKind.PrivateResidence` already exists and is already
+enforced for event publication and investigation visibility, so this extends a live rule. Not yet
+built: a `PrivateResidenceCases` capability checked at case creation and when a case is bound to a
+residence place. See item 184 for the redaction model that goes with it.
+
+**The original follow-on thought and the assessment behind the decision:** *"maybe the free tier
 cannot guarantee privacy and has only the way to take on a case that is allowed to be completely
 public and unguarded. Then paid versions are where cases are allowed that are guarded."* The
 recommendation given was to invert it: not "free cases are unprotected" (which puts the cost on the
