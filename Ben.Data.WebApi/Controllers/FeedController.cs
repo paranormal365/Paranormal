@@ -50,15 +50,18 @@ public sealed class FeedController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IFeedMediaScreener _screener;
 
     public FeedController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
-        IMediaIngestService mediaIngest)
+        IMediaIngestService mediaIngest,
+        IFeedMediaScreener screener)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
+        _screener = screener;
     }
 
     /// <summary>What a feed post may carry, by content type.</summary>
@@ -297,7 +300,22 @@ public sealed class FeedController : BenControllerBase
             db.UploadFileMetadata.Add(ingested.Metadata);
 
             post.MediaUploadFileId = uploadFileId;
+
+            // ── Screening (item 186 F5) ──────────────────────────────────────
+            // Fail-closed by construction: the state starts Pending, and only a verdict moves it.
+            // A screener that throws leaves it exactly where it was, so the worst a broken
+            // screener can do is grow a queue — never publish something nobody looked at.
             post.MediaReviewState = FeedMediaReviewState.Pending;
+            try
+            {
+                var verdict = await _screener.ScreenAsync(storagePath, media.ContentType, ct);
+                post.MediaReviewState = verdict.State;
+                post.MediaReviewNote = verdict.Reason;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                post.MediaReviewNote = "Screening failed; held for a moderator.";
+            }
         }
 
         db.OrgMessages.Add(post);
@@ -392,10 +410,17 @@ public sealed class FeedController : BenControllerBase
         // honest answer is the same 404 as a held one.
         if (post?.StoragePath is not { Length: > 0 } storagePath) return NotFound();
 
-        var path = _mediaIngest.ServingPathFor(storagePath);
-        if (!System.IO.File.Exists(path)) return NotFound();
+        // Storage paths are RELATIVE to the configured root ("users/{id}/file.jpg"), so they go
+        // back through the storage service rather than to PhysicalFile. Passing one straight to
+        // the filesystem resolves against the process's working directory and finds nothing —
+        // which is exactly what this did until a live check caught it, while the unit tests passed
+        // because their storage stub hands out absolute temp paths.
+        var servingPath = _mediaIngest.ServingPathFor(storagePath);
+        if (!_fileStorage.Exists(servingPath)) return NotFound();
 
-        return PhysicalFile(path, post.ContentType ?? "application/octet-stream", enableRangeProcessing: true);
+        return File(await _fileStorage.OpenReadAsync(servingPath, ct),
+                    post.ContentType ?? "application/octet-stream",
+                    enableRangeProcessing: true);
     }
 
     // ── Liking ───────────────────────────────────────────────────────────────

@@ -101,3 +101,9 @@ TestResults/
 *[Cc]lient[-_][Ss]ecret*
 *CLIENT_SECRET*
 *.secrets
+
+# ── Ben.iOS (Xcode / SwiftPM) ────────────────────────────────────────────────
+Ben.iOS/**/xcuserdata/
+Ben.iOS/**/.DS_Store
+Ben.iOS/BenKit/.build/
+Ben.iOS/DerivedData/

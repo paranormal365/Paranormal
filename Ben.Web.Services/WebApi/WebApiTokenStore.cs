@@ -13,6 +13,9 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
     public bool IsSuperAdmin { get; set; }
     public bool IsAdmin { get; set; }
 
+    /// <summary>Item 186 F5: may review reported posts and media awaiting screening.</summary>
+    public bool IsModerator { get; set; }
+
     // Impersonation
     public bool IsImpersonating { get; set; }
     public string? OriginalAccessToken { get; set; }

@@ -1,0 +1,61 @@
+import Foundation
+import SwiftUI
+import BenKit
+
+/// The app's composition root. One instance for the process; environments can
+/// be switched at runtime from Developer Settings (which clears the session).
+@Observable
+@MainActor
+final class AppDependencies {
+    private let environmentStore = APIEnvironmentStore()
+
+    private(set) var environment: APIEnvironment
+    let tokens: TokenSession
+    let api: APIClient
+
+    /// Written by the shared holder so every request follows a switch instantly.
+    private let environmentBox: EnvironmentBox
+
+    init() {
+        let box = EnvironmentBox(environmentStore.load())
+        self.environmentBox = box
+        self.environment = box.value
+
+        let transport = URLSessionTransport()
+        let tokens = TokenSession(
+            storage: KeychainTokenStorage(),
+            transport: transport,
+            environment: { box.value })
+        self.tokens = tokens
+        self.api = APIClient(
+            environment: { box.value },
+            transport: transport,
+            tokens: tokens)
+    }
+
+    /// Switching environments must clear the session — a Dev token means
+    /// nothing to UAT, and serving it there would just burn a 401.
+    func switchEnvironment(to newEnvironment: APIEnvironment) async {
+        environmentBox.value = newEnvironment
+        environment = newEnvironment
+        environmentStore.save(newEnvironment)
+        await tokens.endSession()
+        URLSession.benShared.configuration.urlCache?.removeAllCachedResponses()
+    }
+}
+
+/// A tiny lock-guarded box so the `@Sendable` environment closures handed to
+/// the actors always read the current choice.
+final class EnvironmentBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: APIEnvironment
+
+    init(_ value: APIEnvironment) {
+        self._value = value
+    }
+
+    var value: APIEnvironment {
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
+    }
+}

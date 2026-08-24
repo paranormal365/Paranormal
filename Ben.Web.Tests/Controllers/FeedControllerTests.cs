@@ -41,7 +41,8 @@ public sealed class FeedControllerTests
             .Options);
 
     private static FeedController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
-        => new(factory, TestStorage(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot))
+        => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
+               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
         {
             ControllerContext = new ControllerContext
             {
@@ -55,7 +56,8 @@ public sealed class FeedControllerTests
 
     /// <summary>A controller with no signed-in user at all — a visitor (item 186).</summary>
     private static FeedController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
-        => new(factory, TestStorage(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot))
+        => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
+               new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
         {
             ControllerContext = new ControllerContext
             {
@@ -74,16 +76,6 @@ public sealed class FeedControllerTests
     /// </remarks>
     private static readonly string MediaRoot =
         Path.Combine(Path.GetTempPath(), "ben-feed-tests", Guid.NewGuid().ToString("N"));
-
-    private static IFileStorageService TestStorage(string root)
-    {
-        Directory.CreateDirectory(root);
-
-        var mock = new Mock<IFileStorageService>();
-        mock.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
-            .Returns<Guid, string>((_, name) => Path.Combine(root, name));
-        return mock.Object;
-    }
 
     private static AppUser MakeUser(string handle, string? displayName = null) => new()
     {
@@ -1038,9 +1030,10 @@ public sealed class FeedControllerTests
         // WHICH copy it serves is ServingPathFor's business and is covered where that lives —
         // this asserts the route reaches a file at all, which is the part the feed owns.
         var served = await BuildAnonymous(factory).GetPostMedia(postId, CancellationToken.None);
-        var file = Assert.IsType<PhysicalFileResult>(served);
+        var file = Assert.IsType<FileStreamResult>(served);
         Assert.StartsWith("image/", file.ContentType);
-        Assert.True(new FileInfo(file.FileName).Length > 0);
+        Assert.True(file.FileStream.Length > 0);
+        await file.FileStream.DisposeAsync();
     }
 
     [Fact]

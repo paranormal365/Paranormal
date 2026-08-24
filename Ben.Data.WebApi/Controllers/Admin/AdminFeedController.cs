@@ -32,7 +32,10 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// </remarks>
 [ApiController]
 [Route("api/admin/feed")]
-[Authorize(Policy = RoleNames.SuperAdmin)]
+// Item 186 F5: widened from SuperAdmin to the moderation policy, which a SuperAdmin satisfies
+// implicitly. Deciding a report IS the moderator's job — leaving this behind the administrator
+// role would have meant the new role could see the media queue and not the complaints.
+[Authorize(Policy = AuthPolicyNames.Moderator)]
 public sealed class AdminFeedController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

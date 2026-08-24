@@ -30,6 +30,7 @@ public class NotificationStateTests
     {
         public bool IsAuthenticated { get; set; } = true;
         public bool IsSuperAdmin => false;
+        public bool IsModerator => false;
         public bool IsAdmin => false;
         public bool IsImpersonating => false;
         public string? UserEmail => "test@benco.dev";

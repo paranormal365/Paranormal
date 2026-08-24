@@ -15,6 +15,9 @@ public interface IWebApiTokenStore
     /// see RoleNames.Admin.
     /// </summary>
     bool IsAdmin { get; set; }
+
+    /// <summary>Item 186 F5: may review reported posts and media awaiting screening.</summary>
+    bool IsModerator { get; set; }
     bool IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
 
     // Impersonation
