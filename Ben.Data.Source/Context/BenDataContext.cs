@@ -1680,6 +1680,17 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.ViewerAppUser).WithMany()
                 .HasForeignKey(e => e.ViewerAppUserId).OnDelete(DeleteBehavior.NoAction);
 
+            // ── OrgMessage media (item 186 F4) ────────────────────────────────
+            // NoAction: deleting the file must not silently delete the post that carried it. A
+            // post whose media vanished is a post with text; a post that vanished is a hole in a
+            // conversation.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.MediaUploadFile).WithMany()
+                .HasForeignKey(e => e.MediaUploadFileId).OnDelete(DeleteBehavior.NoAction);
+            // The review queue reads "everything still Pending or Held", across the whole feed.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.MediaReviewState, e.DateCreated });
+
             // ── OrgMessageLike (item 186 F3) ──────────────────────────────────
             // The composite key is the idempotency rule: a second like has nowhere to go.
             modelBuilder.Entity<OrgMessageLike>()

@@ -33,6 +33,9 @@ public interface IBenFeedClient
         string? mode = null, string? hashtag = null, string? cursor = null,
         CancellationToken token = default, Guid? author = null);
 
+    /// <summary>Where a post's photo or video is served from. Absolute, against the API host.</summary>
+    string GetFeedMediaUrl(Guid postId);
+
     /// <summary>Likes a post. Idempotent — liking twice is liking once.</summary>
     Task<bool> LikeAsync(Guid postId, CancellationToken token = default);
 
@@ -52,8 +55,12 @@ public interface IBenFeedClient
     /// The refusal is worth having rather than a bare null: "a post can be at most 1000 characters"
     /// is something a person can act on, and the composer shows it against the box.
     /// </remarks>
+    /// <param name="media">Optional photo or video. Null for a text post.</param>
+    /// <param name="mediaFileName">Its file name — required when <paramref name="media"/> is given.</param>
+    /// <param name="mediaContentType">Its content type.</param>
     Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
-        string body, Guid? parentPostId = null, CancellationToken token = default);
+        string body, Guid? parentPostId = null, CancellationToken token = default,
+        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null);
 
     /// <summary>Reports a post. Idempotent — reporting twice is one report.</summary>
     Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default);

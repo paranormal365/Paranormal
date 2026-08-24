@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
@@ -7,6 +8,7 @@ using Ben.Service.Models.Feed;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using System.Security.Claims;
 using Xunit;
 
@@ -39,7 +41,7 @@ public sealed class FeedControllerTests
             .Options);
 
     private static FeedController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
-        => new(factory)
+        => new(factory, TestStorage(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot))
         {
             ControllerContext = new ControllerContext
             {
@@ -53,13 +55,35 @@ public sealed class FeedControllerTests
 
     /// <summary>A controller with no signed-in user at all — a visitor (item 186).</summary>
     private static FeedController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
-        => new(factory)
+        => new(factory, TestStorage(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot))
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) },
             },
         };
+
+    /// <summary>
+    /// One directory per test class run, shared by the storage stub and the ingest.
+    /// </summary>
+    /// <remarks>
+    /// Shared deliberately: the controller asks storage where to put a file and hands that path to
+    /// the ingest, so the two must agree or the bytes land somewhere the serving route will never
+    /// look — which is exactly the failure that sent an earlier version of these tests looking for
+    /// a bug in the controller.
+    /// </remarks>
+    private static readonly string MediaRoot =
+        Path.Combine(Path.GetTempPath(), "ben-feed-tests", Guid.NewGuid().ToString("N"));
+
+    private static IFileStorageService TestStorage(string root)
+    {
+        Directory.CreateDirectory(root);
+
+        var mock = new Mock<IFileStorageService>();
+        mock.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+            .Returns<Guid, string>((_, name) => Path.Combine(root, name));
+        return mock.Object;
+    }
 
     private static AppUser MakeUser(string handle, string? displayName = null) => new()
     {
@@ -122,7 +146,7 @@ public sealed class FeedControllerTests
 
     private static async Task<Guid> PostAsync(FeedController controller, string body, Guid? parent = null)
     {
-        var result = await controller.CreatePost(new CreateFeedPostRequest(body, parent), CancellationToken.None);
+        var result = await controller.CreatePost(new CreateFeedPostRequest(body, parent), null, CancellationToken.None);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         return ((FeedPostRecord)ok.Value!).Id;
     }
@@ -155,7 +179,7 @@ public sealed class FeedControllerTests
         Assert.IsType<NotFoundResult>((await controller.GetFeed(null, null, null, default)).Result);
         Assert.IsType<NotFoundResult>((await controller.GetThread(Guid.NewGuid(), default)).Result);
         Assert.IsType<NotFoundResult>((await controller.GetProfile(sarah.Id, default)).Result);
-        Assert.IsType<NotFoundResult>((await controller.CreatePost(new CreateFeedPostRequest("hello"), default)).Result);
+        Assert.IsType<NotFoundResult>((await controller.CreatePost(new CreateFeedPostRequest("hello"), null, default)).Result);
         Assert.IsType<NotFoundResult>(await controller.Follow(Guid.NewGuid(), default));
     }
 
@@ -220,7 +244,7 @@ public sealed class FeedControllerTests
         var sarah = MakeUser("sarahmitchell");
         var factory = await SeedAsync(users: sarah);
 
-        var result = await Build(factory, sarah.Id).CreatePost(new CreateFeedPostRequest("   "), default);
+        var result = await Build(factory, sarah.Id).CreatePost(new CreateFeedPostRequest("   "), null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -233,7 +257,7 @@ public sealed class FeedControllerTests
         var factory = await SeedAsync(users: sarah);
 
         var result = await Build(factory, sarah.Id)
-            .CreatePost(new CreateFeedPostRequest(new string('a', FeedController.MaxBodyLength + 1)), default);
+            .CreatePost(new CreateFeedPostRequest(new string('a', FeedController.MaxBodyLength + 1)), null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -379,7 +403,7 @@ public sealed class FeedControllerTests
 
         // And it cannot grow a thread nobody can see the top of.
         Assert.IsType<NotFoundObjectResult>(
-            (await controller.CreatePost(new CreateFeedPostRequest("reply", id), default)).Result);
+            (await controller.CreatePost(new CreateFeedPostRequest("reply", id), null, default)).Result);
     }
 
     // ── Reading ───────────────────────────────────────────────────────────────
@@ -606,8 +630,7 @@ public sealed class FeedControllerTests
         var sarah = MakeUser("sarahmitchell");
         var factory = await SeedAsync(users: sarah);          // seeded as a Member
 
-        var result = await Build(factory, sarah.Id).CreatePost(
-            new CreateFeedPostRequest("Members write here.", null), CancellationToken.None);
+        var result = await Build(factory, sarah.Id).CreatePost(new CreateFeedPostRequest("Members write here.", null), null, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -654,9 +677,7 @@ public sealed class FeedControllerTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, client.Id).CreatePost(
-            new CreateFeedPostRequest("The knocking started again last night.", null),
-            CancellationToken.None);
+        var result = await Build(factory, client.Id).CreatePost(new CreateFeedPostRequest("The knocking started again last night.", null), null, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -670,8 +691,7 @@ public sealed class FeedControllerTests
         var stranger = MakeUser("passerby");
         var factory = await SeedAsync(everybodyBelongs: false, users: stranger);
 
-        var result = await Build(factory, stranger.Id).CreatePost(
-            new CreateFeedPostRequest("Hello?", null), CancellationToken.None);
+        var result = await Build(factory, stranger.Id).CreatePost(new CreateFeedPostRequest("Hello?", null), null, CancellationToken.None);
 
         var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
         var text = refusal.Value!.ToString()!;
@@ -924,5 +944,203 @@ public sealed class FeedControllerTests
         await PostAsync(Build(factory, sarah.Id), "Still here.");
 
         Assert.Single(await ReadFeedAsync(Build(factory, sarah.Id), mode: "whatever"));
+    }
+
+    // ── item 186 F4: media on a post ──────────────────────────────────────────
+
+    private static IFormFile FakeFile(byte[] bytes, string name, string contentType)
+        => new FormFile(new MemoryStream(bytes), 0, bytes.Length, "media", name)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = contentType,
+        };
+
+    private static async Task<(Guid PostId, FeedController Controller, IDbContextFactory<BenDataContext> Factory)>
+        PostWithPhotoAsync()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var controller = Build(factory, sarah.Id);
+
+        var result = await controller.CreatePost(
+            new CreateFeedPostRequest("Look at this.", null),
+            FakeFile(TestImages.JpegWithGps(), "porch.jpg", "image/jpeg"),
+            CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return (((FeedPostRecord)ok.Value!).Id, controller, factory);
+    }
+
+    /// <summary>
+    /// The safety rule, stated as plainly as it can be: new media is Pending, and Pending never
+    /// serves.
+    /// </summary>
+    /// <remarks>
+    /// This is the reason F4 could ship before the screening in F5 — media is fail-closed by the
+    /// data model, so the window between the two phases is one where photos can be posted and
+    /// simply do not appear, rather than one where anything at all reaches the public unscreened.
+    /// </remarks>
+    [Fact]
+    public async Task New_media_is_pending_and_pending_is_never_served()
+    {
+        var (postId, controller, factory) = await PostWithPhotoAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+            Assert.NotNull(post.MediaUploadFileId);
+            Assert.Equal(FeedMediaReviewState.Pending, post.MediaReviewState);
+        }
+
+        // Not in the projection...
+        var record = (await ReadFeedAsync(controller)).Single();
+        Assert.False(record.HasMedia);
+        Assert.True(record.MediaAwaitingReview);          // the author is told it is being checked
+        Assert.Equal(FeedMediaKind.None, record.MediaKind);
+
+        // ...and a stranger is not even told there is something waiting. "Somebody uploaded
+        // something that has not cleared" is a fact about content nobody may see.
+        var asVisitor = (await ReadFeedAsync(BuildAnonymous(factory))).Single();
+        Assert.False(asVisitor.HasMedia);
+        Assert.False(asVisitor.MediaAwaitingReview);
+        Assert.Equal(FeedMediaKind.None, asVisitor.MediaKind);
+
+        // ...and not from the route either, for the author or anybody else.
+        Assert.IsType<NotFoundResult>(await controller.GetPostMedia(postId, CancellationToken.None));
+        Assert.IsType<NotFoundResult>(
+            await BuildAnonymous(factory).GetPostMedia(postId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Approved_media_is_served_and_announced()
+    {
+        var (postId, controller, factory) = await PostWithPhotoAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+            post.MediaReviewState = FeedMediaReviewState.Approved;
+            await db.SaveChangesAsync();
+        }
+
+        var record = (await ReadFeedAsync(controller)).Single();
+        Assert.True(record.HasMedia);
+        Assert.False(record.MediaAwaitingReview);
+        Assert.Equal(FeedMediaKind.Image, record.MediaKind);
+
+        // A visitor may see it too — the feed is readable by anybody.
+        var asVisitor = (await ReadFeedAsync(BuildAnonymous(factory))).Single();
+        Assert.True(asVisitor.HasMedia);
+
+        // And the route actually serves bytes: the ingest ran for real against real files in this
+        // fixture, so this covers upload → store → serve rather than just the projection.
+        //
+        // WHICH copy it serves is ServingPathFor's business and is covered where that lives —
+        // this asserts the route reaches a file at all, which is the part the feed owns.
+        var served = await BuildAnonymous(factory).GetPostMedia(postId, CancellationToken.None);
+        var file = Assert.IsType<PhysicalFileResult>(served);
+        Assert.StartsWith("image/", file.ContentType);
+        Assert.True(new FileInfo(file.FileName).Length > 0);
+    }
+
+    [Fact]
+    public async Task Held_media_stops_serving_again()
+    {
+        var (postId, controller, factory) = await PostWithPhotoAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+            post.MediaReviewState = FeedMediaReviewState.Held;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.False((await ReadFeedAsync(controller)).Single().HasMedia);
+        Assert.IsType<NotFoundResult>(await controller.GetPostMedia(postId, CancellationToken.None));
+    }
+
+    /// <summary>Hiding the post takes its photo with it, without a second rule to remember.</summary>
+    [Fact]
+    public async Task Hiding_a_post_hides_its_media()
+    {
+        var (postId, controller, factory) = await PostWithPhotoAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+            post.MediaReviewState = FeedMediaReviewState.Approved;   // even approved…
+            post.HiddenUtc = DateTime.UtcNow;                        // …a hidden post serves nothing
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>(await controller.GetPostMedia(postId, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The feed is an upload door, so it goes through the ingest every other door goes through —
+    /// which is what keeps a photo's location data off the served copy (items 179-181).
+    /// </summary>
+    [Fact]
+    public async Task Posted_media_is_ingested_so_its_metadata_is_recorded()
+    {
+        var (postId, _, factory) = await PostWithPhotoAsync();
+
+        await using var db = factory.CreateDbContext();
+        var post = await db.OrgMessages.SingleAsync(m => m.Id == postId);
+        var fileId = post.MediaUploadFileId!.Value;
+
+        Assert.True(await db.UploadFiles.AnyAsync(f => f.Id == fileId));
+        var metadata = await db.UploadFileMetadata.SingleAsync(m => m.UploadFileId == fileId);
+        Assert.NotNull(metadata);
+    }
+
+    [Fact]
+    public async Task A_file_that_is_neither_a_photo_nor_a_video_is_refused()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+
+        var result = await Build(factory, sarah.Id).CreatePost(
+            new CreateFeedPostRequest("Here is a spreadsheet.", null),
+            FakeFile([1, 2, 3, 4], "notes.csv", "text/csv"),
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(0, await db.OrgMessages.CountAsync());
+    }
+
+    /// <summary>
+    /// An SVG is refused even though it is an image type.
+    /// </summary>
+    /// <remarks>
+    /// An SVG is a document that can carry script, and the feed is the one upload surface open to
+    /// everybody who belongs — which makes it the one place where that matters most.
+    /// </remarks>
+    [Fact]
+    public async Task An_svg_is_refused_however_it_is_labelled()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+
+        var result = await Build(factory, sarah.Id).CreatePost(
+            new CreateFeedPostRequest("Vector art.", null),
+            FakeFile("<svg xmlns='http://www.w3.org/2000/svg'/>"u8.ToArray(), "a.svg", "image/svg+xml"),
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_text_post_still_carries_no_media_and_says_so()
+    {
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        await PostAsync(Build(factory, sarah.Id), "Words only.");
+
+        var record = (await ReadFeedAsync(Build(factory, sarah.Id))).Single();
+        Assert.False(record.HasMedia);
+        Assert.False(record.MediaAwaitingReview);
+        Assert.Equal(FeedMediaKind.None, record.MediaKind);
     }
 }

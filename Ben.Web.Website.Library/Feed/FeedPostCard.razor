@@ -2,6 +2,7 @@
 @using Ben.Web.Services
 
 @inject IBenUserState UserState
+@inject IBenAdminClient Feed
 
 @*
     One post in the feed.
@@ -46,6 +47,36 @@
         <div class="bv-feed-post__body">
             <FeedText Body="@Post.Body" Mentions="@Post.Mentions" />
         </div>
+
+        @* The photo or video (item 186 F4). Served from the post's own route, which refuses
+           anything unscreened — so there is no file id here to try against the general file
+           endpoints, and a held photo simply has no URL. *@
+        @if (Post.HasMedia)
+        {
+            <div class="mt-2 bv-feed-post__media">
+                @if (Post.MediaKind == FeedMediaKind.Video)
+                {
+                    <video src="@MediaUrl" controls preload="metadata" playsinline
+                           class="w-100 rounded" style="max-height:32rem;background:#000;"></video>
+                }
+                else
+                {
+                    @* No lazy loading: this is a scrolling feed, and an image that starts loading
+                       when it is already on screen is an image that arrives late. *@
+                    <img src="@MediaUrl" alt="" class="w-100 rounded" style="max-height:32rem;object-fit:contain;" />
+                }
+            </div>
+        }
+        else if (Post.MediaAwaitingReview && Post.IsOwnPost)
+        {
+            @* Only to the author, and said as a wait rather than a failure: their upload worked,
+               and "we are checking it" is the truth. Nobody else is told a post has media at all. *@
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-2"
+                 id="feed-media-pending">
+                <BenIcon Name="clock" />
+                <span>Your photo is being checked before it appears.</span>
+            </div>
+        }
 
         <div class="d-flex align-items-center gap-3 mt-2 small">
             @* The like. A visitor sees the count and a link to join rather than a dead control:
@@ -106,4 +137,7 @@
     /// until the page knows, so a control never appears before the page can honour it.
     /// </summary>
     [Parameter] public bool CanAct { get; set; }
+
+    /// <summary>Where the post's media is served from. Only ever asked for when HasMedia.</summary>
+    private string MediaUrl => Feed.GetFeedMediaUrl(Post.Id);
 }

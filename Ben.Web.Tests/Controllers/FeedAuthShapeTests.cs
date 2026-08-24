@@ -24,11 +24,22 @@ namespace Ben.Web.Tests.Controllers;
 public sealed class FeedAuthShapeTests
 {
     /// <summary>
-    /// The three reads a visitor is allowed. Named, not inferred from the HTTP verb: a future GET
-    /// that exposes something per-reader should have to be added here on purpose.
+    /// The reads a visitor is allowed. Named, not inferred from the HTTP verb: a future GET that
+    /// exposes something per-reader should have to be added here on purpose.
     /// </summary>
+    /// <remarks>
+    /// <see cref="FeedController.GetPostMedia"/> was added in F4 and this list is why it was a
+    /// decision rather than an accident: media on a public post is as public as the post, and the
+    /// endpoint itself refuses anything unscreened or hidden. Anyone adding the fifth entry should
+    /// have to write down why it belongs.
+    /// </remarks>
     private static readonly string[] AnonymousReads =
-        [nameof(FeedController.GetFeed), nameof(FeedController.GetThread), nameof(FeedController.GetProfile)];
+    [
+        nameof(FeedController.GetFeed),
+        nameof(FeedController.GetThread),
+        nameof(FeedController.GetProfile),
+        nameof(FeedController.GetPostMedia),
+    ];
 
     private static IEnumerable<MethodInfo> Endpoints()
         => typeof(FeedController)
@@ -45,7 +56,7 @@ public sealed class FeedAuthShapeTests
     }
 
     [Fact]
-    public void Exactly_the_three_reads_are_anonymous()
+    public void Exactly_the_declared_reads_are_anonymous()
     {
         var anonymous = Endpoints()
             .Where(m => m.GetCustomAttributes<AllowAnonymousAttribute>().Any())

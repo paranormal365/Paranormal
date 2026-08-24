@@ -1,4 +1,5 @@
 @using Ben.Data.Common.Helpers
+@using Microsoft.AspNetCore.Components.Forms
 @using Ben.Service.Models.Feed
 @using Ben.Web.Services
 
@@ -30,7 +31,30 @@
             <div class="alert alert-danger py-2 mt-2 mb-0">@_error</div>
         }
 
+        @* The chosen photo or video, named rather than previewed: a preview would mean reading
+           the whole file into the circuit, and a name is enough to answer "did it take the right
+           one". Removing it is one click, because picking the wrong file is the common mistake. *@
+        @if (_media is not null)
+        {
+            <div class="d-flex align-items-center gap-2 mt-2 small" id="feed-composer-media">
+                <BenIcon Name="paperclip" />
+                <span class="text-truncate">@_media.Name</span>
+                <span class="text-secondary">(@FormatSize(_media.Size))</span>
+                <button type="button" class="btn btn-link btn-sm p-0 ms-auto"
+                        @onclick="ClearMedia" disabled="@_busy">Remove</button>
+            </div>
+        }
+
         <div class="d-flex align-items-center gap-2 mt-2">
+            @* A label styled as a button: the file input itself is hidden because no browser
+               lets its default rendering be styled, and every one of them renders it differently. *@
+            <label class="btn btn-outline-secondary btn-sm mb-0" title="Add a photo or video">
+                <InputFile OnChange="OnMediaChosen" accept="image/*,video/*" class="d-none"
+                           disabled="@_busy" />
+                <BenIcon Name="image" />
+                <span class="visually-hidden">Add a photo or video</span>
+            </label>
+
             @if (Remaining <= WarnBelow)
             {
                 <span class="small @(Remaining < 0 ? "text-danger" : "text-secondary")">@Remaining</span>
@@ -70,7 +94,12 @@
 
     private int Remaining => MaxLength - _body.Length;
 
-    private bool CanPost => !string.IsNullOrWhiteSpace(_body) && Remaining >= 0;
+    /// <summary>
+    /// A picture on its own is a post. The server still requires a body, so the caption written
+    /// for a media-only post is the file's own name — better than refusing somebody who has said
+    /// everything they wanted to with the photograph.
+    /// </summary>
+    private bool CanPost => (!string.IsNullOrWhiteSpace(_body) || _media is not null) && Remaining >= 0;
 
     // @oninput rather than @bind: the Post button is gated on this value, and binding on blur would
     // leave the button dead for anyone who types and clicks straight through.
@@ -79,6 +108,34 @@
         _body = e.Value?.ToString() ?? string.Empty;
         _error = null;
     }
+
+    /// <summary>
+    /// The largest file a post may carry.
+    /// </summary>
+    /// <remarks>
+    /// A limit here rather than nowhere, despite the site's general no-caps rule (the upload-limits
+    /// item): this is the one door open to everybody who belongs, and it is served back to every
+    /// reader who scrolls past. The number is about what a feed can serve, not about what the
+    /// storage can hold.
+    /// </remarks>
+    private const long MaxMediaBytes = 200L * 1024 * 1024;
+
+    private IBrowserFile? _media;
+
+    private void OnMediaChosen(InputFileChangeEventArgs e)
+    {
+        _media = e.FileCount > 0 ? e.File : null;
+        _error = null;
+    }
+
+    private void ClearMedia() => _media = null;
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+        >= 1024        => $"{bytes / 1024.0:0.#} KB",
+        _              => $"{bytes} bytes",
+    };
 
     private async Task PostAsync()
     {
@@ -89,7 +146,35 @@
 
         try
         {
-            var (post, error) = await Feed.CreatePostAsync(_body.Trim(), ParentPostId);
+            Stream? media = null;
+            if (_media is not null)
+            {
+                // Opened only now, at post time: a stream held from the moment of choosing would
+                // be a file handle kept open for as long as somebody takes to write their post.
+                media = _media.OpenReadStream(MaxMediaBytes);
+            }
+
+            (FeedPostRecord? post, string? error) result;
+            try
+            {
+                result = await Feed.CreatePostAsync(
+                    string.IsNullOrWhiteSpace(_body) ? _media!.Name : _body.Trim(), ParentPostId,
+                    media: media,
+                    mediaFileName: _media?.Name,
+                    mediaContentType: _media?.ContentType);
+            }
+            catch (IOException)
+            {
+                // OpenReadStream throws this when the file is over the cap.
+                _error = $"That file is larger than {MaxMediaBytes / (1024 * 1024)} MB.";
+                return;
+            }
+            finally
+            {
+                if (media is not null) await media.DisposeAsync();
+            }
+
+            var (post, error) = result;
 
             if (error is not null || post is null)
             {
@@ -100,6 +185,7 @@
             }
 
             _body = string.Empty;
+            _media = null;
             await OnPosted.InvokeAsync(post);
         }
         finally

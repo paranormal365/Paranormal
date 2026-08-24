@@ -32,4 +32,35 @@ public static class TestMedia
             new MediaSanitizationService(),
             Stripper(),
             NullLogger<MediaIngestService>.Instance);
+
+    /// <summary>
+    /// The same ingest, but writing to REAL files under the given root.
+    /// </summary>
+    /// <remarks>
+    /// For the tests that follow a file all the way back out again — upload, strip, store, serve.
+    /// The mocked-storage version above silently writes nowhere, which is fine for a test about
+    /// metadata rows and useless for one about whether the serving route finds anything.
+    /// </remarks>
+    public static IMediaIngestService IngestToDisk(string root)
+    {
+        Directory.CreateDirectory(root);
+
+        var storage = new Mock<IFileStorageService>();
+        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string path, Stream content, CancellationToken ct) =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await using var target = File.Create(path);
+                await content.CopyToAsync(target, ct);
+            });
+        storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+            .Returns<Guid, string>((_, name) => Path.Combine(root, name));
+
+        return new MediaIngestService(
+            storage.Object,
+            new FileMetadataExtractorService(),
+            new MediaSanitizationService(),
+            Stripper(),
+            NullLogger<MediaIngestService>.Instance);
+    }
 }
