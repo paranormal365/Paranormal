@@ -104,6 +104,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseClientRequestRecord>($"/api/organizations/{orgId}/cases/{caseId}/client-request", token);
 
+    public Task<(CasePrivacyRetrofitResult? Result, string? Error)> ApplyCasePrivacyAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, CasePrivacyRetrofitResult>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/apply-privacy", new { }, token);
+
     public Task<LoadResult<string>> GetPublishLeakWarningsAsync(Guid orgId, Guid caseId, string title, string? pseudonym, CancellationToken token = default)
         => _api.GetListAsync<string>(
                $"/api/organizations/{orgId}/cases/{caseId}/publish-leak-check"

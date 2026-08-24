@@ -191,6 +191,28 @@ public sealed class CaseController : BenControllerBase
         return Ok(PublicTitleLeakCheck.Check(title, pseudonym, names, caseRow.StreetAddress1));
     }
 
+    /// <summary>
+    /// Applies this case's privacy protections after the fact (item 182) — for a group that took
+    /// the case on a plan without them and has since upgraded.
+    /// </summary>
+    /// <remarks>
+    /// Gated on Update, not Read: it changes the case. The response is a report rather than a
+    /// bare 204, because the useful part is what it could NOT do — prose naming the client, which
+    /// it deliberately finds instead of rewriting, and the fact that publication cannot be undone.
+    /// </remarks>
+    [HttpPost("{caseId:guid}/apply-privacy")]
+    public async Task<ActionResult<CasePrivacyRetrofitResult>> ApplyPrivacy(
+        [FromServices] CasePrivacyRetrofit retrofit,
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var result = await retrofit.ApplyAsync(db, orgId, caseId, GetCurrentUserId(), ct);
+        return result is null ? NotFound("Case not found.") : Ok(result);
+    }
+
     // ── Create (internally proposed) ──────────────────────────────────────────
 
     [HttpPost]

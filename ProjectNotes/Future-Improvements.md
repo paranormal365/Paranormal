@@ -9382,3 +9382,64 @@ CLIENT, who never chose the plan) but **"free groups may only take public-place 
 residence requires a paid plan"**. Same revenue driver, no third party bearing the risk, and
 `PlaceKind.PrivateResidence` already exists and is already enforced for event publication and
 investigation visibility. Ben's decision.
+
+---
+
+## 182. Applying a case's privacy protections after an upgrade (Ben, 2026-08-24 — BUILT)
+
+Ben: *"if a case is taken on while the group is under the free tier but subscribes, we run all the
+requirements to make a case private and hide the exif for files and the exact location of the
+property and allow the replacement of client names in all reports and pages displaying the
+findings."*
+
+`CasePrivacyRetrofit` + `POST .../cases/{id}/apply-privacy`, reachable from **Apply privacy
+protections** in the case's Edit dialog. It does the mechanical work and reports the rest.
+
+**Applied automatically:** the case becomes private; the exact latitude/longitude are cleared from
+the row (the street address stays — investigators still have to get there); and every file on the
+case that lacks a stripped copy gets one, rebuilt from the original. That last part is only
+possible because the original was always kept untouched — the design decision that looked like
+mere caution now pays for itself.
+
+**Found but never applied: the client's name in prose.** Case label, description, timeline titles
+and bodies, report titles, summaries, conclusions and section bodies are scanned with item 176's
+whole-word matcher and every occurrence is reported with its location and row id. **It is not
+rewritten.** An investigator's account of a night is theirs; a find-and-replace through it can
+change what a sentence means or break a quotation, and nobody reviews the result. The platform's
+own name-writing is already covered by the pseudonym machinery — this covers what a person typed,
+and a person should fix it. That is a deliberate departure from the literal ask ("allow the
+replacement"), and the UI wording makes the reason visible rather than silently narrowing scope.
+
+**Reported and impossible: publication.** `WasEverPublic` is returned and the dialog says it
+plainly — what a visitor read, a search engine indexed or somebody saved cannot be recalled.
+A group upgrading should not be left believing the exposure was erased.
+
+9 unit tests including the two refusals (prose untouched; near-miss names like "Parker" not
+reported) and the file paths (already-clean counted not rebuilt; missing copy built from the
+original). Help: a new "Applying privacy protections to an older case" section in working-a-case;
+PDF regenerated. 3,097 unit tests green.
+
+**Two things this turned up, worth their own attention:**
+
+1. **There is no way to delete a case.** No endpoint exists on any controller, for any role,
+   including SuperAdmin — see item 183. It surfaced because the first version of the e2e created
+   a throwaway case and could not remove it; the test is now deliberately non-destructive and says
+   why in its own remarks.
+2. **The retrofit is destructive by design and the database is shared.** The first e2e run cleared
+   the seeded Park case's real coordinates; they were restored by hand. Any test that exercises
+   this must use data it owns — and while dev and UAT share one database, "owns" is a promise a
+   test cannot keep for a case it cannot delete.
+
+## 183. A case can be created but never deleted (found 2026-08-24)
+
+No `DELETE` endpoint for a case exists anywhere: not on `CaseController`, not on
+`AdminCaseController`, not for SuperAdmin. Timeline entries, files, notes and transfers can all be
+removed; the case itself cannot. Consequences seen already: a test case created against the shared
+database had to be removed with raw SQL, and any mistaken or duplicate case is permanent.
+
+Not obviously wrong as a default — a case is a record of real work and hard-deleting one destroys
+somebody's history, which is exactly the reasoning behind the ledger being append-only. But the
+current state is not a considered rule either; it is an absence. The likely shapes: SuperAdmin-only
+hard delete for mistakes, an org-level archive/withdraw that hides without destroying, or an
+explicit "this cannot be deleted, close it instead" refusal so the absence is a stated rule rather
+than a missing verb. Ben's call.

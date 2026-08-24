@@ -275,6 +275,61 @@
     </div>
 }
 
+@* ── Item 182: apply privacy protections after an upgrade ─────────────────── *@
+<BenModal @bind-Visible="@_showPrivacyResult" Title="Privacy protections applied">
+    <ChildContent>
+        @if (_privacyResult is { } r)
+        {
+            <ul class="mb-3">
+                <li>@(r.MadePrivate ? "The case is now private." : "The case was already private.")</li>
+                <li>@(r.LocationGeneralized ? "The exact coordinates were removed." : "There were no exact coordinates stored.")</li>
+                <li>
+                    @r.FilesStripped file(s) had their location data removed just now;
+                    @r.FilesAlreadyClean already had.
+                    @if (r.FilesUnstrippable > 0)
+                    {
+                        <text>@r.FilesUnstrippable could not be cleaned on this site — audio and video need the media tool, and your plan must include it.</text>
+                    }
+                </li>
+            </ul>
+
+            @if (r.WasEverPublic)
+            {
+                @* The half that cannot be fixed by software, said plainly rather than buried. *@
+                <div class="alert alert-warning py-2">
+                    <strong>This case was public before now.</strong> Anything a visitor already saw,
+                    a search engine already indexed, or somebody already saved cannot be recalled.
+                    Making it private stops it going further; it does not undo what has been.
+                </div>
+            }
+
+            @if (r.NameOccurrences.Count > 0)
+            {
+                <p class="fw-semibold mb-1">Your client's name still appears in text somebody wrote:</p>
+                <p class="text-secondary small">
+                    These are left exactly as written — an account of a night is the investigator's,
+                    and a find-and-replace through it can change what it says. Edit the ones that
+                    should use the pseudonym instead.
+                </p>
+                <ul class="mb-0">
+                    @foreach (var o in _privacyResult.NameOccurrences)
+                    {
+                        <li>@o.Where — @o.Field (<code>@o.Matched</code>)</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="text-success mb-0">No prose on this case names the client.</p>
+            }
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-primary" @onclick="@(() => _showPrivacyResult = false)">Close</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
 @* ── Edit dialog ──────────────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showEdit" Title="Edit Case">
     <ChildContent>
@@ -322,6 +377,11 @@
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 
+            <button type="button" class="btn btn-outline-secondary me-auto" id="case-apply-privacy"
+                    @onclick="ApplyPrivacyAsync" disabled="@_isBusy"
+                    title="Make this case private, remove exact coordinates, clean the files, and list any prose naming the client.">
+                Apply privacy protections
+            </button>
             <button type="button" class="btn btn-secondary" @onclick="@(() => _showEdit = false)">Cancel</button>
             <button type="button" class="btn btn-primary" @onclick="SaveEdit" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
                 @(_isBusy ? "Saving…" : "Save")
@@ -518,6 +578,25 @@
     // exact input pair, so the second Save on the same text publishes as-is, and any edit re-checks.
     private IReadOnlyList<string> _leakWarnings = [];
     private string? _leakWarnedTitle;
+
+    // Item 182: the retrofit for a group that upgraded after taking the case on.
+    private bool _showPrivacyResult;
+    private CasePrivacyRetrofitResult? _privacyResult;
+
+    private async Task ApplyPrivacyAsync()
+    {
+        _isBusy = true;
+        try
+        {
+            var (result, error) = await AdminClient.ApplyCasePrivacyAsync(OrgId, CaseId);
+            if (result is null) { _editError = error ?? "Applying privacy failed."; return; }
+            _privacyResult     = result;
+            _showPrivacyResult = true;
+            _showEdit          = false;
+            if (await AdminClient.GetOrgCaseAsync(OrgId, CaseId) is { } refreshed) _case = refreshed;
+        }
+        finally { _isBusy = false; }
+    }
 
     private async Task SaveEdit()
     {
