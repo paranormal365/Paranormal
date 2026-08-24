@@ -539,16 +539,24 @@ are more useful than one.</p>
 anything you prefer. Set it on your case page under <strong>How You're Named Publicly</strong>.</p>
 <p>Your investigators always see your real name. They cannot work a case while blind to who reported
 it, so the alias applies to public pages and shared documents only.</p>
+<p>On a private case — yours is one, because it came from your request — the protection goes
+further than the name slot: if an investigator's written report or a timeline entry mentions you
+by name, the public copy substitutes your chosen name (or a neutral phrase like "the client")
+automatically. What they wrote is preserved for the investigation; what the public reads does
+not carry your name.</p>
 <h2>If your case is paused</h2>
 <p>A paused case means the organization's subscription ended — nothing more. <strong>Nothing you reported
 or they collected has been lost</strong>, and all of it stays readable to you. If the group renews, the
-case resumes exactly where it left off.</p>
+case resumes exactly where it left off. If your case had a public page, it comes off the public
+site while the subscription is lapsed — your privacy does not depend on the group's billing.</p>
 <p>You can also <strong>move your case to a different organization</strong>, right from the banner on the case
 page. Pick a group, and choose what they will be able to see:</p>
 <ul>
 <li>the <strong>history</strong> collected so far — reports, notes, evidence</li>
 <li>the <strong>investigations</strong> the previous group ran</li>
 </ul>
+<p>If a month passes with the case still paused, the platform sends you a reminder that the move is
+available — you never have to wait on a group that is not coming back.</p>
 <p>Anything you don't share stays with the original case — visible to you, never to the new group,
 and nothing is deleted either way. The findings belong to the original group <em>and</em> to you, which
 is why this is your choice alone; the original group is not asked. The new group answers your
@@ -722,6 +730,52 @@ first would mostly deter the cautious.</p>
 <p>Investigations at a <strong>private residence cannot be made public</strong>. Publishing what happened inside
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.</p>
+<h2>Private engagements</h2>
+<p>Some cases are somebody's home. The platform calls those <strong>private engagements</strong>, and treats them
+differently on every public surface. A case becomes one in three ways:</p>
+<ul>
+<li>it came from a <strong>client request</strong> — a family asked for help, so the case is born private;</li>
+<li>an investigation on it is placed at a <strong>private residence</strong> — the moment the place is bound,
+  the case is designated;</li>
+<li>someone ticks <strong>Private engagement</strong> in Edit Case.</li>
+</ul>
+<p>The designation never comes off by itself. Clearing it is a deliberate choice in Edit Case, for
+the rare case that was marked private by mistake.</p>
+<h3>Write real names freely — the public copy substitutes</h3>
+<p>Inside your group, work the case in plain language: reports, timeline entries and notes can name
+the client and the household exactly as people speak. On a private engagement, the platform
+replaces those names <strong>at the moment a public page renders</strong> — the stored text is never touched,
+so nothing you wrote changes and nothing needs editing before publication.</p>
+<p>Who becomes what:</p>
+<ul>
+<li><strong>The client</strong> is replaced by the alias they chose themselves, or your group's pseudonym for
+  the case, or — when neither is set — "the family" (if two or more people live at the property)
+  or "the client".</li>
+<li><strong>Each person on the case's People list</strong> is replaced by their <strong>Public label</strong> if you set one
+  ("the lady of the house"), or a label read from their relationship ("a family member",
+  "a neighbor", "the homeowner"), or simply "a resident" or "a witness".</li>
+</ul>
+<p>The Public label field lives in the person's entry on the case. A short noun phrase works best —
+it is dropped into the middle of sentences.</p>
+<h3>What the substitution does not do</h3>
+<p>It replaces <strong>the names on the case</strong> — the client's, and the people you listed. It cannot know
+about a nickname nobody recorded, a name inside a photograph, or a voice on a recording. It also
+matches whole words only: "the Parkers" is not "Park", so a family nickname derived from the
+name survives unless you add the person. The pre-publication check still reads your case label
+and pseudonym and warns when either carries the client's name.</p>
+<h3>Private engagements and your plan</h3>
+<p>Taking on private-residence work — accepting a client request, placing an investigation at a
+residence, accepting a private case transferred in — and <strong>publishing</strong> a private case both
+require a plan that includes private-residence cases. The Pricing page says which plans do. Two
+things are never gated: work already in hand (a case your group already holds keeps working,
+whatever your plan), and a client moving their own case — their move is only ever limited by the
+destination group's plan, not yours.</p>
+<h3>If your subscription lapses</h3>
+<p>When a paid period ends without renewal, published private engagements come off the public site
+along with the pause of open work. Nothing is deleted: the case remembers it was public, and once
+the plan is renewed its page shows a one-click <strong>Republish</strong> banner. Public-place cases —
+landmarks, businesses — are untouched by billing and stay published. Both renewal warnings say
+all of this before it happens.</p>
 <h2>Applying privacy protections to an older case</h2>
 <p>If your group took a case on before you had the protections — or before your plan included them —
 <strong>Apply privacy protections</strong> in Edit Case brings that case up to date in one action. It:</p>
@@ -2364,11 +2418,17 @@ something.</p>
 the area before delivery cancels the pending notice — an accidental toggle reaches the groups as
 silence, not as two contradictory messages. Newly included areas are announced right away.</p>
 <h3>Capabilities on a price band</h3>
-<p>Beside the role areas sits a <strong>Capabilities</strong> checklist — plain may-or-may-not switches, the
-first being <strong>Case transfers</strong>. A band without it can neither send a case to another group nor
-accept one transferred in, and both ends are enforced: a case can't be handed TO a group whose
-band lacks it either. Existing cases are unaffected; declining an incoming transfer never
-requires the capability. Changes save per click and notify the affected groups through the same
+<p>Beside the role areas sits a <strong>Capabilities</strong> checklist — plain may-or-may-not switches.
+<strong>Case transfers</strong>: a band without it can neither send a case to another group nor accept one
+transferred in, and both ends are enforced — a case can't be handed TO a group whose band lacks
+it either; declining never requires the capability. <strong>Audio/video location stripping</strong>: whether
+the group's media privacy setting may remove location data from audio and video files (photos
+are always cleaned; every file's metadata is always extracted and kept regardless).
+<strong>Private-residence cases</strong>: whether the group may take on client and residence work at all —
+accepting a client request, placing an investigation at a residence, receiving a private case,
+and publishing one are each checked; work a group already holds keeps working, and a client
+moving their own case is only ever limited by the destination's band. Existing cases are
+unaffected by unchecking; changes save per click and notify the affected groups through the same
 netted notices as the role areas, and the public Pricing page says plainly what a band leaves
 out.</p>
 <p><strong>Administration → Billing</strong> holds three screens.</p>

@@ -204,6 +204,63 @@ Investigations at a **private residence cannot be made public**. Publishing what
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
 
+## Private engagements
+
+Some cases are somebody's home. The platform calls those **private engagements**, and treats them
+differently on every public surface. A case becomes one in three ways:
+
+- it came from a **client request** — a family asked for help, so the case is born private;
+- an investigation on it is placed at a **private residence** — the moment the place is bound,
+  the case is designated;
+- someone ticks **Private engagement** in Edit Case.
+
+The designation never comes off by itself. Clearing it is a deliberate choice in Edit Case, for
+the rare case that was marked private by mistake.
+
+### Write real names freely — the public copy substitutes
+
+Inside your group, work the case in plain language: reports, timeline entries and notes can name
+the client and the household exactly as people speak. On a private engagement, the platform
+replaces those names **at the moment a public page renders** — the stored text is never touched,
+so nothing you wrote changes and nothing needs editing before publication.
+
+Who becomes what:
+
+- **The client** is replaced by the alias they chose themselves, or your group's pseudonym for
+  the case, or — when neither is set — "the family" (if two or more people live at the property)
+  or "the client".
+- **Each person on the case's People list** is replaced by their **Public label** if you set one
+  ("the lady of the house"), or a label read from their relationship ("a family member",
+  "a neighbor", "the homeowner"), or simply "a resident" or "a witness".
+
+The Public label field lives in the person's entry on the case. A short noun phrase works best —
+it is dropped into the middle of sentences.
+
+### What the substitution does not do
+
+It replaces **the names on the case** — the client's, and the people you listed. It cannot know
+about a nickname nobody recorded, a name inside a photograph, or a voice on a recording. It also
+matches whole words only: "the Parkers" is not "Park", so a family nickname derived from the
+name survives unless you add the person. The pre-publication check still reads your case label
+and pseudonym and warns when either carries the client's name.
+
+### Private engagements and your plan
+
+Taking on private-residence work — accepting a client request, placing an investigation at a
+residence, accepting a private case transferred in — and **publishing** a private case both
+require a plan that includes private-residence cases. The Pricing page says which plans do. Two
+things are never gated: work already in hand (a case your group already holds keeps working,
+whatever your plan), and a client moving their own case — their move is only ever limited by the
+destination group's plan, not yours.
+
+### If your subscription lapses
+
+When a paid period ends without renewal, published private engagements come off the public site
+along with the pause of open work. Nothing is deleted: the case remembers it was public, and once
+the plan is renewed its page shows a one-click **Republish** banner. Public-place cases —
+landmarks, businesses — are untouched by billing and stay published. Both renewal warnings say
+all of this before it happens.
+
 ## Applying privacy protections to an older case
 
 If your group took a case on before you had the protections — or before your plan included them —
