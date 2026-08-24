@@ -53,7 +53,19 @@ public sealed record FeedPostRecord(
     /// recategorize nudge. Always false for every other reader — the signal exists to help the
     /// author, not to put an asterisk on them in public.
     /// </summary>
-    bool CategoryMatchDegraded = false);
+    bool CategoryMatchDegraded = false,
+    /// <summary>
+    /// The group whose case this footage came from — POPULATED ONLY WHEN CLAIMED (item 186 F7).
+    /// Unclaimed and Declined emit nothing: absence is structural, so a client cannot forget to
+    /// hide a link the group never agreed to.
+    /// </summary>
+    string? AttributedOrgName = null,
+    string? AttributedOrgUrlName = null,
+    /// <summary>The owning group vouches this footage is what it says (a claim, item 186 F7).</summary>
+    bool GroupVerified = false,
+    /// <summary>A person with the Moderator role cleared this post's media — distinct from the
+    /// automatic screener's approval.</summary>
+    bool ModeratorReviewed = false);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind
@@ -105,8 +117,35 @@ public sealed record FeedProfileRecord(
 /// <param name="ParentMessageId">The post being replied to, or null for a top-level post.</param>
 /// <param name="ExperienceTypeId">What the post shows, from the experience taxonomy (item 186
 /// F6). Optional always — encouraged for media, meaningless for chatter.</param>
+/// <param name="SourceCaseId">The case this render came from (item 186 F7) — the editor's
+/// "Post to the feed" sets it; a hand-written post never does. Requires media, and the author
+/// must be able to see the case.</param>
+/// <param name="ConsentToPublishPrivateEngagement">The explicit tick a PRIVATE-ENGAGEMENT
+/// case's footage requires before it may go public. Ignored for ordinary cases; refusing to
+/// tick it refuses the post.</param>
 public sealed record CreateFeedPostRequest(
-    string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null);
+    string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null,
+    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false);
+
+// ── Org attribution (item 186 F7) ────────────────────────────────────────────
+
+/// <summary>One case-derived post in a group's attribution queue.</summary>
+/// <remarks>The media URL is the post's own public route, which only serves APPROVED media —
+/// so a group admin reviewing a claim sees exactly what the public sees, no more.</remarks>
+public sealed record FeedAttributionItem(
+    Guid PostId,
+    string Body,
+    Guid AuthorAppUserId,
+    string AuthorDisplayName,
+    DateTime DateCreated,
+    Guid? CaseId,
+    string? CaseTitle,
+    bool HasMedia,
+    FeedMediaKind MediaKind,
+    string? ExperienceTypeName,
+    OrgAttributionState State,
+    DateTime? DecidedUtc,
+    string? DecidedByDisplayName);
 
 /// <summary>The author's revised answer to "what does this show?" Null clears it.</summary>
 public sealed record RecategorizeFeedPostRequest(Guid? ExperienceTypeId);

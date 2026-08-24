@@ -93,6 +93,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FeedMediaFeatureSet> FeedMediaFeatureSets { get; set; }
         public virtual DbSet<FeedLabelledExample> FeedLabelledExamples { get; set; }
         public virtual DbSet<FeedTypeWeightSet> FeedTypeWeightSets { get; set; }
+        public virtual DbSet<FeedPostConsent> FeedPostConsents { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
@@ -1754,6 +1755,33 @@ namespace Ben.Data.Source.Context
             // unique because two fits at the same version would make "active" ambiguous.
             modelBuilder.Entity<FeedTypeWeightSet>()
                 .HasIndex(e => new { e.ExperienceTypeId, e.FitVersion }).IsUnique();
+
+            // ── Editor → feed: attribution + consent (item 186 F7) ────────────
+            // NoAction from the org: deleting a group must not delete people's posts; the org
+            // merge machinery (item 110) rewrites these ids like every other org reference.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.AttributedOrganization).WithMany()
+                .HasForeignKey(e => e.AttributedOrganizationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            // The claim queue: a group's unclaimed posts, newest first.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.AttributedOrganizationId, e.AttributionState, e.DateCreated });
+
+            // APPEND-ONLY, like the labelled examples and for the same reason: the consent
+            // outlives the post it authorized (SetNull), because "who agreed to publish this"
+            // must still have an answer after the post is gone.
+            modelBuilder.Entity<FeedPostConsent>()
+                .HasOne(e => e.OrgMessage).WithMany()
+                .HasForeignKey(e => e.OrgMessageId).IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<FeedPostConsent>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FeedPostConsent>()
+                .HasOne(e => e.AgreedByAppUser).WithMany()
+                .HasForeignKey(e => e.AgreedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FeedPostConsent>()
+                .HasIndex(e => new { e.CaseId, e.AgreedUtc });
 
             // ── OrgCalendarEventType ──────────────────────────────────────────
             modelBuilder.Entity<OrgCalendarEventType>()

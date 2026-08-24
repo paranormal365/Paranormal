@@ -127,6 +127,22 @@ namespace Ben.Data.Source.Entities
         /// <summary>The post's measured media facts. Null until extracted (or for text posts).</summary>
         public virtual FeedMediaFeatureSet? MediaFeatures { get; set; }
 
+        /// <summary>
+        /// The group whose case this post's render came from (item 186 F7). Null for a post with
+        /// no case lineage. Whether the group's name actually SHOWS is
+        /// <see cref="AttributionState"/>'s call, never this field's presence.
+        /// </summary>
+        public Guid? AttributedOrganizationId { get; set; }
+
+        /// <summary>Unclaimed by default — no link renders until the group claims it.</summary>
+        public Ben.Data.Common.Enums.OrgAttributionState AttributionState { get; set; }
+
+        /// <summary>Who at the group decided, and when. Null while Unclaimed.</summary>
+        public Guid? AttributionDecidedByAppUserId { get; set; }
+        public DateTime? AttributionDecidedUtc { get; set; }
+
+        public virtual Organization? AttributedOrganization { get; set; }
+
         /// <summary>Feed likes (item 186 F3). Empty for every non-feed message.</summary>
         public virtual ICollection<OrgMessageLike> Likes { get; set; } = new List<OrgMessageLike>();
         public virtual ICollection<OrgMessageMention> Mentions { get; set; } = new List<OrgMessageMention>();

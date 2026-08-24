@@ -7,8 +7,11 @@ namespace Ben.Data.WebApi.Services.Feed;
 /// <param name="Replies">How many visible replies it drew.</param>
 /// <param name="MatchScore">The category-match score (item 186 F6), when the post has one. Null
 /// leaves ranking untouched — text posts and unscored media are neither rewarded nor punished.</param>
+/// <param name="GroupVerified">The owning group claimed the footage (item 186 F7).</param>
+/// <param name="ModeratorReviewed">A person cleared the media, not just the screener (F7).</param>
 public readonly record struct RankableFeedPost(
-    Guid Id, DateTime DateCreated, int Likes, int Replies, double? MatchScore = null);
+    Guid Id, DateTime DateCreated, int Likes, int Replies, double? MatchScore = null,
+    bool GroupVerified = false, bool ModeratorReviewed = false);
 
 /// <summary>
 /// The "For You" ordering (item 186 F3): fresh things surface, engaging things stay up, and
@@ -62,6 +65,13 @@ public static class FeedRanking
     /// </summary>
     public const double MatchFloor = 0.75;
 
+    /// <summary>
+    /// The lift a badge gives (item 186 F7). Two badges stack. Meaningful but modest: a badge
+    /// is a thumb on the scale for verified footage, not a bypass around engagement — the marks
+    /// reward honesty without letting a verified nothing outrank a conversation.
+    /// </summary>
+    public const double BadgeLift = 1.15;
+
     /// <summary>One post's score. Higher is better. Never negative.</summary>
     public static double Score(RankableFeedPost post, DateTime nowUtc)
     {
@@ -70,7 +80,8 @@ public static class FeedRanking
         var match = post.MatchScore is { } score
             ? MatchFloor + ((1 - MatchFloor) * Math.Clamp(score, 0, 1))
             : 1.0;
-        return match * engagement / Math.Pow(ageHours + AgeCushionHours, Gravity);
+        var badges = (post.GroupVerified ? BadgeLift : 1.0) * (post.ModeratorReviewed ? BadgeLift : 1.0);
+        return badges * match * engagement / Math.Pow(ageHours + AgeCushionHours, Gravity);
     }
 
     /// <summary>

@@ -269,6 +269,45 @@ public sealed class FeedController : BenControllerBase
             if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
         }
 
+        // ── Case lineage (item 186 F7): the editor's "Post to the feed" ──────
+        // A render made from a case carries its case with it. The case's org becomes the
+        // (unclaimed) attribution, and a PRIVATE-ENGAGEMENT case requires the explicit tick —
+        // the one door out of item 184's promise, and it is recorded.
+        Guid? lineageOrgId = null;
+        var lineageNeedsConsent = false;
+        if (request.SourceCaseId is { } sourceCaseId)
+        {
+            if (media is not { Length: > 0 })
+                return BadRequest("A case-derived post carries its render — attach the video.");
+
+            var sourceCase = await db.Cases.AsNoTracking()
+                .Where(c => c.Id == sourceCaseId)
+                .Select(c => new { c.OrganizationId, c.IsPrivateEngagement })
+                .FirstOrDefaultAsync(ct);
+
+            // The author must be able to SEE the case: a member of the org working it, or one
+            // of its clients. One answer ("isn't available") for missing and refused alike, so
+            // this door confirms nothing to a prober.
+            var maySee = sourceCase is not null
+                && (await db.OrganizationUserMemberships.AsNoTracking()
+                        .AnyAsync(m => m.AppUserId == userId && m.IsActive
+                                    && m.OrganizationId == sourceCase.OrganizationId, ct)
+                    || await db.Cases.AsNoTracking()
+                        .AnyAsync(c => c.Id == sourceCaseId
+                                    && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct)
+                    || await db.CaseClientAccesses.AsNoTracking()
+                        .AnyAsync(a => a.CaseId == sourceCaseId && a.AppUserId == userId, ct));
+            if (!maySee) return BadRequest("That case isn't available to post from.");
+
+            if (sourceCase!.IsPrivateEngagement && !request.ConsentToPublishPrivateEngagement)
+                return BadRequest(
+                    "This footage comes from a private engagement. Publishing it needs the "
+                    + "explicit confirmation in the export dialog — nothing goes public without it.");
+
+            lineageOrgId = sourceCase.OrganizationId;
+            lineageNeedsConsent = sourceCase.IsPrivateEngagement;
+        }
+
         var post = new OrgMessage
         {
             Id = Guid.NewGuid(),
@@ -279,9 +318,26 @@ public sealed class FeedController : BenControllerBase
             Body = body,
             IsPublic = true,
             FeedExperienceTypeId = request.ExperienceTypeId,
+            CaseId = request.SourceCaseId,
+            AttributedOrganizationId = lineageOrgId,
+            AttributionState = OrgAttributionState.Unclaimed,
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+
+        if (lineageNeedsConsent)
+        {
+            // The recorded agreement — append-only, and it outlives the post (SetNull FK).
+            db.FeedPostConsents.Add(new FeedPostConsent
+            {
+                Id = Guid.NewGuid(),
+                OrgMessageId = post.Id,
+                CaseId = request.SourceCaseId!.Value,
+                AgreedByAppUserId = userId,
+                AgreedUtc = DateTime.UtcNow,
+                WordingVersion = 1,
+            });
+        }
 
         // ── The photo or video, when there is one (item 186 F4) ──────────────
         // Through MediaIngestService like every other upload door, so the feed cannot become the
@@ -855,6 +911,21 @@ public sealed class FeedController : BenControllerBase
                 .Select(t => new { t.Id, t.Name })
                 .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
 
+        // Attributed groups (item 186 F7) — looked up ONLY for Claimed posts, so an unclaimed
+        // or declined attribution has no name in the payload to leak. Absence is structural.
+        var claimedOrgIds = posts
+            .Where(p => p.AttributionState == OrgAttributionState.Claimed
+                     && p.AttributedOrganizationId is not null)
+            .Select(p => p.AttributedOrganizationId!.Value)
+            .Distinct()
+            .ToList();
+        var claimedOrgs = claimedOrgIds.Count == 0
+            ? []
+            : await db.Organizations.AsNoTracking()
+                .Where(o => claimedOrgIds.Contains(o.Id))
+                .Select(o => new { o.Id, o.Name, o.UrlName })
+                .ToDictionaryAsync(o => o.Id, o => (o.Name, o.UrlName), ct);
+
         return posts.Select(p => new FeedPostRecord(
             p.Id,
             p.AuthorAppUserId,
@@ -895,7 +966,16 @@ public sealed class FeedController : BenControllerBase
             readerId != Guid.Empty
                 && p.AuthorAppUserId == readerId
                 && p.CategoryMatchScore is { } matchScore
-                && matchScore < CategoryMatchScoring.NudgeThreshold))
+                && matchScore < CategoryMatchScoring.NudgeThreshold,
+            // Attribution renders ONLY when the group claimed it (item 186 F7).
+            p.AttributionState == OrgAttributionState.Claimed && p.AttributedOrganizationId is { } claimedOrg
+                ? claimedOrgs.GetValueOrDefault(claimedOrg).Name : null,
+            p.AttributionState == OrgAttributionState.Claimed && p.AttributedOrganizationId is { } claimedOrg2
+                ? claimedOrgs.GetValueOrDefault(claimedOrg2).UrlName : null,
+            p.AttributionState == OrgAttributionState.Claimed,
+            // A person with the role decided, as opposed to the automatic screener.
+            p.MediaReviewedByAppUserId is not null
+                && p.MediaReviewState == FeedMediaReviewState.Approved))
             .ToList();
     }
 
@@ -930,12 +1010,16 @@ public sealed class FeedController : BenControllerBase
                 Likes = m.Likes.Count,
                 Replies = m.Replies.Count(r => r.HiddenUtc == null),
                 m.CategoryMatchScore,
+                GroupVerified = m.AttributionState == OrgAttributionState.Claimed,
+                ModeratorReviewed = m.MediaReviewedByAppUserId != null
+                                 && m.MediaReviewState == FeedMediaReviewState.Approved,
             })
             .ToListAsync(ct);
 
         var ranked = FeedRanking.Rank(
             window.Select(w => new RankableFeedPost(
-                w.Id, w.DateCreated, w.Likes, w.Replies, w.CategoryMatchScore)), now);
+                w.Id, w.DateCreated, w.Likes, w.Replies, w.CategoryMatchScore,
+                w.GroupVerified, w.ModeratorReviewed)), now);
 
         var offset = ReadOffsetCursor(cursor);
         var pageIds = ranked.Skip(offset).Take(PageSize).Select(p => p.Id).ToList();

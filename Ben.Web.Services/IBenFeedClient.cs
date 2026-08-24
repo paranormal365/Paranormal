@@ -76,10 +76,27 @@ public interface IBenFeedClient
     /// <param name="mediaFileName">Its file name — required when <paramref name="media"/> is given.</param>
     /// <param name="mediaContentType">Its content type.</param>
     /// <param name="experienceTypeId">What the post shows, from the taxonomy (item 186 F6).</param>
+    /// <param name="sourceCaseId">The case the render came from (item 186 F7) — set only by the
+    /// editor's "Post to the feed"; requires media.</param>
+    /// <param name="consentToPublishPrivateEngagement">The explicit tick a private-engagement
+    /// case's footage requires. The server refuses without it.</param>
     Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
         string body, Guid? parentPostId = null, CancellationToken token = default,
         Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
-        Guid? experienceTypeId = null);
+        Guid? experienceTypeId = null,
+        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false);
+
+    // ── Org attribution (item 186 F7) ────────────────────────────────────────
+
+    /// <summary>A group's case-derived posts: undecided first. Group admins only.</summary>
+    Task<LoadResult<FeedAttributionItem>> GetFeedAttributionsAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>Puts the group's name on the post — and vouches for the footage.</summary>
+    Task<bool> ClaimFeedAttributionAsync(Guid orgId, Guid postId, CancellationToken token = default);
+
+    /// <summary>Says no. The post stays; the group's name never appears on it.</summary>
+    Task<bool> DeclineFeedAttributionAsync(Guid orgId, Guid postId, CancellationToken token = default);
 
     /// <summary>
     /// The author changes what a post claims to show (item 186 F6) — the nudge's one-click
