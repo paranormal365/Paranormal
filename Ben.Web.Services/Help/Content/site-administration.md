@@ -153,9 +153,9 @@ you take while impersonating are real actions on their account.
 ## The clipart library
 
 **Administration → Clipart Library** curates the shared artwork every group can use in the video
-editor. Upload the file first, then publish it here by its file id. The format is read from the
-file itself — SVG, PNG, WebP, AVIF, GIF or Lottie — and anything else is refused rather than
-published as something the editor cannot draw.
+editor. Upload the file first, then choose it from your media library with the picker and
+publish. The format is read from the file itself — SVG, PNG, WebP, AVIF, GIF or Lottie — and
+anything else is refused rather than published as something the editor cannot draw.
 
 Assets are **retired**, never deleted. Projects reference artwork by id, so removing one would
 break renders that already use it. A retired asset leaves the catalog and stays downloadable.

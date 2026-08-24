@@ -54,4 +54,147 @@ public class ContentPickerTests : BenTestBase
         // Close without sharing: nothing was created anywhere.
         await Page.Keyboard.PressAsync("Escape");
     }
+
+    // ── Item 175 sweep ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The CMS ImageBanner editor was the second paste-a-GUID box on the site. This walks a
+    /// throwaway page's Add Section dialog to the banner editor and asserts the box is gone and
+    /// the picker opens in its place; the page is deleted again in finally (shared DB).
+    /// </summary>
+    [Test]
+    public async Task The_cms_banner_editor_offers_a_picker_instead_of_a_guid_box()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        var orgId = TghId;
+
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var title = $"Playwright banner {stamp}";
+
+        await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cms");
+        await WaitUntilLoadedAsync();
+
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
+        await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
+        await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync($"playwright-banner-{stamp}");
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).First.ClickAsync();
+        await Expect(dialog).ToBeHiddenAsync(new() { Timeout = 10_000 });
+
+        try
+        {
+            // The row's FIRST button is Sections, which navigates to the page editor (item 169).
+            var row = Main.Locator("tr", new() { HasTextString = title }).First;
+            await ClickUntilUrlAsync(row.GetByRole(AriaRole.Button, new() { Name = "Sections" }), @"/cms/pages/");
+            await WaitUntilLoadedAsync();
+
+            // The section editor is an inline card, not a modal — HTML authoring gets full width.
+            var sectionCard = Main.Locator(".card").Filter(new() { HasTextString = "New section" }).First;
+            await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Add Section" }), sectionCard);
+            await sectionCard.Locator("select").First.SelectOptionAsync(new SelectOptionValue { Label = "Image or banner" });
+
+            // The whole point: no GUID box, a Choose button instead.
+            await Expect(Page.Locator("#cms-banner-choose")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+            await Expect(Page.Locator("#cmssectioneditor-upload-file-id-8ad5")).ToHaveCountAsync(0);
+
+            await Page.Locator("#cms-banner-choose").ClickAsync();
+            await Expect(Page.Locator("#picker-search")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+            // Candidates or the honest empty sentence — never the load-failure one.
+            var cards = Page.Locator(".ben-content-picker-grid .card");
+            var empty = Page.Locator("#picker-empty");
+            await Expect(cards.First.Or(empty)).ToBeVisibleAsync(new() { Timeout = 45_000 });
+
+            if (await cards.CountAsync() > 0)
+            {
+                await cards.First.ClickAsync();
+                await Page.Locator("#picker-select").ClickAsync();
+                // The chosen-image card takes the place of the box.
+                await Expect(Page.Locator("#cms-banner-chosen")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+            }
+            else
+            {
+                await Page.Keyboard.PressAsync("Escape");
+            }
+
+            // Close the section editor without saving: this test writes no section.
+            await sectionCard.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = false }).First.ClickAsync();
+        }
+        finally
+        {
+            await DeleteCmsPageAsync(orgId, title);
+        }
+    }
+
+    /// <summary>
+    /// The clipart library was the third GUID box: SuperAdmin published editor artwork "by its
+    /// file id". Now a picker over the caller's own media library; nothing is published here.
+    /// </summary>
+    [Test]
+    public async Task The_clipart_library_offers_a_picker_instead_of_a_guid_box()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/video-assets");
+        await WaitUntilLoadedAsync();
+
+        var choose = Page.Locator("#asset-choose-file");
+        await Expect(choose).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        await Expect(Page.Locator("#adminvideoassets-upload-file-id-ace6")).ToHaveCountAsync(0);
+
+        await ClickUntilAsync(choose, Page.Locator("#picker-search"));
+
+        var cards = Page.Locator(".ben-content-picker-grid .card");
+        var empty = Page.Locator("#picker-empty");
+        await Expect(cards.First.Or(empty)).ToBeVisibleAsync(new() { Timeout = 45_000 });
+
+        if (await cards.CountAsync() > 0)
+        {
+            await cards.First.ClickAsync();
+            await Page.Locator("#picker-select").ClickAsync();
+
+            // The choice fills the chosen-file label AND defaults the asset name from the stem.
+            await Expect(Page.Locator("#asset-chosen-file")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+            var name = await Page.Locator("#adminvideoassets-name-0e6a").InputValueAsync();
+            Assert.That(name, Is.Not.Empty, "choosing a file should default the asset name");
+        }
+        else
+        {
+            await Page.Keyboard.PressAsync("Escape");
+        }
+        // Publish is never clicked: the clipart library is live data.
+    }
+
+    /// <summary>
+    /// Cleanup goes through the API, not the UI: the first version drove the grid's
+    /// More-actions dropdown and silently failed BOTH times it ran (the catch logged and the
+    /// test stayed green), leaving orphan pages in the shared DB. A cleanup must be the most
+    /// boring, least breakable path available — and it must be verified once, not trusted.
+    /// </summary>
+    private async Task DeleteCmsPageAsync(string orgId, string title)
+    {
+        try
+        {
+            var login = await Page.APIRequest.PostAsync($"{ApiUrl}/login",
+                new() { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
+            var token = (await login.JsonAsync())?.GetProperty("accessToken").GetString() ?? "";
+            var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+            var response = await Page.APIRequest.GetAsync(
+                $"{ApiUrl}/api/organizations/{orgId}/pages", new() { Headers = auth });
+            var pages = await response.JsonAsync();
+            foreach (var p in pages!.Value.EnumerateArray())
+            {
+                if (p.GetProperty("pageTitle").GetString() != title) continue;
+                var id = p.GetProperty("id").GetString();
+                var del = await Page.APIRequest.DeleteAsync(
+                    $"{ApiUrl}/api/organizations/{orgId}/pages/{id}", new() { Headers = auth });
+                TestContext.Out.WriteLine($"cleanup: deleted \"{title}\" -> {del.Status}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Best effort — a cleanup that throws would bury the real failure underneath it.
+            TestContext.Out.WriteLine($"could not remove the test page \"{title}\": {ex.Message.Split('\n')[0]}");
+        }
+    }
 }
