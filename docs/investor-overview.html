@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IsHaunted.com — Investor Overview</title>
+<style>
+  @page { size: letter; margin: 0.9in 0.85in; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #1a1a2e; line-height: 1.55; font-size: 11.5pt;
+    max-width: 7.2in; margin: 0 auto; background: #fff;
+  }
+  .cover { text-align: center; padding-top: 2.2in; page-break-after: always; }
+  .cover h1 { font-size: 30pt; letter-spacing: 0.5px; margin-bottom: 0.15in; color: #16123f; }
+  .cover .tagline { font-size: 14pt; color: #444; font-style: italic; margin-bottom: 0.8in; }
+  .cover .meta { color: #666; font-size: 10.5pt; }
+  .cover .rule { width: 2.2in; border-top: 2px solid #16123f; margin: 0.35in auto; }
+  h2 {
+    font-size: 15pt; color: #16123f; border-bottom: 2px solid #16123f;
+    padding-bottom: 4px; margin-top: 0.32in; page-break-after: avoid;
+  }
+  h3 { font-size: 12pt; color: #2c2a5a; margin-bottom: 4px; page-break-after: avoid; }
+  p { margin: 6px 0 10px; }
+  ul { margin: 4px 0 10px; padding-left: 1.35em; }
+  li { margin-bottom: 4px; }
+  .lead { font-size: 12.5pt; }
+  .two-col { column-count: 2; column-gap: 0.35in; }
+  .kicker { font-variant: small-caps; letter-spacing: 1px; color: #8a2e2e; font-size: 10pt; }
+  .callout {
+    border-left: 4px solid #16123f; background: #f4f3fa;
+    padding: 10px 14px; margin: 12px 0; page-break-inside: avoid;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 10.5pt; }
+  th { text-align: left; border-bottom: 2px solid #16123f; padding: 5px 8px; color: #16123f; }
+  td { border-bottom: 1px solid #d8d6e8; padding: 5px 8px; vertical-align: top; }
+  .footer-note { color: #777; font-size: 9pt; margin-top: 0.4in; border-top: 1px solid #ccc; padding-top: 8px; }
+  .avoid-break { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>IsHaunted.com</h1>
+  <div class="tagline">The professional platform for paranormal investigation —<br>and the community built around it.</div>
+  <div class="rule"></div>
+  <div class="meta">
+    Investor Overview<br>
+    August 2026<br><br>
+    Prepared by Ben Clark<br>
+    Confidential — for discussion purposes
+  </div>
+</div>
+
+<div class="kicker">The opportunity</div>
+<h2>A real community with no real infrastructure</h2>
+<p class="lead">
+Paranormal investigation is a durable, passionate niche: thousands of volunteer groups worldwide
+field requests from homeowners, investigate historic sites, and produce photo, audio and video
+evidence — and they run it all on spreadsheets, Facebook groups, and shared drives.
+</p>
+<p>
+The work has everything a vertical platform is built for: recurring group activity, sensitive
+records that deserve real tooling, media-heavy evidence that deserves real processing, a public
+audience hungry for the findings, and clients — the families who ask for help — who currently get
+no professional experience at all. No incumbent owns this vertical. IsHaunted.com is built to.
+</p>
+
+<div class="kicker">The product</div>
+<h2>Two sides, one platform</h2>
+<h3>For investigation groups: a complete operations platform</h3>
+<p>
+Everything a group runs, in one place: client intake, case management, scheduled investigations,
+evidence files, team roles and permissions, equipment inventory and lending, calendars and public
+events, member recruitment, and each group's own public website — pages they author and publish
+under the platform, without needing a webmaster.
+</p>
+<h3>For everyone else: the public side</h3>
+<p>
+Published cases and findings, a directory of groups searchable by location, public events anyone
+can attend, long-form publications, and a social feed for the paranormal-interested — built, and
+launching as the engagement centerpiece (see Upcoming Features).
+</p>
+
+<div class="callout avoid-break">
+<strong>The differentiator: privacy engineering.</strong> A paranormal case is somebody's home.
+IsHaunted.com treats that seriously in ways no general-purpose tool can: camera GPS data is
+stripped from served media while originals are preserved as evidence; client names are replaced
+with pseudonyms on every public page; published locations are generalized to the area, never the
+address; and the platform detects a client's name in a report before it goes public and warns the
+author. This is deep, tested machinery — and it is also the paid product (below).
+</div>
+
+<div class="kicker">What exists today</div>
+<h2>Built, tested, and deployed</h2>
+<p>The platform is live at <strong>ishaunted.com</strong>. This is not a prototype — it is a
+working product with production-grade engineering discipline:</p>
+<div class="two-col">
+<ul>
+  <li>Full case lifecycle: intake requests, case records, timelines, investigations, findings, reports</li>
+  <li>A browser-based <strong>video editor</strong> (overlays, keyframes, callouts, audio tools) with an optional
+      native helper app for fast, full-quality rendering on the investigator's own machine</li>
+  <li>Server-side <strong>EVP detection</strong> — automated scanning of audio evidence for anomalies, with an
+      accuracy-gated test fixture suite</li>
+  <li>Audio tooling: waveform players, spectrograms, region notes, clip extraction, multi-track case mixes</li>
+  <li>Evidence metadata: EXIF/GPS extraction on every upload into an audit table; location stripping
+      from served copies; derived clips inherit the recording's provenance</li>
+  <li>Per-group public websites (CMS): pages, layouts, logos, embedded cases and galleries</li>
+  <li>Equipment: personal and group inventories, a moderated global catalog, lending with condition photos</li>
+  <li>Events: public listings, RSVPs, attendee evidence submission, reminder automation</li>
+  <li>Roles &amp; permissions: per-group custom roles with per-table grants, tier-aware</li>
+  <li>Community: member profiles, @handles, following, hashtags, a moderated social feed (built, dark-launched)</li>
+  <li>Group discovery by location; group-authored promotional ads with platform review</li>
+  <li>Billing foundation: subscription tiers by member count, contract-terms freezing, coupons and
+      referral tracking, an append-only financial ledger with receipts and per-state tax</li>
+  <li>In-app help system with full product documentation, generated to PDF</li>
+</ul>
+</div>
+<div class="callout avoid-break">
+<strong>Engineering discipline as an asset:</strong> 3,000+ automated unit tests and a 350+ scenario
+browser test suite run against every change; an append-only audit trail on financial records;
+additive-only database migrations; and a documented decision record covering 180+ tracked product
+items. The codebase is built to be operated, audited, and grown.
+</div>
+
+<div class="kicker">Business model</div>
+<h2>Free where it grows, paid where it matters</h2>
+<p class="lead">The pricing principle: charge for the work that carries responsibility, never for
+the activity that grows the community.</p>
+<table>
+<tr><th>Free lane</th><th>Paid lane</th></tr>
+<tr>
+  <td>Public-place investigations — landmarks, historic sites, businesses — including full public
+  publication of findings. This is the content engine and the recruitment engine, and it stays free.</td>
+  <td><strong>Private-residence and client work</strong> — taking a family's case, working it, and publishing
+  redacted findings from it. The privacy machinery (pseudonyms, location generalization, media
+  stripping, name detection) is the product being bought.</td>
+</tr>
+</table>
+<p><strong>Revenue levers, designed and largely built:</strong></p>
+<ul>
+  <li><strong>Subscriptions by group size</strong> — tiered bands priced per member count, monthly or yearly,
+      with contract terms frozen per period (a group always keeps what it bought).</li>
+  <li><strong>Overflow seats</strong> — when a group outgrows its band, new members can subscribe individually
+      rather than forcing the whole group up a tier. Built; priced per band.</li>
+  <li><strong>Capability gating</strong> — per-tier switches over discrete features (case transfers between
+      groups, audio/video location stripping, private-residence casework), each enforced server-side
+      with honest, upgrade-aware messaging in the product.</li>
+  <li><strong>Referral program</strong> — per-referrer coupon campaigns with frozen-money attribution and
+      a commission ledger; referral links land visitors on pre-discounted pricing.</li>
+  <li><strong>Group promotion</strong> — groups author ads, the platform reviews them, and placements run
+      across the site; location-targeted feed placement is on the roadmap below.</li>
+</ul>
+
+<div class="kicker">Where it goes next</div>
+<h2>Upcoming features</h2>
+<table>
+<tr><th>Feature</th><th>What it is</th><th>Status</th></tr>
+<tr>
+  <td><strong>The feed, as the front door</strong></td>
+  <td>An addictive, scrolling social feed for the paranormal-interested — anyone can scroll; posting
+  and participation require joining or founding a group, making the feed itself the recruitment
+  funnel. Group ads served by viewer location, interleaved with prompts to start your own group.</td>
+  <td>Feed engine, moderation, hashtags and follows already built; engagement loop and geo-targeted
+  placement are the next major arc.</td>
+</tr>
+<tr>
+  <td><strong>Private-case privacy, end to end</strong></td>
+  <td>Write reports using real names freely; the platform substitutes pseudonyms and neutral labels
+  ("the family", "the homeowner") on every public surface automatically, and lapsed subscriptions
+  safely unpublish rather than expose. The core of the paid lane.</td>
+  <td>In active development now — data model and designation shipped; display-time redaction, plan
+  gates, and lifecycle handling in progress.</td>
+</tr>
+<tr>
+  <td><strong>Payments integration</strong></td>
+  <td>Card processing for subscriptions and overflow seats on top of the existing billing domain
+  (tiers, contracts, ledger, receipts, tax are already built and tested — the processor plugs into
+  a finished frame).</td>
+  <td>Designed; the manual billing path runs today.</td>
+</tr>
+<tr>
+  <td><strong>iPhone &amp; iPad app</strong></td>
+  <td>Native companion for investigators in the field — capture, upload, case notes, and the feed
+  on the device they already carry on every investigation.</td>
+  <td>Next major project after the current arc.</td>
+</tr>
+<tr>
+  <td><strong>Group white-label</strong></td>
+  <td>Custom domains and branding for a group's public site — a high-perceived-value premium tier
+  on machinery (per-group CMS) that already exists.</td>
+  <td>On the priced-lever roadmap.</td>
+</tr>
+</table>
+
+<div class="kicker">Why this team ships</div>
+<h2>Velocity</h2>
+<p>
+The entire platform described above was designed and built by a single founder using an
+AI-accelerated development process, with the test discipline and decision records to prove it —
+180+ tracked items designed, built, tested, documented and closed, at a pace of multiple
+production-quality features per day. The same process now compounds: each new capability lands on
+tested foundations with its documentation and its tests in the same change.
+</p>
+
+<h2>The conversation</h2>
+<p>
+IsHaunted.com is live, differentiated, and priced on a principle that grows the community while
+charging for genuine value. The near-term roadmap — the engagement feed, payments, and the mobile
+app — is where investment converts directly into reach and revenue. I'd welcome the chance to walk
+through the product live.
+</p>
+<p><strong>Ben Clark</strong><br>ben.clark@vanderbilt.edu · ishaunted.com</p>
+
+<div class="footer-note">
+This document describes the product and its roadmap as of August 2026. It contains no financial
+projections; figures cited (test counts, tracked items) are drawn directly from the project's
+repository and are verifiable on request.
+</div>
+
+</body>
+</html>
