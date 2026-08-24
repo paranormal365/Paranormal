@@ -152,6 +152,45 @@ public sealed class CaseController : BenControllerBase
         return request is null ? NotFound("The originating request no longer exists.") : Ok(request);
     }
 
+    /// <summary>
+    /// Would this title leak the client's identity onto the public case page? (item 176)
+    /// </summary>
+    /// <remarks>
+    /// <para>Advisory only — the UI warns and lets the org publish anyway, because a surname is
+    /// also a place name and only they know which their title means. Server-side because the
+    /// client's real name deliberately never reaches the org-facing records
+    /// (<see cref="CaseClientRequestRecord"/> has no name fields); the check runs where the name
+    /// lives and returns only the sentence. Same gate as <see cref="GetClientRequest"/> — a
+    /// member who may read the case may already read the client's request.</para>
+    /// <para>Empty list when the title is clean or the case has no client — both mean
+    /// "nothing to warn about".</para>
+    /// </remarks>
+    [HttpGet("{caseId:guid}/publish-leak-check")]
+    public async Task<ActionResult<IReadOnlyList<string>>> PublishLeakCheck(
+        Guid orgId, Guid caseId, [FromQuery] string? title, [FromQuery] string? pseudonym, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var caseRow = await db.Cases.AsNoTracking()
+            .Where(x => x.Id == caseId && x.OrganizationId == orgId)
+            .Select(x => new { x.ClientRequestId, x.StreetAddress1 })
+            .FirstOrDefaultAsync(ct);
+        if (caseRow is null) return NotFound("Case not found.");
+
+        string?[] names = [];
+        if (caseRow.ClientRequestId is { } requestId)
+        {
+            var client = await db.ClientRequests.AsNoTracking()
+                .Where(r => r.Id == requestId)
+                .Select(r => new { r.AppUser.FirstName, r.AppUser.LastName, r.AppUser.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            if (client is not null) names = [client.FirstName, client.LastName, client.DisplayName];
+        }
+
+        return Ok(PublicTitleLeakCheck.Check(title, pseudonym, names, caseRow.StreetAddress1));
+    }
+
     // ── Create (internally proposed) ──────────────────────────────────────────
 
     [HttpPost]

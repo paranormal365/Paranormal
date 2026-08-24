@@ -305,6 +305,16 @@
                 <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
             </div>
         </div>
+        @if (_leakWarnings.Count > 0)
+        {
+            <div class="alert alert-warning mt-3 mb-0" id="case-title-leak-warning">
+                <strong>Before this goes public:</strong>
+                <ul class="mb-1">
+                    @foreach (var w in _leakWarnings) { <li>@w</li> }
+                </ul>
+                <span class="small">This is a warning, not a refusal — click Save again to publish with this title.</span>
+            </div>
+        }
         @if (_editError is not null)
         {
             <div class="alert alert-danger mt-3 mb-0">@_editError</div>
@@ -480,6 +490,8 @@
         _editIsPublic       = _case.IsPublic;
         _editCaseManagerId  = _case.CaseManagerAppUserId;
         _editError          = null;
+        _leakWarnings       = [];
+        _leakWarnedTitle    = null;
         // Load org members lazily for the dropdown
         if (_memberOptions.Count == 0)
             _ = LoadMembersAsync();
@@ -501,12 +513,33 @@
         catch { /* non-critical — dropdown just stays empty */ }
     }
 
+    // Item 176: warn — never block — when a title or pseudonym about to go public carries the
+    // client's name or the street address past the pseudonym. The warnings are remembered per
+    // exact input pair, so the second Save on the same text publishes as-is, and any edit re-checks.
+    private IReadOnlyList<string> _leakWarnings = [];
+    private string? _leakWarnedTitle;
+
     private async Task SaveEdit()
     {
         if (string.IsNullOrWhiteSpace(_editTitle)) { _editError = "Label is required."; return; }
         _isBusy = true; _editError = null;
         try
         {
+            var leakInputs = $"{_editTitle.Trim()}\n{_editPseudonym.Trim()}";
+            if (_editIsPublic && _leakWarnedTitle != leakInputs)
+            {
+                var check = await AdminClient.GetPublishLeakWarningsAsync(
+                    OrgId, CaseId, _editTitle.Trim(), _editPseudonym.Trim());
+                // A check that couldn't run (check.Failed) is silence, not a warning — an
+                // advisory that fails must never stand between the org and publishing.
+                if (!check.Failed && check.Items.Count > 0)
+                {
+                    _leakWarnings = check.Items;
+                    _leakWarnedTitle = leakInputs;
+                    return;
+                }
+            }
+            _leakWarnings = [];
             var req = new UpdateCaseRequest(
                 Title:                _editTitle.Trim(),
                 Description:          string.IsNullOrWhiteSpace(_editDescription) ? null : _editDescription.Trim(),
