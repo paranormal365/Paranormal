@@ -16,6 +16,11 @@ public record OrganizationAdminRecord
     /// org's clients. Both keys are required — see PrivatePhotoConsent.
     /// </summary>
     public bool AllowMemberPrivatePhotosToClients { get; init; }
+    /// <summary>What this group primarily is (2026-08-24). Decides the defaults a NEW group
+    /// starts with; afterwards it is a label, never a gate.</summary>
+    public Ben.Data.Common.Enums.OrganizationKind Kind { get; init; }
+    /// <summary>It runs public walking tours, whatever kind it primarily is.</summary>
+    public bool RunsPublicTours { get; init; }
     public string? PublicPhone { get; init; }
     public string? PublicEmail { get; init; }
     public string? PublicWebsite { get; init; }

@@ -1710,6 +1710,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessageLike>()
                 .HasIndex(e => new { e.OrgMessageId, e.DateLiked });
 
+            // ── Organization kind + the tours capability (2026-08-24) ─────────
+            // The finder's "walking tours" filter reads RunsPublicTours, so it is worth an
+            // index of its own: a visitor in a strange city filtering for tours is exactly
+            // the query this feature exists to serve.
+            modelBuilder.Entity<Organization>()
+                .HasIndex(e => e.RunsPublicTours);
+
             // ── Feed categories + the learning loop (item 186 F6) ─────────────
             // The post's chosen type. SetNull on type delete: a retired taxonomy entry must not
             // take posts down with it — the post just becomes uncategorized.

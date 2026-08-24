@@ -264,7 +264,8 @@ public class OrganizationMembershipController : BenControllerBase
                 "New groups are not being accepted at the moment. Please contact us if you would like to start one.");
         }
 
-        var organization = await _organizationSecurityService.RegisterOrganizationAsync(appUserId, request.Name, request.UrlName, cancellationToken);
+        var organization = await _organizationSecurityService.RegisterOrganizationAsync(
+            appUserId, request.Name, request.UrlName, request.Kind, cancellationToken);
 
         return CreatedAtAction(
             nameof(GetMyOrganizations),
@@ -286,6 +287,10 @@ public class OrganizationMembershipController : BenControllerBase
         public required string Name { get; set; }
         /// <summary>URL-safe slug (e.g. <c>my-org</c>); must be unique across all organizations.</summary>
         public required string UrlName { get; set; }
+        /// <summary>What kind of group this is (2026-08-24). Defaults to an investigation
+        /// group, which is what every caller written before this meant.</summary>
+        public Ben.Data.Common.Enums.OrganizationKind Kind { get; set; }
+            = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
     }
 
     /// <summary>Lightweight organization projection returned by membership endpoints.</summary>
