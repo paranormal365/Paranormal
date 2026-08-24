@@ -12,6 +12,15 @@ struct IsHauntedApp: App {
                 .environment(dependencies)
                 .environment(router)
                 .tint(Theme.ecto)
+                // Taps on linkified @mentions and #tags carry ishaunted:// URLs;
+                // they must navigate IN the app, not bounce through the OS.
+                .environment(\.openURL, OpenURLAction { url in
+                    guard url.scheme == "ishaunted", let link = DeepLinkParser.parse(url) else {
+                        return .systemAction
+                    }
+                    router.open(link)
+                    return .handled
+                })
                 .onOpenURL { url in
                     // Website URLs and ishaunted:// links land on the logically
                     // matching native screen — one URL space, two front ends.

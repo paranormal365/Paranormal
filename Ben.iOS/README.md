@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–2 (kernel + auth core) complete and verified live.**
+**Status: Slices 1–3 complete and verified live (kernel, auth core, and the feed — read-only).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -88,9 +88,18 @@ the OS confirmation dialog — used by automation and the future UI test target.
   website's `/events` page (same three seed events, same local-time rendering).
 - Deep link `https://ishaunted.com/events` routed to the native Events screen.
 
+## Verified (Slice 3, 2026-08-24)
+
+- 71/71 unit tests: fresh live fixtures lock the arc's full record surface (categories,
+  attribution, badges); the For You de-dupe; 404 → `.featureUnavailable` (a switched-off
+  feature is a fact, not an error); the dead-token fall-back to reading as a visitor;
+  the mention/hashtag linkifier mirroring the server's tag rule.
+- Live on iPhone 17 Pro + iPad Pro (M5): For You/Latest modes, media from the anonymous
+  route, linkified tags navigating in-app, the BenCo attribution + Group-verified chip,
+  and the flag-off state rendering as "switched off sitewide", with the flag restored dark.
+
 ## Slices remaining (Phase 1)
 
-3. Feed read-only (modes, cursor+de-dupe, media, feature-gate-404 state)
 4. Feed participation (composer, camera, multipart upload, likes/replies)
 5. Notifications (60 s foreground polling, summed bucket badge, messages)
 6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)

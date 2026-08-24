@@ -45,6 +45,29 @@ struct DeepLinkParserTests {
             == .myCaseDetail(postId))
     }
 
+
+    @Test func feedTypeURL() {
+        #expect(DeepLinkParser.parse(
+            URL(string: "https://ishaunted.com/feed/types/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!)
+            == .feedType(postId))
+    }
+
+    @Test func feedTextLinkifiesMentionsAndTags() {
+        let mentions = [FeedMentionRecord(
+            appUserId: postId, handle: "jamesthornton", displayName: "James")]
+        let text = FeedText.attributed(
+            body: "clear #EVP with @jamesthornton at #bellwitch", mentions: mentions)
+        let links = text.runs.compactMap(\.link)
+        #expect(links.contains(URL(string: "ishaunted://feed/people/\(postId.uuidString.lowercased())")!))
+        #expect(links.contains(URL(string: "ishaunted://feed/tags/evp")!))
+        #expect(links.contains(URL(string: "ishaunted://feed/tags/bellwitch")!))
+    }
+
+    @Test func hashtagRuleMatchesTheServers() {
+        // Letters lead; a leading digit is a year or a list, not a subject.
+        #expect(FeedText.hashtags(in: "#2026 #evp #EVP #a1") == ["evp", "a1"])
+    }
+
     @Test func unknownPathsReturnNilNotACrash() {
         #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/admin/users")!) == nil)
         #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/")!) == nil)

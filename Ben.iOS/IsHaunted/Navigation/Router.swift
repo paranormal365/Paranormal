@@ -34,6 +34,8 @@ enum AppRoute: Hashable {
     case feedPost(UUID)
     case feedProfile(UUID)
     case feedHashtag(String)
+    /// A pinned feed slice — a tag page, a type page, an author page.
+    case feedFiltered(FeedFilter)
     case notifications
     case messages
     case caseDetail(UUID)
@@ -78,7 +80,8 @@ final class Router {
             paths[.feed] = NavigationPath()
         case .feedPost(let id): push(.feedPost(id), in: .feed)
         case .feedProfile(let id): push(.feedProfile(id), in: .feed)
-        case .feedHashtag(let tag): push(.feedHashtag(tag), in: .feed)
+        case .feedHashtag(let tag): push(.feedFiltered(.hashtag(tag)), in: .feed)
+        case .feedType(let id): push(.feedFiltered(.experienceType(id, name: nil)), in: .feed)
         case .events:
             selection = .events
             paths[.events] = NavigationPath()

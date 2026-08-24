@@ -159,7 +159,7 @@ public final class SessionStore {
             // The token died between adoption and /me (or was stale on restore).
             state = .signedOut
             if !quietOnFailure { errorMessage = "The session ended before it began — try again." }
-        case .failed(let reason):
+        case .failed(let reason, _):
             // A sign-in that can't resolve /me is reported on the form, not
             // as the session-ended interrupt.
             expectingDeliberateEnd = true

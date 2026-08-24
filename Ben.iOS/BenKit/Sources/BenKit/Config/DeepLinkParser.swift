@@ -8,6 +8,8 @@ public enum DeepLink: Sendable, Equatable {
     case feedPost(UUID)
     case feedProfile(UUID)
     case feedHashtag(String)
+    /// `/feed/types/{id}` — one experience type's posts (item 186 F6).
+    case feedType(UUID)
     case events
     case eventDetail(UUID)
     case myCases
@@ -46,6 +48,9 @@ public enum DeepLinkParser {
             case "tags":
                 guard components.count > 2 else { return .feed }
                 return .feedHashtag(components[2])
+            case "types":
+                guard components.count > 2, let id = UUID(uuidString: components[2]) else { return .feed }
+                return .feedType(id)
             default:
                 guard let id = UUID(uuidString: components[1]) else { return .feed }
                 return .feedPost(id)

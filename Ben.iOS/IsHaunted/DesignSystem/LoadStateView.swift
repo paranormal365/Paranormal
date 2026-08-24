@@ -42,7 +42,7 @@ struct LoadStateView<T: Sendable, Content: View>: View {
             }
         case .ok(let value):
             content(value)
-        case .failed(let reason):
+        case .failed(let reason, _):
             ContentUnavailableView {
                 Label("Couldn't load this", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(Theme.warning)

@@ -107,7 +107,7 @@ struct RootShell: View {
     @ViewBuilder
     private func sectionRoot(_ section: AppSection) -> some View {
         switch section {
-        case .feed: FeedPlaceholderView()
+        case .feed: FeedListView()
         case .cases: PlaceholderScreen(section: .cases, slice: "Slice 6")
         case .investigations: PlaceholderScreen(section: .investigations, slice: "Slice 7")
         case .events: PublicEventsPreview()
@@ -120,6 +120,12 @@ struct RootShell: View {
         switch route {
         case .developerSettings:
             DeveloperSettingsView()
+        case .feedPost(let id):
+            FeedThreadView(postId: id)
+        case .feedProfile(let id):
+            FeedProfileView(appUserId: id)
+        case .feedFiltered(let filter):
+            FeedListView(fixedFilter: filter)
         case .notifications:
             PlaceholderScreen(title: "Notifications", icon: "bell", slice: "Slice 5")
         default:
