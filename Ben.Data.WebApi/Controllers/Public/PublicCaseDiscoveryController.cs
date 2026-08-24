@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -51,6 +52,9 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
 
         var caseIds = cases.Select(c => c.Id).ToList();
 
+        // Item 184: titles of private-engagement cases substitute real names at display time.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, caseIds, ct);
+
         // Aggregate evidence vote counts for all cases in one query
         var voteCounts = await db.EvidenceVotes.AsNoTracking()
             .Join(db.CaseTimelineEntryFiles,
@@ -86,7 +90,7 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
             return new PublicCaseDiscoveryItem(
                 CaseId:            c.Id,
                 CaseReference:     $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
-                Title:             c.Title,
+                Title:             CaseProseRedactor.RedactFor(rosters, c.Id, c.Title)!,
                 City:              c.City,
                 State:             c.State,
                 Country:           c.Country,

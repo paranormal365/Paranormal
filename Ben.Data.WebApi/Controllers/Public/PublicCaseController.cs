@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,12 +43,16 @@ public sealed class PublicCaseController : ControllerBase
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
 
+        // Item 184: private-engagement cases substitute real names at display time; a case with
+        // no roster (not private) renders exactly as written.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, cases.Select(c => c.Id).ToList(), ct);
+
         var result = cases.Select(c => new PublicCaseListItem(
             CaseReference:    $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
             // Falls back to the reference for a case published before slugs existed, so a card
             // always has somewhere to point rather than silently linking nowhere.
             UrlName:          c.UrlName ?? $"{c.CaseYear}-{c.OrgCaseNumber:D3}",
-            Title:            c.Title,
+            Title:            CaseProseRedactor.RedactFor(rosters, c.Id, c.Title)!,
             City:             c.City,
             State:            c.State,
             Status:           c.Status,
@@ -103,11 +108,14 @@ public sealed class PublicCaseController : ControllerBase
         // if neither — the real name is never an outcome here. See PublicClientName.
         var clientName = PublicClientName.For(c);
 
+        // Item 184: on a private engagement, prose is substituted before it leaves the API.
+        var roster = await CaseRedactionRoster.ForCaseAsync(db, c.Id, ct) ?? RedactionRoster.Empty;
+
         var publicTimeline = c.TimelineEntries.Select(e => new PublicTimelineEntry(
             EntryType:      e.EntryType,
             EventDateTime:  e.EventDateTime,
-            Title:          e.Title,
-            Body:           e.Body,
+            Title:          CaseProseRedactor.Redact(e.Title, roster),
+            Body:           CaseProseRedactor.RedactHtml(e.Body, roster),
             EvidenceFileIds: e.EntryType == CaseTimelineEntryType.Evidence
                 ? e.Files.Select(f => f.UploadFileId).ToList()
                 : [])).ToList();
@@ -115,14 +123,14 @@ public sealed class PublicCaseController : ControllerBase
         return Ok(new PublicCaseDetail(
             CaseId:         c.Id,
             CaseReference:  $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
-            Title:          c.Title,
+            Title:          CaseProseRedactor.Redact(c.Title, roster)!,
             City:           c.City,
             State:          c.State,
             Country:        c.Country,
             Status:         c.Status,
             IsHaunted:      c.Status == CaseStatus.Haunted,
             ClientName:     clientName,
-            Description:    c.Description,
+            Description:    CaseProseRedactor.RedactHtml(c.Description, roster),
             DateCaseOpened: c.DateCaseOpened,
             DateCaseClosed: c.DateCaseClosed,
             Timeline:       publicTimeline,

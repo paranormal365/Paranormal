@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Redaction;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -47,19 +48,32 @@ public sealed class PublicPlaceController : ControllerBase
 
         // An anonymous caller belongs to no organizations and has investigated nowhere, so the
         // shared predicate resolves to "public only" on its own. No second rule to keep in step.
-        var rows = await db.Investigations.AsNoTracking()
+        var raw = await db.Investigations.AsNoTracking()
             .Where(i => i.PlaceId == id)
             .Where(InvestigationVisibilityFilter.VisibleTo([], []))
             .OrderByDescending(i => i.ScheduledDateTime)
-            .Select(i => new PublicPlaceInvestigationRow(
+            .Select(i => new
+            {
+                i.Id, i.UrlName, i.Title, i.ScheduledDateTime, i.Status, i.CaseId,
+                OrganizationName = i.Organization.Name,
+                OrganizationUrlName = i.Organization.UrlName,
+            })
+            .ToListAsync(ct);
+
+        // Item 184: an investigation bound to a private-engagement case must not carry the
+        // client's name in its title on the place's public page.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, raw.Where(i => i.CaseId != null).Select(i => i.CaseId!.Value).Distinct().ToList(), ct);
+
+        var rows = raw.Select(i => new PublicPlaceInvestigationRow(
                 i.Id,
                 i.UrlName,
-                i.Title,
+                i.CaseId is { } caseId ? CaseProseRedactor.RedactFor(rosters, caseId, i.Title)! : i.Title,
                 i.ScheduledDateTime,
                 i.Status,
-                i.Organization.Name,
-                i.Organization.UrlName))
-            .ToListAsync(ct);
+                i.OrganizationName,
+                i.OrganizationUrlName))
+            .ToList();
 
         return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows)));
     }

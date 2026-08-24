@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Controllers.Public;
+using Ben.Data.WebApi.Services.Redaction;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -280,6 +281,12 @@ public static class CmsEmbed
             .Where(i => settings.IncludeNonPublic || i.Visibility == InvestigationVisibility.Public)
             .ToListAsync(ct);
 
+        // Item 184: work bound to a private-engagement case substitutes real names before it is
+        // embedded — and because this runs inside the resolver, the live page and the
+        // authenticated preview show the same thing.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, rows.Where(r => r.CaseId != null).Select(r => r.CaseId!.Value).Distinct().ToList(), ct);
+
         // Ordered by the group's own arrangement, not by date — they chose the sequence.
         return [.. ids
             .Select(id => rows.FirstOrDefault(r => r.Id == id))
@@ -290,9 +297,15 @@ public static class CmsEmbed
                     ? PublicCoordinates.Approximate(r!.Place?.Latitude, r.Place?.Longitude)
                     : (null, null);
 
+                var roster = r!.CaseId is { } caseId && rosters.TryGetValue(caseId, out var found)
+                    ? found : RedactionRoster.Empty;
+
                 return new EmbeddedInvestigation(
-                    r!.Id, r.Title, r.Notes, r.ScheduledDateTime, r.UrlName,
-                    settings.ShowApproximateLocation ? r.Place?.Name : null,
+                    r!.Id,
+                    CaseProseRedactor.Redact(r.Title, roster)!,
+                    CaseProseRedactor.RedactHtml(r.Notes, roster),
+                    r.ScheduledDateTime, r.UrlName,
+                    settings.ShowApproximateLocation ? CaseProseRedactor.Redact(r.Place?.Name, roster) : null,
                     settings.ShowApproximateLocation ? r.Place?.City : null,
                     settings.ShowApproximateLocation ? r.Place?.State : null,
                     lat, lon,
@@ -311,6 +324,10 @@ public static class CmsEmbed
                      || (c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted)))
             .ToListAsync(ct);
 
+        // Item 184: a private-engagement case's title and summary substitute real names here,
+        // inside the resolver, so the live page and the preview cannot disagree.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, rows.Select(r => r.Id).ToList(), ct);
+
         return [.. ids
             .Select(id => rows.FirstOrDefault(r => r.Id == id))
             .Where(r => r is not null)
@@ -321,7 +338,10 @@ public static class CmsEmbed
                     : (null, null);
 
                 return new EmbeddedCase(
-                    r!.Id, r.Title, r.Description, r.DateCreated, r.UrlName,
+                    r!.Id,
+                    CaseProseRedactor.RedactFor(rosters, r.Id, r.Title)!,
+                    CaseProseRedactor.RedactHtmlFor(rosters, r.Id, r.Description),
+                    r.DateCreated, r.UrlName,
                     // The alias or nothing, through the one helper that decides this — so an embed
                     // and the case's own public page can never disagree about who somebody is.
                     settings.ShowClientName ? PublicClientName.For(r) : null,
@@ -364,6 +384,10 @@ public static class CmsEmbed
         var publishable = (await CaseMediaPublication.PublishableAsync(db, settings.CaseId, ct))
             .ToDictionary(f => f.UploadFileId);
 
+        // Item 184: captions are the group's own timeline titles, so a private case's captions
+        // substitute names like every other prose surface.
+        var roster = await CaseRedactionRoster.ForCaseAsync(db, settings.CaseId, ct) ?? RedactionRoster.Empty;
+
         return [.. settings.FileIds
             .Distinct()
             .Where(publishable.ContainsKey)
@@ -371,7 +395,7 @@ public static class CmsEmbed
             .Select(f => new PublishedCaseFile(
                 settings.CaseId,
                 f.UploadFileId,
-                settings.ShowCaptions ? f.Context : null,
+                settings.ShowCaptions ? CaseProseRedactor.Redact(f.Context, roster) : null,
                 settings.ShowCaptions ? f.When : null,
                 f.EntryType))];
     }

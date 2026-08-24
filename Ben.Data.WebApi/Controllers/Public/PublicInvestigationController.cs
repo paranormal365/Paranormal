@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -44,17 +45,35 @@ public sealed class PublicInvestigationController : BenControllerBase
         var (organization, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
         if (organization is null) return Ok(Array.Empty<PublicInvestigationListItem>());
 
-        var rows = await db.Investigations.AsNoTracking()
+        var raw = await db.Investigations.AsNoTracking()
             .Where(i => i.OrganizationId == organization.Id)
             .Where(InvestigationVisibilityFilter.VisibleTo([], []))
             .OrderByDescending(i => i.ScheduledDateTime)
-            .Select(i => new PublicInvestigationListItem(
-                i.Id, i.UrlName, i.Title, i.ScheduledDateTime, i.Status,
-                i.Organization.Name, i.Organization.UrlName,
-                i.Place != null ? i.Place.Name : null,
-                i.Place != null ? i.Place.City : null,
-                i.Place != null ? i.Place.State : null))
+            .Select(i => new
+            {
+                i.Id, i.UrlName, i.Title, i.ScheduledDateTime, i.Status, i.CaseId,
+                OrgName = i.Organization.Name, OrgUrlName = i.Organization.UrlName,
+                PlaceName = i.Place != null ? i.Place.Name : null,
+                PlaceCity = i.Place != null ? i.Place.City : null,
+                PlaceState = i.Place != null ? i.Place.State : null,
+            })
             .ToListAsync(ct);
+
+        // Item 184: work bound to a private-engagement case substitutes names in its title and
+        // its place name — a residence is routinely named after the family living in it.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, raw.Where(i => i.CaseId != null).Select(i => i.CaseId!.Value).Distinct().ToList(), ct);
+
+        var rows = raw.Select(i => i.CaseId is { } caseId
+                ? new PublicInvestigationListItem(
+                    i.Id, i.UrlName, CaseProseRedactor.RedactFor(rosters, caseId, i.Title)!,
+                    i.ScheduledDateTime, i.Status, i.OrgName, i.OrgUrlName,
+                    CaseProseRedactor.RedactFor(rosters, caseId, i.PlaceName),
+                    i.PlaceCity, i.PlaceState)
+                : new PublicInvestigationListItem(
+                    i.Id, i.UrlName, i.Title, i.ScheduledDateTime, i.Status,
+                    i.OrgName, i.OrgUrlName, i.PlaceName, i.PlaceCity, i.PlaceState))
+            .ToList();
 
         return Ok(rows);
     }
@@ -85,19 +104,24 @@ public sealed class PublicInvestigationController : BenControllerBase
         // say precisely where, and the same grid protects a landmark's neighbours as a client's.
         var (lat, lon) = PublicCoordinates.Approximate(i.Place?.Latitude, i.Place?.Longitude);
 
+        // Item 184: bound to a private-engagement case, the write-up substitutes real names.
+        var roster = i.CaseId is { } boundCaseId
+            ? await CaseRedactionRoster.ForCaseAsync(db, boundCaseId, ct) ?? RedactionRoster.Empty
+            : RedactionRoster.Empty;
+
         return Ok(new PublicInvestigationDetail(
             i.Id,
             i.UrlName,
-            i.Title,
+            CaseProseRedactor.Redact(i.Title, roster)!,
             // Notes are the write-up. Description is the plan, which is internal.
-            i.Notes,
+            CaseProseRedactor.RedactHtml(i.Notes, roster),
             i.ScheduledDateTime,
             i.EndDateTime,
             i.Status,
             i.Organization.Name,
             i.Organization.UrlName,
             i.Place?.Id,
-            i.Place?.Name,
+            CaseProseRedactor.Redact(i.Place?.Name, roster),
             i.Place?.City,
             i.Place?.State,
             lat,
