@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using NAudio.Wave;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -33,17 +34,20 @@ public sealed class UploadFileAudioClipController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly IMediaIngestService _mediaIngest;
 
     public UploadFileAudioClipController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        IMediaIngestService mediaIngest)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
+        _mediaIngest = mediaIngest;
     }
 
     /// <summary>
@@ -167,6 +171,16 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
+
+        // Ben's rule (2026-08-24): a clip keeps the recording's location. An encoder writes no
+        // EXIF, so without carrying it forward the choice would be to lose where the audio was
+        // captured or to imply the clip was measured there — the row says it was inherited, and
+        // the duration comes from the clip's own bytes rather than the source's.
+        if (await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct) is { } derived)
+        {
+            derived.DurationSeconds = request.End - request.Start;
+            db.UploadFileMetadata.Add(derived);
+        }
 
         // Saved together with the file: a marker pointing at a clip row that failed to insert would
         // be a dangling reference the UI renders as a broken link.

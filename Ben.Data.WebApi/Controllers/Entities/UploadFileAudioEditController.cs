@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -31,16 +32,20 @@ public sealed class UploadFileAudioEditController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
 
+    private readonly IMediaIngestService _mediaIngest;
+
     public UploadFileAudioEditController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        IMediaIngestService mediaIngest)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
+        _mediaIngest = mediaIngest;
     }
 
     [HttpPost]
@@ -135,6 +140,13 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
+
+        // An edited copy was recorded in the same place as its source (Ben's rule, 2026-08-24).
+        // Duration is left as the source's: noise reduction and normalisation do not change it,
+        // and the operations that would (trim) go through the clip endpoint, which sets its own.
+        if (await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct) is { } derived)
+            db.UploadFileMetadata.Add(derived);
+
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 

@@ -9275,3 +9275,55 @@ time, camera make and model, dimensions, duration, sample rate, bitrate, channel
 not modelled. Read access is `AdminFileMetadataController`, **SuperAdmin-only** — note the service
 comment says "org Administrator or SuperAdmin", so the doc and the gate disagree; the gate is the
 stricter of the two, which is the safe direction, but one of them should be corrected.
+
+---
+
+## 180. EXIF comes off on ANY upload, and clips keep where they came from (Ben, 2026-08-24 — Phase A shipped)
+
+Ben, after item 179 exposed how narrow the stripping actually was: *"The EXIF strip should occur on
+any upload. It should store the data in a table linked to the record for the uploaded file."* And,
+minutes later: *"if we create clips from an audio file... keep any lat/lon altitude or other info
+related to the clip in an exif record - if possible."*
+
+**Every upload door now ingests.** Before this, `MediaIngestService` was reached by the equipment
+doors and by thumbnail generation, and nothing else — `CaseFileController`, the door case EVIDENCE
+comes through, wrote raw bytes and extracted nothing at all. Converted: case files, case research,
+`MyCaseController` timeline evidence, event evidence, equipment loan photos, and published video
+exports. Each keeps the original untouched, writes the stripped derivative beside it, and adds the
+`UploadFileMetadata` row.
+
+**Derived files carry the recording's place forward.** `DeriveMetadataAsync` copies exactly what
+stays true of a derivative — GPS latitude/longitude/altitude, capture time, camera make and model —
+onto audio clips, audio edits, case audio mixes, and copy-on-attach case copies. What belongs to
+the NEW bytes is deliberately NOT carried: duration, sample rate, channels, pixel dimensions (a
+thirty-second clip of a ten-minute recording is thirty seconds), and neither is the raw dump, which
+describes a file this is not. The clip endpoint sets its own duration from the range it cut.
+
+`UploadFileMetadata.InheritedFromUploadFileId` records that the values were **carried, not
+measured**. That distinction is the whole reason to store it: a clip has no EXIF of its own —
+encoders write none — so without the flag the choice would be to lose the location or to imply the
+clip was measured at it. Inherited values are still true about where the recording was made, which
+is what an investigator means when they ask where a clip came from.
+
+**A structural guard keeps it true.** `UploadMetadataCoverageTests` walks every controller: one
+that creates an `UploadFile` must also record its metadata, freshly extracted or derived. It caught
+three doors mid-build (audio mixes, loan photos, video exports) that the manual sweep had missed —
+which is exactly the failure it exists to prevent, since case evidence went years without anyone
+noticing it extracted nothing.
+
+**Fixtures had to get more honest.** Three test helpers handed the API a buffer of zeros labelled
+`image/jpeg`; a door that decodes to strip now answers that with a 400, correctly. They encode real
+2x2 JPEGs instead — and the empty-file case still passes zero bytes, because that guard is real.
+
+**Verified live** through the case-evidence door: a 73-byte PNG came back as a 762-byte stripped
+JPEG with `.clean.jpg` and `.thumb.jpg` written beside the untouched original, and a metadata row
+carrying dimensions and the raw dump. Probe rows and files removed afterwards (shared DB).
+
+**Phase B, still to build — Ben's delete-and-reassign flow** (spec given 2026-08-24, unchanged):
+when a user deletes a file that is shared and in use, ask whether they want it removed everywhere
+it is shared. If yes, honour it. If no, ask whether they still wish to delete it; if they do, the
+file and its EXIF record are **reassigned to the organization using it** rather than destroyed —
+ownership moves to the org, the person stops being the owner, it leaves their personal files, and
+it appears only to those with the right permission in that organization. Needs: an owner-org column
+on `UploadFile`, a usage endpoint so the UI can ask the two questions, ownership checks that read
+org-ownership, and personal-file listings that exclude reassigned files.

@@ -57,7 +57,7 @@ public class VideoProjectControllerTests
         fileStorage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("test/path");
         fileStorage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("test/path");
         fileStorage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        var ctrl = new VideoProjectController(factory, CreateMapper(), fileStorage.Object);
+        var ctrl = new VideoProjectController(factory, CreateMapper(), fileStorage.Object, new Ben.Data.WebApi.Services.MediaIngestService(new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(), new Ben.Data.WebApi.Services.MediaSanitizationService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

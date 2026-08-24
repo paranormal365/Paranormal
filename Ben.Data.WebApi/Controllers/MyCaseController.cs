@@ -38,13 +38,17 @@ public sealed class MyCaseController : BenControllerBase
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
         IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        Services.PlatformMessageService messages)
+        Services.PlatformMessageService messages,
+        Services.IMediaIngestService mediaIngest)
     {
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
         _messages = messages;
+        _mediaIngest = mediaIngest;
     }
+
+    private readonly Services.IMediaIngestService _mediaIngest;
 
     private readonly Services.PlatformMessageService _messages;
 
@@ -554,23 +558,35 @@ public sealed class MyCaseController : BenControllerBase
 
         var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath  = _fileStorage.CaseFilePath(caseId, storedName);
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off in the metadata table.
+        // The ORIGINAL stays untouched; the derivative is what serve paths return (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = EvidenceFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var entryFile = new CaseTimelineEntryFile
         {

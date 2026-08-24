@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -25,11 +26,15 @@ public sealed class CaseAudioMixController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
 
+    private readonly IMediaIngestService _mediaIngest;
+
     public CaseAudioMixController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _fileStorage = fileStorage;
+        _mediaIngest = mediaIngest;
      _security = security; }
 
     [HttpPost("export")]
@@ -98,6 +103,19 @@ public sealed class CaseAudioMixController : BenControllerBase
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFileEntity);
+
+        // A mix is a derivative of the tracks that went into it, so it keeps where they were
+        // recorded (Ben's rule, 2026-08-24). Sources from ONE case are almost always the same
+        // night at the same place; where they disagree the first audible track's provenance is
+        // the honest choice — it is a real source of these bytes, and the row says it was carried.
+        var firstSourceFileId = audible
+            .Select(t => caseFiles[t.CaseFileId].UploadFileId)
+            .FirstOrDefault();
+        if (firstSourceFileId != Guid.Empty
+            && await _mediaIngest.DeriveMetadataAsync(db, firstSourceFileId, uploadFileEntity.Id, "Audio", ct) is { } derived)
+        {
+            db.UploadFileMetadata.Add(derived);
+        }
 
         var caseFile = new CaseFile
         {

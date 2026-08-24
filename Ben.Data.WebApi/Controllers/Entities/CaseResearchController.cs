@@ -20,9 +20,12 @@ public sealed class CaseResearchController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
 
+    private readonly IMediaIngestService _mediaIngest;
+
     public CaseResearchController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _fileStorage = fileStorage;  _security = security; }
+    { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest; _security = security; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseResearchEntryDto>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -79,18 +82,30 @@ public sealed class CaseResearchController : BenControllerBase
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"research/{storedName}");
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off in the metadata table.
+        // The ORIGINAL stays untouched; the derivative is what serve paths return (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var evidenceTypeId = new Guid("20000000-0000-0000-0000-000000000001"); // Case Evidence upload type
         var uploadFile = new UploadFile
         {
-            Id = Guid.NewGuid(), UploadFileTypeId = evidenceTypeId, AppUserId = userId,
+            Id = uploadFileId, UploadFileTypeId = evidenceTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = file.Length,
+            ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var maxOrder = await db.CaseResearchEntries.Where(e => e.CaseId == caseId).MaxAsync(e => (int?)e.SortOrder, ct) ?? 0;
         var entry = new CaseResearchEntry

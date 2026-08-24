@@ -26,17 +26,20 @@ public sealed class CaseFileController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly IMediaIngestService _mediaIngest;
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
     public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits,
+        IMediaIngestService mediaIngest,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
         _limits = limits;
+        _mediaIngest = mediaIngest;
         _security = security;
     }
 
@@ -74,17 +77,35 @@ public sealed class CaseFileController : BenControllerBase
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"files/{storedName}");
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+
+        // Ben's rule (2026-08-24): EXIF comes off on ANY upload, and what came off is kept in the
+        // metadata table beside the record. Case evidence is the most sensitive upload on the
+        // site — a photo taken inside somebody's home — and until now it wrote raw bytes and
+        // extracted nothing. The ORIGINAL is still stored untouched; the stripped derivative is
+        // what every serve path returns (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id = Guid.NewGuid(), UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
+            Id = uploadFileId, UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = file.Length,
+            // The served copy's type and size belong on the row; the original's are recorded in
+            // the metadata table beside its EXIF.
+            ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var caseFile = new CaseFile
         {
@@ -158,6 +179,15 @@ public sealed class CaseFileController : BenControllerBase
         };
         db.UploadFiles.Add(copy);
 
+        // Copy-on-attach mints a NEW file row, so it needs its own metadata row — carried from
+        // the source, since the bytes are identical and were captured in the same place. Without
+        // this, attaching a photo to a case silently dropped where it was taken.
+        if (await _mediaIngest.DeriveMetadataAsync(db, sourceFile.Id, copy.Id,
+                MediaKindFor(sourceFile.ContentType), ct) is { } derived)
+        {
+            db.UploadFileMetadata.Add(derived);
+        }
+
         var caseFile = new CaseFile
         {
             Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = copy.Id,
@@ -171,6 +201,15 @@ public sealed class CaseFileController : BenControllerBase
         caseFile.UploadFile = copy;
         return Ok(ToRecord(caseFile));
     }
+
+    /// <summary>The metadata table's coarse kind, from a content type.</summary>
+    private static string MediaKindFor(string? contentType) => contentType switch
+    {
+        not null when contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => "Image",
+        not null when contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => "Audio",
+        not null when contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => "Video",
+        _ => "Unknown",
+    };
 
     [HttpDelete("{caseFileId:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken ct)
