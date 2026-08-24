@@ -289,11 +289,27 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHand
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.ModeratorHandler>();
 
-// Feed media screening (item 186 F5). The manual screener approves nothing by itself and routes
-// every upload to the moderation queue — fail-closed, and honest about not being automatic. An
-// automatic classifier replaces this ONE registration; nothing else in the upload path changes.
-builder.Services.AddSingleton<Ben.Data.WebApi.Services.Feed.IFeedMediaScreener,
-    Ben.Data.WebApi.Services.Feed.ManualReviewScreener>();
+// Feed media screening (item 186 F5/F5b). The automatic ONNX classifier registers when its model
+// file is present (fetched by scripts/get-screener-model.sh — 87 MB, deliberately not in git);
+// without it the manual screener approves nothing by itself and routes every upload to the
+// moderation queue — fail-closed, and honest about not being automatic. Which one is live is
+// logged at startup below and shown on /admin/feed-reports via IsAutomatic.
+var nsfwModelPresent = File.Exists(Path.Combine(
+    builder.Environment.ContentRootPath, Ben.Data.WebApi.Services.Feed.OnnxNsfwScreener.ModelRelativePath));
+if (nsfwModelPresent)
+{
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Feed.IFeedMediaScreener,
+        Ben.Data.WebApi.Services.Feed.OnnxNsfwScreener>();
+}
+else
+{
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Feed.IFeedMediaScreener,
+        Ben.Data.WebApi.Services.Feed.ManualReviewScreener>();
+}
+// The recovery path for anything stuck Pending: screener was down, ffmpeg missing, the process
+// died mid-create, or the F4→F5b backlog. No-ops under the manual screener.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PendingMediaScreeningJob>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -350,6 +366,19 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// Screening posture, said plainly in the log every start. A deploy that forgot the model file
+// finds out here and on /admin/feed-reports — not from a moderator asking why the queue grew.
+if (nsfwModelPresent)
+    app.Logger.LogInformation(
+        "Feed media screening is AUTOMATIC (ONNX model at {Path}).",
+        Ben.Data.WebApi.Services.Feed.OnnxNsfwScreener.ModelRelativePath);
+else
+    app.Logger.LogWarning(
+        "Feed media screening is MANUAL-ONLY: no model at {Path}. Every feed photo/video waits " +
+        "for a moderator. Run scripts/get-screener-model.sh (or .ps1) and restart to enable " +
+        "automatic screening.",
+        Ben.Data.WebApi.Services.Feed.OnnxNsfwScreener.ModelRelativePath);
 
 // ── Behind a reverse proxy ──────────────────────────────────────────────────
 //
