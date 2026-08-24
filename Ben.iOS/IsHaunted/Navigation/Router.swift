@@ -39,6 +39,8 @@ enum AppRoute: Hashable {
     case notifications
     case messages
     case caseDetail(UUID)
+    /// A case from the GROUP's side — its screen arrives with the cases slice.
+    case orgCase(organizationId: UUID, caseId: UUID)
     case caseReportPDF(caseId: UUID, reportId: UUID)
     case investigationDetail(UUID)
     case attendedMap
@@ -90,6 +92,12 @@ final class Router {
             selection = .cases
             paths[.cases] = NavigationPath()
         case .myCaseDetail(let id): push(.caseDetail(id), in: .cases)
+        case .orgCase(let organizationId, let caseId):
+            // The GROUP's side of a case — a different surface from the client's view of
+            // the same case. Its screen arrives with the cases slice; until then the link
+            // resolves and lands on the cases section rather than nowhere.
+            selection = .cases
+            push(.orgCase(organizationId: organizationId, caseId: caseId), in: .cases)
         case .myInvestigations:
             selection = .investigations
             paths[.investigations] = NavigationPath()

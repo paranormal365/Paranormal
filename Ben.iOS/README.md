@@ -5,7 +5,7 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slices 1–4 complete and verified live (kernel, auth, feed, participation).**
+**Status: Slices 1–5 complete and verified live (kernel, auth, feed, participation, notifications).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
@@ -108,9 +108,25 @@ the OS confirmation dialog — used by automation and the future UI test target.
   was answered as a visitor, so the compose button never appeared — the website's own
   `_participationKnown` lesson, in iOS form. The list now re-asks when the session changes.
 
+## Verified (Slice 5, 2026-08-24)
+
+- 97 unit tests. The urgency rule is ported from `Ben.Web.Services.NotificationBadge` at the
+  same thresholds and pinned by a test that states the point: fifty items from this morning
+  are Fresh, one from last week is Overdue. A live fixture from a real account (90 waiting,
+  both item-173 breakdowns) locks the payload, with a test that the roll-up equals what the
+  rows can open.
+- Live on iPhone: five rows with real counts; the two case rows open the case on its group's
+  side; the three with no app screen yet are greyed and inert rather than offering a chevron
+  that lies.
+- Found live and fixed: opened by deep link at launch, the screen's first load beat sign-in
+  and was answered as a visitor. Screens that depend on identity now re-ask when identity
+  resolves rather than trusting a parent's observer to win the race.
+- Deferred deliberately: foreground polling. The screen reloads on appear, on pull-to-refresh
+  and when the session changes; a timer would add battery cost for a badge nobody is watching
+  while the app is closed. Real push (APNs) is the honest answer and needs server work.
+
 ## Slices remaining (Phase 1)
 
-5. Notifications (60 s foreground polling, summed bucket badge, messages)
 6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)
 7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)
 8. Account completeness (register, confirm-email deep link, 2FA setup QR)

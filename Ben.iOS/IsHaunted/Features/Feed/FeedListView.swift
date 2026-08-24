@@ -6,6 +6,7 @@ import BenKit
 /// states — including "the feed isn't available", which is a fact, not an error.
 struct FeedListView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(Router.self) private var router
 
     /// Non-nil pins the list to one filter (a tag page, a type page, an author).
     let fixedFilter: FeedFilter?
@@ -34,6 +35,19 @@ struct FeedListView: View {
         .toolbar {
             if fixedFilter == nil {
                 ToolbarItem(placement: .principal) { modePicker }
+            }
+            // The bell. On iPhone there is no notifications tab, so without this the screen
+            // is reachable only by deep link; the iPad sidebar carries its own entry.
+            if dependencies.session.me != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { router.push(.notifications, in: .feed) } label: {
+                        Image(systemName: dependencies.notifications.badgeCount > 0
+                              ? "bell.badge" : "bell")
+                    }
+                    .accessibilityLabel(dependencies.notifications.badgeCount > 0
+                        ? "Notifications, \(dependencies.notifications.badgeCount) waiting"
+                        : "Notifications")
+                }
             }
             // CanPost is the SERVER's answer, so the button never invites a refusal.
             if store?.canPost == true {

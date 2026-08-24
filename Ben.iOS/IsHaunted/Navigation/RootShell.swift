@@ -21,6 +21,18 @@ struct RootShell: View {
         }
         // Cold start: tokens in the Keychain mean quiet optimistic sign-in.
         .task { await dependencies.session.restore() }
+        // The badge follows the session in both directions. Loading it before sign-in
+        // resolves would ask as a visitor and be told nothing is waiting; leaving it up
+        // after sign-out would show one person's count to the next.
+        .onChange(of: dependencies.session.me?.userId) { _, userId in
+            Task {
+                if userId == nil {
+                    dependencies.notifications.clear()
+                } else {
+                    await dependencies.notifications.load()
+                }
+            }
+        }
         // The session-ended INTERRUPT: a banner over whatever the user was
         // doing — anonymous surfaces keep working, never a sign-in wall.
         .safeAreaInset(edge: .top) {
@@ -86,6 +98,7 @@ struct RootShell: View {
                         router.push(.notifications)
                     } label: {
                         Label("Notifications", systemImage: "bell")
+                            .badge(dependencies.notifications.badgeCount)
                     }
                 }
             }
@@ -127,7 +140,7 @@ struct RootShell: View {
         case .feedFiltered(let filter):
             FeedListView(fixedFilter: filter)
         case .notifications:
-            PlaceholderScreen(title: "Notifications", icon: "bell", slice: "Slice 5")
+            NotificationsView()
         default:
             PlaceholderScreen(title: "Coming soon", icon: "hammer", slice: "a later slice")
         }

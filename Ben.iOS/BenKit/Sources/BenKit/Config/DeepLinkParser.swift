@@ -14,6 +14,9 @@ public enum DeepLink: Sendable, Equatable {
     case eventDetail(UUID)
     case myCases
     case myCaseDetail(UUID)
+    /// `/organizations/{orgId}/cases/{caseId}` — a case from the GROUP's side, which is a
+    /// different surface from the client's `myCaseDetail` even for the same case.
+    case orgCase(organizationId: UUID, caseId: UUID)
     case myInvestigations
     case notifications
     case profile
@@ -61,6 +64,16 @@ public enum DeepLinkParser {
         case "my-cases":
             guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .myCases }
             return .myCaseDetail(id)
+        case "organizations":
+            // /organizations/{orgId}/cases/{caseId} — the group's side of a case. Anything
+            // shorter or otherwise shaped has no app screen, so it stays unhandled rather
+            // than landing somebody on a page that isn't what their link said.
+            guard components.count > 3,
+                  let orgId = UUID(uuidString: components[1]),
+                  components[2].lowercased() == "cases",
+                  let caseId = UUID(uuidString: components[3])
+            else { return nil }
+            return .orgCase(organizationId: orgId, caseId: caseId)
         case "my-investigations":
             return .myInvestigations
         case "notifications":

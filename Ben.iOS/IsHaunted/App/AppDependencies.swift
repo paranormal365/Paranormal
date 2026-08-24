@@ -16,6 +16,9 @@ final class AppDependencies {
     /// The feed's write surface (item 186 F2–F7) — one instance, shared by every screen
     /// that can post, like, follow or report.
     let feedActions: FeedActions
+    /// What's waiting on the signed-in person — shared, because the tab badge and the
+    /// notifications screen must never show different numbers.
+    let notifications: NotificationsStore
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -41,6 +44,7 @@ final class AppDependencies {
             tokens: tokens,
             api: api)
         self.feedActions = FeedActions(api: api)
+        self.notifications = NotificationsStore(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means
