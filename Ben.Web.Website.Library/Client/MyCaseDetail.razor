@@ -748,6 +748,16 @@
                 <textarea id="mycasedetail-notes-optional-fd4e" class="form-control" rows="2" @bind="@_newPersonNotes"></textarea>
             </div>
             <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-public-label-184a">Public label (optional)</label>
+                <input id="mycasedetail-public-label-184a" type="text" class="form-control" maxlength="100"
+                       placeholder="e.g. the homeowner, their daughter" @bind="@_newPersonPublicLabel" @bind:event="oninput" />
+                <div class="form-text">
+                    If anything from this case is ever shared publicly, this is what stands in for
+                    their name. Real names are never shown; leave it blank and a neutral label like
+                    "a family member" is used instead.
+                </div>
+            </div>
+            <div class="col-12">
                 <label class="form-label fw-semibold">Photo (optional)</label>
                 <div class="d-flex align-items-center gap-3">
                     @if (_personPhotoPreview is not null)
@@ -920,6 +930,7 @@
     private string _newPersonRelationship = "";
     private bool _newPersonLivesAtProperty;
     private string _newPersonNotes = "";
+    private string _newPersonPublicLabel = "";
     private bool _showCounterDialog;
     private Guid _counterProposalId;
     private DateTime? _counterDateTime;
@@ -1241,6 +1252,7 @@
         _newPersonRelationship    = p.Relationship ?? "";
         _newPersonLivesAtProperty = p.LivesAtProperty;
         _newPersonNotes           = p.Notes ?? "";
+        _newPersonPublicLabel     = p.PublicLabel ?? "";
         _newPersonPhotoFileId     = p.UploadFileId;
         _personPhotoPreview       = p.UploadFileId is { } f && _personPhotos.TryGetValue(f, out var src) ? src : null;
         _showAddRelatedPerson     = true;
@@ -1249,7 +1261,7 @@
     private void ResetPersonForm()
     {
         _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
-        _newPersonLivesAtProperty = false; _newPersonNotes = "";
+        _newPersonLivesAtProperty = false; _newPersonNotes = ""; _newPersonPublicLabel = "";
         _newPersonPhotoFileId = null; _personPhotoPreview = null;
     }
 
@@ -1292,12 +1304,13 @@
         var name         = _newPersonName.Trim();
         var relationship = string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim();
         var notes        = string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim();
+        var publicLabel  = string.IsNullOrWhiteSpace(_newPersonPublicLabel) ? null : _newPersonPublicLabel.Trim();
 
         if (_editingPersonId is { } editId)
         {
             var updated = await AdminClient.UpdateRelatedPersonAsync(CaseId, editId,
                 new UpdateRelatedPersonRequest(name, _newPersonAge, relationship,
-                                               _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+                                               _newPersonLivesAtProperty, notes, _newPersonPhotoFileId, publicLabel));
             if (updated is not null)
             {
                 var idx = _relatedPeople.FindIndex(p => p.Id == editId);
@@ -1311,7 +1324,7 @@
         {
             var added = await AdminClient.AddRelatedPersonAsync(CaseId,
                 new AddRelatedPersonRequest(name, _newPersonAge, relationship,
-                                            _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+                                            _newPersonLivesAtProperty, notes, _newPersonPhotoFileId, publicLabel));
             if (added is not null)
             {
                 _relatedPeople.Add(added);

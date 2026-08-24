@@ -27,4 +27,14 @@ public enum TierCapability
     /// file, which is real compute, so it is a capability a tier can withhold.
     /// </summary>
     MediaMetadataStripping = 2,
+
+    /// <summary>
+    /// Taking on and publishing PRIVATE-ENGAGEMENT work — cases at private residences, cases
+    /// born from a client's request (item 184, Ben's lane split 2026-08-24). The free lane is
+    /// public-place work, fully free including publication; homes-and-clients work is the paid
+    /// lane end to end: accepting the request, binding a residence place, and making any of it
+    /// public. One capability for both taking and publishing, because under
+    /// plan-governs-publication they are the same right.
+    /// </summary>
+    PrivateResidenceCases = 3,
 }

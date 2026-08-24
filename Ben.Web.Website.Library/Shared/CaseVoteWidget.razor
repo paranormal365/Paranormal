@@ -48,7 +48,10 @@
             @* ── Vote buttons (authenticated users only) ──────────────────────── *@
             @if (UserState.IsAuthenticated)
             {
-                <div class="d-flex gap-1 flex-wrap">
+                @* Ben's rule (2026-08-24): the vote bar fills its line and NEVER wraps. Three
+                   equal buttons — the icon is always there, the word appears when it fits, and
+                   the tooltip + aria-label say it in full at every width. *@
+                <div class="d-flex w-100 gap-1">
                     @foreach (var vt in Enum.GetValues<EvidenceVoteType>())
                     {
                         var v = vt;
@@ -56,18 +59,21 @@
                         @* Solid marks the vote this user has cast, outline the ones they have not —
                            aria-pressed carries the same fact for anyone not seeing the fill. *@
                         <button type="button"
-                                class="btn btn-sm @VoteButtonClass(v, isActive)"
+                                class="btn btn-sm flex-fill text-nowrap overflow-hidden @VoteButtonClass(v, isActive)"
                                 aria-pressed="@isActive.ToString().ToLowerInvariant()"
+                                aria-label="@VoteTitle(v)"
+                                title="@VoteTitle(v)"
                                 @onclick="@(() => CastVote(v))"
                                 disabled="@_isBusy">
-                            @VoteLabel(v)
+                            @VoteIcon(v)<span class="d-none d-md-inline ms-1">@VoteWord(v)</span>
                         </button>
                     }
                     @if (_summary.CurrentUserVote.HasValue)
                     {
-                        <button type="button" class="btn btn-sm btn-link text-decoration-none"
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none text-nowrap flex-shrink-0"
+                                title="Remove my vote" aria-label="Remove my vote"
                                 @onclick="RemoveVote" disabled="@_isBusy">
-                            Remove
+                            &#x21ba;<span class="d-none d-lg-inline ms-1">Remove</span>
                         </button>
                     }
                 </div>
@@ -159,11 +165,28 @@
     private double DisputesPct     => _summary is { TotalVotes: > 0 } ? _summary.DisputesCount     * 100.0 / _summary.TotalVotes : 0;
     private double InconclusivePct => _summary is { TotalVotes: > 0 } ? _summary.InconclusiveCount * 100.0 / _summary.TotalVotes : 0;
 
-    private static string VoteLabel(EvidenceVoteType v) => v switch
+    private static string VoteIcon(EvidenceVoteType v) => v switch
     {
-        EvidenceVoteType.Confirms     => "✓ Confirms",
-        EvidenceVoteType.Disputes     => "✗ Disputes",
-        EvidenceVoteType.Inconclusive => "? Inconclusive",
+        EvidenceVoteType.Confirms     => "✓",
+        EvidenceVoteType.Disputes     => "✗",
+        EvidenceVoteType.Inconclusive => "?",
+        _                             => "•",
+    };
+
+    private static string VoteWord(EvidenceVoteType v) => v switch
+    {
+        EvidenceVoteType.Confirms     => "Confirms",
+        EvidenceVoteType.Disputes     => "Disputes",
+        EvidenceVoteType.Inconclusive => "Inconclusive",
+        _                             => v.ToString(),
+    };
+
+    /// <summary>The full sentence, for the tooltip and screen readers at every width.</summary>
+    private static string VoteTitle(EvidenceVoteType v) => v switch
+    {
+        EvidenceVoteType.Confirms     => "Confirms the findings",
+        EvidenceVoteType.Disputes     => "Disputes the findings",
+        EvidenceVoteType.Inconclusive => "Inconclusive — can't say either way",
         _                             => v.ToString(),
     };
 

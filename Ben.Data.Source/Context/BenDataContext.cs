@@ -2113,6 +2113,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<CaseRelatedPerson>()
                 .HasOne(e => e.Case).WithMany(e => e.RelatedPeople)
                 .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.PublicLabel).HasMaxLength(100);
             // NoAction, not Cascade: deleting the photo should never silently delete the record
             // that this person exists. Clearing the reference is the client's decision, not a
             // side effect of tidying up files.

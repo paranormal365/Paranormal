@@ -1188,6 +1188,7 @@ public sealed class MyCaseController : BenControllerBase
             Relationship       = request.Relationship?.Trim(),
             LivesAtProperty    = request.LivesAtProperty,
             Notes              = request.Notes?.Trim(),
+            PublicLabel        = string.IsNullOrWhiteSpace(request.PublicLabel) ? null : request.PublicLabel.Trim(),
             UploadFileId       = request.UploadFileId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -1239,6 +1240,7 @@ public sealed class MyCaseController : BenControllerBase
         person.Relationship       = request.Relationship?.Trim();
         person.LivesAtProperty    = request.LivesAtProperty;
         person.Notes              = request.Notes?.Trim();
+        person.PublicLabel        = string.IsNullOrWhiteSpace(request.PublicLabel) ? null : request.PublicLabel.Trim();
         person.UploadFileId       = request.UploadFileId;
         person.DateUpdated        = DateTime.UtcNow;
         person.UpdatedByAppUserId = userId;
@@ -1282,6 +1284,7 @@ public sealed class MyCaseController : BenControllerBase
         Relationship    = p.Relationship,
         LivesAtProperty = p.LivesAtProperty,
         Notes           = p.Notes,
+        PublicLabel     = p.PublicLabel,
         UploadFileId    = p.UploadFileId,
         DateCreated     = p.DateCreated,
     };

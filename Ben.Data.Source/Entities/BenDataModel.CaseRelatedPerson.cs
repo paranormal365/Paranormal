@@ -20,6 +20,15 @@ namespace Ben.Data.Source.Entities
         public string? Notes { get; set; }
 
         /// <summary>
+        /// What public prose calls this person when the case is a private engagement (item 184) —
+        /// "the homeowner", "their daughter". Null falls back to a label derived from
+        /// <see cref="Relationship"/>, then to "a resident"/"a witness". Real names never render
+        /// publicly on a private case; this is the org's chance to pick something better than
+        /// the generic fallback.
+        /// </summary>
+        public string? PublicLabel { get; set; }
+
+        /// <summary>
         /// Optional photo of this person, uploaded by the client. Nullable because most witnesses
         /// will never have one, and a missing photo must never block recording that someone was
         /// there. Points at an <see cref="UploadFile"/> like every other image in the system, so
