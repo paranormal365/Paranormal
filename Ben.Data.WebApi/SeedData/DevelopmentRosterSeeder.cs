@@ -130,7 +130,7 @@ internal static class DevelopmentRosterSeeder
             lat: 36.1755m, lon: -86.7513m, gender: ClientGender.Female, birthYear: 1971,
             requestBody: "<p>My late husband's workshop light turns itself on most nights around 3 AM. "
                        + "The breaker for that circuit is off. Our dog will no longer go past the workshop door.</p>",
-            caseTitle: "Maxwell Residence, Nashville TN",
+            caseTitle: "Fatherland Street Workshop, Nashville TN",   // place, not the client's surname (item 178)
             caseBody: "<p>Widowed client reports electrical anomalies and animal avoidance centred on a "
                     + "detached workshop. Circuit verified dead at the panel on intake call.</p>",
             manager: rachel, pseudonym: "The Workshop Case",
@@ -168,7 +168,7 @@ internal static class DevelopmentRosterSeeder
                 id: new Guid("52000001-0000-0000-0000-000000000001"),
                 title: "Workshop Baseline Sweep",
                 description: "Full EMF and audio baseline of the workshop and yard. Verify the panel.",
-                location: "Maxwell Residence — Workshop",
+                location: "Fatherland St residence — Workshop",
                 start: now.AddDays(-32).Date.AddHours(21), hours: 5,
                 status: InvestigationStatus.Completed, creator: rachel, now: now,
                 notes: "<p>Circuit confirmed dead. Light did not activate during the session, but audio "
@@ -182,7 +182,7 @@ internal static class DevelopmentRosterSeeder
                 id: new Guid("52000001-0000-0000-0000-000000000002"),
                 title: "Workshop Follow-up — Overnight",
                 description: "Extended overnight session focused on the 2–4 AM window the baseline flagged.",
-                location: "Maxwell Residence — Workshop + main house",
+                location: "Fatherland St residence — Workshop + main house",
                 start: now.AddDays(9).Date.AddHours(22), hours: 6,
                 status: InvestigationStatus.Scheduled, creator: rachel, now: now,
                 notes: null,

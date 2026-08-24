@@ -288,7 +288,10 @@ internal static class DevelopmentDataSeeder
                 ClientRequestId = danielAcceptedReq.Id,
                 CaseManagerAppUserId = sarah.Id,
                 CaseYear = 2026, OrgCaseNumber = nextNum,
-                Title = "Park Residence, Nashville TN",
+                // Named for the PLACE, not the client (item 176/178): the seed teaches the habit
+                // every fresh database inherits, and "Park, Nashville TN" for client Daniel Park
+                // is exactly the leak the publish check warns about.
+                Title = "Belmont Boulevard Residence, Nashville TN",
                 Description = "<p>Client reports persistent activity over six months: footsteps on the second floor after midnight and objects found displaced. Initial evidence review underway.</p>",
                 StreetAddress1 = "4512 Belmont Blvd", City = "Nashville",
                 State = "TN", ZipCode = "37215", Country = "US",
@@ -331,7 +334,7 @@ internal static class DevelopmentDataSeeder
                 Id = Guid.NewGuid(), CaseId = danielCase.Id,
                 Title = "Initial Site Assessment",
                 Description = "First visit to the property. EMF baseline, audio placement, walkthrough with client.",
-                Location = "Park Residence — Full property",
+                Location = "Belmont Blvd residence — Full property",
                 ScheduledDateTime = now.AddDays(5),
                 EndDateTime       = now.AddDays(5).AddHours(4),
                 Status = InvestigationStatus.Scheduled,
@@ -383,7 +386,7 @@ internal static class DevelopmentDataSeeder
                 {
                     Id                   = new Guid("30000001-0000-0000-0000-000000000001"),
                     CaseId               = danielCase.Id,
-                    Title                = "Initial Assessment — Park Residence",
+                    Title                = "Initial Assessment — Belmont Blvd residence",
                     Summary              = "Team conducted a baseline sweep of the property on 2026-08-07. Activity was primarily concentrated in the upstairs hallway.",
                     Conclusion           = "Evidence is consistent with a Type 2 residual haunting. Further investigations are recommended to capture additional audio and visual evidence.",
                     Status               = Ben.Data.Common.Enums.CaseReportStatus.Published,
