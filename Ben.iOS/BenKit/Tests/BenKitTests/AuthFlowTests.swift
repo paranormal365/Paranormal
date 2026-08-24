@@ -168,6 +168,49 @@ struct SessionStoreTests {
         #expect(store.sessionEndedBanner == false)
     }
 
+    @Test func anEventFiredBeforeAnyoneIsListeningIsNotLost() async {
+        // SessionStore attaches its listener on an actor hop, so a session ending in the
+        // first instants after launch would otherwise vanish and leave a signed-in-looking
+        // UI. The event is held for the first subscriber and delivered exactly once.
+        let tokens = TokenSession(
+            storage: InMemoryTokenStorage(tokens: StoredTokens(
+                accessToken: "AT", refreshToken: "RT",
+                expiresAt: Date(timeIntervalSinceNow: 600))),
+            transport: MockTransport(status: 200), environment: { .dev })
+
+        await tokens.endSession()          // nobody is listening yet
+
+        // Bounded: without the fix this stream never yields, and a test that HANGS reports a
+        // regression as a timeout instead of a failure. Race the wait against a deadline so
+        // the answer is "no event arrived", which is the actual finding.
+        let stream = await tokens.events()  // subscribes AFTER the fact
+        let received = await withTaskGroup(of: TokenSession.Event?.self) { group -> TokenSession.Event? in
+            group.addTask {
+                for await event in stream { return event }
+                return nil
+            }
+            group.addTask {
+                try? await Task.sleep(for: .milliseconds(500))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        #expect(received == .sessionEnded)
+
+        // And it is not replayed to the next subscriber — a stale banner an hour later
+        // would be worse than the miss it fixes.
+        let second = await tokens.events()
+        var late: [TokenSession.Event] = []
+        let waiter = Task {
+            for await event in second { late.append(event); break }
+        }
+        try? await Task.sleep(for: .milliseconds(60))
+        waiter.cancel()
+        #expect(late.isEmpty)
+    }
+
     @Test func refreshFailureRaisesTheInterruptBanner() async {
         // Signed in, then every request 401s: the next refresh kills the session.
         let storage = InMemoryTokenStorage(tokens: StoredTokens(
