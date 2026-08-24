@@ -30,6 +30,17 @@ public sealed partial class BenAdminClientAdapter
         return _api.GetAsync<FeedPageRecord>(url, token);
     }
 
+    /// <summary>
+    /// Where a post's photo or video is served from (item 186 F4).
+    /// </summary>
+    /// <remarks>
+    /// Absolute, against the API host: the browser fetches this directly, and a relative path
+    /// would ask the WEBSITE host for it — which serves static files and would answer 404. The
+    /// same reason every other file URL on the site is built this way.
+    /// </remarks>
+    public string GetFeedMediaUrl(Guid postId)
+        => $"{_webApiBaseUrl}/api/feed/posts/{postId}/media";
+
     public Task<bool> LikeAsync(Guid postId, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/feed/posts/{postId}/like", new { }, token);
 
@@ -45,16 +56,46 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Writing ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Writes a post, with or without a photo or video.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Multipart either way</b> (item 186 F4). The endpoint takes a form so it can accept
+    /// a file, and a form endpoint does not read JSON — so there is ONE request shape here rather
+    /// than two paths that would drift, with the text-only case simply omitting the file part.</para>
+    ///
+    /// <para>The reason-carrying variant, because "a post can be at most 1000 characters" and
+    /// "that file is neither a photo nor a video" are both things the composer shows against the
+    /// box, and a plain null reads as "something broke".</para>
+    /// </remarks>
     public async Task<(FeedPostRecord? Post, string? Error)> CreatePostAsync(
-        string body, Guid? parentPostId = null, CancellationToken token = default)
+        string body, Guid? parentPostId = null, CancellationToken token = default,
+        Stream? media = null, string? mediaFileName = null, string? mediaContentType = null)
     {
-        // SendExpectingReason rather than Post: "a post can be at most 1000 characters" is
-        // something the composer can show against the box, and the plain helper would flatten it
-        // into a null that reads as "something broke".
-        var (post, error) = await _api.SendExpectingReasonAsync<CreateFeedPostRequest, FeedPostRecord>(
-            HttpMethod.Post, "/api/feed/posts", new CreateFeedPostRequest(body, parentPostId), token);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(body), nameof(CreateFeedPostRequest.Body));
+        if (parentPostId is { } parentId)
+            form.Add(new StringContent(parentId.ToString()), nameof(CreateFeedPostRequest.ParentMessageId));
 
-        return (post, error);
+        StreamContent? mediaContent = null;
+        if (media is not null && mediaFileName is not null)
+        {
+            mediaContent = new StreamContent(media);
+            mediaContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    mediaContentType ?? "application/octet-stream");
+            form.Add(mediaContent, "media", mediaFileName);
+        }
+
+        try
+        {
+            return await _api.PostMultipartExpectingReasonAsync<FeedPostRecord>(
+                "/api/feed/posts", form, token);
+        }
+        finally
+        {
+            mediaContent?.Dispose();
+        }
     }
 
     public Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default)

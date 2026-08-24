@@ -71,6 +71,23 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<OrgMessageRecipient> Recipients { get; set; } = new List<OrgMessageRecipient>();
         public virtual ICollection<OrgMessageView> Views { get; set; } = new List<OrgMessageView>();
 
+        /// <summary>
+        /// One photo or video carried by a feed post (item 186 F4). Null for a text post.
+        /// </summary>
+        public Guid? MediaUploadFileId { get; set; }
+
+        /// <summary>
+        /// Whether that media may be shown. <b>Pending by default, and Pending is never served.</b>
+        /// </summary>
+        /// <remarks>
+        /// Fail-closed by the data model: see <see cref="Ben.Data.Common.Enums.FeedMediaReviewState"/>.
+        /// Meaningless when <see cref="MediaUploadFileId"/> is null, and left at its default there.
+        /// </remarks>
+        public Ben.Data.Common.Enums.FeedMediaReviewState MediaReviewState { get; set; }
+
+        /// <summary>The file itself.</summary>
+        public virtual UploadFile? MediaUploadFile { get; set; }
+
         /// <summary>Feed likes (item 186 F3). Empty for every non-feed message.</summary>
         public virtual ICollection<OrgMessageLike> Likes { get; set; } = new List<OrgMessageLike>();
         public virtual ICollection<OrgMessageMention> Mentions { get; set; } = new List<OrgMessageMention>();

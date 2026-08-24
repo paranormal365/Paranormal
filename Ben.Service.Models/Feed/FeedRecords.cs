@@ -29,7 +29,29 @@ public sealed record FeedPostRecord(
     /// <summary>How many people liked this post (item 186 F3). Counted per page, never cached.</summary>
     int LikeCount = 0,
     /// <summary>Whether THIS reader liked it. Always false for a visitor.</summary>
-    bool LikedByCurrentUser = false);
+    bool LikedByCurrentUser = false,
+    /// <summary>
+    /// Whether there is a photo or video to fetch from the post's own media route (item 186 F4).
+    /// False while the media is unscreened — see <paramref name="MediaAwaitingReview"/>.
+    /// </summary>
+    bool HasMedia = false,
+    /// <summary>
+    /// Media was attached but has not been cleared yet, so nothing renders. Shown to the author
+    /// as a note rather than as a broken image, which is the difference between "we are checking"
+    /// and "your upload failed".
+    /// </summary>
+    bool MediaAwaitingReview = false,
+    /// <summary>Photo or video, so the card knows which element to render.</summary>
+    FeedMediaKind MediaKind = FeedMediaKind.None);
+
+/// <summary>What kind of media a post carries.</summary>
+public enum FeedMediaKind
+{
+    /// <summary>No media, or none the reader may see.</summary>
+    None = 0,
+    Image = 1,
+    Video = 2,
+}
 
 /// <summary>
 /// An account named in a post: the id it resolved to, the <c>@name</c> that was typed, and the

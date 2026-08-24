@@ -2,6 +2,8 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Common.Interfaces;
+using Ben.Data.WebApi.SeedData;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Feed;
 using Ben.Service.Models.Feed;
@@ -46,8 +48,27 @@ public sealed class FeedController : BenControllerBase
     public const int MaxBodyLength = 1000;
 
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
 
-    public FeedController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public FeedController(
+        IDbContextFactory<BenDataContext> db,
+        IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest)
+    {
+        _db = db;
+        _fileStorage = fileStorage;
+        _mediaIngest = mediaIngest;
+    }
+
+    /// <summary>What a feed post may carry, by content type.</summary>
+    private static bool IsAllowedMedia(string? contentType)
+        => contentType is not null
+        && (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+         || contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        // An SVG is a document that can carry script, and this is the one upload surface open to
+        // everybody who belongs. Refused by type as well as by extension.
+        && !contentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
@@ -198,7 +219,7 @@ public sealed class FeedController : BenControllerBase
     [HttpPost("posts")]
     [Authorize]
     public async Task<ActionResult<FeedPostRecord>> CreatePost(
-        [FromBody] CreateFeedPostRequest request, CancellationToken ct)
+        [FromForm] CreateFeedPostRequest request, IFormFile? media, CancellationToken ct)
     {
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -233,6 +254,52 @@ public sealed class FeedController : BenControllerBase
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+
+        // ── The photo or video, when there is one (item 186 F4) ──────────────
+        // Through MediaIngestService like every other upload door, so the feed cannot become the
+        // one surface where location data survives. The review state is left at its default,
+        // Pending, which is why nothing rendered here until F5's screening moves it on.
+        if (media is { Length: > 0 })
+        {
+            if (!IsAllowedMedia(media.ContentType))
+                return BadRequest("A post can carry a photo or a video. That file is neither.");
+
+            var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(media.FileName)}";
+            var storagePath = _fileStorage.UserFilePath(userId, storedName);
+            var uploadFileId = Guid.NewGuid();
+
+            IngestedMedia ingested;
+            try
+            {
+                ingested = await _mediaIngest.IngestAsync(media, storagePath, uploadFileId, ct);
+            }
+            catch (UnreadableImageException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = uploadFileId,
+                UploadFileTypeId = UploadFileTypeSeeder.FeedMediaFileTypeId,
+                AppUserId = userId,
+                FileName = media.FileName,
+                StoredFileName = storedName,
+                ContentType = ingested.ServedContentType,
+                FileSize = ingested.ServedFileSize,
+                StoragePath = storagePath,
+                // False deliberately: the feed's own endpoint decides who may see this, and it
+                // refuses anything unscreened. Public here would route around that.
+                IsPublic = false,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+            db.UploadFileMetadata.Add(ingested.Metadata);
+
+            post.MediaUploadFileId = uploadFileId;
+            post.MediaReviewState = FeedMediaReviewState.Pending;
+        }
+
         db.OrgMessages.Add(post);
 
         foreach (var tag in FeedTextParser.FindHashtags(body))
@@ -290,6 +357,45 @@ public sealed class FeedController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// The photo or video on a post, for anybody who may read the post.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three conditions, all re-asked here on every request: the feed is on, the post is
+    /// visible (<see cref="VisiblePosts"/> — so hiding a post hides its media with it, at no
+    /// extra cost), and the media has been <b>Approved</b>. Pending and Held both 404.</para>
+    ///
+    /// <para><b>404, not 403.</b> "That exists but you may not see it" is itself a disclosure
+    /// about content a moderator has held, and the honest answer to a request for something
+    /// nobody may see is that there is nothing there.</para>
+    ///
+    /// <para>Serves the SANITIZED copy through <c>ServingPathFor</c>, so the location data that
+    /// came off at ingest cannot leave by this route either.</para>
+    /// </remarks>
+    [HttpGet("posts/{id:guid}/media")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPostMedia(Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await VisiblePosts(db)
+            .Where(m => m.Id == id
+                     && m.MediaUploadFileId != null
+                     && m.MediaReviewState == FeedMediaReviewState.Approved)
+            .Select(m => new { m.MediaUploadFile!.StoragePath, m.MediaUploadFile.ContentType })
+            .FirstOrDefaultAsync(ct);
+
+        // A row with no storage path is a file that never landed — nothing to serve, and the
+        // honest answer is the same 404 as a held one.
+        if (post?.StoragePath is not { Length: > 0 } storagePath) return NotFound();
+
+        var path = _mediaIngest.ServingPathFor(storagePath);
+        if (!System.IO.File.Exists(path)) return NotFound();
+
+        return PhysicalFile(path, post.ContentType ?? "application/octet-stream", enableRangeProcessing: true);
     }
 
     // ── Liking ───────────────────────────────────────────────────────────────
@@ -588,6 +694,31 @@ public sealed class FeedController : BenControllerBase
             .ToListAsync(ct))
             .ToDictionary(x => x.PostId, x => x.Count);
 
+        // Content types for the page's media, in one lookup. Read from the stored type rather
+        // than the file name: the extension is whatever the uploader's phone called it, and the
+        // served copy may be a remux with a different one. The nav property is deliberately not
+        // Included — an AsNoTracking query would leave it null and every video would render as
+        // an image, silently.
+        var mediaFileIds = posts.Where(p => p.MediaUploadFileId is not null)
+                                .Select(p => p.MediaUploadFileId!.Value)
+                                .Distinct()
+                                .ToList();
+        var mediaTypes = mediaFileIds.Count == 0
+            ? []
+            : await db.UploadFiles.AsNoTracking()
+                .Where(f => mediaFileIds.Contains(f.Id))
+                .Select(f => new { f.Id, f.ContentType })
+                .ToDictionaryAsync(f => f.Id, f => f.ContentType, ct);
+
+        FeedMediaKind KindOf(OrgMessage post)
+        {
+            if (post.MediaUploadFileId is not { } fileId) return FeedMediaKind.None;
+            var type = mediaTypes.GetValueOrDefault(fileId);
+            return type?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true
+                ? FeedMediaKind.Video
+                : FeedMediaKind.Image;
+        }
+
         var liked = readerId == Guid.Empty
             ? []
             : await db.OrgMessageLikes.AsNoTracking()
@@ -614,7 +745,21 @@ public sealed class FeedController : BenControllerBase
             readerId != Guid.Empty && p.AuthorAppUserId == readerId,
             reported.Contains(p.Id),
             likeCounts.GetValueOrDefault(p.Id),
-            liked.Contains(p.Id))).ToList();
+            liked.Contains(p.Id),
+            // The id is never emitted — a reader gets the post's own media route or nothing, so
+            // there is no file id to try against the general file endpoints.
+            p.MediaUploadFileId is not null && p.MediaReviewState == FeedMediaReviewState.Approved,
+            // Only the AUTHOR is told their media is waiting. To anybody else the post simply has
+            // no media: "somebody uploaded something that has not cleared" is a fact about content
+            // nobody may see, and there is no reason for a stranger to learn it.
+            p.MediaUploadFileId is not null
+                && p.MediaReviewState == FeedMediaReviewState.Pending
+                && readerId != Guid.Empty
+                && p.AuthorAppUserId == readerId,
+            // Likewise the kind: an unapproved post reports None, so not even "there is a video
+            // here somewhere" escapes.
+            p.MediaReviewState == FeedMediaReviewState.Approved ? KindOf(p) : FeedMediaKind.None))
+            .ToList();
     }
 
     /// <summary>

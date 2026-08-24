@@ -31,6 +31,19 @@ internal static class UploadFileTypeSeeder
     // Fixed GUID so MyEquipmentController (and later phases) can reference it without a DB lookup.
     internal static readonly Guid EquipmentPhotoFileTypeId = new("60000000-0000-0000-0000-000000000001");
 
+    // Fixed GUID so FeedController can reference it without a DB lookup (item 186 F4).
+    internal static readonly Guid FeedMediaFileTypeId = new("70000000-0000-0000-0000-000000000001");
+
+    internal const string FeedMediaFileTypeName = "Feed Media";
+
+    /// <summary>
+    /// What a feed post may carry: browser-displayable photos, and video the &lt;video&gt; element
+    /// plays without a plugin. No SVG — an SVG is a document that can carry script, and the feed
+    /// is the one surface where anybody who belongs may upload.
+    /// </summary>
+    private static readonly string[] FeedMediaExtensions =
+        [".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov", ".m4v"];
+
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
 
@@ -58,6 +71,8 @@ internal static class UploadFileTypeSeeder
         if (owner is null) return;
 
         await using var db = await dbFactory.CreateDbContextAsync();
+
+        await SeedFeedMediaFileTypeAsync(db, owner.Id);
 
         await SeedFileTypeAsync(db, owner.Id,
             name:        LogoFileTypeName,
@@ -265,6 +280,48 @@ internal static class UploadFileTypeSeeder
             {
                 Id                 = Guid.NewGuid(),
                 UploadFileTypeId   = EquipmentPhotoFileTypeId,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The file type a feed post's photo or video belongs to (item 186 F4).
+    /// </summary>
+    /// <remarks>
+    /// Fixed GUID for the same reason as the others: the controller names it directly rather than
+    /// looking it up by a display string somebody could rename. <c>IsPublic</c> stays FALSE —
+    /// the feed's own endpoint decides who may see a post's media, and it refuses anything that
+    /// has not been screened. A file marked public here would be reachable by the general file
+    /// routes, going around that entirely.
+    /// </remarks>
+    private static async Task SeedFeedMediaFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == FeedMediaFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = FeedMediaFileTypeId,
+            Name               = FeedMediaFileTypeName,
+            Description        = "Photos and video attached to feed posts — JPEG, PNG, GIF, WebP, MP4, WebM, MOV",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 9,
+            AllowAllExtensions = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        foreach (var ext in FeedMediaExtensions)
+        {
+            db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = FeedMediaFileTypeId,
                 Pattern            = ext,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = ownerId,
