@@ -294,6 +294,16 @@
             <textarea id="cpn-desc" class="form-control" rows="2" @bind="_form.Description"></textarea>
         </div>
 
+        <div class="mb-3">
+            <label class="form-label" for="cpn-referrer">Referrer (optional — their account email)</label>
+            <input id="cpn-referrer" type="email" class="form-control" placeholder="who hands these codes out"
+                   @bind="_form.ReferrerEmail" @bind:event="oninput" />
+            <div class="form-text">
+                Every redemption then counts as this person's referral on the Referrals page. Clear the
+                box to detach them.
+            </div>
+        </div>
+
         <div class="row mb-3">
             <div class="col-auto">
                 <label class="form-label" for="cpn-disc-kind">Discount</label>
@@ -596,6 +606,10 @@
         public BillingInterval? AppliesToInterval;
         public bool IsActive = true;
 
+        // Item 168: attributing the campaign to a referrer, by account email. Round-tripped from
+        // the record so editing an attributed campaign keeps the attribution.
+        public string? ReferrerEmail;
+
         public static CouponForm From(CouponAdminRecord c) => new()
         {
             Name              = c.Name,
@@ -613,6 +627,7 @@
             AppliesTo         = c.AppliesTo,
             AppliesToInterval = c.AppliesToInterval,
             IsActive          = c.IsActive,
+            ReferrerEmail     = c.ReferrerEmail,
         };
 
         public SaveCouponRequest ToRequest() => new(
@@ -624,6 +639,6 @@
             // The whole redeem-by day counts: a code "valid until the 15th" that dies at midnight
             // the night before is a support ticket. The stored instant is the day's last moment.
             RedeemBy?.Date.AddDays(1).AddTicks(-1),
-            AppliesToInterval, AppliesTo, IsActive, SharedCode);
+            AppliesToInterval, AppliesTo, IsActive, SharedCode, ReferrerEmail);
     }
 }

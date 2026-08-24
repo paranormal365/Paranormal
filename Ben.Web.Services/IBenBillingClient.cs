@@ -93,4 +93,33 @@ public interface IBenBillingClient
     /// </summary>
     Task<(SubscriptionQuoteResponse? Result, string? Error)> QuoteSubscriptionAsync(
         Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default);
+
+    // ── the money trail (item 168) ────────────────────────────────────────────
+
+    /// <summary>The whole ledger, or one group's slice of it. SuperAdmin.</summary>
+    Task<LoadResult<BillingLedgerEntryRecord>> GetBillingLedgerAsync(Guid? orgId = null, CancellationToken token = default);
+
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordChargeAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordPaymentAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordAdjustmentAsync(
+        Guid orgId, RecordAdjustmentRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordReferralPayoutAsync(
+        RecordReferralPayoutRequest request, CancellationToken token = default);
+
+    Task<LoadResult<TaxRateRuleRecord>> GetTaxRatesAsync(CancellationToken token = default);
+    Task<(TaxRateRuleRecord? Result, string? Error)> SaveTaxRateAsync(
+        SaveTaxRateRuleRequest request, CancellationToken token = default);
+    Task<bool> DeleteTaxRateAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Every referrer's standing: what their coupons brought in vs what has been paid out.</summary>
+    Task<LoadResult<ReferrerSummaryRecord>> GetReferrersAsync(CancellationToken token = default);
+
+    /// <summary>A group's own billing history — charges, payments, adjustments. Org-gated.</summary>
+    Task<LoadResult<OrgBillingHistoryRecord>> GetOrgBillingHistoryAsync(Guid organizationId, CancellationToken token = default);
+
+    /// <summary>A payment row's receipt as bytes, for the downloadFileFromBase64 hand-off.
+    /// Null when the row is not a payment or the caller may not see it.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(Guid organizationId, Guid entryId, CancellationToken token = default);
 }

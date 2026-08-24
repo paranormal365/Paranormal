@@ -114,7 +114,13 @@ public record CouponAdminRecord(
     int CodeCount,
     string? SharedCode,
     string? Problem,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // Item 168: when set, every redemption of this coupon is a referral attributed to this person.
+    // The email rides along so the editor can round-trip the attribution — a form that reloaded
+    // only the display name would silently CLEAR the referrer on the next save.
+    Guid? ReferrerAppUserId = null,
+    string? ReferrerName = null,
+    string? ReferrerEmail = null);
 
 /// <summary>
 /// Creating or editing a campaign. The codes are managed separately once it exists.
@@ -137,7 +143,10 @@ public record SaveCouponRequest(
     BillingInterval? AppliesToInterval,
     CouponApplicability AppliesTo,
     bool IsActive,
-    string? SharedCode);
+    string? SharedCode,
+    // Item 168: the referrer's account email; empty clears. Resolved server-side so a typo is a
+    // refusal with a sentence, never a silently unattributed campaign.
+    string? ReferrerEmail = null);
 
 /// <summary>Generating a batch of codes under an existing campaign.</summary>
 /// <param name="Count">How many codes to make.</param>

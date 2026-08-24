@@ -137,11 +137,19 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
         var subscription = await db.OrganizationSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
 
+        // ── the tax line (item 168) ──────────────────────────────────────────
+        // Resolved once per quote and applied to whatever ends up payable; the rate itself is
+        // frozen per document only when money is actually recorded, on the ledger row.
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+
+        SubscriptionQuoteResponse Priced(decimal discount, decimal payable, string? refusal, int? periods)
+            => new(tier.Name, request.Interval, listPrice, discount, payable, refusal, periods,
+                   taxRate, TaxResolver.TaxOn(payable, taxRate));
+
         // ── the coupon line ──────────────────────────────────────────────────
         var typed = CouponCodeGenerator.Normalise(request.CouponCode);
         if (typed.Length == 0)
-            return Ok(new SubscriptionQuoteResponse(
-                tier.Name, request.Interval, listPrice, 0m, listPrice, null, null));
+            return Ok(Priced(0m, listPrice, null, null));
 
         var code = await db.CouponCodes.AsNoTracking()
             .Include(c => c.Coupon)
@@ -150,9 +158,7 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
         // The same sentence as every other dead code, on purpose: "no such code" and "withdrawn
         // code" being distinguishable would let anybody probe which strings exist.
         if (code is null)
-            return Ok(new SubscriptionQuoteResponse(
-                tier.Name, request.Interval, listPrice, 0m, listPrice,
-                "That code is no longer available.", null));
+            return Ok(Priced(0m, listPrice, "That code is no longer available.", null));
 
         var alreadyRedeemed = await db.CouponRedemptions.AsNoTracking()
             .AnyAsync(r => r.CouponId == code.CouponId && r.OrganizationId == organizationId, ct);
@@ -163,13 +169,10 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
             AlreadyRedeemedByThisOrg: alreadyRedeemed);
 
         if (CouponMath.WhyNotRedeemable(code.Coupon, code, ctx) is { } refusal)
-            return Ok(new SubscriptionQuoteResponse(
-                tier.Name, request.Interval, listPrice, 0m, listPrice, refusal, null));
+            return Ok(Priced(0m, listPrice, refusal, null));
 
         var price = CouponMath.PriceFor(listPrice, code.Coupon);
 
-        return Ok(new SubscriptionQuoteResponse(
-            tier.Name, request.Interval, price.ListPrice, price.Discount, price.Payable,
-            null, CouponMath.PeriodsFor(code.Coupon)));
+        return Ok(Priced(price.Discount, price.Payable, null, CouponMath.PeriodsFor(code.Coupon)));
     }
 }

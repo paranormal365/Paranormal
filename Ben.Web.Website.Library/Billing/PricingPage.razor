@@ -3,6 +3,8 @@
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
+@using Microsoft.JSInterop
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models
 @using Ben.Web.Services.WebApi
@@ -197,12 +199,69 @@
                                         }))
                                     </p>
                                 }
+                                @if (quote.Tax > 0)
+                                {
+                                    @* Item 168: tax as its own line, never folded into the price. *@
+                                    <p class="small text-secondary mb-0">
+                                        + @($"{quote.Tax:C2}") tax (@($"{quote.TaxRatePercent:0.##}")%) —
+                                        @($"{quote.TotalWithTax:C2}") total
+                                    </p>
+                                }
                             }
+                            <button type="button" class="btn btn-link btn-sm px-0 mt-1"
+                                    @onclick="@(() => ToggleHistoryAsync(org.Id, org.Name))">
+                                @(_historyOrgId == org.Id ? "Hide billing history" : "Billing history")
+                            </button>
                         </div>
                     </div>
                 </div>
             }
         </div>
+
+        @* ── Item 168: the group's own money trail, with re-downloadable receipts ── *@
+        @if (_historyOrgId is { } historyOrg)
+        {
+            <div class="card mt-3" id="org-billing-history">
+                <div class="card-header fw-semibold">Billing history — @_historyOrgName</div>
+                <div class="card-body">
+                    <BenListState TItem="Ben.Service.Models.Admin.OrgBillingHistoryRecord" Result="@_history"
+                                  Loading="@_historyLoading" EmptyText="Nothing billed yet" OnRetry="@ReloadHistoryAsync">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th class="text-end">Tax</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _history.Items)
+                                {
+                                    <tr>
+                                        <td>@row.DateCreated.ToString("MM/dd/yyyy")</td>
+                                        <td>
+                                            <span class="badge me-1 @(row.Kind switch {
+                                                Ben.Data.Common.Enums.BillingLedgerKind.Payment => "bg-success",
+                                                Ben.Data.Common.Enums.BillingLedgerKind.Adjustment => row.AdjustmentIsCredit ? "bg-info text-dark" : "bg-warning text-dark",
+                                                _ => "bg-secondary" })">
+                                                @(row.Kind == Ben.Data.Common.Enums.BillingLedgerKind.Adjustment
+                                                    ? (row.AdjustmentIsCredit ? "Credit" : "Debit") : row.Kind.ToString())
+                                            </span>
+                                            @row.Description
+                                        </td>
+                                        <td class="text-end">@($"${row.Amount:0.00}")</td>
+                                        <td class="text-end">@(row.TaxAmount > 0 ? $"${row.TaxAmount:0.00}" : "—")</td>
+                                        <td class="text-end">
+                                            @if (row.ReceiptNumber is { } n)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
+                                                        @onclick="@(() => DownloadReceiptAsync(historyOrg, row.Id))">
+                                                    Receipt R-@n.ToString("00000")
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </BenListState>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -237,6 +296,37 @@
     private List<BillingInterval> _intervals = [];
     private BillingInterval _selectedInterval = BillingInterval.Monthly;
     private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
+
+    // Item 168: the inline billing-history panel, one group at a time.
+    private Guid? _historyOrgId;
+    private string _historyOrgName = "";
+    private bool _historyLoading;
+    private LoadResult<Ben.Service.Models.Admin.OrgBillingHistoryRecord> _history;
+
+    private async Task ToggleHistoryAsync(Guid orgId, string orgName)
+    {
+        if (_historyOrgId == orgId) { _historyOrgId = null; return; }
+        _historyOrgId = orgId;
+        _historyOrgName = orgName;
+        await ReloadHistoryAsync();
+    }
+
+    private async Task ReloadHistoryAsync()
+    {
+        if (_historyOrgId is not { } orgId) return;
+        _historyLoading = true;
+        StateHasChanged();
+        _history = await Client.GetOrgBillingHistoryAsync(orgId);
+        _historyLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task DownloadReceiptAsync(Guid orgId, Guid entryId)
+    {
+        var receipt = await Client.DownloadReceiptAsync(orgId, entryId);
+        if (receipt is not { } r) return;
+        await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(r.Data), "text/html", r.FileName);
+    }
     private string? _referralCode;
     private readonly Dictionary<Guid, SubscriptionQuoteResponse> _quotes = [];
 

@@ -108,11 +108,19 @@ namespace Ben.Data.Source.Entities
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// The person whose referrals this coupon tracks (item 168). Every redemption of a
+        /// referrer-owned coupon is a referral attributed to them — the redemption rows already
+        /// freeze the money, this names who it belongs to. Null for ordinary campaign coupons.
+        /// </summary>
+        public Guid? ReferrerAppUserId { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
+        public virtual AppUser? ReferrerAppUser { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual ICollection<CouponCode> Codes { get; set; } = [];

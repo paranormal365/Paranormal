@@ -1,0 +1,130 @@
+@page "/admin/tax-rates"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Tax Rates</PageTitle>
+
+@*
+    Item 168: the CURRENT rate per state. No row means no tax — the honest default, since many
+    states do not tax this service. Editing a rule never rewrites history: every bill and receipt
+    froze the rate it used onto its own ledger row.
+*@
+
+<div class="container-fluid px-3" style="max-width:52rem;">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Tax Rates<HelpLink Slug="site-administration" Anchor="the-money-trail" /></h3>
+            <p class="text-secondary small mb-0">Per-state rates, matched against a group's address. A state without a row is taxed at zero.</p>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-3">
+                    <label class="form-label small fw-semibold" for="tax-state">State</label>
+                    <input id="tax-state" type="text" class="form-control form-control-sm" maxlength="2"
+                           placeholder="TN" @bind="@_formState" @bind:event="oninput" />
+                </div>
+                <div class="col-3">
+                    <label class="form-label small fw-semibold" for="tax-rate">Rate %</label>
+                    <input id="tax-rate" type="number" step="0.01" min="0" max="25" class="form-control form-control-sm"
+                           @bind="@_formRate" />
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-semibold" for="tax-notes">Notes (where the rate came from)</label>
+                    <input id="tax-notes" type="text" class="form-control form-control-sm" @bind="@_formNotes" />
+                </div>
+                <div class="col-2">
+                    <button type="button" class="btn btn-primary btn-sm w-100" id="tax-save" @onclick="SaveAsync"
+                            disabled="@(_busy || _formState.Trim().Length != 2)">Save</button>
+                </div>
+            </div>
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0">@_error</div>
+            }
+        </div>
+    </div>
+
+    <BenListState TItem="TaxRateRuleRecord" Result="@_result" Loading="@_loading"
+                  EmptyText="No tax rules yet — every group is quoted at zero tax" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_result.Items" TItem="TaxRateRuleRecord" Sortable="false">
+            <GridColumns>
+                <GridColumn Field="@nameof(TaxRateRuleRecord.State)" Title="State" Width="80px" />
+                <GridColumn Title="Rate" Width="90px">
+                    <Template>@($"{((TaxRateRuleRecord)context).RatePercent:0.##}%")</Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(TaxRateRuleRecord.Notes)" Title="Notes" />
+                <GridColumn Title="Actions" Width="150px">
+                    <Template>
+                        @{ var r = (TaxRateRuleRecord)context; }
+                        <span class="text-nowrap">
+                            <button type="button" class="btn btn-outline-primary btn-sm"
+                                    @onclick="@(() => { _formState = r.State; _formRate = r.RatePercent; _formNotes = r.Notes; })">Edit</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm ms-1"
+                                    @onclick="@(() => DeleteAsync(r))">Delete</button>
+                        </span>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private LoadResult<TaxRateRuleRecord> _result;
+    private string _formState = "";
+    private decimal _formRate;
+    private string? _formNotes;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _result = await AdminClient.GetTaxRatesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (result, error) = await AdminClient.SaveTaxRateAsync(
+                new SaveTaxRateRuleRequest(_formState.Trim(), _formRate, _formNotes));
+            if (result is null) { _error = error ?? "Saving failed."; return; }
+            Toasts.Success($"{result.State} taxes at {result.RatePercent:0.##}%.");
+            _formState = ""; _formRate = 0; _formNotes = null;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(TaxRateRuleRecord rule)
+    {
+        // Rules are configuration, not history — every document froze its own copy.
+        if (!await AdminClient.DeleteTaxRateAsync(rule.Id)) { _error = "Deleting failed."; return; }
+        Toasts.Success($"{rule.State} no longer has a rule — new quotes there tax at zero.");
+        await LoadAsync();
+    }
+}
