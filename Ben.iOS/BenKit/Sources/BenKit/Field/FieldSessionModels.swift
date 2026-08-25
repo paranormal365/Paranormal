@@ -153,17 +153,20 @@ public final class FieldMarker {
 
     public var latitude: Double?
     public var longitude: Double?
+    /// The room this was marked in.
+    public var room: String?
 
     public var session: FieldSession?
 
     public init(id: UUID = UUID(), at: Date, kind: MarkerKind, note: String? = nil,
                 audioFilename: String? = nil, audioOffsetSeconds: Double? = nil,
                 emfMicrotesla: Double? = nil, soundDbfs: Double? = nil,
-                latitude: Double? = nil, longitude: Double? = nil) {
+                latitude: Double? = nil, longitude: Double? = nil, room: String? = nil) {
         self.id = id
         self.at = at
         self.kindRaw = kind.rawValue
         self.note = note
+        self.room = room
         self.audioFilename = audioFilename
         self.audioOffsetSeconds = audioOffsetSeconds
         self.emfMicrotesla = emfMicrotesla
@@ -199,12 +202,21 @@ public final class FieldCapture {
     /// Why the last attempt failed, kept so a retry is an informed one rather than a guess.
     public var uploadProblem: String?
 
+    /// The room the operator said they were in when this was captured. The only dependable
+    /// answer to "where in the building was this taken" — a fix cannot tell rooms apart.
+    public var room: String?
+
+    /// Marked as the picture that represents the property — the one a case or an investigation
+    /// would show. Optional by design: most captures are evidence, not a portrait, and nothing
+    /// is chosen unless somebody chooses it.
+    public var isRepresentative: Bool = false
+
     public var session: FieldSession?
 
     public init(id: UUID = UUID(), at: Date, kind: CaptureKind, relativePath: String,
                 byteCount: Int64, durationSeconds: Double? = nil,
                 latitude: Double? = nil, longitude: Double? = nil,
-                headingDegrees: Double? = nil) {
+                headingDegrees: Double? = nil, room: String? = nil) {
         self.id = id
         self.at = at
         self.kindRaw = kind.rawValue
@@ -214,6 +226,7 @@ public final class FieldCapture {
         self.latitude = latitude
         self.longitude = longitude
         self.headingDegrees = headingDegrees
+        self.room = room
     }
 
     public var kind: CaptureKind {

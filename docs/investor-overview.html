@@ -204,6 +204,7 @@ deck — it is a working product with production-grade engineering discipline:</
   <li>Group discovery by location, by kind (investigation groups and ghost walking tours), and
       group-authored promotional ads with platform review, served nearest-viewer-first</li>
   <li>Native iPhone and iPad app on the same API, running on device today</li>
+  <li>Field Kit: the phone as an offline recording instrument, replayed on either side</li>
   <li>Billing foundation: tiers by member count, contract-terms freezing, coupons, referral
       tracking, an append-only financial ledger with receipts and per-state tax</li>
   <li>In-app help system with full product documentation, generated to PDF</li>
@@ -295,6 +296,26 @@ the activity that grows the community.</p>
   validates Apple's token and links it to an existing account by verified email rather than
   creating a duplicate. Enrolment in the Apple Developer Program is the remaining step before
   submission.</td>
+</tr>
+<tr>
+  <td><strong>Field Kit</strong></td>
+  <td>The phone used as an instrument during an investigation, offline. It records magnetic field
+  (magnetometer), sound level, position, heading and floor-to-floor altitude change, with photos,
+  video and audio captured into the same session, EVP question-and-answer marking, and a sentry
+  mode that watches an unattended device for magnetic, sound, motion and camera-movement events.
+  Sessions replay on the phone and on the website on a single playhead — trace, map, compass and
+  media moving together. Notes can be <strong>spoken and transcribed on the device itself</strong>
+  — offered only where the hardware can do it with no connection, since the whole feature exists
+  for buildings with no signal. Everything recorded carries the <strong>room</strong> the operator
+  named, because a fix indoors covers the whole building and cannot tell one room from
+  another.</td>
+  <td><strong>Working end to end.</strong> Recording needs no signal and no account; uploading is
+  a separate step, file by file, with checksums verified on arrival and a per-file record of what
+  has reached the server. Sessions export as a <strong>published, open format</strong>
+  (IsHaunted Device Data Format v1) that any instrument maker can write — the phone is the first
+  device implementing it, and exports are validated against the format's own schema in the test
+  suite. Uploaded sessions are <strong>citable in the case report the client receives</strong>, so
+  the field work reaches the deliverable rather than stopping at the system.</td>
 </tr>
 <tr>
   <td><strong>Ghost walking tours</strong></td>

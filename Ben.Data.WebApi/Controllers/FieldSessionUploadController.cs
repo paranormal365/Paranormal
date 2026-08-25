@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -91,6 +92,75 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .ToListAsync(ct);
 
         return Ok(sessions.Select(ToRecord));
+    }
+
+    /// <summary>
+    /// One session, with the document itself, for playing back.
+    /// </summary>
+    /// <remarks>
+    /// The document is returned VERBATIM rather than reshaped into a response type. It is the
+    /// only copy that is definitely what the device wrote, and a playback page reading anything
+    /// else is a page showing a story about the readings rather than the readings.
+    /// </remarks>
+    [HttpGet("{sessionId:guid}")]
+    public async Task<IActionResult> GetSession(Guid sessionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+            .Include(s => s.DocumentUploadFile)
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null) return NotFound();
+        if (!await MayReadAsync(db, session, userId, ct)) return NotFound();
+
+        // Asked directly rather than inferred from an exception type: a row that survived its
+        // bytes has to be reported plainly, and returning an empty session instead would read as
+        // a night where nothing happened.
+        if (!_fileStorage.Exists(session.DocumentUploadFile.StoragePath))
+            return NotFound("This session's readings are no longer on the server.");
+
+        string document;
+        await using (var stream = await _fileStorage.OpenReadAsync(
+                         session.DocumentUploadFile.StoragePath, ct))
+        {
+            if (stream is null)
+                return NotFound("This session's readings are no longer on the server.");
+            using var reader = new StreamReader(stream);
+            document = await reader.ReadToEndAsync(ct);
+        }
+
+        return Ok(new FieldSessionDetail(ToRecord(session), document));
+    }
+
+    /// <summary>Streams one of a session's recordings.</summary>
+    [HttpGet("{sessionId:guid}/files/{fileId:guid}")]
+    public async Task<IActionResult> GetFile(Guid sessionId, Guid fileId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null) return NotFound();
+        if (!await MayReadAsync(db, session, userId, ct)) return NotFound();
+
+        var file = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Include(f => f.UploadFile)
+            .FirstOrDefaultAsync(f => f.Id == fileId && f.FieldSessionUploadId == sessionId, ct);
+        if (file is null) return NotFound();
+
+        if (!_fileStorage.Exists(file.UploadFile.StoragePath))
+            return NotFound("That recording is no longer on the server.");
+
+        var stream = await _fileStorage.OpenReadAsync(file.UploadFile.StoragePath, ct);
+        // enableRangeProcessing: a player has to be able to seek, and a two-hour recording that
+        // must be fetched whole before it plays is a recording nobody reviews.
+        return File(stream, file.UploadFile.ContentType ?? "application/octet-stream",
+                    Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
     }
 
     // ── The document ──────────────────────────────────────────────────────────
@@ -356,8 +426,32 @@ public sealed class FieldSessionUploadController : BenControllerBase
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Somebody who was on the investigation, or an active member of the group running it.
+    /// Who may READ a session: its own sender, or anyone entitled to its investigation.
     /// </summary>
+    private static async Task<bool> MayReadAsync(
+        BenDataContext db, FieldSessionUpload session, Guid userId, CancellationToken ct)
+    {
+        if (session.SubmittedByAppUserId == userId) return true;
+        return session.InvestigationId is Guid linked
+            && await MayContributeAsync(db, linked, userId, ct);
+    }
+
+    /// <summary>
+    /// Who may add a recording to an investigation.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three doors, widest last (Ben's rule, 2026-08-25):</para>
+    /// <list type="bullet">
+    /// <item>Somebody who was actually on it — an attendee row. The commonest case.</item>
+    /// <item>An active member of the group running it.</item>
+    /// <item>Anybody at all, when the investigation or its case is <b>public</b>. An open
+    /// investigation is an invitation, and thirty strangers with phones is the whole value of
+    /// one — the same bargain the public-event evidence door already makes.</item>
+    /// </list>
+    ///
+    /// <para>A public case does NOT make a private residence's investigation public: the case's
+    /// own flag is what is read, and case privacy is decided elsewhere and deliberately.</para>
+    /// </remarks>
     private static async Task<bool> MayContributeAsync(
         BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
     {
@@ -365,11 +459,27 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .AnyAsync(a => a.InvestigationId == investigationId && a.AppUserId == userId, ct);
         if (wasThere) return true;
 
-        return await db.Investigations.AsNoTracking()
+        var investigation = await db.Investigations.AsNoTracking()
             .Where(i => i.Id == investigationId)
-            .AnyAsync(i => db.OrganizationUserMemberships
-                .Any(m => m.OrganizationId == i.OrganizationId
-                       && m.AppUserId == userId && m.IsActive), ct);
+            .Select(i => new
+            {
+                i.OrganizationId,
+                i.Visibility,
+                CaseIsPublic = i.CaseId != null
+                    && db.Cases.Any(c => c.Id == i.CaseId && c.IsPublic),
+            })
+            .FirstOrDefaultAsync(ct);
+        if (investigation is null) return false;
+
+        if (investigation.Visibility == InvestigationVisibility.Public
+            || investigation.CaseIsPublic)
+        {
+            return true;
+        }
+
+        return await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == investigation.OrganizationId
+                        && m.AppUserId == userId && m.IsActive, ct);
     }
 
     private static FieldSessionRecord ToRecord(FieldSessionUpload session) =>
@@ -449,6 +559,9 @@ public sealed record FieldSessionRecord(
     DateTime StartedAt, DateTime? EndedAt, int ReadingCount, int MarkerCount,
     Guid DocumentUploadFileId, Guid? RecordedByAppUserId, string? RecordedByName,
     DateTime DateCreated, IReadOnlyList<FieldSessionFileRecord> Files);
+
+/// <summary>A session and its document, for playing back.</summary>
+public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);
 
 public sealed record FieldSessionFileRecord(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,

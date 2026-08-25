@@ -50,6 +50,8 @@
 	<string>Reads the magnetometer and barometer during a field session — magnetic field strength, and how far up or down you've moved between floors.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save investigation media you download to your photo library.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turns spoken notes into text during a field session. This happens entirely on your device — nothing you say is sent anywhere.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -229,6 +229,21 @@ public sealed class InvestigationController : BenControllerBase
             .ToListAsync(ct);
         foreach (var e in binderEntries) e.InvestigationId = null;
 
+        // Field sessions recorded on this visit cascade away with it — but a case report may be
+        // CITING one, and a report quietly losing its evidence is worse than a delete that does
+        // not happen. (The database would refuse this anyway; without the check it arrives as a
+        // 500 the person deleting cannot act on.)
+        var citedSessions = await db.CaseReportSectionFieldSessions
+            .CountAsync(f => f.FieldSessionUpload.InvestigationId == id, ct);
+        if (citedSessions > 0)
+        {
+            return Conflict(
+                $"A case report cites {citedSessions} field session"
+                + (citedSessions == 1 ? "" : "s")
+                + " recorded during this investigation. Remove the citation from the report first, "
+                + "then delete the investigation.");
+        }
+
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();

@@ -31,6 +31,9 @@ public sealed class FieldSessionUploadControllerTests
     private static readonly Guid MemberId = Guid.NewGuid();
     private static readonly Guid StrangerId = Guid.NewGuid();
 
+    /// Storage paths carry a fresh GUID per write, so one store across the suite cannot collide.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Stored = new();
+
     private static IDbContextFactory<BenDataContext> CreateFactory()
         => new PooledDbContextFactory<BenDataContext>(
             new DbContextOptionsBuilder<BenDataContext>()
@@ -74,11 +77,52 @@ public sealed class FieldSessionUploadControllerTests
         var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
         storage.Setup(s => s.OrgFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
                .Returns<Guid, string>((org, name) => $"orgs/{org}/{name}");
+        // Personal sessions live under the PERSON, not under a group they may not belong to.
+        storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+               .Returns<Guid, string>((user, name) => $"users/{user}/{name}");
+        // Writes are remembered and reads hand them back, so a test that reads a session gets
+        // the bytes that were written rather than a stub that pretends they vanished. Shared
+        // across controllers because a real upload and a later read are different requests —
+        // giving each its own store would make every read miss.
+        var written = Stored;
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(),
                                         It.IsAny<CancellationToken>()))
-               .Returns(Task.CompletedTask);
+               .Returns<string, Stream, CancellationToken>((path, stream, _) =>
+               {
+                   using var buffer = new MemoryStream();
+                   stream.CopyTo(buffer);
+                   written[path] = buffer.ToArray();
+                   return Task.CompletedTask;
+               });
+        _ = written;
+        storage.Setup(s => s.Exists(It.IsAny<string>()))
+               .Returns<string>(path => written.ContainsKey(path));
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .Returns<string, CancellationToken>((path, _) => Task.FromResult<Stream>(
+                   written.TryGetValue(path, out var bytes)
+                       ? new MemoryStream(bytes) : Stream.Null));
 
+        // Stubbed to behave like the real thing: it writes the bytes through storage and hands
+        // back what was served. The existing path-traversal tests never reach it, which is why
+        // it had gone unstubbed — and why a test that DID reach it fell over.
         var ingest = new Mock<Ben.Data.WebApi.Services.IMediaIngestService>();
+        ingest.Setup(m => m.IngestAsync(It.IsAny<IFormFile>(), It.IsAny<string>(),
+                                        It.IsAny<Guid>(), It.IsAny<CancellationToken>(),
+                                        It.IsAny<bool>()))
+              .Returns<IFormFile, string, Guid, CancellationToken, bool>(
+                  async (file, path, uploadFileId, _, _) =>
+                  {
+                      using var buffer = new MemoryStream();
+                      await file.CopyToAsync(buffer);
+                      written[path] = buffer.ToArray();
+                      return new Ben.Data.WebApi.Services.IngestedMedia(
+                          new UploadFileMetadata
+                          {
+                              Id = Guid.NewGuid(), UploadFileId = uploadFileId,
+                              MediaKind = "Audio", ExtractedAtUtc = DateTime.UtcNow,
+                          },
+                          buffer.Length, file.ContentType ?? "application/octet-stream", false);
+                  });
 
         var controller = new FieldSessionUploadController(
             factory, storage.Object, ingest.Object,
@@ -94,10 +138,23 @@ public sealed class FieldSessionUploadControllerTests
         return controller;
     }
 
+    /// <summary>
+    /// A form file with real headers.
+    /// </summary>
+    /// <remarks>
+    /// FormFile throws on <c>ContentType</c> when it was built without a header dictionary, and
+    /// the failure surfaces deep inside the controller rather than at construction — so every
+    /// file in these tests is built here.
+    /// </remarks>
+    private static IFormFile Upload(byte[] bytes, string name, string contentType)
+        => new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", name)
+        {
+            Headers = new HeaderDictionary { ["Content-Type"] = contentType },
+        };
+
     private static IFormFile Document(string json)
     {
-        var bytes = Encoding.UTF8.GetBytes(json);
-        return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", "data.json");
+        return Upload(Encoding.UTF8.GetBytes(json), "data.json", "application/json");
     }
 
     private static string ValidDocument(string startedAt = "2026-08-24T22:05:07.000Z",
@@ -232,7 +289,7 @@ public sealed class FieldSessionUploadControllerTests
     public async Task An_empty_document_is_refused()
     {
         var factory = await SeedAsync();
-        var empty = new FormFile(new MemoryStream([]), 0, 0, "file", "data.json");
+        var empty = Upload([], "data.json", "application/json");
         var result = await Build(factory, AttendeeId)
             .SubmitDocument(empty, Guid.NewGuid(), InvestigationId, AttendeeId, null, default);
         Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -264,10 +321,8 @@ public sealed class FieldSessionUploadControllerTests
         var session = Assert.IsType<FieldSessionRecord>(
             Assert.IsType<OkObjectResult>(submitted.Result).Value);
 
-        var bytes = new byte[] { 1, 2, 3, 4 };
-        var file = new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", "clip.m4a");
-        var result = await Build(factory, AttendeeId)
-            .SubmitFile(session.Id, file, path, null, default);
+        var result = await Build(factory, AttendeeId).SubmitFile(
+            session.Id, Upload([1, 2, 3, 4], "clip.m4a", "audio/mp4"), path, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -373,5 +428,191 @@ public sealed class FieldSessionUploadControllerTests
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.Equal(2, await db.FieldSessionUploads.CountAsync());
+    }
+
+    // ── Reading one back ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_document_comes_back_verbatim_for_playing_back()
+    {
+        // Returned as it was written, not reshaped: it is the only copy that is definitely what
+        // the device recorded, and a page reading anything else shows a story about the
+        // readings rather than the readings.
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        var result = await Build(factory, AttendeeId).GetSession(session.Id, default);
+        var detail = Assert.IsType<FieldSessionDetail>(
+            Assert.IsType<OkObjectResult>(result).Value);
+
+        Assert.Contains("\"format_version\"", detail.Document);
+        Assert.Contains("sentry_emf", detail.Document);
+        Assert.Equal(session.Id, detail.Session.Id);
+    }
+
+    [Fact]
+    public async Task A_personal_session_is_readable_only_by_the_person_who_sent_it()
+    {
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, StrangerId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(),
+            investigationId: null, StrangerId, "A Stranger", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        Assert.IsType<OkObjectResult>(
+            await Build(factory, StrangerId).GetSession(session.Id, default));
+        // Nobody else, not even a member of some group — it was never theirs.
+        Assert.IsType<NotFoundResult>(
+            await Build(factory, MemberId).GetSession(session.Id, default));
+    }
+
+    [Fact]
+    public async Task An_investigation_session_is_readable_by_the_group_working_it()
+    {
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        // A member who was not on the night can still review what came back from it.
+        Assert.IsType<OkObjectResult>(
+            await Build(factory, MemberId).GetSession(session.Id, default));
+        Assert.IsType<NotFoundResult>(
+            await Build(factory, StrangerId).GetSession(session.Id, default));
+    }
+
+    // ── Getting a recording back ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_recording_comes_back_to_whoever_may_read_the_session()
+    {
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        var attached = await Build(factory, AttendeeId).SubmitFile(
+            session.Id, Upload([1, 2, 3, 4, 5], "clip.m4a", "audio/mp4"),
+            "media/audio-001.m4a", null, default);
+        var file = Assert.IsType<FieldSessionFileRecord>(
+            Assert.IsType<OkObjectResult>(attached.Result).Value);
+
+        var streamed = await Build(factory, MemberId).GetFile(session.Id, file.Id, default);
+        var result = Assert.IsType<FileStreamResult>(streamed);
+        // Range processing matters: a two-hour recording that must be fetched whole before it
+        // plays is a recording nobody reviews.
+        Assert.True(result.EnableRangeProcessing);
+
+        Assert.IsType<NotFoundResult>(
+            await Build(factory, StrangerId).GetFile(session.Id, file.Id, default));
+    }
+
+    [Fact]
+    public async Task A_recording_whose_bytes_are_gone_says_so_rather_than_streaming_nothing()
+    {
+        // The row can outlive the file. An empty stream would play as silence, which somebody
+        // would hear as a recording of a quiet room rather than a missing file.
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        var attached = await Build(factory, AttendeeId).SubmitFile(
+            session.Id, Upload([1, 2, 3], "clip.m4a", "audio/mp4"),
+            "media/audio-002.m4a", null, default);
+        var file = Assert.IsType<FieldSessionFileRecord>(
+            Assert.IsType<OkObjectResult>(attached.Result).Value);
+
+        Stored.Clear();   // the bytes went away; the row did not
+
+        var streamed = await Build(factory, AttendeeId).GetFile(session.Id, file.Id, default);
+        var refusal = Assert.IsType<NotFoundObjectResult>(streamed);
+        Assert.Contains("no longer on the server", refusal.Value?.ToString() ?? "");
+    }
+
+    [Fact]
+    public async Task A_session_whose_document_is_gone_says_so_rather_than_looking_empty()
+    {
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+
+        Stored.Clear();
+
+        var result = await Build(factory, AttendeeId).GetSession(session.Id, default);
+        var refusal = Assert.IsType<NotFoundObjectResult>(result);
+        // A night where nothing happened and a night nobody can read are different facts.
+        Assert.Contains("no longer on the server", refusal.Value?.ToString() ?? "");
+    }
+
+    // ── Who may contribute to a PUBLIC investigation ──────────────────────────
+
+    [Fact]
+    public async Task Anybody_may_add_a_recording_to_a_public_investigation()
+    {
+        // An open investigation is an invitation, and thirty strangers with phones is the whole
+        // value of one — the same bargain the public-event evidence door already makes.
+        var factory = await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var investigation = await db.Investigations.SingleAsync(i => i.Id == InvestigationId);
+            investigation.Visibility = InvestigationVisibility.Public;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, StrangerId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            StrangerId, "A Stranger", default);
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_public_case_opens_its_investigations_to_recordings_too()
+    {
+        var factory = await SeedAsync();
+        var caseId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = OrgId, Title = "An open case",
+                City = "Nashville", State = "TN", IsPublic = true,
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+            });
+            var investigation = await db.Investigations.SingleAsync(i => i.Id == InvestigationId);
+            investigation.CaseId = caseId;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, StrangerId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            StrangerId, "A Stranger", default);
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_group_only_investigation_still_turns_a_stranger_away()
+    {
+        // The widening must stay tied to the flags. A private residence's investigation is the
+        // whole reason the default is closed.
+        var factory = await SeedAsync();
+        var result = await Build(factory, StrangerId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            StrangerId, "A Stranger", default);
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }

@@ -9,6 +9,9 @@ struct CaseMessagesView: View {
     @State private var store: CaseMessagesStore?
     @State private var draft = ""
     @State private var errorMessage: String?
+    @State private var canDictate = false
+    @State private var isListening = false
+    @State private var listener: Task<Void, Never>?
     @FocusState private var writing: Bool
 
     var body: some View {
@@ -22,11 +25,51 @@ struct CaseMessagesView: View {
         .task {
             let store = CaseMessagesStore(caseId: caseId, api: dependencies.api)
             self.store = store
+            canDictate = await dependencies.fieldKit.sensors().dictation?.isAvailableOffline ?? false
             await store.load()
         }
         .onChange(of: dependencies.session.me?.userId) { _, _ in
             Task { await store?.load() }
         }
+        .onDisappear { stopListening() }
+    }
+
+    // MARK: - Dictation
+
+    private var dictation: DictationService? { dependencies.fieldKit.sensors().dictation }
+
+    private func startDictating() {
+        guard let dictation else { return }
+        errorMessage = nil
+        isListening = true
+        // What was already typed is kept: dictation adds to a message rather than replacing it.
+        let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        listener = Task {
+            do {
+                for await update in try await dictation.start() {
+                    draft = existing.isEmpty ? update.text : existing + " " + update.text
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isListening = false
+        }
+    }
+
+    private func finishDictating() async {
+        guard let dictation else { return }
+        _ = await dictation.stop()
+        isListening = false
+        listener?.cancel()
+        listener = nil
+    }
+
+    private func stopListening() {
+        listener?.cancel()
+        listener = nil
+        guard isListening, let dictation else { return }
+        isListening = false
+        Task { await dictation.stop() }
     }
 
     @ViewBuilder
@@ -87,11 +130,27 @@ struct CaseMessagesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
-                TextField("Message your group", text: $draft, axis: .vertical)
+                TextField(isListening ? "Listening…" : "Message your group",
+                          text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .textFieldStyle(.roundedBorder)
                     .focused($writing)
                     .accessibilityIdentifier("message-draft")
+
+                // Only where this device can transcribe with NO connection. Offering dictation
+                // that quietly needs a network would fail in exactly the building where somebody
+                // is standing when they want to say something quickly.
+                if canDictate {
+                    Button {
+                        if isListening { Task { await finishDictating() } } else { startDictating() }
+                    } label: {
+                        Image(systemName: isListening ? "stop.circle.fill" : "mic.circle")
+                            .font(.title2)
+                    }
+                    .tint(isListening ? Theme.danger : Theme.ecto)
+                    .accessibilityLabel(isListening ? "Stop dictating" : "Dictate this message")
+                    .accessibilityIdentifier("dictate-message")
+                }
 
                 Button {
                     Task { await send() }
@@ -112,6 +171,7 @@ struct CaseMessagesView: View {
     }
 
     private func send() async {
+        if isListening { await finishDictating() }
         errorMessage = nil
         let body = draft
         // Cleared optimistically so the field is ready; put back on refusal rather than losing

@@ -92,6 +92,8 @@ public struct ReplayFrame: Sendable, Equatable {
     public var activeMedia: (segment: MediaSegment, offset: TimeInterval)?
     /// A marker within a second or so of the playhead, for highlighting as it passes.
     public var nearestMarker: FieldMarkerRecord?
+    /// The room the operator said they were in at this moment, if they said.
+    public var room: String?
 
     public init(at: Date) { self.at = at }
 
@@ -103,6 +105,7 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.headingDegrees == rhs.headingDegrees
             && lhs.activeMedia?.segment.id == rhs.activeMedia?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
+            && lhs.room == rhs.room
     }
 
     public func magneticDeviationMilligauss(from baselines: Baselines) -> Double? {
@@ -256,6 +259,10 @@ public final class SessionReplay {
             result.soundDbfs = reading.measurements?["sound_level"]?.numberValue
             result.relativeAltitudeMeters = reading.measurements?["relative_altitude"]?.numberValue
             result.headingDegrees = reading.motion?.headingDegrees
+            // Read from THIS reading rather than held forever: readings carry the room for as
+            // long as one is set, so its absence here means they stopped saying, not that the
+            // label was lost.
+            result.room = reading.measurements?["room"]?.labelValue
         }
 
         result.position = interpolatedPosition(at: moment)
@@ -324,6 +331,12 @@ extension FieldReading.Measurement {
     /// The numeric value, when this measurement carries one.
     public var numberValue: Double? {
         if case .number(let value) = value { return value }
+        return nil
+    }
+
+    /// The text value, when this measurement is a label rather than a quantity.
+    public var labelValue: String? {
+        if case .string(let value) = value { return value }
         return nil
     }
 }

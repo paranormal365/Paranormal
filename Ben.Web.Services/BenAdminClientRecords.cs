@@ -976,7 +976,40 @@ public sealed record CaseReportSectionDto(
     string                                           Title,
     string?                                          Body,
     Ben.Data.Common.Enums.CaseReportSectionType      SectionType,
-    IReadOnlyList<CaseReportSectionFileDto>          Files);
+    IReadOnlyList<CaseReportSectionFileDto>          Files,
+    IReadOnlyList<CaseReportSectionFieldSessionDto>  FieldSessions);
+
+/// <summary>A field session cited by a report section.</summary>
+/// <remarks>
+/// A reference, never a copy: the readings, recordings and digests stay with the upload, and the
+/// report points at them. See <c>CaseReportSectionFieldSession</c>.
+/// </remarks>
+public sealed record CaseReportSectionFieldSessionDto(
+    Guid      Id,
+    Guid      FieldSessionUploadId,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount,
+    string?   Caption,
+    int       SortOrder);
+
+/// <summary>A field session a report section could cite, as the picker lists it.</summary>
+public sealed record AvailableFieldSessionDto(
+    Guid      Id,
+    Guid?     InvestigationId,
+    string?   InvestigationTitle,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    string    DeviceModel,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount);
 
 public sealed record CaseReportSectionFileDto(
     Guid    Id,
@@ -1137,3 +1170,28 @@ public sealed record IncomingTransferRecord(
     string FromOrganizationName, bool ProposedByClient,
     bool ShareHistory, bool ShareInvestigations,
     string? Reason, DateTime DateProposed);
+
+// ── Field sessions recorded on a phone ────────────────────────────────────────
+
+/// <summary>A field session as the website lists it.</summary>
+public sealed record FieldSessionSummaryRecord(
+    Guid Id, Guid? InvestigationId, Guid DeviceSessionId, string DeviceModel,
+    string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
+    int ReadingCount, int MarkerCount, Guid DocumentUploadFileId,
+    Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
+    IReadOnlyList<FieldSessionFileSummary> Files);
+
+public sealed record FieldSessionFileSummary(
+    Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
+    DateTime DateCreated);
+
+/// <summary>
+/// A session and its document.
+/// </summary>
+/// <remarks>
+/// <see cref="Document"/> is the Device Data Format v1 JSON exactly as the phone wrote it. The
+/// playback page parses it here rather than having the server reshape it, because it is the only
+/// copy that is definitely what the instruments recorded.
+/// </remarks>
+public sealed record FieldSessionDetailRecord(
+    FieldSessionSummaryRecord Session, string Document);

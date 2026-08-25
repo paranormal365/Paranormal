@@ -110,6 +110,42 @@ final class FieldKitUITests: XCTestCase {
         XCTAssertTrue(fresh.buttons["set-base-level"].exists)
     }
 
+    /// Saying which room you are in, and having everything afterwards carry it.
+    ///
+    /// This is the one fact the instruments cannot supply — a fix indoors covers the whole
+    /// building — so the control has to be reachable with one hand in the dark, and the label has
+    /// to stick.
+    func testSayingWhichRoomYouAreIn() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let roomBar = fresh.descendants(matching: .any).matching(identifier: "room-bar").firstMatch
+        XCTAssertTrue(roomBar.waitForExistence(timeout: 20),
+                      "the room should be settable from the session screen")
+        roomBar.tap()
+
+        // The quick list is the point: typing a room name in the dark is what this avoids.
+        let suggestion = fresh.buttons["room-suggestion"].firstMatch
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 10),
+                      "common rooms should be one tap away")
+        let chosen = suggestion.label
+        suggestion.tap()
+
+        XCTAssertTrue(fresh.staticTexts[chosen].waitForExistence(timeout: 10),
+                      "the session screen should show the room that was picked")
+
+        // Moving rooms leaves a mark of its own, so a review shows when somebody moved.
+        XCTAssertTrue(fresh.staticTexts["moved to \(chosen)"].waitForExistence(timeout: 10),
+                      "changing room should be marked on the timeline")
+    }
+
     /// Field work happens at night, so the screens that matter most are the ones nobody would
     /// see in a daylight screenshot. This runs the same panel in dark and asserts it is all
     /// still there — the appearance is restored afterwards so the rest of the suite is unaffected.
@@ -440,9 +476,14 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["mark-now"].tap()
         fresh.buttons["stop-field-session"].tap()
 
-        let export = fresh.buttons["open-export"]
-        XCTAssertTrue(export.waitForExistence(timeout: 25), "a finished session should export")
-        export.tap()
+        let share = fresh.buttons["open-share-menu"]
+        XCTAssertTrue(share.waitForExistence(timeout: 25), "a finished session should export")
+        share.tap()
+
+        let exportItem = fresh.buttons["Export a bundle"].firstMatch
+        XCTAssertTrue(exportItem.waitForExistence(timeout: 10),
+                      "exporting should be offered alongside sending to the server")
+        exportItem.tap()
 
         let build = fresh.buttons["build-export"]
         XCTAssertTrue(build.waitForExistence(timeout: 15))
@@ -453,5 +494,138 @@ final class FieldKitUITests: XCTestCase {
                       "building should produce a bundle to share")
         XCTAssertTrue(fresh.staticTexts["Readings"].exists,
                       "the bundle should report what went into it")
+    }
+
+    /// Sending a session up: the screen that asks where it belongs and what goes with it.
+    ///
+    /// The upload itself needs a server, so what is checked here is the part that must be right
+    /// before anything leaves the phone — that the door exists, that it says an account is
+    /// needed, and that files can be chosen and dropped.
+    func testTheUploadScreenAsksWhereTheSessionBelongs() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 20))
+        fresh.buttons["stop-field-session"].tap()
+
+        let share = fresh.buttons["open-share-menu"]
+        XCTAssertTrue(share.waitForExistence(timeout: 25))
+        share.tap()
+
+        let send = fresh.buttons["Send to the server"].firstMatch
+        XCTAssertTrue(send.waitForExistence(timeout: 10),
+                      "a finished session should offer to go to the server")
+        send.tap()
+
+        // Whichever side of the account line this run is on, the screen must say something.
+        // The Keychain survives an app relaunch, so an earlier test in the suite may have left
+        // this device signed in — asserting one state only would pass alone and fail in company.
+        let explained = fresh.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS[c] 'Recording never needs an account'")).firstMatch
+        let picker = fresh.otherElements["upload-investigation"].firstMatch
+        let sendButton = fresh.buttons["send-session"]
+
+        let deadline = Date().addingTimeInterval(20)
+        while !explained.exists && !picker.exists && !sendButton.exists && Date() < deadline {
+            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        }
+
+        if explained.exists {
+            // Signed out: it explains WHY sending needs an account when recording did not,
+            // and offers nothing to press.
+            XCTAssertFalse(sendButton.exists,
+                           "nothing to press until there is an account to send under")
+        } else {
+            // Signed in: it asks where the session belongs before anything leaves the phone.
+            XCTAssertTrue(picker.exists || sendButton.exists,
+                          "a signed-in person should be asked where the session belongs")
+        }
+    }
+
+    /// Writing a note: typed, dictated, or recorded — and dictation only where it works offline.
+    func testTheNoteComposerOffersTheWaysThisDeviceCanWriteOne() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let note = fresh.buttons["open-note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 20), "a session should offer to take a note")
+        note.tap()
+
+        // Queried across element types: a segmented picker is not an `otherElement`.
+        XCTAssertTrue(fresh.descendants(matching: .any)
+                        .matching(identifier: "note-kind").firstMatch
+                        .waitForExistence(timeout: 15),
+                      "the composer should offer a way to write the note")
+
+        // Typing is always available; dictation only where the device can transcribe offline,
+        // so its absence here is correct rather than a fault.
+        let field = fresh.textFields["note-text"]
+        if !field.exists {
+            // Dictation was chosen as the default, so switch to typing.
+            fresh.buttons["Type"].firstMatch.tap()
+        }
+        XCTAssertTrue(fresh.textFields["note-text"].waitForExistence(timeout: 10)
+                      || fresh.textViews["note-text"].waitForExistence(timeout: 5),
+                      "there should always be a way to write a note by hand")
+
+        let target = fresh.textFields["note-text"].exists
+            ? fresh.textFields["note-text"] : fresh.textViews["note-text"]
+        target.tap()
+        let marker = "cold spot \(Int(Date().timeIntervalSince1970))"
+        target.typeText(marker)
+
+        fresh.buttons["save-note"].tap()
+
+        // The note lands on the session's own marker list.
+        XCTAssertTrue(fresh.staticTexts[marker].waitForExistence(timeout: 20),
+                      "a saved note should appear against the session")
+    }
+
+    /// Choosing the photograph that stands for the property.
+    func testAPhotoCanBeChosenToRepresentTheProperty() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 20))
+        fresh.buttons["stop-field-session"].tap()
+
+        let share = fresh.buttons["open-share-menu"]
+        XCTAssertTrue(share.waitForExistence(timeout: 25))
+        share.tap()
+
+        let photos = fresh.buttons["Property photos"].firstMatch
+        XCTAssertTrue(photos.waitForExistence(timeout: 10),
+                      "a session should offer its property photos")
+        photos.tap()
+
+        // A simulator has no camera, so this session has no photos — and the screen SAYS so
+        // rather than showing an empty grid somebody reads as a failure.
+        XCTAssertTrue(
+            fresh.staticTexts.containing(
+                NSPredicate(format: "label CONTAINS[c] 'No photos in this session'")
+            ).firstMatch.waitForExistence(timeout: 15)
+            || fresh.buttons.matching(identifier: "property-photo").firstMatch.exists,
+            "the screen should either show photos or say there are none")
     }
 }

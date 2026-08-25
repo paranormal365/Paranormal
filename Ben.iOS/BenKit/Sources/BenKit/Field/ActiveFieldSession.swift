@@ -23,6 +23,13 @@ public final class ActiveFieldSession {
     /// empty position readout forever.
     public private(set) var locationAuthorization: LocationAuthorization = .notDetermined
 
+    /// Which room the operator says they are in. Everything recorded carries it until changed.
+    public private(set) var room: String?
+
+    /// Rooms this session has already been in, most recent first. Going back to one is then a
+    /// single tap in the dark instead of typing a name again with cold hands.
+    public private(set) var roomsVisited: [String] = []
+
     /// What has been captured into this session, newest first.
     public private(set) var captures: [CaptureRecord] = []
     /// The audio recording currently running, if any.
@@ -52,11 +59,12 @@ public final class ActiveFieldSession {
         public var latitude: Double?
         public var longitude: Double?
         public var headingDegrees: Double?
+        public var room: String?
 
         public init(id: UUID = UUID(), at: Date, kind: CaptureKind, relativePath: String,
                     byteCount: Int64, durationSeconds: Double? = nil,
                     latitude: Double? = nil, longitude: Double? = nil,
-                    headingDegrees: Double? = nil) {
+                    headingDegrees: Double? = nil, room: String? = nil) {
             self.id = id
             self.at = at
             self.kind = kind
@@ -66,6 +74,7 @@ public final class ActiveFieldSession {
             self.latitude = latitude
             self.longitude = longitude
             self.headingDegrees = headingDegrees
+            self.room = room
         }
     }
 
@@ -198,7 +207,7 @@ public final class ActiveFieldSession {
             at: state.startedAt, kind: .audio, relativePath: state.relativePath,
             byteCount: size, durationSeconds: duration,
             latitude: sample.position?.latitude, longitude: sample.position?.longitude,
-            headingDegrees: sample.headingDegrees), at: 0)
+            headingDegrees: sample.headingDegrees, room: room), at: 0)
     }
 
     /// Records a file the camera just handed us. The file has ALREADY been moved into the
@@ -211,7 +220,7 @@ public final class ActiveFieldSession {
             at: now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
             durationSeconds: durationSeconds,
             latitude: sample.position?.latitude, longitude: sample.position?.longitude,
-            headingDegrees: sample.headingDegrees), at: 0)
+            headingDegrees: sample.headingDegrees, room: room), at: 0)
     }
 
     public func clearRecordingProblem() { recordingProblem = nil }
@@ -299,6 +308,26 @@ public final class ActiveFieldSession {
             return "Switch video on to watch for movement in the camera's view."
         }
         return nil
+    }
+
+    /// Moves the session to another room, and marks the moment.
+    ///
+    /// The mark matters as much as the label: reviewing a night later, "they went into the
+    /// cellar at 01:14" is exactly the sort of thing that explains a reading.
+    public func setRoom(_ room: String?) async {
+        let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        guard value != self.room else { return }
+
+        self.room = value
+        if let value {
+            roomsVisited.removeAll { $0.caseInsensitiveCompare(value) == .orderedSame }
+            roomsVisited.insert(value, at: 0)
+        }
+        await engine.setRoom(value)
+        if let value {
+            await mark(kind: .manual, note: "moved to \(value)")
+        }
     }
 
     public func setPolicy(_ policy: SamplingPolicy) async {

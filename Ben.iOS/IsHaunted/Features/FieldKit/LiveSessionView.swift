@@ -19,7 +19,7 @@ struct LiveSessionView: View {
     @State private var showingEVP = false
     @State private var brightnessBeforeBlackout: CGFloat?
     @State private var showingLocationExplainer = false
-    @State private var noteDraft = ""
+    @State private var choosingRoom = false
     @State private var askingForNote = false
     @State private var errorMessage: String?
 
@@ -47,7 +47,8 @@ struct LiveSessionView: View {
             .sheet(isPresented: $showingLocationExplainer) {
                 LocationExplainerSheet { await active?.requestLocation() }
             }
-            .alert("Add a note", isPresented: $askingForNote) { noteAlertButtons }
+            .sheet(isPresented: $askingForNote) { noteComposer }
+            .sheet(isPresented: $choosingRoom) { roomSheet }
             .alert("Couldn't stop the session",
                    isPresented: Binding(get: { errorMessage != nil },
                                         set: { if !$0 { errorMessage = nil } })) {
@@ -141,14 +142,10 @@ struct LiveSessionView: View {
     }
 
     @ViewBuilder
-    private var noteAlertButtons: some View {
-        TextField("What happened?", text: $noteDraft)
-        Button("Save") {
-            let note = noteDraft
-            noteDraft = ""
-            Task { await active?.mark(kind: .manual, note: note.isEmpty ? nil : note) }
+    private var noteComposer: some View {
+        if let active {
+            NoteComposerView(session: active).environment(dependencies)
         }
-        Button("Cancel", role: .cancel) { noteDraft = "" }
     }
 
     private func bringUp() async {
@@ -248,6 +245,15 @@ struct LiveSessionView: View {
         .background(.bar)
     }
 
+    @ViewBuilder
+    private var roomSheet: some View {
+        if let active {
+            RoomSheet(current: active.room, visited: active.roomsVisited) { room in
+                Task { await active.setRoom(room) }
+            }
+        }
+    }
+
     // MARK: - Instruments
 
     @ViewBuilder
@@ -255,6 +261,8 @@ struct LiveSessionView: View {
         VStack(spacing: 16) {
             SessionClock(startedAt: active.startedAt, isRecording: true)
                 .padding(.top, 8)
+
+            RoomBar(room: active.room) { choosingRoom = true }
 
             if active.channels.contains(.video) {
                 viewfinder(active)
@@ -340,6 +348,7 @@ struct LiveSessionView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("open-note")
 
                 Button {
                     showingEVP = true

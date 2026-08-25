@@ -44,6 +44,8 @@ public struct FieldMarkerRecord: Sendable, Equatable, Identifiable {
     public var at: Date
     public var kind: MarkerKind
     public var note: String?
+    /// The room the operator said they were in.
+    public var room: String?
     public var magneticMicrotesla: Double?
     public var soundDbfs: Double?
     public var latitude: Double?
@@ -52,6 +54,7 @@ public struct FieldMarkerRecord: Sendable, Equatable, Identifiable {
     public var audioOffsetSeconds: Double?
 
     public init(id: UUID = UUID(), at: Date, kind: MarkerKind, note: String? = nil,
+                room: String? = nil,
                 magneticMicrotesla: Double? = nil, soundDbfs: Double? = nil,
                 latitude: Double? = nil, longitude: Double? = nil,
                 audioFilename: String? = nil, audioOffsetSeconds: Double? = nil) {
@@ -59,6 +62,7 @@ public struct FieldMarkerRecord: Sendable, Equatable, Identifiable {
         self.at = at
         self.kind = kind
         self.note = note
+        self.room = room
         self.magneticMicrotesla = magneticMicrotesla
         self.soundDbfs = soundDbfs
         self.latitude = latitude
@@ -102,6 +106,14 @@ public actor FieldSessionEngine {
 
     /// Set while a recording is running, so a marker can say where in the file it landed.
     private var recording: (filename: String, startedAt: Date)?
+
+    /// Which room the operator says they are in.
+    ///
+    /// **The only reliable source of this fact.** A phone indoors is routinely 20–50 m out —
+    /// the width of the whole building — so nothing the instruments produce can tell one room
+    /// from another. A person saying "kitchen" is better data than any fix, and everything
+    /// recorded from that moment carries it until they say otherwise.
+    private var room: String?
 
     /// The question currently being waited on. EVP work is question, silence, question — and
     /// what a reviewer needs is the SILENCE bracketed, not just the moment somebody spoke.
@@ -172,6 +184,14 @@ public actor FieldSessionEngine {
     public func setPolicy(_ policy: SamplingPolicy) {
         self.policy = policy
     }
+
+    /// Says which room this is. Everything recorded from now on carries it.
+    public func setRoom(_ room: String?) {
+        let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.room = (trimmed?.isEmpty ?? true) ? nil : trimmed
+    }
+
+    public func currentRoom() -> String? { room }
 
     // MARK: - Sentry
 
@@ -373,6 +393,11 @@ public actor FieldSessionEngine {
         if let battery = sensors.batteryPercent() {
             measurements["battery"] = .number(battery, unit: "percent")
         }
+        if let room {
+            // A label, so it needs no unit — the format's own way of extending a reading without
+            // inventing a top-level field.
+            measurements["room"] = .label(room)
+        }
 
         // No fix means NO position — never a zero, which is a real place in the Gulf of Guinea.
         var position: FieldReading.Position?
@@ -427,7 +452,7 @@ public actor FieldSessionEngine {
                              marker: kind, note: note, audio: audioRef))
 
         let record = FieldMarkerRecord(
-            at: moment, kind: kind, note: note,
+            at: moment, kind: kind, note: note, room: room,
             magneticMicrotesla: latest.magneticMicrotesla,
             soundDbfs: latest.soundDbfs,
             latitude: latest.position?.latitude,

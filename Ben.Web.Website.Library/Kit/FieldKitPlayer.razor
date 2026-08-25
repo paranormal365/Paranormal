@@ -1,0 +1,672 @@
+@namespace Ben.Web.Website.Library.Kit
+@using System.Text.Json
+@using Ben.Web.Website.Library.Manage.Maps
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@implements IDisposable
+
+@*
+    FieldKitPlayer — playing back a session somebody recorded on their phone.
+
+    A COMPONENT, not a page, so the same player can sit on its own route, inside a case, beside
+    an investigation, or anywhere else a recorded session needs watching. The routable page is a
+    two-line wrapper around it.
+
+    One playhead drives everything — the magnetic trace, where they were on the map, which way
+    they were facing, and whatever was being recorded at that second. A spike on its own says
+    very little; the same spike alongside a position, a heading and a sound level is something a
+    reviewer can actually weigh.
+
+    The readings are read from the DOCUMENT the device wrote, not from a reshaped copy. That is
+    the point of storing it verbatim: this page shows the recording, not a story about it.
+*@
+
+@if (Standalone)
+{
+    <PageTitle>@(_session?.LocationLabel ?? "Field session") — @SiteName</PageTitle>
+}
+
+<div class="@(Standalone ? "container-fluid px-3" : "")"
+     style="@(Standalone ? "max-width:1200px;margin:auto;" : "")">
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the session…" />
+    }
+    else if (_refusal is not null)
+    {
+        @* A refusal is not an empty session. Saying "nothing here" for a load that FAILED is
+           the untruth BenListState exists to stop, and a detail page owes the same care. *@
+        <div class="card border-warning">
+            <div class="card-body">
+                <h5 class="card-title">This session couldn't be loaded</h5>
+                <p class="card-text">@_refusal</p>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="Load">Try again</button>
+            </div>
+        </div>
+    }
+    else if (_session is null)
+    {
+        <div class="alert alert-secondary">This session isn't here.</div>
+    }
+    else
+    {
+            <div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
+                <h3 class="mb-0">@(_session.LocationLabel ?? "Field session")</h3>
+                <span class="text-muted small">
+                    @_session.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                    · @_session.DeviceModel
+                    @if (!string.IsNullOrWhiteSpace(_session.RecordedByName))
+                    {
+                        <text> · recorded by @_session.RecordedByName</text>
+                    }
+                    else
+                    {
+                        @* Said plainly rather than left blank: an unattributed recording is a
+                           fact a reviewer should weigh, not a gap they have to notice. *@
+                        <text> · <span class="text-warning">nobody signed in when recorded</span></text>
+                    }
+                </span>
+            </div>
+
+            @if (_readings.Count == 0)
+            {
+                <div class="alert alert-secondary">
+                    This session's document holds no readings.
+                </div>
+            }
+            else
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                            <button class="btn btn-primary" @onclick="TogglePlay">
+                                <i class="bi @(_playing ? "bi-pause-fill" : "bi-play-fill")"></i>
+                                @(_playing ? "Pause" : "Play")
+                            </button>
+
+                            <div class="btn-group btn-group-sm">
+                                @foreach (var rate in new[] { 1, 2, 4, 8, 16 })
+                                {
+                                    <button class="btn @(_rate == rate ? "btn-secondary" : "btn-outline-secondary")"
+                                            @onclick="() => _rate = rate">@rate×</button>
+                                }
+                            </div>
+
+                            <span class="font-monospace">@Elapsed(_playhead)</span>
+                            <span class="text-muted small">of @Elapsed(_end)</span>
+                        </div>
+
+                        <input type="range" class="form-range" min="0" max="1000" step="1"
+                               value="@ScrubPosition"
+                               @oninput="OnScrub" aria-label="Position in the session" />
+
+                        <div class="row g-3 mt-1">
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">
+                                    Magnetic field@(_baseline is null ? "" : " (from base)")
+                                </div>
+                                <div class="fs-5 font-monospace">@FieldText</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Sound</div>
+                                <div class="fs-5 font-monospace">@SoundText</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Heading</div>
+                                <div class="fs-5 font-monospace">@HeadingText</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Position</div>
+                                <div class="fs-6 font-monospace">@PositionText</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-header py-2">Magnetic field over the session</div>
+                            <div class="card-body">
+                                <TelerikChart Height="240px">
+                                    <ChartSeriesItems>
+                                        <ChartSeries Type="ChartSeriesType.Line"
+                                                     Data="@_chartPoints"
+                                                     Field="@nameof(TracePoint.Milligauss)"
+                                                     CategoryField="@nameof(TracePoint.Label)"
+                                                     Name="mG from base">
+                                            <ChartSeriesMarkers Visible="false" />
+                                        </ChartSeries>
+                                    </ChartSeriesItems>
+                                    <ChartValueAxes>
+                                        <ChartValueAxis>
+                                            <ChartValueAxisTitle Text="mG from base" />
+                                        </ChartValueAxis>
+                                    </ChartValueAxes>
+                                    <ChartLegend Visible="false" />
+                                </TelerikChart>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header py-2">Where they were</div>
+                            <div class="card-body p-2">
+                                @if (_track.Count == 0)
+                                {
+                                    @* Indoors a phone often never gets a fix. Saying so beats an
+                                       empty map somebody reads as a broken one. *@
+                                    <div class="text-muted small p-3">
+                                        No position was recorded for this session.
+                                    </div>
+                                }
+                                else
+                                {
+                                    @* The manager's own reusable map, rather than a third one.
+                                       Its radius circle IS the accuracy of the fix: indoors that
+                                       is routinely the width of the building, and a bare pin
+                                       invites the belief that it means the room. *@
+                                    @if (!string.IsNullOrWhiteSpace(CurrentRoom))
+                                    {
+                                        @* The one fact the map cannot supply: which part of the
+                                           building this is. It comes from the person who was
+                                           standing in it. *@
+                                        <div class="mb-2">
+                                            <span class="badge text-bg-secondary" data-testid="current-room">
+                                                Room: @CurrentRoom
+                                            </span>
+                                        </div>
+                                    }
+                                    <AddressMapPlayer Latitude="@(CurrentPoint?.Latitude ?? _track[0].Latitude)"
+                                                      Longitude="@(CurrentPoint?.Longitude ?? _track[0].Longitude)"
+                                                      Title="@PositionTitle"
+                                                      Config="@_mapConfig"
+                                                      ReadOnly="true"
+                                                      Height="240px" />
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_session.Files.Count > 0)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header py-2">Recordings</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var file in _session.Files)
+                            {
+                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+                                    <span class="font-monospace small">@file.RelativePath</span>
+                                    @if (!file.DigestMatched)
+                                    {
+                                        @* Surfaced, never swallowed: a file that arrived damaged
+                                           should not be listened to as though it were intact. *@
+                                        <span class="badge text-bg-warning">arrived damaged</span>
+                                    }
+                                    @if (IsAudio(file.RelativePath))
+                                    {
+                                        <audio controls preload="none" class="ms-auto"
+                                               src="@FileUrl(file.Id)"></audio>
+                                    }
+                                    else if (IsVideo(file.RelativePath))
+                                    {
+                                        <video controls preload="none" width="320"
+                                               class="ms-auto" src="@FileUrl(file.Id)"></video>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_markers.Count > 0)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header py-2">Marked</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var marker in _markers)
+                            {
+                                <li class="list-group-item d-flex align-items-center gap-3">
+                                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                                            @onclick="() => JumpTo(marker.At)">
+                                        @Elapsed(marker.At)
+                                    </button>
+                                    <span>@marker.Kind</span>
+                                    @if (!string.IsNullOrWhiteSpace(marker.Room))
+                                    {
+                                        <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(marker.Note))
+                                    {
+                                        <span class="text-muted small">@marker.Note</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid SessionId { get; set; }
+
+    /// <summary>True when this is the whole page rather than a panel inside something else.</summary>
+    [Parameter] public bool Standalone { get; set; } = true;
+
+    /// The domain is not settled, so the name comes from configuration — a literal here is a
+    /// rename waiting to be missed.
+    private string SiteName => SiteOptions.Value.Name;
+
+    private FieldSessionSummaryRecord? _session;
+    private bool _loading = true;
+    private string? _refusal;
+
+    private List<Reading> _readings = new();
+    private List<TracePoint> _chartPoints = new();
+    private List<GeoPoint> _track = new();
+    private List<GeoPoint> _markerPoints = new();
+    private List<MarkerRow> _markers = new();
+    /// The base level the session was measured against, read from the document.
+    private double? _baseline;
+    /// <summary>
+    /// The map's circle, sized to the ACCURACY of the fix at the playhead.
+    /// </summary>
+    /// <remarks>
+    /// Not decoration. Indoors a phone is routinely 20–50 m out — often the width of the whole
+    /// building — and a pin on its own invites somebody to read it as the room they were
+    /// standing in. Showing the circle is the difference between a coordinate and a claim.
+    /// </remarks>
+    private AddressMapConfig _mapConfig => new()
+    {
+        IsOnMap = true,
+        ShowMarker = true,
+        ShowRegion = CurrentAccuracyMeters is not null,
+        // The component works in miles; a fix is measured in metres.
+        RegionRadiusMiles = (CurrentAccuracyMeters ?? 30) / 1609.34,
+        MarkerColor = "#1f9d63",
+        RegionFillColor = "#1f9d63",
+        RegionFillOpacity = 0.12,
+        RegionStrokeColor = "#1f9d63",
+    };
+
+    private double? CurrentAccuracyMeters => _readings
+        .LastOrDefault(r => r.At <= _playhead && r.AccuracyMeters is not null)?.AccuracyMeters;
+
+    private DateTime _start;
+    private DateTime _end;
+    private DateTime _playhead;
+    private bool _playing;
+    private int _rate = 1;
+    private CancellationTokenSource? _ticker;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _refusal = null;
+        StateHasChanged();
+
+        // The circuit is not signed in during the static prerender, so a load that ran now would
+        // ask the API as a stranger, be refused, and settle on a refusal that never retries. The
+        // page would say "you may no longer have access" to somebody who is perfectly signed in.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        var detail = await AdminClient.GetFieldSessionAsync(SessionId);
+        _loading = false;
+
+        if (detail is null)
+        {
+            _refusal = "The server didn't return this session. It may have been removed, or you "
+                     + "may no longer have access to the investigation it belongs to.";
+            return;
+        }
+
+        _session = detail.Session;
+        try
+        {
+            ReadDocument(detail.Document);
+        }
+        catch (JsonException)
+        {
+            // The document is the evidence; if it cannot be read, say so rather than drawing an
+            // empty chart that looks like a quiet night.
+            _refusal = "This session's document couldn't be read.";
+        }
+    }
+
+    /// <summary>
+    /// Reads the Device Data Format v1 document the phone wrote.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately tolerant: every field except the timestamp is optional in that format, and a
+    /// reading with no position or no sound level is ordinary rather than broken. Anything
+    /// missing is simply absent here too.
+    /// </remarks>
+    private void ReadDocument(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        double? baseline = null;
+        if (root.TryGetProperty("readings", out var readings)
+            && readings.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var element in readings.EnumerateArray())
+            {
+                if (!element.TryGetProperty("at", out var at)) continue;
+                var reading = new Reading { At = at.GetDateTime().ToUniversalTime() };
+
+                if (element.TryGetProperty("measurements", out var measurements)
+                    && measurements.ValueKind == JsonValueKind.Object)
+                {
+                    if (measurements.TryGetProperty("emf", out var emf))
+                    {
+                        reading.Microtesla = Number(emf, "value");
+                        baseline ??= Number(emf, "baseline");
+                    }
+                    reading.SoundDbfs = measurements.TryGetProperty("sound_level", out var sound)
+                        ? Number(sound, "value") : null;
+                    if (measurements.TryGetProperty("marker", out var marker)
+                        && marker.TryGetProperty("value", out var kind)
+                        && kind.ValueKind == JsonValueKind.String)
+                    {
+                        reading.Marker = kind.GetString();
+                    }
+                    if (measurements.TryGetProperty("room", out var room)
+                        && room.TryGetProperty("value", out var roomName)
+                        && roomName.ValueKind == JsonValueKind.String)
+                    {
+                        reading.Room = roomName.GetString();
+                    }
+                }
+
+                if (element.TryGetProperty("position", out var position)
+                    && position.ValueKind == JsonValueKind.Object)
+                {
+                    reading.Latitude = Number(position, "latitude");
+                    reading.Longitude = Number(position, "longitude");
+                    reading.AccuracyMeters = Number(position, "accuracy_meters");
+                }
+
+                if (element.TryGetProperty("motion", out var motion)
+                    && motion.ValueKind == JsonValueKind.Object)
+                {
+                    reading.HeadingDegrees = Number(motion, "heading_degrees");
+                }
+
+                reading.Note = element.TryGetProperty("note", out var note)
+                               && note.ValueKind == JsonValueKind.String
+                    ? note.GetString() : null;
+
+                _readings.Add(reading);
+            }
+        }
+
+        _readings = _readings.OrderBy(r => r.At).ToList();
+        if (_readings.Count == 0) return;
+
+        _start = _readings[0].At;
+        _end = _readings[^1].At;
+        _playhead = _start;
+
+        // Against the base level the investigator actually set that night. Without one there is
+        // nothing to depart from, and an absolute figure would be meaningless on its own.
+        _baseline = baseline;
+        _chartPoints = Downsample(_readings, _baseline);
+
+        _track = _readings
+            .Where(r => r.Latitude is not null && r.Longitude is not null)
+            .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
+            .ToList();
+
+        _markers = _readings
+            .Where(r => r.Marker is not null)
+            .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room))
+            .ToList();
+
+        _markerPoints = _readings
+            .Where(r => r.Marker is not null && r.Latitude is not null && r.Longitude is not null)
+            .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Thins the trace for drawing, keeping the EXTREMES of each bucket.
+    /// </summary>
+    /// <remarks>
+    /// Averaging would flatten the one spike somebody opened this page to look at into the noise
+    /// around it. A chart cannot show more points than the screen has pixels, so the choice is
+    /// which points to lose — and the answer is never the peaks.
+    /// </remarks>
+    private static List<TracePoint> Downsample(List<Reading> readings, double? baseline)
+    {
+        var points = readings
+            .Where(r => r.Microtesla is not null)
+            .Select(r => new TracePoint(
+                r.At.ToString("HH:mm:ss"),
+                baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
+            .ToList();
+
+        const int maxPoints = 400;
+        if (points.Count <= maxPoints) return points;
+
+        var bucket = (int)Math.Ceiling(points.Count / (double)(maxPoints / 2));
+        var kept = new List<TracePoint>();
+        for (var start = 0; start < points.Count; start += bucket)
+        {
+            var slice = points.Skip(start).Take(bucket).ToList();
+            if (slice.Count == 0) continue;
+            var low = slice.MinBy(p => p.Milligauss)!;
+            var high = slice.MaxBy(p => p.Milligauss)!;
+            kept.Add(low);
+            if (!ReferenceEquals(low, high)) kept.Add(high);
+        }
+        return kept;
+    }
+
+    private static double? Number(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetDouble() : null;
+
+    private static string Humanise(string marker) => marker switch
+    {
+        "sentry_emf" => "Magnetic spike",
+        "sentry_sound" => "Sound",
+        "device_moved" => "Device moved",
+        "scene_motion" => "Movement seen",
+        "evp_question" => "Question asked",
+        "evp_wait_end" => "Stopped waiting",
+        "manual_marker" => "Marked",
+        "photo" => "Photo",
+        "video" => "Video",
+        "audio" => "Audio",
+        _ => marker,
+    };
+
+    // ── Transport ─────────────────────────────────────────────────────────────
+
+    private int ScrubPosition => _end > _start
+        ? (int)((_playhead - _start).TotalSeconds / (_end - _start).TotalSeconds * 1000)
+        : 0;
+
+    private void OnScrub(ChangeEventArgs args)
+    {
+        if (!double.TryParse(args.Value?.ToString(), out var value)) return;
+        Pause();
+        _playhead = _start.AddSeconds((_end - _start).TotalSeconds * value / 1000);
+    }
+
+    private void JumpTo(DateTime moment)
+    {
+        Pause();
+        // A moment BEFORE the mark, so what led up to it can be seen rather than starting at it.
+        _playhead = moment.AddSeconds(-3) < _start ? _start : moment.AddSeconds(-3);
+    }
+
+    private void TogglePlay()
+    {
+        if (_playing) { Pause(); return; }
+        if (_playhead >= _end) _playhead = _start;
+        _playing = true;
+        _ticker = new CancellationTokenSource();
+        _ = Tick(_ticker.Token);
+    }
+
+    private void Pause()
+    {
+        _playing = false;
+        _ticker?.Cancel();
+        _ticker = null;
+    }
+
+    private async Task Tick(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && _playing)
+        {
+            await Task.Delay(250, CancellationToken.None);
+            if (token.IsCancellationRequested) break;
+
+            _playhead = _playhead.AddSeconds(0.25 * _rate);
+            if (_playhead >= _end)
+            {
+                _playhead = _end;
+                Pause();
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // ── What the playhead is sitting on ───────────────────────────────────────
+
+    /// <summary>
+    /// The last reading at or before the playhead.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than interpolated: instruments keep their last value, and smoothing between
+    /// samples would draw a reading nobody took.
+    /// </remarks>
+    private Reading? Current => _readings.LastOrDefault(r => r.At <= _playhead);
+
+    private GeoPoint? CurrentPoint
+    {
+        get
+        {
+            var reading = _readings.LastOrDefault(
+                r => r.At <= _playhead && r.Latitude is not null && r.Longitude is not null);
+            return reading is null
+                ? null
+                : new GeoPoint(reading.Latitude!.Value, reading.Longitude!.Value, reading.At);
+        }
+    }
+
+    /// <summary>
+    /// The field at the playhead, against the base level the investigator set.
+    /// </summary>
+    /// <remarks>
+    /// Deviation when there is a base, absolute when there is not — and it SAYS which. Showing
+    /// 480 mG beside a chart plotted as "+50 from base" invites somebody to compare two numbers
+    /// that are not measuring the same thing.
+    /// </remarks>
+    private string FieldText
+    {
+        get
+        {
+            if (Current?.Microtesla is not double value) return "—";
+            return _baseline is double reference
+                ? $"{(value - reference) * 10:+0;-0;0} mG"
+                : $"{value * 10:0} mG abs";
+        }
+    }
+
+    private string SoundText => Current?.SoundDbfs is double sound ? $"{sound:0} dB" : "—";
+
+    private string HeadingText =>
+        Current?.HeadingDegrees is double heading ? $"{heading:0}°" : "—";
+
+    /// <summary>What the pin is called, accuracy included, so the circle is never a mystery.</summary>
+    private string PositionTitle
+    {
+        get
+        {
+            var accuracy = CurrentAccuracyMeters;
+            return accuracy is double metres
+                ? $"Here, to within about {metres:0} m"
+                : "Here";
+        }
+    }
+
+    private string PositionText
+    {
+        get
+        {
+            var point = CurrentPoint;
+            if (point is null) return "no fix";
+            var accuracy = CurrentAccuracyMeters;
+            // The accuracy travels with it, always: indoors a fix is routinely the width of the
+            // whole building, and a bare coordinate invites the belief that it means the room.
+            return accuracy is double metres
+                ? $"{point.Latitude:0.00000}, {point.Longitude:0.00000} ±{metres:0} m"
+                : $"{point.Latitude:0.00000}, {point.Longitude:0.00000}";
+        }
+    }
+
+    private string Elapsed(DateTime moment)
+    {
+        var span = moment - _start;
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}";
+    }
+
+    private string FileUrl(Guid fileId) => $"/webapi/api/field-sessions/{SessionId}/files/{fileId}";
+
+    private static bool IsAudio(string path) =>
+        path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVideo(string path) =>
+        path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+
+    public void Dispose() => Pause();
+
+    // ── Shapes this page works in ─────────────────────────────────────────────
+
+    private sealed class Reading
+    {
+        public DateTime At { get; set; }
+        public double? Microtesla { get; set; }
+        public double? SoundDbfs { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public double? AccuracyMeters { get; set; }
+        public double? HeadingDegrees { get; set; }
+        public string? Marker { get; set; }
+        public string? Note { get; set; }
+        /// <summary>The room the operator said they were in. See <c>CurrentRoom</c>.</summary>
+        public string? Room { get; set; }
+    }
+
+    public sealed record TracePoint(string Label, double Milligauss);
+    public sealed record GeoPoint(double Latitude, double Longitude, DateTime At);
+    private sealed record MarkerRow(DateTime At, string Kind, string? Note, string? Room);
+
+    /// <summary>
+    /// The room at the playhead, when the operator named one.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the reading itself rather than held forward: readings carry the room for as long
+    /// as one is set, so its absence means they stopped saying which room, not that the label was
+    /// lost. This is the one thing on the page a fix cannot supply — the accuracy circle covers the
+    /// whole building, and only a person can say which part of it.
+    /// </remarks>
+    private string? CurrentRoom
+        => _readings.LastOrDefault(r => r.At <= _playhead)?.Room;
+}

@@ -111,6 +111,25 @@ struct MovementMap: View {
     @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
+        map.overlay(alignment: .topLeading) { roomPlate }
+    }
+
+    /// The room, over the map, because it is the one thing on this screen a fix cannot tell
+    /// you: the accuracy circle covers the whole building, the label says which part of it.
+    @ViewBuilder
+    private var roomPlate: some View {
+        if let room = frame.room {
+            Label(room, systemImage: "door.left.hand.open")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(.thinMaterial, in: Capsule())
+                .padding(8)
+                .accessibilityIdentifier("replay-room")
+        }
+    }
+
+    private var map: some View {
         Map(position: $camera) {
             if track.count > 1 {
                 MapPolyline(coordinates: track)

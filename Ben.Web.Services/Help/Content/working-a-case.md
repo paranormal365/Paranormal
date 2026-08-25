@@ -39,6 +39,35 @@ store. Filter the timeline by investigation to see just that visit.
 Readings recorded during a visit go in as **Instrument Reading** entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.
 
+## Putting field sessions in the final report
+
+Sessions recorded in the iPhone and iPad app land on the site whole — the readings, the marks, the
+positions, the room labels and the recordings, exactly as the device wrote them. The report is
+what your client is actually handed, so a report section can point at those sessions.
+
+On the case's **Reports** tab, open a report and add a section of type **Field Sessions**. Choose
+**Add field session** and you get every session uploaded against this case's investigations, newest
+first: where it was, who recorded it, how long it ran, and how much it holds. **Cite** attaches it;
+**Play back** opens the session's own playback page, where the trace, the map and the recordings
+run together on one clock.
+
+A citation is a reference, never a copy. The session stays where it was uploaded and keeps its own
+per-file checksums, so what the client reads and what the instruments recorded cannot drift apart.
+Removing a citation removes the reference only — nothing is deleted.
+
+What the PDF says about each cited session:
+
+- Where it was, in the words the operator used on the device
+- When it started and ended — or that it was **interrupted**, when the phone died mid-session and
+  there is no honest end time
+- Who recorded it, or plainly that nobody was signed in on the device
+- The device model, the number of readings and the number of marks
+- Every recording that belongs to it, flagged if its checksum did not match on arrival
+
+If the picker is empty, no sessions have been uploaded for this case's investigations yet. Sessions
+recorded without picking an investigation belong to the account that recorded them and are not
+anybody's case material until somebody attaches them.
+
 ## Entries at the same time
 
 Two people often record the same moment, and unrelated things sometimes coincide. Entries sharing

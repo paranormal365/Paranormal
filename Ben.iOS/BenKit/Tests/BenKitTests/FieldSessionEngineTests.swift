@@ -609,3 +609,94 @@ struct FieldSessionEngineTests {
         })
     }
 }
+// MARK: - Room labels
+
+/// Indoors a fix covers the whole building, so the operator's word for the room is the only
+/// thing that separates the cellar from the front bedroom. These check it is actually recorded.
+@Suite("Room labels")
+struct RoomLabelTests {
+
+    private func makeEngine() -> (FieldSessionEngine, ReadingLog, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("room-\(UUID().uuidString)")
+            .appendingPathComponent("readings.jsonl")
+        let log = ReadingLog(fileURL: url)
+        let engine = FieldSessionEngine(sessionId: UUID(), log: log,
+                                        sensors: SensorSuite(batteryPercent: { nil }),
+                                        policy: .default)
+        return (engine, log, url.deletingLastPathComponent())
+    }
+
+    @Test func readingsCarryTheRoomUntilItChanges() async throws {
+        let (engine, log, directory) = makeEngine()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setRoom("Cellar")
+        _ = await engine.mark(kind: .manual, note: nil)
+        await engine.setRoom("Front bedroom")
+        _ = await engine.mark(kind: .manual, note: nil)
+        await engine.setRoom(nil)
+        _ = await engine.mark(kind: .manual, note: nil)
+        await engine.stop()
+
+        let rooms = try await log.readings().map { $0.measurements?["room"]?.labelValue }
+        #expect(rooms == ["Cellar", "Front bedroom", nil])
+    }
+
+    /// Blank input must not become a room called " ".
+    @Test func blankRoomsAreNotRooms() async throws {
+        let (engine, _, directory) = makeEngine()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setRoom("   ")
+        #expect(await engine.currentRoom() == nil)
+        await engine.setRoom(" Attic ")
+        #expect(await engine.currentRoom() == "Attic")
+    }
+
+    /// A mark records where it was made, not where the reviewer happens to be looking later.
+    @Test func markersRememberTheirRoom() async throws {
+        let (engine, _, directory) = makeEngine()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setRoom("Kitchen")
+        let first = await engine.mark(kind: .manual, note: "cold spot")
+        await engine.setRoom("Attic")
+        let second = await engine.mark(kind: .manual, note: nil)
+
+        #expect(first.room == "Kitchen")
+        #expect(second.room == "Attic")
+    }
+
+    /// The replay has to say which room the playhead is in — and STOP saying it when the
+    /// operator stopped, rather than holding a stale label over the rest of the night.
+    @Test @MainActor func replayReportsTheRoomAtThePlayhead() async throws {
+        let start = Date(timeIntervalSince1970: 1_787_600_000)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("room-replay-\(UUID().uuidString)")
+            .appendingPathComponent("readings.jsonl")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let log = ReadingLog(fileURL: url)
+
+        func reading(_ offset: TimeInterval, room: String?) -> FieldReading {
+            var result = FieldReading(at: start.addingTimeInterval(offset), sequence: 0)
+            if let room { result.measurements = ["room": .label(room)] }
+            return result
+        }
+        try await log.append(reading(0, room: "Cellar"))
+        try await log.append(reading(10, room: "Attic"))
+        try await log.append(reading(20, room: nil))
+        try await log.close()
+
+        let replay = SessionReplay()
+        await replay.load(readingLog: log, markers: [], media: [], baselines: Baselines(),
+                          startedAt: start, endedAt: start.addingTimeInterval(30))
+
+        replay.seek(to: start.addingTimeInterval(5))
+        #expect(replay.frame.room == "Cellar")
+        replay.seek(to: start.addingTimeInterval(15))
+        #expect(replay.frame.room == "Attic")
+        replay.seek(to: start.addingTimeInterval(25))
+        #expect(replay.frame.room == nil)
+    }
+}

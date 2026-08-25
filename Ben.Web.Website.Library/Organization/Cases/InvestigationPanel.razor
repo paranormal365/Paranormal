@@ -709,11 +709,19 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteInvestigationAsync(OrgId, CaseId, _editInv.Id);
+            // The result is READ. Discarding it closed the dialog and reloaded as though the
+            // delete had happened, so a server refusal looked exactly like success.
+            var (deleted, reason) = await AdminClient
+                .DeleteInvestigationExpectingReasonAsync(OrgId, CaseId, _editInv.Id);
+            if (!deleted)
+            {
+                _dialogError = reason ?? "This visit couldn't be deleted.";
+                return;
+            }
             _showDialog = false;
             await LoadAsync();
         }
-        catch { _error = "Delete failed."; }
+        catch { _dialogError = "Delete failed."; }
         finally { _isBusy = false; }
     }
 

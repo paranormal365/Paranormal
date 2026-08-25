@@ -919,6 +919,35 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("CaseReportSections");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseReportSectionFieldSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("CaseReportSectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FieldSessionUploadId");
+
+                    b.HasIndex("CaseReportSectionId", "FieldSessionUploadId")
+                        .IsUnique();
+
+                    b.ToTable("CaseReportSectionFieldSessions");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseReportSectionFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8768,6 +8797,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseReportSectionFieldSession", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.CaseReportSection", "Section")
+                        .WithMany("FieldSessions")
+                        .HasForeignKey("CaseReportSectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.FieldSessionUpload", "FieldSessionUpload")
+                        .WithMany()
+                        .HasForeignKey("FieldSessionUploadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("FieldSessionUpload");
+
+                    b.Navigation("Section");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseReportSectionFile", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.CaseReportSection", "Section")
@@ -12853,6 +12901,8 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseReportSection", b =>
                 {
+                    b.Navigation("FieldSessions");
+
                     b.Navigation("Files");
                 });
 

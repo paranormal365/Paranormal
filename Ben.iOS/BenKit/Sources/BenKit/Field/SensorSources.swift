@@ -160,6 +160,9 @@ public struct SensorSuite: Sendable {
     public var deviceMovement: DeviceMovementSource?
     /// Movement seen through the camera — armed sessions only, and only while video is on.
     public var sceneMotion: SceneMotionSource?
+    /// Speech to text, ON DEVICE. Nil where the hardware or language cannot do it offline, and
+    /// the UI simply does not offer dictation then.
+    public var dictation: DictationService?
     /// Battery percentage, 0–100. Logged on heartbeats: low battery is a documented cause of
     /// spurious readings, and a reviewer seeing 8% reads a spike differently.
     public var batteryPercent: @Sendable () -> Double?
@@ -171,6 +174,7 @@ public struct SensorSuite: Sendable {
                 altitude: AltitudeSource? = nil,
                 deviceMovement: DeviceMovementSource? = nil,
                 sceneMotion: SceneMotionSource? = nil,
+                dictation: DictationService? = nil,
                 batteryPercent: @escaping @Sendable () -> Double? = { nil }) {
         self.magnetometer = magnetometer
         self.audio = audio
@@ -179,6 +183,7 @@ public struct SensorSuite: Sendable {
         self.altitude = altitude
         self.deviceMovement = deviceMovement
         self.sceneMotion = sceneMotion
+        self.dictation = dictation
         self.batteryPercent = batteryPercent
     }
 }

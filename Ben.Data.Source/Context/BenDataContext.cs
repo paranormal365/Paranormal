@@ -114,6 +114,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
+        public virtual DbSet<CaseReportSectionFieldSession> CaseReportSectionFieldSessions { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
         public virtual DbSet<CaseFile> CaseFiles { get; set; }
         public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
@@ -2165,6 +2166,24 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseReportSectionFile>()
                 .Property(e => e.Caption).HasMaxLength(500);
+
+            // ── CaseReportSectionFieldSession ─────────────────────────────
+            // Cascade from the section (a removed section takes its citations with it), but
+            // NoAction from the session: deleting a report must never reach back and remove the
+            // recording it cited, and a session removed from underneath a published report is a
+            // conversation, not a silent cascade.
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasOne(e => e.Section).WithMany(e => e.FieldSessions)
+                .HasForeignKey(e => e.CaseReportSectionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasOne(e => e.FieldSessionUpload).WithMany()
+                .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .Property(e => e.Caption).HasMaxLength(500);
+            // One citation per session per section — citing the same night twice in one section
+            // is always a mis-click.
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasIndex(e => new { e.CaseReportSectionId, e.FieldSessionUploadId }).IsUnique();
 
             // ── CaseNote ──────────────────────────────────────────────────
             modelBuilder.Entity<CaseNote>()

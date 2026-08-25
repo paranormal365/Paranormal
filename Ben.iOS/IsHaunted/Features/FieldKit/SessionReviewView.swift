@@ -19,6 +19,7 @@ struct SessionReviewView: View {
     @State private var source: ReplaySource?
     @State private var exporting = false
     @State private var uploading = false
+    @State private var choosingPhoto = false
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
@@ -67,6 +68,11 @@ struct SessionReviewView: View {
                     } label: {
                         Label("Export a bundle", systemImage: "square.and.arrow.up")
                     }
+                    Button {
+                        choosingPhoto = true
+                    } label: {
+                        Label("Property photos", systemImage: "photo.on.rectangle")
+                    }
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
@@ -79,6 +85,9 @@ struct SessionReviewView: View {
         }
         .sheet(isPresented: $uploading) {
             UploadSessionView(sessionId: sessionId).environment(dependencies)
+        }
+        .sheet(isPresented: $choosingPhoto) {
+            PropertyPhotosView(sessionId: sessionId).environment(dependencies)
         }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
         .onDisappear {
@@ -200,7 +209,12 @@ struct SessionReviewView: View {
                                 .font(.caption)
                                 .foregroundStyle(marker.kind.isAutomatic ? Theme.warning : Theme.haunt)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(marker.kind.title).font(.caption).foregroundStyle(Theme.bone)
+                                HStack(spacing: 4) {
+                                    Text(marker.kind.title).font(.caption).foregroundStyle(Theme.bone)
+                                    if let room = marker.room {
+                                        Text("· \(room)").font(.caption2).foregroundStyle(Theme.ecto)
+                                    }
+                                }
                                 if let note = marker.note {
                                     Text(note).font(.caption2).foregroundStyle(Theme.fog)
                                         .lineLimit(2)

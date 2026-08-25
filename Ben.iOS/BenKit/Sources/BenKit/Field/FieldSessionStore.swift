@@ -124,7 +124,7 @@ public final class FieldSessionStore {
                     relativePath: capture.relativePath, byteCount: capture.byteCount,
                     durationSeconds: capture.durationSeconds,
                     latitude: capture.latitude, longitude: capture.longitude,
-                    headingDegrees: capture.headingDegrees)
+                    headingDegrees: capture.headingDegrees, room: capture.room)
                 // Insert BEFORE wiring the relationship: SwiftData is unreliable about an
                 // inverse set on an object the context has not yet adopted, and the row simply
                 // does not come back.
@@ -137,7 +137,8 @@ public final class FieldSessionStore {
                     audioFilename: marker.audioFilename,
                     audioOffsetSeconds: marker.audioOffsetSeconds,
                     emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
-                    latitude: marker.latitude, longitude: marker.longitude)
+                    latitude: marker.latitude, longitude: marker.longitude,
+                    room: marker.room)
                 context.insert(stored)
                 stored.session = row
             }
@@ -170,6 +171,7 @@ public final class FieldSessionStore {
             .map { marker in
                 FieldMarkerRecord(
                     id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    room: marker.room,
                     magneticMicrotesla: marker.emfMicrotesla, soundDbfs: marker.soundDbfs,
                     latitude: marker.latitude, longitude: marker.longitude,
                     audioFilename: marker.audioFilename,
@@ -192,7 +194,8 @@ public final class FieldSessionStore {
             .filter { $0.kind == .photo }
             .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
                                relativePath: $0.relativePath,
-                               latitude: $0.latitude, longitude: $0.longitude) }
+                               latitude: $0.latitude, longitude: $0.longitude,
+                               isRepresentative: $0.isRepresentative, room: $0.room) }
             .sorted { $0.at < $1.at }
 
         return ReplaySource(
@@ -214,7 +217,8 @@ public final class FieldSessionStore {
             .sorted { $0.at < $1.at }
             .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
                                relativePath: $0.relativePath,
-                               latitude: $0.latitude, longitude: $0.longitude) }
+                               latitude: $0.latitude, longitude: $0.longitude,
+                               isRepresentative: $0.isRepresentative, room: $0.room) }
     }
 
     /// Writes a Device Data Format v1 bundle for a session, carrying the chosen files.
@@ -306,11 +310,38 @@ public final class FieldSessionStore {
         load()
     }
 
+    /// Chooses the picture that represents the property for this session.
+    ///
+    /// One at a time: picking a second replaces the first, because "which photo represents this
+    /// place" has one answer. Passing the same one again clears it, so a choice can be undone
+    /// without having to pick something else instead.
+    public func setRepresentative(_ captureId: UUID?, in sessionId: UUID) throws {
+        guard let context, let session = try? fetch(sessionId, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+        let alreadyChosen = session.captures.first { $0.isRepresentative }?.id
+        for capture in session.captures {
+            capture.isRepresentative = capture.id == captureId && alreadyChosen != captureId
+        }
+        try context.save()
+        load()
+    }
+
+    public func representative(for sessionId: UUID) -> CaptureMark? {
+        captures(for: sessionId).first { mark in
+            guard let context, let session = try? fetch(sessionId, in: context) else { return false }
+            return session.captures.first { $0.id == mark.id }?.isRepresentative == true
+        }
+    }
+
     /// Whether a capture's bytes are still on this device.
     public func hasLocalFile(_ relativePath: String, in sessionId: UUID) -> Bool {
         FileManager.default.fileExists(
             atPath: files.fileURL(for: sessionId, relativePath: relativePath).path)
     }
+
+    /// The instruments this store was built with — the screens ask it what the device can do.
+    public func sensors() -> SensorSuite { makeSensors() }
 
     public func summary(for id: UUID) -> FieldSessionSummary? {
         sessions.first { $0.id == id }
@@ -425,15 +456,22 @@ public struct CaptureMark: Sendable, Equatable, Identifiable {
     public var relativePath: String
     public var latitude: Double?
     public var longitude: Double?
+    /// The picture chosen to represent the property, if this is it.
+    public var isRepresentative: Bool
+    /// The room the operator said they were in when this was captured.
+    public var room: String?
 
     public init(id: UUID, at: Date, kind: CaptureKind, relativePath: String,
-                latitude: Double? = nil, longitude: Double? = nil) {
+                latitude: Double? = nil, longitude: Double? = nil,
+                isRepresentative: Bool = false, room: String? = nil) {
         self.id = id
         self.at = at
         self.kind = kind
         self.relativePath = relativePath
         self.latitude = latitude
         self.longitude = longitude
+        self.isRepresentative = isRepresentative
+        self.room = room
     }
 }
 
