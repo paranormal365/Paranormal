@@ -25,7 +25,9 @@ else if (_dataUrl is not null)
     @if (_isImage)
     {
         <img src="@_dataUrl"
-             style="max-width:120px;max-height:90px;object-fit:contain;border-radius:4px;cursor:pointer;"
+             style="@(Fill
+                      ? "width:100%;height:100%;object-fit:contain;border-radius:4px;cursor:pointer;image-rendering:pixelated;"
+                      : "max-width:120px;max-height:90px;object-fit:contain;border-radius:4px;cursor:pointer;")"
              alt="@FileName"
              title="@FileName"
              @onclick="ToggleFullSize" />
@@ -57,6 +59,17 @@ else
     [Parameter] public string? ContentType { get; set; }
     [Parameter] public string? FileName    { get; set; }
     [Parameter] public long    FileSize    { get; set; }
+
+    /// <summary>
+    /// Fills the space it is given rather than sitting at its natural size.
+    /// </summary>
+    /// <remarks>
+    /// For tiles in a grid, where a row of thumbnails at wildly different sizes reads as a broken
+    /// page. <c>object-fit: contain</c> keeps the aspect ratio, so nothing is stretched; a very
+    /// small image is scaled UP, and <c>image-rendering: pixelated</c> shows it as the handful of
+    /// large pixels it actually is instead of a blur pretending to be a photograph.
+    /// </remarks>
+    [Parameter] public bool Fill { get; set; }
 
     private string? _dataUrl;
     private bool _loading;
