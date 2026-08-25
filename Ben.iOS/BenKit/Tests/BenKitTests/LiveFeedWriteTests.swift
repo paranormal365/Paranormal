@@ -233,6 +233,42 @@ struct LiveFeedWriteTests {
             "api/my-cases/\(target.caseId.uuidString.lowercased())/occurrences/\(entry.id.uuidString.lowercased())"))
     }
 
+    @Test func aPublishedReportListsAndDownloadsAsARealPDF() async {
+        guard Self.enabled else { return }
+
+        let transport = URLSessionTransport()
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
+        guard case .success(let login) = await auth.login(LoginRequest(
+            email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
+            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+        else { Issue.record("client sign-in failed"); return }
+        await tokens.adopt(login)
+        let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+
+        guard case .ok(let cases) = await api.load(
+            Endpoint(.get, "api/my-cases"), as: [MyCaseSummary].self), let target = cases.first
+        else { return }
+
+        let store = await CaseReportsStore(caseId: target.caseId, api: api)
+        await store.load()
+        guard let report = await store.reports.first else {
+            return   // no published report on this database — nothing to exercise
+        }
+
+        guard case .success(let url) = await store.downloadPDF(report) else {
+            Issue.record("the report would not download"); return
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // A bearer-token route with no Range support: the ONLY safe way to read it is to
+        // download it whole. Proving it is a real PDF is the point — an unauthorized fetch
+        // returns a perfectly well-formed empty body that a viewer renders as a blank page.
+        let bytes = (try? Data(contentsOf: url)) ?? Data()
+        #expect(bytes.count > 500)
+        #expect(bytes.prefix(5) == Data("%PDF-".utf8))
+    }
+
     /// An 8×8 black JPEG — small enough to inline, real enough to decode (and to render:
     /// a thumbnail of it looks like a black square because it IS one).
     private static let tinyJpegBase64 = """

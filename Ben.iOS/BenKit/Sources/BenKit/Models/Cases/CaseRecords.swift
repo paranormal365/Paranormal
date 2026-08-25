@@ -173,3 +173,20 @@ public struct MyCaseDetail: Sendable, Codable, Equatable, Identifiable {
         }
     }
 }
+
+/// A published report on the client's case (`GET api/my-cases/{id}/reports`).
+///
+/// Only PUBLISHED reports ever reach here — the server filters, so there is no draft to hide
+/// client-side and no status to interpret. Shape captured from the dev API.
+public struct MyCaseReport: Sendable, Codable, Equatable, Identifiable {
+    public var id: UUID
+    public var caseId: UUID
+    public var title: String
+    public var expectedDeliveryDate: Date?
+    public var publishedAt: Date?
+    public var dateCreated: Date
+
+    /// The date to show. `publishedAt` is the one that means something to a reader; the created
+    /// date is when the group started writing, which is not their business.
+    public var readerDate: Date { publishedAt ?? dateCreated }
+}

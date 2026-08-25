@@ -151,6 +151,14 @@ struct CaseDetailView: View {
                 }
             }
 
+            Section {
+                NavigationLink(value: AppRoute.caseReports(caseId)) {
+                    Label("Reports", systemImage: "doc.text")
+                }
+            } footer: {
+                Text("What your group has written up and published on this case.")
+            }
+
             Section("What's happened") {
                 if detail.timeline.isEmpty {
                     Text("Nothing logged yet.")

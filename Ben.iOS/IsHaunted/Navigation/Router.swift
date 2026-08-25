@@ -41,6 +41,7 @@ enum AppRoute: Hashable {
     case caseDetail(UUID)
     /// A case from the GROUP's side — its screen arrives with the cases slice.
     case orgCase(organizationId: UUID, caseId: UUID)
+    case caseReports(UUID)
     case caseReportPDF(caseId: UUID, reportId: UUID)
     case investigationDetail(UUID)
     case attendedMap
