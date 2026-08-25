@@ -45,13 +45,13 @@ struct ResponseMappingTests {
     @Test func status403IsFailureNotSessionEnded() {
         let result: LoadResult<[String]> = ResponseMapping.failure(
             statusCode: 403, data: Data("You may not see this.".utf8), headers: [:])
-        #expect(result == .failed(reason: "You may not see this."))
+        #expect(result == .failed(reason: "You may not see this.", statusCode: 403))
     }
 
     @Test func status403WithProblemDetailsFallsBackToStatusText() {
         let result: LoadResult<[String]> = ResponseMapping.failure(
             statusCode: 403, data: Data(#"{"title":"Forbidden"}"#.utf8), headers: [:])
-        guard case .failed(let reason) = result else {
+        guard case .failed(let reason, _) = result else {
             Issue.record("expected .failed"); return
         }
         #expect(reason?.contains("403") == true)

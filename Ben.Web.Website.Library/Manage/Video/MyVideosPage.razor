@@ -1,4 +1,6 @@
 @page "/my-videos"
+@using Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject ProjectService Projects
@@ -50,9 +52,17 @@
         @* ── Editor (full remaining height) ─────────────────────────────────── *@
         <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
             <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         EnablePostToFeed="@_canPostToFeed"
+                         OnPostToFeed="OnPostToFeedAsync"
                          ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
         </div>
     </div>
+
+    @* "Post to the feed" confirmation (item 186 F7) — a personal render, no case lineage. *@
+    <FeedPostFromEditorDialog @bind-Visible="_feedDialogVisible"
+                              Exported="_pendingFeedExport"
+                              OnPosted="OnFeedPostedAsync"
+                              OnCancelled="OnFeedCancelled" />
 
     @* ── Saved Projects dialog ──────────────────────────────────────────────── *@
     <BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
@@ -136,6 +146,36 @@
         _authReady = true;
         if (!UserState.IsAuthenticated) return;
         await LoadProjectListAsync();
+        _canPostToFeed = (await AdminClient.GetFeedAsync())?.CanPost == true;
+    }
+
+    // ── "Post to the feed" (item 186 F7) — personal render, no case lineage ──
+    private bool _canPostToFeed;
+    private bool _feedDialogVisible;
+    private ExportedVideo? _pendingFeedExport;
+    private TaskCompletionSource? _feedFlowDone;
+
+    private async Task OnPostToFeedAsync(ExportedVideo exported)
+    {
+        _pendingFeedExport = exported;
+        _feedFlowDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _feedDialogVisible = true;
+        StateHasChanged();
+        await _feedFlowDone.Task;
+    }
+
+    private Task OnFeedPostedAsync(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _pendingFeedExport = null;
+        Toasts.Success("Posted to the feed — it appears once the video clears screening.");
+        _feedFlowDone?.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private void OnFeedCancelled()
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
     }
 
     private async Task LoadProjectListAsync()

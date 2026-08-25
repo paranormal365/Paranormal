@@ -101,6 +101,41 @@
 
                     <p class="mb-2">@item.Body</p>
 
+                    @* The category claim beside the safety question (item 186 F6): what the
+                       author says this shows, how well the measurements agree, and one click to
+                       say so either way. The verdict writes a labelled example — the moderator's
+                       half of the learning loop — and touches nothing on the post itself. *@
+                    @if (item.ExperienceTypeName is not null)
+                    {
+                        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap small"
+                             id="moderation-category-row">
+                            <span class="badge rounded-pill bg-body-secondary text-body-emphasis">@item.ExperienceTypeName</span>
+                            @if (item.CategoryMatchScore is { } score)
+                            {
+                                <span class="@(score < 0.3 ? "text-danger" : "text-secondary")">
+                                    match @score.ToString("0.00")
+                                </span>
+                            }
+                            @if (_categoryJudged.Contains(item.PostId))
+                            {
+                                <span class="text-secondary">Category noted — thanks.</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-success btn-sm py-0"
+                                        disabled="@(_deciding == item.PostId)"
+                                        @onclick="() => JudgeCategoryAsync(item, matches: true)">
+                                    Is what it says
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm py-0"
+                                        disabled="@(_deciding == item.PostId)"
+                                        @onclick="() => JudgeCategoryAsync(item, matches: false)">
+                                    Category is wrong
+                                </button>
+                            }
+                        </div>
+                    }
+
                     <div class="mb-2">
                         @if (item.Kind == FeedMediaKind.Video)
                         {
@@ -227,6 +262,28 @@
 
             _items.Remove(item);
             _summary = await Feed.GetModerationSummaryAsync();
+        }
+        finally
+        {
+            _deciding = null;
+        }
+    }
+
+    /// <summary>Post ids whose category this moderator already judged, so the buttons collapse
+    /// to an acknowledgment instead of inviting a second, identical example.</summary>
+    private readonly HashSet<Guid> _categoryJudged = [];
+
+    private async Task JudgeCategoryAsync(FeedMediaReviewItem item, bool matches)
+    {
+        _deciding = item.PostId;
+        try
+        {
+            if (!await Feed.JudgeFeedCategoryAsync(item.PostId, matches))
+            {
+                _error = "Couldn't record that judgment. Try again in a moment.";
+                return;
+            }
+            _categoryJudged.Add(item.PostId);
         }
         finally
         {

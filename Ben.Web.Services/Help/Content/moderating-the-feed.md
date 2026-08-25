@@ -39,6 +39,30 @@ Both resolve **every** waiting report against that post together. Five people re
 one decision, and leaving the rest waiting would put it back in front of a colleague with no sign
 it had already been dealt with.
 
+## Photos and videos waiting for a look
+
+**Administration → Content → Feed Media** is the other queue: photos and videos that have not been
+cleared for the feed. Nothing anybody uploads is shown to readers until it has been screened —
+automatically where the site's screening model is installed, and by a person here otherwise. The
+page says plainly which of those is the case.
+
+A file the automatic screener held carries its reason ("blocked", or "borderline, needs a person")
+with a confidence score. **Approve** publishes it; **Hold** keeps it unpublished with your note.
+Neither deletes anything, and the author is only ever told their upload is being checked — never
+which check it tripped, because that would be a manual for dressing up the next one.
+
+### The category question
+
+Beside the safety question sits a different one: **is this what it says it is?** A post's category
+label (Apparition, Voices / Whispering…) is the author's claim, shown with the site's own
+match score. **Is what it says** and **Category is wrong** each record your judgment — that is all
+they do. A wrong category never hides a post; it nudges the author to fix the label and gently
+lowers the post's ranking.
+
+Those judgments are worth the click even when nothing is wrong: every one becomes a labelled
+example the site's classifier learns from, and the classifier is only ever as good as the record
+of what people who looked actually decided.
+
 ## Hidden, not deleted
 
 A hidden post is still there. Nothing is destroyed: its replies, its reports and the record of who

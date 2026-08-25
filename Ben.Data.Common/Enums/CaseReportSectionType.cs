@@ -6,4 +6,8 @@ public enum CaseReportSectionType
     Evidence    = 1,  // uploaded files with player/viewer
     Timeline    = 2,  // selected case timeline entries
     Occurrences = 3,  // selected client-reported occurrences
+
+    /// <summary>Field sessions recorded on a phone or iPad and uploaded to the site — readings,
+    /// marks, positions and the recordings that go with them.</summary>
+    FieldSessions = 4,
 }

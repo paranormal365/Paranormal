@@ -115,10 +115,19 @@ public sealed class PublicOrganizationSearchController : ControllerBase
     /// who knows the name, so listing them exposes nothing new; it only makes them findable.
     /// Coordinates are still never returned — only the area's display label, same as search.</para>
     /// </remarks>
+    /// <param name="page">1-based.</param>
+    /// <param name="pageSize">Clamped.</param>
+    /// <param name="toursOnly">
+    /// Narrow to groups that run public walking tours (2026-08-24). Matches the CAPABILITY,
+    /// not the kind, so an investigation group that also runs tours is found here too — which
+    /// is the whole reason the capability is separate from the kind.
+    /// </param>
+    /// <param name="ct">Cancellation.</param>
     [HttpGet("browse")]
     public async Task<ActionResult<OrgBrowsePage>> Browse(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 24,
+        [FromQuery] bool toursOnly = false,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -127,6 +136,7 @@ public sealed class PublicOrganizationSearchController : ControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
 
         var query = db.Organizations.AsNoTracking();
+        if (toursOnly) query = query.Where(o => o.RunsPublicTours);
         var total = await query.CountAsync(ct);
 
         var items = await query
@@ -147,7 +157,9 @@ public sealed class PublicOrganizationSearchController : ControllerBase
                 o.OrganizationLogos
                     .Where(l => l.IsActive)
                     .Select(l => (Guid?)l.UploadFileId)
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                o.Kind,
+                o.RunsPublicTours))
             .ToListAsync(ct);
 
         return Ok(new OrgBrowsePage(items, total, page, pageSize));
@@ -200,7 +212,11 @@ public sealed record OrgBrowseResult(
     string? AreaLabel,
     double? RadiusMiles,
     bool IsAcceptingClients,
-    Guid? ActiveLogoFileId);
+    Guid? ActiveLogoFileId,
+    /// <summary>What this group primarily is (2026-08-24) — the badge on its card.</summary>
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    /// <summary>Whether it runs public walking tours, whatever kind it primarily is.</summary>
+    bool RunsPublicTours = false);
 
 /// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>
 public sealed record OrgBrowsePage(

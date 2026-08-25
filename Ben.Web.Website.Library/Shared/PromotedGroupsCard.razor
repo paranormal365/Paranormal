@@ -23,8 +23,9 @@
                 <span class="badge bg-info" title="This group promotes itself here">Promoted</span>
             </div>
             <p class="card-text small mb-2">@_card.Body</p>
-            <a class="stretched-link small"
-               href="@(_card.TargetKind == "find" ? "/find" : $"/o/{_card.OrganizationUrlName}")">
+            @* Through /go so the click is counted (item 186 F8) — the website route bumps the
+               counter and forwards to the same two destinations this link used to point at. *@
+            <a class="stretched-link small" href="@($"/go/{_card.AdId}")">
                 @_card.OrganizationName →
             </a>
         </div>

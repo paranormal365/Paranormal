@@ -40,7 +40,10 @@ public sealed class ModerationControllerTests
 
     private static ModerationController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new ModerationController(factory, new ManualReviewScreener());
+        var ctrl = new ModerationController(factory, new ManualReviewScreener(),
+            new FeedLearningService(
+                TestMedia.StorageOnDisk(Path.Combine(Path.GetTempPath(), "moderation-tests")),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedLearningService>.Instance));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

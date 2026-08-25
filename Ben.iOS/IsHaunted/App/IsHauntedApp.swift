@@ -12,6 +12,15 @@ struct IsHauntedApp: App {
                 .environment(dependencies)
                 .environment(router)
                 .tint(Theme.ecto)
+                // Taps on linkified @mentions and #tags carry ishaunted:// URLs;
+                // they must navigate IN the app, not bounce through the OS.
+                .environment(\.openURL, OpenURLAction { url in
+                    guard url.scheme == "ishaunted", let link = DeepLinkParser.parse(url) else {
+                        return .systemAction
+                    }
+                    router.open(link)
+                    return .handled
+                })
                 .onOpenURL { url in
                     // Website URLs and ishaunted:// links land on the logically
                     // matching native screen — one URL space, two front ends.
@@ -27,6 +36,17 @@ struct IsHauntedApp: App {
                        let link = DeepLinkParser.parse(url) {
                         router.open(link)
                     }
+                    #if DEBUG
+                    // Dev/UI-test hook only — never compiled into Release:
+                    // `-autoSignIn "email:password"` drives the real store flow
+                    // (network, Keychain, api/me) without typing.
+                    if let raw = UserDefaults.standard.string(forKey: "autoSignIn"),
+                       let split = raw.range(of: ":") {
+                        let email = String(raw[..<split.lowerBound])
+                        let password = String(raw[split.upperBound...])
+                        Task { await dependencies.session.signIn(email: email, password: password) }
+                    }
+                    #endif
                 }
         }
     }

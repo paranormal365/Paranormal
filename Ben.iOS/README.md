@@ -5,7 +5,8 @@ runs on both devices: a `TabView` on iPhone, a `NavigationSplitView` sidebar on
 iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
-**Status: Slice 1 (scaffolding + kernel) complete and verified live.**
+**Status: Slices 1–8 complete (kernel, auth, feed, participation, notifications, cases, investigations + events, account).**
+**How to run and test it (written for a C# developer): see `TESTING.md`.**
 
 ## It cannot interfere with the website
 
@@ -64,6 +65,18 @@ Profile → API environment. The simulator reaches the Mac's localhost directly.
 The `-openLink <url>` launch argument routes like an incoming deep link without
 the OS confirmation dialog — used by automation and the future UI test target.
 
+## Verified (Slice 2, 2026-08-24)
+
+- 58/58 unit tests: login outcome mapping (2FA-vs-bad-password from
+  ProblemDetails `detail`), the full SessionStore state machine, single-flight
+  refresh, quiet stale-token restore, deliberate-sign-out vs interrupt banner.
+- Live against the dev API on iPhone 17 Pro: signed in as the ordinary member
+  seed (`james.thornton@benco.dev`), `api/me` resolved, and the session
+  SURVIVED kill + relaunch via the Keychain alone.
+- Lesson recorded: a fully unsigned build (`CODE_SIGNING_ALLOWED=NO`) cannot
+  use the simulator Keychain — persistence silently fails. Only `build.sh`
+  (compile check) disables signing; `run-sim.sh` and Xcode use ad-hoc signing.
+
 ## Verified (Slice 1, 2026-08-24)
 
 - 46/46 BenKit unit tests green (`swift test`), including fixtures captured
@@ -75,15 +88,104 @@ the OS confirmation dialog — used by automation and the future UI test target.
   website's `/events` page (same three seed events, same local-time rendering).
 - Deep link `https://ishaunted.com/events` routed to the native Events screen.
 
+## Verified (Slice 3, 2026-08-24)
+
+- 71/71 unit tests: fresh live fixtures lock the arc's full record surface (categories,
+  attribution, badges); the For You de-dupe; 404 → `.featureUnavailable` (a switched-off
+  feature is a fact, not an error); the dead-token fall-back to reading as a visitor;
+  the mention/hashtag linkifier mirroring the server's tag rule.
+- Live on iPhone 17 Pro + iPad Pro (M5): For You/Latest modes, media from the anonymous
+  route, linkified tags navigating in-app, the BenCo attribution + Group-verified chip,
+  and the flag-off state rendering as "switched off sitewide", with the flag restored dark.
+
+## Verified (Slice 4, 2026-08-24)
+
+- 86 unit tests, plus an opt-in LIVE suite (`BEN_LIVE=1 swift test --package-path BenKit
+  --filter LiveFeedWriteTests`) that signs in for real, uploads real multipart media, and
+  round-trips a like against the running API — the nearest thing to a finger on the screen
+  that does not need one. All 4 live tests pass; they skip silently without the flag.
+- Found live and fixed: the feed asked "may this reader post?" before sign-in resolved and
+  was answered as a visitor, so the compose button never appeared — the website's own
+  `_participationKnown` lesson, in iOS form. The list now re-asks when the session changes.
+
+## Verified (Slice 5, 2026-08-24)
+
+- 97 unit tests. The urgency rule is ported from `Ben.Web.Services.NotificationBadge` at the
+  same thresholds and pinned by a test that states the point: fifty items from this morning
+  are Fresh, one from last week is Overdue. A live fixture from a real account (90 waiting,
+  both item-173 breakdowns) locks the payload, with a test that the roll-up equals what the
+  rows can open.
+- Live on iPhone: five rows with real counts; the two case rows open the case on its group's
+  side; the three with no app screen yet are greyed and inert rather than offering a chevron
+  that lies.
+- Found live and fixed: opened by deep link at launch, the screen's first load beat sign-in
+  and was answered as a visitor. Screens that depend on identity now re-ask when identity
+  resolves rather than trusting a parent's observer to win the race.
+- Deferred deliberately: foreground polling. The screen reloads on appear, on pull-to-refresh
+  and when the session changes; a timer would add battery cost for a badge nobody is watching
+  while the app is closed. Real push (APNs) is the honest answer and needs server work.
+
+## Verified (Slice 6, 2026-08-24)
+
+- 107 unit tests. Live fixtures for the list and the detail; the timeline is ordered by when
+  things HAPPENED (falling back to when they were written), so somebody logging three months
+  of experiences in one sitting doesn't have them read as all happening that evening.
+- `AuthenticatedImageLoader` + `APIClient.loadData`: case files sit behind a bearer token, and
+  `AsyncImage` issues its own unauthenticated request — it would render every case photo as a
+  broken frame. Bounded cache; a failure shows a "couldn't load" glyph rather than a spinner
+  that never ends.
+- A 404 on a case reads "That case isn't available" — one answer for gone and not-yours alike,
+  because "that case isn't yours" would confirm to a prober that the case exists.
+- Live on iPhone: the list renders the real case with its reference, status chip and location.
+  Also seen working: a 429 during a concurrent e2e run rendered as "Too many requests — try
+  again shortly" with a retry, which is the honest-states design doing its job.
+- Not yet: logging a new occurrence from the app, and case reports → PDFKit. Reading first.
+
+## Verified (Slice 7, 2026-08-24)
+
+- 117 unit tests. Live fixtures for the roster, the attended list and public events.
+- The roster splits by whether an investigation has HAPPENED, and an investigation that has
+  started but not ended still counts as upcoming — a roster that buries the one you are
+  currently at is useless.
+- The attended map draws only visits that have coordinates, and the screen SAYS how many it
+  could not draw. A place with no coordinates is a real visit with no pin; dropping it from
+  the map is right, dropping it from the list would be losing it.
+- A null attendee capacity is UNLIMITED, not zero — treating it as zero would mark every
+  uncapped event full. Pinned by a test, along with an overbooked event reporting zero left
+  rather than a negative.
+- RSVP refusals carry the server's own sentence: "This event is full" sends somebody to
+  another date; "Couldn't RSVP" sends them to press the same button again.
+- Native counterparts per the design rule: MapKit for where you've been, and EventKit's own
+  add-event sheet (so the person picks the calendar and the app never needs full access).
+  The calendar entry names the TOWN, because the server's public coordinates are deliberately
+  approximate and the app must not imply it knows the venue.
+
+## Verified (Slice 8, 2026-08-24)
+
+- 126 unit tests, plus a live test proving the sign-up refusal against the REAL endpoint.
+- Found while testing: `api/account/register` answers refusals as a JSON body, not prose, so
+  the generic mapper was replacing "That name is already taken" with a status paraphrase.
+  Added `APIClient.loadRaw` for the few endpoints whose FAILURES carry structured payloads.
+- The @name is checked as you type (debounced, and a failed check answers "can't tell" rather
+  than a wrong yes), and the screen says it is permanent BEFORE you choose it.
+- Two-step: no QR code, deliberately. On the phone the app IS the second device, so there is
+  nothing to scan it — the key is selectable and a link hands the secret straight to the
+  authenticator app. Recovery codes are shown once, say so, and offer a share sheet.
+- The confirm-email screen distinguishes "that link is spent" (a 200 with succeeded:false)
+  from "the server couldn't be reached", and only offers a retry for the second.
+
 ## Slices remaining (Phase 1)
 
-2. Auth core (Keychain, sign-in + 2FA challenge, api/me, session-ended banner)
-3. Feed read-only (modes, cursor+de-dupe, media, feature-gate-404 state)
-4. Feed participation (composer, camera, multipart upload, likes/replies)
-5. Notifications (60 s foreground polling, summed bucket badge, messages)
-6. My Cases (occurrences + photo attach, authed thumbnails, reports → PDFKit)
-7. Investigations + Events (RSVP, attended MapKit map, EventKit add-to-calendar)
-8. Account completeness (register, confirm-email deep link, 2FA setup QR)
+9. **Sign in with Apple** (required by Ben, and by App Review once any
+   third-party login exists). Client: `SignInWithAppleButton` →
+   Apple identity token. Server (one new endpoint, built when the web side is
+   quiet): validate the Apple JWT (issuer `appleid.apple.com`, audience = the
+   app's bundle id), then link-or-create through the SAME external-login
+   pattern `MeController` uses for Microsoft/Entra — provider `"Apple"`, key =
+   Apple's `sub` claim — and answer with the standard Identity bearer tokens.
+   A brand-new Apple user still needs DisplayName + Handle, so the app collects
+   those before calling create. Needs the paid Apple Developer Program for the
+   entitlement on real devices.
 
 Later phases: equipment + checkout, org-side management, org messaging,
 discovery/places, publications, APNs push (needs server work), universal links

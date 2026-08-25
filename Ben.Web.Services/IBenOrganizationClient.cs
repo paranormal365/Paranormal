@@ -83,7 +83,9 @@ public interface IBenOrganizationClient
     /// Every organization, paged, with no location required — what the "Browse All Groups"
     /// entry point needs. Anonymous, like the proximity search beside it.
     /// </summary>
-    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default);
+    /// <param name="toursOnly">Narrow to groups that run public walking tours (2026-08-24).</param>
+    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24,
+        CancellationToken token = default, bool toursOnly = false);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 

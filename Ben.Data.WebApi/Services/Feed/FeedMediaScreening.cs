@@ -32,9 +32,12 @@ public interface IFeedMediaScreener
     /// <summary>
     /// Looks at a stored file and says where its post's media should sit.
     /// </summary>
-    /// <param name="storagePath">The file as stored. The ORIGINAL, not the sanitized copy: what
-    /// matters here is what the image shows, and stripping location data changes nothing about
-    /// that while re-encoding could soften exactly the detail a classifier needs.</param>
+    /// <param name="storagePath">The file as stored — the storage-root-RELATIVE path recorded on
+    /// <c>UploadFile.StoragePath</c>, readable only through <c>IFileStorageService</c>, never
+    /// directly from disk (the first live screener decoded it as a filesystem path and reported
+    /// every healthy photo undecodable). The ORIGINAL, not the sanitized copy: what matters here
+    /// is what the image shows, and stripping location data changes nothing about that while
+    /// re-encoding could soften exactly the detail a classifier needs.</param>
     /// <param name="contentType">Its type, so a screener can tell a photo from a video.</param>
     /// <param name="ct">Cancellation.</param>
     Task<FeedMediaVerdict> ScreenAsync(string storagePath, string? contentType, CancellationToken ct);

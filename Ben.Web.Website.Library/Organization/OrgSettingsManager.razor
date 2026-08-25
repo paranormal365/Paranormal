@@ -1,4 +1,6 @@
 @namespace Ben.Web.Website.Library.Organization
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
 
 @inject IBenAdminClient AdminClient
 
@@ -20,6 +22,20 @@ else
                 <span class="small text-secondary">A reviewed card in the group finder and on the home page.</span>
             </div>
             <a class="btn btn-outline-primary btn-sm" id="org-promote-link" href="@($"/organizations/{OrgId}/promote")">Open</a>
+        </div>
+    </div>
+
+    @* Item 186 F7: the door to the feed-attribution queue — a link always shows something,
+       so this leads to the page's own honest empty state rather than hiding until needed. *@
+    <div class="card mb-3">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="film" Class="fs-4 text-info" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Feed attribution</h6>
+                <span class="small text-secondary">Decide which feed videos from your cases link back to this group.</span>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" id="org-feed-attributions-link"
+               href="@($"/organizations/{OrgId}/feed-attributions")">Open</a>
         </div>
     </div>
 
@@ -67,6 +83,37 @@ else
                     </label>
                 </div>
 
+                @* What kind of group this is (2026-08-24). It decided the defaults this group
+                   started with; changing it now re-badges the group and is otherwise harmless —
+                   nothing is withheld from either kind. *@
+                <div class="col-12 col-md-6">
+                    <label class="form-label" for="set-org-kind">What kind of group is this?</label>
+                    <select id="set-org-kind" class="form-select"
+                            value="@((int)_kind)"
+                            @onchange="@(e => _kind = (OrganizationKind)int.Parse(e.Value?.ToString() ?? "0"))">
+                        <option value="0">Investigation group</option>
+                        <option value="1">Ghost walking tour</option>
+                    </select>
+                    <div class="form-text">
+                        Shown as a badge on your public page and in the group finder. It set the
+                        defaults when the group was created; changing it now doesn't move anything
+                        you've already configured.
+                    </div>
+                </div>
+
+                <div class="col-12 d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1" id="set-runs-tours"
+                           @bind="@_runsPublicTours" />
+                    <label for="set-runs-tours" class="form-label mb-0">
+                        We run public walking tours
+                        <div class="text-secondary small">
+                            Lists your group under <strong>Walking tours</strong> in the group finder,
+                            whatever kind you are — so an investigation group that also runs tours is
+                            found by people looking for one, without having to register twice.
+                        </div>
+                    </label>
+                </div>
+
                 <div class="col-12 mt-2">
                     <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))"><BenIcon Name="save" Class="me-1" />
                         @(_saving ? "Saving…" : "Save Settings")
@@ -96,6 +143,13 @@ else
     private string? _stripReason;
     private bool    _stripNeedsUpgrade;
     private bool    _showAddressDirections;
+    private OrganizationKind _kind = OrganizationKind.InvestigationGroup;
+    private bool    _runsPublicTours;
+    /// <summary>Kept so the org update can send Name/UrlName unchanged — that endpoint takes
+    /// them as required values, and inventing them here would rename the group.</summary>
+    private string  _orgName = string.Empty;
+    private string  _orgUrlName = string.Empty;
+    private bool    _orgAcceptingApplications;
     private string? _errorMessage;
     private string? _successMessage;
 
@@ -114,6 +168,17 @@ else
             // preference nothing honours is the write-only shape; the sentence beside it says why.
             _stripAvailable        = s.StripMediaMetadataCanChoose;
         }
+
+        // The kind and the tours flag live on the organization itself, not the settings row.
+        var org = await AdminClient.GetOrganizationAsync(OrgId);
+        if (org is not null)
+        {
+            _kind                     = org.Kind;
+            _runsPublicTours          = org.RunsPublicTours;
+            _orgName                  = org.Name;
+            _orgUrlName               = org.UrlName;
+            _orgAcceptingApplications = org.IsAcceptingApplications;
+        }
         _loading = false;
     }
 
@@ -125,9 +190,20 @@ else
         StateHasChanged();
 
         var result = await AdminClient.UpdateOrgSettingsAsync(OrgId, new OrgSettingsRequest(_showAddressMap, _showAddressDirections, _stripMediaMetadata));
+
+        // The kind and tours flag are on the organization, a different endpoint. Name, web
+        // address and the applications flag are echoed back UNCHANGED — that endpoint takes
+        // them as required values, and omitting them would blank the group's identity.
+        var orgSaved = _orgName.Length == 0
+            || await AdminClient.UpdateOrganizationAsync(OrgId,
+                   new AdminUpdateOrganizationRequest(_orgName, _orgUrlName,
+                       IsAcceptingApplications: _orgAcceptingApplications,
+                       Kind: _kind,
+                       RunsPublicTours: _runsPublicTours)) is not null;
+
         _saving = false;
 
-        if (result is not null) _successMessage = "Settings saved.";
+        if (result is not null && orgSaved) _successMessage = "Settings saved.";
         else _errorMessage = "Save failed. You may not have permission to update org settings.";
     }
 }

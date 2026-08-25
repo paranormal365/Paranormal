@@ -57,6 +57,9 @@ public sealed class CaseReportController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         return report is null ? NotFound() : Ok(ToDetail(report));
     }
@@ -94,6 +97,10 @@ public sealed class CaseReportController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.Files)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
@@ -119,6 +126,10 @@ public sealed class CaseReportController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.Files)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
@@ -143,7 +154,7 @@ public sealed class CaseReportController : BenControllerBase
             Id                 = Guid.NewGuid(),
             CaseId             = caseId,
             AuthorAppUserId    = userId,
-            Body               = $"Your investigation report has been published: <strong>{report.Title}</strong>. You can view and download it from your case page.",
+            Body               = $"Your investigation report has been published: {report.Title}. You can view and download it from your case page.",
             SenderSide         = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient     = false,
             IsReadByOrg        = true,
@@ -193,7 +204,7 @@ public sealed class CaseReportController : BenControllerBase
         };
         db.CaseReportSections.Add(section);
         await db.SaveChangesAsync(ct);
-        return Ok(new CaseReportSectionDto(section.Id, section.CaseReportId, section.SortOrder, section.Title, section.Body, section.SectionType, []));
+        return Ok(new CaseReportSectionDto(section.Id, section.CaseReportId, section.SortOrder, section.Title, section.Body, section.SectionType, [], []));
     }
 
     [HttpPut("{id:guid}/sections/{sectionId:guid}")]
@@ -206,6 +217,7 @@ public sealed class CaseReportController : BenControllerBase
 
         var section = await db.CaseReportSections
             .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+            .Include(s => s.FieldSessions).ThenInclude(f => f.FieldSessionUpload)
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.CaseReportId == id, ct);
         if (section is null) return NotFound();
 
@@ -265,6 +277,111 @@ public sealed class CaseReportController : BenControllerBase
         return NoContent();
     }
 
+    // ── Field sessions cited by a section ─────────────────────────────────────
+
+    /// <summary>
+    /// The field sessions this case could cite.
+    /// </summary>
+    /// <remarks>
+    /// A session reaches a case through its investigation — that is the only tie there is, since
+    /// a session is recorded against an investigation and an investigation belongs to a case (or
+    /// to nothing at all, in which case it is nobody's report to write). Sessions uploaded
+    /// against another org's investigation are not here to be cited, and the org check above is
+    /// what keeps it that way.
+    /// </remarks>
+    [HttpGet("field-sessions")]
+    public async Task<ActionResult<IEnumerable<AvailableFieldSessionDto>>> GetAvailableFieldSessions(
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
+
+        var sessions = await db.FieldSessionUploads.AsNoTracking()
+            .Where(f => f.InvestigationId != null
+                     && f.Investigation!.CaseId == caseId
+                     && f.Investigation.OrganizationId == orgId)
+            .OrderByDescending(f => f.StartedAt)
+            .Select(f => new AvailableFieldSessionDto(
+                f.Id, f.InvestigationId, f.Investigation!.Title,
+                f.LocationLabel, f.RecordedByName, f.DeviceModel,
+                f.StartedAt, f.EndedAt, f.ReadingCount, f.MarkerCount, f.Files.Count))
+            .ToListAsync(ct);
+        return Ok(sessions);
+    }
+
+    [HttpPost("{id:guid}/sections/{sectionId:guid}/field-sessions")]
+    public async Task<ActionResult<CaseReportSectionFieldSessionDto>> AddSectionFieldSession(
+        Guid orgId, Guid caseId, Guid id, Guid sectionId,
+        [FromBody] AddSectionFieldSessionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
+        if (!await db.CaseReportSections.AnyAsync(s => s.Id == sectionId && s.CaseReportId == id, ct)) return NotFound();
+
+        // The session has to belong to THIS case, through its investigation. Without this a
+        // report could cite a night recorded for somebody else entirely, and the PDF would
+        // present it as this case's evidence.
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .Include(f => f.Files)
+            .FirstOrDefaultAsync(f => f.Id == request.FieldSessionUploadId
+                                   && f.InvestigationId != null
+                                   && f.Investigation!.CaseId == caseId
+                                   && f.Investigation.OrganizationId == orgId, ct);
+        if (session is null) return BadRequest("That field session doesn't belong to this case.");
+
+        var existing = await db.CaseReportSectionFieldSessions
+            .FirstOrDefaultAsync(f => f.CaseReportSectionId == sectionId
+                                   && f.FieldSessionUploadId == request.FieldSessionUploadId, ct);
+        if (existing is not null)
+        {
+            existing.Caption = request.Caption?.Trim();
+            await db.SaveChangesAsync(ct);
+            return Ok(new CaseReportSectionFieldSessionDto(
+                existing.Id, session.Id, session.LocationLabel, session.RecordedByName,
+                session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
+                session.Files.Count, existing.Caption, existing.SortOrder));
+        }
+
+        var maxOrder = await db.CaseReportSectionFieldSessions
+            .Where(f => f.CaseReportSectionId == sectionId)
+            .MaxAsync(f => (int?)f.SortOrder, ct) ?? 0;
+        var link = new CaseReportSectionFieldSession
+        {
+            Id = Guid.NewGuid(), CaseReportSectionId = sectionId,
+            FieldSessionUploadId = session.Id, Caption = request.Caption?.Trim(),
+            SortOrder = maxOrder + 10,
+        };
+        db.CaseReportSectionFieldSessions.Add(link);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new CaseReportSectionFieldSessionDto(
+            link.Id, session.Id, session.LocationLabel, session.RecordedByName,
+            session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
+            session.Files.Count, link.Caption, link.SortOrder));
+    }
+
+    [HttpDelete("{id:guid}/sections/{sectionId:guid}/field-sessions/{linkId:guid}")]
+    public async Task<IActionResult> RemoveSectionFieldSession(
+        Guid orgId, Guid caseId, Guid id, Guid sectionId, Guid linkId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
+
+        var link = await db.CaseReportSectionFieldSessions
+            .FirstOrDefaultAsync(f => f.Id == linkId && f.CaseReportSectionId == sectionId, ct);
+        if (link is null) return NotFound();
+        // Removes the CITATION only. The session, its document and its recordings are untouched.
+        db.CaseReportSectionFieldSessions.Remove(link);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     // ── PDF export ────────────────────────────────────────────────────────────
 
     [HttpGet("{id:guid}/pdf")]
@@ -280,6 +397,10 @@ public sealed class CaseReportController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.Files)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
@@ -322,7 +443,19 @@ public sealed class CaseReportController : BenControllerBase
         s.Id, s.CaseReportId, s.SortOrder, s.Title, s.Body, s.SectionType,
         s.Files.OrderBy(f => f.SortOrder)
                .Select(f => new CaseReportSectionFileDto(f.Id, f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize, f.Caption, f.SortOrder))
+               .ToList(),
+        s.FieldSessions.OrderBy(f => f.SortOrder)
+               .Select(ToSectionFieldSessionDto)
                .ToList());
+
+    private static CaseReportSectionFieldSessionDto ToSectionFieldSessionDto(CaseReportSectionFieldSession f) => new(
+        f.Id, f.FieldSessionUploadId,
+        f.FieldSessionUpload.LocationLabel,
+        f.FieldSessionUpload.RecordedByName,
+        f.FieldSessionUpload.StartedAt, f.FieldSessionUpload.EndedAt,
+        f.FieldSessionUpload.ReadingCount, f.FieldSessionUpload.MarkerCount,
+        f.FieldSessionUpload.Files.Count,
+        f.Caption, f.SortOrder);
 
     private static byte[] GeneratePdf(CaseReport report)
         => Ben.Data.WebApi.Services.CaseReportPdfGenerator.Generate(report);
@@ -345,6 +478,36 @@ public sealed record UpsertSectionRequest(
     Ben.Data.Common.Enums.CaseReportSectionType SectionType);
 
 public sealed record AddSectionFileRequest(Guid UploadFileId, string? Caption);
+
+public sealed record AddSectionFieldSessionRequest(Guid FieldSessionUploadId, string? Caption);
+
+/// <summary>A field session a report section could cite, as the picker lists it.</summary>
+public sealed record AvailableFieldSessionDto(
+    Guid      Id,
+    Guid?     InvestigationId,
+    string?   InvestigationTitle,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    string    DeviceModel,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount);
+
+/// <summary>A field session as it appears inside a report section.</summary>
+public sealed record CaseReportSectionFieldSessionDto(
+    Guid      Id,
+    Guid      FieldSessionUploadId,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount,
+    string?   Caption,
+    int       SortOrder);
 
 public sealed record CaseReportSummary(
     Guid                                  Id,
@@ -374,7 +537,8 @@ public sealed record CaseReportSectionDto(
     string                                     Title,
     string?                                    Body,
     Ben.Data.Common.Enums.CaseReportSectionType SectionType,
-    IReadOnlyList<CaseReportSectionFileDto>    Files);
+    IReadOnlyList<CaseReportSectionFileDto>    Files,
+    IReadOnlyList<CaseReportSectionFieldSessionDto> FieldSessions);
 
 public sealed record CaseReportSectionFileDto(
     Guid    Id,

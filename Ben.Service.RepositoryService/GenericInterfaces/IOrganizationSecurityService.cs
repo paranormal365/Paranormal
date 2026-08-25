@@ -62,7 +62,11 @@ public interface IOrganizationSecurityService
     /// Thrown when <paramref name="name"/> or <paramref name="urlName"/> is blank,
     /// the acting user does not exist, or <paramref name="urlName"/> is already taken.
     /// </exception>
-    Task<Organization> RegisterOrganizationAsync(Guid appUserId, string name, string urlName, CancellationToken token = default);
+    /// <param name="kind">What the new group is (2026-08-24). Decides the defaults it starts
+    /// with — see <c>OrganizationKindDefaults</c> — and nothing else.</param>
+    Task<Organization> RegisterOrganizationAsync(Guid appUserId, string name, string urlName,
+        Ben.Data.Common.Enums.OrganizationKind kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+        CancellationToken token = default);
 
     /// <summary>
     /// Returns all membership rows for the organization, ordered by role then creation date.

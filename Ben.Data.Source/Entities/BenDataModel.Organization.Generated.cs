@@ -9,6 +9,25 @@ namespace Ben.Data.Source.Entities
         public string UrlName { get; set; } = null!;
 
         /// <summary>When true, registered users may submit membership applications to join this organization.</summary>
+        /// <summary>
+        /// What this organization primarily is (ghost walking tours, 2026-08-24). Chosen when
+        /// the group is created, where it decides the DEFAULTS a new group starts with; after
+        /// that it is a label for discovery, never a gate on any feature.
+        /// </summary>
+        public Ben.Data.Common.Enums.OrganizationKind Kind { get; set; }
+
+        /// <summary>
+        /// This group runs public walking tours, whatever kind it primarily is.
+        /// </summary>
+        /// <remarks>
+        /// True by default for a <see cref="Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour"/>,
+        /// and separately settable by an investigation group that also runs tours — plenty do,
+        /// and none of them should have to register a second group to be found for it. The
+        /// finder's "walking tours" filter matches on THIS, not on Kind, so a group that does
+        /// both appears in both places while its badge still says what it mainly is.
+        /// </remarks>
+        public bool RunsPublicTours { get; set; }
+
         public bool IsAcceptingApplications { get; set; }
 
         /// <summary>When true, the public can submit investigation requests to this organization.</summary>

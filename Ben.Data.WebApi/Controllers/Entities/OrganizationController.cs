@@ -230,6 +230,8 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         // ends up on a business card, and renaming used to break every printed link in silence.
         await OrganizationUrlNames.ApplyAsync(db, org, request.UrlName, userId, ct);
         org.IsAcceptingApplications = request.IsAcceptingApplications;
+        if (request.Kind is { } kind) org.Kind = kind;
+        if (request.RunsPublicTours is { } runsTours) org.RunsPublicTours = runsTours;
         org.PublicPhone             = request.PublicPhone?.Trim();
         org.PublicEmail             = request.PublicEmail?.Trim();
         org.PublicWebsite           = request.PublicWebsite?.Trim();
@@ -346,6 +348,12 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId.Value
         };
+
+        // The kind decides what this group STARTS as — public meeting point and public
+        // events for a tour, the pre-existing private defaults for an investigation group.
+        // Defaults only: everything is adjustable the moment the group wants.
+        org.Kind = request.Kind;
+        org.RunsPublicTours = OrganizationKindDefaults.RunsPublicTours(request.Kind);
 
         db.Organizations.Add(org);
         OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
@@ -479,6 +487,10 @@ public sealed record OrganizationListItemResponse(
 
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
+    // Optional, and null means "leave as-is" — the same reasoning as the photo policy
+    // below: an older caller that omits it must not silently reclassify a group.
+    Ben.Data.Common.Enums.OrganizationKind? Kind = null,
+    bool? RunsPublicTours = null,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.

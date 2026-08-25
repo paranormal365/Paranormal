@@ -8,10 +8,14 @@ cd "$(dirname "$0")/.."
 
 DEVICE="${1:-iPhone 17 Pro}"
 
+# NOTE: no CODE_SIGNING_ALLOWED=NO here — an entirely unsigned app cannot use
+# the simulator Keychain (token persistence silently fails). Simulator builds
+# use the free ad-hoc "Sign to Run Locally" signature; only build.sh (a CI
+# compile check that never runs the app) disables signing.
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
 xcodebuild -project IsHaunted.xcodeproj -scheme IsHaunted \
   -destination "platform=iOS Simulator,name=$DEVICE" \
-  CODE_SIGNING_ALLOWED=NO build | grep -E "BUILD (SUCCEEDED|FAILED)"
+  build | grep -E "BUILD (SUCCEEDED|FAILED)"
 
 APP=$(find ~/Library/Developer/Xcode/DerivedData/IsHaunted-*/Build/Products/Debug-iphonesimulator \
   -maxdepth 1 -name "IsHaunted.app" | head -1)

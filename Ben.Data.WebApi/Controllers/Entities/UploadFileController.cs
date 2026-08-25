@@ -115,6 +115,16 @@ public sealed class UploadFileController : BenControllerBase
         if (!string.IsNullOrEmpty(entity.StoragePath))
         {
             var servingPath = mediaIngest.ServingPathFor(entity.StoragePath);
+
+            // A row whose bytes are gone is NOT FOUND, not a server error. Storage throws
+            // FileNotFoundException, which reached the exception handler as a 500 — and a page
+            // full of avatars turned one missing file into a wall of them. It happens whenever
+            // the database outlives the blobs: a restored database, a cleared dev .uploads, a
+            // half-finished migration. The honest answer is 404, and the caller's own
+            // broken-image fallback then does its job.
+            if (!_fileStorage.Exists(servingPath))
+                return NotFound("File data is unavailable.");
+
             var stream = await _fileStorage.OpenReadAsync(servingPath, cancellationToken);
             // The row's ContentType already describes the SERVED copy — ingest records the
             // derivative's type, not the original's — so it is right for a cleaned JPEG, a

@@ -47,11 +47,11 @@ public class VotingTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }))
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "✗ Disputes" }))
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" }))
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "? Inconclusive" }))
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Inconclusive" }))
             .ToBeVisibleAsync();
     }
 
@@ -79,7 +79,7 @@ public class VotingTests : BenTestBase
         // sequence that raced the old code.
         await Page.GotoAsync(BaseUrl);
 
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }).First)
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
@@ -89,7 +89,7 @@ public class VotingTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Page.GetByRole(AriaRole.Button, new() { Name = "? Inconclusive" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Inconclusive" }).ClickAsync();
         var remove = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
         await Expect(remove).ToBeVisibleAsync(new() { Timeout = 5_000 });
         // Clean up
@@ -104,12 +104,12 @@ public class VotingTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var confirmsBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" });
+        var confirmsBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
         await confirmsBtn.ClickAsync();
         await Page.WaitForTimeoutAsync(500);
 
         // Change to Disputes
-        var disputesBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✗ Disputes" });
+        var disputesBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" });
         await disputesBtn.ClickAsync();
         await Page.WaitForTimeoutAsync(500);
 
@@ -154,7 +154,7 @@ public class VotingTests : BenTestBase
         }
 
         // Cast a vote
-        await Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).ClickAsync();
         await Page.WaitForTimeoutAsync(600);
 
         // Reload

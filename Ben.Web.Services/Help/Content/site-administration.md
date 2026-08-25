@@ -131,8 +131,15 @@ neither is something a site should acquire by accident — each one adds a publi
 members and visitors will start using the moment it appears, so switching it on is a decision
 somebody makes deliberately rather than a default they inherit.
 
-- **Public feed** — short public posts from anyone signed in. Turning it on means signing up to
-  moderate it; see [Moderating the Feed](/help/moderating-the-feed).
+- **Public feed** — the full arc: anyone reads without an account; members and clients post text,
+  photos and video; posts carry experience-type categories the site learns from; groups decide
+  which case-derived videos link back to them; promoted cards rotate through it, fed nearest-first
+  to viewers who share their location. Turning it on means signing up to moderate it — see
+  [Moderating the Feed](/help/moderating-the-feed) — and the **Feed Media** page states plainly
+  whether screening is **automatic** (the on-server model is installed) or **manual-only** (every
+  photo and video waits for a person). Do not launch on manual-only without meaning to.
+  While the feed is off but has content, every SuperAdmin sees a reminder banner naming this
+  switch — the feature cannot be forgotten in the dark by accident.
 - **Publications** — long-form writing by groups, readable by visitors with no account. Turning it
   on adds the **Publications** entry to the menu for everyone, and a **Publications** tab to each
   group's page for its administrators. Nothing appears in the public directory until a group
