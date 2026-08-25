@@ -7,26 +7,13 @@ struct CaseReportsView: View {
     @Environment(AppDependencies.self) private var dependencies
 
     let caseId: UUID
+    @Environment(Router.self) private var router
     @State private var store: CaseReportsStore?
-    @State private var opening: UUID?
-    @State private var openedPDF: URL?
-    @State private var errorMessage: String?
 
     var body: some View {
         content
             .navigationTitle("Reports")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Couldn't open that report",
-                   isPresented: Binding(get: { errorMessage != nil },
-                                        set: { if !$0 { errorMessage = nil } })) {
-                Button("OK", role: .cancel) { errorMessage = nil }
-            } message: {
-                Text(errorMessage ?? "")
-            }
-            .sheet(item: Binding(get: { openedPDF.map(IdentifiedURL.init) },
-                                 set: { openedPDF = $0?.url })) { identified in
-                ReportPDFView(url: identified.url)
-            }
             .task {
                 let store = CaseReportsStore(caseId: caseId, api: dependencies.api)
                 self.store = store
@@ -71,9 +58,11 @@ struct CaseReportsView: View {
 
     private var reportList: some View {
         List(store?.reports ?? []) { report in
-            Button {
-                Task { await open(report) }
-            } label: {
+            // A pushed screen rather than a sheet: on iPad a sheet raised from inside the detail
+            // column of a NavigationSplitView did not present at all — the row was tapped and
+            // nothing happened. Pushing also matches how the rest of the app moves, and reading a
+            // report is a place you GO, not a thing you glance at.
+            NavigationLink(value: AppRoute.caseReportPDF(caseId: caseId, reportId: report.id)) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(report.title).foregroundStyle(Theme.bone)
@@ -81,56 +70,69 @@ struct CaseReportsView: View {
                             .font(.caption).foregroundStyle(Theme.fog)
                     }
                     Spacer()
-                    if opening == report.id {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "doc.text").foregroundStyle(Theme.ecto)
-                    }
+                    Image(systemName: "doc.text").foregroundStyle(Theme.ecto)
                 }
             }
-            .buttonStyle(.plain)
-            .disabled(opening != nil)
             .accessibilityIdentifier("report-row")
         }
         .listStyle(.insetGrouped)
     }
 
-    private func open(_ report: MyCaseReport) async {
-        opening = report.id
-        defer { opening = nil }
-        switch await store?.downloadPDF(report) {
-        case .success(let url): openedPDF = url
-        case .failure(let error): errorMessage = error.message
-        case nil: break
-        }
-    }
 }
 
-/// `sheet(item:)` needs identity, and a URL has none of its own.
-private struct IdentifiedURL: Identifiable {
-    let url: URL
-    var id: String { url.absoluteString }
-}
+/// One report, downloaded and on screen.
+///
+/// The download happens HERE rather than before navigating, so the wait has somewhere to live: a
+/// spinner on this screen, and a refusal that can be read and retried, instead of a row that sits
+/// there doing nothing while a file arrives.
+struct CaseReportPDFView: View {
+    @Environment(AppDependencies.self) private var dependencies
 
-/// A downloaded report, on screen and shareable.
-private struct ReportPDFView: View {
-    let url: URL
-    @Environment(\.dismiss) private var dismiss
+    let caseId: UUID
+    let reportId: UUID
+
+    @State private var url: URL?
+    @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            PDFKitView(url: url)
-                .ignoresSafeArea(edges: .bottom)
-                .navigationTitle("Report")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
-                    }
+        Group {
+            if let url {
+                PDFKitView(url: url).ignoresSafeArea(edges: .bottom)
+            } else if let errorMessage {
+                ContentUnavailableView {
+                    Label("Couldn't open that report", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Try again") { Task { await fetch() } }
                 }
+            } else {
+                ProgressView("Fetching the report")
+            }
+        }
+        .navigationTitle("Report")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let url {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
+                }
+            }
+        }
+        .task { await fetch() }
+    }
+
+    private func fetch() async {
+        errorMessage = nil
+        let store = CaseReportsStore(caseId: caseId, api: dependencies.api)
+        await store.load()
+        guard let report = store.reports.first(where: { $0.id == reportId }) else {
+            errorMessage = "That report isn't on this case any more."
+            return
+        }
+        switch await store.downloadPDF(report) {
+        case .success(let downloaded): url = downloaded
+        case .failure(let error): errorMessage = error.message
         }
     }
 }

@@ -147,6 +147,8 @@ struct RootShell: View {
             CaseReportsView(caseId: id)
         case .caseMessages(let id):
             CaseMessagesView(caseId: id)
+        case .caseReportPDF(let caseId, let reportId):
+            CaseReportPDFView(caseId: caseId, reportId: reportId)
         case .security:
             SecurityView()
         case .confirmEmail(let token):

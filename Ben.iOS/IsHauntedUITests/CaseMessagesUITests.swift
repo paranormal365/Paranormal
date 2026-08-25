@@ -15,13 +15,7 @@ final class CaseMessagesUITests: XCTestCase {
     }
 
     func testSendingAMessageToTheGroup() throws {
-        let casesTab = app.buttons["My Cases"]
-        XCTAssertTrue(casesTab.waitForExistence(timeout: 20))
-        casesTab.tap()
-
-        let firstCase = app.buttons.matching(identifier: "case-row").firstMatch
-        guard firstCase.waitForExistence(timeout: 20) else { throw XCTSkip("no case on this account") }
-        firstCase.tap()
+        try AppNavigator.openFirstCase(in: app)
 
         let messages = app.buttons["Messages"].firstMatch
         XCTAssertTrue(messages.waitForExistence(timeout: 20), "a case must offer its messages")

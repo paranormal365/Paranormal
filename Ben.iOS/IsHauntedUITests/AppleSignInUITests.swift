@@ -17,9 +17,8 @@ final class AppleSignInUITests: XCTestCase {
     }
 
     func testTheAppleButtonIsOnTheSignInScreen() {
-        let profile = app.buttons["Profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 20))
-        profile.tap()
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app),
+                      "the Profile section should be reachable")
 
         // Earlier tests in the suite may have left a session behind — the Keychain survives an
         // app relaunch by design. Sign out through the real UI rather than adding a test hook.

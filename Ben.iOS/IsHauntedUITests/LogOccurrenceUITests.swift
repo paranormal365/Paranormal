@@ -24,16 +24,8 @@ final class LogOccurrenceUITests: XCTestCase {
     }
 
     func testLoggingAnOccurrenceFromTheCaseScreen() throws {
-        // Signed in by the launch argument, so the case tab has something in it.
-        let casesTab = app.buttons["My Cases"]
-        XCTAssertTrue(casesTab.waitForExistence(timeout: 20), "the Cases tab should be there")
-        casesTab.tap()
-
-        let firstCase = app.buttons.matching(identifier: "case-row").firstMatch
-        guard firstCase.waitForExistence(timeout: 20) else {
-            throw XCTSkip("no case on this account — nothing to log against")
-        }
-        firstCase.tap()
+        // Signed in by the launch argument, so the case section has something in it.
+        try AppNavigator.openFirstCase(in: app)
 
         // THE thing under test: a store method is worthless if no button reaches it.
         let logButton = app.buttons["Log what happened"]

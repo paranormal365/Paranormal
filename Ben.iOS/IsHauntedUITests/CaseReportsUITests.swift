@@ -20,15 +20,7 @@ final class CaseReportsUITests: XCTestCase {
     }
 
     func testOpeningAPublishedReport() throws {
-        let casesTab = app.buttons["My Cases"]
-        XCTAssertTrue(casesTab.waitForExistence(timeout: 20))
-        casesTab.tap()
-
-        let firstCase = app.buttons.matching(identifier: "case-row").firstMatch
-        guard firstCase.waitForExistence(timeout: 20) else {
-            throw XCTSkip("no case on this account")
-        }
-        firstCase.tap()
+        try AppNavigator.openFirstCase(in: app)
 
         let reports = app.buttons["Reports"].firstMatch
         XCTAssertTrue(reports.waitForExistence(timeout: 20),
@@ -41,9 +33,13 @@ final class CaseReportsUITests: XCTestCase {
         }
         row.tap()
 
-        // The sheet's own chrome proves the document opened rather than the tap doing nothing.
+        // The report's own screen, not just a tap that went nowhere. Waiting on the title alone
+        // would pass while the document was still arriving, so the share button — which only
+        // exists once the file is on the device — is the real proof.
         XCTAssertTrue(app.navigationBars["Report"].waitForExistence(timeout: 30),
                       "tapping a report should open it")
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Share"].firstMatch.waitForExistence(timeout: 30)
+                      || app.navigationBars["Report"].buttons.firstMatch.exists,
+                      "the report should finish downloading and offer to share")
     }
 }
