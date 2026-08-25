@@ -222,4 +222,108 @@ final class FieldKitUITests: XCTestCase {
         XCTAssertTrue(fresh.buttons["capture-video"].waitForExistence(timeout: 10),
                       "switching video on should put the camera button there")
     }
+
+    /// A device left in a room: what it watches for, and the fact that it refuses to pretend.
+    func testArmingRefusesWithoutABaseLevelAndWorksWithOne() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let arm = fresh.buttons["arm-sentry"]
+        XCTAssertTrue(arm.waitForExistence(timeout: 20), "watching should be set up from here")
+        arm.tap()
+
+        let confirm = fresh.buttons["confirm-arm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 15))
+        // Magnetic and sound are on by default and no base has been set, so arming would be
+        // measuring against nothing.
+        XCTAssertFalse(confirm.isEnabled,
+                       "arming without a base level should be refused, not silently useless")
+
+        fresh.buttons["Cancel"].tap()
+        XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 15))
+        fresh.buttons["set-base-level"].tap()
+
+        fresh.buttons["arm-sentry"].tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 15))
+        XCTAssertTrue(confirm.isEnabled, "with a base set, watching should be available")
+        confirm.tap()
+
+        XCTAssertTrue(fresh.buttons["disarm-sentry"].waitForExistence(timeout: 15),
+                      "an armed session should offer to stop watching")
+    }
+
+    /// The camera has to be visible to be aimed — a device left in a corner is useless if you
+    /// could not see what it was pointing at.
+    func testTheViewfinderAppearsWithVideoAndGoesWithIt() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let videoSwitch = fresh.switches["channel-video"]
+        XCTAssertTrue(videoSwitch.waitForExistence(timeout: 20))
+        XCTAssertFalse(fresh.otherElements["camera-preview"].exists,
+                       "no viewfinder before video is switched on")
+
+        videoSwitch.tap()
+        XCTAssertTrue(fresh.otherElements["camera-preview"].waitForExistence(timeout: 15),
+                      "switching video on should show what the camera sees")
+
+        videoSwitch.tap()
+        let gone = fresh.otherElements["camera-preview"]
+        let deadline = Date().addingTimeInterval(10)
+        while gone.exists && Date() < deadline {
+            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        }
+        XCTAssertFalse(gone.exists, "a preview left running is a warm phone and a flat battery")
+    }
+
+    /// Blacking out the screen so its light stays out of the recording and the room — and, just
+    /// as importantly, coming back from it with a single tap anywhere.
+    func testTheScreenCanBeBlackedOutAndWokenWithATap() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let blackout = fresh.buttons["blackout"]
+        // On the pinned bar, because a control you have to scroll to find is a control you
+        // cannot find in the dark.
+        XCTAssertTrue(blackout.waitForExistence(timeout: 20))
+        blackout.tap()
+
+        // Queried across element types: the overlay carries a button trait so a VoiceOver user
+        // can wake it, which means it is not an `otherElement`.
+        // Queried across element types and taking the first: the overlay carries a button trait
+        // so a VoiceOver user can wake it, and a full-screen presentation puts the identifier on
+        // more than one node.
+        let overlay = fresh.descendants(matching: .any)
+            .matching(identifier: "blackout-overlay").firstMatch
+        XCTAssertTrue(overlay.waitForExistence(timeout: 10), "the screen should go dark")
+        // The session is still going underneath — the controls are covered, not gone.
+        XCTAssertFalse(fresh.buttons["stop-field-session"].isHittable)
+
+        overlay.tap()
+
+        XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 10),
+                      "a tap anywhere should bring the screen back")
+        XCTAssertFalse(overlay.exists)
+    }
 }

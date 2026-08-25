@@ -47,10 +47,11 @@ public struct SamplingPolicy: Sendable, Equatable {
         + "or sound rises \(Int(reportAtDecibels)) dB above base"
     }
 
-    public var trigger: DeviceDataEnvelope.Trigger {
+    public func trigger(sentry: SentryConfig? = nil) -> DeviceDataEnvelope.Trigger {
         .init(mode: .hybrid,
               intervalSeconds: heartbeatSeconds,
-              eventDescription: triggerDescription,
+              // What was ACTUALLY being watched, not what could have been.
+              eventDescription: sentry?.eventDescription(policy: self) ?? triggerDescription,
               debounceSeconds: debounceSeconds)
     }
 }

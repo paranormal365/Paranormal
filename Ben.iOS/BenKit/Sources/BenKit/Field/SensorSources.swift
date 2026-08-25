@@ -156,6 +156,10 @@ public struct SensorSuite: Sendable {
     public var recorder: AudioRecording?
     public var location: LocationSource?
     public var altitude: AltitudeSource?
+    /// The device being moved — armed sessions only.
+    public var deviceMovement: DeviceMovementSource?
+    /// Movement seen through the camera — armed sessions only, and only while video is on.
+    public var sceneMotion: SceneMotionSource?
     /// Battery percentage, 0–100. Logged on heartbeats: low battery is a documented cause of
     /// spurious readings, and a reviewer seeing 8% reads a spike differently.
     public var batteryPercent: @Sendable () -> Double?
@@ -165,12 +169,16 @@ public struct SensorSuite: Sendable {
                 recorder: AudioRecording? = nil,
                 location: LocationSource? = nil,
                 altitude: AltitudeSource? = nil,
+                deviceMovement: DeviceMovementSource? = nil,
+                sceneMotion: SceneMotionSource? = nil,
                 batteryPercent: @escaping @Sendable () -> Double? = { nil }) {
         self.magnetometer = magnetometer
         self.audio = audio
         self.recorder = recorder
         self.location = location
         self.altitude = altitude
+        self.deviceMovement = deviceMovement
+        self.sceneMotion = sceneMotion
         self.batteryPercent = batteryPercent
     }
 }

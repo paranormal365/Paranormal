@@ -68,6 +68,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
         await engine.ingest(magnetic: MagneticFieldSample(at: start.addingTimeInterval(2.5),
                                                           x: 49, y: 0, z: 0, calibration: .high))
         await engine.stop()
@@ -131,6 +132,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
 
         // A three-second excursion of +5 uT (= +50 mG), sampled at 10 Hz: thirty samples over
         // the line.
@@ -157,6 +159,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start.addingTimeInterval(1),
                                                           x: 53, y: 0, z: 0, calibration: .high))
@@ -177,6 +180,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
 
         // ±1.5 uT = ±15 mG, under the 20 mG line. A meter that fires on this is a meter nobody
         // trusts by midnight.
@@ -199,6 +203,10 @@ struct FieldSessionEngineTests {
             policy: SamplingPolicy(heartbeatSeconds: 60, reportAtMilligauss: 20), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
+        // ARMED, deliberately: without this the test would pass because nothing was watching,
+        // which proves nothing about base levels.
+        await engine.arm(.default)
+
         for index in 0..<20 {
             await engine.ingest(magnetic: MagneticFieldSample(
                 at: start.addingTimeInterval(Double(index) * 0.1),
@@ -220,6 +228,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
         await engine.ingest(magnetic: MagneticFieldSample(
             at: start.addingTimeInterval(3), x: 90, y: 0, z: 0, calibration: .uncalibrated))
         await engine.stop()
@@ -240,6 +249,7 @@ struct FieldSessionEngineTests {
 
         await engine.ingest(audio: AudioLevelSample(at: start, averageDbfs: -54, peakDbfs: -50))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
         await engine.ingest(audio: AudioLevelSample(at: start.addingTimeInterval(1),
                                                     averageDbfs: -38, peakDbfs: -30))
         await engine.stop()
@@ -261,6 +271,7 @@ struct FieldSessionEngineTests {
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
                                                           calibration: .high))
         _ = await engine.setBaselines()
+        await engine.arm(.default)
         await engine.ingest(magnetic: MagneticFieldSample(at: start.addingTimeInterval(1),
                                                           x: 53, y: 0, z: 0, calibration: .high))
 
@@ -350,7 +361,7 @@ struct FieldSessionEngineTests {
         // A reviewer reads this sentence in the exported file to know what a gap means.
         let policy = SamplingPolicy(heartbeatSeconds: 2, reportAtMilligauss: 20,
                                     reportAtDecibels: 12, debounceSeconds: 3)
-        let trigger = policy.trigger
+        let trigger = policy.trigger()
         #expect(trigger.mode == .hybrid)
         #expect(trigger.intervalSeconds == 2)
         #expect(trigger.debounceSeconds == 3)
@@ -395,5 +406,124 @@ struct FieldSessionEngineTests {
         #expect(ref.filename == "media/audio-001.m4a")
         #expect(ref.durationSeconds == 128.5)
         #expect(ref.mediaType == "audio/mp4")
+    }
+
+    // MARK: - A device left in a room
+
+    @Test func nothingAutomaticFiresUntilTheSessionIsArmed() async throws {
+        // "Armed" has to be a real state, not a label. A phone in somebody's hand should not be
+        // filling the log with events every time they walk past a fridge.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, reportAtMilligauss: 20), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
+                                                          calibration: .high))
+        _ = await engine.setBaselines()
+        await engine.ingest(magnetic: MagneticFieldSample(at: start.addingTimeInterval(1),
+                                                          x: 60, y: 0, z: 0, calibration: .high))
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+
+        await engine.arm(.default)
+        await engine.ingest(magnetic: MagneticFieldSample(at: start.addingTimeInterval(10),
+                                                          x: 60, y: 0, z: 0, calibration: .high))
+        await engine.stop()
+
+        #expect(try await log.readings().contains { $0.triggeredBy == .event })
+    }
+
+    @Test func theDeviceBeingMovedIsItsOwnKindOfEvent() async throws {
+        // Different question from "did anything in view move": this is whether the tripod got
+        // knocked, or somebody picked the phone up.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 3), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchDeviceMovement: true,
+                                      deviceMovementThresholdG: 0.05))
+
+        // Sitting still.
+        for index in 0..<10 {
+            await engine.ingest(movement: DeviceMovementSample(
+                at: start.addingTimeInterval(Double(index) * 0.1), magnitudeG: 0.004))
+        }
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+
+        // Knocked.
+        await engine.ingest(movement: DeviceMovementSample(
+            at: start.addingTimeInterval(2), magnitudeG: 0.18))
+        await engine.stop()
+
+        let events = try await log.readings().filter { $0.triggeredBy == .event }
+        #expect(events.count == 1)
+        #expect(events.first?.measurements?["marker"]?.value == .string("device_moved"))
+    }
+
+    @Test func aDeviceMovementSwitchedOffIsNotWatchedAtAll() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchDeviceMovement: false))
+        await engine.ingest(movement: DeviceMovementSample(at: start, magnitudeG: 2.0))
+        await engine.stop()
+
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+    }
+
+    @Test func movementSeenThroughTheCameraIsRecordedWithHowMuchChanged() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 3), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchSceneMotion: true, sceneMotionThreshold: 0.08))
+
+        // Grain and a flickering light are not somebody walking through.
+        await engine.ingest(scene: SceneMotionSample(at: start, changedFraction: 0.02))
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(1),
+                                                     changedFraction: 0.31))
+        await engine.stop()
+
+        let events = try await log.readings().filter { $0.triggeredBy == .event }
+        #expect(events.count == 1)
+        #expect(events.first?.measurements?["marker"]?.value == .string("scene_motion"))
+        #expect(events.first?.note?.contains("31%") == true)
+    }
+
+    @Test func armingAgainForgetsWhatTheLastRoomWasDoing() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 60), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchDeviceMovement: true))
+        await engine.ingest(movement: DeviceMovementSample(at: start, magnitudeG: 0.2))
+        // Re-armed — a new room, a new resting state, a new quiet period.
+        await engine.arm(SentryConfig(watchDeviceMovement: true))
+        await engine.ingest(movement: DeviceMovementSample(at: start.addingTimeInterval(1),
+                                                           magnitudeG: 0.2))
+        await engine.stop()
+
+        #expect(try await log.readings().filter { $0.triggeredBy == .event }.count == 2)
+    }
+
+    @Test func theExportedTriggerSaysWhatWasActuallyBeingWatched() {
+        // A reviewer reads this sentence to know what a gap in the log means. It has to list
+        // what was armed, not everything the app can do.
+        let policy = SamplingPolicy(reportAtMilligauss: 20, reportAtDecibels: 12)
+        let sentry = SentryConfig(watchMagnetic: true, watchSound: false,
+                                  watchDeviceMovement: true, watchSceneMotion: false)
+        let description = policy.trigger(sentry: sentry).eventDescription ?? ""
+
+        #expect(description.contains("20 mG"))
+        #expect(description.contains("moved"))
+        #expect(!description.contains("dB"))        // sound was not being watched
+        #expect(!description.contains("view"))
     }
 }

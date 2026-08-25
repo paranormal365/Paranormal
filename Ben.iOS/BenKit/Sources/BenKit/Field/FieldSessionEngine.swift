@@ -89,6 +89,14 @@ public actor FieldSessionEngine {
     private var lastHeartbeat: Date?
     private var lastMagneticEvent: Date?
     private var lastSoundEvent: Date?
+    private var lastMovementEvent: Date?
+    private var lastSceneEvent: Date?
+    /// Nil until the session is armed. While nil nothing automatic fires at all, which is what
+    /// makes "armed" a real state rather than a label.
+    private var sentry: SentryConfig?
+    /// Resting acceleration, learned when arming — a phone propped against a wall is not at
+    /// rest in the same way one flat on a table is.
+    private var movementFloorG: Double = 0
     private var running = false
     private var tasks: [Task<Void, Never>] = []
 
@@ -161,6 +169,54 @@ public actor FieldSessionEngine {
         self.policy = policy
     }
 
+    // MARK: - Sentry
+
+    /// Starts watching. Baselines must already be set for the field and sound triggers to mean
+    /// anything, which is why the screen refuses to arm without them.
+    public func arm(_ config: SentryConfig) {
+        sentry = config
+        // Everything armed a moment ago describes a room nobody was in yet.
+        lastMagneticEvent = nil
+        lastSoundEvent = nil
+        lastMovementEvent = nil
+        lastSceneEvent = nil
+        if running { restartSensorTasks() }
+    }
+
+    public func disarm() {
+        sentry = nil
+        if running { restartSensorTasks() }
+    }
+
+    public var isArmed: Bool { sentry != nil }
+    public var sentryConfig: SentryConfig? { sentry }
+
+    func ingest(movement sample: DeviceMovementSample) async {
+        // Learn the floor from the first quiet moments rather than assuming zero.
+        movementFloorG = max(movementFloorG * 0.995, min(movementFloorG, sample.magnitudeG))
+
+        guard let sentry, sentry.watchDeviceMovement else { return }
+        guard sample.magnitudeG - movementFloorG >= sentry.deviceMovementThresholdG,
+              passesDebounce(last: lastMovementEvent, at: sample.at)
+        else { return }
+
+        lastMovementEvent = sample.at
+        await record(kind: .deviceMoved, at: sample.at,
+                     note: String(format: "the device was moved (%.2f g)", sample.magnitudeG))
+    }
+
+    func ingest(scene sample: SceneMotionSample) async {
+        guard let sentry, sentry.watchSceneMotion else { return }
+        guard sample.changedFraction >= sentry.sceneMotionThreshold,
+              passesDebounce(last: lastSceneEvent, at: sample.at)
+        else { return }
+
+        lastSceneEvent = sample.at
+        await record(kind: .sceneMotion, at: sample.at,
+                     note: String(format: "%.0f%% of the view changed",
+                                  sample.changedFraction * 100))
+    }
+
     private func restartSensorTasks() {
         for task in tasks { task.cancel() }
         tasks = []
@@ -188,6 +244,21 @@ public actor FieldSessionEngine {
                 for await sample in headings { await self?.ingest(heading: sample) }
             })
         }
+        // Only while armed and only when asked for: an accelerometer stream running all night
+        // for nothing is battery somebody wanted for the magnetometer.
+        if sentry?.watchDeviceMovement == true, let movement = sensors.deviceMovement,
+           movement.isAvailable {
+            let stream = movement.movements(hz: 10)
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(movement: sample) }
+            })
+        }
+        if sentry?.watchSceneMotion == true, let scene = sensors.sceneMotion, scene.isAvailable {
+            let stream = scene.sceneMotion()
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(scene: sample) }
+            })
+        }
         if let altitude = sensors.altitude, altitude.isAvailable {
             let stream = altitude.relativeAltitudes()
             tasks.append(Task { [weak self] in
@@ -207,7 +278,8 @@ public actor FieldSessionEngine {
         // A spike read while the magnetometer is uncalibrated is not evidence of anything, so
         // it never raises an event. It is still logged on the heartbeat, carrying its accuracy,
         // because hiding it entirely would be its own kind of dishonesty.
-        if sample.calibration.isTrustworthy,
+        if sentry?.watchMagnetic == true,
+           sample.calibration.isTrustworthy,
            let deviation = latest.magneticDeviationMilligauss(from: baselines),
            abs(deviation) >= policy.reportAtMilligauss,
            passesDebounce(last: lastMagneticEvent, at: sample.at) {
@@ -225,7 +297,8 @@ public actor FieldSessionEngine {
         latest.soundPeakDbfs = sample.peakDbfs
         emit(.sample(latest))
 
-        if let deviation = latest.soundDeviationDb(from: baselines),
+        if sentry?.watchSound == true,
+           let deviation = latest.soundDeviationDb(from: baselines),
            deviation >= policy.reportAtDecibels,
            passesDebounce(last: lastSoundEvent, at: sample.at) {
             lastSoundEvent = sample.at

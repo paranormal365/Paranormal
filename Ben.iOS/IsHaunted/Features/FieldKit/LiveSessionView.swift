@@ -14,6 +14,9 @@ struct LiveSessionView: View {
     let sessionId: UUID
 
     @State private var showingSettings = false
+    @State private var camera = FieldCameraSession()
+    @State private var blackout = false
+    @State private var brightnessBeforeBlackout: CGFloat?
     @State private var showingLocationExplainer = false
     @State private var noteDraft = ""
     @State private var askingForNote = false
@@ -24,81 +27,163 @@ struct LiveSessionView: View {
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
 
     var body: some View {
-        Group {
-            if let active, active.sessionId == sessionId {
-                if sizeClass == .regular {
-                    HStack(alignment: .top, spacing: 20) {
-                        ScrollView { instruments(active).frame(maxWidth: 420) }
-                        ScrollView { controls(active) }
+        panel
+            .background(Theme.ink)
+            .safeAreaInset(edge: .bottom) { stopBarIfActive }
+            .navigationTitle(summary?.title ?? "Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarItems }
+            .sheet(isPresented: $showingSettings) { levelsSheet }
+            .sheet(isPresented: $showingLocationExplainer) {
+                LocationExplainerSheet { await active?.requestLocation() }
+            }
+            .alert("Add a note", isPresented: $askingForNote) { noteAlertButtons }
+            .alert("Couldn't stop the session",
+                   isPresented: Binding(get: { errorMessage != nil },
+                                        set: { if !$0 { errorMessage = nil } })) {
+                Button("OK", role: .cancel) { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
+            // Blacked out: the screen goes dark so its light does not reach the recording, the
+            // room, or anybody else in it. Everything underneath keeps running.
+            //
+            // A full-screen presentation rather than an overlay, for two reasons that only show
+            // up in the dark: an overlay does not cover the tab bar, and it did not actually
+            // block touches — so a hand brushing the screen could have hit Stop.
+            .fullScreenCover(isPresented: $blackout) {
+                BlackoutOverlay(session: active) { blackout = false }
+            }
+            .onChange(of: blackout) { _, isDark in applyBlackout(isDark) }
+            .onChange(of: store.active?.channels) { _, channels in
+                if channels?.contains(.video) == true { camera.start() } else { camera.stop() }
+            }
+            .onChange(of: store.active?.isArmed) { _, armed in
+                UIApplication.shared.isIdleTimerDisabled = armed == true || blackout
+            }
+            .onDisappear {
+                camera.stop()
+                applyBlackout(false)
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+            .task { await bringUp() }
+    }
+
+    @ViewBuilder
+    private var panel: some View {
+        if let active, active.sessionId == sessionId {
+            if sizeClass == .regular {
+                HStack(alignment: .top, spacing: 20) {
+                    ScrollView { instruments(active).frame(maxWidth: 420) }
+                    ScrollView { controls(active) }
+                }
+                .padding(.horizontal, 16)
+            } else {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        instruments(active)
+                        controls(active)
                     }
                     .padding(.horizontal, 16)
-                } else {
-                    ScrollView {
-                        VStack(spacing: 18) {
-                            instruments(active)
-                            controls(active)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
-                    }
-                }
-            } else if summary != nil {
-                ProgressView("Bringing the instruments up")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ContentUnavailableView {
-                    Label("That session isn't here", systemImage: "waveform.slash")
-                } description: {
-                    Text("It may have been deleted.")
+                    .padding(.bottom, 24)
                 }
             }
-        }
-        .background(Theme.ink)
-        .safeAreaInset(edge: .bottom) {
-            if let active, active.sessionId == sessionId {
-                stopBar(active)
+        } else if summary != nil {
+            ProgressView("Bringing the instruments up")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView {
+                Label("That session isn't here", systemImage: "waveform.slash")
+            } description: {
+                Text("It may have been deleted.")
             }
         }
-        .navigationTitle(summary?.title ?? "Session")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingSettings = true } label: {
-                    Image(systemName: "slider.horizontal.3")
+    }
+
+    @ViewBuilder
+    private var stopBarIfActive: some View {
+        if let active, active.sessionId == sessionId { stopBar(active) }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarItems: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button { showingSettings = true } label: {
+                Image(systemName: "slider.horizontal.3")
+            }
+            .accessibilityLabel("Levels")
+        }
+    }
+
+    @ViewBuilder
+    private var levelsSheet: some View {
+        if let active { LevelsSheet(session: active) }
+    }
+
+    @ViewBuilder
+    private var noteAlertButtons: some View {
+        TextField("What happened?", text: $noteDraft)
+        Button("Save") {
+            let note = noteDraft
+            noteDraft = ""
+            Task { await active?.mark(kind: .manual, note: note.isEmpty ? nil : note) }
+        }
+        Button("Cancel", role: .cancel) { noteDraft = "" }
+    }
+
+    private func bringUp() async {
+        store.load()
+        await store.activate(sessionId)
+        if store.active?.channels.contains(.video) == true { camera.start() }
+        if store.active?.channels.contains(.location) == true,
+           store.active?.locationAuthorization == .notDetermined {
+            showingLocationExplainer = true
+        }
+    }
+
+    /// Takes the screen brightness down to nothing and holds the phone awake, then puts the
+    /// brightness back exactly where it was. Restoring the ORIGINAL value matters: leaving
+    /// somebody's phone at zero after a session would look like a dead device.
+    private func applyBlackout(_ isDark: Bool) {
+        if isDark {
+            if brightnessBeforeBlackout == nil {
+                brightnessBeforeBlackout = UIScreen.main.brightness
+            }
+            UIScreen.main.brightness = 0
+            UIApplication.shared.isIdleTimerDisabled = true
+        } else {
+            if let previous = brightnessBeforeBlackout {
+                UIScreen.main.brightness = previous
+                brightnessBeforeBlackout = nil
+            }
+            UIApplication.shared.isIdleTimerDisabled = active?.isArmed == true
+        }
+    }
+
+    /// What the camera can see, so a device being left in a corner can be aimed before it is
+    /// put down. Low resolution on purpose — this feed is for aiming and for spotting movement,
+    /// not for the recording.
+    @ViewBuilder
+    private func viewfinder(_ active: ActiveFieldSession) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                CameraPreview(session: camera.session)
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                if active.sentry?.watchSceneMotion == true {
+                    Label("watching", systemImage: "eye")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .foregroundStyle(Theme.warning)
+                        .padding(8)
                 }
-                .accessibilityLabel("Levels")
+            }
+            if let problem = camera.problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(Theme.warning)
             }
         }
-        .sheet(isPresented: $showingSettings) {
-            if let active { LevelsSheet(session: active) }
-        }
-        .sheet(isPresented: $showingLocationExplainer) {
-            LocationExplainerSheet {
-                await active?.requestLocation()
-            }
-        }
-        .alert("Add a note", isPresented: $askingForNote) {
-            TextField("What happened?", text: $noteDraft)
-            Button("Save") {
-                let note = noteDraft
-                noteDraft = ""
-                Task { await active?.mark(kind: .manual, note: note.isEmpty ? nil : note) }
-            }
-            Button("Cancel", role: .cancel) { noteDraft = "" }
-        }
-        .alert("Couldn't stop the session",
-               isPresented: Binding(get: { errorMessage != nil },
-                                    set: { if !$0 { errorMessage = nil } })) {
-            Button("OK", role: .cancel) { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
-        .task {
-            store.load()
-            await store.activate(sessionId)
-            if store.active?.channels.contains(.location) == true,
-               store.active?.locationAuthorization == .notDetermined {
-                showingLocationExplainer = true
-            }
-        }
+        .accessibilityIdentifier("camera-preview")
     }
 
     /// Always on screen, never scrolled away. Somebody ending a session at 3am should not have
@@ -114,6 +199,17 @@ struct LiveSessionView: View {
                 }
             }
             Spacer()
+            Button {
+                blackout = true
+            } label: {
+                Image(systemName: "moon.fill")
+                    .font(.headline)
+                    .padding(.horizontal, 6)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Blackout the screen")
+            .accessibilityIdentifier("blackout")
+
             Button(role: .destructive) {
                 stop()
             } label: {
@@ -137,6 +233,10 @@ struct LiveSessionView: View {
         VStack(spacing: 16) {
             SessionClock(startedAt: active.startedAt, isRecording: true)
                 .padding(.top, 8)
+
+            if active.channels.contains(.video) {
+                viewfinder(active)
+            }
 
             if active.channels.contains(.magnetic) {
                 AnalogMeterView(
@@ -219,6 +319,8 @@ struct LiveSessionView: View {
             .buttonStyle(.bordered)
 
             FieldCaptureBar(session: active)
+
+            SentryPanel(session: active, camera: camera)
 
             channelToggles(active)
 

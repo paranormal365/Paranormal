@@ -9,16 +9,25 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case sentrySound = "sentry_sound"
     case evpQuestion = "evp_question"
     case evpWaitEnd = "evp_wait_end"
+    /// The device itself was moved — a bump, a knock, somebody picking it up.
+    case deviceMoved = "device_moved"
+    /// Something in the camera's view moved.
+    case sceneMotion = "scene_motion"
 
     /// Which of the spec's three legal `triggered_by` values this kind reports as.
     public var trigger: FieldReading.Trigger {
         switch self {
-        case .sentryEmf, .sentrySound: .event      // a threshold was crossed
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: .event
         case .manual, .evpQuestion, .evpWaitEnd: .manual
         }
     }
 
-    public var isAutomatic: Bool { self == .sentryEmf || self == .sentrySound }
+    public var isAutomatic: Bool {
+        switch self {
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: true
+        case .manual, .evpQuestion, .evpWaitEnd: false
+        }
+    }
 
     public var title: String {
         switch self {
@@ -27,6 +36,8 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .sentrySound: "Sound"
         case .evpQuestion: "Question asked"
         case .evpWaitEnd: "Stopped waiting"
+        case .deviceMoved: "Device moved"
+        case .sceneMotion: "Movement seen"
         }
     }
 }

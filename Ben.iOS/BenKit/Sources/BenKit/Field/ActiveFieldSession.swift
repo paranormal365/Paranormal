@@ -27,6 +27,10 @@ public final class ActiveFieldSession {
     public private(set) var captures: [CaptureRecord] = []
     /// The audio recording currently running, if any.
     public private(set) var recording: RecordingState?
+    /// What this session is watching for while nobody is holding it. Nil until armed.
+    public private(set) var sentry: SentryConfig?
+    public var isArmed: Bool { sentry != nil }
+
     /// Set when a recording stopped for a reason nobody chose — a call, another app taking the
     /// microphone. Surfaced rather than swallowed: somebody who thinks they are recording and
     /// is not has lost the night.
@@ -206,6 +210,38 @@ public final class ActiveFieldSession {
     }
 
     public func clearRecordingProblem() { recordingProblem = nil }
+
+    // MARK: - Sentry
+
+    /// Starts watching. Refused without a base level for whatever is being watched, because a
+    /// threshold with nothing to measure against is not a threshold.
+    public func arm(_ config: SentryConfig) async {
+        sentry = config
+        await engine.arm(config)
+        // The engine only reads the accelerometer or the camera while those are armed, so the
+        // streams have to be re-evaluated.
+        await engine.setChannels(channels)
+    }
+
+    public func disarm() async {
+        sentry = nil
+        await engine.disarm()
+    }
+
+    /// Why arming would be pointless right now, in words that say what to do about it.
+    public func armingProblem(for config: SentryConfig) -> String? {
+        if !config.watchesAnything { return "Nothing is selected to watch for." }
+        if config.watchMagnetic, baselines.magneticMicrotesla == nil {
+            return "Set a base level first — the magnetic trigger measures against it."
+        }
+        if config.watchSound, baselines.soundDbfs == nil {
+            return "Set a base level first — the sound trigger measures against it."
+        }
+        if config.watchSceneMotion, !channels.contains(.video) {
+            return "Switch video on to watch for movement in the camera's view."
+        }
+        return nil
+    }
 
     public func setPolicy(_ policy: SamplingPolicy) async {
         self.policy = policy

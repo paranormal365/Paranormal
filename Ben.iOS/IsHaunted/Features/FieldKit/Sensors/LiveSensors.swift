@@ -401,6 +401,7 @@ enum LiveSensors {
             recorder: audio,
             location: LiveLocation(),
             altitude: LiveAltimeter(),
+            deviceMovement: LiveDeviceMovement(),
             batteryPercent: {
                 let level = UIDevice.current.batteryLevel
                 return level < 0 ? nil : Double(level) * 100
