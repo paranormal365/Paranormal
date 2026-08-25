@@ -41,7 +41,7 @@ show them to you again.
 | **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
 | **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
 | **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
-| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. Who to contact is a tap away: their email opens Mail, their number dials. |
+| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save. Who to contact is a tap away: their email opens Mail, their number dials. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Events** | Public events, readable without an account, and you can reserve a place. **Add to calendar** puts one straight into your own calendar. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -52,7 +52,7 @@ than pretending to lead somewhere.
 
 ## Coming to the app next
 
-Reading case reports and group messaging. Each arrives as its own update.
+Group messaging. It arrives as its own update.
 
 ## A note on what the app shows you
 
