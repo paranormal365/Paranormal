@@ -21,7 +21,11 @@ Reading the feed and browsing public events needs **no account at all**, exactly
 website. Sign in when you want to join in.
 
 Signing in works the same way it does in a browser, including two-step codes if you have them
-switched on. Your phone stays signed in afterwards; you will not be asked again every time you
+switched on. You can also **sign in with your Apple Account**: if you already have an account
+here under the same email address, that signs you into it rather than making a second one. If
+you don't, the app asks for the name people will see and your @name, and makes one — Apple has
+already confirmed the email address, so there is no confirmation link to wait for. Choosing
+"Hide My Email" works too; the address Apple gives us is a relay that reaches you. Your phone stays signed in afterwards; you will not be asked again every time you
 open the app.
 
 Setting two-step **up** on the phone works a little differently from the website, for a good
@@ -48,8 +52,7 @@ than pretending to lead somewhere.
 
 ## Coming to the app next
 
-Reading case reports, group messaging, and **Sign in with Apple**. Each arrives as its own
-update.
+Reading case reports and group messaging. Each arrives as its own update.
 
 ## A note on what the app shows you
 
