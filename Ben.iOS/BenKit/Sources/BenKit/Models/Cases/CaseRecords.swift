@@ -69,7 +69,42 @@ public struct MyCaseFile: Sendable, Codable, Equatable, Identifiable {
     public var contentType: String?
     public var fileSize: Int64?
 
+    /// The server calls it `fileId`, not `id` — OccurrenceFileItem and CaseTimelineFileRecord
+    /// both do. Without this a case with a single attached photo failed to decode ENTIRELY,
+    /// so the whole case read as "the server's answer couldn't be read".
+    private enum CodingKeys: String, CodingKey {
+        case id = "fileId", fileName, contentType, fileSize
+    }
+
     public var isImage: Bool { contentType?.hasPrefix("image/") ?? false }
+}
+
+/// What `POST api/my-cases/{id}/occurrences` answers with: `CaseTimelineEntryRecord`, which is
+/// NOT the shape the case detail returns for the same entry. The detail projects a client's view
+/// (`ClientCaseOccurrence`, with `fromInvestigators`); the write echoes the raw timeline row.
+/// Decoding one as the other is what a mock cannot catch and the live suite did.
+public struct CaseTimelineEntryRecord: Sendable, Codable, Equatable, Identifiable {
+    public var id: UUID
+    public var caseId: UUID
+    public var authorAppUserId: UUID
+    public var authorDisplayName: String?
+    public var entryType: CaseEntryType
+    public var eventDateTime: Date?
+    public var title: String?
+    public var body: String?
+    public var experienceTypeIds: [UUID]
+    public var files: [MyCaseFile]
+    public var dateCreated: Date
+
+    /// The same entry as the case timeline shows it. `authorId` is who is reading — the client
+    /// who just wrote it — so the side is decided by comparison, never assumed.
+    public func asOccurrence(readerId: UUID?) -> MyCaseOccurrence {
+        MyCaseOccurrence(
+            id: id, entryType: entryType, eventDateTime: eventDateTime,
+            title: title, body: body,
+            fromInvestigators: readerId.map { $0 != authorAppUserId } ?? false,
+            dateCreated: dateCreated, files: files, experienceTypeIds: experienceTypeIds)
+    }
 }
 
 /// One entry on the case timeline — something that happened, or a note from the group.

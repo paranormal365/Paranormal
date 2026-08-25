@@ -89,6 +89,59 @@ public final class CaseDetailStore {
         }
     }
 
+    /// Logs something that happened, from the phone — the thing a phone is genuinely best at,
+    /// because the person is usually standing in the room when they remember it.
+    ///
+    /// Two steps, because the API has two: the entry is created first, then each file is
+    /// attached to it. That order matters — a half-uploaded photo leaves a real entry with
+    /// fewer pictures, which is recoverable, whereas the other way round would leave orphaned
+    /// files belonging to nothing.
+    public func logOccurrence(
+        eventDateTime: Date?, title: String?, body: String?,
+        experienceTypeIds: [UUID] = [], media: [MediaUpload] = []
+    ) async -> Result<MyCaseOccurrence, FeedActionError> {
+        struct Body: Encodable {
+            let eventDateTime: Date?
+            let title: String?
+            let body: String?
+            let experienceTypeIds: [UUID]
+        }
+        guard let endpoint = try? Endpoint.json(
+            .post, "api/my-cases/\(caseId.uuidString.lowercased())/occurrences",
+            payload: Body(eventDateTime: eventDateTime, title: title,
+                          body: body, experienceTypeIds: experienceTypeIds))
+        else { return .failure(.failed(reason: nil)) }
+
+        let created: MyCaseOccurrence
+        switch await api.load(endpoint, as: CaseTimelineEntryRecord.self) {
+        case .ok(let entry): created = entry.asOccurrence(readerId: entry.authorAppUserId)
+        case .failed(let reason, _): return .failure(.failed(reason: reason))
+        case .sessionEnded: return .failure(.sessionEnded)
+        case .rateLimited(let after): return .failure(.rateLimited(retryAfter: after))
+        }
+
+        // Attachments are best-effort by design: the entry EXISTS now, and a failed upload
+        // must not report the whole thing as lost. `failedAttachments` tells the caller how
+        // many to mention rather than swallowing it.
+        var failures = 0
+        for upload in media {
+            let attach = Endpoint(
+                .post,
+                "api/my-cases/\(caseId.uuidString.lowercased())/occurrences/\(created.id.uuidString.lowercased())/files",
+                body: .multipart(MultipartBody(parts: [
+                    .file("file", filename: upload.filename,
+                          contentType: upload.contentType, url: upload.fileURL)
+                ])))
+            if !(await api.upload(attach, as: MyCaseFile.self)).isOk { failures += 1 }
+        }
+        failedAttachments = failures
+
+        return .success(created)
+    }
+
+    /// How many attachments failed on the last log. The entry still saved; the screen says so.
+    public private(set) var failedAttachments = 0
+
     /// Where an attached file's bytes come from — the same shared, AUTHENTICATED route the
     /// website uses (`GetFileDownloadUrl`). There is no public URL for case media, which is
     /// the whole point: a case belongs to its client and its group. An `AsyncImage` pointed

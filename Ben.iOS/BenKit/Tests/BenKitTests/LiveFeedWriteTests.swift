@@ -180,7 +180,61 @@ struct LiveFeedWriteTests {
         #expect(error.message.count > 10)
     }
 
-    /// An 8×8 gray JPEG — small enough to inline, real enough to decode.
+    @Test func loggingAnOccurrenceWithAPhotoReachesTheRealCase() async {
+        guard Self.enabled else { return }
+
+        // The case client, not the group member: this is the CLIENT's door.
+        let transport = URLSessionTransport()
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
+        guard case .success(let login) = await auth.login(LoginRequest(
+            email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
+            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+        else { Issue.record("client sign-in failed"); return }
+        await tokens.adopt(login)
+        let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+
+        guard case .ok(let cases) = await api.load(
+            Endpoint(.get, "api/my-cases"), as: [MyCaseSummary].self),
+              let target = cases.first
+        else { return }   // no client case on this database — nothing to exercise
+
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("live-occ-\(UUID().uuidString).jpg")
+        guard let jpeg = Data(base64Encoded: Self.tinyJpegBase64) else { return }
+        try? jpeg.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let store = await CaseDetailStore(caseId: target.caseId, api: api)
+        let marker = "live occurrence check \(UUID().uuidString.prefix(6))"
+        let result = await store.logOccurrence(
+            eventDateTime: Date().addingTimeInterval(-3600),
+            title: marker, body: "Written by the live test suite.",
+            media: [MediaUpload(fileURL: file, filename: "occ.jpg",
+                                contentType: "image/jpeg", byteCount: Int64(jpeg.count))])
+
+        guard case .success(let entry) = result else {
+            if case .failure(let e) = result { Issue.record("logging refused: \(e.message)") }
+            return
+        }
+        #expect(entry.title == marker)
+        #expect(await store.failedAttachments == 0)
+
+        // And it comes back on the case, with its photo attached.
+        await store.load()
+        let saved = await store.detail?.occurrences.first { $0.id == entry.id }
+        #expect(saved != nil)
+        #expect(saved?.files.isEmpty == false)
+        #expect(saved?.fromInvestigators == false)   // the CLIENT wrote it
+
+        // Clean up after itself: this runs against Ben's real dev case, and a suite that
+        // leaves debris behind stops being runnable on demand.
+        _ = await api.send(Endpoint(.delete,
+            "api/my-cases/\(target.caseId.uuidString.lowercased())/occurrences/\(entry.id.uuidString.lowercased())"))
+    }
+
+    /// An 8×8 black JPEG — small enough to inline, real enough to decode (and to render:
+    /// a thumbnail of it looks like a black square because it IS one).
     private static let tinyJpegBase64 = """
         /9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a\
         HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAAIAAgBAREA/8QAHwAAAQUBAQEB\

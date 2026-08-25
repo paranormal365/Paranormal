@@ -10,6 +10,8 @@ struct CaseDetailView: View {
     let caseId: UUID
 
     @State private var store: CaseDetailStore?
+    @State private var logging = false
+    @State private var toast: String?
 
     var body: some View {
         Group {
@@ -42,6 +44,48 @@ struct CaseDetailView: View {
         }
         .navigationTitle(store?.detail?.caseReference ?? "Case")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Only on a case still open: logging onto a closed case would go unread.
+            if let detail = store?.detail, detail.status != .closed, detail.status != .declined {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { logging = true } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("Log what happened")
+                }
+            }
+        }
+        .sheet(isPresented: $logging) {
+            if let store {
+                LogOccurrenceView(store: store) { _ in
+                    // The saved entry lands mid-timeline by its own date, so re-read rather
+                    // than guessing where to slot it.
+                    Task {
+                        await store.load()
+                        toast = store.failedAttachments == 0
+                            ? "Logged."
+                            : "Logged, but \(store.failedAttachments) attachment\(store.failedAttachments == 1 ? "" : "s") didn't upload."
+                    }
+                }
+                .environment(dependencies)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.callout)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Theme.mist, in: Capsule())
+                    .foregroundStyle(Theme.bone)
+                    .shadow(radius: 6)
+                    .padding(.bottom, 16)
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        self.toast = nil
+                    }
+            }
+        }
+        .animation(.default, value: toast)
         .refreshable { await store?.load() }
         .task {
             let store = CaseDetailStore(caseId: caseId, api: dependencies.api)

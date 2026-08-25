@@ -48,6 +48,7 @@ struct CasesListView: View {
                         CaseSummaryRow(summary: summary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("case-row")
                 }
                 .listStyle(.insetGrouped)
             }
