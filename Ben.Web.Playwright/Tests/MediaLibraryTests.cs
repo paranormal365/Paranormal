@@ -54,6 +54,67 @@ public class MediaLibraryTests : BenTestBase
             Is.True, "Expected redirect to login for unauthenticated media library access.");
     }
 
+    /// <summary>
+    /// The vote buttons on a library card fit the card.
+    /// </summary>
+    /// <remarks>
+    /// They did not. The word beside each icon was hidden on a <c>d-md-inline</c> breakpoint,
+    /// which asks how wide the VIEWPORT is — and says nothing about the card, which is a quarter
+    /// of a row. On any desktop the words switched on and were then clipped mid-syllable:
+    /// "Confi", "Disp", "Inconcl". Measured rather than eyeballed, because a screenshot review
+    /// is exactly what let it through the first time.
+    /// </remarks>
+    [Test]
+    public async Task VoteButtonsOnACard_FitTheCard()
+    {
+        await NavigateToMediaLibraryAsync();
+
+        var anyCard = Page.Locator(".card .evidence-vote-widget").First;
+        if (await anyCard.CountAsync() == 0)
+        { Assert.Ignore("no media in this library to vote on"); return; }
+        await Expect(anyCard).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var clipped = await Page.EvaluateAsync<int>(
+            "() => [...document.querySelectorAll('.card .evidence-vote-widget button')]" +
+            ".filter(b => b.scrollWidth > b.clientWidth + 1).length");
+        Assert.That(clipped, Is.Zero, "a vote button's label is cut off inside the card");
+
+        // And every one of them still says what it does, for a tooltip and a screen reader.
+        var unlabelled = await Page.EvaluateAsync<int>(
+            "() => [...document.querySelectorAll('.card .evidence-vote-widget button')]" +
+            ".filter(b => !b.getAttribute('aria-label') || !b.title).length");
+        Assert.That(unlabelled, Is.Zero,
+            "an icon-only vote button must carry its meaning in title and aria-label");
+    }
+
+    /// <summary>
+    /// Every card gets the same thumbnail tile, whatever it holds.
+    /// </summary>
+    /// <remarks>
+    /// Without a tile of its own height, a card holding a tiny image collapsed to what looked
+    /// like blank space — and "this file has no preview" was indistinguishable from "this page is
+    /// broken". The seeded library is full of 1×1 test PNGs, so this was the normal view.
+    /// </remarks>
+    [Test]
+    public async Task EveryCard_HasAThumbnailTileOfTheSameHeight()
+    {
+        await NavigateToMediaLibraryAsync();
+
+        var card = Page.Locator(".card").First;
+        if (await card.CountAsync() == 0) { Assert.Ignore("no media in this library"); return; }
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var heights = await Page.EvaluateAsync<int[]>(
+            "() => [...document.querySelectorAll('.card .card-body > div')]" +
+            ".filter(d => d.style && d.style.height)" +
+            ".map(d => Math.round(d.getBoundingClientRect().height))");
+
+        Assert.That(heights, Is.Not.Empty, "cards should have a fixed-height thumbnail tile");
+        Assert.That(heights.Distinct().Count(), Is.EqualTo(1),
+            "thumbnail tiles should all be the same height — a ragged grid reads as a broken page");
+        Assert.That(heights[0], Is.GreaterThan(40), "the tile should be a visible frame");
+    }
+
     [Test]
     public async Task Page_HasGridListToggle()
     {
