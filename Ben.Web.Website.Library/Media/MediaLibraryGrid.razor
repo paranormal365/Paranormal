@@ -77,7 +77,12 @@
                             {
                                 <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
                             }
-                            <div class="d-flex align-items-center justify-content-center" style="min-height:96px;">
+                            @* A TILE, not a gap. Every card gets the same frame whatever it
+                               holds, so "this file has no preview" and "this page is broken" stop
+                               looking identical — which is exactly what a row of one-pixel test
+                               images made them look like. *@
+                            <div class="d-flex align-items-center justify-content-center rounded overflow-hidden"
+                                 style="height:96px;background:rgba(128,128,128,.10);">
                                 @RenderThumbnail(file)
                             </div>
                             <div class="small text-truncate fw-semibold" title="@file.FileName">@file.FileName</div>
@@ -87,7 +92,7 @@
                             @if (ShowVoting)
                             {
                                 <div @onclick:stopPropagation="true">
-                                    <EvidenceVoteWidget UploadFileId="@file.Id" />
+                                    <EvidenceVoteWidget UploadFileId="@file.Id" Compact="true" />
                                 </div>
                             }
                             @if (!PickerMode)
@@ -136,7 +141,7 @@
                     <GridColumn Title="Voting" Width="260px">
                         <Template>
                             @{ var row3 = (UploadFileRecord)context; }
-                            <EvidenceVoteWidget UploadFileId="@row3.Id" />
+                            <EvidenceVoteWidget UploadFileId="@row3.Id" Compact="true" />
                         </Template>
                     </GridColumn>
                 }
@@ -285,7 +290,7 @@
     {
         if (_isImage(file))
         {
-            <UserMediaPreview FileId="@file.Id" FileName="@file.FileName" ContentType="@file.ContentType" FileSize="@file.FileSize" />
+            <UserMediaPreview FileId="@file.Id" FileName="@file.FileName" ContentType="@file.ContentType" FileSize="@file.FileSize" Fill="true" />
         }
         else if (_previewLoaded.Contains(file.Id))
         {
