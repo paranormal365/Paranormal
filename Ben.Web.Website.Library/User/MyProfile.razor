@@ -3,6 +3,7 @@
 @using Ben.Service.Models.People
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
@@ -415,20 +416,20 @@
         catch { _error = "Couldn't load your profile. Please refresh."; }
     }
 
-    private async Task LoadPreviewsAsync()
+    /// <summary>Points the two profile photos at URLs the browser fetches.</summary>
+    /// <remarks>
+    /// Only two files, so this was never the disaster the media library was — but a profile photo
+    /// is a full-size camera image, and there is no reason to route one through the server and
+    /// inflate it by a third as base64 when the browser can fetch a thumbnail and cache it.
+    /// </remarks>
+    private Task LoadPreviewsAsync()
     {
         foreach (var photo in new[] { _profile?.PublicPhoto, _profile?.PrivatePhoto })
         {
             if (photo is null || _previews.ContainsKey(photo.UploadFileId)) continue;
-            try
-            {
-                var file = await AdminClient.GetFileDataAsync(photo.UploadFileId);
-                if (file is { } f)
-                    _previews[photo.UploadFileId] =
-                        $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
-            }
-            catch { /* a photo that won't load isn't worth failing the whole page over */ }
+            _previews[photo.UploadFileId] = MediaUrls.Thumbnail(photo.UploadFileId);
         }
+        return Task.CompletedTask;
     }
 
     private async Task SaveNameAsync()

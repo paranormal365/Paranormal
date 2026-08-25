@@ -92,6 +92,17 @@ public sealed class UploadFileController : BenControllerBase
     /// files) could download any file by ID regardless of ownership or sharing; fixed as a
     /// follow-up to item #6 phase 3.
     /// </summary>
+    // Serving a file is not an API call in the sense the limiter was built for.
+    //
+    // The global limit (600/min per client) exists to stop somebody hammering expensive or
+    // sensitive endpoints. A page of media legitimately asks for dozens of files at once, and the
+    // website fetches them on the viewer's behalf — so every visitor's images land in the SAME
+    // partition, the site's own address, and a single media library page could exhaust the
+    // allowance for everybody. The result was 429s rendered as broken files.
+    //
+    // These two routes are read-only, already gated by FileAudienceAccess, and serve bytes that
+    // are meant to be served. The limiter still covers everything else.
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
     [HttpGet("{id:guid}/download")]
     [AllowAnonymous]
     public async Task<IActionResult> Download(
@@ -160,6 +171,7 @@ public sealed class UploadFileController : BenControllerBase
     /// <para>Generated on first request when the sibling file is missing, so files uploaded before
     /// the pipeline existed need no backfill.</para>
     /// </remarks>
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
     [HttpGet("{id:guid}/thumbnail")]
     [AllowAnonymous]
     public async Task<IActionResult> Thumbnail(

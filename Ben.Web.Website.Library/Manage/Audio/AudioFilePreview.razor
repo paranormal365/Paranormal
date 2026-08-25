@@ -12,6 +12,7 @@
 
 @namespace Ben.Web.Website.Library.Manage.Audio
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject BenToastService Toasts
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
@@ -24,7 +25,21 @@
 }
 else if (_source is null)
 {
-    <span class="badge bg-secondary text-truncate" style="max-width:120px;" title="@FileName">@FileName</span>
+    <div class="d-flex flex-column align-items-center justify-content-center text-center gap-1 p-1"
+         data-testid="preview-unavailable" title="@FileName — this audio could not be loaded">
+        <span class="text-danger" style="font-size:1.1rem;line-height:1;">&#9888;</span>
+        <span class="text-danger" style="font-size:.68rem;line-height:1.1;">Couldn't load this audio</span>
+    </div>
+}
+else if (_decodeFailed)
+{
+    @* The player's own text here was "PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN:
+       FFmpegDemuxer: open context", which is true and useless. Say what it means. *@
+    <div class="d-flex flex-column align-items-center justify-content-center text-center gap-1 p-1"
+         data-testid="preview-unavailable" title="@FileName — this recording could not be played">
+        <span class="text-danger" style="font-size:1.1rem;line-height:1;">&#9888;</span>
+        <span class="text-danger" style="font-size:.68rem;line-height:1.1;">Recording can't be played</span>
+    </div>
 }
 else
 {
@@ -48,6 +63,7 @@ else
 
         <WaveSurferPlayer @ref="_player"
                           Config="@_compactConfig"
+                          OnError="@OnPlayerErrorAsync"
                           OnReady="@(() => { _ready = true; StateHasChanged(); })"
                           OnPlay="@(() => { _playing = true; StateHasChanged(); })"
                           OnPause="@(() => { _playing = false; StateHasChanged(); })"
@@ -765,6 +781,27 @@ else
     [Parameter, EditorRequired] public string ContentType { get; set; } = string.Empty;
     [Parameter]                 public long   FileSize    { get; set; }
 
+    /// <summary>Reports whether the waveform actually appeared, so a caller can say so.</summary>
+    /// <remarks>
+    /// Same reason as <c>UserMediaPreview</c>: this used to catch its own failure and render a
+    /// filename badge, which is indistinguishable from a file that simply has nothing to draw.
+    /// </remarks>
+    [Parameter] public EventCallback<Ben.Web.Website.Library.User.MediaPreviewOutcome> OnOutcome { get; set; }
+
+    /// <summary>
+    /// A URL WaveSurfer can stream from, instead of this component fetching the bytes.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Set this anywhere more than one player exists on a page.</b> Fetching bytes puts
+    /// a copy of the recording in the SERVER's memory and then a base64 copy in the page — about
+    /// 2.3× the file, per player, per render. A media library of recordings did exactly that and
+    /// took the website process to sixteen gigabytes before the host was killed.</para>
+    ///
+    /// <para>With a URL the browser does the fetching, streams as it plays, and caches. The
+    /// server holds nothing.</para>
+    /// </remarks>
+    [Parameter] public string? SourceUrl { get; set; }
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     private WsAudioSource? _source;
@@ -934,17 +971,40 @@ else
     {
         if (!firstRender) return;
 
-        try
-        {
-            var result = await AdminClient.GetFileDataAsync(FileId);
-            if (result is not null)
-                _source = WsAudioSource.FromBytes(result.Value.Data, result.Value.ContentType);
-        }
-        catch { /* silently fail — component shows filename badge as fallback */ }
+        // Always a URL: the browser fetches and streams it, and nothing passes through this
+        // process. Fetching the bytes here put a copy of the recording in the server's memory and
+        // a larger base64 copy in the page — per player. A list of clips did that once per clip.
+        _source = WsAudioSource.FromUrl(
+            string.IsNullOrWhiteSpace(SourceUrl) ? MediaUrls.Download(FileId) : SourceUrl);
 
         _loading = false;
         StateHasChanged();
+
+        if (OnOutcome.HasDelegate)
+        {
+            await OnOutcome.InvokeAsync(_source is null
+                ? Ben.Web.Website.Library.User.MediaPreviewOutcome.Unavailable
+                : Ben.Web.Website.Library.User.MediaPreviewOutcome.Shown);
+        }
     }
+
+    /// <summary>
+    /// The waveform could not be drawn — the browser could not decode what it was given.
+    /// </summary>
+    /// <remarks>
+    /// A real outcome, not noise: an empty or truncated recording fails exactly here. It is
+    /// reported so the card can mark the file rather than leaving WaveSurfer's own
+    /// "DEMUXER_ERROR_COULD_NOT_OPEN" on screen, which tells a viewer nothing they can act on.
+    /// </remarks>
+    private async Task OnPlayerErrorAsync(string message)
+    {
+        _decodeFailed = true;
+        StateHasChanged();
+        if (OnOutcome.HasDelegate)
+            await OnOutcome.InvokeAsync(Ben.Web.Website.Library.User.MediaPreviewOutcome.Unavailable);
+    }
+
+    private bool _decodeFailed;
 
     // ── Player event handlers ─────────────────────────────────────────────────
 
