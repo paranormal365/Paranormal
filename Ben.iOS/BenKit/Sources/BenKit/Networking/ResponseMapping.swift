@@ -44,7 +44,8 @@ public enum ResponseMapping {
             return .rateLimited(retryAfter: retryAfter(header))
         default:
             let body = String(data: data, encoding: .utf8)
-            return .failed(reason: prose(fromBody: body) ?? statusFallback(statusCode))
+            return .failed(reason: prose(fromBody: body) ?? statusFallback(statusCode),
+                           statusCode: statusCode)
         }
     }
 

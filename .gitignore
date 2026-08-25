@@ -107,3 +107,6 @@ Ben.iOS/**/xcuserdata/
 Ben.iOS/**/.DS_Store
 Ben.iOS/BenKit/.build/
 Ben.iOS/DerivedData/
+
+# F5b: the NSFW screening model is fetched, not committed (87MB; see scripts/get-screener-model.sh)
+Ben.Data.WebApi/Models/nsfw/*.onnx

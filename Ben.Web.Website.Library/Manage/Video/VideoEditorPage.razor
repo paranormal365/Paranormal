@@ -1,9 +1,12 @@
 @page "/video-editor"
 @using Microsoft.Extensions.Options
 
+@using Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
 @inject IOptions<VideoEditorOptions> EditorOptions
 @inject IBenUserState UserState
 @inject VideoExportPublisher ExportPublisher
+@inject IBenAdminClient AdminClient
 @using Ben.Web.Services
 
 <FeatureGate Flag="@SiteFeatures.VideoEditor">
@@ -24,7 +27,15 @@
     else
     {
         <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         EnablePostToFeed="@_canPostToFeed"
+                         OnPostToFeed="OnPostToFeedAsync"
                          ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+
+    @* "Post to the feed" confirmation (item 186 F7) — a personal render, no case lineage. *@
+    <FeedPostFromEditorDialog @bind-Visible="_feedDialogVisible"
+                              Exported="_pendingFeedExport"
+                              OnPosted="OnFeedPostedAsync"
+                              OnCancelled="OnFeedCancelled" />
     }
 </FeatureGate>
 
@@ -36,7 +47,38 @@
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _authResolved = true;
+        if (UserState.IsAuthenticated)
+            _canPostToFeed = (await AdminClient.GetFeedAsync())?.CanPost == true;
     }
+
+    // ── "Post to the feed" (item 186 F7) — personal render, no case lineage ──
+    private bool _canPostToFeed;
+    private bool _feedDialogVisible;
+    private ExportedVideo? _pendingFeedExport;
+    private TaskCompletionSource? _feedFlowDone;
+
+    private async Task OnPostToFeedAsync(ExportedVideo exported)
+    {
+        _pendingFeedExport = exported;
+        _feedFlowDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _feedDialogVisible = true;
+        StateHasChanged();
+        await _feedFlowDone.Task;
+    }
+
+    private Task OnFeedPostedAsync(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private void OnFeedCancelled()
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+    }
+
 
     /// <summary>Server project id from an earlier publish this session, so a second export in the
     /// same session updates that project rather than creating another row.</summary>

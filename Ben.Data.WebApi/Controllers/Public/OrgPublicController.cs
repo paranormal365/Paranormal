@@ -45,7 +45,8 @@ public sealed class OrgPublicController : ControllerBase
         return Ok(new OrgPublicHomeResponse(
             org.Id, org.Name, org.UrlName,
             logos, homePage, navPages,
-            org.PublicPhone, org.PublicEmail, org.PublicWebsite));
+            org.PublicPhone, org.PublicEmail, org.PublicWebsite,
+            org.Kind, org.RunsPublicTours));
     }
 
     // ── GET /api/public/organizations/{urlName}/pages/{pageSlug} ─────────────
@@ -153,7 +154,11 @@ public sealed record OrgPublicHomeResponse(
     IReadOnlyList<OrgPublicNavItem> NavPages,
     string? PublicPhone = null,
     string? PublicEmail = null,
-    string? PublicWebsite = null);
+    string? PublicWebsite = null,
+    /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
+    bool RunsPublicTours = false);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId,

@@ -38,21 +38,41 @@ public actor TokenSession {
     public var isSignedIn: Bool { tokens != nil }
 
     /// Observe sign-in/session-ended transitions (SessionStore subscribes).
+    /// Subscribes to session events.
+    ///
+    /// An event emitted while NOBODY is listening is held and delivered to the next
+    /// subscriber, exactly once. Subscription happens on an actor hop — `SessionStore`
+    /// creates its listener in `init`, and the `Task` that attaches it runs later — so
+    /// without this a session-ended fired in those first instants is dropped and the UI
+    /// silently keeps looking signed in. An event that WAS delivered is not replayed: a
+    /// subscriber attaching an hour later must not be handed a stale banner.
     public func events() -> AsyncStream<Event> {
         let id = UUID()
         return AsyncStream { continuation in
             continuations[id] = continuation
+            if let missed = undeliveredEvent {
+                undeliveredEvent = nil
+                continuation.yield(missed)
+            }
             continuation.onTermination = { [weak self] _ in
                 Task { await self?.removeContinuation(id) }
             }
         }
     }
 
+    /// An event that fired before any subscriber existed. Only the most recent is kept —
+    /// these are state transitions, and the latest is the one that is still true.
+    private var undeliveredEvent: Event?
+
     private func removeContinuation(_ id: UUID) {
         continuations[id] = nil
     }
 
     private func emit(_ event: Event) {
+        guard !continuations.isEmpty else {
+            undeliveredEvent = event
+            return
+        }
         for continuation in continuations.values { continuation.yield(event) }
     }
 

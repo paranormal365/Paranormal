@@ -12,6 +12,22 @@ final class AppDependencies {
     private(set) var environment: APIEnvironment
     let tokens: TokenSession
     let api: APIClient
+    let session: SessionStore
+    let appleSignIn: AppleSignInClient
+    /// Field sessions live on the DEVICE, so this one is built here rather than per-screen: a
+    /// recording session has to outlive whatever screen started it.
+    let fieldKit: FieldSessionStore
+    let fieldUpload: FieldUploadClient
+    /// The feed's write surface (item 186 F2–F7) — one instance, shared by every screen
+    /// that can post, like, follow or report.
+    let feedActions: FeedActions
+    /// What's waiting on the signed-in person — shared, because the tab badge and the
+    /// notifications screen must never show different numbers.
+    let notifications: NotificationsStore
+    /// Images behind a bearer token (case files) — AsyncImage cannot carry one.
+    let imageLoader: AuthenticatedImageLoader
+    /// Getting an account and looking after it (Slice 8).
+    let accountActions: AccountActions
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -27,10 +43,32 @@ final class AppDependencies {
             transport: transport,
             environment: { box.value })
         self.tokens = tokens
-        self.api = APIClient(
+        let api = APIClient(
             environment: { box.value },
             transport: transport,
             tokens: tokens)
+        self.api = api
+        self.session = SessionStore(
+            auth: IdentityAuthClient(environment: { box.value }, transport: transport),
+            tokens: tokens,
+            api: api)
+        self.feedActions = FeedActions(api: api)
+        self.notifications = NotificationsStore(api: api)
+        self.imageLoader = AuthenticatedImageLoader(api: api)
+        self.accountActions = AccountActions(api: api)
+        self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
+// The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
+        // want it — then handed to the store as a value it can hold. A simulator has no
+        // magnetometer, so a debug build with `-fieldKitFakeSensors` gets scripted ones instead;
+        // a gauge nobody can watch move is a gauge nobody has checked.
+        let suite: SensorSuite
+        #if DEBUG
+        suite = FakeSensors.isEnabled ? FakeSensors.suite() : LiveSensors.suite()
+        #else
+        suite = LiveSensors.suite()
+        #endif
+        self.fieldKit = FieldSessionStore.live(sensors: { suite })
+        self.fieldUpload = FieldUploadClient(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means
@@ -39,7 +77,7 @@ final class AppDependencies {
         environmentBox.value = newEnvironment
         environment = newEnvironment
         environmentStore.save(newEnvironment)
-        await tokens.endSession()
+        await session.signOut()
         URLSession.benShared.configuration.urlCache?.removeAllCachedResponses()
     }
 }

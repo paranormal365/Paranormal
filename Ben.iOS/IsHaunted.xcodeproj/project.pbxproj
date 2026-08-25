@@ -12,12 +12,18 @@
 
 /* Begin PBXFileReference section */
 		BE00000000000000000000C4 /* IsHaunted.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IsHaunted.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE00000000000000000000D4 /* IsHauntedUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IsHauntedUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BE00000000000000000000A3 /* IsHaunted */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = IsHaunted;
+			sourceTree = "<group>";
+		};
+		BE00000000000000000000D3 /* IsHauntedUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = IsHauntedUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +37,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE00000000000000000000D5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +51,7 @@
 			isa = PBXGroup;
 			children = (
 				BE00000000000000000000A3 /* IsHaunted */,
+				BE00000000000000000000D3 /* IsHauntedUITests */,
 				BE00000000000000000000C2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +60,7 @@
 			isa = PBXGroup;
 			children = (
 				BE00000000000000000000C4 /* IsHaunted.app */,
+				BE00000000000000000000D4 /* IsHauntedUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +91,26 @@
 			productReference = BE00000000000000000000C4 /* IsHaunted.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BE00000000000000000000D2 /* IsHauntedUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BE00000000000000000000D9 /* Build configuration list for PBXNativeTarget "IsHauntedUITests" */;
+			buildPhases = (
+				BE00000000000000000000D6 /* Sources */,
+				BE00000000000000000000D5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BE00000000000000000000DB /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BE00000000000000000000D3 /* IsHauntedUITests */,
+			);
+			name = IsHauntedUITests;
+			productName = IsHauntedUITests;
+			productReference = BE00000000000000000000D4 /* IsHauntedUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +123,10 @@
 				TargetAttributes = {
 					BE00000000000000000000A2 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					BE00000000000000000000D2 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = BE00000000000000000000A2;
 					};
 				};
 			};
@@ -107,6 +146,7 @@
 			projectRoot = "";
 			targets = (
 				BE00000000000000000000A2 /* IsHaunted */,
+				BE00000000000000000000D2 /* IsHauntedUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -129,7 +169,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE00000000000000000000D6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BE00000000000000000000DB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE00000000000000000000A2 /* IsHaunted */;
+			targetProxy = BE00000000000000000000DC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		BE00000000000000000000DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BE00000000000000000000A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE00000000000000000000A2;
+			remoteInfo = IsHaunted;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		BE00000000000000000000A4 /* Debug */ = {
@@ -186,8 +251,9 @@
 		BE00000000000000000000A6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "IsHaunted-iOS26-Button";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Support/IsHaunted.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -209,8 +275,9 @@
 		BE00000000000000000000A7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "IsHaunted-iOS26-Button";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Support/IsHaunted.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -226,6 +293,38 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BE00000000000000000000D7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IsHaunted;
+			};
+			name = Debug;
+		};
+		BE00000000000000000000D8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IsHaunted;
 			};
 			name = Release;
 		};
@@ -246,6 +345,15 @@
 			buildConfigurations = (
 				BE00000000000000000000A6 /* Debug */,
 				BE00000000000000000000A7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BE00000000000000000000D9 /* Build configuration list for PBXNativeTarget "IsHauntedUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE00000000000000000000D7 /* Debug */,
+				BE00000000000000000000D8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

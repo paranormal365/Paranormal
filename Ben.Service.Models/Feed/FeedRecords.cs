@@ -42,7 +42,30 @@ public sealed record FeedPostRecord(
     /// </summary>
     bool MediaAwaitingReview = false,
     /// <summary>Photo or video, so the card knows which element to render.</summary>
-    FeedMediaKind MediaKind = FeedMediaKind.None);
+    FeedMediaKind MediaKind = FeedMediaKind.None,
+    /// <summary>What the author says this shows, from the experience taxonomy (item 186 F6).
+    /// Null for uncategorized chatter.</summary>
+    Guid? ExperienceTypeId = null,
+    /// <summary>The type's display name, resolved server-side so a rename shows everywhere.</summary>
+    string? ExperienceTypeName = null,
+    /// <summary>
+    /// AUTHOR-ONLY: the content doesn't look like its chosen type, so the card shows the
+    /// recategorize nudge. Always false for every other reader — the signal exists to help the
+    /// author, not to put an asterisk on them in public.
+    /// </summary>
+    bool CategoryMatchDegraded = false,
+    /// <summary>
+    /// The group whose case this footage came from — POPULATED ONLY WHEN CLAIMED (item 186 F7).
+    /// Unclaimed and Declined emit nothing: absence is structural, so a client cannot forget to
+    /// hide a link the group never agreed to.
+    /// </summary>
+    string? AttributedOrgName = null,
+    string? AttributedOrgUrlName = null,
+    /// <summary>The owning group vouches this footage is what it says (a claim, item 186 F7).</summary>
+    bool GroupVerified = false,
+    /// <summary>A person with the Moderator role cleared this post's media — distinct from the
+    /// automatic screener's approval.</summary>
+    bool ModeratorReviewed = false);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind
@@ -92,7 +115,40 @@ public sealed record FeedProfileRecord(
 /// <summary>A new post.</summary>
 /// <param name="Body">Plain text. Mentions and tags are parsed out of it by the server.</param>
 /// <param name="ParentMessageId">The post being replied to, or null for a top-level post.</param>
-public sealed record CreateFeedPostRequest(string Body, Guid? ParentMessageId = null);
+/// <param name="ExperienceTypeId">What the post shows, from the experience taxonomy (item 186
+/// F6). Optional always — encouraged for media, meaningless for chatter.</param>
+/// <param name="SourceCaseId">The case this render came from (item 186 F7) — the editor's
+/// "Post to the feed" sets it; a hand-written post never does. Requires media, and the author
+/// must be able to see the case.</param>
+/// <param name="ConsentToPublishPrivateEngagement">The explicit tick a PRIVATE-ENGAGEMENT
+/// case's footage requires before it may go public. Ignored for ordinary cases; refusing to
+/// tick it refuses the post.</param>
+public sealed record CreateFeedPostRequest(
+    string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null,
+    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false);
+
+// ── Org attribution (item 186 F7) ────────────────────────────────────────────
+
+/// <summary>One case-derived post in a group's attribution queue.</summary>
+/// <remarks>The media URL is the post's own public route, which only serves APPROVED media —
+/// so a group admin reviewing a claim sees exactly what the public sees, no more.</remarks>
+public sealed record FeedAttributionItem(
+    Guid PostId,
+    string Body,
+    Guid AuthorAppUserId,
+    string AuthorDisplayName,
+    DateTime DateCreated,
+    Guid? CaseId,
+    string? CaseTitle,
+    bool HasMedia,
+    FeedMediaKind MediaKind,
+    string? ExperienceTypeName,
+    OrgAttributionState State,
+    DateTime? DecidedUtc,
+    string? DecidedByDisplayName);
+
+/// <summary>The author's revised answer to "what does this show?" Null clears it.</summary>
+public sealed record RecategorizeFeedPostRequest(Guid? ExperienceTypeId);
 
 /// <summary>A report against a post.</summary>
 public sealed record ReportFeedPostRequest(string? Reason);
@@ -144,16 +200,34 @@ public sealed record FeedMediaReviewItem(
     FeedMediaKind Kind,
     string MediaUrl,
     DateTime? ReviewedUtc,
-    string? ReviewedByDisplayName);
+    string? ReviewedByDisplayName,
+    /// <summary>What the author says it shows (item 186 F6), for the category check beside the
+    /// safety check. Null when uncategorized.</summary>
+    Guid? ExperienceTypeId = null,
+    string? ExperienceTypeName = null,
+    /// <summary>How well the measured features fit that claim, 0–1. Context for the moderator,
+    /// not a verdict.</summary>
+    double? CategoryMatchScore = null);
 
 /// <summary>A moderator's decision about one post's media.</summary>
 /// <param name="Approve">True to publish it, false to hold it.</param>
 /// <param name="Note">Optional note for the record. Never shown to the poster.</param>
 public sealed record ReviewFeedMediaRequest(bool Approve, string? Note = null);
 
+/// <summary>A moderator's judgment on a post's CATEGORY (item 186 F6) — separate from the
+/// safety decision, because "safe to show" and "is what it says" are different questions.</summary>
+/// <param name="Matches">True: the content is what its type says. False: it is not.</param>
+public sealed record FeedCategoryVerdictRequest(bool Matches);
+
 /// <summary>How much is waiting, for the queue's badge and the site-administration screens.</summary>
 public sealed record FeedModerationSummary(
     int MediaAwaitingReview,
     int MediaHeld,
     int ReportsPending,
-    bool ScreeningIsAutomatic);
+    bool ScreeningIsAutomatic,
+    /// <summary>Whether the public feed feature is switched on (item 186 F10) — the fact the
+    /// dark-launch reminder pivots on.</summary>
+    bool FeedIsOn = false,
+    /// <summary>How many feed posts exist, visible or not. Content accumulating while the
+    /// feature is dark is the reminder's reason to exist.</summary>
+    int FeedPostCount = 0);

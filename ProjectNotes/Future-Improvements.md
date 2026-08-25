@@ -9512,7 +9512,7 @@ Recorded during item 184's build; none block the shipped arc.
 6. **Case reports have no anonymous path today** — if one ever ships, it must join the redaction
    surfaces; add a pinning test then.
 
-## 186. The feed as the front door — engagement arc (Ben, 2026-08-24 — RECORDED, next major arc)
+## 186. The feed as the front door — engagement arc (Ben, 2026-08-24 — BUILT, dark-launched 2026-08-24)
 
 Ben's direction, recorded verbatim from the session that planned item 184: engagement becomes the
 top product goal — an X/Twitter-like feed for paranormal-interested people, "addictive like
@@ -9527,3 +9527,28 @@ hashtags/mentions/follows, moderation queue); org-ad approval flow; geo machiner
 nearby search). To design when the arc starts: the ranking/scroll loop, geo-targeting consent
 (reuse the nearby-search geolocation pattern), ad frequency/labeling, and what "members post"
 means for clients vs group members.
+
+**BUILT 2026-08-24, all ten phases (F1–F5 + F5b–F10), dark behind `features.public-feed`:**
+F1 anonymous read; F2 participation gate (member OR case-client posts); F3 likes + For You
+gravity ranking + bell replies; F4 photos/video fail-closed until screened; F5 Moderator role +
+review queue + screening seam; **F5b** the automatic screener (on-server ONNX ViT, fetched by
+`scripts/get-screener-model.{sh,ps1}` — run it on the deploy build host or screening is
+manual-only, the startup log and /admin/feed-reports both say which); F6 experience-type
+categories + the learning loop (append-only labelled examples from moderators/posters/group
+claims, nightly logistic re-fit, author-only mismatch nudge that never blocks); F7 editor →
+feed ("Post to the feed" destination, private-engagement consent recorded append-only, org
+attribution Unclaimed-shows-nothing / Claim = name + Group-verified badge); F8 geo-fed promoted
+cards (1-per-8 weave, nearest public address, AreaOfOperation contributes nothing, /go counted
+redirect, impressions/clicks on the promote page); F9 avatars + new-posts pill + home teaser;
+F10 dark-launch reminder banner (SuperAdmin, names the switch and the screening posture) +
+Playwright walks (FeedTests + FeedArcTests, 16 green) + this record.
+
+**The switch is `features.public-feed` at /admin/site-settings.** The site's resting state is
+dark; a SuperAdmin banner nags while content accumulates behind it.
+
+**Follow-ons recorded, not built:** galleries / multiple media per post; reposts/quotes; ad
+billing hook into items 143/144 once ads charge; screener threshold tuning surface; video
+luma/motion feature extraction sharing the screener's sampled frames; APNs feed notifications
+for the iOS app (needs server device-token registry); universal links incl. /attending/{token}
+(needs AASA hosting); the iOS app's feed fixtures must be re-captured before its Slice 3
+(FeedPostRecord grew: categories, badges, attribution).

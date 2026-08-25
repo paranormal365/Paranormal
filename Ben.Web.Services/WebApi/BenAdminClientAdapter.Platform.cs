@@ -100,14 +100,23 @@ public sealed partial class BenAdminClientAdapter
         return (error is null, error);
     }
 
-    public async Task<LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(int take = 3, CancellationToken token = default)
+    public async Task<LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(
+        int take = 3, CancellationToken token = default,
+        double? lat = null, double? lon = null)
     {
+        // The viewer's consented coordinates order the answer nearest-first (item 186 F8) and
+        // are never sent unless the person shared them this session.
+        var geo = lat is { } la && lon is { } lo
+            ? $"&lat={la.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+              + $"&lon={lo.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : string.Empty;
+
         // Null means the FETCH failed (an empty placement list deserializes as an empty
         // list, not null) — reported as Failure so no caller mistakes an outage for
         // "no ads exist". The card component treats failure as render-nothing, on record
         // in LoadResultRenderedGuardTests.Decorations.
         var cards = await _api.GetAnonymousAsync<List<PromotedGroupCard>>(
-            $"/api/public/promoted-groups?take={take}", token);
+            $"/api/public/promoted-groups?take={take}{geo}", token);
         return cards is null
             ? LoadResult<PromotedGroupCard>.Failure()
             : LoadResult<PromotedGroupCard>.Ok(cards);

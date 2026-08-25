@@ -1,5 +1,6 @@
 @page "/feed"
 @page "/feed/tags/{Tag}"
+@page "/feed/types/{TypeId:guid}"
 @namespace Ben.Web.Website.Library.Feed
 @using Ben.Service.Models.Feed
 @using Ben.Web.Services
@@ -10,7 +11,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>@(Tag is null ? "Feed" : $"#{Tag}")</PageTitle>
+<PageTitle>@(Tag is not null ? $"#{Tag}" : _typeName ?? "Feed")</PageTitle>
 
 @*
     The feed.
@@ -32,18 +33,24 @@
 
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h3 class="mb-0">
-                @if (Tag is null)
+                @if (Tag is not null)
                 {
-                    <text>Feed</text>
+                    <text>#@Tag</text>
+                }
+                else if (TypeId is not null)
+                {
+                    @* The type's name arrives with the first page's posts; the id is an ugly
+                       heading for the beat before that. *@
+                    <text>@(_typeName ?? "Category")</text>
                 }
                 else
                 {
-                    <text>#@Tag</text>
+                    <text>Feed</text>
                 }
                 <HelpLink Slug="the-feed" />
             </h3>
 
-            @if (Tag is not null)
+            @if (Tag is not null || TypeId is not null)
             {
                 <a class="btn btn-outline-secondary btn-sm" href="/feed">All posts</a>
             }
@@ -120,13 +127,81 @@
         }
         else
         {
-            @foreach (var post in _posts)
+            @* The new-posts pill (item 186 F9): sticky so it's reachable from anywhere in the
+               scroll. On the chronological tabs the click prepends exactly what's new; on
+               For You "new" has no stable position, so the click re-ranks the page. *@
+            @if (_newPostsWaiting > 0)
             {
+                <div class="sticky-top d-flex justify-content-center py-2" style="z-index:1020;"
+                     id="feed-new-posts">
+                    <button type="button" class="btn btn-primary btn-sm rounded-pill shadow"
+                            @onclick="ShowNewPostsAsync">
+                        @(_newPostsWaiting == 1 ? "1 new post" : $"{_newPostsWaiting} new posts")
+                    </button>
+                </div>
+            }
+
+            @for (var i = 0; i < _posts.Count; i++)
+            {
+                var post = _posts[i];
                 <FeedPostCard Post="@post"
                               CanAct="@(_participationKnown && _canPost)"
                               OnLikeToggled="ToggleLikeAsync"
                               OnFollowToggled="ToggleFollowAsync"
-                              OnReportRequested="ReportAsync" />
+                              OnReportRequested="ReportAsync"
+                              OnRecategorized="SwapPost" />
+
+                @* ── The weave (item 186 F8): one promoted slot per eight posts, real cards and
+                   house cards alternating, main feed only — a tag or type page stays clean.
+                   Positions 8, 16, 24… so nobody meets an ad before they've met the feed. *@
+                @if (Tag is null && TypeId is null && (i + 1) % AdEvery == 0)
+                {
+                    var slot = (i + 1) / AdEvery;
+                    if (slot % 2 == 1 && NextPromoted(slot) is { } ad)
+                    {
+                        <div class="card mb-2 bv-feed-promoted">
+                            <div class="card-body py-3">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <h6 class="mb-1">@ad.Headline</h6>
+                                    <span class="badge bg-info" title="This group promotes itself here">Promoted</span>
+                                </div>
+                                <p class="small mb-2">@ad.Body</p>
+                                <div class="d-flex align-items-center gap-2 flex-wrap small">
+                                    @* /go so the click is counted; the route owns the closed set. *@
+                                    <a href="@($"/go/{ad.AdId}")" class="fw-semibold text-decoration-none">
+                                        @ad.OrganizationName →
+                                    </a>
+                                    @if (ad.DistanceMiles is { } miles)
+                                    {
+                                        <span class="text-secondary">@miles.ToString("0.#") miles from you</span>
+                                    }
+                                    else if (!_locationShared)
+                                    {
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-secondary"
+                                                id="feed-share-location"
+                                                @onclick="RequestLocationAsync">
+                                            Show groups near you
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (slot % 2 == 0)
+                    {
+                        @* The house card — the site's own, and it says so. *@
+                        <div class="card mb-2 bv-feed-house">
+                            <div class="card-body py-3 d-flex align-items-center gap-3">
+                                <BenIcon Name="users" Class="fs-4 text-info" />
+                                <div class="flex-grow-1 small">
+                                    <strong>Investigating something yourself?</strong>
+                                    Find a group near you, or start your own.
+                                </div>
+                                <a class="btn btn-outline-primary btn-sm" href="/find">Find a group</a>
+                            </div>
+                        </div>
+                    }
+                }
             }
 
             @if (_nextCursor is not null)
@@ -148,6 +223,121 @@
 @code {
     /// <summary>Set when the page is a tag page.</summary>
     [Parameter] public string? Tag { get; set; }
+
+    /// <summary>One experience type's posts (item 186 F6) — the chip's landing page.</summary>
+    [Parameter] public Guid? TypeId { get; set; }
+
+    /// <summary>The type's display name, learned from the first post that carries it.</summary>
+    private string? _typeName;
+
+    // ── Promoted weave (item 186 F8) ─────────────────────────────────────────
+    /// <summary>One promoted slot per this many posts.</summary>
+    private const int AdEvery = 8;
+
+    private List<Ben.Service.Models.Entities.PromotedGroupCard> _promoted = [];
+    /// <summary>Session-only. Shared by an explicit click, sent as query values, never stored.</summary>
+    private double? _viewerLat, _viewerLon;
+    private bool _locationShared;
+    private DotNetObjectReference<FeedPage>? _geoRef;
+
+    /// <summary>The card for a promoted slot, round-robin over what the server sent.</summary>
+    private Ben.Service.Models.Entities.PromotedGroupCard? NextPromoted(int slot)
+        => _promoted.Count == 0 ? null : _promoted[(slot / 2) % _promoted.Count];
+
+    // ── The new-posts pill (item 186 F9) ─────────────────────────────────────
+    /// <summary>How often the head of the feed is re-checked while the page is open.</summary>
+    private static readonly TimeSpan NewPostsCheckEvery = TimeSpan.FromSeconds(45);
+
+    private int _newPostsWaiting;
+    private CancellationTokenSource? _pollCts;
+    private List<FeedPostRecord> _pendingNewPosts = [];
+
+    private void StartNewPostsPolling()
+    {
+        if (_pollCts is not null) return;
+        _pollCts = new CancellationTokenSource();
+        _ = PollForNewPostsAsync(_pollCts.Token);
+    }
+
+    private async Task PollForNewPostsAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(NewPostsCheckEvery);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (_loading || _loadingMore || _posts.Count == 0) continue;
+
+                // "Anything newer than what's on screen?" is asked of the CHRONOLOGICAL head —
+                // even in For You mode, where the answer decides whether re-ranking is offered,
+                // not what position anything lands in.
+                var head = await Feed.GetFeedAsync(
+                    _mode == "foryou" ? "all" : _mode, Tag, experienceType: TypeId);
+                if (head is null) continue;
+
+                var known = _posts.Select(p => p.Id).ToHashSet();
+                var newestSeen = _posts.Max(p => p.DateCreated);
+                _pendingNewPosts = head.Posts
+                    .Where(p => !known.Contains(p.Id) && p.DateCreated > newestSeen)
+                    .ToList();
+
+                if (_pendingNewPosts.Count != _newPostsWaiting)
+                {
+                    _newPostsWaiting = _pendingNewPosts.Count;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException) { /* page going away */ }
+        catch (Exception) { /* a failed poll is a quiet skip — the next tick tries again */ }
+    }
+
+    private async Task ShowNewPostsAsync()
+    {
+        if (_mode == "foryou")
+        {
+            // No stable position for "new" in a ranked list: re-rank the whole page.
+            _newPostsWaiting = 0;
+            _pendingNewPosts = [];
+            await LoadAsync();
+            return;
+        }
+        _posts.InsertRange(0, _pendingNewPosts.OrderByDescending(p => p.DateCreated).ThenByDescending(p => p.Id));
+        _newPostsWaiting = 0;
+        _pendingNewPosts = [];
+    }
+
+    private async Task LoadPromotedAsync()
+    {
+        // Failure renders nothing — promotion is garnish on the feed, same doctrine as the
+        // placements card (on record in LoadResultRenderedGuardTests.Decorations).
+        var cards = await Feed.GetPromotedGroupsAnonymousAsync(
+            4, lat: _viewerLat, lon: _viewerLon);
+        if (!cards.Failed) _promoted = cards.Items.ToList();
+    }
+
+    /// <summary>The consent affordance: an explicit click, the browser's own permission prompt,
+    /// and the answer lives only in this circuit.</summary>
+    private async Task RequestLocationAsync()
+    {
+        _geoRef ??= DotNetObjectReference.Create(this);
+        await using var geo = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Web.Website.Library/Shared/NearbyDiscovery.razor.js");
+        await geo.InvokeVoidAsync("tryGetUserLocation", _geoRef);
+    }
+
+    [JSInvokable]
+    public async Task SetUserLocation(double? lat, double? lon)
+    {
+        _locationShared = true; // asked and answered, either way — don't re-offer
+        if (lat is not null && lon is not null)
+        {
+            _viewerLat = lat;
+            _viewerLon = lon;
+            await LoadPromotedAsync(); // re-ordered nearest-first
+        }
+        StateHasChanged();
+    }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
@@ -235,7 +425,7 @@
 
         try
         {
-            var page = await Feed.GetFeedAsync(_mode, Tag);
+            var page = await Feed.GetFeedAsync(_mode, Tag, experienceType: TypeId);
             if (page is null)
             {
                 _error = "Couldn't load the feed.";
@@ -246,6 +436,12 @@
             _nextCursor = page.NextCursor;
             _canPost = page.CanPost;
             _participationKnown = true;
+            _typeName ??= page.Posts.FirstOrDefault(p => p.ExperienceTypeId == TypeId)?.ExperienceTypeName;
+
+            // The weave's cards (item 186 F8) — main feed only, and only worth fetching when
+            // there are enough posts for the first slot to exist.
+            if (Tag is null && TypeId is null && _posts.Count >= AdEvery && _promoted.Count == 0)
+                await LoadPromotedAsync();
         }
         finally
         {
@@ -261,7 +457,7 @@
         _loadingMore = true;
         try
         {
-            var page = await Feed.GetFeedAsync(_mode, Tag, _nextCursor);
+            var page = await Feed.GetFeedAsync(_mode, Tag, _nextCursor, experienceType: TypeId);
             if (page is null) return;
 
             _posts.AddRange(page.Posts);
@@ -297,6 +493,9 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!RendererInfo.IsInteractive) return;
+
+        // The head re-check that feeds the pill (item 186 F9) — once per page lifetime.
+        StartNewPostsPolling();
 
         var wantsObserver = _nextCursor is not null;
         if (!wantsObserver)
@@ -340,6 +539,9 @@
         catch (JSException) { }
 
         _self?.Dispose();
+        _geoRef?.Dispose();
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
     }
 
     /// <summary>
@@ -351,6 +553,13 @@
     /// wrote if they follow nobody, which reads as the post having failed.
     /// </remarks>
     private void OnPosted(FeedPostRecord post) => _posts.Insert(0, post);
+
+    /// <summary>Swaps in a post the server re-read — a recategorize's fresh copy.</summary>
+    private void SwapPost(FeedPostRecord post)
+    {
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index >= 0) _posts[index] = post;
+    }
 
     /// <summary>
     /// Likes or unlikes, optimistically.

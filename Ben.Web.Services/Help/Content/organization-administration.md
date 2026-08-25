@@ -498,10 +498,26 @@ an apply box to signed-in visitors. Applications land on the **Members** tab, wh
 with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
 sees your answer.
 
+## What kind of group you are
+
+Every group is either an **investigation group** or a **ghost walking tour**, chosen when it was
+created and changeable in **Settings**. The choice decides what a NEW group starts with — a tour
+starts with a public, searchable meeting point and public events; an investigation group starts
+private — and after that it is a label, never a restriction. Nothing is withheld from either kind.
+
+Alongside it sits **runs public tours**, which is a separate switch on purpose. Plenty of
+investigation groups run paid public tours as a sideline, and none of them should have to
+register a second group to be found for it. Turn it on and your group appears under **Walking
+tours** in the group finder while its badge still says investigation group — which is the truth
+about both facts at once.
+
 ## Promoting your group
 
 **Settings → Promote your group** builds a promotional card that rotates through the group
-finder's Featured groups and the home page, always marked "Promoted". The builder walks you
+finder's Featured groups, the home page, and the public feed, always marked "Promoted". In the
+feed, cards are fed to the people nearest your group's public address first — a group with no
+public address still rotates, just unranked. Once approved, the page shows two honest numbers:
+how many times the card was shown, and how many people clicked through. The builder walks you
 through it — headline (say who you help and where), a short message (what you do, what it
 costs, what to do next), an optional picture from your media library, and where the card
 leads: your public page or the group finder. Send your people to the public page only once
@@ -511,6 +527,22 @@ Every card goes through review before anyone sees it: submit, and a platform adm
 approves it or declines it with a reason (you're messaged either way). Any later edit comes
 back through review — the approved text is the only text that ever shows. One card per group;
 withdraw it any time and it leaves the placements immediately.
+
+## Feed posts made from your cases
+
+When a member (or a client) renders a video from one of your cases in the video editor and
+posts it to the public feed, the post is credited to *them* — **your group's name appears on
+nothing until you say so**. **Settings → Feed attribution** lists that footage for your
+decision:
+
+- **Claim** puts your group's name and a link to your public page on the post, plus a
+  **Group verified** badge — you vouching that the footage is what it says. That badge also
+  lifts the post's standing in the feed.
+- **Decline** leaves the post up, credited to the person, with no link to you — ever.
+
+Either decision can be changed later. Footage from a **private engagement** additionally
+required the poster's explicit, recorded confirmation before it could be posted at all —
+claiming or declining is only about your name, never about whether the post exists.
 
 ## Location data in your photos, audio and video
 

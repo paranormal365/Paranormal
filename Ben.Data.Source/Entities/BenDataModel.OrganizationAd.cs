@@ -25,6 +25,14 @@ namespace Ben.Data.Source.Entities
         /// never a free URL — a promoted card must not lead off-site.</summary>
         public string TargetKind { get; set; } = "org";
         public OrganizationAdStatus Status { get; set; } = OrganizationAdStatus.Draft;
+
+        /// <summary>How many times the card was SERVED to a page (item 186 F8). Counted in
+        /// batches on the serving endpoint; approximate by design — a count of serves, not a
+        /// count of eyeballs, and the promote page says so.</summary>
+        public long Impressions { get; set; }
+
+        /// <summary>How many times somebody followed the card through <c>/go</c> (item 186 F8).</summary>
+        public long Clicks { get; set; }
         public string? RejectionReason { get; set; }
         public DateTime? DateSubmitted { get; set; }
         public DateTime? DateReviewed { get; set; }

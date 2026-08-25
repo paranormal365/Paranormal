@@ -1,0 +1,186 @@
+@using Ben.Service.Models.Feed
+@using Ben.Video.Editor.Models
+@using Ben.Web.Services
+
+@inject FeedExportPublisher FeedPublisher
+@inject IBenAdminClient AdminClient
+
+@*
+    The editor's "Post to the feed" confirmation (item 186 F7).
+
+    This dialog is the host's half of the destination: the editor cannot know what a case is,
+    let alone a private engagement, so the naming of what is about to become public happens here.
+    A render from an ordinary case says which case; a render from a PRIVATE-ENGAGEMENT case says
+    so in those words and requires the explicit tick, which the server records as consent.
+
+    TelerikWindow, not TelerikDialog — inputs inside TelerikDialog never reach Blazor (the test
+    suite enforces this repo-wide).
+*@
+
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await CancelAsync(); })"
+                   Width="460px" Modal="true" Draggable="true" Resizable="false">
+        <WindowTitle>Post to the feed</WindowTitle>
+        <WindowContent>
+            <p class="mb-2">
+                <strong>@(Exported?.FileName ?? "This video")</strong> will be visible to
+                <strong>everyone</strong> — the feed is public and needs no account to read.
+            </p>
+
+            @if (SourceCaseId is not null)
+            {
+                @if (IsPrivateEngagement)
+                {
+                    <div class="alert alert-warning py-2">
+                        This footage comes from a <strong>private engagement</strong>@(CaseLabel is null ? "" : $" — {CaseLabel}").
+                        The client was promised privacy; publishing any of it is your call to make
+                        deliberately, and it is recorded.
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="feed-pe-consent"
+                               @bind="_consentGiven" disabled="@_busy" />
+                        <label class="form-check-label" for="feed-pe-consent">
+                            I understand this private-engagement footage will be public, and I
+                            take responsibility for publishing it.
+                        </label>
+                    </div>
+                }
+                else if (CaseLabel is not null)
+                {
+                    <p class="text-secondary small mb-2">From the case: <strong>@CaseLabel</strong>.
+                        The group that worked it decides separately whether the post carries
+                        its name.</p>
+                }
+            }
+
+            <label class="form-label small mb-1" for="feed-editor-body">Say something about it</label>
+            <textarea id="feed-editor-body" class="form-control mb-2" rows="2" maxlength="1000"
+                      placeholder="What did you capture?" @bind="_body" disabled="@_busy"></textarea>
+
+            @if (_taxonomy is { Count: > 0 })
+            {
+                <select class="form-select form-select-sm mb-2" @bind="_typeIdRaw" disabled="@_busy"
+                        aria-label="What does this show?">
+                    <option value="">What does this show? (optional)</option>
+                    @foreach (var group in _taxonomy)
+                    {
+                        <optgroup label="@group.Category.Name">
+                            @foreach (var type in group.Types)
+                            {
+                                <option value="@type.Id">@type.Name</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            }
+
+            <p class="text-secondary small mb-0">
+                The video is checked before it appears — it may take a moment to show publicly.
+            </p>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0" role="alert">@_error</div>
+            }
+        </WindowContent>
+        <WindowFooter>
+            <TelerikButton OnClick="PostAsync"
+                           Enabled="@(!_busy && (!IsPrivateEngagement || _consentGiven))"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                @(_busy ? "Posting…" : "Post publicly")
+            </TelerikButton>
+            <TelerikButton OnClick="CancelAsync" Enabled="@(!_busy)"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Cancel
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>The render awaiting a decision. Read only when Post is clicked.</summary>
+    [Parameter] public ExportedVideo? Exported { get; set; }
+
+    [Parameter] public Guid? SourceCaseId { get; set; }
+    [Parameter] public bool IsPrivateEngagement { get; set; }
+    /// <summary>How the case is named to the person — its display label, never a client name
+    /// this surface shouldn't repeat.</summary>
+    [Parameter] public string? CaseLabel { get; set; }
+
+    /// <summary>The post landed. The host resolves the editor prompt's wait with this.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnPosted { get; set; }
+
+    /// <summary>Walked away. The host faults the wait so the editor keeps the render.</summary>
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    private string _body = string.Empty;
+    private string _typeIdRaw = string.Empty;
+    private bool _consentGiven;
+    private bool _busy;
+    private string? _error;
+    private IReadOnlyList<ExperienceCategoryWithTypesResponse>? _taxonomy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && _taxonomy is null)
+        {
+            var taxonomy = await AdminClient.GetExperienceTaxonomyAsync();
+            // A failed taxonomy fetch just means no category picker — posting still works, and
+            // the select's absence is covered by its optionality rather than a broken dialog.
+            _taxonomy = taxonomy.Failed ? [] : taxonomy.Items;
+        }
+    }
+
+    private async Task PostAsync()
+    {
+        if (Exported is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var post = await FeedPublisher.PostAsync(
+                Exported, _body,
+                Guid.TryParse(_typeIdRaw, out var typeId) ? typeId : null,
+                SourceCaseId,
+                consentToPublishPrivateEngagement: _consentGiven,
+                CancellationToken.None);
+
+            Reset();
+            await VisibleChanged.InvokeAsync(false);
+            await OnPosted.InvokeAsync(post);
+        }
+        catch (Exception ex)
+        {
+            // The server's sentence (a refused consent, the body cap) — shown here, where the
+            // person can fix it. The dialog stays open; the render is untouched.
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_busy) return;
+        Reset();
+        await VisibleChanged.InvokeAsync(false);
+        await OnCancelled.InvokeAsync();
+    }
+
+    private void Reset()
+    {
+        _body = string.Empty;
+        _typeIdRaw = string.Empty;
+        _consentGiven = false;
+        _error = null;
+    }
+}

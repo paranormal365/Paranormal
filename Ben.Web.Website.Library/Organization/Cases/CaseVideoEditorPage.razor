@@ -1,4 +1,6 @@
 @page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/video-editor"
+@using Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject ProjectService Projects
@@ -57,9 +59,23 @@
         @* ── Editor (full remaining height) ─────────────────────────────────── *@
         <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
             <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         EnablePostToFeed="@_canPostToFeed"
+                         OnPostToFeed="OnPostToFeedAsync"
                          ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
         </div>
     </div>
+
+    @* ── "Post to the feed" confirmation (item 186 F7) ─────────────────────────
+       Case lineage travels with the render; a private-engagement case gets the explicit
+       wording and the recorded tick. CaseLabel is the DISPLAY label — the redaction-aware
+       name — never the client's real name. *@
+    <FeedPostFromEditorDialog @bind-Visible="_feedDialogVisible"
+                              Exported="_pendingFeedExport"
+                              SourceCaseId="CaseId"
+                              IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)"
+                              CaseLabel="@_case?.DisplayLabel"
+                              OnPosted="OnFeedPostedAsync"
+                              OnCancelled="OnFeedCancelled" />
 
     @* ── Case Projects dialog ────────────────────────────────────────────────── *@
     <BenModal @bind-Visible="_showProjectList" Title="Case Projects" Size="lg">
@@ -146,6 +162,40 @@
     /// export updates the same project instead of creating a new row per render.</summary>
     private Guid? _publishedProjectId;
 
+    // ── "Post to the feed" (item 186 F7) ─────────────────────────────────────
+    private bool _canPostToFeed;
+    private bool _feedDialogVisible;
+    private ExportedVideo? _pendingFeedExport;
+    private TaskCompletionSource? _feedFlowDone;
+
+    /// <summary>
+    /// The editor's feed destination. Holds the editor's prompt open (its busy state) until the
+    /// confirmation dialog resolves — posted, or walked away. Throwing on cancel is the
+    /// contract: it tells the prompt to stay open with the render still in hand.
+    /// </summary>
+    private async Task OnPostToFeedAsync(ExportedVideo exported)
+    {
+        _pendingFeedExport = exported;
+        _feedFlowDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _feedDialogVisible = true;
+        StateHasChanged();
+        await _feedFlowDone.Task;
+    }
+
+    private Task OnFeedPostedAsync(FeedPostRecord post)
+    {
+        _pendingFeedExport = null;
+        Toasts.Success("Posted to the feed — it appears once the video clears screening.");
+        _feedFlowDone?.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private void OnFeedCancelled()
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
@@ -161,6 +211,10 @@
 
             _caseProjectsResult = await AdminClient.GetMyVideoProjectsAsync(CaseId);
             _caseProjects       = _caseProjectsResult.Items.ToList();
+
+            // Whether the feed destination is offered at all — the server's own CanPost, and
+            // null when the feed feature is dark. The editor never guesses (item 186 F7).
+            _canPostToFeed = (await AdminClient.GetFeedAsync())?.CanPost == true;
         }
         catch (Exception ex)
         {

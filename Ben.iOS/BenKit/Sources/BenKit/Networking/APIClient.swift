@@ -36,6 +36,43 @@ public actor APIClient {
         }
     }
 
+    /// Fetch RAW bytes from an authenticated route — images and other binaries that are not
+    /// JSON and are too small to be worth a file on disk. Refusals map exactly as elsewhere,
+    /// so a 401 still ends the session rather than looking like an empty image.
+    public func loadData(_ endpoint: Endpoint) async -> LoadResult<Data> {
+        guard let request = await buildRequest(endpoint) else {
+            return .failed(reason: nil)
+        }
+        do {
+            let (data, response) = try await transport.send(request)
+            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            guard (200..<300).contains(response.statusCode) else {
+                return ResponseMapping.failure(
+                    statusCode: response.statusCode, data: data,
+                    headers: response.allHeaderFields)
+            }
+            return .ok(data)
+        } catch {
+            return .failed(reason: nil)
+        }
+    }
+
+    /// The body and status, UNINTERPRETED — for the few endpoints whose *failures* carry a
+    /// structured payload rather than prose. `api/account/register` is the example: it answers
+    /// with the same JSON shape for success and for "that name is already taken", and the
+    /// prose mapper would replace that sentence with "The server answered 400 (bad request)".
+    /// Everything else should use `load`, which maps refusals consistently.
+    public func loadRaw(_ endpoint: Endpoint) async -> (data: Data, statusCode: Int)? {
+        guard let request = await buildRequest(endpoint) else { return nil }
+        do {
+            let (data, response) = try await transport.send(request)
+            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            return (data, response.statusCode)
+        } catch {
+            return nil
+        }
+    }
+
     /// Fire an operation whose success needs no payload (204s, empty 200s).
     public func send(_ endpoint: Endpoint) async -> LoadResult<EmptyBody> {
         await load(endpoint, as: EmptyBody.self)

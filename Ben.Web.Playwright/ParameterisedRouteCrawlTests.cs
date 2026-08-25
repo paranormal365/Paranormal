@@ -71,12 +71,63 @@ public class ParameterisedRouteCrawlTests : BenTestBase
         if (FirstValue(await ApiAsync("/api/equipment-catalog/models", token), "id", "modelId") is { } modelId)
             _ids["ModelId"] = modelId;
 
+        // A field session the crawler can actually open. Uploaded rather than assumed: nothing
+        // seeds one, and without it the player's route is skipped — which would mean the one
+        // guard against dead-end links never visits the newest page on the site.
+        //
+        // The device id is FIXED, so running this a hundred times leaves one row rather than a
+        // hundred. That is the same retry behaviour a phone relies on when an upload drops.
+        if (await EnsureFieldSessionAsync(token) is { } fieldSessionId)
+        {
+            _ids["SessionId"] = fieldSessionId;
+        }
+
         // Help documents are embedded in the app rather than served by the API, so the slug comes
         // from the index page's own links — the same route a reader would follow.
         await Page.GotoAsync($"{BaseUrl}/help");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var helpHref = await Page.Locator("a[href^='/help/']").First.GetAttributeAsync("href");
         if (helpHref is { Length: > 6 }) _ids["Slug"] = helpHref["/help/".Length..];
+    }
+
+    /// <summary>Uploads a tiny field session for the crawler, or returns null if it cannot.</summary>
+    private async Task<string?> EnsureFieldSessionAsync(string token)
+    {
+        if (FirstValue(await ApiAsync("/api/field-sessions/mine", token), "id", "sessionId")
+            is { } existing)
+        {
+            return existing;
+        }
+
+        const string document = """
+            {"format_version":"1.0.0",
+             "device":{"manufacturer":"Apple","model":"iPhone17,1"},
+             "session":{"started_at":"2026-08-01T02:00:00.000Z",
+                        "ended_at":"2026-08-01T02:05:00.000Z",
+                        "location_label":"Route crawl fixture",
+                        "trigger":{"mode":"hybrid","interval_seconds":2}},
+             "readings":[{"at":"2026-08-01T02:00:00.000Z","triggered_by":"interval",
+                          "measurements":{"emf":{"value":48.0,"unit":"uT","baseline":48.0}}}]}
+            """;
+
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload
+        {
+            Name = "data.json",
+            MimeType = "application/json",
+            Buffer = System.Text.Encoding.UTF8.GetBytes(document),
+        });
+        // Stable on purpose — see the caller.
+        form.Append("deviceSessionId", "11111111-2222-3333-4444-555555555555");
+
+        var response = await api.PostAsync("/api/field-sessions/document", new()
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+            Multipart = form,
+        });
+        if (!response.Ok) return null;
+        return (await response.JsonAsync())?.GetProperty("id").GetString();
     }
 
     [Test]

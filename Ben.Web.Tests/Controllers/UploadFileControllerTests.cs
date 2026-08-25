@@ -70,6 +70,11 @@ public class UploadFileControllerTests
         Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null, bool isSuperAdmin = false)
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        // A file the tests then serve is a file that EXISTS. Moq's default for a bool is
+        // false, which would make every download 404 through the missing-bytes guard — so the
+        // realistic default is set here once. A test about missing bytes overrides it, which
+        // works because Moq honours the last matching setup.
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
         storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
                .Returns<Guid, string>((uid, name) => $"users/{uid}/{name}");
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
@@ -114,6 +119,8 @@ public class UploadFileControllerTests
         Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null)
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        // Same realistic default as the authenticated builder: a file these tests serve exists.
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
         var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object, storage.Object,
             new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
@@ -751,6 +758,44 @@ public class UploadFileControllerTests
         var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<ForbidResult>(result);
+        storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Download_RowExistsButBytesAreGone_Returns404NotAServerError()
+    {
+        // The database can outlive the blobs: a restored database, a cleared dev .uploads, a
+        // half-finished migration. Storage throws FileNotFoundException for a missing file,
+        // and that reached the exception handler as a 500 — so one missing avatar on a page
+        // full of them produced a wall of server errors. "Not found" is the honest answer,
+        // and it lets the caller's own broken-image fallback do its job.
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .ThrowsAsync(new FileNotFoundException("Stored file not found"));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "gone.png", StoredFileName = "gone.png", ContentType = "image/png",
+                FileSize = 1, StoragePath = "users/owner/gone.png", IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = BuildController(factory, ownerId, storage);
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(false);   // the bytes are gone
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        // And it never even tried to open it — the guard is before the throw, not a catch
+        // around it, so the log stays clean rather than full of handled exceptions.
         storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

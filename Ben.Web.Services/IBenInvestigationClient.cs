@@ -23,6 +23,17 @@ public interface IBenInvestigationClient
     Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<(InvestigationRecord? Result, string? Error)> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
     Task<(InvestigationRecord? Result, string? Error)> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Deletes an investigation, carrying back the server's own sentence when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// The bool-only version discards the refusal, which the UI then shows as success — the
+    /// failure shape this codebase keeps rediscovering. Prefer this one at every call site that
+    /// has somewhere to put a message.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteInvestigationExpectingReasonAsync(
+        Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<LoadResult<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
@@ -80,4 +91,22 @@ public interface IBenInvestigationClient
 
     /// <summary>Sets the current user's RSVP on their attendee record.</summary>
     Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
+
+    // ── Field sessions recorded on a phone ────────────────────────────────────
+
+    /// <summary>Sessions uploaded for one investigation.</summary>
+    Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
+        Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// One session, with the document the device wrote.
+    /// </summary>
+    /// <remarks>
+    /// Null when the server would not give it up — the session may have been removed, or the
+    /// caller may no longer have access to the investigation it belongs to. The page says so
+    /// rather than rendering an empty recording.
+    /// </remarks>
+    Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default);
+
 }

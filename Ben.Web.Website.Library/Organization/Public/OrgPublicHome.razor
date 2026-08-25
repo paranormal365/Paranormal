@@ -38,6 +38,22 @@ else
             }
             <div>
                 <h1 class="mb-0 fs-2 fw-bold">@_org.OrgName</h1>
+                @* What this group is, said plainly (2026-08-24). A visitor who wants a tour
+                   and a visitor who wants an investigation are looking for different things,
+                   and the name alone rarely tells them apart. *@
+                <div class="d-flex flex-wrap gap-2 mt-1">
+                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis">
+                        @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
+                    </span>
+                    @if (_org.RunsPublicTours && _org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
+                    {
+                        @* An investigation group that also runs tours — worth saying, since
+                           it is why they turn up in a tour search. *@
+                        <span class="badge rounded-pill bg-body-secondary text-body-emphasis">
+                            Runs public tours
+                        </span>
+                    }
+                </div>
                 @if (_org.PublicPhone is not null || _org.PublicEmail is not null || _org.PublicWebsite is not null)
                 {
                     <div class="d-flex flex-wrap gap-3 mt-1 text-secondary small">

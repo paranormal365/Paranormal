@@ -57,10 +57,10 @@ public class PublicCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" });
+        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
         await Expect(confirmBtn).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        var disputeBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✗ Disputes" });
+        var disputeBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" });
         await Expect(disputeBtn).ToBeVisibleAsync();
     }
 
@@ -76,7 +76,7 @@ public class PublicCaseTests : BenTestBase
         var voteCount = Page.Locator("text=vote", new() { HasText = "vote" }).First;
 
         // Cast a Confirms vote
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" });
+        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
         await confirmBtn.ClickAsync();
 
         // A Remove button should now appear (user has an active vote)

@@ -16,6 +16,26 @@
     arrival changes the counts and the banner returns — it nags without becoming wallpaper.
 *@
 
+@* Item 186 F10: the dark-launch reminder. SuperAdmin-only — the one person who can flip the
+   switch — and only while the feed has content AND is off. Says the screening posture too,
+   so nobody launches on manual-only screening without having read that they are. *@
+@if (_feedReminder is { } reminder)
+{
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="status"
+         id="feed-dark-reminder">
+        <span aria-hidden="true">📣</span>
+        <div class="flex-grow-1">
+            The public feed has <strong>@reminder.FeedPostCount post@(reminder.FeedPostCount == 1 ? "" : "s")</strong>
+            and is switched <strong>off</strong> — nobody outside this reminder can see any of it.
+            The switch is at <a href="/admin/site-settings">Site Settings</a>.
+            Screening is currently
+            <strong>@(reminder.ScreeningIsAutomatic ? "automatic" : "manual-only — every photo and video waits for a moderator")</strong>.
+        </div>
+        <button type="button" class="btn-close" aria-label="Dismiss"
+                @onclick="DismissFeedReminderAsync"></button>
+    </div>
+}
+
 @foreach (var item in _visible)
 {
     <div class="alert alert-info d-flex align-items-start gap-2 mb-3 action-needed-banner" role="status">
@@ -98,9 +118,44 @@
                 if (await IsDismissedAsync(item)) continue;
                 _visible.Add(item);
             }
-            if (_visible.Count > 0) StateHasChanged();
+
+            await LoadFeedReminderAsync();
+
+            if (_visible.Count > 0 || _feedReminder is not null) StateHasChanged();
         }
         finally { _loading = false; }
+    }
+
+    // ── The dark-launch reminder (item 186 F10) ──────────────────────────────
+
+    private Ben.Service.Models.Feed.FeedModerationSummary? _feedReminder;
+
+    private async Task LoadFeedReminderAsync()
+    {
+        // SuperAdmin holds the switch; nobody else is nagged about it.
+        if (!UserState.IsSuperAdmin) return;
+        try
+        {
+            var summary = await AdminClient.GetModerationSummaryAsync();
+            if (summary is { FeedIsOn: false, FeedPostCount: > 0 }
+                && await JS.InvokeAsync<string?>("sessionStorage.getItem", FeedReminderKey(summary)) is null)
+            {
+                _feedReminder = summary;
+            }
+        }
+        catch { /* same rule as every banner here: never the reason a page errors */ }
+    }
+
+    // Counts in the key, like the org banners: new content since the dismissal brings it back.
+    private static string FeedReminderKey(Ben.Service.Models.Feed.FeedModerationSummary summary)
+        => $"feed-dark-reminder:{summary.FeedPostCount}";
+
+    private async Task DismissFeedReminderAsync()
+    {
+        if (_feedReminder is not { } summary) return;
+        _feedReminder = null;
+        try { await JS.InvokeVoidAsync("sessionStorage.setItem", FeedReminderKey(summary), "1"); }
+        catch { }
     }
 
     // The key carries the counts, so any CHANGE (a new arrival, or a queue that shrank and

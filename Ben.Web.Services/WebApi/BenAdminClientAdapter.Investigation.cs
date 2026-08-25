@@ -38,6 +38,10 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
                HttpMethod.Put, $"{InvBase(orgId, caseId)}/{id}", request, token);
 
+    public Task<(bool Deleted, string? Error)> DeleteInvestigationExpectingReasonAsync(
+        Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/cases/{caseId}/investigations/{id}", token);
+
     public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
 
@@ -124,4 +128,18 @@ public sealed partial class BenAdminClientAdapter
 
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
         => await _api.PutVoidAsync($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+
+    // ── Field sessions recorded on a phone ────────────────────────────────────
+
+    /// <summary>Sessions uploaded for one investigation.</summary>
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
+        Guid investigationId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>(
+            $"/api/field-sessions/for-investigation/{investigationId}", token);
+
+    /// <summary>One session, with its document — the readings as the device wrote them.</summary>
+    public Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}", token);
+
 }

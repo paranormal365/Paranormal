@@ -101,9 +101,11 @@ public sealed partial class BenAdminClientAdapter
         return result;
     }
 
-    public Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default)
+    public Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24,
+        CancellationToken token = default, bool toursOnly = false)
         => _api.GetAnonymousAsync<OrgBrowsePage>(
-               $"/api/public/organizations/browse?page={page}&pageSize={pageSize}", token);
+               $"/api/public/organizations/browse?page={page}&pageSize={pageSize}"
+             + (toursOnly ? "&toursOnly=true" : string.Empty), token);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 

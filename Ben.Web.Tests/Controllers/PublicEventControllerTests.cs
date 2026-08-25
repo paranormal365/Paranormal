@@ -424,4 +424,88 @@ public sealed class PublicEventControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── "Upcoming" has to mean upcoming ───────────────────────────────────────
+
+    [Fact]
+    public async Task The_listing_leaves_out_events_that_have_already_ended()
+    {
+        // GetUpcoming had no date filter at all, and sorts ascending by start — so the FIRST
+        // thing a stranger saw on a group's public events page was the oldest event it had ever
+        // run. Found by opening the Events screen on a phone and reading the top row.
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, Title = "Last Month's Open Night",
+                UrlName = "last-months-open-night", Description = "Over and done.",
+                StartDateTime = DateTime.UtcNow.AddDays(-30),
+                EndDateTime = DateTime.UtcNow.AddDays(-30).AddHours(3),
+                IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var listed = await ListAsync(w);
+        Assert.DoesNotContain(listed, e => e.Title == "Last Month's Open Night");
+        Assert.Contains(listed, e => e.Title == "Ghost Walk");
+    }
+
+    [Fact]
+    public async Task An_event_happening_right_now_is_still_listed()
+    {
+        // End, not start. Dropping something the moment it begins would hide exactly the event
+        // somebody is looking up while standing outside it.
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, Title = "Happening Now",
+                UrlName = "happening-now", Description = "In progress.",
+                StartDateTime = DateTime.UtcNow.AddHours(-1),
+                EndDateTime = DateTime.UtcNow.AddHours(2),
+                IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Contains(await ListAsync(w), e => e.Title == "Happening Now");
+    }
+
+    [Fact]
+    public async Task A_past_events_own_page_still_resolves()
+    {
+        // The listing filter must NOT reach the detail lookup: a link shared to an event that
+        // has since happened has to keep working, or every past share becomes a dead end.
+        var w = await SeedAsync();
+        var pastId = Guid.NewGuid();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = pastId, OrganizationId = OrgId, Title = "Already Happened",
+                UrlName = "already-happened", Description = "Over.",
+                StartDateTime = DateTime.UtcNow.AddDays(-10),
+                EndDateTime = DateTime.UtcNow.AddDays(-10).AddHours(2),
+                IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory, null).GetEvent(pastId, default);
+        var record = Assert.IsType<PublicEventRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("Already Happened", record.Title);
+    }
+
+    private static async Task<IReadOnlyList<PublicEventListItem>> ListAsync(World w)
+    {
+        var result = await Build(w.Factory, null).GetUpcoming(null, 50, default);
+        return Assert.IsType<List<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
 }

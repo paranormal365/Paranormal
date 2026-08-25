@@ -18,8 +18,44 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.ishaunted.ios</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ishaunted</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Add public events and investigations you're attending to your own calendar.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add public events and investigations you're attending to your own calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Capture photos and video during a field session, and for feed posts and case occurrences.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. It stays on this device.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Measures sound level and records audio during field sessions and EVP recordings, and captures sound with video for feed posts and case evidence.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Reads the magnetometer and barometer during a field session — magnetic field strength, and how far up or down you've moved between floors.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save investigation media you download to your photo library.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turns spoken notes into text during a field session. This happens entirely on your device — nothing you say is sent anywhere.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
@@ -38,30 +74,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- Website links and ishaunted:// links land on the matching native screen. -->
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.ishaunted.ios</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>ishaunted</string>
-			</array>
-		</dict>
-	</array>
-	<!-- Dev API is plain-HTTP localhost. Local networking ONLY - no global
-	     arbitrary loads; UAT/production stay HTTPS-clean and App Store-safe. -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Capture photos and video to attach to feed posts and case occurrences.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Save investigation media you download to your photo library.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Record audio when capturing video for feed posts and case evidence.</string>
 </dict>
 </plist>

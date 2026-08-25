@@ -69,11 +69,18 @@ public sealed record OrganizationListItemResponse(
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
 public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    // Ghost walking tours (2026-08-24): what this group primarily is. It decides the
+    // DEFAULTS the new group starts with — see OrgKindDefaults — and nothing else.
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
+    // Null means "leave as-is" — an older caller that omits these must not silently
+    // reclassify a group or switch its tours off.
+    Ben.Data.Common.Enums.OrganizationKind? Kind = null,
+    bool? RunsPublicTours = null,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
@@ -116,7 +123,11 @@ public sealed record OrgPublicHomeResponse(
     IReadOnlyList<OrgPublicLogoItem> Logos,
     OrgPublicPageItem? HomePage,
     IReadOnlyList<OrgPublicNavItem> NavPages,
-    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
+    /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
+    bool RunsPublicTours = false);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
@@ -624,7 +635,9 @@ public sealed record OrgBrowseResult(
     string? AreaLabel,
     double? RadiusMiles,
     bool IsAcceptingClients,
-    Guid? ActiveLogoFileId);
+    Guid? ActiveLogoFileId,
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    bool RunsPublicTours = false);
 
 /// <summary>One page of the browse listing.</summary>
 public sealed record OrgBrowsePage(
@@ -963,7 +976,40 @@ public sealed record CaseReportSectionDto(
     string                                           Title,
     string?                                          Body,
     Ben.Data.Common.Enums.CaseReportSectionType      SectionType,
-    IReadOnlyList<CaseReportSectionFileDto>          Files);
+    IReadOnlyList<CaseReportSectionFileDto>          Files,
+    IReadOnlyList<CaseReportSectionFieldSessionDto>  FieldSessions);
+
+/// <summary>A field session cited by a report section.</summary>
+/// <remarks>
+/// A reference, never a copy: the readings, recordings and digests stay with the upload, and the
+/// report points at them. See <c>CaseReportSectionFieldSession</c>.
+/// </remarks>
+public sealed record CaseReportSectionFieldSessionDto(
+    Guid      Id,
+    Guid      FieldSessionUploadId,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount,
+    string?   Caption,
+    int       SortOrder);
+
+/// <summary>A field session a report section could cite, as the picker lists it.</summary>
+public sealed record AvailableFieldSessionDto(
+    Guid      Id,
+    Guid?     InvestigationId,
+    string?   InvestigationTitle,
+    string?   LocationLabel,
+    string?   RecordedByName,
+    string    DeviceModel,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int       ReadingCount,
+    int       MarkerCount,
+    int       FileCount);
 
 public sealed record CaseReportSectionFileDto(
     Guid    Id,
@@ -1124,3 +1170,28 @@ public sealed record IncomingTransferRecord(
     string FromOrganizationName, bool ProposedByClient,
     bool ShareHistory, bool ShareInvestigations,
     string? Reason, DateTime DateProposed);
+
+// ── Field sessions recorded on a phone ────────────────────────────────────────
+
+/// <summary>A field session as the website lists it.</summary>
+public sealed record FieldSessionSummaryRecord(
+    Guid Id, Guid? InvestigationId, Guid DeviceSessionId, string DeviceModel,
+    string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
+    int ReadingCount, int MarkerCount, Guid DocumentUploadFileId,
+    Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
+    IReadOnlyList<FieldSessionFileSummary> Files);
+
+public sealed record FieldSessionFileSummary(
+    Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
+    DateTime DateCreated);
+
+/// <summary>
+/// A session and its document.
+/// </summary>
+/// <remarks>
+/// <see cref="Document"/> is the Device Data Format v1 JSON exactly as the phone wrote it. The
+/// playback page parses it here rather than having the server reshape it, because it is the only
+/// copy that is definitely what the instruments recorded.
+/// </remarks>
+public sealed record FieldSessionDetailRecord(
+    FieldSessionSummaryRecord Session, string Document);

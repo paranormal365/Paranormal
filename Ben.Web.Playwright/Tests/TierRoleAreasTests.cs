@@ -19,7 +19,7 @@ public class TierRoleAreasTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         var freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-        var calendar = freeRow.Locator("input[type=checkbox][id$='-9']");   // Calendar = 9
+        var calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");   // Calendar = 9
         await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
 
         // ENSURE the starting state rather than asserting it: a previous run that died between
@@ -32,7 +32,7 @@ public class TierRoleAreasTests : BenTestBase
             await Page.ReloadAsync();
             await WaitUntilLoadedAsync();
             freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-            calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
+            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
         }
 
         try
@@ -42,13 +42,13 @@ public class TierRoleAreasTests : BenTestBase
             await WaitUntilLoadedAsync();
 
             freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-            calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
+            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
             await Expect(calendar).Not.ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
         finally
         {
             freeRow = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-            calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
+            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
             if (!await calendar.IsCheckedAsync())
                 await calendar.CheckAsync();
             await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
@@ -72,7 +72,7 @@ public class TierRoleAreasTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         var freeRow  = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-        var calendar = freeRow.Locator("input[type=checkbox][id$='-9']");   // Calendar = 9
+        var calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");   // Calendar = 9
         await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
 
         if (!await calendar.IsCheckedAsync())   // self-heal residue from a dead run
@@ -107,7 +107,7 @@ public class TierRoleAreasTests : BenTestBase
             await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
             await WaitUntilLoadedAsync();
             freeRow  = Main.Locator("tr", new() { HasTextString = "Free" }).First;
-            calendar = freeRow.Locator("input[type=checkbox][id$='-9']");
+            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
             await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
             if (!await calendar.IsCheckedAsync())
                 await calendar.CheckAsync();

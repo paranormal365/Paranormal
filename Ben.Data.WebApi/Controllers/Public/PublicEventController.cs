@@ -54,7 +54,15 @@ public sealed class PublicEventController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var query = VisibleEvents(db);
+        // Events that have ENDED are not upcoming. VisibleEvents deliberately carries no date
+        // filter — a past event's own page must still resolve, or every link ever shared to one
+        // breaks — so each listing adds its own, and this one had none. The result was that the
+        // top of every public events list, on the website and in the app, was the OLDEST event
+        // the group had ever run.
+        //
+        // End, not start: something happening right now is still worth showing somebody.
+        var now = DateTime.UtcNow;
+        var query = VisibleEvents(db).Where(e => e.EndDateTime >= now);
 
         if (!string.IsNullOrWhiteSpace(orgUrlName))
         {

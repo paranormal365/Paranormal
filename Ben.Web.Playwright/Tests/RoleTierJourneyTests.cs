@@ -92,7 +92,7 @@ public class RoleTierJourneyTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
         await WaitUntilLoadedAsync();
         var row = Main.Locator("tr", new() { HasTextString = tierName }).First;
-        var box = row.Locator("input[type=checkbox][id$='-3']");   // Cases = 3
+        var box = row.Locator("input[type=checkbox][id^='area-'][id$='-3']");   // Cases = 3
         await Expect(box).ToBeVisibleAsync(new() { Timeout = 45_000 });
         return box;
     }

@@ -117,15 +117,43 @@
         }
         else if (_browse.TotalCount == 0)
         {
+            @* An empty FILTER is not an empty site. "No groups have registered yet" is a lie
+               when 21 have and none of them run tours, and it sends the reader away thinking
+               there is nothing here at all. *@
             <div class="alert alert-light text-muted text-center py-4">
-                No groups have registered yet.
+                @if (_toursOnly)
+                {
+                    <text>No groups are listed as running walking tours yet.</text>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                @onclick="@(() => SetToursOnlyAsync(false))">See every group</button>
+                    </div>
+                }
+                else
+                {
+                    <text>No groups have registered yet.</text>
+                }
             </div>
         }
         else
         {
-            <div class="d-flex align-items-baseline gap-2 mb-3">
-                <h5 class="mb-0">All Groups</h5>
+            <div class="d-flex align-items-baseline gap-2 mb-3 flex-wrap">
+                <h5 class="mb-0">@(_toursOnly ? "Walking Tours" : "All Groups")</h5>
                 <span class="badge bg-secondary">@_browse.TotalCount total</span>
+                @* Somebody visiting a strange city wants tours, not a list to sift
+                   (2026-08-24). Matches the CAPABILITY, so an investigation group that also
+                   runs tours is in here too. *@
+                <div class="ms-auto btn-group btn-group-sm" role="group" aria-label="Filter groups">
+                    <button type="button" class="btn @(_toursOnly ? "btn-outline-secondary" : "btn-secondary")"
+                            @onclick="@(() => SetToursOnlyAsync(false))" disabled="@_browsing">
+                        Everyone
+                    </button>
+                    <button type="button" class="btn @(_toursOnly ? "btn-secondary" : "btn-outline-secondary")"
+                            id="find-tours-only"
+                            @onclick="@(() => SetToursOnlyAsync(true))" disabled="@_browsing">
+                        Walking tours
+                    </button>
+                </div>
             </div>
 
             <div class="row g-3">
@@ -137,6 +165,13 @@
                             <MetaLine>
                                 @* Child content has to open with markup — a RenderFragment that
                                    starts with @if confuses the Razor parser into losing the tag. *@
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1">
+                                    @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(org.Kind)
+                                </span>
+                                @if (org.RunsPublicTours && org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
+                                {
+                                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1">Runs tours</span>
+                                }
                                 <span class="@(org.IsAcceptingClients ? "text-success" : "text-secondary")">
                                     @(org.IsAcceptingClients ? "✓ Accepting new cases" : "Not currently accepting new cases")
                                 </span>
@@ -183,12 +218,22 @@
 
     protected override async Task OnInitializedAsync() => await LoadBrowseAsync(1);
 
+    /// <summary>Narrowed to groups running public walking tours.</summary>
+    private bool _toursOnly;
+
+    private async Task SetToursOnlyAsync(bool toursOnly)
+    {
+        if (_toursOnly == toursOnly) return;
+        _toursOnly = toursOnly;
+        await LoadBrowseAsync(1);   // a different filter is a different list, from the top
+    }
+
     private async Task LoadBrowseAsync(int page)
     {
         _browsing = true;
         StateHasChanged();
         // Anonymous endpoint — no AuthReady wait needed, and this page is reachable signed out.
-        _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize);
+        _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize, toursOnly: _toursOnly);
         _browsing = false;
     }
 

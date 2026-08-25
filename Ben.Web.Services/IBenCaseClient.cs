@@ -136,6 +136,11 @@ public interface IBenCaseClient
     Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default);
     Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default);
     Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default);
+
+    /// <summary>The field sessions this case's investigations produced, for a report to cite.</summary>
+    Task<LoadResult<AvailableFieldSessionDto>> GetCaseFieldSessionsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseReportSectionFieldSessionDto?> AddReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fieldSessionUploadId, string? caption, CancellationToken token = default);
+    Task<bool> RemoveReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid linkId, CancellationToken token = default);
     /// <summary>Returns a URL to stream the PDF export for in-browser viewing.</summary>
     string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId);
 

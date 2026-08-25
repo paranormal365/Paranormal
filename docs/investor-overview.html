@@ -165,9 +165,10 @@ cuts its evidence reel here has no reason to leave.
 <h2>The feed: from audience to members</h2>
 <p>
 The community layer is live in the product today: member profiles, @handles, following, hashtags,
-and a moderated feed. The next major arc (below) turns it into the front door — anyone can
-scroll, but posting means joining or founding a group, which makes the feed itself the
-recruitment funnel for the paying side of the business.
+and a moderated feed. The full front-door arc is now built and dark-launched — anyone can scroll
+without an account; posting means joining or founding a group; every photo and video is screened
+on our own servers before it appears; and groups' promoted cards ride the feed, served nearest
+the viewer first. One switch turns it on.
 </p>
 
 <div class="fig-pair">
@@ -197,15 +198,20 @@ deck — it is a working product with production-grade engineering discipline:</
   <li>Equipment: personal and group inventories, a moderated global catalog, lending with condition photos</li>
   <li>Events: public listings, RSVPs, attendee evidence submission, reminder automation</li>
   <li>Roles &amp; permissions: per-group custom roles with per-table grants, tier-aware</li>
-  <li>Community: profiles, @handles, following, hashtags, a moderated feed</li>
-  <li>Group discovery by location; group-authored promotional ads with platform review</li>
+  <li>Community: profiles, @handles, following, hashtags, and the full public feed — anonymous
+      scroll, ranked timeline, photo and video posts screened on our own servers before they
+      appear, and a classifier that learns from every moderator decision</li>
+  <li>Group discovery by location, by kind (investigation groups and ghost walking tours), and
+      group-authored promotional ads with platform review, served nearest-viewer-first</li>
+  <li>Native iPhone and iPad app on the same API, running on device today</li>
+  <li>Field Kit: the phone as an offline recording instrument, replayed on either side</li>
   <li>Billing foundation: tiers by member count, contract-terms freezing, coupons, referral
       tracking, an append-only financial ledger with receipts and per-state tax</li>
   <li>In-app help system with full product documentation, generated to PDF</li>
 </ul>
 </div>
 <div class="callout avoid-break">
-<strong>Engineering discipline as an asset:</strong> 3,000+ automated unit tests and a 350+ scenario
+<strong>Engineering discipline as an asset:</strong> 3,270 automated unit tests and a 350+ scenario
 browser test suite run against every change; an append-only audit trail on financial records;
 additive-only database migrations; and a documented decision record covering 180+ tracked product
 items. The codebase is built to be operated, audited, and grown.
@@ -255,8 +261,11 @@ the activity that grows the community.</p>
   <td>An addictive, scrolling social feed for the paranormal-interested — anyone can scroll; posting
   and participation require joining or founding a group, making the feed itself the recruitment
   funnel. Group ads served by viewer location, interleaved with prompts to start your own group.</td>
-  <td>Feed engine, moderation, hashtags and follows already built; the engagement loop and
-  geo-targeted placement are the next major arc.</td>
+  <td>Built and dark-launched: the full arc — anonymous scroll, For You ranking, photo and video
+  posts with automatic on-server safety screening, experience-type categories with a learning
+  classifier, video-editor renders posting straight to the feed with recorded consent, group
+  attribution, and geo-fed promoted cards with counted click-throughs — ships behind one switch,
+  ready to turn on.</td>
 </tr>
 <tr>
   <td><strong>Private-case privacy, end to end</strong></td>
@@ -275,9 +284,46 @@ the activity that grows the community.</p>
 </tr>
 <tr>
   <td><strong>iPhone &amp; iPad app</strong></td>
-  <td>Native companion for investigators in the field — capture, upload, case notes, and the feed
-  on the device they already carry on every investigation.</td>
-  <td>Next major project after the current arc.</td>
+  <td>Native Swift app — one universal build for both devices — for investigators in the field:
+  capture, upload, and the feed on the device they already carry on every investigation. Talks to
+  the same API as the website, so it is the same account and the same data, with the same privacy
+  rules enforced identically.</td>
+  <td><strong>Running on device, and feature-complete for its first phase.</strong> Sign-in with
+  two-step codes, the full feed with camera capture, notifications, cases and their timelines
+  — including logging what happened, with photos, from the scene —
+  investigations with a map of where you've been, and public events with RSVP and add-to-calendar
+  all work against the live API today, as does <strong>Sign in with Apple</strong> — the server
+  validates Apple's token and links it to an existing account by verified email rather than
+  creating a duplicate. Enrolment in the Apple Developer Program is the remaining step before
+  submission.</td>
+</tr>
+<tr>
+  <td><strong>Field Kit</strong></td>
+  <td>The phone used as an instrument during an investigation, offline. It records magnetic field
+  (magnetometer), sound level, position, heading and floor-to-floor altitude change, with photos,
+  video and audio captured into the same session, EVP question-and-answer marking, and a sentry
+  mode that watches an unattended device for magnetic, sound, motion and camera-movement events.
+  Sessions replay on the phone and on the website on a single playhead — trace, map, compass and
+  media moving together. Notes can be <strong>spoken and transcribed on the device itself</strong>
+  — offered only where the hardware can do it with no connection, since the whole feature exists
+  for buildings with no signal. Everything recorded carries the <strong>room</strong> the operator
+  named, because a fix indoors covers the whole building and cannot tell one room from
+  another.</td>
+  <td><strong>Working end to end.</strong> Recording needs no signal and no account; uploading is
+  a separate step, file by file, with checksums verified on arrival and a per-file record of what
+  has reached the server. Sessions export as a <strong>published, open format</strong>
+  (IsHaunted Device Data Format v1) that any instrument maker can write — the phone is the first
+  device implementing it, and exports are validated against the format's own schema in the test
+  suite. Uploaded sessions are <strong>citable in the case report the client receives</strong>, so
+  the field work reaches the deliverable rather than stopping at the system.</td>
+</tr>
+<tr>
+  <td><strong>Ghost walking tours</strong></td>
+  <td>Tour operators are a second kind of business on the same platform — public by default, with
+  their tours listed and reservable, and a filter that lets a visitor in a strange city find them.
+  Investigation groups that also run paid tours are found under both without registering twice.</td>
+  <td>Built. Widens the addressable market beyond investigation groups at essentially no
+  additional platform cost.</td>
 </tr>
 <tr>
   <td><strong>Group white-label</strong></td>

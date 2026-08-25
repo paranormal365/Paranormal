@@ -43,6 +43,42 @@ Capitals do not matter: `#EVP`, `#evp` and `#Evp` are one tag, so they all gathe
 Tags cannot start with a number, because `#1` and `#2026` are almost always a list or a year rather
 than a subject.
 
+### Saying what a post shows
+
+When you attach a photo or video, the composer offers a **category** — the same list of experience
+types used everywhere else on the site (Apparition, Voices / Whispering, EMF Spike, and so on).
+It is always optional, and a plain chat post does not need one.
+
+Picking one does two things: the category appears as a small label on your post that readers can
+click to see everything else of its kind, and it tells the site what your footage claims to be.
+If the site's own measurements disagree — a clip tagged as voices that carries no audio track, for
+instance — **you, and only you**, will see a gentle note on your post offering to change the
+category. Nothing is blocked and nobody else sees the note; an honest mislabel is not misconduct,
+and changing it is one click. Posts whose content clearly does not match their label rank a little
+lower in **For You** until it is sorted out.
+
+### Posting straight from the video editor
+
+When you export a finished video in the editor, **Post to the feed** appears beside "Upload to
+server" and "Save to my machine" (if you're someone who may post at all). A render made from a
+case names that case before anything goes public, and footage from a **private engagement**
+requires an explicit confirmation — the client was promised privacy, and publishing any of it is
+a deliberate, recorded choice.
+
+The group that worked the case decides separately whether the post carries **their** name: until
+they claim it, the post is credited to you alone. A claimed post wears the group's name, a link
+to their page, and a **Group verified** badge — the group vouching that the footage is what it
+says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
+badges lift a post's standing in **For You**.
+
+## Promoted cards
+
+Every eighth spot in the main feed carries a card instead of a post — alternating between a
+group promoting itself (always marked **Promoted**) and the site's own pointer to the group
+finder. If you choose **Show groups near you** on a promoted card, your browser asks your
+permission and the cards re-order nearest-first. Your location is used for that one ordering
+and is never stored — leave, and it's forgotten.
+
 ## Reading
 
 | | |
@@ -52,6 +88,10 @@ than a subject.
 
 Click a post's reply count to open it and read the replies. Opening a post is what clears a
 "mentioned you" badge from your **Feed** menu entry, so nothing disappears before you have seen it.
+
+While the page is open it quietly checks for newer posts; a **"new posts"** button appears when
+there are some, and clicking it brings them in without losing your place. The site's home page
+also shows a small taste of the feed's current top posts — the front door on the front page.
 
 ## Following
 

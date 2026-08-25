@@ -12,9 +12,18 @@ import Foundation
 ///   than a generic failure.
 public enum LoadResult<T: Sendable>: Sendable {
     case ok(T)
-    case failed(reason: String?)
+    /// `statusCode` is the raw HTTP status when the failure came from a response (nil for
+    /// unreachable-network failures). Most callers ignore it; the feed reads 404 as "the
+    /// feature is switched off sitewide" — the API 404s the whole controller in that case,
+    /// and rendering that as an error would tell a visitor something broke when nothing did.
+    case failed(reason: String?, statusCode: Int?)
     case sessionEnded
     case rateLimited(retryAfter: TimeInterval?)
+
+    /// The common construction: an unreachable server or a mapped failure without a status.
+    public static func failed(reason: String?) -> LoadResult<T> {
+        .failed(reason: reason, statusCode: nil)
+    }
 
     public var value: T? {
         if case .ok(let v) = self { return v }
@@ -30,7 +39,7 @@ public enum LoadResult<T: Sendable>: Sendable {
     public func map<U: Sendable>(_ transform: (T) -> U) -> LoadResult<U> {
         switch self {
         case .ok(let v): .ok(transform(v))
-        case .failed(let reason): .failed(reason: reason)
+        case .failed(let reason, let statusCode): .failed(reason: reason, statusCode: statusCode)
         case .sessionEnded: .sessionEnded
         case .rateLimited(let retryAfter): .rateLimited(retryAfter: retryAfter)
         }
