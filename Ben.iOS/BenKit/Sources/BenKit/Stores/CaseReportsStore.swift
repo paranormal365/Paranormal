@@ -6,7 +6,7 @@ import Foundation
 public final class CaseReportsStore {
     /// The same four-way shape the other case stores use: a refusal must never render as
     /// "nothing here".
-    public enum State: Equatable {
+    public enum State: Equatable, Sendable {
         case loading
         case loaded
         case signedOut

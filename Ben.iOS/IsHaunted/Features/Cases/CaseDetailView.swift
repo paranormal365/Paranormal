@@ -155,8 +155,12 @@ struct CaseDetailView: View {
                 NavigationLink(value: AppRoute.caseReports(caseId)) {
                     Label("Reports", systemImage: "doc.text")
                 }
+                NavigationLink(value: AppRoute.caseMessages(caseId)) {
+                    Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                        .badge(detail.unreadMessageCount)
+                }
             } footer: {
-                Text("What your group has written up and published on this case.")
+                Text("What your group has written up and published, and anything you want to ask them.")
             }
 
             Section("What's happened") {

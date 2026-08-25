@@ -269,6 +269,43 @@ struct LiveFeedWriteTests {
         #expect(bytes.prefix(5) == Data("%PDF-".utf8))
     }
 
+    @Test func aMessageToTheGroupReachesTheRealCase() async {
+        guard Self.enabled else { return }
+
+        let transport = URLSessionTransport()
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
+        guard case .success(let login) = await auth.login(LoginRequest(
+            email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
+            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+        else { Issue.record("client sign-in failed"); return }
+        await tokens.adopt(login)
+        let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+
+        guard case .ok(let cases) = await api.load(
+            Endpoint(.get, "api/my-cases"), as: [MyCaseSummary].self), let target = cases.first
+        else { return }
+
+        let store = await CaseMessagesStore(caseId: target.caseId, api: api)
+        await store.load()
+        let before = await store.messages.count
+
+        let marker = "live message check \(UUID().uuidString.prefix(6))"
+        guard case .success(let sent) = await store.send(marker) else {
+            Issue.record("the message was refused"); return
+        }
+        // The SERVER decided which side this is. A client's message coming back as the group's
+        // would put their own words on the wrong side of every screen.
+        #expect(sent.senderSide == .client)
+        #expect(sent.body == marker)
+        #expect(await store.messages.count == before + 1)
+
+        // And it is really there on a fresh read, not just in memory.
+        let fresh = await CaseMessagesStore(caseId: target.caseId, api: api)
+        await fresh.load()
+        #expect(await fresh.messages.contains { $0.id == sent.id })
+    }
+
     /// An 8×8 black JPEG — small enough to inline, real enough to decode (and to render:
     /// a thumbnail of it looks like a black square because it IS one).
     private static let tinyJpegBase64 = """

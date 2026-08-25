@@ -143,7 +143,7 @@ public sealed class CaseReportController : BenControllerBase
             Id                 = Guid.NewGuid(),
             CaseId             = caseId,
             AuthorAppUserId    = userId,
-            Body               = $"Your investigation report has been published: <strong>{report.Title}</strong>. You can view and download it from your case page.",
+            Body               = $"Your investigation report has been published: {report.Title}. You can view and download it from your case page.",
             SenderSide         = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient     = false,
             IsReadByOrg        = true,

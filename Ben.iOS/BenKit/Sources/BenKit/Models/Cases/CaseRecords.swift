@@ -190,3 +190,31 @@ public struct MyCaseReport: Sendable, Codable, Equatable, Identifiable {
     /// date is when the group started writing, which is not their business.
     public var readerDate: Date { publishedAt ?? dateCreated }
 }
+
+/// Which side of a case wrote a message. Mirrors `CaseMessageSide`.
+public enum CaseMessageSide: Int, Sendable, Codable, Equatable {
+    case client = 0
+    case organization = 1
+    /// A side this build doesn't know about is shown as the group's, never as the reader's own —
+    /// mistaking somebody else's words for your own is the worse failure.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(Int.self)
+        self = CaseMessageSide(rawValue: raw) ?? .organization
+    }
+}
+
+/// One message on a case (`GET api/my-cases/{id}/messages`). Shape captured from the dev API.
+public struct MyCaseMessage: Sendable, Codable, Equatable, Identifiable {
+    public var id: UUID
+    public var caseId: UUID
+    public var authorAppUserId: UUID
+    public var authorDisplayName: String
+    public var body: String
+    public var senderSide: CaseMessageSide
+    public var isReadByClient: Bool
+    public var isReadByOrg: Bool
+    public var dateCreated: Date
+
+    /// Written by the client reading it. Drives which side of the screen it sits on.
+    public var isMine: Bool { senderSide == .client }
+}
