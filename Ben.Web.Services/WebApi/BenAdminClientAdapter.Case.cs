@@ -200,6 +200,15 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/files/{fileId}", token);
 
+    public Task<LoadResult<AvailableFieldSessionDto>> GetCaseFieldSessionsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<AvailableFieldSessionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/field-sessions", token);
+
+    public Task<CaseReportSectionFieldSessionDto?> AddReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fieldSessionUploadId, string? caption, CancellationToken token = default)
+        => _api.PostAsync<object, CaseReportSectionFieldSessionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/field-sessions", new { FieldSessionUploadId = fieldSessionUploadId, Caption = caption }, token);
+
+    public Task<bool> RemoveReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid linkId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/field-sessions/{linkId}", token);
+
     public string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId)
         => $"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf";
 

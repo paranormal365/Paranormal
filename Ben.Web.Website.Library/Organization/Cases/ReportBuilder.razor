@@ -125,12 +125,66 @@ else
         <div class="card mb-2">
             <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                    <div class="fw-semibold small">@s.Title <span class="badge bg-secondary ms-1">@s.SectionType</span></div>
+                    <div class="fw-semibold small">@s.Title <span class="badge bg-secondary ms-1">@SectionTypeLabel(s.SectionType)</span></div>
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => RemoveSection(s.Id))"><BenIcon Name="trash-2" /></button>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(s.Body))
                 {
                     <div class="small text-secondary">@((MarkupString)s.Body)</div>
+                }
+                @if (s.SectionType == CaseReportSectionType.FieldSessions)
+                {
+                    <div class="mt-2">
+                        @if (s.FieldSessions.Count == 0)
+                        {
+                            <div class="text-secondary small">No field sessions cited yet.</div>
+                        }
+                        else
+                        {
+                            @foreach (var fs in s.FieldSessions.OrderBy(x => x.SortOrder))
+                            {
+                                <div class="border rounded p-2 mb-1 d-flex justify-content-between align-items-start gap-2" data-testid="report-field-session">
+                                    <div>
+                                        <div class="fw-semibold small">
+                                            @(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "Field session" : fs.LocationLabel)
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @fs.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                            @if (fs.EndedAt.HasValue)
+                                            {
+                                                <text> – @fs.EndedAt.Value.ToViewerLocalTime(UserState).ToDisplayTime()</text>
+                                            }
+                                            else
+                                            {
+                                                @* An interrupted session has no honest end time — say so rather than guess. *@
+                                                <text> — interrupted</text>
+                                            }
+                                            · @fs.ReadingCount.ToString("N0") reading@(fs.ReadingCount == 1 ? "" : "s")
+                                            · @fs.MarkerCount.ToString("N0") mark@(fs.MarkerCount == 1 ? "" : "s")
+                                            · @fs.FileCount recording@(fs.FileCount == 1 ? "" : "s")
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @(string.IsNullOrWhiteSpace(fs.RecordedByName)
+                                                ? "Nobody was signed in on the device"
+                                                : $"Recorded by {fs.RecordedByName}")
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(fs.Caption))
+                                        {
+                                            <div class="small">@fs.Caption</div>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-1 flex-shrink-0">
+                                        <a class="btn btn-secondary btn-sm text-nowrap" href="@($"/field-sessions/{fs.FieldSessionUploadId}")" target="_blank">Play back</a>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => RemoveSectionFieldSession(s.Id, fs.Id))"><BenIcon Name="trash-2" /></button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        <button type="button" class="btn btn-secondary btn-sm mt-1 text-nowrap" data-testid="add-field-session"
+                                @onclick="@(() => OpenFieldSessionPicker(s.Id))">
+                            <BenIcon Name="plus" Class="me-1" />Add field session
+                        </button>
+                    </div>
                 }
                 @if (s.SectionType == CaseReportSectionType.Evidence && s.Files.Count > 0)
                 {
@@ -168,6 +222,57 @@ else
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showNewDialog = false)">Cancel</button>
         <button type="button" class="btn btn-primary" @onclick="CreateReport"
                 disabled="@(_saving || string.IsNullOrWhiteSpace(_newTitle))">Create</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Field session picker ─────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showFieldSessionDialog" Title="Cite a field session">
+    <ChildContent>
+        @if (_fieldSessionsResult.Failed)
+        {
+            <BenListState TItem="AvailableFieldSessionDto" Result="@_fieldSessionsResult" OnRetry="@LoadFieldSessionsAsync" />
+        }
+        else if (_availableSessions.Count == 0)
+        {
+            <div class="text-secondary small">
+                No field sessions have been uploaded for this case's investigations yet. Sessions
+                recorded in the iPhone or iPad app appear here once somebody sends them up and
+                picks one of this case's investigations.
+            </div>
+        }
+        else
+        {
+            @foreach (var a in _availableSessions)
+            {
+                <div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-start gap-2" data-testid="available-field-session">
+                    <div>
+                        <div class="fw-semibold small">@(string.IsNullOrWhiteSpace(a.LocationLabel) ? "Field session" : a.LocationLabel)</div>
+                        <div class="text-secondary small">
+                            @a.InvestigationTitle · @a.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            · @a.ReadingCount.ToString("N0") reading@(a.ReadingCount == 1 ? "" : "s")
+                            · @a.MarkerCount.ToString("N0") mark@(a.MarkerCount == 1 ? "" : "s")
+                            · @a.FileCount recording@(a.FileCount == 1 ? "" : "s")
+                        </div>
+                        <div class="text-secondary small">
+                            @(string.IsNullOrWhiteSpace(a.RecordedByName) ? "Nobody was signed in on the device" : a.RecordedByName) · @a.DeviceModel
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1 flex-shrink-0">
+                        <a class="btn btn-secondary btn-sm text-nowrap" href="@($"/field-sessions/{a.Id}")" target="_blank">Play back</a>
+                        <button type="button" class="btn btn-primary btn-sm text-nowrap" data-testid="cite-field-session"
+                                disabled="@_saving" @onclick="@(() => CiteFieldSession(a.Id))">Cite</button>
+                    </div>
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="reportbuilder-fieldsession-caption">What to say about it (optional)</label>
+                <input id="reportbuilder-fieldsession-caption" type="text" class="form-control"
+                       placeholder="e.g. the cellar spike at 01:14" @bind="@_fieldSessionCaption" @bind:event="oninput" />
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showFieldSessionDialog = false)">Close</button>
     </FooterContent>
 </BenModal>
 
@@ -219,12 +324,19 @@ else
     private CaseReportSectionType _sectionType = CaseReportSectionType.Text;
     private string _sectionBody = "";
 
+    // Field session picker
+    private bool _showFieldSessionDialog;
+    private Guid _fieldSessionSectionId;
+    private string _fieldSessionCaption = "";
+    private List<AvailableFieldSessionDto> _availableSessions = [];
+    private LoadResult<AvailableFieldSessionDto> _fieldSessionsResult;
+
     // Editor form
     private ReportForm _form = new();
 
     private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum
         .GetValues<CaseReportSectionType>()
-        .Select(t => new SectionTypeOption(t, t.ToString()))
+        .Select(t => new SectionTypeOption(t, t == CaseReportSectionType.FieldSessions ? "Field Sessions" : t.ToString()))
         .ToList();
 
     protected override async Task OnInitializedAsync()
@@ -346,6 +458,60 @@ else
         _editingReport = _editingReport with { Sections = updatedSections };
     }
 
+    // ── Field sessions ────────────────────────────────────────────────────────
+    //
+    // A section CITES a session; it never copies it. The readings, the recordings and the
+    // digests stay with the upload, and the report points at them — so what the client is given
+    // and what the instruments recorded cannot drift apart.
+
+    private async Task OpenFieldSessionPicker(Guid sectionId)
+    {
+        _fieldSessionSectionId = sectionId;
+        _fieldSessionCaption = "";
+        _showFieldSessionDialog = true;
+        await LoadFieldSessionsAsync();
+    }
+
+    private async Task LoadFieldSessionsAsync()
+    {
+        try
+        {
+            _fieldSessionsResult = await AdminClient.GetCaseFieldSessionsAsync(OrgId, CaseId);
+            _availableSessions   = _fieldSessionsResult.Items.ToList();
+        }
+        catch { _fieldSessionsResult = LoadResult<AvailableFieldSessionDto>.Failure(); }
+    }
+
+    private async Task CiteFieldSession(Guid fieldSessionUploadId)
+    {
+        if (_editingReport is null) return;
+        _saving = true;
+        try
+        {
+            var result = await AdminClient.AddReportSectionFieldSessionAsync(
+                OrgId, CaseId, _editingReport.Id, _fieldSessionSectionId, fieldSessionUploadId,
+                string.IsNullOrWhiteSpace(_fieldSessionCaption) ? null : _fieldSessionCaption);
+            if (result is null) { _error = "Failed to add that field session."; return; }
+
+            var updated = _editingReport.Sections.Select(s => s.Id != _fieldSessionSectionId ? s
+                : s with { FieldSessions = s.FieldSessions.Where(f => f.Id != result.Id).Append(result).ToList() }).ToList();
+            _editingReport = _editingReport with { Sections = updated };
+            _showFieldSessionDialog = false;
+        }
+        catch { _error = "Failed to add that field session."; }
+        finally { _saving = false; }
+    }
+
+    private async Task RemoveSectionFieldSession(Guid sectionId, Guid linkId)
+    {
+        if (_editingReport is null) return;
+        // Removes the citation. The session itself stays exactly where it was uploaded.
+        await AdminClient.RemoveReportSectionFieldSessionAsync(OrgId, CaseId, _editingReport.Id, sectionId, linkId);
+        var updated = _editingReport.Sections.Select(s => s.Id != sectionId ? s
+            : s with { FieldSessions = s.FieldSessions.Where(f => f.Id != linkId).ToList() }).ToList();
+        _editingReport = _editingReport with { Sections = updated };
+    }
+
     private void UpdateSummaryList(CaseReportDetail r)
     {
         var idx = _reports.FindIndex(x => x.Id == r.Id);
@@ -363,6 +529,10 @@ else
     }
 
     private record SectionTypeOption(CaseReportSectionType Value, string Label);
+
+    /// <summary>The enum's own name reads as "FieldSessions" on the card. Say it in words.</summary>
+    private static string SectionTypeLabel(CaseReportSectionType type)
+        => type == CaseReportSectionType.FieldSessions ? "Field Sessions" : type.ToString();
 
     private async Task DownloadPdf(Guid reportId, string reportTitle)
     {

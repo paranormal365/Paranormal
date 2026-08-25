@@ -114,6 +114,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
+        public virtual DbSet<CaseReportSectionFieldSession> CaseReportSectionFieldSessions { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
         public virtual DbSet<CaseFile> CaseFiles { get; set; }
         public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
@@ -144,6 +145,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SubscriptionContractTerms> SubscriptionContractTerms { get; set; }
         public virtual DbSet<TierChangeNotice> TierChangeNotices { get; set; }
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
+        public virtual DbSet<FieldSessionUpload> FieldSessionUploads { get; set; }
+        public virtual DbSet<FieldSessionUploadFile> FieldSessionUploadFiles { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -1964,7 +1967,8 @@ namespace Ben.Data.Source.Context
             // ── InvestigationAttendee ─────────────────────────────────────────
             modelBuilder.Entity<InvestigationAttendee>()
                 .HasOne(e => e.Investigation).WithMany(e => e.Attendees)
-                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<InvestigationAttendee>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -1985,7 +1989,8 @@ namespace Ben.Data.Source.Context
             // ── InvestigationFinding ──────────────────────────────────────────
             modelBuilder.Entity<InvestigationFinding>()
                 .HasOne(e => e.Investigation).WithMany(e => e.Findings)
-                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<InvestigationFinding>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -2161,6 +2166,24 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseReportSectionFile>()
                 .Property(e => e.Caption).HasMaxLength(500);
+
+            // ── CaseReportSectionFieldSession ─────────────────────────────
+            // Cascade from the section (a removed section takes its citations with it), but
+            // NoAction from the session: deleting a report must never reach back and remove the
+            // recording it cited, and a session removed from underneath a published report is a
+            // conversation, not a silent cascade.
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasOne(e => e.Section).WithMany(e => e.FieldSessions)
+                .HasForeignKey(e => e.CaseReportSectionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasOne(e => e.FieldSessionUpload).WithMany()
+                .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .Property(e => e.Caption).HasMaxLength(500);
+            // One citation per session per section — citing the same night twice in one section
+            // is always a mis-click.
+            modelBuilder.Entity<CaseReportSectionFieldSession>()
+                .HasIndex(e => new { e.CaseReportSectionId, e.FieldSessionUploadId }).IsUnique();
 
             // ── CaseNote ──────────────────────────────────────────────────
             modelBuilder.Entity<CaseNote>()
@@ -2553,6 +2576,59 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EventEvidenceSubmission>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // Listing is always "this investigation's sessions, newest first"; the device id
+            // makes a retried upload find its existing row instead of making a second one.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.InvestigationId, e.StartedAt });
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.SubmittedByAppUserId, e.StartedAt });
+            // Per PERSON, not per investigation: a retried upload finds its own row, while two
+            // people handed the same exported session each keep their own copy.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.SubmittedByAppUserId, e.DeviceSessionId }).IsUnique();
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.DeviceModel).HasMaxLength(100);
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.LocationLabel).HasMaxLength(400);
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.RecordedByName).HasMaxLength(200);
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.RecordedByAppUser).WithMany()
+                .HasForeignKey(e => e.RecordedByAppUserId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict: the document IS the session — the row must not outlive it silently.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.DocumentUploadFile).WithMany()
+                .HasForeignKey(e => e.DocumentUploadFileId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.SubmittedByAppUser).WithMany()
+                .HasForeignKey(e => e.SubmittedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // One row per path per session: a retried file upload replaces rather than duplicates.
+            modelBuilder.Entity<FieldSessionUploadFile>()
+                .HasIndex(e => new { e.FieldSessionUploadId, e.RelativePath }).IsUnique();
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.RelativePath).HasMaxLength(500);
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.Sha256).HasMaxLength(64);
+            modelBuilder.Entity<FieldSessionUploadFile>()
+                .HasOne(e => e.FieldSessionUpload).WithMany(e => e.Files)
+                .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FieldSessionUploadFile>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<FieldSessionUploadFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 

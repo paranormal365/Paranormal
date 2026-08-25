@@ -34,6 +34,47 @@ public static class CaseReportPdfGenerator
                 editor.InsertParagraph();
             }
 
+            // Field sessions the section cites. The PDF states what the night ACTUALLY holds —
+            // when it ran, who recorded it, how many readings and marks, and which recordings
+            // belong to it — because the client reads the report, not the site, and a citation
+            // that says only "field session" tells them nothing they can check.
+            foreach (var link in section.FieldSessions.OrderBy(x => x.SortOrder))
+            {
+                var session = link.FieldSessionUpload;
+                var where   = string.IsNullOrWhiteSpace(session.LocationLabel)
+                    ? "Field session" : $"Field session — {session.LocationLabel}";
+                editor.InsertRun(where);
+                editor.InsertLineBreak();
+
+                var ran = session.EndedAt is null
+                    // An interrupted session has no honest end time. Saying so beats inventing one.
+                    ? $"{session.StartedAt:yyyy-MM-dd HH:mm} UTC — interrupted, no end recorded"
+                    : $"{session.StartedAt:yyyy-MM-dd HH:mm} – {session.EndedAt:HH:mm} UTC "
+                      + $"({(session.EndedAt.Value - session.StartedAt).TotalMinutes:F0} min)";
+                editor.InsertRun("    " + ran);
+                editor.InsertLineBreak();
+
+                var by = string.IsNullOrWhiteSpace(session.RecordedByName)
+                    // Unattributed is a fact about the evidence, not a gap to paper over.
+                    ? "not attributed" : session.RecordedByName;
+                editor.InsertRun($"    Recorded by {by} on {session.DeviceModel} · "
+                               + $"{session.ReadingCount:N0} readings · {session.MarkerCount:N0} marks");
+                editor.InsertLineBreak();
+
+                foreach (var file in session.Files.OrderBy(x => x.RelativePath))
+                {
+                    var flag = file.DigestMatched ? "" : "  [checksum did not match on arrival]";
+                    editor.InsertRun($"        {file.RelativePath}{flag}");
+                    editor.InsertLineBreak();
+                }
+
+                if (!string.IsNullOrWhiteSpace(link.Caption))
+                {
+                    editor.InsertRun($"    {link.Caption}");
+                    editor.InsertLineBreak();
+                }
+            }
+
             foreach (var f in section.Files.OrderBy(x => x.SortOrder))
             {
                 var label = $"[{f.UploadFile.ContentType.Split('/')[0].ToUpper()}] {f.UploadFile.FileName}";

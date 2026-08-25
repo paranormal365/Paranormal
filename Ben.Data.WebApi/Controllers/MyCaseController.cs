@@ -414,6 +414,13 @@ public sealed class MyCaseController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            // The client's copy has to be the SAME document the org sees. Loading the citations
+            // only on the org path would quietly hand the client a report with the field
+            // sessions missing.
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.Files)
             .FirstOrDefaultAsync(r => r.Id == reportId && r.CaseId == caseId
                 && r.Status == Ben.Data.Common.Enums.CaseReportStatus.Published, ct);
         if (report is null) return NotFound();

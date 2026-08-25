@@ -19,8 +19,15 @@ struct RootShell: View {
                 tabView
             }
         }
+        // Which sections exist depends on the chrome, and the chrome depends on width — so a
+        // link to Events has to be told where Events currently lives.
+        .onAppear { router.availableSections = shownSections }
+        .onChange(of: sizeClass) { _, _ in router.availableSections = shownSections }
         // Cold start: tokens in the Keychain mean quiet optimistic sign-in.
         .task { await dependencies.session.restore() }
+        // A session left recording when the app went away is closed as interrupted, its log
+        // recovered, before anything can show a stale "recording" row.
+        .task { await dependencies.fieldKit.recoverInterruptedSessions() }
         // The badge follows the session in both directions. Loading it before sign-in
         // resolves would ask as a visitor and be told nothing is waiting; leaving it up
         // after sign-out would show one person's count to the next.
@@ -71,10 +78,15 @@ struct RootShell: View {
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
+    /// iPad shows everything; iPhone shows five tabs and keeps Events on Profile.
+    private var shownSections: [AppSection] {
+        sizeClass == .regular ? AppSection.allCases : AppSection.compactTabs
+    }
+
     private var tabView: some View {
         @Bindable var router = router
         return TabView(selection: $router.selection) {
-            ForEach(AppSection.allCases) { section in
+            ForEach(AppSection.compactTabs) { section in
                 sectionStack(section)
                     .tabItem { Label(section.title, systemImage: section.icon) }
                     .tag(section)
@@ -123,6 +135,7 @@ struct RootShell: View {
         case .feed: FeedListView()
         case .cases: CasesListView()
         case .investigations: InvestigationsView()
+        case .fieldKit: FieldKitHomeView()
         case .events: EventsView()
         case .profile: SettingsHomeView()
         }
@@ -131,6 +144,10 @@ struct RootShell: View {
     @ViewBuilder
     private func destination(_ route: AppRoute) -> some View {
         switch route {
+        case .fieldKit:
+            FieldKitHomeView()
+        case .eventsList:
+            EventsView()
         case .developerSettings:
             DeveloperSettingsView()
         case .feedPost(let id):
@@ -164,6 +181,12 @@ struct RootShell: View {
                     Text("Open the link from your email again, or paste the whole address.")
                 }
             }
+        case .investigationDetail(let id):
+            InvestigationDetailView(investigationId: id)
+        case .fieldSession(let id):
+            LiveSessionView(sessionId: id)
+        case .fieldSessionReview(let id):
+            SessionReviewView(sessionId: id)
         default:
             PlaceholderScreen(title: "Coming soon", icon: "hammer", slice: "a later slice")
         }

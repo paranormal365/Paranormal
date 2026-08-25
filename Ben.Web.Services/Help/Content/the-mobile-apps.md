@@ -44,11 +44,233 @@ show them to you again.
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Events** | Public events, readable without an account, and you can reserve a place. **Add to calendar** puts one straight into your own calendar. |
+| **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
 
 Anything the app cannot do yet says so plainly rather than showing you an empty screen. A count
 with no screen behind it yet is still listed on Notifications — it just isn't tappable, rather
 than pretending to lead somewhere.
+
+
+## Field Kit — the phone as an instrument
+
+Field Kit records an investigation on the device. It needs **no signal and no account**: a member
+standing in a cellar with no bars can start recording, and everything stays on the phone until
+they choose to send it. Signing in still matters, because a session records who was signed in
+when it was made — and being signed in needs no connection, so a member who signed in last week
+is still identified in that cellar.
+
+![Field Kit, listing sessions recorded on this device](/help/media/the-mobile-apps/iphone-home.png)
+
+### Your first session, start to finish
+
+1. Open **Field Kit** and tap **Start a session**.
+2. Give it a name in your own words — "back bedroom, north wall". This is what you will
+   recognise it by next week, so a room beats a timestamp.
+3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
+   attach the session to an investigation later.
+4. Let the room settle for a few seconds, then tap **Set base**. Everything from here is measured
+   against what this room reads when nothing is happening.
+5. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
+6. Tap **Stop** when you are done. The session opens for review straight away.
+
+Nothing you record needs a signal, and nothing leaves the phone until you send it.
+
+### What it measures, and what it does not
+
+The dial is a **magnetic field meter**, not an EMF meter in the sense most detectors mean. The
+phone's magnetometer reads the DC magnetic field — the Earth's, plus whatever local wiring, iron
+and motors are doing to it. It cannot see the AC electromagnetic fields a K‑II style detector
+responds to, and the app says so on the screen rather than leaving anyone to assume otherwise.
+
+The needle shows **how far the field has moved from the base level you set**, not the absolute
+figure. An absolute reading means nothing on its own: the Earth alone is around 500 mG and every
+building bends that. Setting a base is the act that turns a number into a measurement, which is
+why several things refuse to work until you have.
+
+![The instrument panel: the dial, sound level, position and the controls](/help/media/the-mobile-apps/iphone-meter.png)
+
+On screen at once: the wall clock and how long the session has run, the dial in milligauss, a
+sound meter in decibels with your base and report levels marked on it, and where you are —
+**with the accuracy of that fix**. Indoors a phone is routinely 20 to 50 metres out, often the
+width of the whole building, so the number is always shown. A reading taken with no fix at all
+carries no position rather than a made-up one.
+
+If the magnetometer reports itself uncalibrated, nothing is reported as an event and the screen
+asks you to move the phone in a figure of eight. A reading the instrument does not trust is not
+evidence.
+
+### Choosing what a session records
+
+Switches decide what is running: **magnetic field**, **audio**, **video** and **location**. Each
+says what it costs. Switching one off tears it down rather than leaving it running quietly —
+which is the whole reason to switch video off at two in the morning.
+
+Video is captured as **clips**, not a continuous recording. Five hours of video is tens of
+gigabytes and a flat battery long before the night is over.
+
+![The capture bar, the channel switches, and what has been marked](/help/media/the-mobile-apps/iphone-controls.png)
+
+### Saying which room you're in
+
+At the top of the session screen is the **room**. Tap it, pick one, and everything from that
+moment on — every reading, every mark, every photo — is recorded as having happened there. Moving
+rooms is one tap, and it drops a mark of its own, so a review a week later shows when you went
+down to the cellar.
+
+This is worth doing because **nothing else can tell rooms apart**. A fix indoors is twenty to
+fifty metres wide — the width of the whole building — so the app cannot work out which room you
+are in, and it does not pretend to. A person saying so is the only reliable source there is.
+
+Rooms you have already used this session come first in the list, so walking a loop through a
+house is a tap per room rather than typing a name again in the dark. You can stop naming rooms at
+any time; readings keep their position and simply stop claiming a room.
+
+### Marking, and setting the level things get marked at
+
+**Mark** drops a marker at this second; **Note** adds one with a line of explanation. Under
+*Levels* you set the base and the **report level** — how far the field or the sound has to move
+before the app marks it for you — along with a quiet period, so one door slamming leaves one
+record rather than forty.
+
+### Notes you can speak
+
+Writing in the dark with a glove off is the worst part of taking notes, so **Note** lets you
+speak instead. The words are turned into text **on the phone itself** — nothing you say is sent
+anywhere, and it works with no signal, which is the only reason it is worth having in a cellar.
+
+You can correct the wording before saving; a transcription is a machine's best guess, and the
+person who said it is the authority on what they said.
+
+If a device cannot turn speech into text without a connection, **the option is not offered at
+all**. A button that works in the car park and fails in the building would be worse than none.
+Typing is always available, and you can record the note **as audio** instead — sometimes what was
+said matters less than how it was said.
+
+The same choice appears when messaging your group about a case: type it, or speak it, on any
+device that can transcribe offline.
+
+### Photographs of the property
+
+Photos you take during a session are kept with it. Under **Property photos** you can choose one
+to stand for the place — the front of the building, the room in question — and it represents the
+case and the investigation, so a list of cases shows somewhere recognisable rather than a row of
+identical folders.
+
+Choosing is entirely optional and can be undone: tap the chosen photo again to un-choose it.
+Most photographs in a session are evidence and should never be a portrait of anything, so nothing
+is picked unless you pick it.
+
+Each photo carries the **room** you were in when you took it, so "a doorway" becomes "Cellar — a
+doorway" a month later, when it matters. That comes from the room you set on the session screen;
+there is nothing extra to type per photo.
+
+### Leaving the device in a room
+
+*Watching* arms the session so it records events while nobody is holding the phone. It can watch
+for the magnetic field, sound, **the device itself being moved** (somebody knocking the tripod)
+and **movement seen through the camera**. Those last two answer different questions and the app
+spells out which is which. Camera motion is deliberately crude — it cannot tell a person from a
+curtain — so its sensitivity is adjustable and every trigger records how much of the view changed.
+
+Arming is refused until the base levels the triggers measure against have been set, and the
+screen stays awake while watching so it can be read across a room.
+
+### EVP question and answer
+
+EVP mode marks the **question and the silence after it**, not just the moment you spoke. Both
+marks point into the recording with the offset, so reviewing later means jumping to a list of
+places to listen rather than scrubbing hours of tape. Asking the next question closes the
+previous wait. Recording keeps running when the screen locks.
+
+![EVP mode: one large control, and the wait timing itself](/help/media/the-mobile-apps/iphone-evp.png)
+
+### Blacking out the screen
+
+A lit phone in a dark room reaches the recording, the room and everyone in it. The moon button
+takes the screen to black and holds the phone awake; a tap anywhere brings it back. Your
+brightness is put back exactly where it was.
+
+### Reviewing what you recorded
+
+A finished session plays back on the phone: one playhead moving the magnetic trace, the map, the
+compass and whatever was being recorded at that second, with every mark listed to jump to. Marks
+land you a few seconds *before* the event so you hear what led up to it.
+
+![Reviewing a session — the trace, the map and what was marked](/help/media/the-mobile-apps/iphone-review.png)
+
+On an iPad the same screens use the extra width, putting the instruments beside the log while
+recording and the trace beside the map while reviewing.
+
+![The instrument panel on an iPad](/help/media/the-mobile-apps/ipad-meter.png)
+
+Reviewing on an iPad puts the trace beside the map, so a spike and the place it happened are
+visible at the same moment rather than one scroll apart.
+
+![Reviewing a session on an iPad](/help/media/the-mobile-apps/ipad-review.png)
+
+### Battery, storage and a long night
+
+A session logging magnetic field and position costs very little. Audio adds a steady trickle;
+video is the one that will end a night early, which is why it is off unless you ask for it and
+why it records clips rather than running continuously.
+
+The readings themselves are tiny — a five-hour session is a few megabytes of numbers. It is the
+recordings that fill a phone, and those are the only thing clearing a session removes.
+
+### If something goes wrong
+
+**The dial says the magnetometer needs calibrating.** Move the phone slowly in a figure of eight.
+Nothing is reported as an event until it settles, because a reading the instrument does not trust
+should not ring a bell.
+
+**Nothing is being marked.** Check that you set a base level, and that the session is *watching*
+if you have put the device down. Until a base exists there is nothing for a reading to depart
+from.
+
+**The position never appears.** Indoors a phone often never gets a fix at all. The session
+carries on without it; readings simply have no position rather than a guessed one.
+
+**A recording came back empty.** The app says so rather than listing it — usually another app had
+the microphone. Start it again.
+
+**The app closed mid-session.** The session survives. It is listed as *interrupted*, with
+everything recorded up to that moment intact. Its end time is left unknown, because it is.
+
+### Sending a session to your group
+
+Recording works offline; **sending needs a connection**. When you have one, choose the
+investigation it belongs to — which chooses its case too — and pick which recordings go with it.
+
+Files go up **one at a time**, so a dropped connection costs one file rather than the night, and
+anything that failed can be sent again without re-sending what already arrived. Each file
+travels with a checksum, and a file that arrives damaged is flagged rather than quietly accepted.
+
+Who can send a recording to an investigation: anyone who was **on** it, any active **member of
+the group** running it, and — when the investigation or its case is **public** — anybody at all.
+An open investigation is an invitation, and a dozen visitors with phones is much of the value of
+running one.
+
+A session does not need an investigation at all. Somebody scouting a building, or a guide walking
+a route, can keep it against their own account and attach it to an investigation later.
+
+Once everything is up, the app offers to clear the recordings off the phone. It only offers when
+**every** file is confirmed on the server, and clearing takes the photos, video and audio while
+keeping the session, its readings and its marks — those are small, and losing the trace of a
+night to reclaim video space would be a poor trade. Individual captures can be deleted at any
+time for the ones not worth keeping.
+
+Uploaded sessions play back on the website too, on the same one-playhead idea — and the case
+manager can **cite them in the final report**. A report section of type *Field Sessions* points at
+the sessions recorded for that case, and the PDF the client receives says what each one holds:
+where it was, when it ran, who recorded it, and how many readings and marks it carries. Your work
+in the field ends up in the document, rather than only in the system.
+
+### Exporting a session
+
+A session can also be exported as a **.zip in the IsHaunted device data format** — the same
+published format any instrument maker can write. That file can go by AirDrop, email or Files to
+anyone, whether or not they use this site.
 
 ## A note on what the app shows you
 
