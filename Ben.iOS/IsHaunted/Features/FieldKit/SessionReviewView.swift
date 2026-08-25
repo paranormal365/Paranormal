@@ -18,6 +18,7 @@ struct SessionReviewView: View {
     @State private var loadedMediaId: UUID?
     @State private var source: ReplaySource?
     @State private var exporting = false
+    @State private var uploading = false
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
@@ -55,15 +56,29 @@ struct SessionReviewView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { exporting = true } label: {
+                Menu {
+                    Button {
+                        uploading = true
+                    } label: {
+                        Label("Send to the server", systemImage: "icloud.and.arrow.up")
+                    }
+                    Button {
+                        exporting = true
+                    } label: {
+                        Label("Export a bundle", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
-                .accessibilityLabel("Export this session")
-                .accessibilityIdentifier("open-export")
+                .accessibilityLabel("Send or export this session")
+                .accessibilityIdentifier("open-share-menu")
             }
         }
         .sheet(isPresented: $exporting) {
             ExportSessionView(sessionId: sessionId).environment(dependencies)
+        }
+        .sheet(isPresented: $uploading) {
+            UploadSessionView(sessionId: sessionId).environment(dependencies)
         }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
         .onDisappear {

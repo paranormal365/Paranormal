@@ -138,7 +138,9 @@ public struct DeviceDataExporter: Sendable {
         return open..<(close + 1)
     }
 
-    static func sha256(of url: URL) throws -> String {
+    /// Public because the upload path needs the same digest the export stamps, and the
+    /// server checks the two against each other.
+    public static func sha256(of url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()

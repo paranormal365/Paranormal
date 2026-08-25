@@ -85,6 +85,11 @@ public final class FieldSession {
 
     public var batteryPercentAtStart: Double?
     public var deviceModel: String
+
+    /// Set once the session's document has reached the server. The device keeps everything
+    /// regardless — this says what is safe to delete, never what has been deleted.
+    public var serverSessionId: UUID?
+    public var uploadedAt: Date?
     public var timezoneIdentifier: String
 
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
@@ -187,6 +192,12 @@ public final class FieldCapture {
     public var latitude: Double?
     public var longitude: Double?
     public var headingDegrees: Double?
+
+    /// When this file reached the server, if it has. Per FILE, because somebody picks three of
+    /// twenty and the rest are still only on the phone.
+    public var uploadedAt: Date?
+    /// Why the last attempt failed, kept so a retry is an informed one rather than a guess.
+    public var uploadProblem: String?
 
     public var session: FieldSession?
 

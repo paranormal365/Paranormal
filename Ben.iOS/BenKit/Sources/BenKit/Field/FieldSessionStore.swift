@@ -243,6 +243,75 @@ public final class FieldSessionStore {
             request, log: ReadingLog(fileURL: files.readingLogURL(for: id)), to: directory)
     }
 
+    // ── Uploading, and what may be deleted afterwards ─────────────────────────
+
+    /// Records that a session's document reached the server.
+    public func markUploaded(_ id: UUID, serverSessionId: UUID) {
+        guard let context, let session = try? fetch(id, in: context) else { return }
+        session.serverSessionId = serverSessionId
+        session.uploadedAt = now()
+        try? context.save()
+        load()
+    }
+
+    /// Records that one file reached the server — or why it did not.
+    public func markFileUploaded(_ captureId: UUID, in sessionId: UUID, problem: String? = nil) {
+        guard let context, let session = try? fetch(sessionId, in: context),
+              let capture = session.captures.first(where: { $0.id == captureId })
+        else { return }
+        capture.uploadedAt = problem == nil ? now() : nil
+        capture.uploadProblem = problem
+        try? context.save()
+        load()
+    }
+
+    /// True when the document AND every file this session holds are on the server — which is the
+    /// only condition under which deleting the local copies loses nothing.
+    public func isFullyUploaded(_ id: UUID) -> Bool {
+        guard let context, let session = try? fetch(id, in: context) else { return false }
+        guard session.uploadedAt != nil else { return false }
+        return session.captures.allSatisfy { $0.uploadedAt != nil }
+    }
+
+    /// Deletes the recorded FILES while keeping the session, its readings and its marks.
+    ///
+    /// This is the "free up the phone" path, and it is deliberately not the same as deleting the
+    /// session: the readings are small, and losing the trace of the night to reclaim video space
+    /// would be a bad trade nobody asked for.
+    public func deleteLocalMedia(for id: UUID) throws {
+        guard let context, let session = try? fetch(id, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+        for capture in session.captures {
+            let url = files.fileURL(for: id, relativePath: capture.relativePath)
+            try? FileManager.default.removeItem(at: url)
+        }
+        // The rows stay: a capture that was made and has since been cleared off the device is a
+        // fact worth keeping, and the file may still exist on the server.
+        try context.save()
+        load()
+    }
+
+    /// Deletes one capture — its row and its bytes. For the ones somebody simply does not want.
+    public func deleteCapture(_ captureId: UUID, in sessionId: UUID) throws {
+        guard let context, let session = try? fetch(sessionId, in: context),
+              let capture = session.captures.first(where: { $0.id == captureId })
+        else { return }
+
+        try? FileManager.default.removeItem(
+            at: files.fileURL(for: sessionId, relativePath: capture.relativePath))
+        context.delete(capture)
+        session.captureCount = max(0, session.captureCount - 1)
+        try context.save()
+        load()
+    }
+
+    /// Whether a capture's bytes are still on this device.
+    public func hasLocalFile(_ relativePath: String, in sessionId: UUID) -> Bool {
+        FileManager.default.fileExists(
+            atPath: files.fileURL(for: sessionId, relativePath: relativePath).path)
+    }
+
     public func summary(for id: UUID) -> FieldSessionSummary? {
         sessions.first { $0.id == id }
     }

@@ -13,10 +13,13 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var readingCount: Int
     public var markerCount: Int
     public var captureCount: Int
+    public var serverSessionId: UUID?
+    public var uploadedAt: Date?
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
-                readingCount: Int, markerCount: Int, captureCount: Int) {
+                readingCount: Int, markerCount: Int, captureCount: Int,
+                serverSessionId: UUID? = nil, uploadedAt: Date? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -27,6 +30,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.readingCount = readingCount
         self.markerCount = markerCount
         self.captureCount = captureCount
+        self.serverSessionId = serverSessionId
+        self.uploadedAt = uploadedAt
     }
 
     init(_ session: FieldSession) {
@@ -39,7 +44,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   investigationTitle: session.investigationTitle,
                   readingCount: session.readingCount,
                   markerCount: session.markerCount,
-                  captureCount: session.captureCount)
+                  captureCount: session.captureCount,
+                  serverSessionId: session.serverSessionId,
+                  uploadedAt: session.uploadedAt)
     }
 
     /// What to call it in a list. The operator's own label wins; failing that, where it sat in
@@ -55,4 +62,5 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     }
 
     public var isRecording: Bool { outcome == .recording }
+    public var isUploaded: Bool { uploadedAt != nil }
 }

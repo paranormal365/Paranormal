@@ -17,6 +17,7 @@ final class AppDependencies {
     /// Field sessions live on the DEVICE, so this one is built here rather than per-screen: a
     /// recording session has to outlive whatever screen started it.
     let fieldKit: FieldSessionStore
+    let fieldUpload: FieldUploadClient
     /// The feed's write surface (item 186 F2–F7) — one instance, shared by every screen
     /// that can post, like, follow or report.
     let feedActions: FeedActions
@@ -67,6 +68,7 @@ final class AppDependencies {
         suite = LiveSensors.suite()
         #endif
         self.fieldKit = FieldSessionStore.live(sensors: { suite })
+        self.fieldUpload = FieldUploadClient(api: api)
     }
 
     /// Switching environments must clear the session — a Dev token means
