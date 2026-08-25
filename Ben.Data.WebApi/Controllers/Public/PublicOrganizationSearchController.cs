@@ -205,6 +205,8 @@ public sealed record OrgSearchResult(
 /// </remarks>
 /// AreaLabel is the human-readable area, e.g. "Nashville, TN", and is null when none is set;
 /// RadiusMiles is the declared operating radius, null when no area is configured.
+/// Kind is what this group primarily is (2026-08-24) — the badge on its card; RunsPublicTours
+/// says it runs public walking tours, whatever kind it primarily is.
 public sealed record OrgBrowseResult(
     Guid OrganizationId,
     string Name,
@@ -213,9 +215,7 @@ public sealed record OrgBrowseResult(
     double? RadiusMiles,
     bool IsAcceptingClients,
     Guid? ActiveLogoFileId,
-    /// <summary>What this group primarily is (2026-08-24) — the badge on its card.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
-    /// <summary>Whether it runs public walking tours, whatever kind it primarily is.</summary>
     bool RunsPublicTours = false);
 
 /// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>

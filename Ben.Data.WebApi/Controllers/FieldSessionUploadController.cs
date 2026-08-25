@@ -119,12 +119,16 @@ public sealed class FieldSessionUploadController : BenControllerBase
         // Asked directly rather than inferred from an exception type: a row that survived its
         // bytes has to be reported plainly, and returning an empty session instead would read as
         // a night where nothing happened.
-        if (!_fileStorage.Exists(session.DocumentUploadFile.StoragePath))
+        // StoragePath is nullable, and a null one is the same story as a missing file: the row
+        // points at nothing. Folded into the check rather than left to Exists, which would throw
+        // ArgumentNullException on null and surface as a 500 — the one answer this branch exists
+        // to avoid.
+        if (session.DocumentUploadFile.StoragePath is not { } documentPath
+            || !_fileStorage.Exists(documentPath))
             return NotFound("This session's readings are no longer on the server.");
 
         string document;
-        await using (var stream = await _fileStorage.OpenReadAsync(
-                         session.DocumentUploadFile.StoragePath, ct))
+        await using (var stream = await _fileStorage.OpenReadAsync(documentPath, ct))
         {
             if (stream is null)
                 return NotFound("This session's readings are no longer on the server.");
@@ -153,10 +157,10 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == fileId && f.FieldSessionUploadId == sessionId, ct);
         if (file is null) return NotFound();
 
-        if (!_fileStorage.Exists(file.UploadFile.StoragePath))
+        if (file.UploadFile.StoragePath is not { } filePath || !_fileStorage.Exists(filePath))
             return NotFound("That recording is no longer on the server.");
 
-        var stream = await _fileStorage.OpenReadAsync(file.UploadFile.StoragePath, ct);
+        var stream = await _fileStorage.OpenReadAsync(filePath, ct);
         // enableRangeProcessing: a player has to be able to seek, and a two-hour recording that
         // must be fetched whole before it plays is a recording nobody reviews.
         return File(stream, file.UploadFile.ContentType ?? "application/octet-stream",

@@ -145,6 +145,11 @@ public sealed class OrgPublicController : ControllerBase
 
 // ── Response records ─────────────────────────────────────────────────────────
 
+/// <summary>
+/// The public home payload for one group. Kind is what this group is (2026-08-24), shown as a
+/// badge on its public page; RunsPublicTours says it runs public walking tours, which is worth
+/// saying even on an investigation group.
+/// </summary>
 public sealed record OrgPublicHomeResponse(
     Guid OrgId,
     string OrgName,
@@ -155,9 +160,7 @@ public sealed record OrgPublicHomeResponse(
     string? PublicPhone = null,
     string? PublicEmail = null,
     string? PublicWebsite = null,
-    /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
-    /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
     bool RunsPublicTours = false);
 
 public sealed record OrgPublicPageResponse(
