@@ -177,6 +177,11 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 // person. The backfill service gives one to any account that predates the column and then does
 // nothing on every subsequent start.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+
+// Sign in with Apple. The validator holds a cached, self-refreshing copy of Apple's signing keys,
+// so it is a singleton — one key fetch for the process, not one per sign-in.
+builder.Services.AddHttpClient<Ben.Data.WebApi.Controllers.IAppleIdentityTokenValidator,
+                               Ben.Data.WebApi.Controllers.AppleIdentityTokenValidator>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
 

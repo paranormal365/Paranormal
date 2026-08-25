@@ -53,9 +53,9 @@ struct SignInView: View {
                     .disabled(email.isEmpty || password.isEmpty || countdown > 0
                               || session.state == .authenticating
                               || session.state == .fetchingIdentity)
-                } footer: {
-                    Text("Registration and password reset arrive in a later slice — use the website for those for now.")
                 }
+
+                AppleSignInSection { dismiss() }
             }
             .navigationTitle("Sign in")
             .navigationBarTitleDisplayMode(.inline)

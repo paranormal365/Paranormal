@@ -150,6 +150,18 @@ public final class SessionStore {
         }
     }
 
+    /// Adopts a session that some OTHER door established — today, Sign in with Apple, which
+    /// puts the credentials in the token session itself and never sees a password. The state
+    /// machine still has to catch up, or the app stays on its sign-in sheet holding a valid token.
+    public func adoptExternalSignIn() async {
+        clearPending()
+        errorMessage = nil
+        retryAfter = nil
+        sessionEndedBanner = false
+        state = .fetchingIdentity
+        await fetchIdentity(quietOnFailure: false)
+    }
+
     private func fetchIdentity(quietOnFailure: Bool) async {
         let result = await api.load(Endpoint(.get, "api/me"), as: MeResponse.self)
         switch result {
