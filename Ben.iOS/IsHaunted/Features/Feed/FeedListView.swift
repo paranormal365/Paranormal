@@ -44,9 +44,13 @@ struct FeedListView: View {
                         Image(systemName: dependencies.notifications.badgeCount > 0
                               ? "bell.badge" : "bell")
                     }
-                    .accessibilityLabel(dependencies.notifications.badgeCount > 0
-                        ? "Notifications, \(dependencies.notifications.badgeCount) waiting"
-                        : "Notifications")
+                    // The NAME is the name; the count is a value. Baking the number into the
+                    // label made the control rename itself as the count changed — VoiceOver
+                    // announced a different control, and nothing could refer to it by name.
+                    // The iPad sidebar's own row uses .badge, which is the same idea.
+                    .accessibilityLabel("Notifications")
+                    .accessibilityValue(dependencies.notifications.badgeCount > 0
+                        ? "\(dependencies.notifications.badgeCount) waiting" : "")
                 }
             }
             // CanPost is the SERVER's answer, so the button never invites a refusal.
