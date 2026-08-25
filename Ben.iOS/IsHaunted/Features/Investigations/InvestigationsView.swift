@@ -73,12 +73,22 @@ struct InvestigationsView: View {
         List {
             if !store.upcoming.isEmpty {
                 Section("Coming up") {
-                    ForEach(store.upcoming) { InvestigationRow(investigation: $0) }
+                    ForEach(store.upcoming) { investigation in
+                        NavigationLink(value: AppRoute.investigationDetail(investigation.investigationId)) {
+                            InvestigationRow(investigation: investigation)
+                        }
+                        .accessibilityIdentifier("investigation-row")
+                    }
                 }
             }
             if !store.past.isEmpty {
                 Section("Been and gone") {
-                    ForEach(store.past) { InvestigationRow(investigation: $0) }
+                    ForEach(store.past) { investigation in
+                        NavigationLink(value: AppRoute.investigationDetail(investigation.investigationId)) {
+                            InvestigationRow(investigation: investigation)
+                        }
+                        .accessibilityIdentifier("investigation-row")
+                    }
                 }
             }
             if !store.attended.isEmpty {

@@ -5,6 +5,7 @@ import BenKit
 /// not, and the developer environment picker.
 struct SettingsHomeView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(Router.self) private var router
     @State private var showSignIn = false
     @State private var showRegister = false
 
@@ -54,6 +55,19 @@ struct SettingsHomeView: View {
                     Text("Account")
                 } footer: {
                     Text("You can browse the feed and public events without an account.")
+                }
+            }
+
+            // Events has no tab on iPhone — Field Kit took the fifth slot — so this is where
+            // public events live on a phone. On iPad the sidebar carries them and this row
+            // would be a second door to the same room.
+            if !router.isSection(.events) {
+                Section {
+                    NavigationLink(value: AppRoute.eventsList) {
+                        Label("Public events", systemImage: "calendar")
+                    }
+                } footer: {
+                    Text("Events groups have posted publicly, and the ones you're going to.")
                 }
             }
 

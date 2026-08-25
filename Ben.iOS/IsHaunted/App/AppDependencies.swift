@@ -14,6 +14,9 @@ final class AppDependencies {
     let api: APIClient
     let session: SessionStore
     let appleSignIn: AppleSignInClient
+    /// Field sessions live on the DEVICE, so this one is built here rather than per-screen: a
+    /// recording session has to outlive whatever screen started it.
+    let fieldKit: FieldSessionStore
     /// The feed's write surface (item 186 F2–F7) — one instance, shared by every screen
     /// that can post, like, follow or report.
     let feedActions: FeedActions
@@ -53,6 +56,7 @@ final class AppDependencies {
         self.imageLoader = AuthenticatedImageLoader(api: api)
         self.accountActions = AccountActions(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
+        self.fieldKit = FieldSessionStore.live()
     }
 
     /// Switching environments must clear the session — a Dev token means

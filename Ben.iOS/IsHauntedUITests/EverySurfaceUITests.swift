@@ -86,7 +86,16 @@ final class EverySurfaceUITests: XCTestCase {
     }
 
     func testEventsOpensWithoutNeedingAnything() {
-        XCTAssertTrue(AppNavigator.openSection("Events", in: app))
+        // Events has a sidebar row on iPad and a Profile row on iPhone — Field Kit took the
+        // fifth tab. AppNavigator finds whichever this shell drew; if it is not a section here,
+        // Profile is where it lives.
+        if !AppNavigator.openSection("Events", in: app, timeout: 8) {
+            XCTAssertTrue(AppNavigator.openSection("Profile", in: app))
+            let events = app.buttons["Public events"].firstMatch
+            XCTAssertTrue(events.waitForExistence(timeout: 15),
+                          "a phone should reach public events from Profile")
+            events.tap()
+        }
         // "Reserve" and "spaces left" are what an event row actually says — my first guess at
         // these was wrong, and the failure was the TEST's, not the app's.
         assertSettled("Events", anyOf: [
@@ -97,6 +106,12 @@ final class EverySurfaceUITests: XCTestCase {
         XCTAssertTrue(AppNavigator.openSection("My Cases", in: app))
         assertSettled("My Cases", anyOf: [
             "it appears here", "between you and the group", "#20"])
+    }
+
+    func testFieldKitOpens() {
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        assertSettled("Field Kit", anyOf: ["Start a session", "Nothing recorded yet",
+                                           "can't be stored"])
     }
 
     func testSecurityOpensFromProfile() {
