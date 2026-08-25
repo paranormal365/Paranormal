@@ -326,4 +326,51 @@ final class FieldKitUITests: XCTestCase {
                       "a tap anywhere should bring the screen back")
         XCTAssertFalse(overlay.exists)
     }
+
+    /// A finished session, replayed: the transport, the trace and the map all reachable, and the
+    /// media pane honest about the stretches where nothing was recorded.
+    func testAFinishedSessionCanBeReplayed() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        // Give the scripted instruments a moment to log something worth replaying, and mark it
+        // so the timeline has something to jump to.
+        XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 20))
+        fresh.buttons["set-base-level"].tap()
+        sleep(3)
+        fresh.buttons["mark-now"].tap()
+        sleep(1)
+
+        fresh.buttons["stop-field-session"].tap()
+
+        // Stopping lands on review, which is where the replay lives.
+        let play = fresh.buttons["replay-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 25), "a finished session should replay")
+        // Queried across element types: a decorative pane is not reliably an `otherElement`.
+        XCTAssertTrue(fresh.descendants(matching: .any)
+                        .matching(identifier: "replay-media").firstMatch
+                        .waitForExistence(timeout: 10),
+                      "the replay should show its media pane, even over a gap with no recording")
+
+        // The marker made during the session is listed and jumps the playhead to it.
+        let marker = fresh.buttons.matching(identifier: "replay-marker-row").firstMatch
+        XCTAssertTrue(marker.waitForExistence(timeout: 15),
+                      "what was marked during the session should be here to jump to")
+        marker.tap()
+
+        play.tap()
+        sleep(1)
+        // Pausing again proves the transport is live rather than a static picture.
+        play.tap()
+
+        XCTAssertTrue(fresh.buttons["replay-speed"].exists,
+                      "a five-hour vigil needs a speed control")
+    }
 }

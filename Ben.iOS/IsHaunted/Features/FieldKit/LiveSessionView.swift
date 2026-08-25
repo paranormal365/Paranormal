@@ -22,14 +22,23 @@ struct LiveSessionView: View {
     @State private var askingForNote = false
     @State private var errorMessage: String?
 
+    /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
+    private static let barClearance: CGFloat = 96
+
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var active: ActiveFieldSession? { store.active }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
 
     var body: some View {
-        panel
+        // The bar takes its OWN space in a stack rather than floating over the content on a
+        // safe-area inset. The inset version did not shrink the scroll area, so controls sat
+        // underneath the bar and a tap aimed at Mark landed on Stop — a mis-tap in the dark
+        // that ends a recording. A stack cannot get this wrong.
+        VStack(spacing: 0) {
+            panel
+            stopBarIfActive
+        }
             .background(Theme.ink)
-            .safeAreaInset(edge: .bottom) { stopBarIfActive }
             .navigationTitle(summary?.title ?? "Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarItems }
@@ -70,10 +79,16 @@ struct LiveSessionView: View {
     @ViewBuilder
     private var panel: some View {
         if let active, active.sessionId == sessionId {
+            // The bottom padding clears the pinned Stop bar. Without it the scroll content
+            // sits UNDER the bar, and a tap aimed at the last control lands on Stop instead —
+            // which is how a test aiming for "Mark" ended the session. In the field that is
+            // somebody losing a recording to a mis-tap in the dark.
             if sizeClass == .regular {
                 HStack(alignment: .top, spacing: 20) {
-                    ScrollView { instruments(active).frame(maxWidth: 420) }
-                    ScrollView { controls(active) }
+                    ScrollView {
+                        instruments(active).frame(maxWidth: 420).padding(.bottom, Self.barClearance)
+                    }
+                    ScrollView { controls(active).padding(.bottom, Self.barClearance) }
                 }
                 .padding(.horizontal, 16)
             } else {
@@ -83,7 +98,7 @@ struct LiveSessionView: View {
                         controls(active)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, Self.barClearance)
                 }
             }
         } else if summary != nil {

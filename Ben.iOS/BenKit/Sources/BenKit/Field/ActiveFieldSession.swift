@@ -101,7 +101,12 @@ public final class ActiveFieldSession {
                 guard let self else { return }
                 switch event {
                 case .sample(let sample): self.sample = sample
-                case .marked(let marker): self.markers.insert(marker, at: 0)
+                case .marked(let marker):
+                    // Guarded because `mark()` records its own result immediately — see there
+                    // for why waiting for this stream is not safe.
+                    if !self.markers.contains(where: { $0.id == marker.id }) {
+                        self.markers.insert(marker, at: 0)
+                    }
                 case .logged(let count): self.readingCount = count
                 }
             }
@@ -248,9 +253,19 @@ public final class ActiveFieldSession {
         await engine.setPolicy(policy)
     }
 
+    /// Marks the moment, and records it here immediately.
+    ///
+    /// The engine also announces markers on its event stream, but that arrives whenever the pump
+    /// gets to it — and somebody who marks something and then stops the session straight away
+    /// would lose exactly the marker they just made. So the returned record is kept at once and
+    /// the stream de-duplicates.
     @discardableResult
     public func mark(kind: MarkerKind = .manual, note: String? = nil) async -> FieldMarkerRecord {
-        await engine.mark(kind: kind, note: note)
+        let record = await engine.mark(kind: kind, note: note)
+        if !markers.contains(where: { $0.id == record.id }) {
+            markers.insert(record, at: 0)
+        }
+        return record
     }
 
     // MARK: - Derived, for the dial

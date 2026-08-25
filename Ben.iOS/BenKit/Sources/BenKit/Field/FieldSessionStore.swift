@@ -100,10 +100,15 @@ public final class FieldSessionStore {
     public func deactivate() async {
         guard let session = active else { return }
         let id = session.sessionId
+
+        // END FIRST, then read what the session holds. Ending closes any open recording, and
+        // closing it ADDS a capture — so reading the list beforehand persisted everything
+        // except the recording somebody had just been making.
+        await session.end()
+
         let markers = session.markers
         let captures = session.captures
         let readings = session.readingCount
-        await session.end()
         active = nil
 
         guard let context else { return }
@@ -120,8 +125,11 @@ public final class FieldSessionStore {
                     durationSeconds: capture.durationSeconds,
                     latitude: capture.latitude, longitude: capture.longitude,
                     headingDegrees: capture.headingDegrees)
-                stored.session = row
+                // Insert BEFORE wiring the relationship: SwiftData is unreliable about an
+                // inverse set on an object the context has not yet adopted, and the row simply
+                // does not come back.
                 context.insert(stored)
+                stored.session = row
             }
             for marker in markers where !row.markers.contains(where: { $0.id == marker.id }) {
                 let stored = FieldMarker(
@@ -130,8 +138,8 @@ public final class FieldSessionStore {
                     audioOffsetSeconds: marker.audioOffsetSeconds,
                     emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
                     latitude: marker.latitude, longitude: marker.longitude)
-                stored.session = row
                 context.insert(stored)
+                stored.session = row
             }
             try? context.save()
         }
@@ -150,6 +158,53 @@ public final class FieldSessionStore {
         } catch {
             state = .unavailable(reason: "Your sessions couldn't be read: \(error.localizedDescription)")
         }
+    }
+
+    /// Everything a finished session needs to be replayed: what was marked, what was captured,
+    /// and the base levels it was measured against.
+    public func replayData(for id: UUID) -> ReplaySource? {
+        guard let context, let session = try? fetch(id, in: context) else { return nil }
+
+        let markers = session.markers
+            .sorted { $0.at < $1.at }
+            .map { marker in
+                FieldMarkerRecord(
+                    id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    magneticMicrotesla: marker.emfMicrotesla, soundDbfs: marker.soundDbfs,
+                    latitude: marker.latitude, longitude: marker.longitude,
+                    audioFilename: marker.audioFilename,
+                    audioOffsetSeconds: marker.audioOffsetSeconds)
+            }
+
+        // Only timed media can sit on a timeline. A photo is an instant, not a stretch, so it
+        // is a pin on the track rather than something the playhead runs through.
+        let media = session.captures
+            .filter { $0.kind != .photo }
+            .compactMap { capture -> MediaSegment? in
+                guard let duration = capture.durationSeconds, duration > 0 else { return nil }
+                return MediaSegment(id: capture.id, kind: capture.kind,
+                                    relativePath: capture.relativePath,
+                                    startedAt: capture.at, duration: duration)
+            }
+            .sorted { $0.startedAt < $1.startedAt }
+
+        let stills = session.captures
+            .filter { $0.kind == .photo }
+            .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
+                               relativePath: $0.relativePath,
+                               latitude: $0.latitude, longitude: $0.longitude) }
+            .sorted { $0.at < $1.at }
+
+        return ReplaySource(
+            sessionId: id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            markers: markers,
+            media: media,
+            stills: stills,
+            baselines: Baselines(magneticMicrotesla: session.baselineEmfMicrotesla,
+                                 soundDbfs: session.baselineSoundDbfs),
+            log: ReadingLog(fileURL: files.readingLogURL(for: id)))
     }
 
     public func summary(for id: UUID) -> FieldSessionSummary? {
@@ -255,6 +310,38 @@ public final class FieldSessionStore {
         try context.fetch(FetchDescriptor<FieldSession>(
             predicate: #Predicate { $0.id == id })).first
     }
+}
+
+/// A photo, as a moment on the timeline.
+public struct CaptureMark: Sendable, Equatable, Identifiable {
+    public var id: UUID
+    public var at: Date
+    public var kind: CaptureKind
+    public var relativePath: String
+    public var latitude: Double?
+    public var longitude: Double?
+
+    public init(id: UUID, at: Date, kind: CaptureKind, relativePath: String,
+                latitude: Double? = nil, longitude: Double? = nil) {
+        self.id = id
+        self.at = at
+        self.kind = kind
+        self.relativePath = relativePath
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
+/// Everything needed to replay one finished session.
+public struct ReplaySource: Sendable {
+    public var sessionId: UUID
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var markers: [FieldMarkerRecord]
+    public var media: [MediaSegment]
+    public var stills: [CaptureMark]
+    public var baselines: Baselines
+    public var log: ReadingLog
 }
 
 public enum FieldSessionError: Error, LocalizedError {

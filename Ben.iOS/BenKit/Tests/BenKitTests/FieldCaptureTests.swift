@@ -157,4 +157,81 @@ struct FieldCaptureTests {
             #expect(FieldReading.FileRef.relative(path) != nil)
         }
     }
+
+    // MARK: - What survives the session ending
+
+    @Test func whatWasMarkedDuringASessionIsThereToReplayAfterwards() async throws {
+        // The whole point of marking something at 3am is finding it again at breakfast. This is
+        // the seam where that either works or quietly does not — the live session's markers have
+        // to reach the database before the replay goes looking for them.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("persist-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = FieldSessionStore(
+            database: try .inMemory(),
+            files: SessionFileStore(root: root),
+            deviceModel: "iPhone17,1",
+            sensors: { SensorSuite(recorder: StubRecorder()) })
+
+        let id = try store.startSession(locationLabel: "Cellar")
+        await store.activate(id, channels: [.magnetic])
+
+        let session = try #require(store.active)
+        await session.mark(kind: .manual, note: "cold spot")
+        await session.mark(kind: .manual, note: "knock")
+
+        try await store.endSession(id)
+
+        let source = try #require(store.replayData(for: id))
+        #expect(source.markers.count == 2)
+        #expect(source.markers.map(\.note) == ["cold spot", "knock"])   // oldest first
+        #expect(store.summary(for: id)?.markerCount == 2)
+    }
+
+    @Test func aRecordingBecomesAReplayableStretchOfTheTimeline() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("persist-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = FieldSessionStore(
+            database: try .inMemory(),
+            files: SessionFileStore(root: root),
+            deviceModel: "iPhone17,1",
+            sensors: { SensorSuite(recorder: StubRecorder(duration: 30)) })
+
+        let id = try store.startSession(locationLabel: "Hall")
+        await store.activate(id, channels: [.magnetic, .audio])
+        try await store.endSession(id)
+
+        let source = try #require(store.replayData(for: id))
+        // Audio has a duration, so it is a stretch the playhead runs through.
+        #expect(source.media.count == 1)
+        #expect(source.media.first?.duration == 30)
+        #expect(source.stills.isEmpty)
+    }
+
+    @Test func aPhotoIsAMomentOnTheTimelineNotAStretch() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("persist-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = FieldSessionStore(
+            database: try .inMemory(),
+            files: SessionFileStore(root: root),
+            deviceModel: "iPhone17,1",
+            sensors: { SensorSuite(recorder: StubRecorder()) })
+
+        let id = try store.startSession(locationLabel: "Attic")
+        await store.activate(id, channels: [.magnetic])
+        await store.active?.noteCapture(kind: .photo, relativePath: "media/photo-001.jpg",
+                                        byteCount: 2_048)
+        try await store.endSession(id)
+
+        let source = try #require(store.replayData(for: id))
+        // A photo is an instant. Running a playhead "through" one would be meaningless.
+        #expect(source.media.isEmpty)
+        #expect(source.stills.count == 1)
+        #expect(source.stills.first?.relativePath == "media/photo-001.jpg")
+    }
 }
