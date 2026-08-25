@@ -21,6 +21,12 @@ public final class FieldSessionStore {
     public private(set) var sessions: [FieldSessionSummary] = []
     /// The session currently recording, if any.
     public private(set) var activeSessionId: UUID?
+    /// The live instruments of that session — nil when nothing is recording.
+    public private(set) var active: ActiveFieldSession?
+
+    /// How the store builds the instruments. Injected so a test can hand it scripted streams
+    /// and the app can hand it either the real sensors or the fake ones.
+    private var makeSensors: @Sendable () -> SensorSuite = { SensorSuite() }
 
     private let database: FieldSessionDatabase?
     public let files: SessionFileStore
@@ -35,7 +41,9 @@ public final class FieldSessionStore {
                 files: SessionFileStore,
                 deviceModel: String,
                 unavailableReason: String? = nil,
+                sensors: @escaping @Sendable () -> SensorSuite = { SensorSuite() },
                 now: @escaping @Sendable () -> Date = Date.init) {
+        self.makeSensors = sensors
         self.database = database
         self.files = files
         self.deviceModel = deviceModel
@@ -49,12 +57,13 @@ public final class FieldSessionStore {
 
     /// Builds the real store, degrading to an explained refusal rather than throwing into a
     /// crash if the database will not open.
-    public static func live(now: @escaping @Sendable () -> Date = Date.init) -> FieldSessionStore {
+    public static func live(sensors: @escaping @Sendable () -> SensorSuite,
+                            now: @escaping @Sendable () -> Date = Date.init) -> FieldSessionStore {
         let model = DeviceModel.identifier()
         do {
             return FieldSessionStore(database: try .onDisk(),
                                      files: try .applicationSupport(),
-                                     deviceModel: model, now: now)
+                                     deviceModel: model, sensors: sensors, now: now)
         } catch {
             let fallback = SessionFileStore(
                 root: FileManager.default.temporaryDirectory
@@ -62,8 +71,59 @@ public final class FieldSessionStore {
             return FieldSessionStore(
                 database: nil, files: fallback, deviceModel: model,
                 unavailableReason: "Field sessions can't be stored on this device: \(error.localizedDescription)",
-                now: now)
+                sensors: sensors, now: now)
         }
+    }
+
+    // ── The running session ───────────────────────────────────────────────────
+
+    /// Brings the instruments up for a session and starts reading them.
+    public func activate(_ id: UUID, policy: SamplingPolicy = .default,
+                         channels: CaptureChannels = .default) async {
+        guard active?.sessionId != id else { return }
+        await active?.end()
+
+        guard let summary = summary(for: id) else { return }
+        let log = ReadingLog(fileURL: files.readingLogURL(for: id))
+        let sensors = makeSensors()
+        let engine = FieldSessionEngine(sessionId: id, log: log, sensors: sensors,
+                                        policy: policy, channels: channels, now: now)
+        let session = ActiveFieldSession(sessionId: id, startedAt: summary.startedAt,
+                                         engine: engine, sensors: sensors,
+                                         policy: policy, channels: channels)
+        active = session
+        activeSessionId = id
+        await session.begin()
+    }
+
+    /// Stops the instruments and records what the session ended up holding.
+    public func deactivate() async {
+        guard let session = active else { return }
+        let id = session.sessionId
+        let markers = session.markers
+        let readings = session.readingCount
+        await session.end()
+        active = nil
+
+        guard let context else { return }
+        if let row = try? fetch(id, in: context) {
+            row.readingCount = readings
+            row.markerCount = markers.count
+            row.baselineEmfMicrotesla = session.baselines.magneticMicrotesla
+            row.baselineSoundDbfs = session.baselines.soundDbfs
+            for marker in markers where !row.markers.contains(where: { $0.id == marker.id }) {
+                let stored = FieldMarker(
+                    id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    audioFilename: marker.audioFilename,
+                    audioOffsetSeconds: marker.audioOffsetSeconds,
+                    emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
+                    latitude: marker.latitude, longitude: marker.longitude)
+                stored.session = row
+                context.insert(stored)
+            }
+            try? context.save()
+        }
+        load()
     }
 
     // ── Reading ───────────────────────────────────────────────────────────────
@@ -114,7 +174,8 @@ public final class FieldSessionStore {
         return id
     }
 
-    public func endSession(_ id: UUID) throws {
+    public func endSession(_ id: UUID) async throws {
+        if active?.sessionId == id { await deactivate() }
         guard let context else { throw FieldSessionError.unavailable }
         guard let session = try fetch(id, in: context) else { return }
         session.endedAt = now()

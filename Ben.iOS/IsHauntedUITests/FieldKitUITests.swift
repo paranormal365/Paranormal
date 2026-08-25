@@ -76,4 +76,93 @@ final class FieldKitUITests: XCTestCase {
             ).firstMatch.waitForExistence(timeout: 20),
             "stopping should open the session's review")
     }
+
+    /// Drives the fake instruments so the gauges can actually be looked at.
+    func testTheMeterRunsOnFakeSensors() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 20))
+        // Let the scripted field settle, then take the room as normal.
+        sleep(2)
+        fresh.buttons["set-base-level"].tap()
+        sleep(1)
+
+        // The scripted room swings past the report level every twenty seconds.
+        sleep(9)
+
+        // The dial is drawn, not a label, so its accessibility value is what proves a needle
+        // is pointing somewhere real rather than a placeholder being shown.
+        let dial = fresh.otherElements["Magnetic field"].firstMatch
+        XCTAssertTrue(dial.waitForExistence(timeout: 15), "the meter should be on screen")
+        XCTAssertFalse(dial.value as? String == "No reading",
+                       "with a base set and instruments running, the meter should read something")
+
+        // The two set points a person controls both have to be reachable while recording.
+        XCTAssertTrue(fresh.buttons["mark-now"].exists)
+        XCTAssertTrue(fresh.buttons["set-base-level"].exists)
+    }
+
+    /// Field work happens at night, so the screens that matter most are the ones nobody would
+    /// see in a daylight screenshot. This runs the same panel in dark and asserts it is all
+    /// still there — the appearance is restored afterwards so the rest of the suite is unaffected.
+    func testTheInstrumentPanelWorksInTheDark() throws {
+        let previous = XCUIDevice.shared.appearance
+        XCUIDevice.shared.appearance = .dark
+        defer { XCUIDevice.shared.appearance = previous }
+
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 20))
+        fresh.buttons["set-base-level"].tap()
+
+        XCTAssertTrue(fresh.otherElements["Magnetic field"].firstMatch.exists)
+        XCTAssertTrue(fresh.otherElements["Sound level"].firstMatch.exists)
+        XCTAssertTrue(fresh.buttons["stop-field-session"].exists)
+    }
+
+    /// What a session records is the investigator's choice, and switching a channel off has to
+    /// actually take its readout away rather than leaving it there looking live.
+    func testChannelsCanBeSwitchedOffDuringASession() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let audioToggle = fresh.switches["channel-audio"]
+        XCTAssertTrue(audioToggle.waitForExistence(timeout: 20), "channels should be switchable")
+        XCTAssertTrue(fresh.otherElements["Sound level"].firstMatch.exists)
+
+        audioToggle.tap()
+
+        // The sound meter goes away with the channel — a gauge left on screen after its stream
+        // is torn down would show a frozen last value as though it were live.
+        let meter = fresh.otherElements["Sound level"].firstMatch
+        let deadline = Date().addingTimeInterval(15)
+        while meter.exists && Date() < deadline {
+            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        }
+        XCTAssertFalse(meter.exists,
+                       "switching audio off should take its meter away, not freeze it")
+    }
 }

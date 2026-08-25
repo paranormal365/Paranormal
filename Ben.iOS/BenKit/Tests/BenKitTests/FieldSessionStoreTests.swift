@@ -54,14 +54,14 @@ struct FieldSessionStoreTests {
         #expect(try #require(store.summary(for: id)).title == "The Old Mill")
     }
 
-    @Test func endingASessionRecordsWhenItStopped() throws {
+    @Test func endingASessionRecordsWhenItStopped() async throws {
         let clock = ManualClock()
         let (store, root) = try makeStore(now: clock.nowProvider)
         defer { try? FileManager.default.removeItem(at: root) }
 
         let id = try store.startSession(locationLabel: "Cellar")
         clock.advance(by: 3_600)
-        try store.endSession(id)
+        try await store.endSession(id)
 
         let session = try #require(store.summary(for: id))
         #expect(session.outcome == .ended)

@@ -56,7 +56,17 @@ final class AppDependencies {
         self.imageLoader = AuthenticatedImageLoader(api: api)
         self.accountActions = AccountActions(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
-        self.fieldKit = FieldSessionStore.live()
+// The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
+        // want it — then handed to the store as a value it can hold. A simulator has no
+        // magnetometer, so a debug build with `-fieldKitFakeSensors` gets scripted ones instead;
+        // a gauge nobody can watch move is a gauge nobody has checked.
+        let suite: SensorSuite
+        #if DEBUG
+        suite = FakeSensors.isEnabled ? FakeSensors.suite() : LiveSensors.suite()
+        #else
+        suite = LiveSensors.suite()
+        #endif
+        self.fieldKit = FieldSessionStore.live(sensors: { suite })
     }
 
     /// Switching environments must clear the session — a Dev token means
