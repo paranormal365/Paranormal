@@ -21,9 +21,54 @@ enum FakeSensors {
         SensorSuite(
             magnetometer: DriftingMagnetometer(),
             audio: DriftingAudio(),
+            recorder: SilentRecorder(),
             location: WalkingLocation(),
             altitude: DriftingAltimeter(),
             batteryPercent: { 82 })
+    }
+}
+
+/// Writes a real (if silent) file, so the capture path is exercised end to end rather than
+/// mocked away: the session directory, the naming, the size check, the reading that names it.
+private final class SilentRecorder: AudioRecording, @unchecked Sendable {
+    private let lock = NSLock()
+    private var startedAt: Date?
+    private var url: URL?
+
+    var isRecording: Bool {
+        get async { running() }
+    }
+
+    // Locks live in synchronous helpers: Swift 6 refuses an NSLock held across an await.
+    private func running() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return startedAt != nil
+    }
+
+    private func begin(_ url: URL) {
+        lock.lock(); defer { lock.unlock() }
+        startedAt = Date()
+        self.url = url
+    }
+
+    private func finish() -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        let started = startedAt
+        startedAt = nil
+        return started
+    }
+
+    func beginRecording(to url: URL) async throws {
+        // ~2 KB of nothing: past the "did this produce anything" floor, so the capture is
+        // treated as real, which is the point of exercising it.
+        try Data(count: 2_048).write(to: url)
+        begin(url)
+    }
+
+    @discardableResult
+    func endRecording() async -> TimeInterval {
+        // Long enough to clear the empty-recording floor even when a test stops it instantly.
+        max(1.0, finish().map { Date().timeIntervalSince($0) } ?? 1.0)
     }
 }
 

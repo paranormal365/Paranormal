@@ -55,54 +55,177 @@ final class LiveMagnetometer: MagnetometerSource, @unchecked Sendable {
     }
 }
 
-/// Sound level, from a metering-only audio tap.
+/// The microphone: one engine, one owner, doing both jobs.
 ///
-/// Slice 2 measures; it does not record. The recording rides on the same engine in the next
-/// slice, which is why this owns the session rather than a recorder object — two things fighting
-/// over one audio session is how a night's recording ends up silent.
-final class LiveAudioLevel: AudioLevelSource, @unchecked Sendable {
+/// Metering and recording come off the SAME tap deliberately. Two objects each opening the
+/// microphone is how a night's audio ends up silent — one of them wins, the other fails quietly,
+/// and nobody finds out until they go looking for the recording that was never made.
+///
+/// Interruptions are watched for and reported. A call, or another app taking the microphone,
+/// stops a recording; somebody who believes they are recording and is not has lost the night, so
+/// this is surfaced rather than swallowed.
+final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Sendable {
     private let engine = AVAudioEngine()
+    private let lock = NSLock()
+    private var file: AVAudioFile?
+    private var recordingStartedAt: Date?
+    private var interruptionObserver: NSObjectProtocol?
+    private var tapInstalled = false
 
     var isAvailable: Bool { true }
+
+    var isRecording: Bool {
+        get async { hasOpenFile() }
+    }
+
+    /// Every lock is taken inside a synchronous helper: Swift 6 rightly refuses an NSLock held
+    /// across an await, and these are all short critical sections anyway.
+    private func hasOpenFile() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return file != nil
+    }
+
+    private func adoptFile(_ created: AVAudioFile, startedAt: Date) {
+        lock.lock(); defer { lock.unlock() }
+        file = created
+        recordingStartedAt = startedAt
+    }
+
+    /// Releases the file — which is what finalises the container — and reports when it started.
+    private func releaseFile() -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        let startedAt = recordingStartedAt
+        file = nil
+        recordingStartedAt = nil
+        return startedAt
+    }
 
     func levels() -> AsyncStream<AudioLevelSample> {
         AsyncStream { continuation in
             do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .measurement,
-                                        options: [.mixWithOthers, .defaultToSpeaker])
-                try session.setActive(true)
-
-                let input = engine.inputNode
-                let format = input.outputFormat(forBus: 0)
-                input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-                    guard let levels = Self.levels(of: buffer) else { return }
+                try configureSession()
+                try startEngine { [weak self] buffer, levels in
+                    // The same buffer feeds the meter and the file, so what a person watched
+                    // and what was recorded cannot disagree.
+                    self?.write(buffer)
                     continuation.yield(AudioLevelSample(at: Date(),
                                                         averageDbfs: levels.average,
                                                         peakDbfs: levels.peak))
                 }
-                try engine.start()
             } catch {
-                // No microphone, or permission refused: the session carries on without sound
-                // rather than failing. A missing channel narrows a reading; it never stops one.
+                // No microphone, or permission refused: the session carries on without sound.
+                // A missing channel narrows a reading; it never stops one.
                 continuation.finish()
                 return
             }
+            continuation.onTermination = { [weak self] _ in self?.teardown() }
+        }
+    }
 
-            continuation.onTermination = { [weak self] _ in
-                self?.stop()
+    func beginRecording(to url: URL) async throws {
+        do {
+            try configureSession()
+            if !hasTap() {
+                try startEngine { [weak self] buffer, _ in self?.write(buffer) }
+            }
+
+            let format = engine.inputNode.outputFormat(forBus: 0)
+            guard format.sampleRate > 0 else { throw AudioRecordingError.microphoneUnavailable }
+
+            let settings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: format.sampleRate,
+                AVNumberOfChannelsKey: min(2, Int(format.channelCount)),
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            ]
+            let created = try AVAudioFile(forWriting: url, settings: settings)
+
+            adoptFile(created, startedAt: Date())
+            watchForInterruptions()
+        } catch let error as AudioRecordingError {
+            throw error
+        } catch {
+            throw AudioRecordingError.couldNotStart(error.localizedDescription)
+        }
+    }
+
+    @discardableResult
+    func endRecording() async -> TimeInterval {
+        // Releasing the AVAudioFile is what finalises the container. Dropped without this, an
+        // m4a has no moov atom and will not play anywhere.
+        let startedAt = releaseFile()
+
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
+        return startedAt.map { Date().timeIntervalSince($0) } ?? 0
+    }
+
+    // MARK: - Plumbing
+
+    private func configureSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .measurement,
+                                options: [.mixWithOthers, .defaultToSpeaker])
+        try session.setActive(true)
+    }
+
+    private func startEngine(
+        _ handler: @escaping @Sendable (AVAudioPCMBuffer, (average: Double, peak: Double)) -> Void
+    ) throws {
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { throw AudioRecordingError.microphoneUnavailable }
+
+        if hasTap() { input.removeTap(onBus: 0) }
+        input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
+            handler(buffer, Self.levels(of: buffer) ?? (-60, -60))
+        }
+        lock.lock(); tapInstalled = true; lock.unlock()
+        if !engine.isRunning { try engine.start() }
+    }
+
+    private func hasTap() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return tapInstalled
+    }
+
+    private func write(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        let target = file
+        lock.unlock()
+        guard let target else { return }
+        try? target.write(from: buffer)
+    }
+
+    private func watchForInterruptions() {
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(), queue: .main
+        ) { [weak self] notification in
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            if type == .began {
+                // Close the file rather than leaving a half-written container behind. What was
+                // recorded up to the interruption stays playable.
+                Task { await self?.endRecording() }
             }
         }
     }
 
-    private func stop() {
-        engine.inputNode.removeTap(onBus: 0)
+    private func teardown() {
+        _ = releaseFile()
+        if hasTap() {
+            engine.inputNode.removeTap(onBus: 0)
+            lock.lock(); tapInstalled = false; lock.unlock()
+        }
         engine.stop()
         try? AVAudioSession.sharedInstance().setActive(false)
     }
 
-    /// RMS and peak, in dBFS. A silent buffer is reported at the floor rather than negative
-    /// infinity, which would break every scale that touches it.
+    /// RMS and peak, in dBFS. A silent buffer reports the floor rather than negative infinity,
+    /// which would break every scale that touches it.
     private static func levels(of buffer: AVAudioPCMBuffer) -> (average: Double, peak: Double)? {
         guard let channel = buffer.floatChannelData?[0] else { return nil }
         let count = Int(buffer.frameLength)
@@ -115,7 +238,6 @@ final class LiveAudioLevel: AudioLevelSource, @unchecked Sendable {
             sumOfSquares += value * value
             peak = max(peak, abs(value))
         }
-
         let rms = (sumOfSquares / Float(count)).squareRoot()
         return (decibels(rms), decibels(peak))
     }
@@ -271,9 +393,12 @@ enum LiveSensors {
     @MainActor
     static func suite() -> SensorSuite {
         UIDevice.current.isBatteryMonitoringEnabled = true
+        // One object for both audio jobs — see LiveAudioCapture on why that matters.
+        let audio = LiveAudioCapture()
         return SensorSuite(
             magnetometer: LiveMagnetometer(),
-            audio: LiveAudioLevel(),
+            audio: audio,
+            recorder: audio,
             location: LiveLocation(),
             altitude: LiveAltimeter(),
             batteryPercent: {

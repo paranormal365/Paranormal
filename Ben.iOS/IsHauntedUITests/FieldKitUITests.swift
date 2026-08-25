@@ -165,4 +165,61 @@ final class FieldKitUITests: XCTestCase {
         XCTAssertFalse(meter.exists,
                        "switching audio off should take its meter away, not freeze it")
     }
+
+    /// Recording sound into the session, and seeing it land as a capture.
+    ///
+    /// The camera cannot run in a simulator, so photo and video are verified on hardware; the
+    /// audio path is the one that can be driven here, and it is also the one EVP depends on.
+    func testRecordingAudioLandsAsACaptureInTheSession() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let toggle = fresh.buttons["toggle-audio-recording"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 20), "recording should be reachable")
+
+        // Audio is on by default, so the button offers to STOP — which is the state that proves
+        // a recording started on its own when the session did.
+        XCTAssertEqual(toggle.label, "Stop audio",
+                       "a session with audio switched on should already be recording")
+        toggle.tap()
+
+        // The capture list is the proof: a stopped recording that produced nothing is
+        // deliberately not listed, so a row here means a real file on disk.
+        XCTAssertTrue(fresh.otherElements["capture-row"].firstMatch.waitForExistence(timeout: 20)
+                      || fresh.staticTexts["audio-001.m4a"].waitForExistence(timeout: 5),
+                      "a finished recording should be listed as a capture")
+    }
+
+    /// The video switch decides whether this session carries a camera at all — one fewer thing
+    /// to fumble past in the dark when it is not what you came to do.
+    func testTheVideoSwitchAddsAndRemovesTheCameraButton() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let videoSwitch = fresh.switches["channel-video"]
+        XCTAssertTrue(videoSwitch.waitForExistence(timeout: 20),
+                      "video should be one of the session's channels")
+
+        // Off by default: it is the one that would fill a phone.
+        XCTAssertFalse(fresh.buttons["capture-video"].exists,
+                       "a session not set up for video shouldn't offer the button")
+
+        videoSwitch.tap()
+        XCTAssertTrue(fresh.buttons["capture-video"].waitForExistence(timeout: 10),
+                      "switching video on should put the camera button there")
+    }
 }

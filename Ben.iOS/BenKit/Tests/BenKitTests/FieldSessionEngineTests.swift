@@ -357,4 +357,43 @@ struct FieldSessionEngineTests {
         #expect(trigger.eventDescription?.contains("20 mG") == true)
         #expect(trigger.eventDescription?.contains("12 dB") == true)
     }
+
+    // MARK: - Captures
+
+    @Test func aCaptureNamesItsFileByARelativePathTheBundleCanCarry() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.ingest(position: PositionSample(at: start, latitude: 36.1, longitude: -86.7,
+                                                     accuracyMeters: 30))
+        await engine.noteCapture(kind: .photo, relativePath: "media/photo-001.jpg")
+        await engine.stop()
+
+        let reading = try #require(try await log.readings().last)
+        #expect(reading.triggeredBy == .manual)
+        #expect(reading.measurements?["marker"]?.value == .string("photo"))
+        // Photos have no home in the v1 format's audio_ref, so the path travels in the note —
+        // and it is a RELATIVE path, which is what the bundle's own rules require.
+        #expect(reading.note == "photo: media/photo-001.jpg")
+        #expect(FieldReading.FileRef.relative("media/photo-001.jpg") != nil)
+        // Stamped with where it was taken, which is the whole reason to capture inside a session.
+        #expect(reading.position?.latitude == 36.1)
+    }
+
+    @Test func anAudioCaptureCarriesItsDurationInTheFileReference() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.noteCapture(kind: .audio, relativePath: "media/audio-001.m4a",
+                                 durationSeconds: 128.5)
+        await engine.stop()
+
+        let reading = try #require(try await log.readings().last)
+        let ref = try #require(reading.audioRef)
+        #expect(ref.filename == "media/audio-001.m4a")
+        #expect(ref.durationSeconds == 128.5)
+        #expect(ref.mediaType == "audio/mp4")
+    }
 }

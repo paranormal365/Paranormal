@@ -152,6 +152,8 @@ public protocol AltitudeSource: Sendable {
 public struct SensorSuite: Sendable {
     public var magnetometer: MagnetometerSource?
     public var audio: AudioLevelSource?
+    /// Usually the same object as `audio` — one microphone, one owner.
+    public var recorder: AudioRecording?
     public var location: LocationSource?
     public var altitude: AltitudeSource?
     /// Battery percentage, 0–100. Logged on heartbeats: low battery is a documented cause of
@@ -160,11 +162,13 @@ public struct SensorSuite: Sendable {
 
     public init(magnetometer: MagnetometerSource? = nil,
                 audio: AudioLevelSource? = nil,
+                recorder: AudioRecording? = nil,
                 location: LocationSource? = nil,
                 altitude: AltitudeSource? = nil,
                 batteryPercent: @escaping @Sendable () -> Double? = { nil }) {
         self.magnetometer = magnetometer
         self.audio = audio
+        self.recorder = recorder
         self.location = location
         self.altitude = altitude
         self.batteryPercent = batteryPercent

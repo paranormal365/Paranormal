@@ -218,6 +218,8 @@ struct LiveSessionView: View {
             }
             .buttonStyle(.bordered)
 
+            FieldCaptureBar(session: active)
+
             channelToggles(active)
 
             markerLog(active)
@@ -231,12 +233,7 @@ struct LiveSessionView: View {
             Text("Recording").font(.caption).foregroundStyle(Theme.fog)
 
             ForEach(CaptureChannels.orderedForDisplay, id: \.rawValue) { channel in
-                if channel == .video {
-                    // Not shown until it records something. A switch that does nothing is worse
-                    // than a missing one.
-                    EmptyView()
-                } else {
-                    Toggle(isOn: Binding(
+                Toggle(isOn: Binding(
                         get: { active.channels.contains(channel) },
                         set: { isOn in
                             var channels = active.channels
@@ -250,9 +247,8 @@ struct LiveSessionView: View {
                                 .font(.caption2).foregroundStyle(Theme.fog)
                         }
                     }
-                    .tint(Theme.ecto)
-                    .accessibilityIdentifier("channel-\(channel.title.lowercased())")
-                }
+                .tint(Theme.ecto)
+                .accessibilityIdentifier("channel-\(channel.title.lowercased())")
             }
         }
         .padding(12)

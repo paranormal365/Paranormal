@@ -387,6 +387,34 @@ public actor FieldSessionEngine {
         }
     }
 
+    /// Notes a captured file against the session. Best-effort by design: the FILE is already on
+    /// disk by the time this runs, so a failure to write its reading loses the note, never the
+    /// photo.
+    @discardableResult
+    public func noteCapture(kind: CaptureKind, relativePath: String,
+                            durationSeconds: Double? = nil) async -> FieldReading {
+        sequence -= 1   // `reading` increments; keep the numbering continuous
+        let entry = reading(
+            at: now(), triggeredBy: .manual,
+            marker: nil,
+            note: "\(kind.rawValue): \(relativePath)",
+            audio: kind == .audio
+                ? FieldReading.FileRef.relative(relativePath, mediaType: "audio/mp4",
+                                                durationSeconds: durationSeconds)
+                : nil)
+
+        var withMarker = entry
+        // Photos and video have no home in the v1 format's `audio_ref`, so the kind travels as a
+        // marker label and the path in the note. Flagged for Ben as a `media_ref` candidate for
+        // a future spec version rather than inventing a top-level field here.
+        var measurements = withMarker.measurements ?? [:]
+        measurements["marker"] = .label(kind.rawValue)
+        withMarker.measurements = measurements
+
+        await append(withMarker)
+        return withMarker
+    }
+
     public func currentSample() -> LiveSample { latest }
     public func readingCount() -> Int { sequence }
 }

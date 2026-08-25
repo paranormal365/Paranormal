@@ -89,8 +89,8 @@ public final class FieldSessionStore {
         let engine = FieldSessionEngine(sessionId: id, log: log, sensors: sensors,
                                         policy: policy, channels: channels, now: now)
         let session = ActiveFieldSession(sessionId: id, startedAt: summary.startedAt,
-                                         engine: engine, sensors: sensors,
-                                         policy: policy, channels: channels)
+                                         engine: engine, sensors: sensors, files: files,
+                                         policy: policy, channels: channels, now: now)
         active = session
         activeSessionId = id
         await session.begin()
@@ -101,6 +101,7 @@ public final class FieldSessionStore {
         guard let session = active else { return }
         let id = session.sessionId
         let markers = session.markers
+        let captures = session.captures
         let readings = session.readingCount
         await session.end()
         active = nil
@@ -109,8 +110,19 @@ public final class FieldSessionStore {
         if let row = try? fetch(id, in: context) {
             row.readingCount = readings
             row.markerCount = markers.count
+            row.captureCount = captures.count
             row.baselineEmfMicrotesla = session.baselines.magneticMicrotesla
             row.baselineSoundDbfs = session.baselines.soundDbfs
+            for capture in captures where !row.captures.contains(where: { $0.id == capture.id }) {
+                let stored = FieldCapture(
+                    id: capture.id, at: capture.at, kind: capture.kind,
+                    relativePath: capture.relativePath, byteCount: capture.byteCount,
+                    durationSeconds: capture.durationSeconds,
+                    latitude: capture.latitude, longitude: capture.longitude,
+                    headingDegrees: capture.headingDegrees)
+                stored.session = row
+                context.insert(stored)
+            }
             for marker in markers where !row.markers.contains(where: { $0.id == marker.id }) {
                 let stored = FieldMarker(
                     id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
