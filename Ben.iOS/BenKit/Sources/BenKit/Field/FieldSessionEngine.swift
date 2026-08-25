@@ -103,6 +103,10 @@ public actor FieldSessionEngine {
     /// Set while a recording is running, so a marker can say where in the file it landed.
     private var recording: (filename: String, startedAt: Date)?
 
+    /// The question currently being waited on. EVP work is question, silence, question — and
+    /// what a reviewer needs is the SILENCE bracketed, not just the moment somebody spoke.
+    private var openQuestion: (markerId: UUID, at: Date, text: String?)?
+
     private var continuations: [UUID: AsyncStream<FieldEvent>.Continuation] = [:]
 
     public init(sessionId: UUID,
@@ -487,6 +491,38 @@ public actor FieldSessionEngine {
         await append(withMarker)
         return withMarker
     }
+
+    // MARK: - EVP
+
+    /// Marks a question being asked, and starts the wait.
+    ///
+    /// Asking again while a wait is open closes the previous one first: somebody moving straight
+    /// to the next question has ended the last silence by speaking, and the record should say
+    /// where it actually ended rather than leaving it open forever.
+    @discardableResult
+    public func askQuestion(_ text: String?) async -> FieldMarkerRecord {
+        if openQuestion != nil { await endWait() }
+        let marker = await record(kind: .evpQuestion, at: now(), note: text)
+        openQuestion = (marker.id, marker.at, text)
+        return marker
+    }
+
+    /// Closes the wait after a question. Nil when nothing was open — ending a silence that never
+    /// started would put a mark in the file with nothing on the other end of it.
+    @discardableResult
+    public func endWait() async -> FieldMarkerRecord? {
+        guard let question = openQuestion else { return nil }
+        openQuestion = nil
+
+        let moment = now()
+        let waited = moment.timeIntervalSince(question.at)
+        let note = question.text.map { "waited \(Int(waited.rounded()))s after: \($0)" }
+            ?? "waited \(Int(waited.rounded()))s"
+        return await record(kind: .evpWaitEnd, at: moment, note: note)
+    }
+
+    /// When the open question was asked, if there is one.
+    public func questionOpenedAt() -> Date? { openQuestion?.at }
 
     public func currentSample() -> LiveSample { latest }
     public func readingCount() -> Int { sequence }

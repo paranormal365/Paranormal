@@ -373,4 +373,85 @@ final class FieldKitUITests: XCTestCase {
         XCTAssertTrue(fresh.buttons["replay-speed"].exists,
                       "a five-hour vigil needs a speed control")
     }
+
+    /// Question, silence, question — and the wait bracketed at both ends.
+    func testAskingAnEVPQuestionAndClosingTheWait() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        let openEVP = fresh.buttons["open-evp"]
+        XCTAssertTrue(openEVP.waitForExistence(timeout: 20))
+        openEVP.tap()
+
+        let primary = fresh.buttons["evp-primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 15))
+        // One control, and it says which half of the cycle you are in — there is no reading a
+        // subtitle in the dark.
+        XCTAssertEqual(primary.label, "Ask a question")
+        primary.tap()
+
+        // Asking starts the wait, and the same control now ends it.
+        let deadline = Date().addingTimeInterval(10)
+        while primary.label != "Stop waiting" && Date() < deadline {
+            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        }
+        XCTAssertEqual(primary.label, "Stop waiting",
+                       "asking should start the wait, on the same button")
+
+        XCTAssertTrue(fresh.otherElements.matching(identifier: "evp-question-row").firstMatch.exists
+                      || fresh.staticTexts["Question"].exists,
+                      "the question should be listed while it is being waited on")
+
+        sleep(2)
+        primary.tap()
+
+        let closed = Date().addingTimeInterval(10)
+        while primary.label != "Ask a question" && Date() < closed {
+            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        }
+        XCTAssertEqual(primary.label, "Ask a question", "stopping the wait should free it up")
+
+        fresh.buttons["Done"].tap()
+        XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 15),
+                      "leaving EVP should return to the session, still running")
+    }
+
+    /// Building a bundle to hand over, from a finished session.
+    func testASessionCanBeExportedAsABundle() throws {
+        app.terminate()
+        let fresh = XCUIApplication()
+        fresh.launchArguments += ["-fieldKitFakeSensors"]
+        fresh.launch()
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        fresh.buttons["start-field-session"].tap()
+        XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        fresh.buttons["confirm-start-session"].tap()
+
+        XCTAssertTrue(fresh.buttons["mark-now"].waitForExistence(timeout: 20))
+        sleep(2)
+        fresh.buttons["mark-now"].tap()
+        fresh.buttons["stop-field-session"].tap()
+
+        let export = fresh.buttons["open-export"]
+        XCTAssertTrue(export.waitForExistence(timeout: 25), "a finished session should export")
+        export.tap()
+
+        let build = fresh.buttons["build-export"]
+        XCTAssertTrue(build.waitForExistence(timeout: 15))
+        build.tap()
+
+        // The share control only appears once a bundle really exists on disk.
+        XCTAssertTrue(fresh.buttons["share-export"].waitForExistence(timeout: 30),
+                      "building should produce a bundle to share")
+        XCTAssertTrue(fresh.staticTexts["Readings"].exists,
+                      "the bundle should report what went into it")
+    }
 }

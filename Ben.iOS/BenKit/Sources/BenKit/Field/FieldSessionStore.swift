@@ -207,6 +207,42 @@ public final class FieldSessionStore {
             log: ReadingLog(fileURL: files.readingLogURL(for: id)))
     }
 
+    /// Everything captured in a session, for choosing what to hand over.
+    public func captures(for id: UUID) -> [CaptureMark] {
+        guard let context, let session = try? fetch(id, in: context) else { return [] }
+        return session.captures
+            .sorted { $0.at < $1.at }
+            .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
+                               relativePath: $0.relativePath,
+                               latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
+    /// Writes a Device Data Format v1 bundle for a session, carrying the chosen files.
+    public func export(_ id: UUID, includedMedia: [String],
+                       policy: SamplingPolicy = .default) async throws -> DeviceDataExporter.Result {
+        guard let context, let session = try? fetch(id, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+
+        let request = DeviceDataExporter.Request(
+            sessionId: id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            locationLabel: session.locationLabel,
+            deviceModel: session.deviceModel,
+            timezone: session.timezoneIdentifier,
+            batteryPercentAtStart: session.batteryPercentAtStart,
+            trigger: policy.trigger(),
+            includedMedia: includedMedia)
+
+        // Into the scratch directory, not the session's own: the bundle is a copy made to be
+        // handed over, and the session keeps everything it had.
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exports", isDirectory: true)
+        return try await DeviceDataExporter(files: files).export(
+            request, log: ReadingLog(fileURL: files.readingLogURL(for: id)), to: directory)
+    }
+
     public func summary(for id: UUID) -> FieldSessionSummary? {
         sessions.first { $0.id == id }
     }

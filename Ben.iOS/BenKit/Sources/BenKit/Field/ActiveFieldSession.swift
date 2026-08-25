@@ -216,6 +216,59 @@ public final class ActiveFieldSession {
 
     public func clearRecordingProblem() { recordingProblem = nil }
 
+    // MARK: - EVP
+
+    /// When the question currently being waited on was asked. Nil when nobody is waiting.
+    public private(set) var questionOpenedAt: Date?
+
+    /// The questions asked in this session, newest first, with how long the silence after each
+    /// one ran. An unanswered wait is still open and reads as such.
+    public private(set) var questions: [AskedQuestion] = []
+
+    public struct AskedQuestion: Sendable, Equatable, Identifiable {
+        public var id: UUID
+        public var at: Date
+        public var text: String?
+        public var waitedSeconds: TimeInterval?
+
+        public init(id: UUID, at: Date, text: String?, waitedSeconds: TimeInterval? = nil) {
+            self.id = id
+            self.at = at
+            self.text = text
+            self.waitedSeconds = waitedSeconds
+        }
+    }
+
+    @discardableResult
+    public func askQuestion(_ text: String?) async -> FieldMarkerRecord {
+        // Asking again closes the previous wait, so the list has to catch up too.
+        if let open = questionOpenedAt, let index = questions.firstIndex(where: {
+            $0.at == open && $0.waitedSeconds == nil
+        }) {
+            questions[index].waitedSeconds = now().timeIntervalSince(open)
+        }
+
+        let marker = await engine.askQuestion(text)
+        if !markers.contains(where: { $0.id == marker.id }) { markers.insert(marker, at: 0) }
+        questions.insert(AskedQuestion(id: marker.id, at: marker.at, text: text), at: 0)
+        questionOpenedAt = marker.at
+        return marker
+    }
+
+    @discardableResult
+    public func endWait() async -> FieldMarkerRecord? {
+        guard let open = questionOpenedAt else { return nil }
+        let marker = await engine.endWait()
+        if let marker, !markers.contains(where: { $0.id == marker.id }) {
+            markers.insert(marker, at: 0)
+        }
+        if let index = questions.firstIndex(where: { $0.at == open && $0.waitedSeconds == nil }) {
+            questions[index].waitedSeconds = (marker?.at ?? now()).timeIntervalSince(open)
+        }
+        questionOpenedAt = nil
+        return marker
+    }
+
     // MARK: - Sentry
 
     /// Starts watching. Refused without a base level for whatever is being watched, because a

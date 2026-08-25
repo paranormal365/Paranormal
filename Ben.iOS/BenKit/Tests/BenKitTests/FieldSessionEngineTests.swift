@@ -526,4 +526,86 @@ struct FieldSessionEngineTests {
         #expect(!description.contains("dB"))        // sound was not being watched
         #expect(!description.contains("view"))
     }
+
+    // MARK: - EVP question and answer
+
+    @Test func askingAQuestionBracketsTheSilenceThatFollowsIt() async throws {
+        // What a reviewer needs is the SILENCE bracketed, not just the moment somebody spoke —
+        // the answer, if there is one, is in the gap.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setRecording(filename: "media/audio-001.m4a", startedAt: start)
+        clock.advance(by: 30)
+        await engine.askQuestion("Is anyone here with us?")
+        clock.advance(by: 12)
+        let end = await engine.endWait()
+        await engine.stop()
+
+        #expect(end != nil)
+        let readings = try await log.readings()
+        let question = try #require(readings.first {
+            $0.measurements?["marker"]?.value == .string("evp_question")
+        })
+        let waitEnd = try #require(readings.first {
+            $0.measurements?["marker"]?.value == .string("evp_wait_end")
+        })
+
+        // Both point into the SAME file, so a reviewer can play the gap between them.
+        #expect(question.audioRef?.filename == "media/audio-001.m4a")
+        #expect(waitEnd.audioRef?.filename == "media/audio-001.m4a")
+        #expect(question.audioRef?.startOffsetSeconds == 30)
+        #expect(waitEnd.audioRef?.startOffsetSeconds == 42)
+        #expect(waitEnd.note?.contains("12s") == true)
+        #expect(waitEnd.note?.contains("Is anyone here with us?") == true)
+    }
+
+    @Test func endingAWaitThatNeverStartedDoesNothing() async throws {
+        // A mark with nothing on the other end of it is worse than no mark.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(await engine.endWait() == nil)
+        await engine.stop()
+        #expect(try await log.readings().isEmpty)
+    }
+
+    @Test func askingAgainClosesTheWaitYouWereAlreadyOn() async throws {
+        // Moving straight to the next question ends the last silence by speaking. Leaving it
+        // open forever would describe a wait that never finished.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.askQuestion("First")
+        clock.advance(by: 8)
+        await engine.askQuestion("Second")
+        await engine.stop()
+
+        let readings = try await log.readings()
+        let ends = readings.filter { $0.measurements?["marker"]?.value == .string("evp_wait_end") }
+        #expect(ends.count == 1)
+        #expect(ends.first?.note?.contains("First") == true)
+        #expect(readings.filter {
+            $0.measurements?["marker"]?.value == .string("evp_question")
+        }.count == 2)
+    }
+
+    @Test func aQuestionAskedWithNoRecordingRunningStillMarksTheMoment() async throws {
+        // Somebody may be recording on a separate device entirely. The mark is still the useful
+        // thing; it simply has no file to point into.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let marker = await engine.askQuestion("Anyone?")
+        await engine.stop()
+
+        #expect(marker.audioFilename == nil)
+        #expect(try await log.readings().contains {
+            $0.measurements?["marker"]?.value == .string("evp_question")
+        })
+    }
 }

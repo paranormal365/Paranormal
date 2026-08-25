@@ -127,7 +127,9 @@ public enum DeviceDataJSON {
             var container = encoder.singleValueContainer()
             try container.encode(iso8601.format(date))
         }
-        encoder.outputFormatting = [.sortedKeys]
+        // Slashes unescaped: `media\/audio-001.m4a` is valid JSON but nobody writes paths that
+        // way, and it makes every file reference in the document harder to read and to match.
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return encoder
     }()
 

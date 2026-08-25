@@ -16,6 +16,7 @@ struct LiveSessionView: View {
     @State private var showingSettings = false
     @State private var camera = FieldCameraSession()
     @State private var blackout = false
+    @State private var showingEVP = false
     @State private var brightnessBeforeBlackout: CGFloat?
     @State private var showingLocationExplainer = false
     @State private var noteDraft = ""
@@ -61,6 +62,7 @@ struct LiveSessionView: View {
             .fullScreenCover(isPresented: $blackout) {
                 BlackoutOverlay(session: active) { blackout = false }
             }
+            .fullScreenCover(isPresented: $showingEVP) { evpSheet }
             .onChange(of: blackout) { _, isDark in applyBlackout(isDark) }
             .onChange(of: store.active?.channels) { _, channels in
                 if channels?.contains(.video) == true { camera.start() } else { camera.stop() }
@@ -126,6 +128,11 @@ struct LiveSessionView: View {
             }
             .accessibilityLabel("Levels")
         }
+    }
+
+    @ViewBuilder
+    private var evpSheet: some View {
+        if let active { EVPModeView(session: active) }
     }
 
     @ViewBuilder
@@ -325,13 +332,24 @@ struct LiveSessionView: View {
                 .accessibilityIdentifier("mark-now")
             }
 
-            Button {
-                askingForNote = true
-            } label: {
-                Label("Mark with a note", systemImage: "square.and.pencil")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                Button {
+                    askingForNote = true
+                } label: {
+                    Label("Note", systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    showingEVP = true
+                } label: {
+                    Label("EVP", systemImage: "questionmark.bubble")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("open-evp")
             }
-            .buttonStyle(.bordered)
 
             FieldCaptureBar(session: active)
 

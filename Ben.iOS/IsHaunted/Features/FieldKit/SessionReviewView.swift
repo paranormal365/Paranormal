@@ -17,6 +17,7 @@ struct SessionReviewView: View {
     @State private var player = AVPlayer()
     @State private var loadedMediaId: UUID?
     @State private var source: ReplaySource?
+    @State private var exporting = false
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
@@ -52,6 +53,18 @@ struct SessionReviewView: View {
         .background(Theme.ink)
         .navigationTitle(summary?.title ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { exporting = true } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("Export this session")
+                .accessibilityIdentifier("open-export")
+            }
+        }
+        .sheet(isPresented: $exporting) {
+            ExportSessionView(sessionId: sessionId).environment(dependencies)
+        }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
         .onDisappear {
             replay.pause()
