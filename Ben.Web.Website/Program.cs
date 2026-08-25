@@ -83,6 +83,8 @@ builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebA
 // and the link previews that carry a shared URL into a chat window.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
+builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
+builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
 // ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
 // leading slash, which BaseAddress treats as root-relative and so discards the base path - see the
 // handler for the full story. Harmless when the API is at an origin root, as it is in development.
@@ -314,6 +316,44 @@ app.MapGet("/go/{adId:guid}", async (
         // The counter is garnish on the navigation, not the other way round.
     }
     return Results.Redirect("/find");
+});
+
+// ── Media, streamed ───────────────────────────────────────────────────────────
+//
+// The browser fetches a file's picture or bytes THROUGH here, and this process never holds the
+// file: the API's response is copied straight to the client as it arrives. What this replaced
+// fetched whole files into memory and base64'd them into the page, which took the site to
+// sixteen gigabytes on a media library and got it killed.
+//
+// The ticket carries WHO is asking (see MediaTicketService). The API remains the authority on
+// what they may see — this endpoint asserts nothing, it only forwards a bearer token — so the
+// audience rules cannot drift apart from the ones the API already enforces.
+// A session's recordings are gated on the investigation, not on the file's own audience, so they
+// come from the field-session endpoint. Same ticket, same streaming, different upstream path.
+app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
+    Guid sessionId, Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/field-sessions/{sessionId}/files/{fileId}",
+        accessToken, httpFactory, ctx, ct);
+});
+
+app.MapGet("/media/{fileId:guid}/{kind}", async (
+    Guid fileId, string kind, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    if (kind is not ("thumbnail" or "download")) return Results.NotFound();
+
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/upload-files/{fileId}/{kind}",
+        accessToken, httpFactory, ctx, ct);
 });
 
 app.MapRazorComponents<App>()

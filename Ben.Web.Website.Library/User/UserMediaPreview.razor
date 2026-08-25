@@ -1,9 +1,13 @@
-@* Renders an image thumbnail, video player, or audio player for an UploadFile.
-   Fetches file bytes server-side and renders as a base64 data URL.
-   Audio files are delegated to AudioFilePreview (WaveSurfer waveform).
-   For non-media types renders a plain file-type badge. *@
+@* Shows an UploadFile: an image, a video, or an audio waveform.
 
-@inject IBenAdminClient AdminClient
+   NOTHING IS FETCHED INTO THIS PROCESS. Every element is given a URL and the browser does the
+   fetching, streaming and caching. The component used to pull whole files server-side and hand
+   them to the page as base64 data URLs — roughly 2.3x the file, per instance, per render — which
+   put a media library of recordings into gigabytes and got the host OOM-killed. A page showing
+   more than one file could never survive that shape, and several pages show dozens. *@
+
+@using Ben.Web.Services
+@inject IMediaUrlBuilder MediaUrls
 
 @if (FileId == Guid.Empty || string.IsNullOrEmpty(ContentType))
 {
@@ -14,44 +18,65 @@ else if (_isAudio)
     <AudioFilePreview FileId="@FileId"
                       FileName="@(FileName ?? string.Empty)"
                       ContentType="@ContentType"
-                      FileSize="@FileSize" />
+                      FileSize="@FileSize"
+                      SourceUrl="@MediaUrls.Download(FileId)"
+                      OnOutcome="@OnOutcome" />
 }
-else if (_loading)
+else if (_isImage)
 {
-    <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
-}
-else if (_dataUrl is not null)
-{
-    @if (_isImage)
+    @if (_failed)
     {
-        <img src="@_dataUrl"
+        @* Said out loud. This used to fall through to a filename badge, which is also what a
+           perfectly healthy unpreviewable file showed — so "the bytes are gone" and "nothing to
+           show here" were the same picture. *@
+        <div class="d-flex flex-column align-items-center justify-content-center text-center gap-1 p-1"
+             data-testid="preview-unavailable" title="@FileName — this file could not be loaded">
+            <span class="text-danger" style="font-size:1.1rem;line-height:1;">&#9888;</span>
+            <span class="text-danger" style="font-size:.68rem;line-height:1.1;">Couldn't load this file</span>
+        </div>
+    }
+    else
+    {
+        <img src="@MediaUrls.Thumbnail(FileId)"
              style="@(Fill
                       ? "width:100%;height:100%;object-fit:contain;border-radius:4px;cursor:pointer;image-rendering:pixelated;"
                       : "max-width:120px;max-height:90px;object-fit:contain;border-radius:4px;cursor:pointer;")"
              alt="@FileName"
              title="@FileName"
+             loading="lazy" decoding="async"
+             @onload="@(() => ReportAsync(MediaPreviewOutcome.Shown))"
+             @onerror="@OnImageErrorAsync"
              @onclick="ToggleFullSize" />
 
         @if (_showFull)
         {
+            @* The full-size copy, also by URL. The browser already holds the thumbnail; this
+               fetches the original only when somebody actually asks to see it. *@
             <div style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;"
                  @onclick="ToggleFullSize">
-                <img src="@_dataUrl" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;" alt="@FileName" />
+                <img src="@MediaUrls.Download(FileId)" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;" alt="@FileName" />
             </div>
         }
     }
-    else if (_isVideo)
-    {
-        <video controls preload="metadata"
-               style="max-width:320px;max-height:240px;border-radius:4px;">
-            <source src="@_dataUrl" type="@ContentType" />
-            <em class="text-secondary small">Browser does not support video.</em>
-        </video>
-    }
+}
+else if (_isVideo)
+{
+    @* preload="metadata": a few kilobytes of header, not the film. *@
+    <video controls preload="metadata"
+           src="@MediaUrls.Download(FileId)"
+           style="max-width:320px;max-height:240px;border-radius:4px;">
+        <em class="text-secondary small">Browser does not support video.</em>
+    </video>
 }
 else
 {
-    <span class="badge bg-secondary text-truncate" style="max-width:120px;" title="@FileName">@FileName</span>
+    @* Not a fault — a .json or a .zip was never going to render in a page. Nothing is fetched:
+       there is nothing to draw. *@
+    <div class="d-flex flex-column align-items-center justify-content-center text-center gap-1 p-1"
+         data-testid="preview-none" title="@FileName">
+        <span class="text-secondary" style="font-size:1.1rem;line-height:1;">&#128196;</span>
+        <span class="text-secondary" style="font-size:.68rem;line-height:1.1;">No preview for this type</span>
+    </div>
 }
 
 @code {
@@ -64,40 +89,45 @@ else
     /// Fills the space it is given rather than sitting at its natural size.
     /// </summary>
     /// <remarks>
-    /// For tiles in a grid, where a row of thumbnails at wildly different sizes reads as a broken
-    /// page. <c>object-fit: contain</c> keeps the aspect ratio, so nothing is stretched; a very
-    /// small image is scaled UP, and <c>image-rendering: pixelated</c> shows it as the handful of
-    /// large pixels it actually is instead of a blur pretending to be a photograph.
+    /// For tiles in a grid, where thumbnails at wildly different sizes read as a broken page.
+    /// <c>object-fit: contain</c> keeps the aspect ratio, so nothing is stretched; a very small
+    /// image is scaled UP, and <c>image-rendering: pixelated</c> shows it as the handful of large
+    /// pixels it actually is instead of a blur pretending to be a photograph.
     /// </remarks>
     [Parameter] public bool Fill { get; set; }
 
-    private string? _dataUrl;
-    private bool _loading;
+    /// <summary>
+    /// Reports whether this file actually showed itself, so the surrounding card can say so.
+    /// </summary>
+    /// <remarks>
+    /// The component knows which of the outcomes happened and nothing else does. Without this a
+    /// caller could only render a hopeful tile and leave the viewer to work out the rest.
+    /// </remarks>
+    [Parameter] public EventCallback<MediaPreviewOutcome> OnOutcome { get; set; }
+
     private bool _showFull;
+    private bool _failed;
 
     private bool _isImage => ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isVideo => ContentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isAudio => ContentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
-    // No audio here: audio is delegated to AudioFilePreview above, which fetches its own bytes.
-    private bool _hasPreview => _isImage || _isVideo;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (FileId == Guid.Empty || !_hasPreview) return;
+        // Audio reports for itself through AudioFilePreview; images report on load or error.
+        if (_isAudio || _isImage) return;
+        await ReportAsync(_isVideo ? MediaPreviewOutcome.Shown : MediaPreviewOutcome.NotPreviewable);
+    }
 
-        _loading = true;
-        _dataUrl = null;
-        StateHasChanged();
+    private async Task OnImageErrorAsync()
+    {
+        _failed = true;
+        await ReportAsync(MediaPreviewOutcome.Unavailable);
+    }
 
-        try
-        {
-            var result = await AdminClient.GetFileDataAsync(FileId);
-            if (result is not null)
-                _dataUrl = $"data:{ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
-        }
-        catch { /* silently fail — component shows file-type badge as fallback */ }
-
-        _loading = false;
+    private async Task ReportAsync(MediaPreviewOutcome outcome)
+    {
+        if (OnOutcome.HasDelegate) await OnOutcome.InvokeAsync(outcome);
     }
 
     private void ToggleFullSize() => _showFull = !_showFull;

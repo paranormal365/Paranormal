@@ -115,6 +115,56 @@ public class MediaLibraryTests : BenTestBase
         Assert.That(heights[0], Is.GreaterThan(40), "the tile should be a visible frame");
     }
 
+    /// <summary>
+    /// The pictures actually arrive.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every way this page has broken produced the same picture — an empty tile — and none
+    /// of them was visible to a test that only counted elements. In one day it was: whole files
+    /// pulled into the server until it was OOM-killed; a direct API link that 401'd because the
+    /// browser holds no bearer token; and a burst of media requests answered 429 because every
+    /// visitor's files share one rate-limit partition. A blank tile looked identical each
+    /// time.</para>
+    ///
+    /// <para>So this asserts the one thing that distinguishes working from all of those:
+    /// <c>naturalWidth &gt; 0</c> — the browser decoded actual pixels.</para>
+    /// </remarks>
+    [Test]
+    public async Task ThumbnailsActuallyLoad_NotJustTheirTiles()
+    {
+        await NavigateToMediaLibraryAsync();
+        await Expect(Page.Locator(".card").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        var images = Page.Locator(".card img[src*='/media/']");
+        if (await images.CountAsync() == 0)
+        { Assert.Ignore("no image files in this library to draw"); return; }
+
+        // Images are lazy and fetched by the browser, so give them a moment to arrive.
+        var loaded = 0;
+        for (var attempt = 0; attempt < 20 && loaded == 0; attempt++)
+        {
+            await Task.Delay(500);
+            loaded = await Page.EvaluateAsync<int>(
+                "() => [...document.querySelectorAll(\".card img[src*='/media/']\")]" +
+                ".filter(i => i.naturalWidth > 0).length");
+        }
+
+        Assert.That(loaded, Is.GreaterThan(0),
+            "no thumbnail decoded — the tiles are there but the pictures never arrived "
+            + "(server refused, rate-limited, or the bytes never came)");
+
+        // And nothing came back as a refusal dressed up as a broken file.
+        var refusals = await Page.EvaluateAsync<int>(
+            "async () => { const urls = [...document.querySelectorAll(\".card img[src*='/media/']\")]" +
+            ".slice(0, 6).map(i => i.src);" +
+            " let bad = 0;" +
+            " for (const u of urls) { try { const r = await fetch(u); if (!r.ok) bad++; } catch { bad++; } }" +
+            " return bad; }");
+        Assert.That(refusals, Is.Zero,
+            "a media URL answered with an error — 401 means the fetch carried no identity, "
+            + "429 means the rate limiter counted it against everyone else");
+    }
+
     [Test]
     public async Task Page_HasGridListToggle()
     {
