@@ -770,7 +770,7 @@ public class OrganizationControllerTests
         Assert.Equal(4, dutyCount);
 
         var roleCount = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == created.Id);
-        Assert.Equal(7, roleCount);
+        Assert.Equal(Ben.Data.Source.Services.OrgRoleDefaults.Defaults.Count, roleCount);
     }
 
     [Fact]

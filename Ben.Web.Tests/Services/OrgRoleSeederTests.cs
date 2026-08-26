@@ -11,7 +11,7 @@ using Xunit;
 namespace Ben.Web.Tests.Services;
 
 /// <summary>
-/// The seven-role backfill — and the grandfathering that is deliberately no longer there.
+/// The default-role backfill — and the grandfathering that is deliberately no longer there.
 /// </summary>
 /// <remarks>
 /// <para>These tests used to assert the opposite. The seeder created an Investigator Role and
@@ -63,7 +63,7 @@ public sealed class OrgRoleSeederTests
     }
 
     [Fact]
-    public async Task Backfill_gives_a_bare_org_the_seven_roles()
+    public async Task Backfill_gives_a_bare_org_the_default_roles()
     {
         var (services, factory) = Harness();
         var world = await SeedOrgAsync(factory);
@@ -72,7 +72,10 @@ public sealed class OrgRoleSeederTests
 
         await using var db = await factory.CreateDbContextAsync();
         var roles = await db.OrganizationRoles.Where(r => r.OrganizationId == world.OrgId).ToListAsync();
-        Assert.Equal(7, roles.Count);
+        // Counted from the source of truth, not a literal: the list grew from seven to
+        // eight when the Investigator Role joined it (IH-03 step 5 aftermath), and a hardcoded
+        // seven made ADDING a default look like a regression.
+        Assert.Equal(Ben.Data.Source.Services.OrgRoleDefaults.Defaults.Count, roles.Count);
     }
 
     /// <summary>
@@ -92,8 +95,14 @@ public sealed class OrgRoleSeederTests
         await OrgRoleSeeder.SeedAsync(services, Config());
 
         await using var db = await factory.CreateDbContextAsync();
+
+        // The heart of the rule is the FIRST assertion: however many roles exist, nobody holds
+        // one. The old second assertion — that no Investigator Role exists at all — described the
+        // world where creating that role and grandfathering people into it were the same act.
+        // They are separate now: the role IS a default (a fresh group needs something to hand its
+        // ordinary members), and what must never come back is the automatic membership.
         Assert.Empty(db.OrganizationRoleMemberships);
-        Assert.False(await db.OrganizationRoles
+        Assert.True(await db.OrganizationRoles
             .AnyAsync(r => r.OrganizationId == world.OrgId && r.Name == "Investigator Role"));
     }
 

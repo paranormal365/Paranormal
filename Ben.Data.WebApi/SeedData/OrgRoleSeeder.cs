@@ -9,11 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Ben.Data.WebApi.SeedData;
 
 /// <summary>
-/// Backfills the seven default roles for organizations that have none.
+/// Backfills the default roles for organizations that have none.
 /// </summary>
 /// <remarks>
 /// <para><b>Backfill:</b> a group with ANY roles is left entirely alone (its role list is its
-/// own); a group with none gets the seven defaults. Roles are CREATED here; nobody is put in
+/// own); a group with none gets the defaults. Roles are CREATED here; nobody is put in
 /// them.</para>
 ///
 /// <para><b>The grandfathering is gone (Ben, 2026-08-26).</b> This used to also create an
@@ -41,7 +41,7 @@ internal static class OrgRoleSeeder
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BenDataContext>>();
         await using var db = await factory.CreateDbContextAsync();
 
-        // ── Backfill the seven defaults ───────────────────────────────────────
+        // ── Backfill the defaults ───────────────────────────────────────
         var orgsWithRoles = await db.OrganizationRoles
             .Select(r => r.OrganizationId).Distinct().ToListAsync();
         var bare = await db.Organizations
@@ -53,7 +53,7 @@ internal static class OrgRoleSeeder
         if (bare.Count > 0)
         {
             await db.SaveChangesAsync();
-            Console.WriteLine($"[OrgRoleSeeder] Backfilled the seven default roles for {bare.Count} organization(s).");
+            Console.WriteLine($"[OrgRoleSeeder] Backfilled the default roles for {bare.Count} organization(s).");
         }
     }
 }

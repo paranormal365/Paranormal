@@ -30,11 +30,22 @@ public static class OrgRoleDefaults
         OrganizationSecurityAction.Read | OrganizationSecurityAction.Update;
 
     /// <summary>
-    /// The seven starting roles: name, description, and (table, actions) grants.
+    /// The eight starting roles: name, description, and (table, actions) grants.
     /// </summary>
     public static readonly IReadOnlyList<(string Name, string Description,
         IReadOnlyList<(OrganizationSecurityTable Table, OrganizationSecurityAction Actions)> Grants)> Defaults =
     [
+        // The ordinary member's role, and the one every real group needs first. It was missing
+        // from the original seven because the grandfathering seeder used to hand an equivalent to
+        // every member automatically; when Ben ended that (IH-03 step 4, 2026-08-26) the role
+        // became something an owner assigns deliberately — and a fresh group had nothing to
+        // assign. The revoke migration kept the old role where it existed; this provides it where
+        // it never did. The description deliberately differs from the revoked seeder's exact
+        // sentence, which that migration matches on.
+        ("Investigator Role", "Reads the group's cases and investigations. Assign it to the members who should see them.",
+            [(OrganizationSecurityTable.Case, OrganizationSecurityAction.Read),
+             (OrganizationSecurityTable.Investigation, OrganizationSecurityAction.Read)]),
+
         ("Case Manager Role", "Runs cases end to end: the case record, and the investigations under it.",
             [(OrganizationSecurityTable.Case, Crud), (OrganizationSecurityTable.Investigation, Crud)]),
 

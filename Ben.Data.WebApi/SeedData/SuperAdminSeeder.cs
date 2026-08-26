@@ -64,6 +64,7 @@ internal static class SuperAdminSeeder
                 UserName = email,
                 Email = email,
                 DisplayName = displayName,
+                DateOnboarded = DateTime.UtcNow, // seeded = established; no first-run wizard
                 FirstName   = firstName,
                 LastName    = lastName,
                 BirthYear   = birthYear,
@@ -87,8 +88,12 @@ internal static class SuperAdminSeeder
         // a seeder that re-imposed config on every restart would undo that silently.
         var needsName = string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(firstName);
         var needsBirthYear = user.BirthYear is null && birthYear is not null;
+        // Same fill-where-empty rule for onboarding: the seeded admin account never needs the
+        // first-run wizard, and after a database rebuild an unstamped account is redirected to
+        // /onboarding on every navigation.
+        var needsOnboarded = user.DateOnboarded is null;
 
-        if (needsName || needsBirthYear)
+        if (needsName || needsBirthYear || needsOnboarded)
         {
             if (needsName)
             {
@@ -96,6 +101,7 @@ internal static class SuperAdminSeeder
                 user.LastName  = lastName;
             }
             if (needsBirthYear) user.BirthYear = birthYear;
+            if (needsOnboarded) user.DateOnboarded = DateTime.UtcNow;
 
             await userManager.UpdateAsync(user);
         }
