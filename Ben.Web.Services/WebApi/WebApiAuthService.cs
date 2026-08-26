@@ -34,7 +34,14 @@ public sealed class WebApiAuthService : IWebApiAuthService
               : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
               : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
               : attempt.Detail == "LockedOut"   ? LoginFailure.LockedOut
-              :                                   LoginFailure.InvalidCredentials;
+              // "Failed" is Identity's own word for a wrong email or password — SignInResult
+              // stringified. Anything ELSE, including a detail that could not be read at all,
+              // means the reason is genuinely unknown, and saying "invalid email or password"
+              // there is the mistake the three cases above exist to avoid. A full Playwright run
+              // caught it: an unconfirmed account with the RIGHT password was told the password
+              // was wrong, because the 401's problem-detail did not survive the read under load.
+              : attempt.Detail == "Failed"      ? LoginFailure.InvalidCredentials
+              :                                   LoginFailure.UnknownRefusal;
             return false;
         }
 
