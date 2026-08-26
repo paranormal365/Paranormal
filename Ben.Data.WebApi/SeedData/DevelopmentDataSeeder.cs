@@ -92,19 +92,33 @@ internal static class DevelopmentDataSeeder
 
         addrType = await db.OrganizationAddressTypes.FirstAsync(t => t.Name == "Headquarters");
 
-        // ── Org 1: Tennessee Ghost Hunters ────────────────────────────────────
-        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "tgh");
+        // ── Org 1: Paranormal365 ──────────────────────────────────────────────
+        // Renamed from "Tennessee Ghost Hunters" (Ben, 2026-08-26): Paranormal365 and
+        // Paranormal365.com are Ben's own names, so the flagship seeded group carries them. The
+        // row is still found by its old slug first, so a database seeded under either name
+        // converges on the new one instead of growing a twin.
+        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "paranormal365" || o.UrlName == "tgh");
         if (tgh is null)
         {
             tgh = new Organization
             {
-                Id = Guid.NewGuid(), Name = "Tennessee Ghost Hunters", UrlName = "tgh",
+                Id = Guid.NewGuid(), Name = "Paranormal365", UrlName = "paranormal365",
+                PublicWebsite = "https://paranormal365.com",
                 IsAcceptingClients = true, IsAcceptingApplications = true,
                 DateCreated = now, CreatedByAppUserId = owner.Id,
             };
             db.Organizations.Add(tgh);
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Created organization: Tennessee Ghost Hunters");
+            Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
+        }
+        else if (tgh.Name == "Tennessee Ghost Hunters")
+        {
+            tgh.Name = "Paranormal365";
+            tgh.UrlName = "paranormal365";
+            tgh.PublicWebsite = "https://paranormal365.com";
+            tgh.DateUpdated = now;
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Renamed Tennessee Ghost Hunters to Paranormal365.");
         }
 
         await SeedOrgMembersAsync(db, tgh, owner, sarah, james, now);
@@ -205,7 +219,12 @@ internal static class DevelopmentDataSeeder
         {
             var inv = new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = tghCase1.Id,
+                // OrganizationId is a direct FK, not derived through the case — an investigation
+                // can exist with no case at all, so the org is its own required column. Omitting
+                // it left Guid.Empty and the insert failed the foreign key, which only ever showed
+                // on a genuinely empty database: every other run skips this block because an
+                // investigation already exists. Found rebuilding from scratch, 2026-08-26.
+                Id = Guid.NewGuid(), OrganizationId = tghCase1.OrganizationId, CaseId = tghCase1.Id,
                 Title = "Initial Night Investigation",
                 Description = "Baseline EMF sweep and audio recording session. Focus on the main barn and east wing of the farmhouse.",
                 Location = "Springfield Farmhouse — Barn + East Wing",
@@ -331,7 +350,8 @@ internal static class DevelopmentDataSeeder
             // Upcoming investigation
             db.Investigations.Add(new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = danielCase.Id,
+                // Same as above: the org is its own FK, not inferred from the case.
+                Id = Guid.NewGuid(), OrganizationId = danielCase.OrganizationId, CaseId = danielCase.Id,
                 Title = "Initial Site Assessment",
                 Description = "First visit to the property. EMF baseline, audio placement, walkthrough with client.",
                 Location = "Belmont Blvd residence — Full property",
@@ -720,7 +740,7 @@ internal static class DevelopmentDataSeeder
             tghAddress.PublicDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
             tghAddress.SearchRadiusMiles = 50;
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Made Tennessee Ghost Hunters findable in nearby search.");
+            Console.WriteLine("[DevDataSeeder] Made Paranormal365 findable in nearby search.");
         }
 
         // ── Public events ────────────────────────────────────────────────────

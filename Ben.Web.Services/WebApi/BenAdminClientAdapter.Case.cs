@@ -134,6 +134,15 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
                new { Status = (int)status }, token);
 
+    public Task<RequestReviewDetailItem?> GetRequestReviewAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+        => _api.GetAsync<RequestReviewDetailItem>(
+               $"/api/organizations/{orgId}/request-review/{clientRequestId}", token);
+
+    public Task<RequestReviewVoteItem?> CastRequestReviewVoteAsync(Guid orgId, Guid clientRequestId, bool inFavor, string? comment, CancellationToken token = default)
+        => _api.PostAsync<object, RequestReviewVoteItem>(
+               $"/api/organizations/{orgId}/request-review/{clientRequestId}/vote",
+               new { InFavor = inFavor, Comment = comment }, token);
+
     // Reason-carrying (item 184): the make-public and designation gates refuse with a sentence
     // the dialog must show, and PutAsync would discard it — the write-only-guard trap.
     public Task<(CaseRecord? Result, string? Error)> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)

@@ -23,7 +23,12 @@
 
     <div class="d-flex align-items-center justify-content-between mb-3">
         <span class="fw-semibold">Investigations (@(_investigations?.Count ?? 0))</span>
-        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAdd"><BenIcon Name="plus" Class="me-1" />Schedule Investigation</button>
+        @* IH-03 step 2: answers to the same Investigations.Create grant the server checks. *@
+        @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                         Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+        {
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAdd" data-testid="schedule-investigation"><BenIcon Name="plus" Class="me-1" />Schedule Investigation</button>
+        }
     </div>
 
     @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
@@ -524,8 +529,14 @@
         _orgMembers = members.ToList();
     }
 
+    /// <summary>What this viewer may do with investigations here — see CaseList for the pattern.</summary>
+    private MyOrgPermissionsItem? _perms;
+
     private async Task LoadAsync()
     {
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        catch { _perms = null; }   // unknown means the button stays hidden, not hopeful
+
         try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
         catch { _error = "Failed to load investigations."; }
     }

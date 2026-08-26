@@ -126,7 +126,7 @@ public class CaseReportFieldSessionTests
         }
 
         await db.SaveChangesAsync();
-        await TestSeeds.BridgeAsync(factory, orgId);
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return new World(factory, orgId, caseId, userId, investigationId, sessionId, otherCaseId, otherSessionId);
     }
 
@@ -470,7 +470,7 @@ public class InvestigationDeleteWithCitedSessionTests
             await db.SaveChangesAsync();
         }
 
-        await TestSeeds.BridgeAsync(factory, orgId);
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return new DeleteWorld(factory, orgId, caseId, userId, investigationId, sessionId);
     }
 }

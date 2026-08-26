@@ -15,9 +15,13 @@ public sealed class CaseMessageController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public CaseMessageController(IDbContextFactory<BenDataContext> db, Services.Billing.SubscriptionLimitGuard limits)
-    { _db = db; _limits = limits; }
+    public CaseMessageController(
+        IDbContextFactory<BenDataContext> db,
+        Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _limits = limits; _security = security; }
 
     /// <summary>Returns all messages and marks client messages as read by the org.</summary>
     [HttpGet]
@@ -28,7 +32,7 @@ public sealed class CaseMessageController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Read, ct)) return NotFound();
         // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
         // MyCaseController and stays open — their records, their voice.
         if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
@@ -62,7 +66,7 @@ public sealed class CaseMessageController : BenControllerBase
         if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Message body is required.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Update, ct)) return NotFound();
         // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
         // MyCaseController and stays open — their records, their voice.
         if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
@@ -86,11 +90,44 @@ public sealed class CaseMessageController : BenControllerBase
         return Ok(ToRecord(msg));
     }
 
-    private static async Task<bool> IsOrgCase(BenDataContext db, Guid orgId, Guid caseId, Guid userId, CancellationToken ct)
-        => await db.Cases.AsNoTracking()
-            .AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)
-            && await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+    /// <summary>
+    /// Whether the case is this organization's, and the caller may take <paramref name="action"/>
+    /// on the group's cases.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two questions, both load-bearing.</b> The case must belong to the org in the route
+    /// — otherwise a member of group A reads group B's conversation by pairing their own org id
+    /// with someone else's case id, the broken-ID-chain shape the Phase-B audit found nine times.
+    /// And the caller must hold the grant.</para>
+    ///
+    /// <para><b>Found on Ben's prompt, 2026-08-26:</b> "Be sure to check permissions for clients of
+    /// organizations with their case." This asked for bare active membership, so every member of
+    /// the group could read the private conversation between the client and their investigator,
+    /// and post into it under the group's name — no case grant needed, none consulted. That was
+    /// invisible while the seeder handed case read to everyone; ending the grandfathering is what
+    /// made it matter.</para>
+    ///
+    /// <para><b>Reading is Read, speaking to the client is Update.</b> Answering a client in the
+    /// group's name is acting on their case, not observing it, so a read-only member sees the
+    /// thread and cannot write to it. Owners and administrators pass through
+    /// <see cref="Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService.MayAsync"/>
+    /// as they do everywhere.</para>
+    ///
+    /// <para>The client's own half of this conversation is <c>MyCaseController</c>, gated on
+    /// being the client of the case rather than on any grant — a client holds no membership and
+    /// no grants, and must never be asked for one.</para>
+    /// </remarks>
+    private async Task<bool> MayUseThreadAsync(
+        BenDataContext db, Guid orgId, Guid caseId, OrganizationSecurityAction action, CancellationToken ct)
+    {
+        if (!await db.Cases.AsNoTracking().AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
+            return false;
+
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
+
+        return await _security.MayAsync(
+            GetCurrentUserId(), orgId, OrganizationPermissionArea.Cases, action, ct);
+    }
 
     private static CaseMessageRecord ToRecord(CaseMessage m) => new(
         m.Id, m.CaseId, m.AuthorAppUserId,
@@ -105,7 +142,7 @@ public sealed class CaseMessageController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+        if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Read, ct)) return NotFound();
         // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
         // MyCaseController and stays open — their records, their voice.
         if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);

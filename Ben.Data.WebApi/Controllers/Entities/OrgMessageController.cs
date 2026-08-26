@@ -18,10 +18,40 @@ public sealed class OrgMessageController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public OrgMessageController(IDbContextFactory<BenDataContext> db, IMapper mapper)
+    public OrgMessageController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
-        _db = db; _mapper = mapper;
+        _db = db; _mapper = mapper; _security = security;
+    }
+
+    /// <summary>
+    /// Whether the caller belongs to this organization at all.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Found by the write-endpoint audit of 2026-08-26.</b> This controller carried
+    /// <c>[Authorize]</c> and nothing else: the organization id came from the route, the author
+    /// from the token, and no step in between asked whether the two had anything to do with each
+    /// other. Any signed-in person could read a group's message board, and post to it, by knowing
+    /// its id — the same broken-ID-chain shape the Phase-B audit found across nine controllers.
+    /// </para>
+    ///
+    /// <para>Membership, not a grant: no permission AREA covers the group's message board, so
+    /// there is no grant to consult. Belonging is the whole rule — and the rule that was
+    /// missing.</para>
+    /// </remarks>
+    private async Task<bool> IsMemberAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
+
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return false;
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
     }
 
     /// <summary>Returns the current user's inbox for this org (messages they received).</summary>
@@ -29,6 +59,7 @@ public sealed class OrgMessageController : BenControllerBase
     public async Task<ActionResult<IEnumerable<OrgMessageRecord>>> GetInbox(
         Guid orgId, CancellationToken ct)
     {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -64,6 +95,7 @@ public sealed class OrgMessageController : BenControllerBase
     public async Task<ActionResult<IEnumerable<OrgMessageRecord>>> GetSent(
         Guid orgId, CancellationToken ct)
     {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var messages = await db.OrgMessages.AsNoTracking()
@@ -84,6 +116,11 @@ public sealed class OrgMessageController : BenControllerBase
     public async Task<ActionResult<OrgMessageRecord>> GetById(
         Guid orgId, Guid messageId, CancellationToken ct)
     {
+        // NOT gated on membership, deliberately — unlike every other action here. This one reads
+        // ONE message and already decides per message just below: public feed posts are meant to
+        // be readable by anyone, and the author and recipients may read their own. A blanket
+        // membership check here refused a public post to the public, which is what
+        // GetById_PublicFeedMessage_AnyoneCanView caught the moment it was added.
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
         var message = await db.OrgMessages
@@ -134,6 +171,7 @@ public sealed class OrgMessageController : BenControllerBase
     public async Task<ActionResult<OrgMessageRecord>> Send(
         Guid orgId, [FromBody] SendOrgMessageRequest request, CancellationToken ct)
     {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 

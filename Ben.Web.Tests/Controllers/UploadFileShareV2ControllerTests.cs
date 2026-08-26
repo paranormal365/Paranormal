@@ -30,7 +30,7 @@ public class UploadFileShareV2ControllerTests
 
     private static UploadFileShareV2Controller Build(IDbContextFactory<BenDataContext> factory, Guid userId, bool isSuperAdmin = false)
     {
-        var ctrl = new UploadFileShareV2Controller(factory, new Mock<IAuditLogService>().Object);
+        var ctrl = new UploadFileShareV2Controller(factory, new Mock<IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext

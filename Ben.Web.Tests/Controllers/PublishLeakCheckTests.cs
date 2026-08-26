@@ -117,7 +117,8 @@ public sealed class PublishLeakCheckTests
         return new CaseController(
             factory, m.Object,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
-            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)))
         {
             ControllerContext = new ControllerContext
             {

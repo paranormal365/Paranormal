@@ -28,7 +28,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -42,7 +42,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -73,6 +73,11 @@ public class CaseMessageControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        // The org's half of the client thread follows the case grant now: reading it is Case.Read
+        // and answering the client in the group's name is Case.Update (IH-03 step 2). The suite's
+        // subject is the message board, so its member is seeded able to work the case; refusal is
+        // covered by ReadDoesNotGrantDestructionTests and the tests below.
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return (factory, orgId, caseId, userId);
     }
 

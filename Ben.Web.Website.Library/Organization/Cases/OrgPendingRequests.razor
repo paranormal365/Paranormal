@@ -62,6 +62,9 @@
                             <div class="d-flex gap-2 flex-wrap justify-content-end">
                                 @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)
                                 {
+                                    <a class="btn btn-outline-secondary btn-sm" href="/organizations/@OrgId/request-review/@r.ClientRequestId"><BenIcon Name="eye" Class="me-1" />
+                                        Review & vote
+                                    </a>
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MarkUnderReview(r))" disabled="@(!(!_isBusy))"><BenIcon Name="search" Class="me-1" />
                                         Under Review
                                     </button>

@@ -17,7 +17,11 @@ namespace Ben.Web.Playwright.Tests;
 [Category("FourSeatSmoke")]
 public class FourSeatSmokeTests : BenTestBase
 {
-    private const string TghId  = "881ea0f6-8c0d-475e-9065-c6ed15e3302f"; // Tennessee Ghost Hunters
+    // Resolved from the slug at run time — a hardcoded GUID dies with every database rebuild.
+    private string TghId = null!;
+
+    [SetUp]
+    public async Task ResolveTghId() => TghId = await OrgIdBySlugAsync("paranormal365");
     private const string McssId = "50000001-0000-0000-0000-000000000001"; // Music City Spirit Seekers
 
     /// <summary>

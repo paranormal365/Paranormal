@@ -24,7 +24,7 @@ public class PrivateCaseRedactionTests : BenTestBase
 {
     // Seeded by DevelopmentDataSeeder: tgh #2026-001 carries pseudonym "The Hargrove Family";
     // the seeded client across the suite is Daniel Park (daniel.park@benco.dev).
-    private const string TghUrl = "tgh";
+    private const string TghUrl = "paranormal365";
 
     [Test]
     [Description("A pseudonymed case page shows the pseudonym and never the seeded client's real name.")]

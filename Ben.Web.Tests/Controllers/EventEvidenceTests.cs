@@ -69,7 +69,73 @@ public sealed class EventEvidenceTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = attendee,
         });
         await db.SaveChangesAsync();
+        // Reviewing a submission decides whether an attendee's file becomes public, so it asks for
+        // the Calendar grant now rather than bare membership. The suite's subject is the review
+        // flow, so its member is seeded able to review.
+        await TestSeeds.GrantAsync(f, orgId, member, OrganizationSecurityTable.OrgCalendar,
+            OrganizationSecurityAction.Read | OrganizationSecurityAction.Update);
         return new World(f, orgId, eventId, member, attendee, stranger);
+    }
+
+    /// <summary>An active member of the group holding no grant of any kind.</summary>
+    private static async Task<Guid> PlainMemberAsync(World w)
+    {
+        var plainId = Guid.NewGuid();
+        await using var db = await w.F.CreateDbContextAsync();
+        db.Users.Add(new AppUser
+        {
+            Id = plainId, UserName = "plain@t.com", Email = "plain@t.com",
+            DisplayName = "Plain", DateCreated = DateTime.UtcNow,
+        });
+        db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = w.OrgId, AppUserId = plainId,
+            Role = OrganizationMemberRole.Member, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.MemberId,
+        });
+        await db.SaveChangesAsync();
+        return plainId;
+    }
+
+    /// <summary>
+    /// Belonging to the group is not permission to publish a stranger's upload.
+    /// </summary>
+    /// <remarks>
+    /// Accepting a submission at a public event makes the attendee's file public. That was gated on
+    /// bare active membership, so every member of the group could publish an attendee's photo in
+    /// the group's name regardless of what they had been granted — found in the sweep of
+    /// 2026-08-26 and gated on the Calendar area, where events live.
+    /// </remarks>
+    [Fact]
+    public async Task A_member_without_the_calendar_grant_cannot_decide_a_submission()
+    {
+        var w = await SeedAsync();
+        var plainId = await PlainMemberAsync(w);
+        var submissionId = await SubmitAsync(w, w.AttendeeId);
+
+        var result = await Controller(w.F, plainId)
+            .Review(w.OrgId, submissionId, new EventEvidenceController.ReviewEvidenceRequest(true, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var submission = await db.EventEvidenceSubmissions.Include(x => x.UploadFile)
+            .SingleAsync(x => x.Id == submissionId);
+        Assert.Equal(EvidenceSubmissionStatus.Pending, submission.Status);
+        Assert.False(submission.UploadFile.IsPublic);
+    }
+
+    /// <summary>And cannot read the queue of what is waiting to be decided.</summary>
+    [Fact]
+    public async Task A_member_without_the_calendar_grant_cannot_read_the_queue()
+    {
+        var w = await SeedAsync();
+        var plainId = await PlainMemberAsync(w);
+        await SubmitAsync(w, w.AttendeeId);
+
+        var result = await Controller(w.F, plainId).Queue(w.OrgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
     private static EventEvidenceController Controller(IDbContextFactory<BenDataContext> f, Guid? userId,
@@ -88,7 +154,7 @@ public sealed class EventEvidenceTests
                 "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role)
             : new ClaimsIdentity();
 
-        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper())
+        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
         {
             ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(claims) } }

@@ -18,7 +18,11 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Audit")]
 public class SiteWideAuditTests : BenTestBase
 {
-    private const string TghId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f";
+    // Resolved from the slug at run time — a hardcoded GUID dies with every database rebuild.
+    private string TghId = null!;
+
+    [SetUp]
+    public async Task ResolveTghId() => TghId = await OrgIdBySlugAsync("paranormal365");
 
     private static string OwnerEmail => Environment.GetEnvironmentVariable("BEN_OWNER_EMAIL") ?? "emma.rodriguez@benco.dev";
     private static string? OwnerPassword => Environment.GetEnvironmentVariable("BEN_OWNER_PASSWORD");
@@ -65,7 +69,7 @@ public class SiteWideAuditTests : BenTestBase
             ("/equipment-catalog", null),
             ("/publications", null),
             ("/help", "Help"),
-            ("/o/tgh", null),
+            ("/o/paranormal365", null),
             ("/login", null),
             ("/signup", null),
             ("/contact", null),

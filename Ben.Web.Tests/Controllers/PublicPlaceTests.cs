@@ -38,7 +38,7 @@ public class PublicPlaceTests
         await using var db = await factory.CreateDbContextAsync();
 
         db.Organizations.Add(new Organization
-        { Id = OrgId, Name = "Tennessee Ghost Hunters", UrlName = "tgh", DateCreated = DateTime.UtcNow });
+        { Id = OrgId, Name = "Paranormal365", UrlName = "paranormal365", DateCreated = DateTime.UtcNow });
         db.Places.Add(new Place
         {
             Id = PlaceId, Name = "Bell Witch Cave", City = "Adams", State = "TN",
@@ -161,8 +161,8 @@ public class PublicPlaceTests
         var row = Assert.Single((await GetAsync(f)).Investigations);
 
         // So the page can link to the group's public page without a second lookup.
-        Assert.Equal("Tennessee Ghost Hunters", row.OrganizationName);
-        Assert.Equal("tgh", row.OrganizationUrlName);
+        Assert.Equal("Paranormal365", row.OrganizationName);
+        Assert.Equal("paranormal365", row.OrganizationUrlName);
     }
 
     [Fact]

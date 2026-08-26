@@ -14,14 +14,19 @@ public class RestoredRouteTests : BenTestBase
     [SetUp]
     public async Task SignIn() => await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-    private const string OrgId = "8e739323-9e09-480f-a10b-32e91eb618cd";
+    // Resolved from the slug at run time — a hardcoded GUID dies with every database rebuild.
+    private string OrgId = null!;
+
+    [SetUp]
+    public async Task ResolveOrgId() => OrgId = await OrgIdBySlugAsync("benco");
 
     [TestCase("/upload-files",        "Upload")]
     [TestCase("/media-library",       "Media")]
     [TestCase("/organization-security","Security")]
-    [TestCase("/organizations/8e739323-9e09-480f-a10b-32e91eb618cd/equipment-feedback", "Feedback")]
+    [TestCase("/organizations/{org}/equipment-feedback", "Feedback")]
     public async Task RestoredRoute_RendersContent(string path, string expected)
     {
+        path = path.Replace("{org}", OrgId);   // resolved in SetUp — ids do not survive reseeds
         await Page.GotoAsync($"{BaseUrl}{path}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Task.Delay(1000);

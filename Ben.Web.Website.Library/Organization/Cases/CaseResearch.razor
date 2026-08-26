@@ -13,12 +13,15 @@ else
 {
     @* ── Toolbar ─────────────────────────────────────────────────────────────── *@
     <div class="d-flex gap-2 flex-wrap mb-3">
-        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Note))"><BenIcon Name="plus" Class="me-1" />Note</button>
-        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Link))"><BenIcon Name="link" Class="me-1" />Link</button>
-        <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="research-file-upload" />
-        <label for="research-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
-            <BenIcon Name="upload" /> File
-        </label>
+        @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+        {
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Note))"><BenIcon Name="plus" Class="me-1" />Note</button>
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Link))"><BenIcon Name="link" Class="me-1" />Link</button>
+            <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="research-file-upload" />
+            <label for="research-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
+                <BenIcon Name="upload" /> File
+            </label>
+        }
         @if (_uploading) { <span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span> }
     </div>
 
@@ -70,8 +73,14 @@ else
                             </div>
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0">
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(e))"><BenIcon Name="edit-2" /></button>
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteEntry(e.Id))"><BenIcon Name="trash-2" /></button>
+                            @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update))
+                            {
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(e))"><BenIcon Name="edit-2" /></button>
+                            }
+                            @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete))
+                            {
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteEntry(e.Id))"><BenIcon Name="trash-2" /></button>
+                            }
                         </div>
                     </div>
                 </div>
@@ -113,6 +122,27 @@ else
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
+    /// <summary>
+    /// What the viewer may do in this organization's <c>Cases</c> area, handed down by
+    /// <c>CaseDetail</c> so the tabs and their parent agree without three more round trips.
+    /// </summary>
+    /// <remarks>
+    /// <para>IH-03 step 2. The controller behind this tab used to gate create, update AND delete
+    /// on the <c>Case.Read</c> grant, so anyone who could open the case could empty it. The server
+    /// now checks the matching action for each verb; these buttons exist so a member who cannot
+    /// do the thing is not shown the door to a refusal.</para>
+    ///
+    /// <para><b>Null means no.</b> The parameter is null while the parent is still loading and if
+    /// the permissions call fails, and both of those mean the buttons stay hidden. Hiding a button
+    /// from someone entitled to it is a visible annoyance they can report; showing one to someone
+    /// who is not is the bug this arc exists to close.</para>
+    /// </remarks>
+    [Parameter] public MyOrgPermissionsItem? Permissions { get; set; }
+
+    /// <summary>The server-side gate, asked client-side.</summary>
+    private bool May(Ben.Data.Common.Enums.OrganizationSecurityAction action)
+        => Permissions?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action) == true;
+
 
     private List<CaseResearchEntryDto> _entries = [];
     private LoadResult<CaseResearchEntryDto> _entriesResult;

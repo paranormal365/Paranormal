@@ -40,16 +40,19 @@ public sealed class EventEvidenceController : BenControllerBase
     private readonly IMediaIngestService _mediaIngest;
     private readonly IAvMetadataStripper _avStripper;
 
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
     public EventEvidenceController(
         IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         PlatformMessageService messages, IMediaIngestService mediaIngest,
-        IAvMetadataStripper avStripper)
+        IAvMetadataStripper avStripper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db          = db;
         _fileStorage = fileStorage;
         _messages    = messages;
         _mediaIngest = mediaIngest;
         _avStripper  = avStripper;
+        _security    = security;
     }
 
     public sealed record EvidenceSubmissionRecord(
@@ -152,7 +155,7 @@ public sealed class EventEvidenceController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        if (!await IsOrgMemberAsync(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
 
         return Ok(await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
             .Where(s => s.OrgCalendarEvent.OrganizationId == orgId
@@ -170,7 +173,7 @@ public sealed class EventEvidenceController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        if (!await IsOrgMemberAsync(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
 
         var submission = await db.EventEvidenceSubmissions
             .Include(s => s.OrgCalendarEvent).Include(s => s.UploadFile)
@@ -286,6 +289,28 @@ public sealed class EventEvidenceController : BenControllerBase
 
         return await IsOrgMemberAsync(db, orgId, userId, ct);
     }
+
+    /// <summary>Whether the caller may take <paramref name="action"/> on the group's calendar.</summary>
+    /// <remarks>
+    /// <para>The review queue and the verdict on a submission used to ask bare membership. Accepting
+    /// a submission at a public event <b>makes the attendee's file public</b> — a publication
+    /// decision, taken in the group's name, that every member could make regardless of what they
+    /// had been granted.</para>
+    ///
+    /// <para>Events live under the Calendar area (<c>OrgCalendar</c>), so that is the grant asked
+    /// for: reading the queue is Read, deciding a submission is Update.</para>
+    ///
+    /// <para><b>This does not replace <see cref="IsOrgMemberAsync"/>,</b> which stays for
+    /// <see cref="AttendedAsync"/> — being on the roster counts as having attended the group's own
+    /// event, and that genuinely is a question about belonging, not about permission. The two were
+    /// one helper serving both purposes, which is how the wrong one ended up guarding the
+    /// verdict.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                  OrganizationPermissionArea.Calendar, action, ct);
 
     // SuperAdmin first, membership second — see CaseFileController.IsOrgMember for why.
     private async Task<bool> IsOrgMemberAsync(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)

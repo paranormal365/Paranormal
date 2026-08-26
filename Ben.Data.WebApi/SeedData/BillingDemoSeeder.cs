@@ -142,11 +142,11 @@ internal static class BillingDemoSeeder
         var tiers = await db.SubscriptionTiers.Include(t => t.Prices).Include(t => t.Limits).ToListAsync();
         if (tiers.Count == 0) return;
 
-        // "tgh" is 10 days from renewal ON PURPOSE: inside the two-week window, so the lapse job's
+        // "paranormal365" is 10 days from renewal ON PURPOSE: inside the two-week window, so the lapse job's
         // first notice fires on a dev database and the feature can be seen rather than trusted.
         var plans = new (string UrlName, string TierName, BillingInterval Interval, int DaysLeft)[]
         {
-            ("tgh", "Small group", BillingInterval.Monthly, 10),
+            ("paranormal365", "Small group", BillingInterval.Monthly, 10),
             ("nps", "Large group", BillingInterval.Yearly,  200),
         };
 

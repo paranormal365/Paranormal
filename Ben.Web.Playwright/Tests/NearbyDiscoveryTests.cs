@@ -7,7 +7,7 @@ namespace Ben.Web.Playwright.Tests;
 /// Tests for the home page's "What's Near You" panel (backlog item #88).
 /// </summary>
 /// <remarks>
-/// <para>Requires the dev seed data: <c>SeedLocalDiscoveryAsync</c> marks Tennessee Ghost Hunters
+/// <para>Requires the dev seed data: <c>SeedLocalDiscoveryAsync</c> marks Paranormal365
 /// findable and creates two public events, one of them at the group's Nashville address and one at
 /// Bell Witch Cave, 33.4 miles away. Without that data the panel is correct and empty, and every
 /// assertion below would be testing an empty state.</para>
@@ -66,7 +66,7 @@ public class NearbyDiscoveryTests : BenTestBase
         var groups = Page.GetByText("Groups Nearby", new() { Exact = false });
         await Expect(groups).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false }).First;
+        var tgh = Page.GetByText("Paranormal365", new() { Exact = false }).First;
         await Expect(tgh).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
 

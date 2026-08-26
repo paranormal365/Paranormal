@@ -12,7 +12,7 @@ namespace Ben.Web.Playwright.Tests;
 [Category("InvestigationPanel")]
 public class InvestigationPanelTests : BenTestBase
 {
-    private const string TghUrlName = "tgh";
+    private const string TghUrlName = "paranormal365";
 
     private async Task<string> NavigateToInvestigationsTabAsync()
     {

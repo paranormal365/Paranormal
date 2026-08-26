@@ -29,17 +29,17 @@ public class OrgDiscoveryTests : BenTestBase
     [Description("The /o/{urlName} public org page is reachable.")]
     public async Task OrgPublicPage_IsReachable()
     {
-        await Page.GotoAsync($"{BaseUrl}/o/tgh");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Heading role — the Apply panel also names the group; see OrgPublicPageTests.
-        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Tennessee Ghost Hunters" })).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Paranormal365" })).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]
     [Description("The 'Cases' tab on an org page shows the list of public cases.")]
     public async Task OrgPublicPage_CasesTabShowsPublicCases()
     {
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/cases");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Should show at least one case reference

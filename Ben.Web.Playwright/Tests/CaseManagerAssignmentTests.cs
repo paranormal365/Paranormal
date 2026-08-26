@@ -16,7 +16,7 @@ public class CaseManagerAssignmentTests : BenTestBase
     private async Task NavigateToTghCaseDetail()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH case not in the seed data; nothing to assert against.");
     }
 
@@ -26,7 +26,7 @@ public class CaseManagerAssignmentTests : BenTestBase
     public async Task CaseList_ShowsManagerOrUnassigned()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+        if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Pass("TGH org not in the seed data.");
         await OpenTabAsync("Cases", Main.GetByText("Manager:", new() { Exact = false })
                                         .Or(Main.GetByText("No cases", new() { Exact = false })));
