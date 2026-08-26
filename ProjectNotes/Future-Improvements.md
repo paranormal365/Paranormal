@@ -9860,3 +9860,42 @@ discovered by a customer:
 
 Both are testable today against the seeded billing demo data.
 
+## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
+
+> "We may need to provide a hold harmless form to generate for groups visiting private residences."
+
+A group walking into somebody's home at 2am, in the dark, with equipment and strangers, has real
+exposure — to the homeowner's property, to injury on unfamiliar stairs, and to what gets published
+afterwards. A generated waiver is the sort of thing a small group never gets round to writing and
+would value having handed to them.
+
+**It fits what already exists**, which is why it is worth doing properly rather than as a static
+PDF download:
+
+- `IsPrivateEngagement` (item 184) already marks exactly the cases this applies to, so the form can
+  be offered where it is relevant instead of everywhere.
+- `CaseReportPdfGenerator` already produces PDFs from case data, so the group's name, the client's
+  name, the address and the visit date can be filled in rather than typed.
+- The client already has an account and a case view (`/my-cases`), which is where a signed copy
+  would naturally live for both sides.
+- Publication consent is already a concept here — item 184's leak-warnings and the
+  plan-governs-publication rule. A waiver that also records *what may be published* would join up
+  two things that are currently separate conversations.
+
+**Questions to settle before building:**
+
+- **Signature.** A typed name and a timestamp is not nothing, but it is not a signature either.
+  Real e-signature means either integrating a provider or accepting a drawn-signature image with
+  an audit trail. That choice sets the size of the work.
+- **Who owns the wording.** This is the one that matters. A template that a group treats as legal
+  cover, written by a website, is a liability of its own — for them and for IsHaunted.com. The
+  honest shape is a clearly-labelled *starting point* the group may edit, with a plain statement
+  that it is not legal advice and they should have their own reviewed. Ben may want a lawyer's
+  wording for the default before it ships at all.
+- **Jurisdiction.** Waiver enforceability varies by state, and some clauses are void in some of
+  them. A single national template will be wrong somewhere. Per-state variants are a research task,
+  not a coding one.
+- **Whether it blocks anything.** Recommend NOT gating the investigation on a signed form —
+  groups will work anyway and a blocked flow just gets worked around. Offer it, record whether it
+  was signed, and show its absence on the case.
+
