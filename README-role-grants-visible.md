@@ -286,3 +286,49 @@ write. **3365 pass.**
   `OrganizationAreaOfOperationController`, and `CaseController.IsOrgAdminOrSuperAsync` — the
   admin-shaped ones are candidates for `IsOwnerOrAdminAsync` rather than a grant.
 - Playwright has not been run against the hidden-affordance changes.
+
+## Step 5 — titles that suggest roles (2026-08-26)
+
+The last step of the plan, and the one with a rule to protect.
+`OrganizationMemberLevel`'s own remarks say it plainly: *"a title is seniority, never permission:
+it grants nothing, and no code may ever read it to decide access."* Step 5 has to make titles
+useful without breaking that.
+
+### Copy on assign, never inherit
+
+A rung may now carry a list of **suggested** roles (`OrganizationMemberLevelRole`). That list is
+read at exactly one moment — when an administrator assigns the title — to offer the roles that
+usually go with it. Accepting writes ordinary `OrganizationRoleMembership` rows, and from then on
+those rows are the whole truth.
+
+Live inheritance was the obvious alternative and is the wrong one. It would make every promotion a
+silent grant, and every edit of the ladder a silent re-grant across the group — access changing for
+people nobody was looking at, from a screen labelled "titles". Copying keeps the audit honest:
+somebody chose, on a date, to give this person these roles.
+
+Three consequences, each with a test:
+
+- **Assigning a title alone grants nothing.** `ApplySuggestedRoles` defaults to false, so every
+  existing caller keeps assigning a title and nothing else.
+- **Editing the suggestions later changes nobody's access.** It changes what the *next* assignment
+  offers.
+- **Clearing or lowering a title takes nothing away.** The grant is additive only; access is
+  removed on the roles screen, deliberately. A title screen that quietly revoked things would be
+  the same silent re-grant pointed the other way.
+
+### The offer, not the action
+
+On the members roster the title dropdown still saves immediately. If the new title suggests roles
+the member does not already hold, an inline panel then says *"Senior Investigator usually carries:
+Case Lead"* with **Also grant these roles** and **Title only**. Accepting re-sends the same title
+with `ApplySuggestedRoles`, so the server decides what to grant from its own data rather than
+trusting a list assembled in the browser — and because it only ever adds and skips what is already
+held, a double click costs nothing.
+
+### The ratchet
+
+`TitleSuggestedRolesTests.The_suggestion_table_is_read_only_where_titles_are_assigned` scans the
+tree and fails if `OrganizationMemberLevelRoles` is named anywhere outside the assignment
+controller, the context and its own tests. A future convenience — "just check the title's roles
+here" — would convert copy-on-assign into live inheritance without anybody deciding to, and every
+behavioural test above would still pass.

@@ -82,6 +82,30 @@
                         {
                             <span class="badge bg-info text-dark">@m3.MemberLevelName</span>
                         }
+
+                        @* Step 5. The title is already saved; this OFFERS the roles it usually
+                           carries. Never automatic: a promotion that silently granted access
+                           would be a permission change made from a screen labelled "titles". *@
+                        @if (_offer is { } offer && offer.MembershipId == m3.MembershipId)
+                        {
+                            <div class="alert alert-info p-2 mt-2 small">
+                                <div class="mb-2">
+                                    <strong>@offer.LevelName</strong> usually carries:
+                                    @foreach (var name in offer.RoleNames)
+                                    {
+                                        <span class="badge text-bg-secondary ms-1">@name</span>
+                                    }
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm text-nowrap"
+                                            disabled="@_offerBusy"
+                                            @onclick="AcceptOfferAsync">Also grant @(offer.RoleNames.Count == 1 ? "this role" : "these roles")</button>
+                                    <button type="button" class="btn btn-secondary btn-sm text-nowrap"
+                                            disabled="@_offerBusy"
+                                            @onclick="@(() => _offer = null)">Title only</button>
+                                </div>
+                            </div>
+                        }
                     </Template>
                 </GridColumn>
                 @* IH-09/IH-07, Ben's 2026-08-26 sweep: role membership was managed one role at a
@@ -136,6 +160,9 @@
 
     /// <summary>Which functional roles each membership holds — see the IH-07 note in the markup.</summary>
     private Dictionary<Guid, List<string>> _rolesByMembership = [];
+
+    /// <summary>Role id → name, so a title's suggestions can be named rather than shown as GUIDs.</summary>
+    private Dictionary<Guid, string> _roleNamesById = [];
     private bool _rolesLoaded;
 
     /// <summary>
@@ -152,6 +179,8 @@
         try
         {
             var roles = (await AdminClient.GetOrgRolesAsync(OrgId)).Items;
+            // Step 5 needs id → name so a title's suggested role IDs can be shown as names.
+            _roleNamesById = roles.ToDictionary(r => r.Id, r => r.Name);
             var map = new Dictionary<Guid, List<string>>();
             foreach (var role in roles)
             {
@@ -177,9 +206,17 @@
         }
     }
 
+    /// <summary>A pending "this title usually carries…" offer for one row.</summary>
+    private sealed record RoleOffer(Guid MembershipId, Guid LevelId, string LevelName, List<string> RoleNames);
+
+    private RoleOffer? _offer;
+    private bool _offerBusy;
+
     private async Task AssignLevelAsync(OrgMembershipItem m, string? raw)
     {
         Guid? levelId = Guid.TryParse(raw, out var id) ? id : null;
+        _offer = null;
+
         if (!await AdminClient.AssignMemberLevelAsync(OrgId, m.MembershipId, levelId))
         {
             _error = "The title couldn't be saved. Please try again.";
@@ -187,11 +224,49 @@
         }
 
         // Update in place rather than refetching the roster: the change is this one cell.
-        var name = levelId is null ? null : _levels.FirstOrDefault(l => l.Id == levelId)?.Name;
+        var level = levelId is null ? null : _levels.FirstOrDefault(l => l.Id == levelId);
         _members = _members
             .Select(x => x.MembershipId == m.MembershipId
-                ? x with { MemberLevelId = levelId, MemberLevelName = name } : x)
+                ? x with { MemberLevelId = levelId, MemberLevelName = level?.Name } : x)
             .ToList();
+
+        // The title is saved either way. What follows is only an offer.
+        if (level?.SuggestedRoleIds is not { Count: > 0 } suggestedIds) return;
+
+        List<string> held = _rolesByMembership.TryGetValue(m.MembershipId, out var names) ? names : [];
+        var toOffer = _roleNamesById
+            .Where(kv => suggestedIds.Contains(kv.Key) && !held.Contains(kv.Value))
+            .Select(kv => kv.Value)
+            .ToList();
+
+        if (toOffer.Count > 0)
+            _offer = new RoleOffer(m.MembershipId, level.Id, level.Name, toOffer);
+    }
+
+    /// <summary>
+    /// Grants the offered roles — the copy in "copy-on-assign".
+    /// </summary>
+    /// <remarks>
+    /// Re-sends the same title with <c>applySuggestedRoles</c>, so the server decides what to
+    /// grant from its own data rather than trusting a list assembled in the browser. The server
+    /// only ever adds, and skips what is already held, so a double click costs nothing.
+    /// </remarks>
+    private async Task AcceptOfferAsync()
+    {
+        if (_offer is not { } offer) return;
+        _offerBusy = true;
+        try
+        {
+            if (!await AdminClient.AssignMemberLevelAsync(
+                    OrgId, offer.MembershipId, offer.LevelId, applySuggestedRoles: true))
+            {
+                _error = "The roles couldn't be granted. Please try again.";
+                return;
+            }
+            _offer = null;
+            await LoadRolesAsync();      // the roles column is now out of date
+        }
+        finally { _offerBusy = false; }
     }
 
     protected override async Task OnParametersSetAsync()

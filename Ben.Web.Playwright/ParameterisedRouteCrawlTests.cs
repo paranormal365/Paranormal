@@ -85,9 +85,25 @@ public class ParameterisedRouteCrawlTests : BenTestBase
         // Help documents are embedded in the app rather than served by the API, so the slug comes
         // from the index page's own links — the same route a reader would follow.
         await Page.GotoAsync($"{BaseUrl}/help");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var helpHref = await Page.Locator("a[href^='/help/']").First.GetAttributeAsync("href");
-        if (helpHref is { Length: > 6 }) _ids["Slug"] = helpHref["/help/".Length..];
+
+        // Wait for the LINK, not for the network. NetworkIdle never settles on a Blazor Server
+        // page — the SignalR circuit keeps the connection busy — so the old wait returned at its
+        // own timeout and the locator below then failed on a page that renders perfectly well.
+        // That took the whole crawl down with it, and every route it would have visited.
+        var firstHelpLink = Page.Locator("a[href^='/help/']").First;
+        try
+        {
+            await firstHelpLink.WaitForAsync(new() { State = WaitForSelectorState.Attached, Timeout = 15_000 });
+            var helpHref = await firstHelpLink.GetAttributeAsync("href");
+            if (helpHref is { Length: > 6 }) _ids["Slug"] = helpHref["/help/".Length..];
+        }
+        catch (TimeoutException)
+        {
+            // No help topics visible to this viewer is a legitimate state, not a crawl failure:
+            // the index shows only the topics that apply to you. Routes needing {Slug} are then
+            // skipped and reported as skipped, which is the honest outcome.
+            TestContext.Out.WriteLine("   no /help/ links visible — {Slug} routes will be skipped");
+        }
     }
 
     /// <summary>Uploads a tiny field session for the crawler, or returns null if it cannot.</summary>

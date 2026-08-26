@@ -55,6 +55,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationAreaOfOperation> OrganizationAreaOfOperations { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationMemberLevel> OrganizationMemberLevels { get; set; }
+        public virtual DbSet<OrganizationMemberLevelRole> OrganizationMemberLevelRoles { get; set; }
         public virtual DbSet<InvestigationDuty> InvestigationDuties { get; set; }
         public virtual DbSet<InvestigationDutyAssignment> InvestigationDutyAssignments { get; set; }
         public virtual DbSet<CaseContact> CaseContacts { get; set; }
@@ -1820,6 +1821,22 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Name).HasMaxLength(128);
             modelBuilder.Entity<OrganizationMemberLevel>()
                 .HasIndex(e => new { e.OrganizationId, e.SortOrder });
+
+            // ── OrganizationMemberLevelRole (step 5): what a title SUGGESTS ───
+            // Never read to decide access — see the entity's remarks. Cascade from the rung
+            // because a suggestion on a deleted rung is nothing; NoAction from the role so that
+            // deleting a role is not silently widened into editing ladders.
+            modelBuilder.Entity<OrganizationMemberLevelRole>()
+                .HasOne(e => e.OrganizationMemberLevel).WithMany()
+                .HasForeignKey(e => e.OrganizationMemberLevelId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationMemberLevelRole>()
+                .HasOne(e => e.OrganizationRole).WithMany()
+                .HasForeignKey(e => e.OrganizationRoleId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMemberLevelRole>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMemberLevelRole>()
+                .HasIndex(e => new { e.OrganizationMemberLevelId, e.OrganizationRoleId }).IsUnique();
 
             // Deleting a rung clears the title from members who held it rather than blocking —
             // a ladder edit must never be refused because somebody is standing on the rung.

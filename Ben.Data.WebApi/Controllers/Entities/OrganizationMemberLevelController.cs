@@ -39,7 +39,22 @@ public sealed class OrganizationMemberLevelController : BenControllerBase
         var levels = await db.OrganizationMemberLevels.AsNoTracking()
             .Where(l => l.OrganizationId == orgId)
             .OrderBy(l => l.SortOrder).ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<OrganizationMemberLevelRecord>>(levels));
+
+        // One query for every rung's suggestions rather than one per rung.
+        var levelIds  = levels.Select(l => l.Id).ToList();
+        var suggested = (await db.OrganizationMemberLevelRoles.AsNoTracking()
+                .Where(r => levelIds.Contains(r.OrganizationMemberLevelId))
+                .Select(r => new { r.OrganizationMemberLevelId, r.OrganizationRoleId })
+                .ToListAsync(ct))
+            .GroupBy(r => r.OrganizationMemberLevelId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.OrganizationRoleId).ToList());
+
+        var records = _mapper.Map<IEnumerable<OrganizationMemberLevelRecord>>(levels)
+            .Select(r => r with
+            {
+                SuggestedRoleIds = suggested.TryGetValue(r.Id, out var ids) ? ids : [],
+            });
+        return Ok(records);
     }
 
     [HttpPost]
@@ -122,11 +137,124 @@ public sealed class OrganizationMemberLevelController : BenControllerBase
         membership.MemberLevelId = request.MemberLevelId;
         membership.DateUpdated = DateTime.UtcNow;
         membership.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+
+        // ── Step 5: the roles this title usually carries, if the assigner asked for them ──
+        // Opt-in, and only ever ADDITIVE. Clearing a title takes nothing away and neither does
+        // moving somebody down the ladder: access is removed by removing a role, on the roles
+        // screen, deliberately. A title screen that quietly revoked things would be the silent
+        // re-grant this design exists to avoid, pointed the other way.
+        if (request.ApplySuggestedRoles && request.MemberLevelId is { } applyLevelId)
+        {
+            var suggested = await db.OrganizationMemberLevelRoles.AsNoTracking()
+                .Where(r => r.OrganizationMemberLevelId == applyLevelId)
+                .Select(r => r.OrganizationRoleId)
+                .ToListAsync(ct);
+
+            var alreadyHeld = await db.OrganizationRoleMemberships.AsNoTracking()
+                .Where(rm => rm.OrganizationUserMembershipId == membershipId)
+                .Select(rm => rm.OrganizationRoleId)
+                .ToListAsync(ct);
+
+            // Re-checked against this organization rather than trusted from the join: a role row
+            // that somehow pointed elsewhere must not become a grant in a group it never belonged
+            // to.
+            var grantable = await db.OrganizationRoles.AsNoTracking()
+                .Where(r => suggested.Contains(r.Id) && r.OrganizationId == orgId && r.IsActive)
+                .Select(r => r.Id)
+                .ToListAsync(ct);
+
+            foreach (var roleId in grantable.Except(alreadyHeld))
+            {
+                db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+                {
+                    Id = Guid.NewGuid(),
+                    OrganizationRoleId = roleId,
+                    OrganizationUserMembershipId = membershipId,
+                    DateCreated = DateTime.UtcNow,
+                    CreatedByAppUserId = userId,
+                });
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
-    public sealed record AssignMemberLevelRequest(Guid? MemberLevelId);
+    /// <summary>
+    /// Sets one member's title, optionally granting the roles that title suggests.
+    /// </summary>
+    /// <param name="MemberLevelId">The rung, or null to clear the title.</param>
+    /// <param name="ApplySuggestedRoles">
+    /// When true, also give this member the roles the new title suggests. Defaults to false so
+    /// that an existing caller — and there are several — keeps assigning a title and nothing else.
+    /// </param>
+    public sealed record AssignMemberLevelRequest(Guid? MemberLevelId, bool ApplySuggestedRoles = false);
+
+    // ── The suggestions themselves ────────────────────────────────────────────
+
+    /// <summary>The roles this title suggests. Readable by any member — it explains the ladder.</summary>
+    [HttpGet("{id:guid}/suggested-roles")]
+    public async Task<ActionResult<IEnumerable<Guid>>> GetSuggestedRoles(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.OrganizationMemberLevels.AnyAsync(l => l.Id == id && l.OrganizationId == orgId, ct))
+            return NotFound();
+
+        return Ok(await db.OrganizationMemberLevelRoles.AsNoTracking()
+            .Where(r => r.OrganizationMemberLevelId == id)
+            .Select(r => r.OrganizationRoleId)
+            .ToListAsync(ct));
+    }
+
+    /// <summary>
+    /// Replaces the roles this title suggests.
+    /// </summary>
+    /// <remarks>
+    /// <b>This changes nothing about who may do what.</b> It changes what the next assignment of
+    /// this title will OFFER. Everybody already holding the title keeps exactly the roles they
+    /// were given, which is the point of copying rather than inheriting.
+    /// </remarks>
+    [HttpPut("{id:guid}/suggested-roles")]
+    public async Task<IActionResult> SetSuggestedRoles(
+        Guid orgId, Guid id, [FromBody] SetSuggestedRolesRequest request, CancellationToken ct)
+    {
+        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.OrganizationMemberLevels.AnyAsync(l => l.Id == id && l.OrganizationId == orgId, ct))
+            return NotFound();
+
+        var wanted = request.RoleIds.Distinct().ToList();
+        var foreign = await db.OrganizationRoles.AsNoTracking()
+            .AnyAsync(r => wanted.Contains(r.Id) && r.OrganizationId != orgId, ct);
+        if (foreign) return BadRequest("A role from another group cannot be suggested here.");
+
+        var existing = await db.OrganizationMemberLevelRoles
+            .Where(r => r.OrganizationMemberLevelId == id)
+            .ToListAsync(ct);
+
+        db.OrganizationMemberLevelRoles.RemoveRange(
+            existing.Where(r => !wanted.Contains(r.OrganizationRoleId)));
+
+        foreach (var roleId in wanted.Except(existing.Select(r => r.OrganizationRoleId)))
+            db.OrganizationMemberLevelRoles.Add(new OrganizationMemberLevelRole
+            {
+                Id = Guid.NewGuid(),
+                OrganizationMemberLevelId = id,
+                OrganizationRoleId = roleId,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    public sealed record SetSuggestedRolesRequest(IReadOnlyList<Guid> RoleIds);
 
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
     {
