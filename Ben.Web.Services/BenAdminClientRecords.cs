@@ -704,7 +704,9 @@ public sealed record OrgSearchResult(
     double DistanceFromSearchMiles,
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
-    Guid? ActiveLogoFileId);
+    Guid? ActiveLogoFileId,
+    /// <summary>Whether this group's plan lets it take private-residence work (item 194).</summary>
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>
 /// One organization in the location-free browse listing. Mirrors the WebApi record of the same
@@ -719,7 +721,9 @@ public sealed record OrgBrowseResult(
     bool IsAcceptingClients,
     Guid? ActiveLogoFileId,
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
-    bool RunsPublicTours = false);
+    bool RunsPublicTours = false,
+    /// <summary>Whether this group's plan lets it take private-residence work (item 194).</summary>
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>One page of the browse listing.</summary>
 public sealed record OrgBrowsePage(

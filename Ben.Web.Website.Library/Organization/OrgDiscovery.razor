@@ -65,6 +65,14 @@
                         <MetaLine>
                             <span class="text-success">✓ Within range</span>
                             <span> · @(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
+                            @if (org.TakesPrivateResidenceCases)
+                            {
+                                <span class="badge rounded-pill bg-primary ms-1">Takes private homes</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis ms-1">Public investigations only</span>
+                            }
                         </MetaLine>
                     </OrgCard>
                 </div>
@@ -91,6 +99,14 @@
                         <MetaLine>
                             <span>@(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
                             <span class="text-secondary"> (range: @(org.RadiusMiles.ToString("F0")) mi)</span>
+                            @if (org.TakesPrivateResidenceCases)
+                            {
+                                <span class="badge rounded-pill bg-primary ms-1">Takes private homes</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis ms-1">Public investigations only</span>
+                            }
                         </MetaLine>
                     </OrgCard>
                 </div>
@@ -171,6 +187,19 @@
                                 @if (org.RunsPublicTours && org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
                                 {
                                     <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1">Runs tours</span>
+                                }
+                                @* Item 194, Ben's direction: colour for groups that can take
+                                   private work, plain for the rest — and the plain one says what
+                                   it CAN do. "Public investigations only" is a fact; greyed-and-
+                                   diminished reads as a punishment, and free-tier groups are the
+                                   early adopters. *@
+                                @if (org.TakesPrivateResidenceCases)
+                                {
+                                    <span class="badge rounded-pill bg-primary me-1" title="This group's plan covers investigations at private homes.">Takes private homes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1" title="This group investigates public places — landmarks, businesses, events.">Public investigations only</span>
                                 }
                                 <span class="@(org.IsAcceptingClients ? "text-success" : "text-secondary")">
                                     @(org.IsAcceptingClients ? "✓ Accepting new cases" : "Not currently accepting new cases")

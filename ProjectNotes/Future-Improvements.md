@@ -9838,6 +9838,31 @@ Design notes for whoever builds it:
 - **Do not hard-block selection everywhere.** A free group can still take a public case — a ghost
   walk, a public building. Block it for a private-residence REQUEST, which is the only place the
   plan is relevant.
+### Built 2026-08-26
+
+`TierAreaResolution.WithCapabilityAsync` resolves one capability for a whole listing in a fixed
+number of queries (asking per card is the N+1 that turns a browse page into forty round trips),
+and both public listing endpoints stamp `TakesPrivateResidenceCases` onto every result. The finder
+badges it — colour for groups that can, plain "Public investigations only" for the rest, per Ben's
+"say what a free group CAN do". The request wizard **filters** rather than only tinting: groups
+that cannot take private-residence work are hidden by default, with an explicit checkbox to show
+them, and an honest empty state when the filter hides everything. Free groups are NOT blocked from
+public cases anywhere — the filter lives only in the wizard, which is about somebody's own home.
+
+Five tests pin the batched resolver to the single-group one, including all three fail-open cases
+(no tiers, no exclusion row, empty list). Verified live on the anonymous path.
+
+**Promotion in ORDER, added the same day.** Paid groups lead — but only WITHIN a range bucket,
+never across one. Promoting globally would put a paid group forty miles away above a free one down
+the road: worse for the searcher, and the pay-to-win shape that makes a directory untrustworthy.
+Inside a bucket every group is equally reachable, so leading with the ones that can actually take
+the case is a service rather than a tax. On the browse listing the promotion is applied within the
+page the database already chose, because a group's visibility should not depend on how somebody
+paged to it. Two tests pin it, including the boundary: a free group IN range still outranks a paid
+group out of it.
+
+**Still open:** the same treatment on `/organizations` if it ever grows a public face.
+
 - **Tie the highlight to the paid tier itself**, not to a new "featured" flag. Otherwise there are
   two competing notions of prominence the moment paid placement arrives (item 143).
 
@@ -9859,6 +9884,27 @@ discovered by a customer:
    not a surprise charge. The trial ending is the moment the relationship is won or lost.
 
 Both are testable today against the seeded billing demo data.
+
+### Verified 2026-08-26 — one of the two was broken
+
+**1. The zero-value period WAS forgotten, exactly as predicted.** `AdminBillingController`
+refused any amount at or below zero on all three entry paths, so a 100%-off period could not be
+recorded at all — a three-month hole in the billing history of the first groups Ben courts.
+Fixed: a CHARGE or PAYMENT may now be zero (a trial period costs nothing and still has to appear,
+and its description names the coupon that made it free); a PAYMENT of zero still takes the next
+receipt number, so the sequence has no gap for an accountant to ask about. Negative stays refused
+on every path, and an ADJUSTMENT still demands a positive number because its direction lives in
+the credit flag. Three tests, each proven by reverting the fix under them.
+
+**2. Month four already works.** `SubscriptionLapseJob` sends its fourteen-day and seven-day
+notices before EVERY period end, so a trial's last period meets the same warning a paid one does
+— no surprise charge, and the machinery needed no change.
+
+**Still worth Ben's attention before the trial goes on sale:** those notices say "your paid period
+ends" and "renewing before then keeps everything exactly as it is". Accurate for a renewal,
+slightly wrong for a trial ending — the group is about to start paying for the first time, and the
+wording does not say so or name the price. That is a copy decision, not a mechanism one, and item
+195 called this "the moment the relationship is won or lost".
 
 ## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
 

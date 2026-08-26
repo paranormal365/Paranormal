@@ -338,8 +338,11 @@ public class TitleSuggestedRolesTests
         var offenders = new List<string>();
         foreach (var file in Directory.EnumerateFiles(dir!.FullName, "*.cs", SearchOption.AllDirectories))
         {
-            // Normalized so the exclusions hold on Windows too — EnumerateFiles returns
-            // backslash paths there, and "/obj/" would never match.
+            // Normalized before matching: EnumerateFiles returns BACKSLASH paths on Windows, so
+            // "/obj/" matched nothing there and the scan swept generated and migration files,
+            // reporting offenders that were never source. A guard defeated by the paths it reads
+            // is the same trap the source-scan guards keep falling into — the exclusion list was
+            // right, the separator was not. Found by a Windows run, not by this machine.
             var slashed = file.Replace('\\', '/');
             if (slashed.Contains("/obj/") || slashed.Contains("/bin/") || slashed.Contains("/worktrees/")
                 || slashed.Contains("/Migrations/") || slashed.Contains("/Entities/"))

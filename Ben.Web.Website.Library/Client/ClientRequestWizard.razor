@@ -216,8 +216,41 @@
                         Select up to <strong>2 organizations</strong> to send your request to.
                         The first to accept will be assigned your case.
                     </p>
+
+                    @* Item 194, Ben's direction: FILTER, don't only tint. A request from this
+                       wizard is about somebody's own address — private-residence work — so groups
+                       whose plan cannot take it are hidden by default rather than offered and then
+                       refused after the pick. The escape hatch is explicit, because a free group
+                       can still take a public building and the person may know that is their case. *@
+                    @if (_orgs.Any(o => !o.TakesPrivateResidenceCases))
+                    {
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="wizard-show-public-only-groups"
+                                   checked="@_showGroupsWithoutPrivate"
+                                   @onchange="@(e => _showGroupsWithoutPrivate = (bool?)e.Value == true)" />
+                            <label class="form-check-label small text-secondary" for="wizard-show-public-only-groups">
+                                Also show groups that only investigate public places
+                                (@_orgs.Count(o => !o.TakesPrivateResidenceCases) nearby) — they cannot take a case at your home.
+                            </label>
+                        </div>
+                    }
+
+                    @* The filter must never leave a silent empty list: if every nearby group is
+                       public-only, say so and name the way forward. An empty list with a checkbox
+                       above it is the dead end item 149 made policy against. *@
+                    @if (!VisibleOrgs.Any())
+                    {
+                        <div class="alert alert-warning">
+                            <strong>No nearby group can take a case at a private home yet.</strong>
+                            The groups near you investigate public places — landmarks, businesses,
+                            events. You can tick the box above to see them anyway, or
+                            <a href="/my-requests" class="alert-link">save this as a draft</a> and
+                            come back: groups add private-residence work as their plans change.
+                        </div>
+                    }
+
                     <div class="d-flex flex-column gap-3">
-                        @foreach (var org in _orgs)
+                        @foreach (var org in VisibleOrgs)
                         {
                             var isSelected = _selectedOrgIds.Contains(org.OrganizationId);
                             var canSelect  = isSelected || _selectedOrgIds.Count < 2;
@@ -236,6 +269,10 @@
                                             else
                                             {
                                                 <span class="badge bg-secondary">Outside range — accepts</span>
+                                            }
+                                            @if (!org.TakesPrivateResidenceCases)
+                                            {
+                                                <span class="badge bg-body-secondary text-body-emphasis">Public investigations only</span>
                                             }
                                         </div>
                                         @if (!string.IsNullOrEmpty(org.DisplayLabel))
@@ -322,6 +359,22 @@
 
     // Step 4 — org selection
     private List<OrgSearchResult>? _orgs;
+
+    /// <summary>
+    /// Whether groups that cannot take private-residence work are shown (item 194).
+    /// </summary>
+    /// <remarks>
+    /// Off by default: this wizard requests an investigation at the person's OWN address, and
+    /// offering a group that will be refused later answers a question they did not ask. Turning it
+    /// on is a deliberate act, for the person who knows their case is a public building.
+    /// </remarks>
+    private bool _showGroupsWithoutPrivate;
+
+    /// <summary>The groups actually offered, after the private-work filter.</summary>
+    private IEnumerable<OrgSearchResult> VisibleOrgs =>
+        _showGroupsWithoutPrivate
+            ? _orgs ?? []
+            : (_orgs ?? []).Where(o => o.TakesPrivateResidenceCases);
     private LoadResult<OrgSearchResult> _orgsResult;
     private readonly HashSet<Guid> _selectedOrgIds = new();
 

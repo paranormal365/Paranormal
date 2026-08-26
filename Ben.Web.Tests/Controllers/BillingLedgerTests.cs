@@ -189,6 +189,73 @@ public sealed class BillingLedgerTests
             orgId, new RecordAdjustmentRequest(5m, true, ""), default)).Result);
     }
 
+    // ── The 100%-off trial (item 195) ────────────────────────────────────────
+
+    /// <summary>
+    /// A trial period costs nothing and still belongs in the ledger.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben plans a three-month 100%-off trial from 1 September. The coupon machinery
+    /// already expresses it, so item 195 asked for the zero-value period to be PROVEN rather
+    /// than built — "a zero-value invoice is exactly the case a billing path forgets", and it
+    /// had: <c>RecordCharge</c> refused any amount at or below zero, which would have left a
+    /// three-month hole in the billing history of exactly the groups being courted first.</para>
+    ///
+    /// <para>The row is the answer to "what happened in September?", and its description names
+    /// the coupon that made it free.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_free_trial_period_is_recorded_at_zero_rather_than_refused()
+    {
+        var (factory, orgId, adminId) = await SeedOrgAsync();
+
+        var record = Body(await Admin(factory, adminId).RecordCharge(
+            orgId,
+            new RecordBillingEntryRequest(
+                0m, "September 2026 — Small group, 100% off (coupon TRIAL3)",
+                null, new DateTime(2026, 9, 1), new DateTime(2026, 9, 30)),
+            default));
+
+        Assert.Equal(0m, record.Amount);
+        Assert.Equal(0m, record.TaxAmount);      // nothing owed, nothing taxed
+        Assert.Contains("TRIAL3", record.Description);
+    }
+
+    /// <summary>A negative charge is still refused — a credit is an adjustment.</summary>
+    [Fact]
+    public async Task A_negative_charge_is_still_refused()
+    {
+        var (factory, orgId, adminId) = await SeedOrgAsync();
+
+        Assert.IsType<BadRequestObjectResult>((await Admin(factory, adminId).RecordCharge(
+            orgId, new RecordBillingEntryRequest(-10m, "nope", null, null, null), default)).Result);
+        // …and the stricter rule holds where it should: an adjustment carries direction in its
+        // flag, so zero is meaningless there and stays refused.
+        Assert.IsType<BadRequestObjectResult>((await Admin(factory, adminId).RecordAdjustment(
+            orgId, new RecordAdjustmentRequest(0m, true, "nope"), default)).Result);
+    }
+
+    /// <summary>A zero-value payment closes the period and still takes a receipt number.</summary>
+    /// <remarks>
+    /// The receipt is the group's proof the trial period was settled, not skipped. Receipt
+    /// numbering is Max+1 over the whole ledger, so a zero row must not be special-cased out of
+    /// the sequence — a gap in receipt numbers is the kind of thing an accountant asks about.
+    /// </remarks>
+    [Fact]
+    public async Task A_zero_value_payment_still_gets_a_receipt_number()
+    {
+        var (factory, orgId, adminId) = await SeedOrgAsync();
+        var admin = Admin(factory, adminId);
+
+        await admin.RecordCharge(orgId,
+            new RecordBillingEntryRequest(0m, "September 2026 — 100% off (TRIAL3)", null, null, null), default);
+        var payment = Body(await admin.RecordPayment(orgId,
+            new RecordBillingEntryRequest(0m, "Settled by coupon TRIAL3", "coupon", null, null), default));
+
+        Assert.NotNull(payment.ReceiptNumber);
+        Assert.True(payment.ReceiptNumber > 0);
+    }
+
     // ── The group's own view ─────────────────────────────────────────────────
 
     private static Ben.Data.WebApi.Controllers.OrganizationBillingController OrgSide(
