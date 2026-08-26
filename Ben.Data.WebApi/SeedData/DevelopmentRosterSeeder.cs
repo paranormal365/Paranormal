@@ -59,6 +59,19 @@ internal static class DevelopmentRosterSeeder
         // remember to put them back. The seat nobody can sit in is the seat nobody tests.
         var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes",   "V!ctor!Reyes26");
 
+        // IH-08, Ben's 2026-08-26 sweep: Site Roles reported Admin 0 users and Moderator 0, so
+        // neither role's behaviour had ever run — including whatever gates the 26 /admin/* routes
+        // and the /moderation/media screen. Same reasoning as Victor's Viewer seat above: the
+        // seat nobody can sit in is the seat nobody tests. These two exist to be signed in as.
+        //
+        // Deliberately NOT given to an existing person: promoting Rachel or Marcus would change
+        // what an existing seat means and quietly invalidate every check that treats them as an
+        // ordinary org administrator or member.
+        var alice  = await UserAsync(userManager, "alice.nguyen@benco.dev",    "Alice Nguyen",   "@lice!Nguyen26");
+        var miguel = await UserAsync(userManager, "miguel.santos@benco.dev",   "Miguel Santos",  "M!guel!Santos26");
+        await EnsureSiteRoleAsync(userManager, alice,  Ben.Data.Common.Constants.RoleNames.Admin);
+        await EnsureSiteRoleAsync(userManager, miguel, Ben.Data.Common.Constants.RoleNames.Moderator);
+
         var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell",  "L!nda!Maxwell26");
         var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes",   "R0bert!Hayes26");
         var karen  = await UserAsync(userManager, "karen.foster@example.com",  "Karen Foster",   "K@ren!Foster26");
@@ -244,6 +257,25 @@ internal static class DevelopmentRosterSeeder
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>Puts somebody in a site-wide role, idempotently.</summary>
+    /// <remarks>
+    /// The roles themselves are created by <see cref="SuperAdminSeeder"/>; this only fills them.
+    /// A failure is reported and swallowed: a missing role holder is a gap in test coverage, not
+    /// a reason for the whole seed to fall over.
+    /// </remarks>
+    private static async Task EnsureSiteRoleAsync(
+        UserManager<AppUser> userManager, AppUser user, string roleName)
+    {
+        if (await userManager.IsInRoleAsync(user, roleName)) return;
+
+        var result = await userManager.AddToRoleAsync(user, roleName);
+        if (!result.Succeeded)
+        {
+            Console.WriteLine($"[RosterSeeder] Could not put {user.Email} in '{roleName}': "
+                            + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
 
     private static async Task<AppUser> UserAsync(
         UserManager<AppUser> userManager, string email, string displayName, string password)
