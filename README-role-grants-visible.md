@@ -204,3 +204,85 @@ organization. A helper about a GRANT should say so and use neither word.
    should not become one.
 4. Any active member → only where no area covers the thing at all, as with messages.
 
+
+## Step 2, second pass — the case sub-surfaces (2026-08-26)
+
+Prompted by Ben mid-session: *"Be sure to check permissions for clients of organizations with
+their case."* The sweep that followed found more than the prompt asked for.
+
+### The defect, in one sentence
+
+Seven controllers gated **create, update and delete** on the `Case.Read` grant.
+
+| Controller | Was | Now |
+| --- | --- | --- |
+| `CaseNoteController` | Read for POST/PUT/DELETE | Create / Update / Delete |
+| `CaseFileController` | Read for POST/DELETE | Create / Delete |
+| `CaseResearchController` | Read for POST/PUT/DELETE | Create / Update / Delete |
+| `CaseReportController` | Read for **all sixteen** | Read / Create / Update / Delete |
+| `CaseMessageController` | bare active membership | Read to read, Update to answer the client |
+| `ScheduleProposalController` | Read for all four | Read / Create / Delete / Investigations.Create |
+| `CaseAudioMixController` | Read for the export | Create (the export attaches a case file) |
+| `CaseContactController` | bare active membership | Read (write stays case-manager-or-admin) |
+
+`CaseReportController` is the one that mattered most: **Publish** is what puts a report in front
+of the client, and **Delete** removes a published one. Both were open to anyone who could read
+the case.
+
+**The naming did the damage.** Six of these were called `IsOrgMember` / `IsOrgMemberAsync` while
+actually asking `HasAccessAsync(Case, Read)`. A helper called "is org member" reads as a
+belonging check, so no reviewer asked what it permitted. Every one is now named for the question
+it answers and takes the action as an argument.
+
+It was survivable while the seeder handed case read to every member. Step 4 — ending the
+grandfathering — is what turned a read grant into a deliberate act, and made this urgent.
+
+### Two bugs found in the same sweep, neither about permissions
+
+**`ScheduleProposalController.Convert` created an org-less investigation.** `OrganizationId` is a
+direct FK, deliberately not derived through the case, and `Convert` never set it. The
+investigation belonged to `Guid.Empty`, was absent from every org-scoped query, and the proposal
+cheerfully reported `Converted`. Of the six `new Investigation` sites in the codebase this was
+the only one missing it — and it is the one the **client** starts by accepting a date.
+
+**A lapse never told the primary client.** `SubscriptionLapseJob` notified `CaseClientAccesses`,
+which holds *co-clients* — people added by invitation. The primary client reaches their case
+through `Case.ClientRequest.AppUserId` and has no row there (`MyCaseController.IsCaseClient`
+checks both, which is why the client side otherwise works). So the person whose home is being
+investigated was never told their case had been paused and never got the thirty-day
+reassignment offer; a case with no invited co-clients notified **nobody** while the job logged
+success. Both notices now go through one `ClientsOfCaseAsync` helper.
+
+### The UI half
+
+`CaseNotes`, `CaseFiles` and `CaseResearch` take a `Permissions` parameter from `CaseDetail`
+rather than each fetching its own — one answer, one round trip, four surfaces that agree.
+**Null means no**: while permissions load, and if the call fails, the buttons stay hidden.
+Hiding a button from someone entitled to it is a visible annoyance they can report; showing one
+to someone who is not is the bug this branch exists to close.
+
+### The tests, and the hole in the first one
+
+`ReadDoesNotGrantDestructionTests` asserts the rule (a `Case.Read` grant permits Read and refuses
+Create/Update/Delete) and ratchets it across all seven controllers by pairing each HTTP verb with
+the action guarding it.
+
+**Its first version was wrong in a way that would have shipped.** It looked for `Forbid()` only,
+and `CaseMessageController` refuses with `NotFound()` — so reverting its POST to a `Read` gate
+passed the ratchet cleanly. Found by sabotaging the fix and watching the test stay green, which
+is the only way that class of hole shows itself. The three lapse-notification tests were proven
+the same way.
+
+`TestSeeds.BridgeAsync` now grants `Read` by default and takes `TestSeeds.CaseWork` explicitly.
+Seventy tests failed when the gates tightened; every one was a suite seeding a member with no
+write grant and expecting a write to succeed. A suite must now say out loud that its member may
+write. **3365 pass.**
+
+### Still open on this branch
+
+- **Step 5** — titles suggesting roles (copy-on-assign, not live inheritance).
+- The remaining bare-membership helpers outside the case area: `EventEvidenceController`,
+  `UploadFileShareController`, `UploadFileShareV2Controller`,
+  `OrganizationAreaOfOperationController`, and `CaseController.IsOrgAdminOrSuperAsync` — the
+  admin-shaped ones are candidates for `IsOwnerOrAdminAsync` rather than a grant.
+- Playwright has not been run against the hidden-affordance changes.
