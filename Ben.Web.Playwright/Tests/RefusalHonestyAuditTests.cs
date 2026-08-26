@@ -13,7 +13,12 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Audit")]
 public class RefusalHonestyAuditTests : BenTestBase
 {
-    private const string TghId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f";
+    // Resolved from the seed, not hardcoded: the 2026-08-26 database rebuild regenerated every
+    // org id, and a pasted GUID pins a test to one database that no longer exists.
+    private string TghId = "";
+
+    [SetUp]
+    public async Task ResolveTgh() => TghId = await OrgIdBySlugAsync("paranormal365");
 
     /// <summary>Words that mean "there is nothing", as opposed to "you may not see it".</summary>
     private static readonly string[] EmptyStateWords =
