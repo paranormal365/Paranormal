@@ -56,6 +56,23 @@ public enum LoginFailure
     EmailNotConfirmed,
 
     /// <summary>
+    /// The refusal arrived but its reason could not be read, so WHY is genuinely unknown.
+    /// </summary>
+    /// <remarks>
+    /// <para>Distinct from <see cref="InvalidCredentials"/> because the credentials may have been
+    /// perfectly good. <c>ReadDetailAsync</c> returns null for any response it cannot parse —
+    /// a truncated body, an aborted read, a proxy page — and null used to fall through to
+    /// "invalid email or password", which is the exact harm three separate comments in this file
+    /// warn about: sending somebody to reset a password that was always right.</para>
+    ///
+    /// <para>Seen in a full Playwright run: an account with an unconfirmed email and a CORRECT
+    /// password was told its password was wrong, because the 401's problem-detail did not survive
+    /// the read under load. Asking the person to try again is honest; naming their password is
+    /// not.</para>
+    /// </remarks>
+    UnknownRefusal,
+
+    /// <summary>
     /// Identity has locked the account after too many failed attempts. Distinct from
     /// <see cref="RateLimited"/>, which is the server refusing the request rather than the
     /// account: this one is about this account specifically, and waiting is the only cure —

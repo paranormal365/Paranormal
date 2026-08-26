@@ -223,6 +223,16 @@
                 _errorMessage = "This account is locked for a few minutes after too many attempts. Wait, then try again.";
                 break;
 
+            case LoginFailure.UnknownRefusal:
+                // The refusal arrived but its reason did not survive the read. Naming the
+                // password here would be a guess, and the wrong guess sends somebody to reset a
+                // password that was always right — seen in a full Playwright run, where an
+                // unconfirmed account with the correct password was told its password was wrong.
+                _errorMessage = "Sign-in couldn't be completed just now, and the reason didn't "
+                              + "come back. Please try again — if it keeps happening, your email "
+                              + "may still need confirming, or use \"Forgot your password?\" below.";
+                break;
+
             default:
                 // Item 142: an account created by signing in with Microsoft has no password at
                 // all, and this message is what that case looks like. The hint is worded for that
