@@ -41,6 +41,49 @@ public interface IOrganizationSecurityService
     /// </remarks>
     Task<bool> HasAccessAsync(Guid appUserId, Guid organizationId, OrganizationSecurityTable tableName, OrganizationSecurityAction actionName, CancellationToken token = default);
 
+    // ── The three questions, said plainly (Ben, 2026-08-26) ──────────────────
+    //
+    // Twenty-six controllers had each written their own wrapper around HasAccessAsync and named
+    // it something friendlier — IsOrgMember, IsMemberAsync, MayManageAsync, CanManageAsync. The
+    // names disagreed with each other AND with what the code did: a helper called `IsOrgMember`
+    // that returns "holds a Case.Read grant" is a lie in a method name, and it cost this branch
+    // one wrong measurement of its own audit. Ben's rule, which these follow: a USER is a
+    // verified account, a MEMBER belongs to an organization, and a question about a GRANT should
+    // say neither.
+    //
+    // Three names, three meanings, no wrappers. A call site reads as the question it is asking.
+
+    /// <summary>May this person take this action in this area?</summary>
+    /// <remarks>
+    /// <para>The grant question. Takes an <see cref="OrganizationPermissionArea"/> rather than a
+    /// table, because an area is what a role editor grants and what a UI affordance is about;
+    /// the table is an implementation detail underneath.</para>
+    ///
+    /// <para>Answers are cached for the life of the request: the same verdict is asked for many
+    /// times while rendering one page, and each uncached call opens its own DbContext for up to
+    /// four queries — which is why <c>OrganizationController</c> had to hand-batch this to avoid
+    /// "up to 8N queries for N orgs". Nothing a person may do changes mid-request.</para>
+    /// </remarks>
+    Task<bool> MayAsync(Guid appUserId, Guid organizationId, OrganizationPermissionArea area, OrganizationSecurityAction action, CancellationToken token = default);
+
+    /// <summary>Is this person the owner or an administrator of this organization?</summary>
+    /// <remarks>
+    /// The TIER question, not the grant question — deliberately separate. Some things are
+    /// owner-or-admin forever regardless of any role: member levels, area of operation,
+    /// transferring a case away. Asking it by name stops those being quietly converted into
+    /// grants by somebody tidying up.
+    /// </remarks>
+    Task<bool> IsOwnerOrAdminAsync(Guid appUserId, Guid organizationId, CancellationToken token = default);
+
+    /// <summary>Does this person belong to this organization at all?</summary>
+    /// <remarks>
+    /// The MEMBERSHIP question. For the handful of things no permission area covers — the group's
+    /// message board is the example — where belonging IS the whole rule. Not a substitute for
+    /// <see cref="MayAsync"/>: reaching for this because the area model is inconvenient is how a
+    /// grant stops meaning anything.
+    /// </remarks>
+    Task<bool> BelongsToAsync(Guid appUserId, Guid organizationId, CancellationToken token = default);
+
     /// <summary>
     /// Returns the list of organizations the user is an active member of.
     /// SuperAdmins receive all organizations.
