@@ -4,6 +4,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.User
+@using Ben.Web.Website.Library.Help
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -48,7 +49,7 @@ else
 {
     <div class="container py-4" style="max-width:860px;">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0">Investigation request — @_detail.City, @_detail.State</h4>
+            <h4 class="mb-0">Investigation request — @_detail.City, @_detail.State<HelpLink Slug="working-a-case" Anchor="taking-on-a-request-reviewing-and-voting" /></h4>
             <span class="badge @StatusBadge()">@StatusLabel()</span>
         </div>
 
