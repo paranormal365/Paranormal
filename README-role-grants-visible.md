@@ -162,3 +162,45 @@ any other seeded group) need removing — either through Roles → Investigator 
 or by deleting the role outright. Ben's own SuperAdmin seat is unaffected either way: SuperAdmin
 bypasses these checks entirely.
 
+---
+
+## What the gate helpers actually check (2026-08-26)
+
+Ben's question, and the right one: *"I kinda would assume it meant a member of an organization
+since we call people who have verified accounts Users and not Members. But you will have to check
+what it points towards."*
+
+Checked. **The naming is misleading in both directions, and it misled this branch's own audit.**
+
+| What it really does | How many | Examples |
+|---|---|---|
+| **Calls `HasAccessAsync`** — already grant-aware | 16 | `IsOrgMember` (CaseFile, CaseReport, CaseResearch, ScheduleProposal, CaseAudioMix), `IsOrgMemberAsync` (CaseNote, CaseTransfer, Investigation), `IsMemberAsync` (OrgInvestigations), `MayManageAsync` (OrganizationAd), `CanManageAsync` (MembershipQuestion), `MayDecideAsync` (FeedAttribution), `IsAdminOrHasAsync` (Case, OrgCalendar) |
+| **Owner or Administrator only** — deliberate | ~9 | the `IsOrgAdmin*` family, resolving to `Role <= Administrator`, i.e. Owner(1) or Administrator(2) |
+| **Per-row rule** — about ONE record, not the area | 1 | `InvestigationController.CanManageAsync` → `InvestigationAccess`, "may this person manage THIS investigation" |
+| **Genuinely any active member** | 1 | `OrgMessageController.IsMemberAsync` — correct, because no permission area covers the message board |
+
+### Two corrections this forces
+
+**My earlier "70 endpoints gated on tier rather than grant" was too high.** That audit read only the
+endpoint body, so a grant check living one call away — inside a helper named `IsOrgMember` — looked
+like no grant check at all. A large share of those 70 are already grant-aware through their
+helpers. The number to trust is the table above, not the earlier one; step 2 is correspondingly
+smaller than advertised.
+
+**A helper called `IsOrgMember` that returns "has a Case.Read grant" is a lie in a method name.**
+It cost this branch one wrong measurement and would cost the next reader the same. Renaming them as
+step 2 touches each controller — `MayReadCasesAsync`, `IsOwnerOrAdminAsync`, and so on — is worth
+doing while the intent is fresh.
+
+**Ben's vocabulary should be the rule**: **User** = a verified account; **Member** = belongs to an
+organization. A helper about a GRANT should say so and use neither word.
+
+### What step 2 actually needs, per endpoint
+
+1. Already grant-aware → the endpoint needs no change; only the UI affordance is missing.
+2. Owner/admin-only → decide, deliberately, whether a granted role SHOULD pass. Some of these
+   (member levels, area of operation, transfers) may be genuinely owner-only forever.
+3. Per-row → leave alone. "May this person manage this investigation" is not an area grant and
+   should not become one.
+4. Any active member → only where no area covers the thing at all, as with messages.
+
