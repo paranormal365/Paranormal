@@ -217,6 +217,12 @@ public sealed class PublicOrganizationSearchController : ControllerBase
 /// <summary>
 /// Public search result — deliberately excludes CenterLatitude and CenterLongitude.
 /// </summary>
+/// <remarks>
+/// <c>TakesPrivateResidenceCases</c> (item 194) is whether this group's plan lets it take
+/// private-residence work. Somebody with a haunted HOME needs it before they choose, not after:
+/// the transfer gate already refuses the wrong group politely, but only once they have picked
+/// one. Fail-open like every capability — a group with no resolvable tier reads as able.
+/// </remarks>
 public sealed record OrgSearchResult(
     Guid OrganizationId,
     string Name,
@@ -228,14 +234,6 @@ public sealed record OrgSearchResult(
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId,
     [property: System.Text.Json.Serialization.JsonIgnore] double SortKey,
-    /// <summary>
-    /// Whether this group's plan lets it take private-residence work (item 194).
-    /// </summary>
-    /// <remarks>
-    /// Somebody with a haunted HOME needs this before they choose, not after: the transfer gate
-    /// already refuses the wrong group politely, but only once they have picked one. Fail-open
-    /// like every capability — a group with no resolvable tier reads as able.
-    /// </remarks>
     bool TakesPrivateResidenceCases = true);
 
 /// <summary>
@@ -248,6 +246,13 @@ public sealed record OrgSearchResult(
 /// </remarks>
 /// AreaLabel is the human-readable area, e.g. "Nashville, TN", and is null when none is set;
 /// RadiusMiles is the declared operating radius, null when no area is configured.
+/// <remarks>
+/// <para><c>Kind</c> is what this group primarily is (2026-08-24) — the badge on its card — and
+/// <c>RunsPublicTours</c> is whether it runs public walking tours whatever kind it primarily is.
+/// </para>
+/// <para><c>TakesPrivateResidenceCases</c> (item 194) is whether its plan lets it take
+/// private-residence work.</para>
+/// </remarks>
 public sealed record OrgBrowseResult(
     Guid OrganizationId,
     string Name,
@@ -256,11 +261,8 @@ public sealed record OrgBrowseResult(
     double? RadiusMiles,
     bool IsAcceptingClients,
     Guid? ActiveLogoFileId,
-    /// <summary>What this group primarily is (2026-08-24) — the badge on its card.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
-    /// <summary>Whether it runs public walking tours, whatever kind it primarily is.</summary>
     bool RunsPublicTours = false,
-    /// <summary>Whether this group's plan lets it take private-residence work (item 194).</summary>
     bool TakesPrivateResidenceCases = true);
 
 /// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>

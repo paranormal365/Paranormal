@@ -155,9 +155,11 @@ public sealed record OrgPublicHomeResponse(
     string? PublicPhone = null,
     string? PublicEmail = null,
     string? PublicWebsite = null,
-    /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
+    // Kind is what this group is (2026-08-24), shown as a badge on its public page;
+    // RunsPublicTours is worth saying even on an investigation group. Plain comments, not XML:
+    // a /// on a positional record parameter is not a valid doc target, so the compiler warns and
+    // the text never reaches the generated documentation anyway.
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
-    /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
     bool RunsPublicTours = false);
 
 public sealed record OrgPublicPageResponse(
