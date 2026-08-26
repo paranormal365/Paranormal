@@ -72,7 +72,14 @@ public sealed class AdminBillingController : BenControllerBase
     private async Task<ActionResult<BillingLedgerEntryRecord>> RecordOrgEntryAsync(
         Guid orgId, BillingLedgerKind kind, RecordBillingEntryRequest request, CancellationToken ct)
     {
-        if (request.Amount <= 0) return BadRequest("The amount must be positive.");
+        // Zero is ALLOWED here, and only here (adjustments and payouts still demand a positive
+        // number). A 100%-off trial period costs nothing and still has to appear in the ledger:
+        // the row is how anyone later answers "what happened in September?" — and its description
+        // names the coupon that made it free. Refusing it left a three-month hole in the billing
+        // history of exactly the groups Ben is courting first (item 195, found 2026-08-26 while
+        // proving the trial before it goes on sale). Negative stays refused: a credit is an
+        // Adjustment with the credit flag, not a charge with a minus sign.
+        if (request.Amount < 0) return BadRequest("The amount cannot be negative; a credit is an adjustment.");
         if (string.IsNullOrWhiteSpace(request.Description))
             return BadRequest("A ledger row needs a description — an unexplained number is unanswerable later.");
 
