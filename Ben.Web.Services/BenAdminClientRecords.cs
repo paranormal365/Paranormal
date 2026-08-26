@@ -515,7 +515,45 @@ public sealed record OrgIncludedAreasItem(
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas, string? TierName);
 
 /// <summary>Per-area read verdicts for the caller in one group (item 156 Phase D).</summary>
-public sealed record MyOrgPermissionsItem(bool CanReadCases, bool CanReadInvestigations);
+/// <summary>
+/// What the signed-in person may do in one group, per area.
+/// </summary>
+/// <remarks>
+/// <para>Two read booleans until 2026-08-26, which was the whole of IH-03: a Case Manager holds
+/// create, update and delete on Cases, none of which this could carry, so no button could depend
+/// on the grant and an owner assigning roles saw nothing change.</para>
+///
+/// <para>Use <see cref="May"/> rather than reading the dictionary directly — it answers "no" for
+/// an area the server did not mention, which is the safe direction and keeps a call site working
+/// against an older server.</para>
+/// </remarks>
+public sealed record MyOrgPermissionsItem(
+    bool CanReadCases,
+    bool CanReadInvestigations,
+    IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null)
+{
+    /// <summary>Whether this person may take one action in one area.</summary>
+    /// <remarks>
+    /// Absent means NO. An affordance that appeared because the server said nothing would lead
+    /// somebody to a refusal, which is the failure this endpoint exists to prevent.
+    /// </remarks>
+    public bool May(Ben.Data.Common.Enums.OrganizationPermissionArea area,
+                    Ben.Data.Common.Enums.OrganizationSecurityAction action)
+    {
+        if (Areas is null || !Areas.TryGetValue(area, out var actions)) return false;
+        return action switch
+        {
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Create => actions.Create,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Read   => actions.Read,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Update => actions.Update,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Delete => actions.Delete,
+            _ => false,
+        };
+    }
+}
+
+/// <summary>What one person may do in one area.</summary>
+public sealed record OrgAreaActions(bool Create, bool Read, bool Update, bool Delete);
 
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
