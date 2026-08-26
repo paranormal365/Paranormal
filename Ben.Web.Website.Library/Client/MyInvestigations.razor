@@ -131,7 +131,7 @@
                                     @ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDate()
                                     @if (!ev.IsAllDay)
                                     {
-                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTime()</span>
+                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTimeNoSeconds()</span>
                                     }
                                 </div>
                             </div>
@@ -298,20 +298,30 @@
                         <span class="badge bg-secondary" style="font-size:.72rem;">@inv.AssignedRole</span>
                     }
                 </div>
+                @* IH-11: an investigation need not belong to a case, and the separators were
+                   rendered regardless — so a case-less visit opened with a dot in front of the
+                   group name, a delimiter for a field that was not there. *@
                 <div class="text-secondary small">
-                    <span class="font-monospace">@inv.CaseReference</span>
-                    <span class="mx-1">·</span>@inv.CaseTitle
-                    <span class="mx-1">·</span>
+                    @if (!string.IsNullOrWhiteSpace(inv.CaseReference))
+                    {
+                        <span class="font-monospace">@inv.CaseReference</span>
+                        <span class="mx-1">·</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(inv.CaseTitle))
+                    {
+                        @inv.CaseTitle
+                        <span class="mx-1">·</span>
+                    }
                     <strong @onclick:stopPropagation="true">
                         <OrgNameLink OrganizationId="@inv.OrgId" OrganizationName="@inv.OrgName" OrgUrlName="@inv.OrgUrlName" IsMember="true" />
                     </strong>
                 </div>
                 <div class="small mt-1">
                     <BenIcon Name="calendar" />
-                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
                     @if (inv.EndDateTime.HasValue)
                     {
-                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span>
+                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTimeNoSeconds()</span>
                     }
                 </div>
                 @if (!string.IsNullOrWhiteSpace(inv.Location))

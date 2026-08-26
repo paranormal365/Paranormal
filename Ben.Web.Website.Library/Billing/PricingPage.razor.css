@@ -1,0 +1,18 @@
+/* IH-10, Ben's 2026-08-26 sweep: the three pricing cards disagreed about where their feature
+   list began, because the notes above it are optional — Free carries an extra "Not included"
+   line, and Large group's "Unlimited pieces of equipment" wraps to two. Three different heights,
+   above the fold.
+
+   Reserving the slot is enough: every card keeps the same room for its notes whether it has any
+   or not, so the first feature row lands on the same line across all three. Two lines of small
+   text plus its margin. On a narrow screen the cards stack and there is nothing left to align,
+   so the reservation is dropped rather than leaving a gap under each price. */
+.pricing-notes {
+    min-height: 3.25rem;
+}
+
+@media (max-width: 767.98px) {
+    .pricing-notes {
+        min-height: 0;
+    }
+}

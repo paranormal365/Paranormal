@@ -124,6 +124,23 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayTime(this DateTime local) =>
         local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// A scheduled moment, without seconds.
+    /// </summary>
+    /// <remarks>
+    /// IH-11, Ben's 2026-08-26 sweep: a visit scheduled through a picker that offers no seconds
+    /// was displayed as "12:44:44 PM". The seconds are not a detail, they are noise — nobody
+    /// entered them and they never mean anything. Use these for anything a person SCHEDULED;
+    /// keep the second-precision versions for logs and audit trails, where they do mean
+    /// something.
+    /// </remarks>
+    public static string ToDisplayDateTimeNoSeconds(this DateTime local) =>
+        local.ToString(DateTimeNoSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <inheritdoc cref="ToDisplayDateTimeNoSeconds(DateTime)"/>
+    public static string ToDisplayTimeNoSeconds(this DateTime local) =>
+        local.ToString("hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
 
