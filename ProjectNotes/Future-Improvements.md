@@ -9852,8 +9852,16 @@ public cases anywhere — the filter lives only in the wizard, which is about so
 Five tests pin the batched resolver to the single-group one, including all three fail-open cases
 (no tiers, no exclusion row, empty list). Verified live on the anonymous path.
 
-**Still open from the notes below:** promoting paid groups in ORDER (they are only badged, not
-sorted), and the same treatment on `/organizations` browse if it ever grows a public face.
+**Promotion in ORDER, added the same day.** Paid groups lead — but only WITHIN a range bucket,
+never across one. Promoting globally would put a paid group forty miles away above a free one down
+the road: worse for the searcher, and the pay-to-win shape that makes a directory untrustworthy.
+Inside a bucket every group is equally reachable, so leading with the ones that can actually take
+the case is a service rather than a tax. On the browse listing the promotion is applied within the
+page the database already chose, because a group's visibility should not depend on how somebody
+paged to it. Two tests pin it, including the boundary: a free group IN range still outranks a paid
+group out of it.
+
+**Still open:** the same treatment on `/organizations` if it ever grows a public face.
 
 - **Tie the highlight to the paid tier itself**, not to a new "featured" flag. Otherwise there are
   two competing notions of prominence the moment paid placement arrives (item 143).
