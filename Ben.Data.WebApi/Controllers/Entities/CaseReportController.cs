@@ -34,7 +34,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var reports = await db.CaseReports.AsNoTracking()
@@ -50,7 +50,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = await db.CaseReports.AsNoTracking()
@@ -69,7 +69,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = new CaseReport
@@ -90,7 +90,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = await db.CaseReports
@@ -119,7 +119,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = await db.CaseReports
@@ -172,7 +172,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Delete, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = await db.CaseReports.FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
@@ -191,7 +191,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (!await db.CaseReports.AnyAsync(r => r.Id == id && r.CaseId == caseId, ct)) return NotFound();
 
@@ -212,7 +212,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var section = await db.CaseReportSections
@@ -231,7 +231,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var section = await db.CaseReportSections.FirstOrDefaultAsync(s => s.Id == sectionId && s.CaseReportId == id, ct);
@@ -246,7 +246,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (!await db.CaseReportSections.AnyAsync(s => s.Id == sectionId && s.CaseReportId == id, ct)) return NotFound();
         var file = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == request.UploadFileId, ct);
@@ -268,7 +268,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var link = await db.CaseReportSectionFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.CaseReportSectionId == sectionId, ct);
         if (link is null) return NotFound();
@@ -295,7 +295,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var sessions = await db.FieldSessionUploads.AsNoTracking()
@@ -318,7 +318,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (!await db.CaseReportSections.AnyAsync(s => s.Id == sectionId && s.CaseReportId == id, ct)) return NotFound();
 
@@ -370,7 +370,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var link = await db.CaseReportSectionFieldSessions
@@ -389,7 +389,7 @@ public sealed class CaseReportController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var report = await db.CaseReports.AsNoTracking()
@@ -428,11 +428,25 @@ public sealed class CaseReportController : BenControllerBase
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
-    private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+    /// <summary>Whether the caller may take <paramref name="action"/> on this group's cases.</summary>
+    /// <remarks>
+    /// <para><b>Was <c>IsOrgMember</c>, and asked <c>Case.Read</c> for all sixteen endpoints</b> —
+    /// including <see cref="Publish"/>, which is what puts a report in front of the client, and
+    /// <see cref="Delete"/>. Anyone who could read a case could write the group's findings, publish
+    /// them to the client under the group's name, and delete published reports.</para>
+    ///
+    /// <para>Found sweeping the client-facing surfaces on Ben's prompt, 2026-08-26. The name is
+    /// most of why it survived review: a helper called "is org member" reads as a belonging check,
+    /// so nobody asked what it permitted. It is named for the question it answers now.</para>
+    ///
+    /// <para><b>Publishing is Update, not Create.</b> It changes an existing report's state rather
+    /// than making a new one, and there is no separate publish action to grant. A member who may
+    /// only read the case now sees reports and cannot write, publish or delete them.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, OrganizationSecurityAction action, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
-        || await _security.HasAccessAsync(userId, orgId,
-               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
-               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId, OrganizationPermissionArea.Cases, action, ct);
 
     private static CaseReportDetail ToDetail(CaseReport r) => new(
         r.Id, r.CaseId, r.Title, r.Summary, r.Conclusion, r.Status,

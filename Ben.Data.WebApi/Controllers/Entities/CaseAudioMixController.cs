@@ -45,7 +45,7 @@ public sealed class CaseAudioMixController : BenControllerBase
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
 
         var caseFileIds = request.Tracks.Select(t => t.CaseFileId).ToHashSet();
@@ -142,10 +142,15 @@ public sealed class CaseAudioMixController : BenControllerBase
         });
     }
 
-    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
-    private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+    /// <summary>Whether the caller may take <paramref name="action"/> on this group's cases.</summary>
+    /// <remarks>
+    /// The single endpoint here renders a mix and ATTACHES it to the case as a new file, so it
+    /// needs the grant a case-file upload needs. It asked <c>Case.Read</c> under the name
+    /// <c>IsOrgMember</c>, which is how a read-only member could add files to a case through the
+    /// mixer after the front door was locked.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
-        || await _security.HasAccessAsync(userId, orgId,
-               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
-               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId, Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
 }

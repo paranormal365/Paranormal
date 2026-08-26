@@ -52,7 +52,7 @@ public sealed class CaseResearchController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var maxOrder = await db.CaseResearchEntries.Where(e => e.CaseId == caseId).MaxAsync(e => (int?)e.SortOrder, ct) ?? 0;
@@ -79,7 +79,7 @@ public sealed class CaseResearchController : BenControllerBase
         if (file.Length == 0) return BadRequest("File is empty.");
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
@@ -132,7 +132,7 @@ public sealed class CaseResearchController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Update, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entry = await db.CaseResearchEntries.Include(e => e.UploadFile)
@@ -153,7 +153,7 @@ public sealed class CaseResearchController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entry = await db.CaseResearchEntries.Include(e => e.UploadFile)
@@ -170,6 +170,22 @@ public sealed class CaseResearchController : BenControllerBase
     }
 
     // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
+    /// <summary>
+    /// May the caller take this action here?
+    /// </summary>
+    /// <remarks>
+    /// Create, update and delete used to ask for Case.READ — through a helper named for
+    /// membership, which is neither what it asked nor what it meant: anybody who could SEE a case
+    /// could destroy the things hanging off it. Survivable while every member was auto-granted
+    /// case read; not survivable now that Ben ended the grandfathering (2026-08-26) and a read
+    /// grant is a deliberate act. Owners and administrators still pass above this.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
+
     private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
         || await _security.HasAccessAsync(userId, orgId,

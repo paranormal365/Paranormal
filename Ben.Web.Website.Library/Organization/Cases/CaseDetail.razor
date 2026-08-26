@@ -86,7 +86,13 @@
                     <BenIcon Name="help-circle" />
                     <span class="visually-hidden">How cases go public</span>
                 </button>
-                <button type="button" id="case-edit" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
+                @* IH-03 step 2: the same Cases.Update grant CaseController checks on PUT. A
+                   member who cannot edit is no longer shown the door to a refusal. *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)
+                {
+                    <button type="button" id="case-edit" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
+                }
             </div>
         </div>
 
@@ -240,7 +246,7 @@
             @* ── Files ─────────────────────────────────────────────────────── *@
             <BenTab Title="Files" Id="files">
                 <div class="mt-2">
-                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
 
@@ -270,13 +276,13 @@
             @* ── Research ─────────────────────────────────────────────────────── *@
             <BenTab Title="Research" Id="research">
                 <div class="mt-2">
-                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@
             <BenTab Title="Notes" Id="notes">
                 <div class="mt-2">
-                    <CaseNotes OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseNotes OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
 
@@ -513,6 +519,10 @@
     private bool _editIsPublic;
     private bool _editIsPrivate;
 
+    /// <summary>What this viewer may do with cases in this group (IH-03 step 2).</summary>
+    /// <remarks>Fails closed: an unknown verdict hides the control rather than offering it.</remarks>
+    private MyOrgPermissionsItem? _perms;
+
     /// <summary>Whether the group's plan covers private-residence work (item 193).</summary>
     /// <remarks>
     /// Starts TRUE and is narrowed by what the server says, matching the server's own fail-open
@@ -566,13 +576,15 @@
         // Item 193: what the PLAN allows, fetched beside the case so the private-engagement
         // toggle can say what it will do before somebody uses it. A failure here leaves the
         // control enabled — the same fail-open rule the server applies to capabilities.
+        // One fetch answers both questions this screen asks: what the PERSON may do, and what the
+        // group's PLAN allows. They fail in opposite directions on purpose — see PlanIncludes.
         try
         {
-            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
-            _planIncludesPrivate = perms?.PlanIncludes(
+            _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _planIncludesPrivate = _perms?.PlanIncludes(
                 Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases) ?? true;
         }
-        catch { _planIncludesPrivate = true; }
+        catch { _perms = null; _planIncludesPrivate = true; }
 
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }

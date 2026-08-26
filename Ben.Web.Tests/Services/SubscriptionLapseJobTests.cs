@@ -111,6 +111,94 @@ public sealed class SubscriptionLapseJobTests
         Assert.Equal(1, toClient);
     }
 
+    /// <summary>
+    /// Attaches a primary client to the active case — the person who submitted the request.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately given NO <c>CaseClientAccess</c> row, because the real primary client has
+    /// none: that table holds co-clients, added by invitation. Seeding one would model a world
+    /// where the bug cannot happen.
+    /// </remarks>
+    private static async Task<Guid> AttachPrimaryClientAsync(World w)
+    {
+        var primaryId = Guid.NewGuid();
+        await using var db = await w.F.CreateDbContextAsync();
+        db.Users.Add(new AppUser
+        {
+            Id = primaryId, UserName = "primary@t.com", Email = "primary@t.com",
+            DateCreated = DateTime.UtcNow,
+        });
+        var request = new ClientRequest
+        {
+            Id = Guid.NewGuid(), AppUserId = primaryId, Status = ClientRequestStatus.Assigned,
+            StreetAddress1 = "1 Main", City = "N", State = "TN", ZipCode = "1", Country = "US",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = primaryId,
+        };
+        db.ClientRequests.Add(request);
+        var theCase = await db.Cases.SingleAsync(c => c.Id == w.ActiveCaseId);
+        theCase.ClientRequestId = request.Id;
+        await db.SaveChangesAsync();
+        return primaryId;
+    }
+
+    /// <summary>
+    /// The client whose case it is hears about the pause — not just invited co-clients.
+    /// </summary>
+    /// <remarks>
+    /// Both notices read <c>CaseClientAccesses</c> alone, so the primary client — the person who
+    /// opened the case and whose home is being investigated — was told nothing, and a case with no
+    /// co-clients notified nobody while the job reported success. Ben asked whether a lapse still
+    /// pauses and notifies; it paused.
+    /// </remarks>
+    [Fact]
+    public async Task The_lapse_messages_the_primary_client_not_only_co_clients()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        var primaryId = await AttachPrimaryClientAsync(w);
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == primaryId));
+        Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == w.ClientId));
+    }
+
+    /// <summary>A case whose only client is the primary one still reaches somebody.</summary>
+    [Fact]
+    public async Task A_case_with_no_co_clients_still_notifies_its_client()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        var primaryId = await AttachPrimaryClientAsync(w);
+
+        // Remove the invited co-client: the ordinary shape is one client and no invitations.
+        await using (var seed = await w.F.CreateDbContextAsync())
+        {
+            seed.CaseClientAccesses.RemoveRange(seed.CaseClientAccesses);
+            await seed.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == primaryId));
+    }
+
+    /// <summary>The thirty-day reassignment offer reaches the primary client too.</summary>
+    [Fact]
+    public async Task The_stranded_notice_reaches_the_primary_client()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        var primaryId = await AttachPrimaryClientAsync(w);
+
+        await Job(w.F).RunAsync(default);          // lapse + pause
+        await MakeLapsedAsync(w, daysAgo: 31);
+        await Job(w.F).RunAsync(default);          // the stranded-client pass
+
+        await using var db = await w.F.CreateDbContextAsync();
+        // One for the pause, one for the offer to move.
+        Assert.Equal(2, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == primaryId));
+    }
+
     /// <summary>Running the job twice cannot lapse twice — the second pass finds nothing Active.</summary>
     [Fact]
     public async Task The_lapse_is_idempotent()
