@@ -96,6 +96,72 @@ public static class TierAreaResolution
         return (resolved.Id, resolved.Name);
     }
 
+    /// <summary>
+    /// Which of <paramref name="organizationIds"/> hold <paramref name="capability"/> — resolved
+    /// for a whole listing in a fixed number of queries.
+    /// </summary>
+    /// <remarks>
+    /// <para>Same rules as <see cref="HasCapabilityAsync"/>, including fail-open: a group with no
+    /// resolvable tier, or a tier with no exclusion row, HOLDS the capability. Only a checklist
+    /// that says so refuses.</para>
+    ///
+    /// <para>Exists because item 194 puts the answer on every card in the group finder, and asking
+    /// per card is the N+1 that turns a browse page into forty round trips. The per-group method
+    /// stays for the single-group questions the gates ask.</para>
+    /// </remarks>
+    public static async Task<HashSet<Guid>> WithCapabilityAsync(
+        BenDataContext db, IReadOnlyCollection<Guid> organizationIds,
+        TierCapability capability, CancellationToken ct = default)
+    {
+        var holders = new HashSet<Guid>(organizationIds);
+        if (organizationIds.Count == 0) return holders;
+
+        var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
+        var tiersUsable = tiers.Count > 0 && SubscriptionTierResolver.Validate(tiers) is null;
+
+        // The tier each group actually answers to: its subscription's, else its member band.
+        var subs = await db.OrganizationSubscriptions.AsNoTracking()
+            .Where(s => organizationIds.Contains(s.OrganizationId))
+            .OrderByDescending(s => s.DateCreated)
+            .Select(s => new { s.OrganizationId, s.SubscriptionTierId })
+            .ToListAsync(ct);
+        var tierByOrg = subs
+            .GroupBy(s => s.OrganizationId)
+            .Where(g => g.First().SubscriptionTierId is not null)
+            .ToDictionary(g => g.Key, g => g.First().SubscriptionTierId!.Value);
+
+        if (tiersUsable)
+        {
+            var needBand = organizationIds.Where(id => !tierByOrg.ContainsKey(id)).ToList();
+            if (needBand.Count > 0)
+            {
+                var counts = await db.OrganizationUserMemberships.AsNoTracking()
+                    .Where(m => needBand.Contains(m.OrganizationId) && m.IsActive)
+                    .GroupBy(m => m.OrganizationId)
+                    .Select(g => new { OrganizationId = g.Key, Count = g.Count() })
+                    .ToListAsync(ct);
+                var countByOrg = counts.ToDictionary(c => c.OrganizationId, c => c.Count);
+
+                foreach (var id in needBand)
+                    tierByOrg[id] = SubscriptionTierResolver
+                        .Resolve(tiers, countByOrg.TryGetValue(id, out var n) ? n : 0).Id;
+            }
+        }
+
+        if (tierByOrg.Count == 0) return holders;   // nothing resolvable: everyone holds it
+
+        var excludedTiers = await db.SubscriptionTierExcludedCapabilities.AsNoTracking()
+            .Where(c => c.Capability == capability
+                     && tierByOrg.Values.Contains(c.SubscriptionTierId))
+            .Select(c => c.SubscriptionTierId)
+            .ToHashSetAsync(ct);
+
+        foreach (var (orgId, tierId) in tierByOrg)
+            if (excludedTiers.Contains(tierId)) holders.Remove(orgId);
+
+        return holders;
+    }
+
     /// <summary>Whether one table's area is included. User-scoped tables are never tier-gated.</summary>
     public static async Task<bool> IsIncludedAsync(
         BenDataContext db, Guid organizationId, OrganizationSecurityTable table, CancellationToken ct = default)

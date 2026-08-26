@@ -100,6 +100,15 @@ public sealed class PublicOrganizationSearchController : ControllerBase
             .Select(r => r with { SortKey = 0 })      // strip internal sort key before returning
             .ToList();
 
+        // Item 194: whether each group may take private-residence work, resolved once for the
+        // whole result set rather than per card.
+        var canPrivate = await Ben.Data.Source.Services.TierAreaResolution.WithCapabilityAsync(
+            db, ordered.Select(r => r.OrganizationId).ToList(),
+            Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases, ct);
+        ordered = ordered
+            .Select(r => r with { TakesPrivateResidenceCases = canPrivate.Contains(r.OrganizationId) })
+            .ToList();
+
         return Ok(ordered);
     }
 
@@ -162,6 +171,15 @@ public sealed class PublicOrganizationSearchController : ControllerBase
                 o.RunsPublicTours))
             .ToListAsync(ct);
 
+        // One resolution for the whole page (item 194) — asking per card is the N+1 that turns a
+        // browse into forty round trips.
+        var canPrivate = await Ben.Data.Source.Services.TierAreaResolution.WithCapabilityAsync(
+            db, items.Select(i => i.OrganizationId).ToList(),
+            Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases, ct);
+        items = items
+            .Select(i => i with { TakesPrivateResidenceCases = canPrivate.Contains(i.OrganizationId) })
+            .ToList();
+
         return Ok(new OrgBrowsePage(items, total, page, pageSize));
     }
 
@@ -193,7 +211,16 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId,
-    [property: System.Text.Json.Serialization.JsonIgnore] double SortKey);
+    [property: System.Text.Json.Serialization.JsonIgnore] double SortKey,
+    /// <summary>
+    /// Whether this group's plan lets it take private-residence work (item 194).
+    /// </summary>
+    /// <remarks>
+    /// Somebody with a haunted HOME needs this before they choose, not after: the transfer gate
+    /// already refuses the wrong group politely, but only once they have picked one. Fail-open
+    /// like every capability — a group with no resolvable tier reads as able.
+    /// </remarks>
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>
 /// One organization in the location-free browse listing.
@@ -216,7 +243,9 @@ public sealed record OrgBrowseResult(
     /// <summary>What this group primarily is (2026-08-24) — the badge on its card.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     /// <summary>Whether it runs public walking tours, whatever kind it primarily is.</summary>
-    bool RunsPublicTours = false);
+    bool RunsPublicTours = false,
+    /// <summary>Whether this group's plan lets it take private-residence work (item 194).</summary>
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>
 public sealed record OrgBrowsePage(
