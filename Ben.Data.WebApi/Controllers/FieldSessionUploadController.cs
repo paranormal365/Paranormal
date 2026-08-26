@@ -140,6 +140,13 @@ public sealed class FieldSessionUploadController : BenControllerBase
     }
 
     /// <summary>Streams one of a session's recordings.</summary>
+    /// <remarks>
+    /// Outside the rate limiter for the same reason as the upload-file routes: the website
+    /// fetches these for the viewer, so every visitor's recordings share one partition, and a
+    /// replay page asking for several at once could exhaust the allowance for the whole site.
+    /// Read-only, and already gated on access to the investigation.
+    /// </remarks>
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
     [HttpGet("{sessionId:guid}/files/{fileId:guid}")]
     public async Task<IActionResult> GetFile(Guid sessionId, Guid fileId, CancellationToken ct)
     {

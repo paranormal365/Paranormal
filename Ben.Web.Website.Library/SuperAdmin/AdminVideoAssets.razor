@@ -5,6 +5,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
@@ -243,20 +244,17 @@
     /// endpoint is anonymous, but the source file may not be — going through the client keeps
     /// this working either way.
     /// </summary>
-    private async Task LoadThumbsAsync()
+    private Task LoadThumbsAsync()
     {
+        // A URL per row, not a file per row. This loop had no bound on it: every video asset in
+        // the library was pulled into the SERVER and base64'd, and video assets are the largest
+        // files the site holds. The browser fetches these itself now, and caches them.
         foreach (var a in _assets ?? [])
         {
-            var fileId = a.ThumbnailUploadFileId ?? a.UploadFileId;
             if (_thumbs.ContainsKey(a.Id)) continue;
-            try
-            {
-                var file = await AdminClient.GetFileDataAsync(fileId);
-                if (file is { } f)
-                    _thumbs[a.Id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
-            }
-            catch { /* the row still lists without a preview */ }
+            _thumbs[a.Id] = MediaUrls.Thumbnail(a.ThumbnailUploadFileId ?? a.UploadFileId);
         }
+        return Task.CompletedTask;
     }
 
     private async Task PublishAsync()

@@ -9,6 +9,7 @@
 @namespace Ben.Web.Website.Library.Manage.Media
 @implements IAsyncDisposable
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IJSRuntime JS
 @inject BenToastService Toasts
 @using System.Text.Json
@@ -236,17 +237,13 @@
         _module    ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
         _dotNetRef ??= DotNetObjectReference.Create(this);
 
-        // The UploadFile download endpoint is [Authorize]-protected, so Fabric.js's own
-        // fromURL() (a plain, unauthenticated browser image load) can never fetch it —
-        // fetch the bytes server-side over the authenticated HttpClient instead and hand
-        // the canvas a base64 data URL, matching UserMediaPreview/AudioFilePreview's pattern.
-        string? imageUrl = ImageUrl;
-        if (imageUrl is null)
-        {
-            var result = await AdminClient.GetFileDataAsync(UploadFileId);
-            if (result is not null)
-                imageUrl = $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
-        }
+        // The note that used to sit here was right at the time: the download endpoint is
+        // [Authorize]-protected, so Fabric's own fromURL() — a plain, unauthenticated image load —
+        // could not fetch it, and the bytes were pulled server-side instead. There is now a
+        // media URL that carries the viewer's identity, so the canvas can load the image
+        // directly and this process never holds a copy of it. An image being edited is a full-
+        // size photograph, which made this one of the more expensive instances of that pattern.
+        var imageUrl = ImageUrl ?? MediaUrls.Download(UploadFileId);
         var editState = (string?)null;
 
         await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);

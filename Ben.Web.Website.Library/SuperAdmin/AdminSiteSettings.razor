@@ -2,6 +2,7 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject SiteFeaturesProvider Features
@@ -220,13 +221,9 @@
         _avatarPreviews.Remove(key);
         var raw = _settings?.FirstOrDefault(s => s.Key == key)?.Value;
         if (!Guid.TryParse(raw, out var fileId)) return;
-        try
-        {
-            var file = await AdminClient.GetFileDataAsync(fileId);
-            if (file is { } f)
-                _avatarPreviews[key] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
-        }
-        catch { /* leaves the "doesn't resolve" warning showing, which is the useful signal */ }
+        // A URL the browser fetches. Only a handful of avatars, so this was never heavy — but
+        // there is no reason to route an image through the server to show it.
+        _avatarPreviews[key] = MediaUrls.Thumbnail(fileId);
     }
 
     /// <summary>Ceiling for the default avatar image. Matches the profile-photo limit.</summary>

@@ -9552,3 +9552,64 @@ luma/motion feature extraction sharing the screener's sampled frames; APNs feed 
 for the iOS app (needs server device-token registry); universal links incl. /attending/{token}
 (needs AASA hosting); the iOS app's feed fixtures must be re-captured before its Slice 3
 (FeedPostRecord grew: categories, badges, attribution).
+
+## 187. The dev WebApi dies under load — .NET's IPv6 accept path on macOS (found 2026-08-25)
+
+**Symptom.** The local WebApi process disappears during long test runs. Nothing in the
+application log explains it; the last thing written is an ordinary request. What follows in the
+suite is a spray of unrelated-looking failures — "sign-in never left the login page", "no
+equipment categories in the taxonomy", timeouts, `ECONNREFUSED ::1:5252` — none of which name the
+real cause. It killed the API **nine times** during one full Playwright run and invalidated two
+runs before the pattern was recognised.
+
+**What it actually is:**
+
+```
+Unhandled exception. System.ArgumentException: The supplied System.Net.SocketAddress is an
+invalid size for the System.Net.IPEndPoint end point. (Parameter 'socketAddress')
+   at System.Net.IPEndPoint.Create(SocketAddress socketAddress)
+   at System.Net.Sockets.SocketAsyncEventArgs.FinishOperationSyncSuccess(...)
+   at System.Net.Sockets.SocketAsyncContext.AcceptOperation.InvokeCallback(...)
+   at System.Threading.PortableThreadPool.WorkerThread.WorkerThreadStart()
+```
+
+A .NET runtime bug on macOS in the **socket accept** path — below Kestrel, below any middleware,
+below anything we wrote. It surfaces on a threadpool thread, so it is unhandled by construction
+and takes the process down; no `try`/`catch` of ours can be in the way of it. Reported upstream
+as [dotnet/runtime#102663](https://github.com/dotnet/runtime/issues/102663) (and #40913 in CI),
+and it has bitten other .NET servers on Apple Silicon —
+[Jellyfin #16265](https://github.com/jellyfin/jellyfin/issues/16265),
+[Kavita #2996](https://github.com/Kareadita/Kavita/issues/2996). Reports associate it with
+IPv6/dual-stack endpoints, and specifically with *several services on one machine talking to each
+other over different ports* — which is exactly this repo's local shape (website 5078 → API 5252,
+plus the WASM host on 5180). Observed on .NET SDK 10.0.301 / runtime 10.0.9.
+
+**What was done about it (2026-08-25):**
+
+- **The dev start scripts now bind `http://127.0.0.1:5252` instead of `http://localhost:5252`.**
+  `localhost` makes Kestrel open an IPv4 *and* an IPv6 listener; binding the address directly
+  leaves only IPv4, so the faulting accept path is never taken. Verified: a single IPv4 listener,
+  and clients asking for `localhost:5252` still get 200 — curl and Chromium both fall back from
+  `::1` to `127.0.0.1`. A 34-test API-heavy Playwright slice passes against it.
+- **`scripts/dev-api-supervisor.sh`** restarts the API if it dies anyway, for full-suite runs.
+  Check `grep -c restarting /tmp/ben-api-supervisor.log` afterwards: **a run with restarts in it
+  is a run whose failures cannot be trusted.** Both invalid runs on 2026-08-25 looked like real
+  failures until that was checked.
+- `DOTNET_SYSTEM_NET_DISABLEIPV6=1` was tried first and does **not** help: Kestrel still opens
+  both listeners for a `localhost` binding. Recorded so nobody spends the time twice.
+
+**What is left open:**
+
+- The website (5078) and the WASM host (5180) still bind `localhost` and so still have an IPv6
+  listener. Neither has been seen to crash — every observed crash was the API, which takes by far
+  the most connections — but the exposure is identical and the same one-word change would remove
+  it.
+- **UAT/production are unaffected**: Windows/IIS, not macOS Kestrel-on-loopback. This is a local
+  development problem, which is precisely why it is easy to keep re-diagnosing as "flaky tests".
+- Worth re-testing on a later .NET 10 patch and dropping the workaround if upstream fixes it. The
+  same class of bug was fixed once before, in 9.0.2, and evidently returned.
+
+**The lesson worth keeping**, independent of the bug: a suite failure whose message is about
+sign-in, or empty data, or a timeout, may be a *dead dependency* wearing a costume. Check the
+hosts are alive before believing any of it.
+

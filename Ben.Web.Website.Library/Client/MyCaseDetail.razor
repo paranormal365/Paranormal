@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
@@ -1336,20 +1337,21 @@
         StateHasChanged();
     }
 
-    /// <summary>Fetches thumbnails for any witness photos not already cached.</summary>
-    private async Task LoadPersonPhotosAsync()
+    /// <summary>Points each witness photo at a URL the browser fetches.</summary>
+    /// <remarks>
+    /// This used to pull every related person's photo into the SERVER as base64 — a loop with no
+    /// bound on it, so a case with a dozen witnesses meant a dozen full-size images held in this
+    /// process. No bytes are fetched here now; the browser asks for a thumbnail per photo and
+    /// caches it.
+    /// </remarks>
+    private Task LoadPersonPhotosAsync()
     {
         foreach (var id in _relatedPeople.Select(p => p.UploadFileId).OfType<Guid>().Distinct())
         {
             if (_personPhotos.ContainsKey(id)) continue;
-            try
-            {
-                var file = await AdminClient.GetFileDataAsync(id);
-                if (file is { } f)
-                    _personPhotos[id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
-            }
-            catch { /* a missing thumbnail is not worth failing the page over */ }
+            _personPhotos[id] = MediaUrls.Thumbnail(id);
         }
+        return Task.CompletedTask;
     }
 
     private Task<LoadResult<CaseMessageRecord>> LoadClientMessages()
