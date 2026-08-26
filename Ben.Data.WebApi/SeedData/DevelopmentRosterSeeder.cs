@@ -675,8 +675,14 @@ internal static class DevelopmentRosterSeeder
         var memberships = await db.OrganizationUserMemberships
             .Where(m => m.IsActive
                      && seededUserIds.Contains(m.AppUserId)
+                     // Owners and admins bypass grants; Viewers are DEFINED by holding none —
+                     // Victor Reyes exists precisely so a role-less Viewer seat is always there,
+                     // and the first version of this filter handed him the Investigator Role,
+                     // which put case banners in front of the one seat that must never see them
+                     // (the action-needed banner e2e caught it).
                      && m.Role != OrganizationMemberRole.Owner
-                     && m.Role != OrganizationMemberRole.Administrator)
+                     && m.Role != OrganizationMemberRole.Administrator
+                     && m.Role != OrganizationMemberRole.Viewer)
             .Select(m => new { m.Id, m.OrganizationId })
             .ToListAsync();
 
