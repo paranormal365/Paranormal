@@ -257,4 +257,39 @@ public class OrganizationSecurityServiceQuestionsTests
             "these areas map to no table, so no grant in them can ever be true: "
             + string.Join(", ", orphans));
     }
+
+    /// <summary>
+    /// The table-based check keeps table, action, person and organization apart.
+    /// </summary>
+    /// <remarks>
+    /// <para>Written while <c>HasAccessAsync</c> was briefly cached, and kept after that was
+    /// reverted — the assertions are about the ANSWERS, not the mechanism, and they are worth
+    /// having either way.</para>
+    ///
+    /// <para>Why the caching went: <c>PhaseDFlipTests</c> grants a role and re-asks within one
+    /// scope, and got the cached "no" from before the grant. See the remarks on
+    /// <c>HasAccessAsync</c> — a request that changes access and then acts on it is a normal
+    /// shape, so this is the one that must stay uncached until invalidation exists.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheTableCheck_KeepsTableAndActionApart()
+    {
+        var w = await SeedAsync();
+        var service = Build(w.Factory);
+
+        // Granted: Case + Create. Everything else about this person is false.
+        Assert.True(await service.HasAccessAsync(
+            w.GrantedId, w.OrgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Create));
+        Assert.True(await service.HasAccessAsync(
+            w.GrantedId, w.OrgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Create));
+
+        Assert.False(await service.HasAccessAsync(
+            w.GrantedId, w.OrgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Delete));
+        Assert.False(await service.HasAccessAsync(
+            w.GrantedId, w.OrgId, OrganizationSecurityTable.Investigation, OrganizationSecurityAction.Create));
+        Assert.False(await service.HasAccessAsync(
+            w.MemberId, w.OrgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Create));
+        Assert.False(await service.HasAccessAsync(
+            w.GrantedId, Guid.NewGuid(), OrganizationSecurityTable.Case, OrganizationSecurityAction.Create));
+    }
 }

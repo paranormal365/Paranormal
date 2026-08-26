@@ -62,6 +62,27 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             .ToListAsync(token);
     }
 
+    /// <summary>
+    /// Deliberately NOT cached, unlike the three questions below.
+    /// </summary>
+    /// <remarks>
+    /// <para>Caching this was tried on 2026-08-26 and reverted the same hour. It is the call
+    /// seventy-odd endpoints already make, so caching it looked like the change with the best
+    /// return and no call-site churn — and <c>PhaseDFlipTests</c> failed immediately, because it
+    /// grants a role and re-asks <b>within one scope</b>. The cached "no" from before the grant
+    /// was still there.</para>
+    ///
+    /// <para>The test was right and the cache was wrong. A request that CHANGES somebody's access
+    /// and then acts on it is not exotic — accepting a membership application, adding a role
+    /// member, creating an organization and then reading it back all have that shape. A stale
+    /// refusal is safer than a stale grant, but it is still a bug, and one that would appear only
+    /// in the request that just changed something.</para>
+    ///
+    /// <para>The three questions below ARE cached because they serve read paths — a screen asking
+    /// what to draw, many times, while changing nothing. If this one is ever worth caching, it
+    /// needs explicit invalidation wherever grants, role memberships or memberships are written,
+    /// and that list has to be complete or the bug comes back quietly.</para>
+    /// </remarks>
     public async Task<bool> HasAccessAsync(Guid appUserId, Guid organizationId, OrganizationSecurityTable tableName, OrganizationSecurityAction actionName, CancellationToken token = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
