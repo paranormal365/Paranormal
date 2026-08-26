@@ -9799,3 +9799,64 @@ Two things worth doing before any of it:
 ishaunted.com shows "File data is unavailable" for files uploaded on the Mac. Whatever storage
 plan is chosen should say plainly which machines share which file store.
 
+## 193. The private-engagement toggle is offered to groups whose plan refuses it (found 2026-08-26)
+
+The "Private engagement" checkbox on the case editor renders unconditionally. A free-tier group can
+tick it, save, and get a 400 back from `PrivateCaseGate`. The help text beside it does say a plan is
+required — but the control is live, so the only way to learn is to try.
+
+This is IH-03's shape inverted: not an invisible grant, but a **visible control that always fails**.
+Both come from the same root, a UI that cannot see what the server will allow.
+
+The fix is now cheap, because the widened `my-permissions` endpoint tells the browser what the plan
+includes: disable the toggle, and say why beside it rather than after the attempt. Folded into the
+step-2 work on `feature/role-grants-visible`.
+
+Worth checking the same pattern elsewhere while there: anything gated by `TierCapability` almost
+certainly renders the same way, since none of it could see the plan until now.
+
+## 194. A client cannot tell which groups may take their case until after they pick one (found 2026-08-26)
+
+The gate works — `MyCaseController` refuses a transfer to a group whose plan does not cover
+private-residence work, with "Pick a different group, or ask them about upgrading." But `/find` and
+the request-an-investigation flow surface **nothing**. Somebody with a haunted house browses groups,
+chooses one, and only then learns that group cannot take their case.
+
+Backwards, and avoidable: the capability is knowable when the list is built.
+
+**Ben's direction (2026-08-26):** show it on the card, and make paid groups stand out — a colour
+for groups that can take private work, plain for free-tier ones, with the free ones noted as
+public-investigations-only.
+
+Design notes for whoever builds it:
+
+- **Say what a free group CAN do**, not what it lacks. "Public investigations only" is a fact;
+  greyed-and-diminished reads as a punishment, and these are the early adopters.
+- **Filter, don't only tint.** Somebody requesting an investigation of their HOME should have
+  free-tier groups filtered out by default, with an explicit "show groups that cannot take private
+  cases" escape. That answers their actual question rather than decorating it.
+- **Do not hard-block selection everywhere.** A free group can still take a public case — a ghost
+  walk, a public building. Block it for a private-residence REQUEST, which is the only place the
+  plan is relevant.
+- **Tie the highlight to the paid tier itself**, not to a new "featured" flag. Otherwise there are
+  two competing notions of prominence the moment paid placement arrives (item 143).
+
+## 195. Verify a 100%-off trial end to end before September (Ben, 2026-08-26)
+
+Ben plans to start taking groups on 1 September and wants to offer a three-month trial of the paid
+tier. **The coupon machinery already expresses this**: `CouponDuration.Repeating` with
+`DurationPeriods = 3` and `PercentOff = 100`, plus `ValidFromUtc` (1 September), `RedeemByUtc` to
+close the window, `MaxRedemptions` to cap it, `AppliesToInterval` for monthly-only, and
+`CouponKind` batch codes if each group should get its own.
+
+Nothing needs building. Two things need PROVING, because both are the kind of edge that is only
+discovered by a customer:
+
+1. **A zero-value period all the way through.** 100% off means an invoice for nothing — through the
+   append-only ledger (item 168), the frozen tax line, and the receipt. A zero-value invoice is
+   exactly the case a billing path forgets.
+2. **What happens in month four.** The group should meet the renewal notice that already exists,
+   not a surprise charge. The trial ending is the moment the relationship is won or lost.
+
+Both are testable today against the seeded billing demo data.
+
