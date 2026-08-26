@@ -9,25 +9,32 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Ben.Data.WebApi.SeedData;
 
 /// <summary>
-/// Backfills the seven default roles for organizations that predate item 156 Phase C, and runs
-/// the one-time grandfathering Ben approved for Phase D's enforcement flip.
+/// Backfills the seven default roles for organizations that have none.
 /// </summary>
 /// <remarks>
 /// <para><b>Backfill:</b> a group with ANY roles is left entirely alone (its role list is its
-/// own); a group with none gets the seven defaults.</para>
+/// own); a group with none gets the seven defaults. Roles are CREATED here; nobody is put in
+/// them.</para>
 ///
-/// <para><b>Grandfathering, once per group:</b> when Phase D flips enforcement, ordinary members
-/// lose the historical is-member case visibility unless something bridges them. The bridge is an
-/// <b>Investigator Role</b> (Cases + Investigations Read) created here and assigned to every
-/// ACTIVE non-admin member the group has at that moment. The whole block is gated on the role's
-/// absence, which is what makes it one-time: members who join after the role exists start at
-/// the baseline and are handed the role by a person, not a seeder. Owners and administrators are
-/// skipped — they bypass permission checks entirely (decision D2).</para>
+/// <para><b>The grandfathering is gone (Ben, 2026-08-26).</b> This used to also create an
+/// <b>Investigator Role</b> and hand it to every active non-admin member, so that Phase D's
+/// enforcement flip took nothing from anyone. Ben's decision, now that he is the only person
+/// using the site: <i>change the security settings instead of grandfathering anyone</i>.</para>
+///
+/// <para>That makes roles <b>authoritative</b>. A member holds exactly what somebody gave them,
+/// and a read grant can now be restrictive rather than only additive — which was the whole point
+/// of IH-03 and is impossible while a seeder is quietly granting case access to everyone. The
+/// runtime never had a bypass: <c>HasAccessAsync</c> has always answered from grants alone, with
+/// owners and administrators passing above it (decision D2). This seeder was the bridge, and the
+/// bridge is what has been removed.</para>
+///
+/// <para>Existing assignments are left alone — a grandfathered one is indistinguishable from a
+/// deliberate one, and revoking both would take roles away that somebody meant to give. What
+/// stops here is the automatic granting: new groups and new members start with nothing until a
+/// person says otherwise.</para>
 /// </remarks>
 internal static class OrgRoleSeeder
 {
-    internal const string InvestigatorRoleName = "Investigator Role";
-
     public static async Task SeedAsync(IServiceProvider services, IConfiguration config)
     {
         using var scope = services.CreateScope();
@@ -47,74 +54,6 @@ internal static class OrgRoleSeeder
         {
             await db.SaveChangesAsync();
             Console.WriteLine($"[OrgRoleSeeder] Backfilled the seven default roles for {bare.Count} organization(s).");
-        }
-
-        // ── Grandfathering (one-time per group, gated on the role's absence) ──
-        var orgsWithInvestigator = await db.OrganizationRoles
-            .Where(r => r.Name == InvestigatorRoleName)
-            .Select(r => r.OrganizationId).Distinct().ToListAsync();
-
-        var allOrgs = await db.Organizations
-            .Where(o => !orgsWithInvestigator.Contains(o.Id))
-            .Select(o => new { o.Id, o.CreatedByAppUserId })
-            .ToListAsync();
-
-        var granted = 0;
-        foreach (var org in allOrgs)
-        {
-            var now = DateTime.UtcNow;
-            var role = new OrganizationRole
-            {
-                Id = Guid.NewGuid(), OrganizationId = org.Id,
-                Name = InvestigatorRoleName,
-                Description = "Reads the group's cases and investigations. Assigned to everyone "
-                    + "who was already a member when role-based case access arrived, so the "
-                    + "change took nothing from anyone; hand it to new members as they earn it.",
-                IsActive = true, SortOrder = 100,
-                DateCreated = now, CreatedByAppUserId = org.CreatedByAppUserId,
-            };
-            db.OrganizationRoles.Add(role);
-            db.OrganizationRolePermissions.AddRange(
-                new OrganizationRolePermission
-                {
-                    Id = Guid.NewGuid(), OrganizationRoleId = role.Id,
-                    TableName = OrganizationSecurityTable.Case,
-                    Actions = OrganizationSecurityAction.Read,
-                    DateCreated = now, CreatedByAppUserId = org.CreatedByAppUserId,
-                },
-                new OrganizationRolePermission
-                {
-                    Id = Guid.NewGuid(), OrganizationRoleId = role.Id,
-                    TableName = OrganizationSecurityTable.Investigation,
-                    Actions = OrganizationSecurityAction.Read,
-                    DateCreated = now, CreatedByAppUserId = org.CreatedByAppUserId,
-                });
-
-            var grandfathered = await db.OrganizationUserMemberships
-                .Where(m => m.OrganizationId == org.Id && m.IsActive
-                         && m.Role != OrganizationMemberRole.Owner
-                         && m.Role != OrganizationMemberRole.Administrator)
-                .Select(m => m.Id)
-                .ToListAsync();
-
-            foreach (var membershipId in grandfathered)
-            {
-                db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
-                {
-                    Id = Guid.NewGuid(),
-                    OrganizationRoleId = role.Id,
-                    OrganizationUserMembershipId = membershipId,
-                    DateCreated = now, CreatedByAppUserId = org.CreatedByAppUserId,
-                });
-                granted++;
-            }
-        }
-
-        if (allOrgs.Count > 0)
-        {
-            await db.SaveChangesAsync();
-            Console.WriteLine(
-                $"[OrgRoleSeeder] Grandfathered {granted} member(s) across {allOrgs.Count} organization(s) with the Investigator Role.");
         }
     }
 }

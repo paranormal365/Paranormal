@@ -133,3 +133,32 @@ Before that, two things are worth deciding rather than discovering:
   "owner or admin". Converting them to grants is only safe once it is clear which of the two each
   one was trying to say.
 
+---
+
+## Step 4 — the grandfather bridge is gone (Ben, 2026-08-26)
+
+> Currently I am the only actual person using the site. Keep me as the super admin then change the
+> security settings instead of grandfathering anyone. No one else is using the site yet.
+
+Removed from `OrgRoleSeeder`: it used to create an **Investigator Role** (Cases + Investigations
+Read) and hand it to every active non-admin member, so Phase D's enforcement flip took nothing
+from anyone. It still backfills the seven default roles for a group that has none — roles are
+CREATED, nobody is put in them.
+
+**The runtime never had a bypass.** `HasAccessAsync` has always answered from grants alone, with
+owners and administrators passing above it. This seeder was the bridge, and removing it is what
+makes roles authoritative — a read grant can now be restrictive rather than only additive, which
+was the point of IH-03 and impossible while a seeder quietly granted case access to everyone.
+
+**Existing assignments were left in place**, deliberately. Being precise about why: the
+grandfathered ones ARE identifiable — the seeder wrote a distinctive description ("Assigned to
+everyone who was already a member when role-based case access arrived…") — so they could be
+revoked. That is a data change on the shared dev/UAT database, and it is Ben's to make rather than
+mine to slip in. Until he does, existing members keep the role they were auto-given and the
+change applies to new groups and new members only.
+
+**To see strict behaviour on the existing data**, the Investigator Role assignments in TGH (and
+any other seeded group) need removing — either through Roles → Investigator Role → Edit → Members,
+or by deleting the role outright. Ben's own SuperAdmin seat is unaffected either way: SuperAdmin
+bypasses these checks entirely.
+
