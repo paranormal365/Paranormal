@@ -35,6 +35,28 @@ public static class TestSeeds
         OrganizationSecurityAction.Read | OrganizationSecurityAction.Create
         | OrganizationSecurityAction.Update | OrganizationSecurityAction.Delete;
 
+    /// <summary>
+    /// Grants one user one table's actions directly, outside any role.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BridgeAsync"/> covers Cases and Investigations, which is most of what suites
+    /// need. This is for the areas it does not reach — the calendar, equipment, membership — where
+    /// a suite needs its member able to do the one thing the suite is about.
+    /// </remarks>
+    public static async Task GrantAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid appUserId,
+        OrganizationSecurityTable table, OrganizationSecurityAction actions)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = appUserId,
+            TableName = table, Actions = actions,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = appUserId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     public static async Task BridgeAsync(
         IDbContextFactory<BenDataContext> factory, Guid orgId,
         OrganizationSecurityAction actions = ReadOnly)

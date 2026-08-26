@@ -117,16 +117,12 @@ public sealed class CaseContactController : BenControllerBase
                   Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
                   Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
-    private async Task<bool> IsOrgAdmin(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
-                        && (m.Role == Ben.Data.Common.Enums.OrganizationMemberRole.Owner
-                         || m.Role == Ben.Data.Common.Enums.OrganizationMemberRole.Administrator), ct);
-    }
+    /// <summary>Owner or administrator of this group, or a site administrator.</summary>
+    /// <remarks>The fourth hand-written copy of Role &lt;= Administrator; asked of the service now.</remarks>
+    private Task<bool> IsOrgAdmin(Guid orgId, CancellationToken ct)
+        => User.IsInRole(RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.IsOwnerOrAdminAsync(GetCurrentUserId(), orgId, ct);
 }
 
 /// <summary>One person the client can talk to. <c>IsFallback</c> marks the case manager standing

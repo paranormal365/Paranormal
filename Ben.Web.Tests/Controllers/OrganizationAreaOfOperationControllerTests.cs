@@ -39,7 +39,7 @@ public class OrganizationAreaOfOperationControllerTests
 
     private static OrganizationAreaOfOperationController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new OrganizationAreaOfOperationController(factory, CreateMapper());
+        var ctrl = new OrganizationAreaOfOperationController(factory, CreateMapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

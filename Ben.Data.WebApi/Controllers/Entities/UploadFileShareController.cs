@@ -37,11 +37,16 @@ public sealed class UploadFileShareController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
 
-    public UploadFileShareController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    public UploadFileShareController(
+        IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper,
+        IAuditLogService auditLog, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _auditLog = auditLog;
+        _security = security;
     }
 
     /// <summary>List all active shares for a specific file. File owner or SuperAdmin only —
@@ -186,7 +191,7 @@ public sealed class UploadFileShareController : BenControllerBase
         var share = await db.UploadFileOrganizationShares.FirstOrDefaultAsync(s => s.Id == shareId, cancellationToken);
         if (share is null) return NotFound();
 
-        if (!await IsAdminTierMemberAsync(db, share.OrganizationId, userId, cancellationToken))
+        if (!await IsAdminTierMemberAsync(share.OrganizationId, userId, cancellationToken))
             return Forbid();
 
         share.Visibility = request.Visibility;
@@ -211,7 +216,7 @@ public sealed class UploadFileShareController : BenControllerBase
         if (share is null) return NotFound();
 
         var isFileOwner = share.UploadFile.AppUserId == userId;
-        if (!isFileOwner && !await IsAdminTierMemberAsync(db, share.OrganizationId, userId, cancellationToken))
+        if (!isFileOwner && !await IsAdminTierMemberAsync(share.OrganizationId, userId, cancellationToken))
             return Forbid();
 
         share.IsActive = false;
@@ -224,13 +229,16 @@ public sealed class UploadFileShareController : BenControllerBase
         return NoContent();
     }
 
-    private async Task<bool> IsAdminTierMemberAsync(BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive
-                        && m.Role <= OrganizationMemberRole.Administrator, ct);
-    }
+    /// <summary>Owner or administrator of the group a file is shared with.</summary>
+    /// <remarks>
+    /// Was a local copy of <c>Role &lt;= Administrator</c>. Same question, same answer, asked of
+    /// the one implementation now. The <c>db</c> parameter went with it — the service opens its
+    /// own context and caches the verdict for the request.
+    /// </remarks>
+    private Task<bool> IsAdminTierMemberAsync(Guid organizationId, Guid userId, CancellationToken ct)
+        => User.IsInRole(RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.IsOwnerOrAdminAsync(userId, organizationId, ct);
 }
 
 public sealed record ShareWithOrgRequest(Guid OrganizationId, FileShareVisibility Visibility);
