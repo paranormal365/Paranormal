@@ -61,6 +61,11 @@ public class ParameterisedRouteCrawlTests : BenTestBase
 
             var cases = await ApiAsync($"/api/organizations/{orgId}/cases", token);
             if (FirstValue(cases, "id", "caseId") is { } caseId) _ids["CaseId"] = caseId;
+
+            // The request-review page needs a request THIS org was offered — the ids travel as a
+            // pair, so it is resolved from the same org's pending list rather than independently.
+            var pending = await ApiAsync($"/api/organizations/{orgId}/cases/pending-requests", token);
+            if (FirstValue(pending, "clientRequestId") is { } pendingId) _ids["ClientRequestId"] = pendingId;
         }
 
         if (FirstValue(orgs, "urlName") is { } urlName) _ids["UrlName"] = urlName;

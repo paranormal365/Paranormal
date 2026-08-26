@@ -594,6 +594,27 @@ public sealed record OrgMemberLevelItem(
     Guid Id, string Name, int SortOrder, bool IsActive,
     IReadOnlyList<Guid>? SuggestedRoleIds = null);
 
+/// <summary>One member's ballot on taking a client request. Mirrors the server record.</summary>
+public sealed record RequestReviewVoteItem(
+    Guid VoterAppUserId, string VoterDisplayName, bool InFavor, string? Comment, DateTime DateVoted);
+
+/// <summary>A file the client attached to their request, for the review page's previews.</summary>
+public sealed record RequestReviewFileItem(Guid UploadFileId, string FileName, string ContentType, long FileSize);
+
+/// <summary>The full submission as the reviewing group sees it — deliberately nameless.</summary>
+public sealed record RequestReviewDetailItem(
+    Guid ClientRequestId,
+    Ben.Data.Common.Enums.ClientOrgRequestStatus ApplicationStatus,
+    DateTime DateSubmitted,
+    string? Description,
+    Ben.Data.Common.Enums.ClientGender Gender,
+    int? BirthYear,
+    string StreetAddress1, string? StreetAddress2,
+    string City, string State, string ZipCode, string Country,
+    IReadOnlyList<RequestReviewFileItem> Files,
+    IReadOnlyList<RequestReviewVoteItem> Votes,
+    RequestReviewVoteItem? MyVote);
+
 /// <summary>Minimal member-directory entry — see <c>IBenAdminClient.GetOrgUserDirectoryAsync</c>.</summary>
 public sealed record OrgUserDirectoryItem(Guid Id, string DisplayName);
 

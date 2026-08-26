@@ -123,7 +123,8 @@ public class PrivateCaseGateTests
     {
         var ctrl = new CaseController(factory, Mock.Of<IMapper>(),
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
-            new OrganizationSecurityService(factory));
+            new OrganizationSecurityService(factory),
+            new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

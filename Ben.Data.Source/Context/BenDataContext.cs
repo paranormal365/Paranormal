@@ -65,6 +65,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationMembershipQuestion> OrganizationMembershipQuestions { get; set; }
         public virtual DbSet<OrganizationMembershipAnswer> OrganizationMembershipAnswers { get; set; }
         public virtual DbSet<MembershipReviewVote> MembershipReviewVotes { get; set; }
+        public virtual DbSet<ClientRequestReviewVote> ClientRequestReviewVotes { get; set; }
         public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
         public virtual DbSet<OrganizationFileDeleteLog> OrganizationFileDeleteLogs { get; set; }
         public virtual DbSet<OrganizationAddressMapConfig> OrganizationAddressMapConfigs { get; set; }
@@ -1171,6 +1172,30 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Comment).HasMaxLength(1000);
             modelBuilder.Entity<MembershipReviewVote>()
                 .HasIndex(e => new { e.OrganizationMembershipRequestId, e.VoterAppUserId }).IsUnique();
+
+            // ── ClientRequestReviewVote (request-review voting) ───────────────
+            modelBuilder.Entity<ClientRequestReviewVote>()
+                .HasOne(e => e.ClientRequestOrganization).WithMany()
+                .HasForeignKey(e => e.ClientRequestOrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ClientRequestReviewVote>()
+                .HasOne(e => e.VoterAppUser).WithMany()
+                .HasForeignKey(e => e.VoterAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestReviewVote>()
+                .Property(e => e.Comment).HasMaxLength(1000);
+            // One ballot per member per application; voting again updates it.
+            modelBuilder.Entity<ClientRequestReviewVote>()
+                .HasIndex(e => new { e.ClientRequestOrganizationId, e.VoterAppUserId }).IsUnique();
+
+            // Ben, 2026-08-26: "Any group who accepts the case first wins." This index is the
+            // referee — at most ONE application per request can ever be Accepted, no matter how
+            // close the race. The code checks first and answers politely; when two accepts land
+            // in the same instant, the second one's save fails here rather than making a second
+            // case for someone's home.
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasIndex(e => e.ClientRequestId)
+                .HasFilter($"[Status] = {(int)Ben.Data.Common.Enums.ClientOrgRequestStatus.Accepted}")
+                .IsUnique()
+                .HasDatabaseName("UX_ClientRequestOrganizations_OneAcceptedPerRequest");
 
             // ── OrganizationFile ─────────────────────────────────────────────
             modelBuilder.Entity<OrganizationFile>().ToTable("OrganizationFiles");

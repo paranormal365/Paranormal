@@ -1,0 +1,215 @@
+@page "/organizations/{OrgId:guid}/request-review/{ClientRequestId:guid}"
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.User
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    The review page an internal message links to when a request goes Under Review: everything
+    the client submitted — text, photos, any file type — plus the group's ballot. The vote is
+    advisory; whoever holds the accept grant decides with the tally in front of them, and any
+    group who accepts first wins (Ben, 2026-08-26).
+*@
+
+<PageTitle>Review Investigation Request</PageTitle>
+
+@if (_loading)
+{
+    <BenLoaderOverlay Visible="true" Text="Loading the request…" />
+}
+else if (_signedOut)
+{
+    @* Found live: a dead session made this page claim the request "isn't available", which reads
+       as lost-the-race when the truth is sign-in. The two refusals mean opposite next steps. *@
+    <div class="container py-4">
+        <div class="alert alert-warning">
+            You've been signed out. Sign in again to review this request — you'll come straight back here.
+        </div>
+        <a class="btn btn-primary btn-sm" href="/login">Sign in again</a>
+    </div>
+}
+else if (_detail is null)
+{
+    @* Honest refusal state (item 141): a member without the grant, a dead application, or a
+       request that no longer exists all land here — never a blank page. *@
+    <div class="container py-4">
+        <div class="alert alert-warning">
+            This request isn't available to review. It may have been taken on by another group,
+            declined, or you may not have access to case material in this group.
+        </div>
+        <a class="btn btn-secondary btn-sm" href="/organizations/@OrgId/cases">Back to cases</a>
+    </div>
+}
+else
+{
+    <div class="container py-4" style="max-width:860px;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">Investigation request — @_detail.City, @_detail.State</h4>
+            <span class="badge @StatusBadge()">@StatusLabel()</span>
+        </div>
+
+        @if (_detail.ApplicationStatus == ClientOrgRequestStatus.Cancelled)
+        {
+            <div class="alert alert-secondary">This request has been taken on by another group and is no longer available.</div>
+        }
+
+        @if (_error is not null) { <div class="alert alert-danger py-2 small">@_error</div> }
+
+        @* ── The submission ─────────────────────────────────────────────── *@
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="fw-semibold">What the client reported</h6>
+                @if (!string.IsNullOrWhiteSpace(_detail.Description))
+                {
+                    <div class="small" style="white-space:pre-wrap;">@((MarkupString)_detail.Description)</div>
+                }
+                else
+                {
+                    <div class="text-secondary small">No written description was provided.</div>
+                }
+                <div class="text-secondary mt-3" style="font-size:.8rem;">
+                    <div><strong>Location:</strong> @_detail.StreetAddress1@(string.IsNullOrWhiteSpace(_detail.StreetAddress2) ? "" : $", {_detail.StreetAddress2}"), @_detail.City, @_detail.State @_detail.ZipCode</div>
+                    <div><strong>Submitted:</strong> @_detail.DateSubmitted.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                    @if (_detail.BirthYear is { } by) { <div><strong>Client birth year:</strong> @by</div> }
+                    @if (_detail.Gender != ClientGender.NotProvided) { <div><strong>Client gender:</strong> @_detail.Gender</div> }
+                </div>
+            </div>
+        </div>
+
+        @* ── The materials ──────────────────────────────────────────────── *@
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="fw-semibold">Submitted files (@_detail.Files.Count)</h6>
+                @if (_detail.Files.Count == 0)
+                {
+                    <div class="text-secondary small">The client attached no files to this request.</div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @foreach (var f in _detail.Files)
+                        {
+                            <div class="border rounded p-2">
+                                <div class="fw-semibold small mb-1">@f.FileName</div>
+                                <UserMediaPreview FileId="@f.UploadFileId" FileName="@f.FileName"
+                                                  ContentType="@f.ContentType" FileSize="@f.FileSize" />
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ── The ballot ─────────────────────────────────────────────────── *@
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-semibold mb-0">Should we take this case?</h6>
+                    <span class="small text-secondary">
+                        @_detail.Votes.Count(v => v.InFavor) for · @_detail.Votes.Count(v => !v.InFavor) against
+                    </span>
+                </div>
+
+                @if (_detail.ApplicationStatus == ClientOrgRequestStatus.UnderReview)
+                {
+                    <div class="d-flex gap-2 align-items-start flex-wrap mb-2">
+                        <button type="button" class="btn @(_detail.MyVote?.InFavor == true ? "btn-success" : "btn-outline-success") btn-sm text-nowrap"
+                                disabled="@_busy" @onclick="@(() => VoteAsync(true))">
+                            <BenIcon Name="thumbs-up" Class="me-1" />Take it@(_detail.MyVote?.InFavor == true ? " ✓" : "")
+                        </button>
+                        <button type="button" class="btn @(_detail.MyVote?.InFavor == false ? "btn-danger" : "btn-outline-danger") btn-sm text-nowrap"
+                                disabled="@_busy" @onclick="@(() => VoteAsync(false))">
+                            <BenIcon Name="thumbs-down" Class="me-1" />Pass@(_detail.MyVote?.InFavor == false ? " ✓" : "")
+                        </button>
+                        <input class="form-control form-control-sm" style="max-width:340px;" placeholder="Optional comment with your vote"
+                               value="@_comment" @oninput="@(e => _comment = e.Value?.ToString() ?? "")" />
+                    </div>
+                }
+                else
+                {
+                    <div class="text-secondary small mb-2">Voting is open while the request is marked Under Review.</div>
+                }
+
+                @foreach (var v in _detail.Votes)
+                {
+                    <div class="d-flex align-items-baseline gap-2 small border-top pt-1 mt-1">
+                        <BenIcon Name="@(v.InFavor ? "thumbs-up" : "thumbs-down")" />
+                        <span class="fw-semibold">@v.VoterDisplayName</span>
+                        @if (!string.IsNullOrWhiteSpace(v.Comment)) { <span class="text-secondary">— @v.Comment</span> }
+                        <span class="text-secondary ms-auto" style="font-size:.75rem;">@v.DateVoted.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ── The decision — lives on the pending-requests screen, where the accept dialog
+              (title + case manager) already is. First group to accept wins. ─── *@
+        @if (_detail.ApplicationStatus is ClientOrgRequestStatus.UnderReview or ClientOrgRequestStatus.Viewed or ClientOrgRequestStatus.Pending)
+        {
+            <div class="d-flex gap-2">
+                <a class="btn btn-primary btn-sm" href="/organizations/@OrgId/pending-requests">
+                    <BenIcon Name="check" Class="me-1" />Decide (accept or decline)
+                </a>
+                <a class="btn btn-secondary btn-sm" href="/organizations/@OrgId/cases">Back to cases</a>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid ClientRequestId { get; set; }
+
+    private RequestReviewDetailItem? _detail;
+    private bool _loading = true;
+    private bool _signedOut;
+    private bool _busy;
+    private string? _error;
+    private string _comment = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reached from a link in an internal message, so almost always a hard navigation:
+        // wait for the circuit and the bearer token or the one load comes back unauthorised
+        // and the page lies (the OrganizationMembers lesson).
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _loading = true;
+        _signedOut = !UserState.IsAuthenticated;
+        _detail = _signedOut ? null : await AdminClient.GetRequestReviewAsync(OrgId, ClientRequestId);
+        _loading = false;
+    }
+
+    private async Task VoteAsync(bool inFavor)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var cast = await AdminClient.CastRequestReviewVoteAsync(OrgId, ClientRequestId, inFavor,
+                string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim());
+            if (cast is null) { _error = "Your vote couldn't be saved."; return; }
+            _detail = await AdminClient.GetRequestReviewAsync(OrgId, ClientRequestId);
+        }
+        finally { _busy = false; }
+    }
+
+    private string StatusLabel() => _detail!.ApplicationStatus switch
+    {
+        ClientOrgRequestStatus.UnderReview => "Under Review",
+        ClientOrgRequestStatus.Accepted    => "Accepted by your group",
+        ClientOrgRequestStatus.Cancelled   => "Taken by another group",
+        var s => s.ToString(),
+    };
+
+    private string StatusBadge() => _detail!.ApplicationStatus switch
+    {
+        ClientOrgRequestStatus.UnderReview => "bg-warning text-dark",
+        ClientOrgRequestStatus.Accepted    => "bg-success",
+        ClientOrgRequestStatus.Cancelled   => "bg-secondary",
+        _ => "bg-info text-dark",
+    };
+}
