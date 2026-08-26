@@ -21,7 +21,7 @@ public class CaseReportFieldSessionTests : BenTestBase
     public async Task A_manager_can_cite_an_uploaded_field_session_in_a_report()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah, TGH
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Ignore("TGH case not in the seed data."); return; }
 
         var ids = Regex.Match(Page.Url, @"/organizations/([0-9a-f\-]+)/cases/([0-9a-f\-]+)");
@@ -141,7 +141,7 @@ public class CaseReportFieldSessionTests : BenTestBase
     public async Task An_empty_field_session_picker_explains_itself()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Ignore("TGH case not in the seed data."); return; }
 
         var reportsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Reports" })

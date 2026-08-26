@@ -98,8 +98,8 @@ public sealed class HelpMediaRecording : BenTestBase
         var (page, context) = await StartRecordingAsync(async () =>
         {
             await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-            if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Bell Witch"))
-                Assert.Ignore("Seed case not present in Tennessee Ghost Hunters.");
+            if (!await OpenOrgCaseAsync("Paranormal365", "Bell Witch"))
+                Assert.Ignore("Seed case not present in Paranormal365.");
             return Page.Url;
         });
 

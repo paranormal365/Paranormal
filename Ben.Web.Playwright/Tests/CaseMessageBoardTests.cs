@@ -169,7 +169,7 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Messages tab should be present
@@ -183,7 +183,7 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_ShowsClientMessages()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Click Messages tab
@@ -202,7 +202,7 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_CanSendMessage()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
         // The compose box is the one thing both sides of the thread render. Its placeholder differs

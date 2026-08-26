@@ -66,7 +66,7 @@ public class EventEvidenceTests : BenTestBase
         }
         if (slug is null) return false;
 
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/events/{slug}");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/events/{slug}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         return (await Page.GetByText(EventTitle, new() { Exact = false }).CountAsync()) > 0;
@@ -135,8 +135,8 @@ public class EventEvidenceTests : BenTestBase
 
         // The member's half: the queue card on the Calendar tab.
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-            Assert.Ignore("No Tennessee Ghost Hunters in this database.");
+        if (!await OpenOrganizationAsync("Paranormal365"))
+            Assert.Ignore("No Paranormal365 in this database.");
 
         await Main.GetByRole(AriaRole.Tab, new() { Name = "Calendar", Exact = true }).ClickAsync();
 

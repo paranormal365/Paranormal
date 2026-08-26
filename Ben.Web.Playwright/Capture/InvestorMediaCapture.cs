@@ -122,11 +122,11 @@ public sealed class InvestorMediaCapture : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-            Assert.Ignore("Seed org 'Tennessee Ghost Hunters' not present.");
+        if (!await OpenOrganizationAsync("Paranormal365"))
+            Assert.Ignore("Seed org 'Paranormal365' not present.");
         await ShootAsync("org-hub.png", ".content-wrapper");
 
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Bell Witch"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Bell Witch"))
             Assert.Ignore("Seed case not present.");
         await ShootAsync("case-detail.png", ".content-wrapper", proves: "Case Summary");
     }

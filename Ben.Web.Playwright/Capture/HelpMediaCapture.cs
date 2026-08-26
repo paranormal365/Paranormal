@@ -924,15 +924,15 @@ public sealed class HelpMediaCapture : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-            Assert.Ignore("Seed org 'Tennessee Ghost Hunters' not present.");
+        if (!await OpenOrganizationAsync("Paranormal365"))
+            Assert.Ignore("Seed org 'Paranormal365' not present.");
 
         await ShootAsync("working-a-case", "org-hub.png");
 
         // The document is about a case, not about the hub that lists them, so the picture beside
         // "The case tabs" has to be a case that is actually open.
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Bell Witch"))
-            Assert.Ignore("Seed case not present in Tennessee Ghost Hunters.");
+        if (!await OpenOrgCaseAsync("Paranormal365", "Bell Witch"))
+            Assert.Ignore("Seed case not present in Paranormal365.");
 
         await ShootAsync("working-a-case", "case-detail.png");
     }
@@ -945,8 +945,8 @@ public sealed class HelpMediaCapture : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-            Assert.Ignore("Seed org 'Tennessee Ghost Hunters' not present.");
+        if (!await OpenOrganizationAsync("Paranormal365"))
+            Assert.Ignore("Seed org 'Paranormal365' not present.");
 
         var orgUrl = Page.Url;
 
@@ -1083,7 +1083,7 @@ public sealed class HelpMediaCapture : BenTestBase
         foreach (var org in orgs.EnumerateArray())
         {
             var name = org.TryGetProperty("name", out var n) ? n.GetString() : null;
-            if (name is null || !name.Contains("Tennessee Ghost Hunters", StringComparison.OrdinalIgnoreCase))
+            if (name is null || !name.Contains("Paranormal365", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             orgId = org.GetProperty("id").GetString();

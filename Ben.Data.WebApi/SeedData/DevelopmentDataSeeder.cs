@@ -92,19 +92,33 @@ internal static class DevelopmentDataSeeder
 
         addrType = await db.OrganizationAddressTypes.FirstAsync(t => t.Name == "Headquarters");
 
-        // ── Org 1: Tennessee Ghost Hunters ────────────────────────────────────
-        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "tgh");
+        // ── Org 1: Paranormal365 ──────────────────────────────────────────────
+        // Renamed from "Tennessee Ghost Hunters" (Ben, 2026-08-26): Paranormal365 and
+        // Paranormal365.com are Ben's own names, so the flagship seeded group carries them. The
+        // row is still found by its old slug first, so a database seeded under either name
+        // converges on the new one instead of growing a twin.
+        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "paranormal365" || o.UrlName == "tgh");
         if (tgh is null)
         {
             tgh = new Organization
             {
-                Id = Guid.NewGuid(), Name = "Tennessee Ghost Hunters", UrlName = "tgh",
+                Id = Guid.NewGuid(), Name = "Paranormal365", UrlName = "paranormal365",
+                PublicWebsite = "https://paranormal365.com",
                 IsAcceptingClients = true, IsAcceptingApplications = true,
                 DateCreated = now, CreatedByAppUserId = owner.Id,
             };
             db.Organizations.Add(tgh);
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Created organization: Tennessee Ghost Hunters");
+            Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
+        }
+        else if (tgh.Name == "Tennessee Ghost Hunters")
+        {
+            tgh.Name = "Paranormal365";
+            tgh.UrlName = "paranormal365";
+            tgh.PublicWebsite = "https://paranormal365.com";
+            tgh.DateUpdated = now;
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Renamed Tennessee Ghost Hunters to Paranormal365.");
         }
 
         await SeedOrgMembersAsync(db, tgh, owner, sarah, james, now);
@@ -726,7 +740,7 @@ internal static class DevelopmentDataSeeder
             tghAddress.PublicDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
             tghAddress.SearchRadiusMiles = 50;
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Made Tennessee Ghost Hunters findable in nearby search.");
+            Console.WriteLine("[DevDataSeeder] Made Paranormal365 findable in nearby search.");
         }
 
         // ── Public events ────────────────────────────────────────────────────

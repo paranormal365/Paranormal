@@ -16,8 +16,8 @@ public class SmokeTests : BenTestBase
         yield return ($"{BaseUrl}/",            "IsHaunted");
         yield return ($"{BaseUrl}/find",        "Find");
         yield return ($"{BaseUrl}/login",       "Sign");
-        yield return ($"{BaseUrl}/o/tgh",       "Tennessee Ghost Hunters");
-        yield return ($"{BaseUrl}/o/tgh/cases", "#2026-");
+        yield return ($"{BaseUrl}/o/paranormal365",       "Paranormal365");
+        yield return ($"{BaseUrl}/o/paranormal365/cases", "#2026-");
     }
 
     [TestCaseSource(nameof(PublicRoutes))]
