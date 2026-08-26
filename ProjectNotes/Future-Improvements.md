@@ -9613,3 +9613,189 @@ plus the WASM host on 5180). Observed on .NET SDK 10.0.301 / runtime 10.0.9.
 sign-in, or empty data, or a timeout, may be a *dead dependency* wearing a costume. Check the
 hosts are alive before believing any of it.
 
+## 188. Tier shape: free is public-only, paid unlocks private client work (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> The free tier can only have public cases with public files and results, and can have 2 public
+> cases open. When you move to the first paid tier, they can accept private cases from clients
+> and have 2 private and any number of public.
+
+This is a sharper line than anything in item 143 and worth taking seriously: it makes the free
+tier a *contribution* tier rather than a crippled version of the paid one. A free group's work
+feeds the public side of the site — cases, evidence, results anyone can read — which is exactly
+what item 186's feed and item 88's discovery need in order to be worth visiting. The thing you
+pay for is **privacy**, which is also the thing a paying client is actually buying.
+
+It also lines up with what item 184 already built: `IsPrivateEngagement`, the display-time name
+redaction, and `PrivateResidenceCases` as a plan limit. The machinery for "this plan may hold N
+private cases" exists; this changes what the numbers are and makes the free number **zero**.
+
+**To settle before building:**
+
+- What happens to a free group's existing private cases if this lands after they have some — the
+  lapse path from item 184 (unpublish + 30-day stranded-client notice) is the obvious model.
+- Does "public case" mean the client agreed to publication? A client requesting an investigation
+  through the site has to be told, at request time, that a free group's work is public — that is
+  a consent surface, not a settings toggle.
+- Whether "any number of public cases" stays literally unlimited, or gets a high ceiling so one
+  group cannot flood discovery.
+
+### Billing and the iPhone/iPad apps — Ben asked, and the recommendation is: don't
+
+**Keep the apps free and entitle them from the group's plan.** Three reasons:
+
+1. **Apple takes a cut of anything sold in-app.** Digital content unlocked inside the app must go
+   through In-App Purchase (15–30%). The subscription is already sold on the web; selling it
+   again in the app would either duplicate the billing or hand Apple a slice of revenue the site
+   already collects cleanly.
+2. **The app is what makes the subscription sticky, not a product beside it.** A group that
+   records its investigations on the phone has its evidence in this system rather than a folder
+   of files. Charging for that discourages exactly the behaviour worth encouraging.
+3. **Seats already exist.** Item 144's overflow-seat model is the right lever if per-person
+   revenue is wanted: the app rides the seat, and a group with more members pays for members —
+   not for an app.
+
+The one place billing meets the app is the **paid-event flow in item 189**: reserving a spot on a
+paid weekend is a purchase, and if that is ever taken *inside* the app it is Apple IAP territory.
+Keep reservations on the web and the app stays free of it.
+
+## 189. Public places, multiple groups, and ticketed public events (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Places that are public like The Thomas House in Red Boiling Springs, TN should be able to have
+> multiple groups have investigations there because it is public. Also there are organizations
+> like Ghost Hunt Weekends which hold events there. Maybe we allow people to sign up for public
+> events like these. The owner should be able to schedule these events, create a page to advertise
+> the event, and see how many unique people looked at it. People should be able to show interest,
+> ask a question, or reserve X spots; the owner marks them Attending or Confirmed. When confirmed,
+> the user can use the iPhone/iPad app during the investigation to post data. Messages in the apps
+> go to everyone confirmed to be attending that investigation only.
+
+**Two features wearing one coat, worth separating:**
+
+**(a) A public place is not owned by one group.** Item 90's places and item 9's investigation
+mapping assume a place belongs to the org that entered it. The Thomas House is a venue many
+groups visit. Needs: a place that several organizations can each hold their own investigations
+at, without seeing each other's cases, and a public place page that lists what has been published
+about it by anyone. This is close to the item 80 CMS work and to the walking-tour group kind.
+
+**(b) A ticketed public event, which is a paid tour by another name.** Ben has already said the
+weekend-long event is "really a lot like the Ghost Tour Walk" — and the walking-tour group kind
+(`RunsPublicTours`), item 111's attendee evidence flow, and the invite/RSVP machinery all exist.
+The new parts are the **funnel** and the **numbers**: show interest → ask a question → reserve N
+spots → owner marks Attending → Confirmed; plus unique views on the advert page.
+
+**Where it meets the app:** *Confirmed* becomes the gate. A confirmed attendee may post Field Kit
+data to that investigation, and the in-app group messages reach confirmed attendees only. The
+server side of that is already close — `FieldSessionUploadController.MayContributeAsync` allows an
+attendee, an org member, or anyone when the investigation is public — so the work is making
+"confirmed attendee of a ticketed event" one of the identities it recognises, not inventing a new
+path.
+
+**To settle:** whether reserving a spot takes payment (see item 188 — keep purchases on the web,
+not in the app), what a no-show or refund does to the Confirmed gate, and whether a visitor's
+uploads at a paid event belong to the visitor, the host organization, or both.
+
+## 190. Devices talking to each other with no internet (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Could our apps on iPads and iPhones during an investigation contact one another without internet
+> — send messages between those at the investigation. Push and receive from nearby devices,
+> assuming they are in range. If they are not in range, as soon as they come back their messages
+> catch up and any waiting ones can send. At the end, the case manager or organization owner can
+> choose to archive them in the database.
+
+**This is buildable on Apple platforms, and it fits the product.** The Field Kit exists precisely
+because the building has no signal; a team spread across three floors of it currently cannot say
+"come to the cellar" without walking there. `MultipeerConnectivity` does peer-to-peer over
+Bluetooth and peer-to-peer Wi-Fi with no infrastructure, which is exactly this shape.
+
+**What makes it real work rather than a demo:**
+
+- **Range is small and walls are unkind.** Tens of metres, less through stone. The honest framing
+  is "the people near you", not "the team" — and the app must say which, or somebody will believe
+  a message was delivered when it was not.
+- **Store-and-forward is the whole feature.** Every message needs an id, an author, a timestamp
+  from the sending device, and a delivered-to set, so a device coming back into range can
+  exchange what each side is missing without duplicating. This is the same append-only,
+  reconcile-later discipline the reading log already uses.
+- **Background limits.** iOS restricts what a backgrounded app may do on Bluetooth; a phone in a
+  pocket with the screen off is the normal case for a sentry device. Expect to keep the session
+  alive the way the Field Kit already keeps the screen awake, and to be honest about the gaps.
+- **Clocks disagree.** Two devices with no network have no shared time. Order by a logical clock
+  and show the sender's own timestamp for what it is.
+- **Trust.** Anything within range can attempt to join. Pair against the investigation — only
+  devices signed in to an account confirmed for it — and encrypt payloads.
+- **Archiving is the easy half** and should not be forgotten: on reconnection, the case manager
+  or owner chooses to keep the thread, and it lands as case material like any other record.
+
+Related: `NearbyInteraction` gives direction and distance between devices on U1/U2 hardware — a
+separate idea, but the same permission and pairing surface, and "who else is in this building and
+roughly where" is obviously useful during an investigation.
+
+## 191. The audit log will outgrow the database — archive it, never delete it (Ben, 2026-08-26)
+
+Ben's question: the audit log grows without bound because nearly everything is audited; should
+old records be archived after a period, rather than deleted?
+
+**Yes — and the instinct not to delete is the right one.** An audit trail whose old entries were
+thrown away is worth much less than one that can answer a question about last year, and for a
+platform holding other people's case material the ability to say *who did what, when* is part of
+what is being sold.
+
+**The shape that fits this system:**
+
+- **Keep a hot window in SQL Server** — 90 days is a reasonable starting point, and it is the
+  window anyone actually queries interactively.
+- **Roll everything older into compressed monthly files** in the existing file storage
+  (`FileStorage:RootPath`), as newline-delimited JSON, gzipped. One file per month per table,
+  plus a small manifest row in the database so an archive is *discoverable* rather than a folder
+  someone has to know about. NDJSON because it appends, streams, and survives a torn write — the
+  same reasoning as the Field Kit's reading log.
+- **A restore path, tested.** An archive nobody has ever restored is a belief, not a backup. The
+  job that writes them should have a counterpart that reads one back into a queryable form, and
+  it should be exercised.
+- **Do the sums before choosing the window.** Row counts per month by table would say whether 90
+  days is generous or absurd; that measurement should come first.
+
+If SQL Server Enterprise features are ever available, table partitioning with partition switching
+is the tidier mechanism for the same idea — but the file-based roll-off works on any edition and
+keeps the archive portable.
+
+## 192. Running out of room for files — yes, a new drive works (Ben, 2026-08-26)
+
+Ben's question: if collected files outgrow the current storage location, can he buy a new hard
+drive and have it become more room?
+
+**Yes, and more easily than it might look**, because of something proved during the 2026-08-26
+thumbnail diagnosis: **the database stores only relative paths** (`orgs/{guid}/{file}`), and
+`FileStorage:RootPath` supplies the rest. Move the tree, point the root at its new home, and every
+existing row still resolves. Nothing in the database needs rewriting.
+
+Three ways to add room, roughly in order of preference:
+
+1. **A bigger volume, one root.** Copy `C:\ishaunted-files` to the new drive, change
+   `FileStorage:RootPath`, restart. Simplest thing that works, and the one to choose while the
+   answer is "we need more space", not "we need many machines".
+2. **Mount the new drive into the existing path.** Windows can mount a volume at an empty folder,
+   so `C:\ishaunted-files\2027\` can physically live on a different disk with no configuration
+   change at all. Useful if the files should stay under one root by year.
+3. **Network or object storage.** A UNC path works today with no code change. Cloud object
+   storage (S3/Azure Blob) would need an `IFileStorageService` implementation, which is a real but
+   contained piece of work — the interface already exists and everything goes through it.
+
+Two things worth doing before any of it:
+
+- **Measure.** Which organizations and which media kinds account for the growth. Video will
+  dominate; the Field Kit will accelerate it.
+- **Decide about derivatives.** Sanitised copies and thumbnails are regenerable. If space gets
+  tight, those are the cheapest things to drop and rebuild on demand — unlike originals, which
+  are irreplaceable.
+
+**Related and already true:** UAT shares the dev database but not the blobs, which is why
+ishaunted.com shows "File data is unavailable" for files uploaded on the Mac. Whatever storage
+plan is chosen should say plainly which machines share which file store.
+
