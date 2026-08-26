@@ -374,8 +374,14 @@
                 <input type="checkbox" class="form-check-input" id="case-public" @bind="@_editIsPublic" />
                 <label for="case-public" class="form-label mb-0">Make Public</label>
             </div>
+            @* Item 193: this rendered for every group, so a free-tier group could tick it, save,
+               and collect a 400 from PrivateCaseGate. The plan is knowable before the click — say
+               so beside the control rather than after the attempt. Already-private cases keep the
+               box readable (and clearable): the plan governs new commitments, not work in hand. *@
+            @{ var mayGoPrivate = _planIncludesPrivate || _editIsPrivate; }
             <div class="col-12 d-flex align-items-start gap-2">
-                <input type="checkbox" class="form-check-input mt-1" id="case-private-engagement" @bind="@_editIsPrivate" />
+                <input type="checkbox" class="form-check-input mt-1" id="case-private-engagement"
+                       @bind="@_editIsPrivate" disabled="@(!mayGoPrivate)" />
                 <div>
                     <label for="case-private-engagement" class="form-label mb-0">Private engagement<HelpLink Slug="working-a-case" Anchor="private-engagements" /></label>
                     <div class="form-text">
@@ -383,6 +389,13 @@
                         public page, and publishing the case requires a plan that includes
                         private-residence work.
                     </div>
+                    @if (!mayGoPrivate)
+                    {
+                        <div class="form-text text-warning" data-testid="private-needs-plan">
+                            Your group's plan covers public investigations only.
+                            <a href="/pricing">See what each plan includes.</a>
+                        </div>
+                    }
                 </div>
             </div>
             <div class="col-12">
@@ -499,6 +512,14 @@
     private string _editPseudonym    = "";
     private bool _editIsPublic;
     private bool _editIsPrivate;
+
+    /// <summary>Whether the group's plan covers private-residence work (item 193).</summary>
+    /// <remarks>
+    /// Starts TRUE and is narrowed by what the server says, matching the server's own fail-open
+    /// rule: only a plan that explicitly excludes the capability refuses. A lookup that fails must
+    /// not disable a control the group is entitled to.
+    /// </remarks>
+    private bool _planIncludesPrivate = true;
     private Guid? _editCaseManagerId;
     private string? _editError;
     private List<MemberOption> _memberOptions = [];
@@ -541,6 +562,17 @@
         StateHasChanged();
 
         _clientRequest = null;
+
+        // Item 193: what the PLAN allows, fetched beside the case so the private-engagement
+        // toggle can say what it will do before somebody uses it. A failure here leaves the
+        // control enabled — the same fail-open rule the server applies to capabilities.
+        try
+        {
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _planIncludesPrivate = perms?.PlanIncludes(
+                Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases) ?? true;
+        }
+        catch { _planIncludesPrivate = true; }
 
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }

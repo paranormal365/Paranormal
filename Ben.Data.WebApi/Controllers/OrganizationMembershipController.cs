@@ -123,10 +123,31 @@ public class OrganizationMembershipController : BenControllerBase
                 Delete: await MayAsync(table, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete));
         }
 
+        // What the PLAN allows, alongside what the person may do — two different questions that a
+        // screen usually has to ask together. Item 193: the private-engagement toggle rendered for
+        // every group because the browser had no way to know the plan refused it, so a free-tier
+        // group could tick it and collect a 400. A control should say what it will do before it is
+        // used, not after.
+        var capabilities = new Dictionary<Ben.Data.Common.Enums.TierCapability, bool>();
+        using (var capScope = HttpContext.RequestServices.CreateScope())
+        {
+            var capFactory = capScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var capDb = await capFactory.CreateDbContextAsync(cancellationToken);
+
+            foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
+            {
+                var (included, _) = await Ben.Data.Source.Services.TierAreaResolution.HasCapabilityAsync(
+                    capDb, organizationId, capability, cancellationToken);
+                capabilities[capability] = included;
+            }
+        }
+
         return Ok(new MyOrgPermissionsResponse(
             CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
             CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
-            Areas: areas));
+            Areas: areas,
+            Capabilities: capabilities));
 
         async Task<bool> MayAsync(
             Ben.Data.Common.Enums.OrganizationSecurityTable table,
@@ -277,7 +298,8 @@ public class OrganizationMembershipController : BenControllerBase
     public sealed record MyOrgPermissionsResponse(
         bool CanReadCases,
         bool CanReadInvestigations,
-        IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions> Areas);
+        IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions> Areas,
+        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities);
 
     /// <summary>What one person may do in one area. Absent action means refused.</summary>
     public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);

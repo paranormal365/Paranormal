@@ -530,8 +530,24 @@ public sealed record OrgIncludedAreasItem(
 public sealed record MyOrgPermissionsItem(
     bool CanReadCases,
     bool CanReadInvestigations,
-    IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null)
+    IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
+    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null)
 {
+    /// <summary>Whether the group's PLAN includes a capability — a different question from
+    /// whether this person may act.</summary>
+    /// <remarks>
+    /// <para>Item 193: the private-engagement toggle rendered for every group, so a free-tier
+    /// group could tick it and collect a 400 from the server. A control has to know what the plan
+    /// allows BEFORE it is used.</para>
+    ///
+    /// <para>Fails OPEN, matching the server: capabilities are included unless a tier explicitly
+    /// excludes one, so an older server that says nothing leaves controls working rather than
+    /// silently disabling them. That is the opposite default from <see cref="May"/>, deliberately
+    /// — an unknown PERMISSION should refuse, an unknown PLAN FEATURE should not punish.</para>
+    /// </remarks>
+    public bool PlanIncludes(Ben.Data.Common.Enums.TierCapability capability)
+        => Capabilities is null || !Capabilities.TryGetValue(capability, out var included) || included;
+
     /// <summary>Whether this person may take one action in one area.</summary>
     /// <remarks>
     /// Absent means NO. An affordance that appeared because the server said nothing would lead
