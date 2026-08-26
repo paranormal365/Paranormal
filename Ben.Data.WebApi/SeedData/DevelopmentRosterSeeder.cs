@@ -263,9 +263,12 @@ internal static class DevelopmentRosterSeeder
                 EquipmentLoanAudience.NotLoanable, inCatalog: false,
                 "Do not lend. Original 1990s unit.", now);
 
-            await ShareAsync(db, marcusRecorder, tgh,  marcus.Id, now);
-            await ShareAsync(db, oliviaMeter,    tgh,  olivia.Id, now);
-            await ShareAsync(db, oliviaMeter,    mcss, olivia.Id, now);   // shared into both her groups
+            // tgh/mcss come from FirstOrDefaultAsync and the compiler cannot see the guard that
+            // established them further up; asserted rather than re-checked, so a genuinely missing
+            // org fails loudly in the seeder instead of silently skipping the shares.
+            await ShareAsync(db, marcusRecorder, tgh!,  marcus.Id, now);
+            await ShareAsync(db, oliviaMeter,    tgh!,  olivia.Id, now);
+            await ShareAsync(db, oliviaMeter,    mcss!, olivia.Id, now);   // shared into both her groups
         }
 
         await db.SaveChangesAsync();

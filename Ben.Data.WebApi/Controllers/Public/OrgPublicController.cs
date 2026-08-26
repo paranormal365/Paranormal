@@ -145,11 +145,6 @@ public sealed class OrgPublicController : ControllerBase
 
 // ── Response records ─────────────────────────────────────────────────────────
 
-/// <summary>
-/// The public home payload for one group. Kind is what this group is (2026-08-24), shown as a
-/// badge on its public page; RunsPublicTours says it runs public walking tours, which is worth
-/// saying even on an investigation group.
-/// </summary>
 public sealed record OrgPublicHomeResponse(
     Guid OrgId,
     string OrgName,
@@ -160,6 +155,10 @@ public sealed record OrgPublicHomeResponse(
     string? PublicPhone = null,
     string? PublicEmail = null,
     string? PublicWebsite = null,
+    // Kind is what this group is (2026-08-24), shown as a badge on its public page;
+    // RunsPublicTours is worth saying even on an investigation group. Plain comments, not XML:
+    // a /// on a positional record parameter is not a valid doc target, so the compiler warns and
+    // the text never reaches the generated documentation anyway.
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     bool RunsPublicTours = false);
 
