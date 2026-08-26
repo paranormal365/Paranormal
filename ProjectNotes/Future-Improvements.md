@@ -9899,3 +9899,59 @@ PDF download:
   groups will work anyway and a blocked flow just gets worked around. Offer it, record whether it
   was signed, and show its absence on the case.
 
+
+## 197. Haunted hotels — a property that IS the attraction (Ben, 2026-08-26)
+
+> "Ability to run an entire hotel where the attraction to the public is how haunted it is
+> reported to be. A hotel owner is like an organization owner, but they own the property so there
+> are always ongoing investigations. Also, an owner of a hotel or dormitory would need to define
+> their rooms and offerings. We can discuss it later when we get further."
+
+Parked deliberately — Ben wants to discuss it when we get further. Recorded now so the shape is
+not lost, because it inverts two assumptions the whole site currently makes.
+
+**What inverts:**
+
+- **The haunting stops being the problem and becomes the product.** Everywhere else, reported
+  activity is something a client wants investigated and possibly kept private
+  (`IsPrivateEngagement`, redaction, leak warnings). A haunted hotel wants the opposite: the
+  reports ARE the marketing, and the public page should lead with them. The privacy machinery
+  must not fight the business model — but guest-specific details still need the same care.
+- **Investigations stop ending.** Today an investigation is a visit: scheduled, attended,
+  written up, closed. A property owner investigating their own building is a standing state —
+  "always ongoing" in Ben's words. That is closer to the Field Kit's sentry mode and to a
+  rolling timeline than to the visit lifecycle, and it should not be modelled by forever-open
+  `Investigation` rows that every org-scoped list has to step around.
+
+**What already fits:**
+
+- `OrganizationKind` (item for walking tours) is exactly the seam: a `HauntedProperty` kind
+  (hotel, dormitory, inn — probably a sub-type or free label) with its own creation defaults,
+  the way `GhostWalkingTour` set address visibility and `RunsPublicTours`. Owner-of-property is
+  a kind of organization, not a new account type.
+- Places already exist (area 9) and the property is one Place the org owns rather than visits —
+  the dedup rule and public place pages carry over.
+- Public investigations, evidence votes, the feed, and CMS pages give the "how haunted is it"
+  public face a head start; per-room activity feeds could hang off the same publication flow.
+- Events + RSVP + overflow-seat billing already handle "book a night on the ghost floor" better
+  than a bespoke booking engine would at first.
+
+**Genuinely new:**
+
+- **Rooms.** A property defines its rooms/spaces (the Field Kit already stamps a `room` label on
+  readings — this would make those labels first-class and shared between the phone, the
+  timeline, and the public page). Per-room haunting history is the obvious public draw:
+  "Room 217's activity log."
+- **Offerings.** What a guest can buy: a night in a specific room, a ghost-hunt package, an
+  after-hours tour. Needs pricing, availability, and probably the same processor decision item
+  144/the subscription arc is already waiting on. Dormitory case suggests offerings ≠ only
+  lodging (student housing runs tours and events, not bookings).
+- **Standing investigation.** A first-class "ongoing" mode: no end date, rolling evidence,
+  sentry-style instrument feeds, per-room attribution. Needs its own lifecycle answer before any
+  UI.
+
+**Questions for the later discussion:** does a hotel need investigator members at all, or does
+it HOST visiting groups (which meets the existing model neatly — the hotel as a client whose
+case never closes, or as a venue listing groups can book)? Do guest reports enter as
+occurrences, feed posts, or a new lightweight "guest log"? And which tier does a property pay
+on — the seats model fits groups, not businesses whose value is the public page.
