@@ -515,7 +515,61 @@ public sealed record OrgIncludedAreasItem(
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas, string? TierName);
 
 /// <summary>Per-area read verdicts for the caller in one group (item 156 Phase D).</summary>
-public sealed record MyOrgPermissionsItem(bool CanReadCases, bool CanReadInvestigations);
+/// <summary>
+/// What the signed-in person may do in one group, per area.
+/// </summary>
+/// <remarks>
+/// <para>Two read booleans until 2026-08-26, which was the whole of IH-03: a Case Manager holds
+/// create, update and delete on Cases, none of which this could carry, so no button could depend
+/// on the grant and an owner assigning roles saw nothing change.</para>
+///
+/// <para>Use <see cref="May"/> rather than reading the dictionary directly — it answers "no" for
+/// an area the server did not mention, which is the safe direction and keeps a call site working
+/// against an older server.</para>
+/// </remarks>
+public sealed record MyOrgPermissionsItem(
+    bool CanReadCases,
+    bool CanReadInvestigations,
+    IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
+    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null)
+{
+    /// <summary>Whether the group's PLAN includes a capability — a different question from
+    /// whether this person may act.</summary>
+    /// <remarks>
+    /// <para>Item 193: the private-engagement toggle rendered for every group, so a free-tier
+    /// group could tick it and collect a 400 from the server. A control has to know what the plan
+    /// allows BEFORE it is used.</para>
+    ///
+    /// <para>Fails OPEN, matching the server: capabilities are included unless a tier explicitly
+    /// excludes one, so an older server that says nothing leaves controls working rather than
+    /// silently disabling them. That is the opposite default from <see cref="May"/>, deliberately
+    /// — an unknown PERMISSION should refuse, an unknown PLAN FEATURE should not punish.</para>
+    /// </remarks>
+    public bool PlanIncludes(Ben.Data.Common.Enums.TierCapability capability)
+        => Capabilities is null || !Capabilities.TryGetValue(capability, out var included) || included;
+
+    /// <summary>Whether this person may take one action in one area.</summary>
+    /// <remarks>
+    /// Absent means NO. An affordance that appeared because the server said nothing would lead
+    /// somebody to a refusal, which is the failure this endpoint exists to prevent.
+    /// </remarks>
+    public bool May(Ben.Data.Common.Enums.OrganizationPermissionArea area,
+                    Ben.Data.Common.Enums.OrganizationSecurityAction action)
+    {
+        if (Areas is null || !Areas.TryGetValue(area, out var actions)) return false;
+        return action switch
+        {
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Create => actions.Create,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Read   => actions.Read,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Update => actions.Update,
+            Ben.Data.Common.Enums.OrganizationSecurityAction.Delete => actions.Delete,
+            _ => false,
+        };
+    }
+}
+
+/// <summary>What one person may do in one area.</summary>
+public sealed record OrgAreaActions(bool Create, bool Read, bool Update, bool Delete);
 
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
@@ -531,7 +585,35 @@ public sealed record OrgActionNeededItem(
     int PendingClientRequests, int PendingMembershipRequests);
 
 /// <summary>One rung of a group's member-title ladder (item 157). Seniority, never permission.</summary>
-public sealed record OrgMemberLevelItem(Guid Id, string Name, int SortOrder, bool IsActive);
+/// <summary>One rung of the title ladder, plus the roles it suggests (step 5).</summary>
+/// <remarks>
+/// <c>SuggestedRoleIds</c> is what assigning this title will OFFER to grant. Nothing reads it to
+/// decide access — a title is seniority, never permission.
+/// </remarks>
+public sealed record OrgMemberLevelItem(
+    Guid Id, string Name, int SortOrder, bool IsActive,
+    IReadOnlyList<Guid>? SuggestedRoleIds = null);
+
+/// <summary>One member's ballot on taking a client request. Mirrors the server record.</summary>
+public sealed record RequestReviewVoteItem(
+    Guid VoterAppUserId, string VoterDisplayName, bool InFavor, string? Comment, DateTime DateVoted);
+
+/// <summary>A file the client attached to their request, for the review page's previews.</summary>
+public sealed record RequestReviewFileItem(Guid UploadFileId, string FileName, string ContentType, long FileSize);
+
+/// <summary>The full submission as the reviewing group sees it — deliberately nameless.</summary>
+public sealed record RequestReviewDetailItem(
+    Guid ClientRequestId,
+    Ben.Data.Common.Enums.ClientOrgRequestStatus ApplicationStatus,
+    DateTime DateSubmitted,
+    string? Description,
+    Ben.Data.Common.Enums.ClientGender Gender,
+    int? BirthYear,
+    string StreetAddress1, string? StreetAddress2,
+    string City, string State, string ZipCode, string Country,
+    IReadOnlyList<RequestReviewFileItem> Files,
+    IReadOnlyList<RequestReviewVoteItem> Votes,
+    RequestReviewVoteItem? MyVote);
 
 /// <summary>Minimal member-directory entry — see <c>IBenAdminClient.GetOrgUserDirectoryAsync</c>.</summary>
 public sealed record OrgUserDirectoryItem(Guid Id, string DisplayName);

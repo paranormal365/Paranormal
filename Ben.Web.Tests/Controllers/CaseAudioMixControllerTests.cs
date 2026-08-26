@@ -107,7 +107,7 @@ public class CaseAudioMixControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
-        await TestSeeds.BridgeAsync(factory, orgId);
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return (factory, orgId, caseId, userId);
     }
 

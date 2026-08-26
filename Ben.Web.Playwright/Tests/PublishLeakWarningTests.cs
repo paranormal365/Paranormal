@@ -13,13 +13,18 @@ namespace Ben.Web.Playwright.Tests;
 [Category("PublishLeakWarning")]
 public class PublishLeakWarningTests : BenTestBase
 {
-    private const string TghId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f";
+    // Resolved from the seed, not hardcoded: the 2026-08-26 database rebuild regenerated every
+    // org id, and a pasted GUID pins a test to one database that no longer exists.
+    private string TghId = "";
+
+    [SetUp]
+    public async Task ResolveTgh() => TghId = await OrgIdBySlugAsync("paranormal365");
 
     [Test]
     public async Task Publishing_a_surname_title_warns_once_then_publishes_on_the_second_save()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah, TGH member
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();
@@ -81,7 +86,7 @@ public class PublishLeakWarningTests : BenTestBase
     public async Task The_privacy_retrofit_is_reachable_from_a_cases_edit_dialog()
     {
         await LoginAsync(UserEmail, UserPassword);   // Sarah — TGH administrator
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();
@@ -99,7 +104,7 @@ public class PublishLeakWarningTests : BenTestBase
     public async Task A_place_named_title_saves_public_with_no_warning_at_all()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();

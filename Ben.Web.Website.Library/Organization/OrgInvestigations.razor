@@ -21,7 +21,14 @@
         </p>
     </div>
     <div class="d-flex align-items-center gap-1">
-        <button type="button" class="btn btn-primary" @onclick="@(() => _creating = true)"><BenIcon Name="plus" Class="me-1" />Schedule an investigation</button>
+        @* IH-03: the same Investigations.Create grant the POST checks. A member who cannot
+           schedule is not shown the door to a refusal — this button was ungated while the
+           server accepted Investigation.READ, so a read-only member could schedule visits. *@
+        @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                         Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+        {
+            <button type="button" class="btn btn-primary" @onclick="@(() => _creating = true)"><BenIcon Name="plus" Class="me-1" />Schedule an investigation</button>
+        }
         <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
     </div>
 </div>
@@ -143,6 +150,8 @@ else
         await LoadAsync();
     }
 
+    private MyOrgPermissionsItem? _perms;
+
     private async Task LoadAsync()
     {
         _loading = true;
@@ -152,6 +161,8 @@ else
         {
             _rowsResult = await AdminClient.GetOrgInvestigationsAsync(OrgId);
             _rows       = _rowsResult.Items.ToList();
+            // Null on failure means the schedule button stays hidden — the safe direction.
+            try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); } catch { _perms = null; }
         }
         catch
         {

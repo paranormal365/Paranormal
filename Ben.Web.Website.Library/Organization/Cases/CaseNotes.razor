@@ -13,7 +13,10 @@ else
     @* ── Toolbar ─────────────────────────────────────────────────────────── *@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <span class="fw-semibold">Case Notes <span class="text-secondary small fw-normal">(internal — not visible to clients)</span></span>
-        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
+        @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+        {
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
+        }
     </div>
 
     @if (_error is not null)
@@ -57,8 +60,14 @@ else
                                 </div>
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEdit(n))"><BenIcon Name="edit-2" /></button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(n))"><BenIcon Name="trash-2" /></button>
+                                @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEdit(n))"><BenIcon Name="edit-2" /></button>
+                                }
+                                @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(n))"><BenIcon Name="trash-2" /></button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -122,6 +131,27 @@ else
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
+    /// <summary>
+    /// What the viewer may do in this organization's <c>Cases</c> area, handed down by
+    /// <c>CaseDetail</c> so the tabs and their parent agree without three more round trips.
+    /// </summary>
+    /// <remarks>
+    /// <para>IH-03 step 2. The controller behind this tab used to gate create, update AND delete
+    /// on the <c>Case.Read</c> grant, so anyone who could open the case could empty it. The server
+    /// now checks the matching action for each verb; these buttons exist so a member who cannot
+    /// do the thing is not shown the door to a refusal.</para>
+    ///
+    /// <para><b>Null means no.</b> The parameter is null while the parent is still loading and if
+    /// the permissions call fails, and both of those mean the buttons stay hidden. Hiding a button
+    /// from someone entitled to it is a visible annoyance they can report; showing one to someone
+    /// who is not is the bug this arc exists to close.</para>
+    /// </remarks>
+    [Parameter] public MyOrgPermissionsItem? Permissions { get; set; }
+
+    /// <summary>The server-side gate, asked client-side.</summary>
+    private bool May(Ben.Data.Common.Enums.OrganizationSecurityAction action)
+        => Permissions?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action) == true;
+
 
     private List<CaseNoteDto> _notes = [];
     private LoadResult<CaseNoteDto> _notesResult;

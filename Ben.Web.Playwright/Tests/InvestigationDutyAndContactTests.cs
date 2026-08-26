@@ -15,7 +15,7 @@ public class InvestigationDutyAndContactTests : BenTestBase
     public async Task The_duty_board_renders_and_a_duty_can_be_handed_out_and_back()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        Assert.That(await OpenOrganizationAsync("Tennessee Ghost Hunters"), Is.True);
+        Assert.That(await OpenOrganizationAsync("Paranormal365"), Is.True);
         var orgUrl = System.Text.RegularExpressions.Regex.Match(Page.Url, @"/organizations/[0-9a-f-]{36}").Value;
 
         // Arrive via the ?tab= deep link (item 149) rather than clicking the strip: a mid-load
@@ -82,7 +82,7 @@ public class InvestigationDutyAndContactTests : BenTestBase
     public async Task A_case_shows_its_contact_with_the_manager_fallback_and_a_choice_sticks()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        Assert.That(await OpenOrgCaseAsync("Tennessee Ghost Hunters", "#2026-"), Is.True,
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "#2026-"), Is.True,
             "The seeded TGH case should be reachable.");
 
         var panel = Main.Locator(".card", new() { HasText = "Points of contact" });

@@ -9613,3 +9613,345 @@ plus the WASM host on 5180). Observed on .NET SDK 10.0.301 / runtime 10.0.9.
 sign-in, or empty data, or a timeout, may be a *dead dependency* wearing a costume. Check the
 hosts are alive before believing any of it.
 
+## 188. Tier shape: free is public-only, paid unlocks private client work (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> The free tier can only have public cases with public files and results, and can have 2 public
+> cases open. When you move to the first paid tier, they can accept private cases from clients
+> and have 2 private and any number of public.
+
+This is a sharper line than anything in item 143 and worth taking seriously: it makes the free
+tier a *contribution* tier rather than a crippled version of the paid one. A free group's work
+feeds the public side of the site — cases, evidence, results anyone can read — which is exactly
+what item 186's feed and item 88's discovery need in order to be worth visiting. The thing you
+pay for is **privacy**, which is also the thing a paying client is actually buying.
+
+It also lines up with what item 184 already built: `IsPrivateEngagement`, the display-time name
+redaction, and `PrivateResidenceCases` as a plan limit. The machinery for "this plan may hold N
+private cases" exists; this changes what the numbers are and makes the free number **zero**.
+
+**To settle before building:**
+
+- What happens to a free group's existing private cases if this lands after they have some — the
+  lapse path from item 184 (unpublish + 30-day stranded-client notice) is the obvious model.
+- Does "public case" mean the client agreed to publication? A client requesting an investigation
+  through the site has to be told, at request time, that a free group's work is public — that is
+  a consent surface, not a settings toggle.
+- Whether "any number of public cases" stays literally unlimited, or gets a high ceiling so one
+  group cannot flood discovery.
+
+### Billing and the iPhone/iPad apps — Ben asked, and the recommendation is: don't
+
+**Keep the apps free and entitle them from the group's plan.** Three reasons:
+
+1. **Apple takes a cut of anything sold in-app.** Digital content unlocked inside the app must go
+   through In-App Purchase (15–30%). The subscription is already sold on the web; selling it
+   again in the app would either duplicate the billing or hand Apple a slice of revenue the site
+   already collects cleanly.
+2. **The app is what makes the subscription sticky, not a product beside it.** A group that
+   records its investigations on the phone has its evidence in this system rather than a folder
+   of files. Charging for that discourages exactly the behaviour worth encouraging.
+3. **Seats already exist.** Item 144's overflow-seat model is the right lever if per-person
+   revenue is wanted: the app rides the seat, and a group with more members pays for members —
+   not for an app.
+
+The one place billing meets the app is the **paid-event flow in item 189**: reserving a spot on a
+paid weekend is a purchase, and if that is ever taken *inside* the app it is Apple IAP territory.
+Keep reservations on the web and the app stays free of it.
+
+## 189. Public places, multiple groups, and ticketed public events (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Places that are public like The Thomas House in Red Boiling Springs, TN should be able to have
+> multiple groups have investigations there because it is public. Also there are organizations
+> like Ghost Hunt Weekends which hold events there. Maybe we allow people to sign up for public
+> events like these. The owner should be able to schedule these events, create a page to advertise
+> the event, and see how many unique people looked at it. People should be able to show interest,
+> ask a question, or reserve X spots; the owner marks them Attending or Confirmed. When confirmed,
+> the user can use the iPhone/iPad app during the investigation to post data. Messages in the apps
+> go to everyone confirmed to be attending that investigation only.
+
+**Two features wearing one coat, worth separating:**
+
+**(a) A public place is not owned by one group.** Item 90's places and item 9's investigation
+mapping assume a place belongs to the org that entered it. The Thomas House is a venue many
+groups visit. Needs: a place that several organizations can each hold their own investigations
+at, without seeing each other's cases, and a public place page that lists what has been published
+about it by anyone. This is close to the item 80 CMS work and to the walking-tour group kind.
+
+**(b) A ticketed public event, which is a paid tour by another name.** Ben has already said the
+weekend-long event is "really a lot like the Ghost Tour Walk" — and the walking-tour group kind
+(`RunsPublicTours`), item 111's attendee evidence flow, and the invite/RSVP machinery all exist.
+The new parts are the **funnel** and the **numbers**: show interest → ask a question → reserve N
+spots → owner marks Attending → Confirmed; plus unique views on the advert page.
+
+**Where it meets the app:** *Confirmed* becomes the gate. A confirmed attendee may post Field Kit
+data to that investigation, and the in-app group messages reach confirmed attendees only. The
+server side of that is already close — `FieldSessionUploadController.MayContributeAsync` allows an
+attendee, an org member, or anyone when the investigation is public — so the work is making
+"confirmed attendee of a ticketed event" one of the identities it recognises, not inventing a new
+path.
+
+**To settle:** whether reserving a spot takes payment (see item 188 — keep purchases on the web,
+not in the app), what a no-show or refund does to the Confirmed gate, and whether a visitor's
+uploads at a paid event belong to the visitor, the host organization, or both.
+
+## 190. Devices talking to each other with no internet (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Could our apps on iPads and iPhones during an investigation contact one another without internet
+> — send messages between those at the investigation. Push and receive from nearby devices,
+> assuming they are in range. If they are not in range, as soon as they come back their messages
+> catch up and any waiting ones can send. At the end, the case manager or organization owner can
+> choose to archive them in the database.
+
+**This is buildable on Apple platforms, and it fits the product.** The Field Kit exists precisely
+because the building has no signal; a team spread across three floors of it currently cannot say
+"come to the cellar" without walking there. `MultipeerConnectivity` does peer-to-peer over
+Bluetooth and peer-to-peer Wi-Fi with no infrastructure, which is exactly this shape.
+
+**What makes it real work rather than a demo:**
+
+- **Range is small and walls are unkind.** Tens of metres, less through stone. The honest framing
+  is "the people near you", not "the team" — and the app must say which, or somebody will believe
+  a message was delivered when it was not.
+- **Store-and-forward is the whole feature.** Every message needs an id, an author, a timestamp
+  from the sending device, and a delivered-to set, so a device coming back into range can
+  exchange what each side is missing without duplicating. This is the same append-only,
+  reconcile-later discipline the reading log already uses.
+- **Background limits.** iOS restricts what a backgrounded app may do on Bluetooth; a phone in a
+  pocket with the screen off is the normal case for a sentry device. Expect to keep the session
+  alive the way the Field Kit already keeps the screen awake, and to be honest about the gaps.
+- **Clocks disagree.** Two devices with no network have no shared time. Order by a logical clock
+  and show the sender's own timestamp for what it is.
+- **Trust.** Anything within range can attempt to join. Pair against the investigation — only
+  devices signed in to an account confirmed for it — and encrypt payloads.
+- **Archiving is the easy half** and should not be forgotten: on reconnection, the case manager
+  or owner chooses to keep the thread, and it lands as case material like any other record.
+
+Related: `NearbyInteraction` gives direction and distance between devices on U1/U2 hardware — a
+separate idea, but the same permission and pairing surface, and "who else is in this building and
+roughly where" is obviously useful during an investigation.
+
+## 191. The audit log will outgrow the database — archive it, never delete it (Ben, 2026-08-26)
+
+Ben's question: the audit log grows without bound because nearly everything is audited; should
+old records be archived after a period, rather than deleted?
+
+**Yes — and the instinct not to delete is the right one.** An audit trail whose old entries were
+thrown away is worth much less than one that can answer a question about last year, and for a
+platform holding other people's case material the ability to say *who did what, when* is part of
+what is being sold.
+
+**The shape that fits this system:**
+
+- **Keep a hot window in SQL Server** — 90 days is a reasonable starting point, and it is the
+  window anyone actually queries interactively.
+- **Roll everything older into compressed monthly files** in the existing file storage
+  (`FileStorage:RootPath`), as newline-delimited JSON, gzipped. One file per month per table,
+  plus a small manifest row in the database so an archive is *discoverable* rather than a folder
+  someone has to know about. NDJSON because it appends, streams, and survives a torn write — the
+  same reasoning as the Field Kit's reading log.
+- **A restore path, tested.** An archive nobody has ever restored is a belief, not a backup. The
+  job that writes them should have a counterpart that reads one back into a queryable form, and
+  it should be exercised.
+- **Do the sums before choosing the window.** Row counts per month by table would say whether 90
+  days is generous or absurd; that measurement should come first.
+
+If SQL Server Enterprise features are ever available, table partitioning with partition switching
+is the tidier mechanism for the same idea — but the file-based roll-off works on any edition and
+keeps the archive portable.
+
+## 192. Running out of room for files — yes, a new drive works (Ben, 2026-08-26)
+
+Ben's question: if collected files outgrow the current storage location, can he buy a new hard
+drive and have it become more room?
+
+**Yes, and more easily than it might look**, because of something proved during the 2026-08-26
+thumbnail diagnosis: **the database stores only relative paths** (`orgs/{guid}/{file}`), and
+`FileStorage:RootPath` supplies the rest. Move the tree, point the root at its new home, and every
+existing row still resolves. Nothing in the database needs rewriting.
+
+Three ways to add room, roughly in order of preference:
+
+1. **A bigger volume, one root.** Copy `C:\ishaunted-files` to the new drive, change
+   `FileStorage:RootPath`, restart. Simplest thing that works, and the one to choose while the
+   answer is "we need more space", not "we need many machines".
+2. **Mount the new drive into the existing path.** Windows can mount a volume at an empty folder,
+   so `C:\ishaunted-files\2027\` can physically live on a different disk with no configuration
+   change at all. Useful if the files should stay under one root by year.
+3. **Network or object storage.** A UNC path works today with no code change. Cloud object
+   storage (S3/Azure Blob) would need an `IFileStorageService` implementation, which is a real but
+   contained piece of work — the interface already exists and everything goes through it.
+
+Two things worth doing before any of it:
+
+- **Measure.** Which organizations and which media kinds account for the growth. Video will
+  dominate; the Field Kit will accelerate it.
+- **Decide about derivatives.** Sanitised copies and thumbnails are regenerable. If space gets
+  tight, those are the cheapest things to drop and rebuild on demand — unlike originals, which
+  are irreplaceable.
+
+**Related and already true:** UAT shares the dev database but not the blobs, which is why
+ishaunted.com shows "File data is unavailable" for files uploaded on the Mac. Whatever storage
+plan is chosen should say plainly which machines share which file store.
+
+## 193. The private-engagement toggle is offered to groups whose plan refuses it (found 2026-08-26)
+
+The "Private engagement" checkbox on the case editor renders unconditionally. A free-tier group can
+tick it, save, and get a 400 back from `PrivateCaseGate`. The help text beside it does say a plan is
+required — but the control is live, so the only way to learn is to try.
+
+This is IH-03's shape inverted: not an invisible grant, but a **visible control that always fails**.
+Both come from the same root, a UI that cannot see what the server will allow.
+
+The fix is now cheap, because the widened `my-permissions` endpoint tells the browser what the plan
+includes: disable the toggle, and say why beside it rather than after the attempt. Folded into the
+step-2 work on `feature/role-grants-visible`.
+
+Worth checking the same pattern elsewhere while there: anything gated by `TierCapability` almost
+certainly renders the same way, since none of it could see the plan until now.
+
+## 194. A client cannot tell which groups may take their case until after they pick one (found 2026-08-26)
+
+The gate works — `MyCaseController` refuses a transfer to a group whose plan does not cover
+private-residence work, with "Pick a different group, or ask them about upgrading." But `/find` and
+the request-an-investigation flow surface **nothing**. Somebody with a haunted house browses groups,
+chooses one, and only then learns that group cannot take their case.
+
+Backwards, and avoidable: the capability is knowable when the list is built.
+
+**Ben's direction (2026-08-26):** show it on the card, and make paid groups stand out — a colour
+for groups that can take private work, plain for free-tier ones, with the free ones noted as
+public-investigations-only.
+
+Design notes for whoever builds it:
+
+- **Say what a free group CAN do**, not what it lacks. "Public investigations only" is a fact;
+  greyed-and-diminished reads as a punishment, and these are the early adopters.
+- **Filter, don't only tint.** Somebody requesting an investigation of their HOME should have
+  free-tier groups filtered out by default, with an explicit "show groups that cannot take private
+  cases" escape. That answers their actual question rather than decorating it.
+- **Do not hard-block selection everywhere.** A free group can still take a public case — a ghost
+  walk, a public building. Block it for a private-residence REQUEST, which is the only place the
+  plan is relevant.
+- **Tie the highlight to the paid tier itself**, not to a new "featured" flag. Otherwise there are
+  two competing notions of prominence the moment paid placement arrives (item 143).
+
+## 195. Verify a 100%-off trial end to end before September (Ben, 2026-08-26)
+
+Ben plans to start taking groups on 1 September and wants to offer a three-month trial of the paid
+tier. **The coupon machinery already expresses this**: `CouponDuration.Repeating` with
+`DurationPeriods = 3` and `PercentOff = 100`, plus `ValidFromUtc` (1 September), `RedeemByUtc` to
+close the window, `MaxRedemptions` to cap it, `AppliesToInterval` for monthly-only, and
+`CouponKind` batch codes if each group should get its own.
+
+Nothing needs building. Two things need PROVING, because both are the kind of edge that is only
+discovered by a customer:
+
+1. **A zero-value period all the way through.** 100% off means an invoice for nothing — through the
+   append-only ledger (item 168), the frozen tax line, and the receipt. A zero-value invoice is
+   exactly the case a billing path forgets.
+2. **What happens in month four.** The group should meet the renewal notice that already exists,
+   not a surprise charge. The trial ending is the moment the relationship is won or lost.
+
+Both are testable today against the seeded billing demo data.
+
+## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
+
+> "We may need to provide a hold harmless form to generate for groups visiting private residences."
+
+A group walking into somebody's home at 2am, in the dark, with equipment and strangers, has real
+exposure — to the homeowner's property, to injury on unfamiliar stairs, and to what gets published
+afterwards. A generated waiver is the sort of thing a small group never gets round to writing and
+would value having handed to them.
+
+**It fits what already exists**, which is why it is worth doing properly rather than as a static
+PDF download:
+
+- `IsPrivateEngagement` (item 184) already marks exactly the cases this applies to, so the form can
+  be offered where it is relevant instead of everywhere.
+- `CaseReportPdfGenerator` already produces PDFs from case data, so the group's name, the client's
+  name, the address and the visit date can be filled in rather than typed.
+- The client already has an account and a case view (`/my-cases`), which is where a signed copy
+  would naturally live for both sides.
+- Publication consent is already a concept here — item 184's leak-warnings and the
+  plan-governs-publication rule. A waiver that also records *what may be published* would join up
+  two things that are currently separate conversations.
+
+**Questions to settle before building:**
+
+- **Signature.** A typed name and a timestamp is not nothing, but it is not a signature either.
+  Real e-signature means either integrating a provider or accepting a drawn-signature image with
+  an audit trail. That choice sets the size of the work.
+- **Who owns the wording.** This is the one that matters. A template that a group treats as legal
+  cover, written by a website, is a liability of its own — for them and for IsHaunted.com. The
+  honest shape is a clearly-labelled *starting point* the group may edit, with a plain statement
+  that it is not legal advice and they should have their own reviewed. Ben may want a lawyer's
+  wording for the default before it ships at all.
+- **Jurisdiction.** Waiver enforceability varies by state, and some clauses are void in some of
+  them. A single national template will be wrong somewhere. Per-state variants are a research task,
+  not a coding one.
+- **Whether it blocks anything.** Recommend NOT gating the investigation on a signed form —
+  groups will work anyway and a blocked flow just gets worked around. Offer it, record whether it
+  was signed, and show its absence on the case.
+
+
+## 197. Haunted hotels — a property that IS the attraction (Ben, 2026-08-26)
+
+> "Ability to run an entire hotel where the attraction to the public is how haunted it is
+> reported to be. A hotel owner is like an organization owner, but they own the property so there
+> are always ongoing investigations. Also, an owner of a hotel or dormitory would need to define
+> their rooms and offerings. We can discuss it later when we get further."
+
+Parked deliberately — Ben wants to discuss it when we get further. Recorded now so the shape is
+not lost, because it inverts two assumptions the whole site currently makes.
+
+**What inverts:**
+
+- **The haunting stops being the problem and becomes the product.** Everywhere else, reported
+  activity is something a client wants investigated and possibly kept private
+  (`IsPrivateEngagement`, redaction, leak warnings). A haunted hotel wants the opposite: the
+  reports ARE the marketing, and the public page should lead with them. The privacy machinery
+  must not fight the business model — but guest-specific details still need the same care.
+- **Investigations stop ending.** Today an investigation is a visit: scheduled, attended,
+  written up, closed. A property owner investigating their own building is a standing state —
+  "always ongoing" in Ben's words. That is closer to the Field Kit's sentry mode and to a
+  rolling timeline than to the visit lifecycle, and it should not be modelled by forever-open
+  `Investigation` rows that every org-scoped list has to step around.
+
+**What already fits:**
+
+- `OrganizationKind` (item for walking tours) is exactly the seam: a `HauntedProperty` kind
+  (hotel, dormitory, inn — probably a sub-type or free label) with its own creation defaults,
+  the way `GhostWalkingTour` set address visibility and `RunsPublicTours`. Owner-of-property is
+  a kind of organization, not a new account type.
+- Places already exist (area 9) and the property is one Place the org owns rather than visits —
+  the dedup rule and public place pages carry over.
+- Public investigations, evidence votes, the feed, and CMS pages give the "how haunted is it"
+  public face a head start; per-room activity feeds could hang off the same publication flow.
+- Events + RSVP + overflow-seat billing already handle "book a night on the ghost floor" better
+  than a bespoke booking engine would at first.
+
+**Genuinely new:**
+
+- **Rooms.** A property defines its rooms/spaces (the Field Kit already stamps a `room` label on
+  readings — this would make those labels first-class and shared between the phone, the
+  timeline, and the public page). Per-room haunting history is the obvious public draw:
+  "Room 217's activity log."
+- **Offerings.** What a guest can buy: a night in a specific room, a ghost-hunt package, an
+  after-hours tour. Needs pricing, availability, and probably the same processor decision item
+  144/the subscription arc is already waiting on. Dormitory case suggests offerings ≠ only
+  lodging (student housing runs tours and events, not bookings).
+- **Standing investigation.** A first-class "ongoing" mode: no end date, rolling evidence,
+  sentry-style instrument feeds, per-room attribution. Needs its own lifecycle answer before any
+  UI.
+
+**Questions for the later discussion:** does a hotel need investigator members at all, or does
+it HOST visiting groups (which meets the existing model neatly — the hotel as a client whose
+case never closes, or as a venue listing groups can book)? Do guest reports enter as
+occurrences, feed posts, or a new lightweight "guest log"? And which tier does a property pay
+on — the seats model fits groups, not businesses whose value is the public page.

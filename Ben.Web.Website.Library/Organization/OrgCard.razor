@@ -12,9 +12,12 @@
         @if (LogoFileId.HasValue)
         {
             <div class="mb-2">
-                <img src="@AdminClient.GetFileThumbnailUrl(LogoFileId.Value)"
-                     alt="@Name"
-                     style="max-height:40px; max-width:80px; object-fit:contain;" />
+                @* IH-06: a logo whose bytes are gone hides rather than showing a broken glyph
+                   and spilling its alt text across the card. *@
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@AdminClient.GetFileThumbnailUrl(LogoFileId.Value)"
+                    Alt="@Name"
+                    Style="max-height:40px; max-width:80px; object-fit:contain;" />
             </div>
         }
         <h5 class="mb-1">@Name</h5>

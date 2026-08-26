@@ -18,7 +18,11 @@ namespace Ben.Web.Playwright.Tests;
 [Category("ActionNeededBanner")]
 public class ActionNeededBannerTests : BenTestBase
 {
-    private const string TghId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f";
+    // Resolved from the slug at run time — a hardcoded GUID dies with every database rebuild.
+    private string TghId = null!;
+
+    [SetUp]
+    public async Task ResolveTghId() => TghId = await OrgIdBySlugAsync("paranormal365");
 
     [Test]
     public async Task A_waiting_application_banners_the_reviewer_and_not_the_viewer()

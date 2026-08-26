@@ -27,11 +27,15 @@ public class AudioScrubModeTests : BenTestBase
         // organisation's *name*, which is a plain grid cell on this site and navigates nowhere —
         // the exact trap OpenOrganizationAsync exists to avoid. The walk then stalled waiting for
         // a Cases tab on a page it had never left.
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters")) return false;
+        if (!await OpenOrganizationAsync("Paranormal365")) return false;
 
         await OpenTabAsync("Cases", Main.GetByRole(AriaRole.Button, new() { Name = "New Case" }));
 
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
+        // The LINK, not any text mentioning Belmont: GetByText.First used to land on the
+        // card's "4512 Belmont Blvd" address line, which takes the click and goes nowhere —
+        // ClickUntilUrlAsync then times out against a perfectly healthy page.
+        var caseItem = Main.GetByRole(AriaRole.Link)
+            .Filter(new() { HasTextString = "Belmont" }).First;
         if (!await caseItem.IsVisibleAsync()) return false;
         await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
 

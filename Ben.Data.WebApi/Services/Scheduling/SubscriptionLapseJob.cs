@@ -56,6 +56,44 @@ public sealed class SubscriptionLapseJob : IScheduledJob
         await OfferReassignmentToStrandedClientsAsync(now, ct);
     }
 
+
+    /// <summary>Everyone on the client's side of a case: the primary client and any co-clients.</summary>
+    /// <remarks>
+    /// <para><b>The primary client has no <c>CaseClientAccess</c> row.</b> They reach their case
+    /// through <c>Case.ClientRequest.AppUserId</c> — the request they submitted — and the access
+    /// table holds only co-clients, who are added by invitation. <c>MyCaseController.IsCaseClient</c>
+    /// checks both, which is why the client side works everywhere it is asked properly.</para>
+    ///
+    /// <para><b>Both notices here asked only the access table</b>, so the one person who most needed
+    /// telling — the client whose home is being investigated, who opened the case — was never told
+    /// their case had been paused, and was never offered the reassignment that the thirty-day
+    /// notice exists to offer. Only invited co-clients heard anything, and a case with no
+    /// co-clients (the common shape) notified nobody at all while the job reported success.</para>
+    ///
+    /// <para>Found on Ben's question, 2026-08-26: "if they have a case and their paid subscription
+    /// expires, is that still handled by pausing everything and notifying the client?" The pausing
+    /// was. The notifying was not.</para>
+    /// </remarks>
+    private static async Task<List<Guid>> ClientsOfCaseAsync(
+        BenDataContext db, Guid caseId, CancellationToken ct)
+    {
+        var recipients = await db.CaseClientAccesses.AsNoTracking()
+            .Where(a => a.CaseId == caseId)
+            .Select(a => a.AppUserId)
+            .ToListAsync(ct);
+
+        var primary = await db.Cases.AsNoTracking()
+            .Where(c => c.Id == caseId && c.ClientRequest != null)
+            .Select(c => (Guid?)c.ClientRequest!.AppUserId)
+            .FirstOrDefaultAsync(ct);
+
+        // Front of the list, and never twice — a primary client may also hold an access row.
+        if (primary is { } id && id != Guid.Empty && !recipients.Contains(id))
+            recipients.Insert(0, id);
+
+        return recipients;
+    }
+
     // ── the two warnings ──────────────────────────────────────────────────────
 
     private async Task SendApproachWarningsAsync(DateTime now, CancellationToken ct)
@@ -174,10 +212,7 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             // then failed to commit would be worse than a late one.
             foreach (var c in openCases)
             {
-                var clients = await db.CaseClientAccesses
-                    .Where(a => a.CaseId == c.Id)
-                    .Select(a => a.AppUserId)
-                    .ToListAsync(ct);
+                var clients = await ClientsOfCaseAsync(db, c.Id, ct);
 
                 if (clients.Count == 0) continue;
 
@@ -237,10 +272,7 @@ public sealed class SubscriptionLapseJob : IScheduledJob
 
             foreach (var c in pausedCases)
             {
-                var clients = await db.CaseClientAccesses
-                    .Where(a => a.CaseId == c.Id)
-                    .Select(a => a.AppUserId)
-                    .ToListAsync(ct);
+                var clients = await ClientsOfCaseAsync(db, c.Id, ct);
                 if (clients.Count == 0) continue;
 
                 await _messages.SendAsync(

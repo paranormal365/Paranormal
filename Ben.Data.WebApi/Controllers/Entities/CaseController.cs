@@ -29,13 +29,17 @@ public sealed class CaseController : BenControllerBase
     public CaseController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Services.Billing.SubscriptionLimitGuard limits,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.RequestReviewNotifier reviewNotifier)
     {
         _db = db;
         _mapper = mapper;
         _limits = limits;
         _security = security;
+        _reviewNotifier = reviewNotifier;
     }
+
+    private readonly Services.RequestReviewNotifier _reviewNotifier;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -304,10 +308,20 @@ public sealed class CaseController : BenControllerBase
         if (application is null) return NotFound();
 
         // Only advance the status — never move backward
+        var becameUnderReview = request.Status == ClientOrgRequestStatus.UnderReview
+                             && application.Status != ClientOrgRequestStatus.UnderReview
+                             && (int)request.Status > (int)application.Status;
         if ((int)request.Status > (int)application.Status)
             application.Status = request.Status;
 
         await db.SaveChangesAsync(ct);
+
+        // Under Review is the group deciding together, so the moment it is chosen the eligible
+        // members are messaged with a link to the review page — everything the client submitted,
+        // and the ballot. Only on the TRANSITION: re-saving the same status must not re-spam.
+        if (becameUnderReview)
+            await _reviewNotifier.SendReviewOpenedAsync(orgId, clientRequestId, GetCurrentUserId(), ct);
+
         return NoContent();
     }
 
@@ -381,6 +395,15 @@ public sealed class CaseController : BenControllerBase
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
 
+        // Ben, 2026-08-26: any group who accepts first wins. This check answers the common case
+        // politely; the unique filtered index UX_ClientRequestOrganizations_OneAcceptedPerRequest
+        // is the referee for the genuine race, where two accepts land between each other's check
+        // and save — the second save fails on the index rather than creating a second case.
+        if (await db.ClientRequestOrganizations.AsNoTracking()
+                .AnyAsync(a => a.ClientRequestId == clientRequestId
+                            && a.Status == ClientOrgRequestStatus.Accepted, ct))
+            return BadRequest("Another group has already accepted this request.");
+
         var clientReq = application.ClientRequest;
         var now       = DateTime.UtcNow;
 
@@ -389,11 +412,15 @@ public sealed class CaseController : BenControllerBase
         application.DateResponded        = now;
         application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
 
-        // Cancel all other pending applications for this request
+        // Cancel every other live application for this request. Viewed and UnderReview count:
+        // this only matched Pending before, so a group mid-vote at another table kept a live
+        // application to a request that was already someone's case — and was never told.
         var otherApps = await db.ClientRequestOrganizations
             .Where(a => a.ClientRequestId == clientRequestId
                      && a.OrganizationId != orgId
-                     && a.Status == ClientOrgRequestStatus.Pending)
+                     && (a.Status == ClientOrgRequestStatus.Pending
+                      || a.Status == ClientOrgRequestStatus.Viewed
+                      || a.Status == ClientOrgRequestStatus.UnderReview))
             .ToListAsync(ct);
         foreach (var a in otherApps) { a.Status = ClientOrgRequestStatus.Cancelled; a.DateResponded = now; }
 
@@ -452,6 +479,23 @@ public sealed class CaseController : BenControllerBase
         await db.SaveChangesAsync(ct);
         if (transaction is not null)
             await transaction.CommitAsync(ct);
+
+        // Messages go out only after the acceptance is real — a "you have a group" about a
+        // transaction that then rolled back would be worse than a late one (the lapse job
+        // learned this first). Failures here must not un-accept the case: the client's group
+        // exists either way, so message trouble is logged by the mail path, not surfaced as a 500.
+        var acceptingOrgName = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == orgId).Select(o => o.Name).FirstAsync(ct);
+        var contactName = request.CaseManagerAppUserId is { } mgrId
+            ? await db.AppUsers.AsNoTracking().Where(u => u.Id == mgrId)
+                .Select(u => u.DisplayName).FirstOrDefaultAsync(ct)
+            : null;
+
+        await _reviewNotifier.SendNoLongerAvailableAsync(
+            otherApps.Select(a => a.OrganizationId).Distinct().ToList(),
+            clientRequestId, userId, ct);
+        await _reviewNotifier.SendClientAcceptedAsync(
+            clientReq.AppUserId, newCase.Id, acceptingOrgName, contactName, userId, ct);
 
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = newCase.Id },
             _mapper.Map<CaseRecord>(newCase));

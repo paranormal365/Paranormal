@@ -11,9 +11,22 @@ using Xunit;
 namespace Ben.Web.Tests.Services;
 
 /// <summary>
-/// Item 156 Phase C's seeder: the seven-role backfill, and the ONE-TIME grandfathering that
-/// bridges existing members across Phase D's enforcement flip.
+/// The default-role backfill — and the grandfathering that is deliberately no longer there.
 /// </summary>
+/// <remarks>
+/// <para>These tests used to assert the opposite. The seeder created an Investigator Role and
+/// handed it to every active non-admin member, so item 156 Phase D's enforcement flip took nothing
+/// from anyone.</para>
+///
+/// <para><b>Ben ended that on 2026-08-26:</b> "Currently I am the only actual person using the
+/// site. Keep me as the super admin then change the security settings instead of grandfathering
+/// anyone." Roles are authoritative now — a member holds exactly what somebody gave them, and a
+/// read grant can restrict rather than only add, which was the whole point of IH-03.</para>
+///
+/// <para>Rewritten rather than deleted, because the new rule needs guarding just as much as the
+/// old one did: a seeder that starts quietly granting case access again would undo the decision
+/// without anybody noticing.</para>
+/// </remarks>
 public sealed class OrgRoleSeederTests
 {
     private static (IServiceProvider Services, IDbContextFactory<BenDataContext> Factory) Harness()
@@ -50,104 +63,99 @@ public sealed class OrgRoleSeederTests
     }
 
     [Fact]
-    public async Task Backfill_gives_a_bare_org_the_seven_roles_and_grandfathers_the_member_only()
+    public async Task Backfill_gives_a_bare_org_the_default_roles()
     {
         var (services, factory) = Harness();
-        var w = await SeedOrgAsync(factory);
+        var world = await SeedOrgAsync(factory);
 
         await OrgRoleSeeder.SeedAsync(services, Config());
 
         await using var db = await factory.CreateDbContextAsync();
-        var roles = await db.OrganizationRoles.Where(r => r.OrganizationId == w.OrgId).ToListAsync();
-        Assert.Equal(8, roles.Count);   // seven defaults + Investigator
-        Assert.All(roles, r => Assert.EndsWith("Role", r.Name));
-
-        var investigator = roles.Single(r => r.Name == "Investigator Role");
-        var assigned = await db.OrganizationRoleMemberships
-            .Where(m => m.OrganizationRoleId == investigator.Id)
-            .Select(m => m.OrganizationUserMembershipId)
-            .ToListAsync();
-
-        // The plain member is bridged; the owner and administrator are not — they bypass
-        // permission checks entirely and an assignment would only muddy the roster.
-        Assert.Equal([w.MemberMembershipId], assigned);
+        var roles = await db.OrganizationRoles.Where(r => r.OrganizationId == world.OrgId).ToListAsync();
+        // Counted from the source of truth, not a literal: the list grew from seven to
+        // eight when the Investigator Role joined it (IH-03 step 5 aftermath), and a hardcoded
+        // seven made ADDING a default look like a regression.
+        Assert.Equal(Ben.Data.Source.Services.OrgRoleDefaults.Defaults.Count, roles.Count);
     }
 
+    /// <summary>
+    /// Roles are CREATED. Nobody is put in them.
+    /// </summary>
+    /// <remarks>
+    /// The heart of Ben's decision. Before, every active non-admin member came out of this holding
+    /// an Investigator Role granting Cases and Investigations read — which meant a read grant could
+    /// only ever ADD, and taking a role away from somebody changed nothing they could see.
+    /// </remarks>
     [Fact]
-    public async Task Grandfathering_is_one_time_a_member_joining_later_starts_at_baseline()
+    public async Task Backfill_puts_nobody_in_any_role()
     {
         var (services, factory) = Harness();
-        var w = await SeedOrgAsync(factory);
-        await OrgRoleSeeder.SeedAsync(services, Config());
-
-        // Somebody joins after the flip…
-        Guid lateMembership = Guid.NewGuid();
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
-            {
-                Id = lateMembership, OrganizationId = w.OrgId, AppUserId = Guid.NewGuid(),
-                Role = OrganizationMemberRole.Member, IsActive = true,
-                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
-            });
-            await db.SaveChangesAsync();
-        }
-
-        // …and the seeder runs again, as it does on every host start.
-        await OrgRoleSeeder.SeedAsync(services, Config());
-
-        await using var verify = await factory.CreateDbContextAsync();
-        Assert.Equal(1, await verify.OrganizationRoles.CountAsync(r => r.Name == "Investigator Role"));
-        var assigned = await verify.OrganizationRoleMemberships
-            .Select(m => m.OrganizationUserMembershipId).ToListAsync();
-        Assert.DoesNotContain(lateMembership, assigned);
-        Assert.Contains(w.MemberMembershipId, assigned);
-    }
-
-    [Fact]
-    public async Task An_org_with_its_own_roles_keeps_them_but_is_still_grandfathered()
-    {
-        // The two gates are independent on purpose: an edited role list is never touched, and
-        // the enforcement bridge still arrives — a group that built roles early must not lose
-        // its ordinary members' case visibility for its diligence.
-        var (services, factory) = Harness();
-        var w = await SeedOrgAsync(factory);
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            db.OrganizationRoles.Add(new OrganizationRole
-            {
-                Id = Guid.NewGuid(), OrganizationId = w.OrgId, Name = "My Custom Role",
-                IsActive = true, SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
-            });
-            await db.SaveChangesAsync();
-        }
+        var world = await SeedOrgAsync(factory);
 
         await OrgRoleSeeder.SeedAsync(services, Config());
 
-        await using var verify = await factory.CreateDbContextAsync();
-        var names = await verify.OrganizationRoles
-            .Where(r => r.OrganizationId == w.OrgId).Select(r => r.Name).ToListAsync();
-        Assert.Contains("My Custom Role", names);
-        Assert.DoesNotContain("Case Manager Role", names);   // backfill skipped: it had roles
-        Assert.Contains("Investigator Role", names);          // grandfathering still ran
+        await using var db = await factory.CreateDbContextAsync();
+
+        // The heart of the rule is the FIRST assertion: however many roles exist, nobody holds
+        // one. The old second assertion — that no Investigator Role exists at all — described the
+        // world where creating that role and grandfathering people into it were the same act.
+        // They are separate now: the role IS a default (a fresh group needs something to hand its
+        // ordinary members), and what must never come back is the automatic membership.
+        Assert.Empty(db.OrganizationRoleMemberships);
+        Assert.True(await db.OrganizationRoles
+            .AnyAsync(r => r.OrganizationId == world.OrgId && r.Name == "Investigator Role"));
     }
 
+    /// <summary>
+    /// And a plain member really is refused, asked through the resolver the server uses.
+    /// </summary>
+    /// <remarks>
+    /// The end-to-end version of the test above: not "no rows exist" but "the answer is no". This
+    /// is the behaviour Ben asked for — a member sees the group's cases when somebody grants it,
+    /// and not before.
+    /// </remarks>
     [Fact]
-    public async Task The_grandfather_grant_actually_opens_case_read_through_the_real_resolver()
+    public async Task A_plain_member_cannot_read_cases_until_somebody_grants_it()
     {
-        // The bridge is only a bridge if HasAccessAsync honors it — assert the whole chain.
         var (services, factory) = Harness();
-        var w = await SeedOrgAsync(factory);
+        var world = await SeedOrgAsync(factory);
         await OrgRoleSeeder.SeedAsync(services, Config());
 
         Guid memberUserId;
         await using (var db = await factory.CreateDbContextAsync())
-            memberUserId = (await db.OrganizationUserMemberships.FirstAsync(m => m.Id == w.MemberMembershipId)).AppUserId;
+            memberUserId = (await db.OrganizationUserMemberships.FindAsync(world.MemberMembershipId))!.AppUserId;
 
         var security = new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory);
-        Assert.True(await security.HasAccessAsync(memberUserId, w.OrgId,
-            OrganizationSecurityTable.Case, OrganizationSecurityAction.Read));
-        Assert.False(await security.HasAccessAsync(memberUserId, w.OrgId,
-            OrganizationSecurityTable.Case, OrganizationSecurityAction.Delete));
+
+        Assert.False(await security.HasAccessAsync(
+            memberUserId, world.OrgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read));
+
+        // Belonging is still true — the distinction the old helper names blurred.
+        Assert.True(await security.BelongsToAsync(memberUserId, world.OrgId));
+    }
+
+    /// <summary>An organization that already has roles keeps exactly those.</summary>
+    [Fact]
+    public async Task An_org_with_its_own_roles_keeps_them_untouched()
+    {
+        var (services, factory) = Harness();
+        var world = await SeedOrgAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationRoles.Add(new OrganizationRole
+            {
+                Id = Guid.NewGuid(), OrganizationId = world.OrgId, Name = "Only Ours",
+                IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await OrgRoleSeeder.SeedAsync(services, Config());
+
+        await using var check = await factory.CreateDbContextAsync();
+        var roles = await check.OrganizationRoles.Where(r => r.OrganizationId == world.OrgId).ToListAsync();
+        Assert.Single(roles);
+        Assert.Equal("Only Ours", roles[0].Name);
     }
 }

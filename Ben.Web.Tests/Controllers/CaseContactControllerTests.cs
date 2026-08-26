@@ -27,7 +27,7 @@ public sealed class CaseContactControllerTests
 
     private static CaseContactController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseContactController(factory);
+        var ctrl = new CaseContactController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -61,6 +61,8 @@ public sealed class CaseContactControllerTests
             new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = adminId, Role = OrganizationMemberRole.Administrator, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId },
             new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = managerId, Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId },
             new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = memberId, Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
+        // Reading case contacts follows the case grant now, not bare membership (IH-03 step 2).
+        // Seeded after save, below, so the memberships exist for the bridge to attach a role to.
         db.Cases.Add(new Case
         {
             Id = caseId, OrganizationId = orgId, Title = "Case", CaseYear = 2026, OrgCaseNumber = 9,
@@ -69,6 +71,7 @@ public sealed class CaseContactControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId);
         return new World(factory, orgId, caseId, adminId, managerId, memberId);
     }
 

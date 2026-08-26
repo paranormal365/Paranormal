@@ -21,8 +21,12 @@ namespace Ben.Web.Playwright.Tests;
 [Category("OrdinaryMemberBaseline")]
 public class OrdinaryMemberBaselineTests : BenTestBase
 {
-    private const string TghId   = "881ea0f6-8c0d-475e-9065-c6ed15e3302f"; // Tennessee Ghost Hunters
-    private const string BenCoId = "8e739323-9e09-480f-a10b-32e91eb618cd"; // BenCo
+    // Resolved by urlName at setup, NOT hardcoded: the 2026-08-26 database rebuild regenerated
+    // every org id, and the GUID constants that used to live here made this whole fixture fail
+    // its roster lookups against any database but the one that happened to exist when they were
+    // pasted. urlName is the stable identity (item 89 made it unique and rename-checked).
+    private string TghId   = "";
+    private string BenCoId = "";
     private const string MemberDisplayName = "James Thornton";
 
     private string _token = "";
@@ -34,6 +38,64 @@ public class OrdinaryMemberBaselineTests : BenTestBase
             new() { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
         Assert.That(login.Ok, "API login failed; the fixture cannot arrange roles.");
         _token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString()!;
+
+        TghId   = await OrgIdBySlugAsync("paranormal365");
+        BenCoId = await OrgIdBySlugAsync("benco");
+    }
+
+    /// <summary>
+    /// IH-03 step 2, from the member's own seat: a read grant shows the case and hides every
+    /// write affordance the server would refuse.
+    /// </summary>
+    /// <remarks>
+    /// James's normal state IS the read-only state — the Investigator Role carries Case.Read and
+    /// nothing else — so this test arranges nothing and simply looks. The server-side halves are
+    /// proven in ReadDoesNotGrantDestructionTests; this is the UI half of the same rule: a member
+    /// who cannot do the thing is not shown the door to a refusal.
+    /// </remarks>
+    [Test]
+    public async Task A_read_only_member_sees_the_case_and_none_of_the_write_buttons()
+    {
+        var investigatorId = await RoleIdAsync(TghId, "Investigator Role");
+        var membershipId   = await OrgMembershipIdAsync(TghId, MemberDisplayName);
+        await EnsureRoleMemberAsync(TghId, investigatorId, membershipId);
+
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GotoOrgAsync(TghId);
+        await Tab("Cases").ClickAsync();
+        await WaitUntilLoadedAsync();
+
+        var caseLink = Main.GetByRole(AriaRole.Link, new() { Name = "#", Exact = false }).First;
+        if (!await caseLink.IsVisibleAsync()) { Assert.Pass("No cases in the seed to open."); return; }
+        await caseLink.ClickAsync();
+        await WaitUntilLoadedAsync();
+
+        // The case page itself opened — the read grant works…
+        await Expect(Main.GetByText("Case", new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 45_000 });
+        // …and the write affordances are gone: Edit Case on the header…
+        await Expect(Page.Locator("#case-edit")).ToHaveCountAsync(0);
+
+        // …New Note on the notes tab…
+        var notesTab = Main.GetByText("Notes", new() { Exact = true }).First;
+        if (await notesTab.IsVisibleAsync())
+        {
+            await notesTab.ClickAsync();
+            await WaitUntilLoadedAsync();
+            await Expect(Main.GetByText("Case Notes", new() { Exact = false }).First)
+                .ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await Expect(Main.GetByRole(AriaRole.Button, new() { Name = "New Note" })).ToHaveCountAsync(0);
+        }
+
+        // …and Upload File on the files tab.
+        var filesTab = Main.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true }).First;
+        if (await filesTab.IsVisibleAsync())
+        {
+            await filesTab.ClickAsync();
+            await WaitUntilLoadedAsync();
+            await Expect(Main.GetByText("Upload File", new() { Exact = true })).ToHaveCountAsync(0);
+            await Expect(Main.GetByText("Attach from Library", new() { Exact = false })).ToHaveCountAsync(0);
+        }
     }
 
     [Test]

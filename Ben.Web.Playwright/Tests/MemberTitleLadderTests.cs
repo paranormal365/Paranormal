@@ -18,8 +18,8 @@ public class MemberTitleLadderTests : BenTestBase
     public async Task Owner_edits_the_ladder_and_assigns_a_title_the_member_can_see()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        Assert.That(await OpenOrganizationAsync("Tennessee Ghost Hunters"), Is.True,
-            "The seeded Tennessee Ghost Hunters group should exist.");
+        Assert.That(await OpenOrganizationAsync("Paranormal365"), Is.True,
+            "The seeded Paranormal365 group should exist.");
 
         // ── The ladder manager lives in Settings, seeded with the five rungs ──
         await OpenTabAsync("Settings", Main.GetByText("Member titles"));

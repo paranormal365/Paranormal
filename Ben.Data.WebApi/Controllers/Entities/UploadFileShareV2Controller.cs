@@ -18,10 +18,14 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IAuditLogService _auditLog;
 
-    public UploadFileShareV2Controller(IDbContextFactory<BenDataContext> db, IAuditLogService auditLog)
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    public UploadFileShareV2Controller(
+        IDbContextFactory<BenDataContext> db, IAuditLogService auditLog, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _auditLog = auditLog;
+        _security = security;
     }
 
     [HttpGet("api/upload-files/{fileId:guid}/shares-v2")]
@@ -64,7 +68,7 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
             case ShareTargetType.InvestigationTeam:
                 if (request.TargetInvestigationId is null || request.TargetAppUserId is not null || request.TargetOrganizationId is not null)
                     return BadRequest("Investigation-team shares must set only TargetInvestigationId.");
-                if (!isSuperAdmin && !await IsOrgMemberOfInvestigationAsync(db, request.TargetInvestigationId.Value, userId, ct))
+                if (!isSuperAdmin && !await MayShareWithInvestigationAsync(db, request.TargetInvestigationId.Value, userId, ct))
                     return Forbid();
                 break;
             case ShareTargetType.Organization:
@@ -122,18 +126,30 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
         return NoContent();
     }
 
-    private static async Task<bool> IsOrgMemberOfInvestigationAsync(BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
+    /// <summary>Whether the caller may put a file in front of this investigation's team.</summary>
+    /// <remarks>
+    /// <para>Read the organization straight off the investigation. Going through the case returned
+    /// <c>Guid.Empty</c> for a case-less visit, which this method reads as "deny everybody" — a
+    /// permission check that fails closed is still a permission check that is wrong, and nobody
+    /// would see why.</para>
+    ///
+    /// <para><b>Investigations.Read, not bare membership.</b> Sharing a file with a team puts it
+    /// in a place those people will read it from; you should not be able to push something into an
+    /// investigation you are not allowed to look at. Read rather than Update because the file is
+    /// the sharer's own and the investigation record is not being altered.</para>
+    /// </remarks>
+    private async Task<bool> MayShareWithInvestigationAsync(
+        BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
     {
-        // Read straight off the investigation. Going through the case returned Guid.Empty for a
-        // case-less visit, which this method reads as "deny everybody" — a permission check that
-        // fails closed is still a permission check that is wrong, and nobody would see why.
         var orgId = await db.Investigations.AsNoTracking()
             .Where(i => i.Id == investigationId)
             .Select(i => i.OrganizationId)
             .FirstOrDefaultAsync(ct);
         if (orgId == Guid.Empty) return false;
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+
+        return await _security.MayAsync(
+            userId, orgId, OrganizationPermissionArea.Investigations,
+            OrganizationSecurityAction.Read, ct);
     }
 
     private static UploadFileShareRecord ToRecord(Ben.Data.Source.Entities.UploadFileShare s) => new()

@@ -132,6 +132,54 @@ internal static class SubscriptionTierSeeder
             await db.SaveChangesAsync();
         }
 
+        // ── What the free tier does NOT include ──────────────────────────────
+        //
+        // Ben's tier shape, 2026-08-26 (item 188): the free lane is PUBLIC work — public cases,
+        // public files, public results — and what a paid plan buys is PRIVACY, which is also what
+        // a paying client is actually buying. So the free tier excludes private-residence and
+        // client casework; every paid tier includes it.
+        //
+        // Capabilities fail OPEN — only an explicit exclusion row refuses — so before this,
+        // nothing was seeded and a free group could take on private client work. Ben's 2026-08-26
+        // production sweep noticed the wider version of that: a free organization held the same
+        // nine permission areas as a $40/month one, with only the numeric limits separating them.
+        //
+        // Written only when the free tier has NO capability rows of its own. A SuperAdmin who has
+        // deliberately configured that tier owns it from then on; a seeder that overwrote their
+        // choice on every restart would be worse than one that never ran.
+        {
+            var freeTier = await db.SubscriptionTiers.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Name == "Free");
+
+            if (freeTier is not null)
+            {
+                var alreadyConfigured = await db.SubscriptionTierExcludedCapabilities.AsNoTracking()
+                    .AnyAsync(c => c.SubscriptionTierId == freeTier.Id);
+
+                if (!alreadyConfigured)
+                {
+                    var capNow = DateTime.UtcNow;
+                    foreach (var capability in new[]
+                             {
+                                 Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases,
+                                 // Already Ben's rule from item 167, seeded here rather than left
+                                 // to be set by hand on every fresh environment.
+                                 Ben.Data.Common.Enums.TierCapability.CaseTransfers,
+                             })
+                    {
+                        db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+                        {
+                            SubscriptionTierId = freeTier.Id,
+                            Capability         = capability,
+                            DateCreated        = capNow,
+                            CreatedByAppUserId = owner.Id,
+                        });
+                    }
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
+
         var seeded = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
         if (SubscriptionTierResolver.Validate(seeded) is { } problem)
             throw new InvalidOperationException($"Seeded subscription tiers are not usable: {problem}");

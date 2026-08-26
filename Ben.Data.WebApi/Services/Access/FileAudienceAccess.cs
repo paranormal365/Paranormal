@@ -127,6 +127,27 @@ public static class FileAudienceAccess
             .Select(m => m.OrganizationId).ToListAsync(ct);
         if (orgIds.Count == 0) return false;
 
+        // Request-review materials (Ben, 2026-08-26): everything a client attached to their
+        // request "should be available for review for any group being offered to take on the
+        // investigation" — the photos ARE the evidence a group votes on. So a file attached to a
+        // ClientRequest is viewable by active members of any org holding a live application for
+        // it. Live means not Rejected/Cancelled: a group that declined, or lost the race, loses
+        // the door along with the application. Checked BEFORE the case-ownership branch below,
+        // whose caseIds short-circuit returns false for a group that owns no cases yet — which
+        // is precisely the group deciding whether to take its first one; the first draft of this
+        // clause sat after that return and the flow test caught it never being reached.
+        // Membership rather than a grant, deliberately: this query is the whole gate for raw
+        // bytes, and grant resolution (direct + role + tier) cannot be composed into it without
+        // duplicating OrganizationSecurityService; the review PAGE gates on Case.Read, and this
+        // clause only backs the previews on it.
+        if (await db.ClientRequestFiles.AsNoTracking()
+                .AnyAsync(rf => rf.UploadFileId == uploadFileId &&
+                    rf.ClientRequest.OrganizationApplications.Any(a =>
+                        a.Status != ClientOrgRequestStatus.Rejected &&
+                        a.Status != ClientOrgRequestStatus.Cancelled &&
+                        orgIds.Contains(a.OrganizationId)), ct))
+            return true;
+
         var caseIds = await db.Cases.AsNoTracking()
             .Where(c => orgIds.Contains(c.OrganizationId))
             .Select(c => c.Id).ToListAsync(ct);

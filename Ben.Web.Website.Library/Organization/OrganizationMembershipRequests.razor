@@ -67,23 +67,33 @@
 
         @* ── Resolved ─────────────────────────────────────────────────────── *@
         var resolved = _requests.Where(r => r.Status != OrganizationMembershipRequestStatus.Pending).ToList();
-        @if (resolved.Any())
+        @* IH-09, Ben's 2026-08-26 sweep: this listed 23 withdrawn applications from the SAME
+           person across three pages, every row identical but for the date — so a genuinely new
+           application would be hard to spot among them. One row per person per outcome, with a
+           count and the most recent date. The individual rows are still reachable; they are just
+           no longer the first thing an owner has to read past. *@
+        var grouped = ResolvedGroups(resolved);
+        @if (grouped.Count > 0)
         {
             <h6 class="text-secondary small text-uppercase fw-semibold mb-2">Resolved (@resolved.Count)</h6>
-            <TelerikGrid Data="@resolved" Pageable="true" PageSize="10">
+            <TelerikGrid Data="@grouped" Pageable="@(grouped.Count > 10)" PageSize="10">
                 <GridColumns>
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantDisplayName)" Title="Applicant" />
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.Status)" Title="Status" Width="110px">
+                    <GridColumn Field="@nameof(ResolvedGroup.ApplicantDisplayName)" Title="Applicant" />
+                    <GridColumn Title="Status" Width="150px">
                         <Template>
-                            @{ var r = (OrganizationMembershipRequestRecord)context; }
-                            <span class="badge @StatusBadge(r.Status)">@r.Status</span>
+                            @{ var g = (ResolvedGroup)context; }
+                            <span class="badge @StatusBadge(g.Status)">@g.Status</span>
+                            @if (g.Count > 1)
+                            {
+                                <span class="text-secondary small ms-1" title="@g.Count applications with this outcome">×@g.Count</span>
+                            }
                         </Template>
                     </GridColumn>
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RespondedByDisplayName)" Title="Responded By" />
-                    <GridColumn Title="Date" Width="110px">
+                    <GridColumn Field="@nameof(ResolvedGroup.RespondedByDisplayName)" Title="Responded By" />
+                    <GridColumn Title="Most recent" Width="130px">
                         <Template>
-                            @{ var responded = (OrganizationMembershipRequestRecord)context; }
-                            @responded.DateResponded?.ToViewerLocalTime(UserState).ToDisplayDate()
+                            @{ var g2 = (ResolvedGroup)context; }
+                            @g2.MostRecent?.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
                 </GridColumns>
@@ -151,6 +161,27 @@
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
     private bool _loading = true;
+    /// <summary>One row per applicant per outcome — see the IH-09 note in the markup.</summary>
+    private sealed record ResolvedGroup(
+        string ApplicantDisplayName,
+        OrganizationMembershipRequestStatus Status,
+        string? RespondedByDisplayName,
+        int Count,
+        DateTime? MostRecent);
+
+    private static List<ResolvedGroup> ResolvedGroups(List<OrganizationMembershipRequestRecord> resolved)
+        => resolved
+            .GroupBy(r => (r.ApplicantDisplayName, r.Status))
+            .Select(g => new ResolvedGroup(
+                g.Key.ApplicantDisplayName,
+                g.Key.Status,
+                // The responder on the most recent one; older rows may name somebody else.
+                g.OrderByDescending(r => r.DateResponded ?? r.DateCreated).First().RespondedByDisplayName,
+                g.Count(),
+                g.Max(r => r.DateResponded ?? r.DateCreated)))
+            .OrderByDescending(g => g.MostRecent)
+            .ToList();
+
     private List<OrganizationMembershipRequestRecord> _requests = [];
     private LoadResult<OrganizationMembershipRequestRecord> _requestsResult;
 

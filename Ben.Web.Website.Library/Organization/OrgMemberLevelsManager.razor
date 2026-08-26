@@ -49,10 +49,50 @@
                             <button type="button" class="btn btn-outline-secondary btn-sm" title="Move down"
                                     disabled="@(level.SortOrder >= _levels.Max(l => l.SortOrder))"
                                     @onclick="@(() => MoveAsync(level, +1))">↓</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" @onclick="@(() => BeginRolesAsync(level))">Suggested roles</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => BeginEdit(level))">Rename</button>
                             <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => DeleteAsync(level))">Delete</button>
                         }
                     </li>
+
+                    @* Step 5. Editing this list changes what the NEXT assignment of the title
+                       offers — never what anybody already holds. The wording says so, because a
+                       screen that looked like it granted access would be the live inheritance
+                       this design deliberately avoids. *@
+                    @if (_rolesForLevelId == level.Id)
+                    {
+                        <li class="list-group-item py-2">
+                            <div class="small text-secondary mb-2">
+                                Roles to <strong>offer</strong> when someone is given
+                                <strong>@level.Name</strong>. Changing this does not add or remove
+                                anyone's access — it changes what the next assignment suggests.
+                            </div>
+                            @if (_roles.Count == 0)
+                            {
+                                <div class="small text-secondary">This group has no roles yet — add them on the Roles tab.</div>
+                            }
+                            else
+                            {
+                                @foreach (var role in _roles)
+                                {
+                                    var r = role;
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="suggest-@level.Id-@r.Id"
+                                               checked="@_selectedRoleIds.Contains(r.Id)"
+                                               @onchange="@(e => ToggleRole(r.Id, (bool?)e.Value == true))" />
+                                        <label class="form-check-label small" for="suggest-@level.Id-@r.Id">@r.Name</label>
+                                    </div>
+                                }
+                            }
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-primary btn-sm" disabled="@_rolesBusy"
+                                        @onclick="@(() => SaveRolesAsync(level))">Save suggestions</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_rolesBusy"
+                                        @onclick="@(() => _rolesForLevelId = null)">Cancel</button>
+                            </div>
+                        </li>
+                    }
                 }
             </ul>
         </ChildContent>
@@ -96,6 +136,50 @@
         _result = await AdminClient.GetMemberLevelsAsync(OrgId);
         _levels = _result.Items;
         _loading = false;
+    }
+
+    // ── Step 5: which roles a title suggests ─────────────────────────────────
+
+    private Guid? _rolesForLevelId;
+    private IReadOnlyList<Ben.Service.Models.Entities.OrganizationRoleRecord> _roles = [];
+    private HashSet<Guid> _selectedRoleIds = [];
+    private bool _rolesBusy;
+
+    private async Task BeginRolesAsync(OrgMemberLevelItem level)
+    {
+        _error = null;
+        _rolesForLevelId = level.Id;
+
+        // The group's roles are needed to show names rather than ids; fetched on open rather than
+        // with the ladder, because most visits to this screen never touch suggestions.
+        if (_roles.Count == 0) _roles = (await AdminClient.GetOrgRolesAsync(OrgId)).Items;
+
+        // Trust the server's list over the one carried on the ladder row: this panel is where the
+        // list is edited, so it should open on what is actually stored.
+        var current = await AdminClient.GetSuggestedRolesAsync(OrgId, level.Id);
+        _selectedRoleIds = current.Items.ToHashSet();
+    }
+
+    private void ToggleRole(Guid roleId, bool on)
+    {
+        if (on) _selectedRoleIds.Add(roleId); else _selectedRoleIds.Remove(roleId);
+    }
+
+    private async Task SaveRolesAsync(OrgMemberLevelItem level)
+    {
+        _error = null;
+        _rolesBusy = true;
+        try
+        {
+            if (!await AdminClient.SetSuggestedRolesAsync(OrgId, level.Id, _selectedRoleIds.ToList()))
+            {
+                _error = "Those suggestions couldn't be saved.";
+                return;
+            }
+            _rolesForLevelId = null;
+            await LoadAsync();   // the ladder carries SuggestedRoleIds for the members screen
+        }
+        finally { _rolesBusy = false; }
     }
 
     private async Task AddAsync()

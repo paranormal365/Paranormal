@@ -237,7 +237,7 @@ public class MediaLibraryTests : BenTestBase
         // The shared walk. This had its own copy, written against the original site: it clicked
         // the organisation's name (a grid cell here, not a link) after an unretried nav click, so
         // it was really operating on whatever page it had failed to leave.
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("TGH case not in the seed data.");
 
         await OpenTabAsync("Files", Main.GetByRole(AriaRole.Button, new() { Name = "Attach from Library", Exact = false })

@@ -26,7 +26,10 @@ public class OrganizationMemberLevelProfile : Profile
 {
     public OrganizationMemberLevelProfile()
     {
-        CreateMap<OrganizationMemberLevel, OrganizationMemberLevelRecord>();
+        // SuggestedRoleIds is filled by the controller from a separate table (step 5), not
+        // projected off the entity — said explicitly so the mapping does not quietly clear it.
+        CreateMap<OrganizationMemberLevel, OrganizationMemberLevelRecord>()
+            .ForMember(d => d.SuggestedRoleIds, o => o.Ignore());
     }
 }
 

@@ -12,7 +12,7 @@ namespace Ben.Web.Playwright.Tests;
 public class PublicCaseTests : BenTestBase
 {
     // Seeded by DevelopmentDataSeeder
-    private const string OrgUrlName = "tgh";
+    private const string OrgUrlName = "paranormal365";
     private const string CaseRef    = "2026-001";
 
     [Test]

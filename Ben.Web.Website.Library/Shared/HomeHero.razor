@@ -89,9 +89,10 @@
                             @if (org.ActiveLogoFileId.HasValue)
                             {
                                 <div class="mb-2">
-                                    <img src="@AdminClient.GetFileThumbnailUrl(org.ActiveLogoFileId.Value)"
-                                         alt="@org.Name"
-                                         style="max-height:36px; max-width:72px; object-fit:contain;" />
+                                    <Ben.Web.Website.Library.Kit.BenImage
+                                        Src="@AdminClient.GetFileThumbnailUrl(org.ActiveLogoFileId.Value)"
+                                        Alt="@org.Name"
+                                        Style="max-height:36px; max-width:72px; object-fit:contain;" />
                                 </div>
                             }
                             <h6 class="card-title mb-1">@org.Name</h6>

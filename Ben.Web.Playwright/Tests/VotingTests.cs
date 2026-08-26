@@ -14,7 +14,7 @@ namespace Ben.Web.Playwright.Tests;
 public class VotingTests : BenTestBase
 {
     private const string TghCaseRef  = "2026-001";
-    private const string TghUrlName  = "tgh";
+    private const string TghUrlName  = "paranormal365";
 
     // ── Case vote widget (anonymous) ──────────────────────────────────────────
 

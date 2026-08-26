@@ -34,9 +34,10 @@ else
         <div class="d-flex align-items-center gap-3 mb-3">
             @if (_page.Logos.Any())
             {
-                <img src="@AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId)"
-                     alt="@(_page.Logos.First().AltText ?? _page.OrgName)"
-                     style="max-height:48px; max-width:96px; object-fit:contain;" />
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId)"
+                    Alt="@(_page.Logos.First().AltText ?? _page.OrgName)"
+                    Style="max-height:48px; max-width:96px; object-fit:contain;" />
             }
             <a href="/o/@_page.OrgUrlName" class="text-decoration-none">
                 <span class="fs-5 fw-semibold text-secondary">@_page.OrgName</span>

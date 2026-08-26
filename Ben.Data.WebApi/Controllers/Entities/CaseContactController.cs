@@ -23,13 +23,18 @@ public sealed class CaseContactController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public CaseContactController(IDbContextFactory<BenDataContext> db) => _db = db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    public CaseContactController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _security = security; }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseContactRecord>>> GetAll(
         Guid orgId, Guid caseId, CancellationToken ct)
     {
-        if (!await IsOrgMember(orgId, ct)) return Forbid();
+        if (!await MayReadCasesAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         return Ok(await ResolveAsync(db, orgId, caseId, ct));
     }
@@ -98,25 +103,26 @@ public sealed class CaseContactController : BenControllerBase
             .ToListAsync(ct);
     }
 
-    private async Task<bool> IsOrgMember(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
-    }
+    /// <summary>Whether the caller may read this group's cases.</summary>
+    /// <remarks>
+    /// Was bare active membership. Case contacts name the people a client is told to call, which
+    /// is case content, so it follows the case grant like every other tab. The write half
+    /// (<see cref="SetAll"/>) is left to the case manager or an administrator — a stricter rule
+    /// than any grant, and it stays as it is.
+    /// </remarks>
+    private Task<bool> MayReadCasesAsync(Guid orgId, CancellationToken ct)
+        => User.IsInRole(RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                  Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                  Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
-    private async Task<bool> IsOrgAdmin(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
-                        && (m.Role == Ben.Data.Common.Enums.OrganizationMemberRole.Owner
-                         || m.Role == Ben.Data.Common.Enums.OrganizationMemberRole.Administrator), ct);
-    }
+    /// <summary>Owner or administrator of this group, or a site administrator.</summary>
+    /// <remarks>The fourth hand-written copy of Role &lt;= Administrator; asked of the service now.</remarks>
+    private Task<bool> IsOrgAdmin(Guid orgId, CancellationToken ct)
+        => User.IsInRole(RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.IsOwnerOrAdminAsync(GetCurrentUserId(), orgId, ct);
 }
 
 /// <summary>One person the client can talk to. <c>IsFallback</c> marks the case manager standing

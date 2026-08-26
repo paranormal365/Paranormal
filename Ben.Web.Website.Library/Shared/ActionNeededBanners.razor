@@ -74,8 +74,33 @@
     protected override void OnInitialized()
         => UserState.StateChanged += OnAuthChanged;
 
+    /// <summary>
+    /// The viewer changed — everything below was worked out for somebody else.
+    /// </summary>
+    /// <remarks>
+    /// <b>IH-02, found in Ben's 2026-08-26 production sweep.</b> This used to call
+    /// <see cref="LoadAsync"/> directly, which returned immediately because <c>_loaded</c> was
+    /// already true — so after impersonating somebody, the banners on screen were still the
+    /// ADMIN's. A client with no memberships at all sat looking at two organizations' pending
+    /// work, named. The server scopes /action-needed to the caller correctly; nothing leaked out
+    /// of it. What leaked was the previous identity's answer, kept on screen.
+    ///
+    /// The generation counter matters as much as the reset: a fetch already in flight for the old
+    /// viewer must not be allowed to land after this one starts.
+    /// </remarks>
     private void OnAuthChanged()
-        => _ = InvokeAsync(LoadAsync);
+        => _ = InvokeAsync(async () =>
+        {
+            _generation++;
+            _loaded = false;
+            _visible.Clear();
+            _feedReminder = null;
+            StateHasChanged();
+            await LoadAsync();
+        });
+
+    /// <summary>Bumped whenever the viewer changes; a load whose generation is stale is dropped.</summary>
+    private int _generation;
 
     public void Dispose()
         => UserState.StateChanged -= OnAuthChanged;
@@ -94,6 +119,7 @@
         // rendered twice (Ben's live report: each request showing as two identical rows).
         if (_loaded || _loading) return;
         _loading = true;
+        var generation = _generation;
         try
         {
             await UserState.AuthReady;
@@ -109,6 +135,9 @@
                 // A banner must never be the reason a page errors; it simply does not appear.
                 return;
             }
+
+            // Somebody else's answer, arriving late. Drop it rather than render it.
+            if (generation != _generation) return;
             _loaded = true;
 
             // Rebuild rather than append — belt to the guard's braces.
@@ -121,7 +150,10 @@
 
             await LoadFeedReminderAsync();
 
-            if (_visible.Count > 0 || _feedReminder is not null) StateHasChanged();
+            if (generation != _generation) return;
+            // Always re-render, including when the new viewer has NOTHING to show: the old
+            // viewer's banners are what we are here to take off the screen.
+            StateHasChanged();
         }
         finally { _loading = false; }
     }
