@@ -194,7 +194,17 @@ public class EquipmentTests : BenTestBase
 
     private async Task<bool> PickFirstRealOptionAsync(ILocator select)
     {
-        var values = await OptionValuesAsync(select);
+        // Polled, for the same reason the category select is: the options arrive from an async
+        // fetch after the select is already visible, and under full-suite load that window
+        // stretches past a single read. Read-once here made every category×make pair look
+        // model-less while the API was serving models for all of them — the walk exhausted the
+        // whole taxonomy and reported that gear could not be added at all.
+        var values = Array.Empty<string>();
+        for (var poll = 0; poll < 10 && values.Length == 0; poll++)
+        {
+            values = await OptionValuesAsync(select);
+            if (values.Length == 0) await Page.WaitForTimeoutAsync(300);
+        }
         if (values.Length == 0) return false;
 
         await select.SelectOptionAsync(values[0]);

@@ -11,7 +11,7 @@ namespace Ben.Web.Playwright.Tests;
 /// offers a plain member and checks the tab actually works. It finds things because of who is
 /// signed in, not because of what it does.</para>
 ///
-/// <para>James is an active <c>Member</c> of Tennessee Ghost Hunters with no access grants and no
+/// <para>James is an active <c>Member</c> of Paranormal365 with no access grants and no
 /// named role, which is what an ordinary member is. That makes <c>HasAccessAsync</c> return
 /// <b>false on every table</b> — so any surface gated on it that members are meant to reach is
 /// broken from this seat and from nowhere else. Sarah, whom the rest of the suite uses, is an
@@ -32,7 +32,7 @@ namespace Ben.Web.Playwright.Tests;
 public class OrdinaryMemberSurfaceTests : BenTestBase
 {
     /// <summary>The group James belongs to as a plain member.</summary>
-    private const string OrgName = "Tennessee Ghost Hunters";
+    private const string OrgName = "Paranormal365";
 
     [SetUp]
     public async Task SignInAsAnOrdinaryMember()
@@ -132,15 +132,18 @@ public class OrdinaryMemberSurfaceTests : BenTestBase
     {
         if (!await OpenGroupAsync()) Assert.Ignore($"Seed org '{OrgName}' not present.");
 
-        // Cases render as cards, not a grid, so the signal is a case reference rather than a
-        // table. Waiting for the wrong container is how this test first failed against working
-        // code — worth stating, because "the locator was wrong" and "the tab is broken" look
-        // identical in a timeout.
-        await OpenTabAsync("Cases", Main.GetByRole(AriaRole.Button, new() { Name = "New Case" }));
+        // The loaded-signal is a case REFERENCE, not the "New Case" button it used to be:
+        // IH-03 step 2 gated that button on the Create grant, and this member deliberately
+        // holds Read alone. Waiting on the button turned the new rule working into a timeout.
+        await OpenTabAsync("Cases", Main.GetByText("#2026-", new() { Exact = false }).First);
         await WaitUntilLoadedAsync();
 
         await Expect(Main.GetByText("#2026-", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // And the rule itself, from the seat it protects: reading the list does not offer the
+        // door to a refusal.
+        await Expect(Main.GetByRole(AriaRole.Button, new() { Name = "New Case" })).ToHaveCountAsync(0);
     }
 
     /// <summary>The Investigations tab carries the group's investigations.</summary>
@@ -149,14 +152,19 @@ public class OrdinaryMemberSurfaceTests : BenTestBase
     {
         if (!await OpenGroupAsync()) Assert.Ignore($"Seed org '{OrgName}' not present.");
 
+        // Same IH-03 correction as the Cases tab: the schedule button now answers to the
+        // Create grant, so the loaded-signal is the panel's own heading.
         await OpenTabAsync("Investigations",
-            Main.GetByRole(AriaRole.Button, new() { Name = "Schedule an investigation" }));
+            Main.GetByText("Everywhere this group has worked", new() { Exact = false }).First);
         await WaitUntilLoadedAsync();
 
         // The panel names every visit the group has made, including ones with no location — the
         // heading alone would render even if the list behind it were refused.
         await Expect(Main.GetByText("Everywhere this group has worked", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        await Expect(Main.GetByRole(AriaRole.Button, new() { Name = "Schedule an investigation" }))
+            .ToHaveCountAsync(0);
     }
 
     /// <summary>The Members tab names the people in the group — including the member reading it.</summary>
