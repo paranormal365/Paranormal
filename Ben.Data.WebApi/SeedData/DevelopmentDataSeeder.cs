@@ -205,7 +205,12 @@ internal static class DevelopmentDataSeeder
         {
             var inv = new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = tghCase1.Id,
+                // OrganizationId is a direct FK, not derived through the case — an investigation
+                // can exist with no case at all, so the org is its own required column. Omitting
+                // it left Guid.Empty and the insert failed the foreign key, which only ever showed
+                // on a genuinely empty database: every other run skips this block because an
+                // investigation already exists. Found rebuilding from scratch, 2026-08-26.
+                Id = Guid.NewGuid(), OrganizationId = tghCase1.OrganizationId, CaseId = tghCase1.Id,
                 Title = "Initial Night Investigation",
                 Description = "Baseline EMF sweep and audio recording session. Focus on the main barn and east wing of the farmhouse.",
                 Location = "Springfield Farmhouse — Barn + East Wing",
@@ -331,7 +336,8 @@ internal static class DevelopmentDataSeeder
             // Upcoming investigation
             db.Investigations.Add(new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = danielCase.Id,
+                // Same as above: the org is its own FK, not inferred from the case.
+                Id = Guid.NewGuid(), OrganizationId = danielCase.OrganizationId, CaseId = danielCase.Id,
                 Title = "Initial Site Assessment",
                 Description = "First visit to the property. EMF baseline, audio placement, walkthrough with client.",
                 Location = "Belmont Blvd residence — Full property",
