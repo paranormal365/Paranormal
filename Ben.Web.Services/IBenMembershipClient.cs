@@ -25,6 +25,16 @@ public interface IBenMembershipClient
     /// <summary>Returns the current user's membership request for the organization, or null if none exists.</summary>
     Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>
+    /// Every application this person has made, anywhere.
+    /// </summary>
+    /// <remarks>
+    /// IH-04: the per-organization version above only answers for somebody who already knows to
+    /// look at that group — which an applicant is not a member of. Without this, applying
+    /// produced no acknowledgement anywhere in the applicant's own account.
+    /// </remarks>
+    Task<LoadResult<OrganizationMembershipRequestRecord>> GetMyMembershipRequestsAsync(CancellationToken token = default);
+
     /// <summary>Submits a membership application to the organization.</summary>
     Task<(OrganizationMembershipRequestRecord? Result, string? Error)> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
 

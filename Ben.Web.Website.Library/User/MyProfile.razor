@@ -46,9 +46,18 @@
            hero should show what they show. *@
         <div class="card mb-3">
             <div class="card-body d-flex flex-wrap align-items-center gap-3">
-                <img src="@(HeroPhotoSrc ?? BlankAvatar)" alt=""
-                     class="rounded-circle border flex-shrink-0"
-                     style="width:96px;height:96px;object-fit:cover;" />
+                @* IH-06: falls back to the blank avatar this already uses when there is no
+                   photo — a failed load and an absent one should look the same. *@
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@(HeroPhotoSrc ?? BlankAvatar)"
+                    Class="rounded-circle border flex-shrink-0"
+                    Style="width:96px;height:96px;object-fit:cover;">
+                    <Fallback>
+                        <img src="@BlankAvatar" alt=""
+                             class="rounded-circle border flex-shrink-0"
+                             style="width:96px;height:96px;object-fit:cover;" />
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
 
                 <div class="min-w-0">
                     <h3 class="mb-1">@(string.IsNullOrWhiteSpace(_displayName) ? "Your profile" : _displayName)</h3>
@@ -553,10 +562,21 @@
         <div class="d-flex align-items-center gap-3 flex-wrap">
             @if (photo is not null && _previews.TryGetValue(photo.UploadFileId, out var src))
             {
-                <img src="@src"
-                     alt="@(photo.AltText ?? "Profile photo")"
-                     class="rounded-circle border"
-                     style="width:88px;height:88px;object-fit:cover;" />
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@src"
+                    Alt="@(photo.AltText ?? "Profile photo")"
+                    Class="rounded-circle border"
+                    Style="width:88px;height:88px;object-fit:cover;">
+                    <Fallback>
+                        @* IH-06: the photo is recorded but its bytes did not arrive. Say so in
+                           the frame instead of spilling alt text out of a circle. *@
+                        <div class="rounded-circle border d-flex align-items-center justify-content-center text-secondary text-center"
+                             style="width:88px;height:88px;font-size:.65rem;line-height:1.1;"
+                             title="This photo could not be loaded">
+                            <span>Photo<br/>unavailable</span>
+                        </div>
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
             }
             else if (photo is not null)
             {

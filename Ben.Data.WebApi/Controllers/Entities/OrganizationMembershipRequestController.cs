@@ -102,6 +102,43 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         return Ok(_mapper.Map<OrganizationMembershipRequestRecord>(request));
     }
 
+    // ── GET /api/me/membership-requests ─────────────────────────────────────
+    /// <summary>
+    /// Every application this person has made, across all organizations.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>IH-04, Ben's 2026-08-26 production sweep.</b> An applicant had nowhere to see
+    /// that their own application existed. The per-organization <c>my</c> endpoint above only
+    /// answers for somebody who already knows to go and look at that group's page — which an
+    /// applicant, by definition, is not a member of. So a person applied, saw no acknowledgement
+    /// anywhere in their account, and reasonably concluded it had not gone through. One test
+    /// account accumulated <b>23 applications to the same group</b>.</para>
+    ///
+    /// <para>Deliberately account-scoped rather than org-scoped, and it returns resolved
+    /// applications too: "you were declined" is also an answer somebody is owed.</para>
+    /// </remarks>
+    [HttpGet("/api/me/membership-requests")]
+    public async Task<ActionResult<IEnumerable<OrganizationMembershipRequestRecord>>> GetMineEverywhere(
+        CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var requests = await db.OrganizationMembershipRequests
+            .Include(r => r.Organization)
+            .Include(r => r.Applicant)
+            .Include(r => r.UpdatedByAppUser)
+            .AsNoTracking()
+            .Where(r => r.AppUserId == userId.Value)
+            // Pending first — those are the ones somebody is waiting on — then most recent.
+            .OrderByDescending(r => r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ThenByDescending(r => r.DateCreated)
+            .ToListAsync(ct);
+
+        return Ok(requests.Select(_mapper.Map<OrganizationMembershipRequestRecord>).ToList());
+    }
+
     // ── POST /api/organizations/{orgId}/membership-requests ─────────────────
     /// <summary>
     /// Submits a membership application. The organization must have IsAcceptingApplications = true.
