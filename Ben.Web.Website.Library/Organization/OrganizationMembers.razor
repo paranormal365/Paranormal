@@ -84,6 +84,26 @@
                         }
                     </Template>
                 </GridColumn>
+                @* IH-09/IH-07, Ben's 2026-08-26 sweep: role membership was managed one role at a
+                   time under Roles → Edit → Members, and appeared on no per-person screen — so
+                   answering "what does this person hold?" meant opening all nine roles in turn.
+                   Five of TGH's nine members held Investigator Role and nothing here said so. *@
+                <GridColumn Title="Functional roles" Width="200px">
+                    <Template>
+                        @{ var rm = (OrgMembershipItem)context; }
+                        @if (_rolesByMembership.TryGetValue(rm.MembershipId, out var held) && held.Count > 0)
+                        {
+                            @foreach (var roleName in held)
+                            {
+                                <span class="badge text-bg-secondary me-1">@roleName</span>
+                            }
+                        }
+                        else if (_rolesLoaded)
+                        {
+                            <span class="text-secondary small">—</span>
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
             </GridColumns>
         </TelerikGrid>
@@ -113,6 +133,49 @@
     private IReadOnlyList<OrgMembershipItem> _members = [];
     private LoadResult<OrgMembershipItem>   _result;
     private IReadOnlyList<OrgMemberLevelItem> _levels = [];
+
+    /// <summary>Which functional roles each membership holds — see the IH-07 note in the markup.</summary>
+    private Dictionary<Guid, List<string>> _rolesByMembership = [];
+    private bool _rolesLoaded;
+
+    /// <summary>
+    /// Fills the roles column, after the roster is already on screen.
+    /// </summary>
+    /// <remarks>
+    /// One request per role, because role membership is only queryable per role. That is a
+    /// handful of small calls, and they run AFTER the grid renders so nobody waits on them — the
+    /// column fills in a moment later rather than delaying the page. If a server-side
+    /// "roles per membership" projection ever lands, this becomes one call.
+    /// </remarks>
+    private async Task LoadRolesAsync()
+    {
+        try
+        {
+            var roles = (await AdminClient.GetOrgRolesAsync(OrgId)).Items;
+            var map = new Dictionary<Guid, List<string>>();
+            foreach (var role in roles)
+            {
+                var holders = (await AdminClient.GetOrgRoleMembersAsync(OrgId, role.Id)).Items;
+                foreach (var holder in holders)
+                {
+                    if (!map.TryGetValue(holder.OrganizationUserMembershipId, out var list))
+                        map[holder.OrganizationUserMembershipId] = list = [];
+                    list.Add(role.Name);
+                }
+            }
+            _rolesByMembership = map;
+        }
+        catch
+        {
+            // A column that cannot be filled must not cost anybody the roster.
+            _rolesByMembership = [];
+        }
+        finally
+        {
+            _rolesLoaded = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     private async Task AssignLevelAsync(OrgMembershipItem m, string? raw)
     {
@@ -161,6 +224,9 @@
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
+
+        // Deliberately not awaited above: the roster is what somebody came for.
+        _ = LoadRolesAsync();
     }
 
     private static string RoleBadge(OrganizationMemberRole role) => role switch
