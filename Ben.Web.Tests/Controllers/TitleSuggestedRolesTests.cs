@@ -338,8 +338,11 @@ public class TitleSuggestedRolesTests
         var offenders = new List<string>();
         foreach (var file in Directory.EnumerateFiles(dir!.FullName, "*.cs", SearchOption.AllDirectories))
         {
-            if (file.Contains("/obj/") || file.Contains("/bin/") || file.Contains("/worktrees/")
-                || file.Contains("/Migrations/") || file.Contains("/Entities/"))
+            // Normalized so the exclusions hold on Windows too — EnumerateFiles returns
+            // backslash paths there, and "/obj/" would never match.
+            var slashed = file.Replace('\\', '/');
+            if (slashed.Contains("/obj/") || slashed.Contains("/bin/") || slashed.Contains("/worktrees/")
+                || slashed.Contains("/Migrations/") || slashed.Contains("/Entities/"))
                 continue;
             if (allowed.Contains(Path.GetFileName(file))) continue;
 
