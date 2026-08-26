@@ -114,6 +114,9 @@ public class ReadDoesNotGrantDestructionTests
             // publishing a report to the client and deleting a published one.
             "CaseReportController.cs", "CaseMessageController.cs",
             "ScheduleProposalController.cs", "CaseAudioMixController.cs",
+            // The verb the sweep missed: Create here had no per-row manage gate to save it, so
+            // Investigation.Read scheduled visits until the read-only-member e2e caught the button.
+            "OrgInvestigationsController.cs",
         ];
 
         var offenders = new List<string>();

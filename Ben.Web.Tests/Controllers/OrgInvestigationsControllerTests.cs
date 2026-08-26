@@ -89,7 +89,7 @@ public class OrgInvestigationsControllerTests
             Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
-        await TestSeeds.BridgeAsync(factory, OrgId);
+        await TestSeeds.BridgeAsync(factory, OrgId, TestSeeds.CaseWork);
         return factory;
     }
 
@@ -374,7 +374,14 @@ public class OrgInvestigationsControllerTests
             });
             await db.SaveChangesAsync();
         }
+        // Read for everyone; Create for the CREATOR alone, as a direct grant. The first pass
+        // bridged CaseWork to every member, which handed the bystander Update too — and the
+        // whole point here is that seeing an investigation and being offered its Edit button
+        // are different things.
         await TestSeeds.BridgeAsync(factory, OrgId);
+        await TestSeeds.GrantAsync(factory, OrgId, MemberId,
+            OrganizationSecurityTable.Investigation,
+            OrganizationSecurityAction.Read | OrganizationSecurityAction.Create);
 
         // Created by MemberId.
         await Build(factory).Create(OrgId, Request(
