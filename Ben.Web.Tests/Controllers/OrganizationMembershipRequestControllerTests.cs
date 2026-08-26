@@ -340,4 +340,44 @@ public class OrganizationMembershipRequestControllerTests
             Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(newestId, record.Id);
     }
+
+    // ── IH-04: the applicant's own view ──────────────────────────────────────
+
+    /// <summary>
+    /// An applicant can see their own application without being a member of the group.
+    /// </summary>
+    /// <remarks>
+    /// The per-organization <c>my</c> endpoint only answers for somebody who already knows to
+    /// look at that group's page — which an applicant is not a member of. With nothing in their
+    /// own account acknowledging the application, people applied again; one test account reached
+    /// 23 applications to a single group.
+    /// </remarks>
+    [Fact]
+    public async Task GetMineEverywhere_ReturnsTheApplicantsOwnPendingApplication()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var apply = Build(factory, applicantId);
+        await apply.Apply(orgId, new ApplyForMembershipRequest("Please let me join"), default);
+
+        var result = await Build(factory, applicantId).GetMineEverywhere(default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationMembershipRequestRecord>>(ok.Value).ToList();
+        var mine = Assert.Single(list);
+        Assert.Equal(orgId, mine.OrganizationId);
+        Assert.Equal(OrganizationMembershipRequestStatus.Pending, mine.Status);
+    }
+
+    /// <summary>And it is genuinely account-scoped — one person cannot read another's.</summary>
+    [Fact]
+    public async Task GetMineEverywhere_ShowsNobodyElsesApplications()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest("Me please"), default);
+
+        var stranger = await Build(factory, Guid.NewGuid()).GetMineEverywhere(default);
+
+        var ok = Assert.IsType<OkObjectResult>(stranger.Result);
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<OrganizationMembershipRequestRecord>>(ok.Value));
+    }
 }

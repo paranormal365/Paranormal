@@ -26,6 +26,15 @@ public record OrganizationMemberLevelRecord
     public required string Name { get; init; }
     public int SortOrder { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>
+    /// The roles this title suggests — what assigning it will OFFER to grant (step 5).
+    /// </summary>
+    /// <remarks>
+    /// Carried on the list so the members screen can say what a title usually carries without a
+    /// call per rung. It is a suggestion and nothing else: no permission check anywhere reads it.
+    /// </remarks>
+    public IReadOnlyList<Guid> SuggestedRoleIds { get; init; } = [];
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
 }

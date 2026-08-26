@@ -38,7 +38,7 @@ public class ErrorHandlingTests : BenTestBase
     [Test]
     public async Task CaseDetailRoute_InvalidRef_ShowsNotFound()
     {
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/cases/9999-999");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/cases/9999-999");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
@@ -69,7 +69,7 @@ public class ErrorHandlingTests : BenTestBase
     public async Task PublicCase_PrivateCase_NotExposed()
     {
         // A case that is not marked IsPublic should return not-found on the public endpoint
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/cases/2026-999");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/cases/2026-999");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("NullReferenceException"));
@@ -103,7 +103,7 @@ public class ErrorHandlingTests : BenTestBase
     [Description("Public case detail page produces no Telerik component errors.")]
     public async Task PublicCaseDetail_NoTelerikErrors()
     {
-        await Page.GotoAsync($"{BaseUrl}/o/tgh/cases/2026-001");
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/cases/2026-001");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Page.WaitForTimeoutAsync(2_000);
         var body = await Page.InnerTextAsync("body");

@@ -11,6 +11,27 @@ Every case belongs to a group, and the group's own page is where its cases are l
 ![A group's page, with its cases listed](/help/media/working-a-case/org-hub.png)
 *Open a group from Organizations, then its Cases tab, to reach any case it is working.*
 
+## Taking on a request — reviewing and voting
+
+Client requests arrive under **Pending Requests** on the group's Cases screen. Every request
+shows **Review & vote**, which opens everything the client submitted — their description, the
+location, and any files they attached: photos, recordings, documents. Every group the client
+sent the request to sees the same materials while it decides.
+
+Marking a request **Under Review** tells your group it is decision time: everyone who can read
+the group's cases gets an internal message with a link to the review page, where they vote
+**Take it** or **Pass**, with an optional comment. The vote is advisory — it does not accept
+the case by itself. Whoever holds the accept permission decides, with the tally in front of
+them.
+
+**The first group to accept wins.** The moment any group accepts, the other groups reviewing
+the same request are messaged that it is no longer available, and their review pages close. The
+client is told they have a group — and who their contact person is, when a case manager was
+chosen at accept time.
+
+If your group is not going to take a request, decline it promptly — the client is waiting, and
+declining lets them offer it elsewhere without re-writing it.
+
 ## The case tabs
 
 ![A case with its tabs](/help/media/working-a-case/case-detail.png)

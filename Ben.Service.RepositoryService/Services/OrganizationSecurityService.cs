@@ -62,6 +62,27 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             .ToListAsync(token);
     }
 
+    /// <summary>
+    /// Deliberately NOT cached, unlike the three questions below.
+    /// </summary>
+    /// <remarks>
+    /// <para>Caching this was tried on 2026-08-26 and reverted the same hour. It is the call
+    /// seventy-odd endpoints already make, so caching it looked like the change with the best
+    /// return and no call-site churn — and <c>PhaseDFlipTests</c> failed immediately, because it
+    /// grants a role and re-asks <b>within one scope</b>. The cached "no" from before the grant
+    /// was still there.</para>
+    ///
+    /// <para>The test was right and the cache was wrong. A request that CHANGES somebody's access
+    /// and then acts on it is not exotic — accepting a membership application, adding a role
+    /// member, creating an organization and then reading it back all have that shape. A stale
+    /// refusal is safer than a stale grant, but it is still a bug, and one that would appear only
+    /// in the request that just changed something.</para>
+    ///
+    /// <para>The three questions below ARE cached because they serve read paths — a screen asking
+    /// what to draw, many times, while changing nothing. If this one is ever worth caching, it
+    /// needs explicit invalidation wherever grants, role memberships or memberships are written,
+    /// and that list has to be complete or the bug comes back quietly.</para>
+    /// </remarks>
     public async Task<bool> HasAccessAsync(Guid appUserId, Guid organizationId, OrganizationSecurityTable tableName, OrganizationSecurityAction actionName, CancellationToken token = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
@@ -125,6 +146,81 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             select role.Id
         ).AnyAsync(token);
     }
+
+    // ── The three questions (Ben, 2026-08-26) ────────────────────────────────
+
+    /// <summary>
+    /// Verdicts already worked out during this request.
+    /// </summary>
+    /// <remarks>
+    /// The service is registered scoped, so this lives exactly as long as one request — and
+    /// nothing a person may do changes inside one. Without it, calling the service freely is
+    /// expensive: every uncached verdict opens its own DbContext for up to four queries, which is
+    /// why <c>OrganizationController</c> had to hand-batch permission checks to avoid "up to 8N
+    /// queries for N orgs", and why the widened my-permissions endpoint would otherwise make
+    /// thirty-six round trips to answer one call.
+    /// </remarks>
+    private readonly Dictionary<string, bool> _verdicts = [];
+
+    private async Task<bool> CachedAsync(string key, Func<Task<bool>> compute)
+    {
+        if (_verdicts.TryGetValue(key, out var cached)) return cached;
+        var verdict = await compute();
+        _verdicts[key] = verdict;
+        return verdict;
+    }
+
+    /// <inheritdoc />
+    public Task<bool> MayAsync(
+        Guid appUserId, Guid organizationId, OrganizationPermissionArea area,
+        OrganizationSecurityAction action, CancellationToken token = default)
+        => CachedAsync($"may:{appUserId}:{organizationId}:{(int)area}:{(int)action}", async () =>
+        {
+            // An area covers several tables and a role's permissions are stored per table, so the
+            // area is asked through the tables that belong to it: holding the action on ANY of
+            // them is holding it in the area. Reading it the other way — requiring all of them —
+            // would make a Cases grant depend on tables the role editor never mentions.
+            var tables = Ben.Data.Common.Constants.PermissionAreas.Map
+                .Where(kv => kv.Value == area)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var table in tables)
+                if (await HasAccessAsync(appUserId, organizationId, table, action, token))
+                    return true;
+
+            return false;
+        });
+
+    /// <inheritdoc />
+    public Task<bool> IsOwnerOrAdminAsync(Guid appUserId, Guid organizationId, CancellationToken token = default)
+        => CachedAsync($"admin:{appUserId}:{organizationId}", async () =>
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(token);
+            if (await IsSuperAdminAsync(db, appUserId, token)) return true;
+
+            // Role <= Administrator: Owner is 1 and Administrator is 2, the same comparison
+            // FileAudienceAccess.IsOrgAdminAsync already makes. Said once, here, rather than
+            // spelled slightly differently in nine controllers.
+            return await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == organizationId
+                            && m.AppUserId == appUserId
+                            && m.IsActive
+                            && m.Role <= OrganizationMemberRole.Administrator, token);
+        });
+
+    /// <inheritdoc />
+    public Task<bool> BelongsToAsync(Guid appUserId, Guid organizationId, CancellationToken token = default)
+        => CachedAsync($"member:{appUserId}:{organizationId}", async () =>
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(token);
+            if (await IsSuperAdminAsync(db, appUserId, token)) return true;
+
+            return await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == organizationId
+                            && m.AppUserId == appUserId
+                            && m.IsActive, token);
+        });
 
     public async Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(Guid appUserId, CancellationToken token = default)
     {

@@ -107,6 +107,12 @@
                             @* Item 156 Phase E: what upgrading buys in role terms. Only shown
                                when a plan EXCLUDES something — an all-inclusive checklist would
                                render as a wall of everything, which says nothing. *@
+                            @* IH-10: these two notes are optional, so a card without them started
+                               its feature list higher than its neighbours and the first row sat
+                               at three different heights. The slot is reserved whether or not
+                               there is anything to put in it, and the list below is top-aligned
+                               to it. *@
+                            <div class="pricing-notes">
                             @if ((tier.IncludedAreas?.Count ?? 9) < 9)
                             {
                                 <p class="small mb-1 fw-semibold">Custom-role areas included:</p>
@@ -122,9 +128,10 @@
                                     Not included: @string.Join(", ", missing.Select(CapabilityLabel))
                                 </p>
                             }
+                            </div>
                             @if (tier.Limits.Count > 0)
                             {
-                                <ul class="list-unstyled text-start small mt-auto mb-0">
+                                <ul class="list-unstyled text-start small mb-0">
                                     @foreach (var limit in tier.Limits)
                                     {
                                         <li class="mb-1">@LimitSentence(limit)</li>

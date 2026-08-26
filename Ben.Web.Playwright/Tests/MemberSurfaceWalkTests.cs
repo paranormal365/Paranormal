@@ -21,7 +21,7 @@ namespace Ben.Web.Playwright.Tests;
 [Category("MemberWalk")]
 public class MemberSurfaceWalkTests : BenTestBase
 {
-    private const string OrgName = "Tennessee Ghost Hunters";
+    private const string OrgName = "Paranormal365";
 
     /// <summary>Text that means a surface refused or broke, in every voice this app uses.</summary>
     private static readonly string[] RefusalMarkers =

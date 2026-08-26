@@ -1383,6 +1383,11 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ClientRequestOrganizations_OneAcceptedPerRequest")
+                        .HasFilter("[Status] = 1");
+
                     b.HasIndex("CreatedByAppUserId");
 
                     b.HasIndex("OrganizationId");
@@ -1395,6 +1400,38 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("ClientRequestOrganizations");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestReviewVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientRequestOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("DateVoted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("InFavor")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("VoterAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VoterAppUserId");
+
+                    b.HasIndex("ClientRequestOrganizationId", "VoterAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("ClientRequestReviewVotes");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
@@ -5073,6 +5110,36 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("OrganizationId", "SortOrder");
 
                     b.ToTable("OrganizationMemberLevels");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMemberLevelRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationMemberLevelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationRoleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationRoleId");
+
+                    b.HasIndex("OrganizationMemberLevelId", "OrganizationRoleId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationMemberLevelRoles");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipAnswer", b =>
@@ -9117,6 +9184,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestReviewVote", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.ClientRequestOrganization", "ClientRequestOrganization")
+                        .WithMany()
+                        .HasForeignKey("ClientRequestOrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "VoterAppUser")
+                        .WithMany()
+                        .HasForeignKey("VoterAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("ClientRequestOrganization");
+
+                    b.Navigation("VoterAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -11224,6 +11310,33 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Organization");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMemberLevelRole", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationMemberLevel", "OrganizationMemberLevel")
+                        .WithMany()
+                        .HasForeignKey("OrganizationMemberLevelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationRole", "OrganizationRole")
+                        .WithMany()
+                        .HasForeignKey("OrganizationRoleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationMemberLevel");
+
+                    b.Navigation("OrganizationRole");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipAnswer", b =>

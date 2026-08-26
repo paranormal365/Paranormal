@@ -13,7 +13,7 @@ namespace Ben.Web.Playwright.Tests;
 public class OrgPublicPageTests : BenTestBase
 {
     // Seeded by DevelopmentDataSeeder
-    private const string TghUrl = "tgh";
+    private const string TghUrl = "paranormal365";
     private const string NpsUrl = "nps";
 
     [Test]
@@ -23,7 +23,7 @@ public class OrgPublicPageTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Heading role, not bare text: the Apply-to-join panel also names the group, and a
         // strict-mode GetByText resolves to both. The heading is the sharper assertion anyway.
-        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Tennessee Ghost Hunters" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Paranormal365" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -92,7 +92,7 @@ public class OrgPublicPageTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}/cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Should have a link back to the org home
-        var orgLink = Page.GetByRole(AriaRole.Link, new() { Name = "Tennessee Ghost Hunters", Exact = false });
+        var orgLink = Page.GetByRole(AriaRole.Link, new() { Name = "Paranormal365", Exact = false });
         await Expect(orgLink.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

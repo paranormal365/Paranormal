@@ -113,15 +113,48 @@ public class OrganizationMembershipController : BenControllerBase
         var appUserId = GetCurrentUserIdOrThrow();
         var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
+        var areas = new Dictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions>();
+        foreach (var (area, table) in AreaProbeTables)
+        {
+            areas[area] = new AreaActions(
+                Create: await MayAsync(table, Ben.Data.Common.Enums.OrganizationSecurityAction.Create),
+                Read:   await MayAsync(table, Ben.Data.Common.Enums.OrganizationSecurityAction.Read),
+                Update: await MayAsync(table, Ben.Data.Common.Enums.OrganizationSecurityAction.Update),
+                Delete: await MayAsync(table, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete));
+        }
+
+        // What the PLAN allows, alongside what the person may do — two different questions that a
+        // screen usually has to ask together. Item 193: the private-engagement toggle rendered for
+        // every group because the browser had no way to know the plan refused it, so a free-tier
+        // group could tick it and collect a 400. A control should say what it will do before it is
+        // used, not after.
+        var capabilities = new Dictionary<Ben.Data.Common.Enums.TierCapability, bool>();
+        using (var capScope = HttpContext.RequestServices.CreateScope())
+        {
+            var capFactory = capScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var capDb = await capFactory.CreateDbContextAsync(cancellationToken);
+
+            foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
+            {
+                var (included, _) = await Ben.Data.Source.Services.TierAreaResolution.HasCapabilityAsync(
+                    capDb, organizationId, capability, cancellationToken);
+                capabilities[capability] = included;
+            }
+        }
+
         return Ok(new MyOrgPermissionsResponse(
-            CanReadCases: isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
-                appUserId, organizationId,
-                Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
-                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken),
-            CanReadInvestigations: isSuperAdmin || await _organizationSecurityService.HasAccessAsync(
-                appUserId, organizationId,
-                Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
-                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, cancellationToken)));
+            CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
+            CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
+            Areas: areas,
+            Capabilities: capabilities));
+
+        async Task<bool> MayAsync(
+            Ben.Data.Common.Enums.OrganizationSecurityTable table,
+            Ben.Data.Common.Enums.OrganizationSecurityAction action)
+            => isSuperAdmin
+            || await _organizationSecurityService.HasAccessAsync(
+                   appUserId, organizationId, table, action, cancellationToken);
     }
 
     /// <summary>
@@ -221,11 +254,55 @@ public class OrganizationMembershipController : BenControllerBase
     }
 
     /// <summary>The plan's included role areas, and its name for the upgrade note.</summary>
+    /// <summary>
+    /// One representative table per area, for asking "may this person act in this area at all".
+    /// </summary>
+    /// <remarks>
+    /// An area covers several tables (Cases covers the case, its timeline, its files…), and a
+    /// role's permissions are stored per TABLE. A UI affordance is about the area, so each area
+    /// is probed through the table its role permissions are actually written against — the one
+    /// the role editor edits. Per-row rules (who may edit THIS case) stay where they are, on the
+    /// server, per request.
+    /// </remarks>
+    private static readonly (Ben.Data.Common.Enums.OrganizationPermissionArea Area,
+                             Ben.Data.Common.Enums.OrganizationSecurityTable Table)[] AreaProbeTables =
+    [
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.OrganizationProfile, Ben.Data.Common.Enums.OrganizationSecurityTable.Organization),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Membership,          Ben.Data.Common.Enums.OrganizationSecurityTable.MembershipRequests),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,               Ben.Data.Common.Enums.OrganizationSecurityTable.Case),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,      Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Equipment,           Ben.Data.Common.Enums.OrganizationSecurityTable.Equipment),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.PublicPages,         Ben.Data.Common.Enums.OrganizationSecurityTable.OrganizationPage),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Files,               Ben.Data.Common.Enums.OrganizationSecurityTable.OrganizationFiles),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Clients,             Ben.Data.Common.Enums.OrganizationSecurityTable.ClientRequest),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar,            Ben.Data.Common.Enums.OrganizationSecurityTable.OrgCalendar),
+    ];
+
     public sealed record OrgIncludedAreasResponse(
         IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas, string? TierName);
 
-    /// <summary>Per-area read verdicts for one member in one group.</summary>
-    public sealed record MyOrgPermissionsResponse(bool CanReadCases, bool CanReadInvestigations);
+    /// <summary>
+    /// What the caller may DO in one group, per permission area.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two booleans until 2026-08-26, and that was the whole of IH-03. A Case Manager holds
+    /// create, update and delete on Cases — none of which this could express — so the browser had
+    /// no way to offer a button that the grant had just unlocked. The server refused nothing; it
+    /// simply never told anyone what they could do, and an owner configuring roles saw no
+    /// difference whatsoever.</para>
+    ///
+    /// <para>Keyed by area rather than flattened into named booleans so a new area is a row,
+    /// not a schema change — the same reasoning as the tier tables. <see cref="CanReadCases"/>
+    /// and <see cref="CanReadInvestigations"/> remain so existing callers keep working.</para>
+    /// </remarks>
+    public sealed record MyOrgPermissionsResponse(
+        bool CanReadCases,
+        bool CanReadInvestigations,
+        IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions> Areas,
+        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities);
+
+    /// <summary>What one person may do in one area. Absent action means refused.</summary>
+    public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);
 
     /// <summary>Creates a new organization with the authenticated user as its <see cref="Ben.Data.Common.Enums.OrganizationMemberRole.Owner"/>.</summary>
     /// <param name="request">Name and URL slug for the new organization.</param>

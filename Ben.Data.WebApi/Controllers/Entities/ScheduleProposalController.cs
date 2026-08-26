@@ -27,7 +27,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposals = await db.InvestigationScheduleProposals.AsNoTracking()
@@ -45,7 +45,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (request.Slots is null || request.Slots.Count == 0) return BadRequest("At least one proposed slot is required.");
 
@@ -81,7 +81,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Delete, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals
@@ -102,7 +102,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Investigations, OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
@@ -114,7 +114,12 @@ public sealed class ScheduleProposalController : BenControllerBase
 
         var investigation = new Investigation
         {
-            Id = Guid.NewGuid(), CaseId = caseId,
+            // OrganizationId is a direct FK and is NOT derived from the case at read time, so
+            // omitting it here left the investigation owned by Guid.Empty — belonging to no group,
+            // absent from every org-scoped list, while the proposal happily showed "Converted".
+            // The one investigation-creating path that had this wrong was the one the CLIENT
+            // starts by accepting a date.
+            Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
             Title = request.Title?.Trim() ?? "Investigation",
             ScheduledDateTime = slot.StartDateTime,
             EndDateTime = slot.EndDateTime,
@@ -131,12 +136,19 @@ public sealed class ScheduleProposalController : BenControllerBase
         return Ok(ToDto(proposal));
     }
 
-    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
-    private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+    /// <summary>Whether the caller may take <paramref name="action"/> in the given area.</summary>
+    /// <remarks>
+    /// Was <c>IsOrgMember</c>, asking <c>Case.Read</c> for every endpoint — so a member who could
+    /// only read a case could send the client date proposals in the group's name, withdraw them,
+    /// and convert one into a scheduled investigation. Converting creates an investigation, so it
+    /// is asked of the Investigations area rather than Cases: it is the same act as scheduling one
+    /// directly, and should need the same grant.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, OrganizationPermissionArea area,
+        OrganizationSecurityAction action, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
-        || await _security.HasAccessAsync(userId, orgId,
-               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
-               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId, area, action, ct);
 
     private static ScheduleProposalDto ToDto(InvestigationScheduleProposal p) => new(
         p.Id, p.CaseId, p.Status, p.Notes, p.AcceptedSlotId,

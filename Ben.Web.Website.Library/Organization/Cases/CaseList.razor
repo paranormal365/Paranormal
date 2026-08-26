@@ -19,9 +19,15 @@
             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))"><BenIcon Name="inbox" Class="me-1" />
                 Pending Requests @(_pendingCount > 0 ? $"({_pendingCount})" : "")
             </button>
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))"><BenIcon Name="plus" Class="me-1" />
-                New Case
-            </button>
+            @* IH-03 step 2: the button now answers to the same grant the server checks on
+               POST — a Case Manager gets it, a member with no grant does not see an action that
+               would 403. Offering it and refusing it is the shape this whole arc is about. *@
+            @if (_perms?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Create) == true)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))" data-testid="new-case"><BenIcon Name="plus" Class="me-1" />
+                    New Case
+                </button>
+            }
         </div>
     </div>
 
@@ -202,11 +208,24 @@
         await LoadAsync();
     }
 
+    /// <summary>What this viewer may do with cases in this group.</summary>
+    /// <remarks>
+    /// Null until it arrives, and <see cref="MyOrgPermissionsItem.May"/> answers NO for anything
+    /// the server did not mention — so a button appears once it is known to be usable, never
+    /// hopefully.
+    /// </remarks>
+    private MyOrgPermissionsItem? _perms;
+
     private async Task LoadAsync()
     {
         _error = null;
         try
         {
+            // Fetched alongside the list, not per button: one round trip answers every
+            // affordance on this screen, and the service caches it for the rest of the request.
+            try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+            catch { _perms = null; }   // unknown means the buttons stay hidden, not hopeful
+
             _casesResult = await AdminClient.GetOrgCasesAsync(OrgId);
             _cases       = _casesResult.Items.ToList();
             _incoming    = [.. (await AdminClient.GetIncomingTransfersAsync(OrgId)).Items];

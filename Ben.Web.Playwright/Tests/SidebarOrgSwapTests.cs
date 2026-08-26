@@ -15,7 +15,11 @@ namespace Ben.Web.Playwright.Tests;
 [Category("SidebarOrgSwap")]
 public class SidebarOrgSwapTests : BenTestBase
 {
-    private const string TghId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f";
+    // Resolved from the slug at run time — a hardcoded GUID dies with every database rebuild.
+    private string TghId = null!;
+
+    [SetUp]
+    public async Task ResolveTghId() => TghId = await OrgIdBySlugAsync("paranormal365");
 
     [Test]
     public async Task Swapping_groups_in_the_sidebar_actually_swaps_the_page()
@@ -35,8 +39,8 @@ public class SidebarOrgSwapTests : BenTestBase
             Main.Locator("dd", new() { HasTextString = "Nashville Paranormal Society" }));
 
         // …and back again, because the second swap is the one the stale instance breaks.
-        var tghLink = Page.Locator("#nav-menu a", new() { HasTextString = "Tennessee Ghost Hunters" }).First;
+        var tghLink = Page.Locator("#nav-menu a", new() { HasTextString = "Paranormal365" }).First;
         await ClickUntilAsync(tghLink,
-            Main.Locator("dd", new() { HasTextString = "Tennessee Ghost Hunters" }));
+            Main.Locator("dd", new() { HasTextString = "Paranormal365" }));
     }
 }

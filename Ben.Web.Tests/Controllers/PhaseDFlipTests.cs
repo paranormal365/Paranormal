@@ -72,7 +72,20 @@ public sealed class PhaseDFlipTests
         Assert.IsNotType<ForbidResult>((await ctrl.GetAll(orgId, Guid.NewGuid(), default)).Result);
     }
 
-    /// <summary>The ten converted files must keep delegating to HasAccessAsync.</summary>
+    /// <summary>
+    /// The converted files must keep asking the security service, by either of its two names.
+    /// </summary>
+    /// <remarks>
+    /// <para>Phase D's rule was "delegate to <c>HasAccessAsync</c>". IH-03 step 2 moved most of
+    /// these to <c>MayAsync</c>, which asks the same question one level up — an AREA rather than a
+    /// single table — and calls <c>HasAccessAsync</c> for each table underneath. Accepting both is
+    /// widening the ratchet's vocabulary, not its permissiveness: what it still refuses is a gate
+    /// that answers out of the membership table on its own.</para>
+    ///
+    /// <para>Left deliberately as a text scan rather than a behavioural test. It is guarding
+    /// against a shape that compiles and passes every functional test — which is how the original
+    /// bare-membership gates lived for months.</para>
+    /// </remarks>
     [Fact]
     public void No_converted_helper_regresses_to_a_membership_query()
     {
@@ -93,17 +106,17 @@ public sealed class PhaseDFlipTests
         foreach (var file in converted)
         {
             var text = File.ReadAllText(Path.Combine(root, file));
-            // The member-read helper must reference HasAccessAsync…
-            if (!text.Contains("_security.HasAccessAsync"))
-                offenders.Add($"{file}: helper no longer delegates to HasAccessAsync");
+            // The gate must reference the security service, by either of its two names.
+            if (!text.Contains("_security.HasAccessAsync") && !text.Contains("_security.MayAsync"))
+                offenders.Add($"{file}: gate no longer delegates to the security service");
             // …and must not have re-grown a bare-membership read gate.
             if (Regex.IsMatch(text, @"private async Task<bool> Is(?:Org)?Member\w*\([^)]*\)[\s\S]{0,400}?OrganizationUserMemberships"))
                 offenders.Add($"{file}: a membership query came back inside a member-gate helper");
         }
 
         Assert.True(offenders.Count == 0,
-            "Phase D converted these gates to HasAccessAsync(table, Read); a regression here "
-            + "silently reopens case data to every member and bypasses the tier area gate:\n  "
+            "These gates answer to the security service (HasAccessAsync or MayAsync); a regression "
+            + "here silently reopens case data to every member and bypasses the tier area gate:\n  "
             + string.Join("\n  ", offenders));
     }
 }

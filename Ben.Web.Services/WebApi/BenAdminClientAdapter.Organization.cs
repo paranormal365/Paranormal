@@ -323,9 +323,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteMemberLevelAsync(Guid orgId, Guid levelId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/member-levels/{levelId}", token);
 
-    public Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId, CancellationToken token = default)
+    public Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId,
+        bool applySuggestedRoles = false, CancellationToken token = default)
         => _api.PutVoidAsync($"/api/organizations/{orgId}/member-levels/assign/{membershipId}",
-            new { MemberLevelId = levelId }, token);
+            new { MemberLevelId = levelId, ApplySuggestedRoles = applySuggestedRoles }, token);
+
+    public Task<LoadResult<Guid>> GetSuggestedRolesAsync(Guid orgId, Guid levelId, CancellationToken token = default)
+        => _api.GetListAsync<Guid>($"/api/organizations/{orgId}/member-levels/{levelId}/suggested-roles", token);
+
+    public Task<bool> SetSuggestedRolesAsync(Guid orgId, Guid levelId, IReadOnlyList<Guid> roleIds,
+        CancellationToken token = default)
+        => _api.PutVoidAsync($"/api/organizations/{orgId}/member-levels/{levelId}/suggested-roles",
+            new { RoleIds = roleIds }, token);
 
     public async Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)
     {

@@ -28,9 +28,15 @@ send the same request to more than one; each decides independently whether to ta
 ![The My Requests list showing a request and its status](/help/media/requesting-an-investigation/my-requests.png)
 *My Requests tracks where each request stands with each group you sent it to.*
 
-1. The group reviews your request. They may mark it as under review while they discuss it.
-2. If they accept, a **case** is opened and you get access to it under **My Cases**.
-3. If they decline, you are told, and you can send the request to a different group without
+1. The group reviews your request. **Under review** means their members are looking at what
+   you submitted — including any photos or files you attached — and voting on taking it.
+2. If you sent the request to several groups, each of them can review it at the same time.
+   **The first group to accept it takes the case**; the others are told it is no longer
+   available.
+3. When a group accepts, you get a message naming your group — and your contact person, when
+   one has been chosen. Your **case** opens under **My Cases**, and its **Messages** tab is
+   where you talk to your group from then on.
+4. If they decline, you are told, and you can send the request to a different group without
    writing it again.
 
 ## Your address

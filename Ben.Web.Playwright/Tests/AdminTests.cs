@@ -23,7 +23,9 @@ public class AdminTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("AverageBen", new() { Exact = false }))
+        // .First: the accounts arc backfilled first/last names, so "AverageBen" now appears in
+        // several grid columns and a bare GetByText trips Playwright's strict mode.
+        await Expect(Page.GetByText("AverageBen", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 

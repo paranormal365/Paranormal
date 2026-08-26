@@ -195,7 +195,25 @@ public interface IBenOrganizationClient
     Task<OrgMemberLevelItem?> CreateMemberLevelAsync(Guid orgId, string name, int sortOrder, bool isActive, CancellationToken token = default);
     Task<OrgMemberLevelItem?> UpdateMemberLevelAsync(Guid orgId, Guid levelId, string name, int sortOrder, bool isActive, CancellationToken token = default);
     Task<bool> DeleteMemberLevelAsync(Guid orgId, Guid levelId, CancellationToken token = default);
-    Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId, CancellationToken token = default);
+    /// <summary>
+    /// Sets a member's title, optionally also granting the roles that title suggests.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="applySuggestedRoles"/> defaults to false so a plain title change stays a
+    /// plain title change. When true the grant is additive only — clearing or lowering a title
+    /// never takes a role away, because access is removed on the roles screen, deliberately.
+    /// </remarks>
+    Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId,
+        bool applySuggestedRoles = false, CancellationToken token = default);
+
+    /// <summary>The roles a title suggests — what assigning it will offer to grant.</summary>
+    Task<LoadResult<Guid>> GetSuggestedRolesAsync(Guid orgId, Guid levelId, CancellationToken token = default);
+
+    /// <summary>
+    /// Replaces the roles a title suggests. Changes nothing about who may do what today.
+    /// </summary>
+    Task<bool> SetSuggestedRolesAsync(Guid orgId, Guid levelId, IReadOnlyList<Guid> roleIds,
+        CancellationToken token = default);
     Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────

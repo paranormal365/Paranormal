@@ -129,14 +129,17 @@ public class RequestStatusProgressionTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Find a submitted request (status badge = "Submitted")
-        var submittedCard = Page.GetByText("Submitted", new() { Exact = false }).First;
-        if (!await submittedCard.IsVisibleAsync())
+        // The status BADGE exactly, not any text containing "Submitted": every card carries a
+        // "Submitted {date}" line, so the loose match found that on an Accepted card, clicked a
+        // request with no Submitted To section, and reported the section broken. In the reseeded
+        // data Daniel's request is Accepted, which is exactly when the loose match lies.
+        var submittedBadge = Page.Locator(".badge", new() { HasTextString = "Submitted" }).First;
+        if (!await submittedBadge.IsVisibleAsync())
         {
-            Assert.Pass("No submitted requests for Daniel Park — may only have Draft.");
+            Assert.Pass("No submitted requests for Daniel Park — may only have Draft/Accepted.");
             return;
         }
-        await Page.Locator(".card").Filter(new() { HasText = "Submitted" }).First.ClickAsync();
+        await Page.Locator(".card").Filter(new() { Has = submittedBadge }).First.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Submitted To card should appear

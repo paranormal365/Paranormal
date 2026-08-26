@@ -66,8 +66,9 @@ public class MyCaseDashboardTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // DevelopmentDataSeeder creates "Park Residence, Nashville TN" for Daniel
-        var caseCard = Page.GetByText("Park Residence", new() { Exact = false })
+        // DevelopmentDataSeeder titles Daniel's case "Belmont Boulevard Residence" — renamed from
+        // "Park Residence" by item 178, because Park is the client's surname and the title leaked it.
+        var caseCard = Page.GetByText("Belmont Boulevard Residence", new() { Exact = false })
                            .Or(Page.GetByText("Nashville", new() { Exact = false }).First)
                            .First;
         await Expect(caseCard).ToBeVisibleAsync(new() { Timeout = 12_000 });
@@ -132,7 +133,7 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        // Should show "Park Residence" or the case reference
+        // Should show "Belmont Boulevard Residence" or the case reference
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Contain("Nashville").Or.Contain("Park").Or.Contain("#2026"),
             "Expected case title or reference on detail page.");
@@ -149,7 +150,9 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        var logBtn = Page.GetByText("Log Occurrence", new() { Exact = false });
+        // The ROLE, not the text: the log dialog's title is also "Log Occurrence" and BenModal
+        // keeps it in the DOM while hidden, so a text match resolves to two elements.
+        var logBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" });
         await Expect(logBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

@@ -46,7 +46,7 @@ public sealed class CaseNoteController : BenControllerBase
     public async Task<ActionResult<CaseNoteRecord>> Create(
         Guid orgId, Guid caseId, [FromBody] UpsertCaseNoteRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
@@ -77,7 +77,7 @@ public sealed class CaseNoteController : BenControllerBase
     public async Task<ActionResult<CaseNoteRecord>> Update(
         Guid orgId, Guid caseId, Guid noteId, [FromBody] UpsertCaseNoteRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var note = await db.CaseNotes.Include(n => n.AuthorAppUser)
@@ -102,7 +102,7 @@ public sealed class CaseNoteController : BenControllerBase
     public async Task<IActionResult> Delete(
         Guid orgId, Guid caseId, Guid noteId, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var note = await db.CaseNotes
@@ -118,6 +118,24 @@ public sealed class CaseNoteController : BenControllerBase
     }
 
     // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
+    /// <summary>
+    /// May the caller take this action on this case's notes?
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Create, update and delete used to ask for Case.READ</b> — through a helper called
+    /// <c>IsOrgMemberAsync</c>, which is neither what it asked nor what it meant. Anybody who
+    /// could see a case could rewrite and destroy its notes.</para>
+    ///
+    /// <para>That was survivable while every member was auto-granted case read anyway. It is not
+    /// survivable now: Ben ended the grandfathering on 2026-08-26, so a read grant is a
+    /// deliberate act and has to mean READ. Owners and administrators still pass above this.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
+
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
         => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
         || await _security.HasAccessAsync(GetCurrentUserId(), orgId,

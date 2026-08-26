@@ -49,6 +49,43 @@ public abstract class BenTestBase : PageTest
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
 
+    // ── Seeded org ids, resolved once per run ─────────────────────────────────
+    // Fixtures used to hardcode these GUIDs, which survives exactly until the next database
+    // rebuild: the org comes back under a fresh id, the fixture navigates to an org that no
+    // longer exists, and the failure blames whatever element it was waiting for. The slug is the
+    // identity the seeder maintains, so the slug is what fixtures name.
+    private static readonly Dictionary<string, string> _orgIdBySlug = [];
+    private static readonly SemaphoreSlim _orgIdLock = new(1, 1);
+
+    /// <summary>The seeded org's current id, looked up by its stable slug.</summary>
+    protected async Task<string> OrgIdBySlugAsync(string slug)
+    {
+        await _orgIdLock.WaitAsync();
+        try
+        {
+            if (_orgIdBySlug.TryGetValue(slug, out var cached)) return cached;
+
+            var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+            var login = await api.PostAsync("/login", new()
+            {
+                DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+            });
+            Assert.That(login.Ok, Is.True, "the admin seat should be able to sign in to resolve org ids");
+            var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+            var orgs = await api.GetAsync("/api/organizations",
+                new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+            Assert.That(orgs.Ok, Is.True, await orgs.TextAsync());
+            foreach (var o in (await orgs.JsonAsync())!.Value.EnumerateArray())
+                _orgIdBySlug[o.GetProperty("urlName").GetString()!] = o.GetProperty("id").GetString()!;
+            await api.DisposeAsync();
+
+            Assert.That(_orgIdBySlug.ContainsKey(slug), Is.True, $"no seeded org has the slug '{slug}'");
+            return _orgIdBySlug[slug];
+        }
+        finally { _orgIdLock.Release(); }
+    }
+
+
     // ── The seats ─────────────────────────────────────────────────────────────
     //
     // Four of them, named by what they can do rather than who they are, because which seat a test
@@ -68,7 +105,7 @@ public abstract class BenTestBase : PageTest
     protected static string SuperAdminPassword => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_PASSWORD") ?? "Y@ung615";
 
     /// <summary>
-    /// Sarah — Administrator of Tennessee Ghost Hunters and owner of BenCo. The default seat, and
+    /// Sarah — Administrator of Paranormal365 and owner of BenCo. The default seat, and
     /// the reason to think twice: an administrator passes <c>HasAccessAsync</c> on every table by
     /// role, so a surface broken for everyone else looks perfect from here.
     /// </summary>
@@ -76,7 +113,7 @@ public abstract class BenTestBase : PageTest
     protected static string UserPassword       => Environment.GetEnvironmentVariable("BEN_USER_PASSWORD")       ?? "S@rah!Mitchell26";
 
     /// <summary>
-    /// James — a plain <c>Member</c> of Tennessee Ghost Hunters, and the most useful seat in the
+    /// James — a plain <c>Member</c> of Paranormal365, and the most useful seat in the
     /// suite.
     /// </summary>
     /// <remarks>
@@ -89,7 +126,7 @@ public abstract class BenTestBase : PageTest
     protected static string MemberPassword     => Environment.GetEnvironmentVariable("BEN_MEMBER_PASSWORD")     ?? "J@mes!Thornton26";
 
     /// <summary>
-    /// Victor — a <c>Viewer</c> of Tennessee Ghost Hunters: belongs to the group, may look,
+    /// Victor — a <c>Viewer</c> of Paranormal365: belongs to the group, may look,
     /// changes nothing. The fourth seat of the four-seat pass (owner, administrator, member,
     /// viewer); seeded permanently so using it never requires mutating a real member's tier.
     /// </summary>

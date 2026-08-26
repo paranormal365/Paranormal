@@ -55,6 +55,7 @@ internal static class OrganizationSeeder
                     UserName      = email,
                     Email         = email,
                     DisplayName   = displayName,
+                    DateOnboarded = DateTime.UtcNow, // seeded = established; no first-run wizard
                     EmailConfirmed = true,
                     DateCreated   = DateTime.UtcNow
                 };

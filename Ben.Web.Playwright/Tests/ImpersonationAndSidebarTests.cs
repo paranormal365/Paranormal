@@ -20,7 +20,7 @@ public class ImpersonationAndSidebarTests : BenTestBase
 
         var nav = Page.Locator("aside, .app-nav, nav").First;
         // The SuperAdmin belongs to these three; a sees-all list would show fourteen.
-        foreach (var org in new[] { "Tennessee Ghost Hunters", "BenCo" })
+        foreach (var org in new[] { "Paranormal365", "BenCo" })
             await Expect(nav.GetByText(org, new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 20_000 });
         await Expect(nav.GetByText("Journey Group", new() { Exact = false })).ToHaveCountAsync(0);
     }

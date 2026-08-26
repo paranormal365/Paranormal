@@ -16,7 +16,36 @@ namespace Ben.Web.Playwright.Tests;
 [Category("RoleTierJourney")]
 public class RoleTierJourneyTests : BenTestBase
 {
-    private const string OrgId = "881ea0f6-8c0d-475e-9065-c6ed15e3302f"; // Tennessee Ghost Hunters
+    /// <summary>
+    /// Paranormal365's id, resolved from its slug at run time.
+    /// </summary>
+    /// <remarks>
+    /// This was a hardcoded GUID, which survives exactly until the next database rebuild — the
+    /// org comes back under a fresh id, the test navigates to an org that no longer exists, and
+    /// the failure reads as "the Cases tab never appeared", pointing at permissions when the
+    /// address was simply wrong. The slug is the identity the seeder actually maintains.
+    /// </remarks>
+    private string? _orgId;
+
+    private async Task<string> OrgIdAsync()
+    {
+        if (_orgId is not null) return _orgId;
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new()
+        {
+            DataObject = new { email = MemberEmail, password = MemberPassword },
+        });
+        Assert.That(login.Ok, Is.True, "the member seat should be able to sign in");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var orgs = await api.GetAsync("/api/organizations",
+            new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+        Assert.That(orgs.Ok, Is.True, await orgs.TextAsync());
+        foreach (var o in (await orgs.JsonAsync())!.Value.EnumerateArray())
+            if (o.GetProperty("urlName").GetString() == "paranormal365")
+                return _orgId = o.GetProperty("id").GetString()!;
+        Assert.Fail("Paranormal365 is not in the seed data.");
+        return "";
+    }
 
     [Test]
     public async Task Unchecking_a_tier_area_revokes_a_role_holders_access_until_it_returns()
@@ -82,7 +111,7 @@ public class RoleTierJourneyTests : BenTestBase
 
     private async Task GotoOrgAsync()
     {
-        await Page.GotoAsync($"{BaseUrl}/organizations/{OrgId}?tab=details");
+        await Page.GotoAsync($"{BaseUrl}/organizations/{await OrgIdAsync()}?tab=details");
         await WaitUntilLoadedAsync();
     }
 
@@ -105,7 +134,7 @@ public class RoleTierJourneyTests : BenTestBase
         var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
 
         var areas = await Page.APIRequest.GetAsync(
-            $"http://localhost:5252/api/security/organizations/{OrgId}/included-areas",
+            $"http://localhost:5252/api/security/organizations/{await OrgIdAsync()}/included-areas",
             new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
         if (!areas.Ok) return null;
         var json = await areas.JsonAsync();

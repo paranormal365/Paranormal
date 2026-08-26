@@ -138,7 +138,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     public async Task<ActionResult<InvestigationRecord>> Create(
         Guid orgId, [FromBody] CreateOrgInvestigationRequest request, CancellationToken ct)
     {
-        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (string.IsNullOrWhiteSpace(request.Title)) return BadRequest("A title is required.");
 
         var userId = GetCurrentUserId();
@@ -724,6 +724,26 @@ public sealed class OrgInvestigationsController : BenControllerBase
         || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
                Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+
+    /// <summary>Whether the caller may take <paramref name="action"/> on this group's investigations.</summary>
+    /// <remarks>
+    /// <para><b>Create was gated on Read until 2026-08-26</b> — the one write verb here the IH-03
+    /// sweep missed, because every OTHER write in this controller carries a second per-row
+    /// <c>InvestigationAccess.CanManageAsync</c> gate and this one never did: scheduling a new
+    /// visit has no row to manage yet. A member holding only Investigation.Read could schedule
+    /// visits in the group's name. Found by the e2e assertion that a read-only member sees no
+    /// "Schedule an investigation" button — the button was there, and the server would have
+    /// honoured it.</para>
+    ///
+    /// <para><see cref="CheckIn"/> stays on <see cref="IsMemberAsync"/> deliberately: checking in
+    /// records the caller's OWN presence at a visit they are on the roster for — participation,
+    /// not editing — and the roster itself is the gate that matters there.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                  Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations, action, ct);
 }
 
 /// <summary>

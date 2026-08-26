@@ -210,7 +210,18 @@
     {
         // Entra sessions are maintained by the OIDC cookie, not localStorage.
         // Persisting an Entra access token would cause stale-token issues after expiry.
-        if (TokenStore.IsEntraSession) return;
+        //
+        // IMPERSONATION IS THE EXCEPTION (IH-01, Ben's 2026-08-26 production sweep) — the rule and
+        // the reasoning live in AuthStatePersistence, where they can be tested.
+        if (AuthStatePersistence.For(TokenStore.IsEntraSession, TokenStore.IsImpersonating)
+            == AuthStatePersistence.Action.Clear)
+        {
+            // Clearing matters as much as persisting: a record left over from an impersonation
+            // that has ended would silently put the admin back into it on the next reload.
+            try { await LocalStorage.DeleteAsync(AuthStateKey); }
+            catch { /* JS interop can fail if the circuit is disconnecting */ }
+            return;
+        }
 
         try
         {
@@ -229,7 +240,8 @@
                     TokenStore.OriginalRefreshToken,
                     TokenStore.OriginalUserId?.ToString(),
                     TokenStore.OriginalUserEmail,
-                    TokenStore.OriginalUserDisplayName
+                    TokenStore.OriginalUserDisplayName,
+                    TokenStore.IsEntraSession
                 ));
             }
             else
@@ -262,6 +274,7 @@
                 TokenStore.OriginalUserId = Guid.TryParse(state.OriginalUserId, out var origId) ? origId : null;
                 TokenStore.OriginalUserEmail = state.OriginalUserEmail;
                 TokenStore.OriginalUserDisplayName = state.OriginalUserDisplayName;
+                TokenStore.IsEntraSession = state.IsEntraSession;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -296,7 +309,12 @@
         string? OriginalRefreshToken = null,
         string? OriginalUserId = null,
         string? OriginalUserEmail = null,
-        string? OriginalUserDisplayName = null
+        string? OriginalUserDisplayName = null,
+        // IH-01: an impersonation started from an Entra session is now persisted, so the flag has
+        // to come back with it — otherwise ending that impersonation looks like a password
+        // session and writes the admin's own bridged token into local storage, where a later
+        // reload would restore a stale one instead of re-bridging. Defaulted, same rule as above.
+        bool IsEntraSession = false
     );
 
 }

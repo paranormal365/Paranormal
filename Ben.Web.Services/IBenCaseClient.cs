@@ -107,6 +107,12 @@ public interface IBenCaseClient
     Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
+
+    /// <summary>The review page's one load: submission, materials, ballot, and my own vote.</summary>
+    Task<RequestReviewDetailItem?> GetRequestReviewAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+
+    /// <summary>Cast or change my vote on taking this request. Null on refusal.</summary>
+    Task<RequestReviewVoteItem?> CastRequestReviewVoteAsync(Guid orgId, Guid clientRequestId, bool inFavor, string? comment, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
     /// <summary>
     /// The case timeline. Pass <paramref name="investigationId"/> for the binder view — only the

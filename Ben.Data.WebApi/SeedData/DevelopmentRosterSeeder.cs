@@ -59,6 +59,19 @@ internal static class DevelopmentRosterSeeder
         // remember to put them back. The seat nobody can sit in is the seat nobody tests.
         var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes",   "V!ctor!Reyes26");
 
+        // IH-08, Ben's 2026-08-26 sweep: Site Roles reported Admin 0 users and Moderator 0, so
+        // neither role's behaviour had ever run — including whatever gates the 26 /admin/* routes
+        // and the /moderation/media screen. Same reasoning as Victor's Viewer seat above: the
+        // seat nobody can sit in is the seat nobody tests. These two exist to be signed in as.
+        //
+        // Deliberately NOT given to an existing person: promoting Rachel or Marcus would change
+        // what an existing seat means and quietly invalidate every check that treats them as an
+        // ordinary org administrator or member.
+        var alice  = await UserAsync(userManager, "alice.nguyen@benco.dev",    "Alice Nguyen",   "@lice!Nguyen26");
+        var miguel = await UserAsync(userManager, "miguel.santos@benco.dev",   "Miguel Santos",  "M!guel!Santos26");
+        await EnsureSiteRoleAsync(userManager, alice,  Ben.Data.Common.Constants.RoleNames.Admin);
+        await EnsureSiteRoleAsync(userManager, miguel, Ben.Data.Common.Constants.RoleNames.Moderator);
+
         var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell",  "L!nda!Maxwell26");
         var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes",   "R0bert!Hayes26");
         var karen  = await UserAsync(userManager, "karen.foster@example.com",  "Karen Foster",   "K@ren!Foster26");
@@ -72,7 +85,7 @@ internal static class DevelopmentRosterSeeder
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
-        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "tgh");
+        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "paranormal365" || o.UrlName == "tgh");
         var nps = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "nps");
         if (tgh is null || nps is null)
         {
@@ -155,6 +168,22 @@ internal static class DevelopmentRosterSeeder
             body: "<p>Renting a 1920s duplex. Cold spots on the stairs, and twice I have heard my name "
                 + "said clearly from an empty room. My landlord says the previous tenant reported the same.</p>",
             now: now);
+
+        // A fourth story for the request-review flow (2026-08-26): offered to TWO groups at once
+        // — BenCo (alphabetically first, so the route crawler resolves this pair) and MCSS — with
+        // a photo attached, so the review page's file previews and the both-groups-see-the-
+        // materials rule have something real to show. Mark it Under Review in either group's
+        // pending queue to watch the vote messages go out; first group to accept wins.
+        var benco = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "benco");
+        if (benco is not null && mcss is not null)
+            await ContestedRequestAsync(db, [benco, mcss], alice,
+                requestId: new Guid("51000004-0000-0000-0000-000000000001"),
+                street: "121 Rosebank Ave", city: "Nashville", state: "TN", zip: "37206",
+                gender: ClientGender.Female, birthYear: 1987,
+                body: "<p>The attic hatch opens on its own — I have found it hanging open three "
+                    + "mornings in a row with the cord still looped on its hook. My daughter says "
+                    + "someone hums up there. Photo of the hatch attached.</p>",
+                now: now);
 
         // ── Investigations with full rosters ──────────────────────────────────
         //
@@ -240,10 +269,31 @@ internal static class DevelopmentRosterSeeder
         }
 
         await db.SaveChangesAsync();
+        await AssignInvestigatorRolesAsync(dbFactory, now);
+
         Console.WriteLine("[RosterSeeder] Roster seed complete — 11 people, MCSS, 3 client stories, 3 investigations, 3 brands.");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>Puts somebody in a site-wide role, idempotently.</summary>
+    /// <remarks>
+    /// The roles themselves are created by <see cref="SuperAdminSeeder"/>; this only fills them.
+    /// A failure is reported and swallowed: a missing role holder is a gap in test coverage, not
+    /// a reason for the whole seed to fall over.
+    /// </remarks>
+    private static async Task EnsureSiteRoleAsync(
+        UserManager<AppUser> userManager, AppUser user, string roleName)
+    {
+        if (await userManager.IsInRoleAsync(user, roleName)) return;
+
+        var result = await userManager.AddToRoleAsync(user, roleName);
+        if (!result.Succeeded)
+        {
+            Console.WriteLine($"[RosterSeeder] Could not put {user.Email} in '{roleName}': "
+                            + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
 
     private static async Task<AppUser> UserAsync(
         UserManager<AppUser> userManager, string email, string displayName, string password)
@@ -255,6 +305,10 @@ internal static class DevelopmentRosterSeeder
         {
             UserName = email, Email = email, DisplayName = displayName,
             EmailConfirmed = true, DateCreated = DateTime.UtcNow,
+            // Seeded people are established users: the first-run wizard has nothing to ask them,
+            // and an unstamped account is redirected to /onboarding on every navigation — which
+            // silently hijacked whole e2e fixtures after the database rebuild.
+            DateOnboarded = DateTime.UtcNow,
         };
         var result = await userManager.CreateAsync(user, password);
         if (!result.Succeeded)
@@ -367,6 +421,65 @@ internal static class DevelopmentRosterSeeder
         Console.WriteLine($"[RosterSeeder] Created case '{caseTitle}' for {client.DisplayName}.");
         return theCase;
     }
+
+    /// <summary>
+    /// A submitted request offered to several groups at once, with a photo attached — the
+    /// request-review flow's demo data: every candidate group can open the materials, and the
+    /// first to accept wins.
+    /// </summary>
+    private static async Task ContestedRequestAsync(
+        BenDataContext db, IReadOnlyList<Organization> orgs, AppUser client, Guid requestId,
+        string street, string city, string state, string zip,
+        ClientGender gender, int birthYear, string body, DateTime now)
+    {
+        if (await db.ClientRequests.AnyAsync(r => r.Id == requestId)) return;
+
+        db.ClientRequests.Add(new ClientRequest
+        {
+            Id = requestId, AppUserId = client.Id,
+            Status = ClientRequestStatus.Submitted,
+            StreetAddress1 = street, City = city, State = state, ZipCode = zip, Country = "US",
+            Gender = gender, BirthYear = birthYear,
+            Description = body,
+            DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
+        });
+        foreach (var org in orgs)
+            db.ClientRequestOrganizations.Add(new ClientRequestOrganization
+            {
+                ClientRequestId = requestId, OrganizationId = org.Id,
+                Status = ClientOrgRequestStatus.Pending,
+                DateApplied = now.AddDays(-2),
+                DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
+            });
+
+        // A real (tiny) JPEG in the legacy FileData column, which the download path still
+        // honours — no file on disk to lose between environments.
+        var photoId = new Guid("51000004-0000-0000-0000-00000000f001");
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = photoId, AppUserId = client.Id,
+            // The fixed case-evidence type CaseFileController uses — a client's request photo is
+            // exactly prospective case evidence.
+            UploadFileTypeId = new Guid("20000000-0000-0000-0000-000000000001"),
+            FileName = "attic-hatch.jpg", ContentType = "image/jpeg",
+            FileData = TinyJpeg, FileSize = TinyJpeg.Length,
+            DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
+        });
+        db.ClientRequestFiles.Add(new ClientRequestFile
+        {
+            ClientRequestId = requestId, UploadFileId = photoId,
+            DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
+        });
+
+        await db.SaveChangesAsync();
+        Console.WriteLine($"[RosterSeeder] Created contested request from {client.DisplayName} to {orgs.Count} groups.");
+    }
+
+    /// <summary>A 1×1 grey JPEG — the smallest honest image the preview pipeline will render.</summary>
+    private static readonly byte[] TinyJpeg = Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
+      + "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA"
+      + "AAAAAAAAAAAAC//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==");
 
     /// <summary>A submitted request sitting unanswered in one group's queue.</summary>
     private static async Task PendingRequestAsync(
@@ -514,4 +627,129 @@ internal static class DevelopmentRosterSeeder
         });
         await db.SaveChangesAsync();
     }
+
+
+    /// <summary>
+    /// Gives every seeded plain member their group's Investigator Role — the assignment a real
+    /// owner would make.
+    /// </summary>
+    /// <remarks>
+    /// <para>Needed since IH-03 step 4 ended the grandfathering (Ben, 2026-08-26). Before that,
+    /// every member could read cases without holding anything, so the seeded world worked by
+    /// accident. Now a member with no role sees no case surfaces — which is CORRECT enforcement
+    /// aimed at an UNCONFIGURED world: the seeders built a group whose owner never assigned
+    /// anyone a role, and the whole e2e suite failed honestly against it. The fix belongs here,
+    /// in the seeded data, not in the enforcement and not in the tests.</para>
+    ///
+    /// <para>Dev-only by construction: this file already runs behind <c>SeedData:DevData:Enabled</c>.
+    /// Owners and Administrators are skipped — they bypass grants. Idempotent: an existing role
+    /// membership is left alone. The role is matched by name within each org, and an org whose
+    /// owner deleted its Investigator Role is skipped rather than "repaired" — deletions are
+    /// decisions, even seeded ones.</para>
+    /// </remarks>
+    private static async Task AssignInvestigatorRolesAsync(
+        IDbContextFactory<BenDataContext> dbFactory, DateTime now)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        // Only the fake people — a real member in a shared dev database keeps whatever their
+        // group's owner actually decided.
+        var seededUserIds = await db.Users
+            .Where(u => u.Email != null && u.Email.EndsWith("@benco.dev"))
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        // Backfill DateOnboarded for fake people created before the stamp existed at creation:
+        // an unstamped account is redirected to /onboarding on every navigation, which is how a
+        // database rebuild silently hijacked whole e2e fixtures. Idempotent by the null check.
+        var unonboarded = await db.Users
+            .Where(u => seededUserIds.Contains(u.Id) && u.DateOnboarded == null)
+            .ToListAsync();
+        foreach (var u in unonboarded) u.DateOnboarded = now;
+        if (unonboarded.Count > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[RosterSeeder] Stamped DateOnboarded for {unonboarded.Count} seeded account(s).");
+        }
+
+        var memberships = await db.OrganizationUserMemberships
+            .Where(m => m.IsActive
+                     && seededUserIds.Contains(m.AppUserId)
+                     // Owners and admins bypass grants; Viewers are DEFINED by holding none —
+                     // Victor Reyes exists precisely so a role-less Viewer seat is always there,
+                     // and the first version of this filter handed him the Investigator Role,
+                     // which put case banners in front of the one seat that must never see them
+                     // (the action-needed banner e2e caught it).
+                     && m.Role != OrganizationMemberRole.Owner
+                     && m.Role != OrganizationMemberRole.Administrator
+                     && m.Role != OrganizationMemberRole.Viewer)
+            .Select(m => new { m.Id, m.OrganizationId })
+            .ToListAsync();
+
+        var orgIds = memberships.Select(m => m.OrganizationId).Distinct().ToList();
+
+        // The assignment is recorded as the org owner's act, which is who it models.
+        var ownerByOrg = await db.Organizations
+            .Where(o => orgIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o.CreatedByAppUserId);
+
+        var roles = await db.OrganizationRoles
+            .Where(r => orgIds.Contains(r.OrganizationId) && r.Name == "Investigator Role" && r.IsActive)
+            .Select(r => new { r.Id, r.OrganizationId })
+            .ToListAsync();
+        var roleByOrg = roles.ToDictionary(r => r.OrganizationId, r => r.Id);
+
+        // Dev orgs seeded before the Investigator Role joined the defaults hold the original
+        // seven, and the org-level backfill deliberately skips any org that already has roles.
+        // Here — dev data only — the role is created where it is missing, modelling the owner
+        // adding it. The name is the marker: an org where the owner RENAMED or deleted theirs is
+        // an org this cannot distinguish, and in seeded data that trade is fine.
+        foreach (var orgId in orgIds.Where(id => !roleByOrg.ContainsKey(id)))
+        {
+            var role = new OrganizationRole
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, Name = "Investigator Role",
+                Description = "Reads the group's cases and investigations. Assign it to the members who should see them.",
+                IsActive = true, SortOrder = 0,
+                DateCreated = now, CreatedByAppUserId = ownerByOrg[orgId],
+            };
+            db.OrganizationRoles.Add(role);
+            foreach (var table in new[] { OrganizationSecurityTable.Case, OrganizationSecurityTable.Investigation })
+                db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+                {
+                    Id = Guid.NewGuid(), OrganizationRoleId = role.Id,
+                    TableName = table, Actions = OrganizationSecurityAction.Read,
+                    DateCreated = now, CreatedByAppUserId = ownerByOrg[orgId],
+                });
+            roleByOrg[orgId] = role.Id;
+        }
+
+        var roleIds = roleByOrg.Values.ToList();
+        var already = await db.OrganizationRoleMemberships
+            .Where(rm => roleIds.Contains(rm.OrganizationRoleId))
+            .Select(rm => rm.OrganizationUserMembershipId)
+            .ToHashSetAsync();
+
+        var added = 0;
+        foreach (var m in memberships)
+        {
+            if (!roleByOrg.TryGetValue(m.OrganizationId, out var roleId)) continue;
+            if (already.Contains(m.Id)) continue;
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+            {
+                Id = Guid.NewGuid(),
+                OrganizationRoleId = roleId,
+                OrganizationUserMembershipId = m.Id,
+                DateCreated = now,
+                CreatedByAppUserId = ownerByOrg[m.OrganizationId],
+            });
+            added++;
+        }
+        if (added > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[RosterSeeder] Assigned Investigator Role to {added} seeded member(s).");
+        }
+    }
+
 }

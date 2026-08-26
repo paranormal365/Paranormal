@@ -20,8 +20,15 @@
                 @onclick="Toggle">
             @if (_avatarFileId is { } fileId)
             {
-                <img src="@AdminClient.GetFileThumbnailUrl(fileId)" alt=""
-                     class="profile-image profile-image-md rounded-circle" />
+                @* IH-06: a photo that fails to load falls back to the SAME initials the
+                   no-photo case shows, rather than a broken glyph in a round frame. *@
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@AdminClient.GetFileThumbnailUrl(fileId)"
+                    Class="profile-image profile-image-md rounded-circle">
+                    <Fallback>
+                        <span class="profile-image profile-image-md rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white">@Initials</span>
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
             }
             else
             {
