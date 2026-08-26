@@ -94,7 +94,7 @@ public sealed class RequestReviewNotifier
     }
 
     /// <summary>The race is over: tell every OTHER reviewing group it is no longer available.</summary>
-    /// <param name="cancelledOrgIds">The groups whose applications were just cancelled.</param>
+    /// <remarks><c>cancelledOrgIds</c> are the groups whose applications were just cancelled.</remarks>
     public async Task SendNoLongerAvailableAsync(
         IReadOnlyCollection<Guid> cancelledOrgIds, Guid clientRequestId, Guid byUserId, CancellationToken ct)
     {

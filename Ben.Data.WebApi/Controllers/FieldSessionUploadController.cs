@@ -119,7 +119,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
         // Asked directly rather than inferred from an exception type: a row that survived its
         // bytes has to be reported plainly, and returning an empty session instead would read as
         // a night where nothing happened.
-        if (!_fileStorage.Exists(session.DocumentUploadFile.StoragePath))
+        // StoragePath is nullable — a legacy row keeps its bytes in the FileData column instead —
+        // and LocalFileStorageService.FullPath dereferences what it is given, so passing null here
+        // threw a NullReferenceException where this line exists precisely to return an honest 404.
+        // A row with no path has no file on disk, which is the same answer.
+        if (session.DocumentUploadFile.StoragePath is not { } documentPath
+            || !_fileStorage.Exists(documentPath))
             return NotFound("This session's readings are no longer on the server.");
 
         string document;
@@ -160,10 +165,13 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == fileId && f.FieldSessionUploadId == sessionId, ct);
         if (file is null) return NotFound();
 
-        if (!_fileStorage.Exists(file.UploadFile.StoragePath))
+        // Same nullable StoragePath as the document above: no path means no file on disk, which
+        // is the 404 this line already intends rather than the NullReferenceException it threw.
+        if (file.UploadFile.StoragePath is not { } recordingPath
+            || !_fileStorage.Exists(recordingPath))
             return NotFound("That recording is no longer on the server.");
 
-        var stream = await _fileStorage.OpenReadAsync(file.UploadFile.StoragePath, ct);
+        var stream = await _fileStorage.OpenReadAsync(recordingPath, ct);
         // enableRangeProcessing: a player has to be able to seek, and a two-hour recording that
         // must be fetched whole before it plays is a recording nobody reviews.
         return File(stream, file.UploadFile.ContentType ?? "application/octet-stream",
