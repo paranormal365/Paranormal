@@ -14,7 +14,15 @@ set -euo pipefail
 # logic is inlined here now.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_URL="${BEN_WEBAPI_URL:-http://localhost:5252}"
+# 127.0.0.1, not localhost — deliberately. See ProjectNotes/Future-Improvements.md item 187.
+#
+# "localhost" makes Kestrel open BOTH an IPv4 and an IPv6 listener, and .NET on macOS has a bug
+# in the IPv6 accept path (dotnet/runtime#102663): an unhandled ArgumentException from
+# IPEndPoint.Create on a threadpool thread, which kills the process outright. It fired nine times
+# during one Playwright run on 2026-08-25 and made every long local run flaky. Binding IPv4 only
+# removes that accept path entirely; clients asking for "localhost" still reach it, because both
+# curl and Chromium fall back from ::1 to 127.0.0.1.
+API_URL="${BEN_WEBAPI_URL:-http://127.0.0.1:5252}"
 APP_PROJECT="${BEN_APP_PROJECT:-Ben.Web.Website/Ben.Web.Website.csproj}"
 WEBSITE_URL="${BEN_WEBSITE_URL:-http://localhost:5078}"
 API_PID_FILE="$ROOT_DIR/.vscode/.webapi.pid"
