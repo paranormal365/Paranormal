@@ -10103,3 +10103,29 @@ what the code does now, and is defensible — a tour company and an investigatio
 different businesses using different features. A single invoice is a billing convenience that
 can be added later without touching the subscription model, by grouping receipts at payment
 time rather than by making the person a subscriber.
+
+**Addendum (Ben, same day): the role is per-membership, and so is the seat charge.**
+
+Ben's third variation — "work for a walking tour, own a ghost hunting event provider and be
+part of an organization" — is three rows for one `AppUserId`, and it works today because
+authority is carried by the membership, never by the person:
+
+```
+OrganizationUserMembership: Id, OrganizationId, AppUserId, Role, MemberLevelId, IsActive
+HasIndex("OrganizationId", "AppUserId").IsUnique()
+```
+
+`Owner` is a value in `OrganizationMemberRole` ("exactly one owner exists per organization"),
+not a column on `Organization` and not a flag on `AppUser` — which is precisely why owning one
+organization grants nothing in another. Checked `AppUser` for anything global that could leak
+across orgs: no role, no admin flag, no tier, no subscription. The title rung (`MemberLevelId`)
+sits on the membership too, so "Lead Investigator" at your own group and "Guide" at the tour
+company do not collide.
+
+**The consequence to decide on:** `MemberSeatSubscription` is keyed `(OrganizationId,
+AppUserId)` in the same way. A person who is the *overflow* seat (item 144) in more than one
+organization is therefore billed separately by each of them, with no single place showing all
+three charges. That is internally consistent — every organization pays for its own headcount —
+but somebody guiding for a tour, working events for a second outfit and belonging to a third
+group may be surprised by three small charges. Not a bug, and if Ben wants it to feel like one
+relationship the fix is to group receipts at payment time, not to make the person a subscriber.
