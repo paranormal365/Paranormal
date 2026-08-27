@@ -10182,3 +10182,43 @@ started-more-than-once database.
 **Do not fix this by rebuilding the shared dev database.** It also serves ishaunted.com, and
 rebuilding it has already caused one outage. Create a second database beside it instead — the
 whole investigation above was done that way, and IsHauntedDb was never touched.
+
+## 201. A whole access token in a URL is too big to be safe (found 2026-08-27)
+
+Ben's profile photos would not display on ishaunted.com while working perfectly on localhost.
+Root cause: `/media/{id}/{kind}?t=...` carries the viewer's API access token, encrypted with Data
+Protection, and a real ticket measured **2504 characters**. IIS refuses a query string over 2048
+with 404.15 **before the request reaches the application** — nothing logs it, and what comes back
+is an IIS error page, so it reads as "wrong URL" rather than "URL too long". Kestrel has no such
+limit, which is exactly why localhost was clean and only the deployed site failed.
+
+Raised to 16384 in `Ben.Web.Website/web.config`, which unblocks it. **That is the band-aid.**
+
+**Why it deserves a real fix.** A limit raised is still a limit, and this one is crossed by
+something that grows on its own: the access token. Nothing warns when it gets longer — the next
+claim added to a JWT silently pushes some viewers back over, and the failure is invisible
+server-side because IIS answers before any of our code runs. It also looked *intermittent* for
+exactly this reason: whether a page's images worked depended on how long that viewer's token
+happened to be that day.
+
+It is bad for other reasons that have nothing to do with length. A URL is the most-copied,
+most-logged, most-cached string in a system: it lands in proxy logs, browser history, and
+`Referer` headers. Encryption keeps it unreadable, but a URL nobody can read is still a URL
+anybody can replay until it expires.
+
+**Recommended shape:** keep the ticket, shrink it to an opaque handle. Mint a short key (a GUID
+is 36 characters against 2504), hold `(fileId, token, expiry)` server-side against it, and put
+only the key in the URL. Everything the current design is careful about survives — bound to one
+file id, expiring, token never in the URL — and it gets *better*, because the token stops
+travelling at all.
+
+**The one thing to get right:** the current ticket is stateless, so it survives a restart and
+would survive a second web instance. A server-side handle does not. Derive the key
+deterministically (file id + a hash of the token + the hour bucket, as the expiry is rounded
+today) so the same viewer gets the same URL across renders and the browser can still cache the
+bytes — and rebuild the entry on a miss rather than failing, so a restart costs a re-mint and not
+a broken image.
+
+**Also worth a guard:** nothing anywhere asserts that a generated URL fits in a URL. A test that
+mints a ticket and checks the resulting query string against a stated ceiling would have caught
+this before deployment, and is three lines.
