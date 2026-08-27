@@ -451,9 +451,19 @@ If somebody cancels, the address stops being shown to them.
   after the start — the late-arrival grace, for the guest who reaches the meeting point a few
   minutes after you set off. Set it earlier to require booking ahead, or later to hold a
   particular night open longer.
-- **Anyone who can edit the calendar can add a guest by hand**, at any time, from the event's
+- **Anyone who can edit the calendar can sign somebody up by hand**, at any time, from the event's
   attendee list. That is the walk-up who has no account, or the latecomer who turns up with three
-  friends — you are standing there, so you decide.
+  friends — you are standing there, so you decide. Type the address in the invite box: if they
+  already have an account they go straight onto the list, and if they don't they get a sign-up
+  link instead.
+- **A link you sent still works after sign-ups close, and past a full house.** That is the
+  difference between you signing somebody up and them signing themselves up — you vouched for
+  them in person, so your cut-off and your capacity are yours to set aside. A guest working
+  through the public page on their own gets no such latitude.
+- The guest still has to open the link. It only takes a moment on their phone while you are
+  taking the money, and it is what makes the address real — otherwise anybody could put any
+  address on any event. Until they open it, they are not on the list, and **they cannot share
+  what they recorded on the night**, because that is tied to having been there.
 - Somebody who cancels frees their place for somebody else.
 
 ### The link you can share

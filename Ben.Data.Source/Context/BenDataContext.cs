@@ -483,6 +483,11 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventAttendanceInvite>()
                 .HasOne(e => e.ConfirmedByAppUser).WithMany()
                 .HasForeignKey(e => e.ConfirmedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // NoAction and nullable, like ConfirmedByAppUser above: deleting a guide's account must
+            // not cascade away the record of who let a group of guests in.
+            modelBuilder.Entity<EventAttendanceInvite>()
+                .HasOne(e => e.InvitedByAppUser).WithMany()
+                .HasForeignKey(e => e.InvitedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Email).HasMaxLength(320);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.DisplayName).HasMaxLength(200);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Token).HasMaxLength(128);

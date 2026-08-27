@@ -200,8 +200,11 @@
                         <div class="text-danger small mt-1">@_inviteError</div>
                     }
                     <div class="form-text">
-                        People outside this group are invited by email address — they need an
-                        account here for the invitation to reach them.
+                        People outside this group are invited by email address. If they already have
+                        an account here they go straight onto the guest list; if they don't, they're
+                        sent a sign-up link instead — which is how you add somebody who turns up on
+                        the night. Confirming that link is what lets them share photos and
+                        recordings with the group afterwards.
                     </div>
                 </div>
             }
@@ -499,8 +502,16 @@
 
         foreach (var email in _emailInvitees)
         {
+            // Two kinds of person arrive through the same box, and the organiser should not have
+            // to know which one they are typing. An address an account has published is added
+            // straight to the guest list; anything else — the walk-up at the meeting point with no
+            // account at all — is sent a sign-up link instead, which is the only thing that can
+            // reach them. Falling back rather than asking keeps one field doing one job.
             var added = await AdminClient.AddCalendarAttendeeByEmailAsync(OrgId, eventId, email);
-            if (added is null) failed.Add(email);
+            if (added is not null) continue;
+
+            if (!await AdminClient.InviteEventGuestAsync(OrgId, eventId, email))
+                failed.Add(email);
         }
 
         _emailInvitees.Clear();

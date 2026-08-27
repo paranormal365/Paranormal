@@ -20,6 +20,14 @@ namespace Ben.Web.Tests.Controllers;
 /// </summary>
 public class OrgCalendarControllerTests
 {
+    /// <summary>Email off: these suites are about permission and data, never about delivery.</summary>
+    private static Ben.Data.Common.Interfaces.IEmailService UnconfiguredEmail()
+    {
+        var m = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        m.SetupGet(x => x.IsConfigured).Returns(false);
+        return m.Object;
+    }
+
     // Non-pooled: Create/Update use FirstAsync with optional Includes (EventType, Case, Attendees)
     private sealed class SimpleFactory(DbContextOptions<BenDataContext> options) : IDbContextFactory<BenDataContext>
     {
@@ -59,7 +67,9 @@ public class OrgCalendarControllerTests
 
     private static OrgCalendarEventController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new OrgCalendarEventController(factory, CreateMapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new OrgCalendarEventController(factory, CreateMapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

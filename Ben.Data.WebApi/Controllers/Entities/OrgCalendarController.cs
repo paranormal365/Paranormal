@@ -125,9 +125,16 @@ public sealed class OrgCalendarEventController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
+    private readonly Ben.Data.Common.Interfaces.IEmailService _email;
+    private readonly Ben.Data.Common.SiteIdentity _site;
+    private readonly ILogger<OrgCalendarEventController> _logger;
+
     public OrgCalendarEventController(IDbContextFactory<BenDataContext> db, IMapper mapper,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _mapper = mapper;  _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Ben.Data.Common.Interfaces.IEmailService email,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
+        ILogger<OrgCalendarEventController> logger)
+    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -462,6 +469,118 @@ public sealed class OrgCalendarEventController : BenControllerBase
             _mapper.Map<OrgCalendarEventAttendeeRecord>(loaded));
     }
 
+    /// <summary>
+    /// Sends a sign-up link to somebody who has no account here — the walk-up at the meeting point.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The gap this closes (Ben, 2026-08-27).</b> A ghost walking tour is thirty guests a
+    /// session who are not members of anything, and the late ones turn up with friends. Neither
+    /// existing path served them: <c>AddAttendeeByEmail</c> resolves an <i>existing</i> account by
+    /// published address, and <c>AddAttendee</c> needs an account id — a walk-up has neither. The
+    /// guest could sign themselves up, and mostly will, but the person handing the guide cash on
+    /// the pavement could not be helped by the guide at all.</para>
+    ///
+    /// <para><b>It sends a link rather than creating the attendance.</b> Deliberately. Letting an
+    /// organiser type any address and have an account appear would create accounts for people who
+    /// never asked, from addresses nobody verified — the email click is what makes the address
+    /// real, and the guest has a phone in their hand. What the permission buys is the organiser's
+    /// authority travelling with the link: it confirms after sign-ups close and past a full house,
+    /// which is the whole point for a late arrival.</para>
+    ///
+    /// <para><b>It answers the same way whether or not that address has an account.</b> The public
+    /// flow is careful not to become an account-existence oracle and this must not undo that from
+    /// the inside — a guide is a hired stranger, not an administrator, and "does this person have
+    /// an account" is not theirs to learn. The published-address rule on
+    /// <c>AddAttendeeByEmail</c> stays exactly as strict as it was.</para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/guest-invites")]
+    public async Task<ActionResult<bool>> InviteGuest(
+        Guid orgId, Guid eventId, [FromBody] InviteGuestRequest request, CancellationToken ct)
+    {
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
+
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320)
+            return BadRequest("A valid email address is needed.");
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var ev = await db.OrgCalendarEvents
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        // Reuse a pending row rather than stacking one per attempt, exactly as the public flow
+        // does — a guide who is not sure the first one arrived will simply send it again.
+        var invite = await db.EventAttendanceInvites
+            .FirstOrDefaultAsync(i => i.OrgCalendarEventId == eventId && i.Email == email, ct);
+
+        if (invite is { DateConfirmed: not null })
+            return Ok(true);   // already coming; say nothing that distinguishes the case
+
+        var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+        if (invite is null)
+        {
+            invite = new EventAttendanceInvite
+            {
+                Id                 = Guid.NewGuid(),
+                OrgCalendarEventId = eventId,
+                Email              = email,
+                DisplayName        = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
+                Token              = token,
+                DateExpires        = DateTime.UtcNow.AddDays(14),
+                InvitedByAppUserId = userId,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            };
+            db.EventAttendanceInvites.Add(invite);
+        }
+        else
+        {
+            invite.Token              = token;
+            invite.DateExpires        = DateTime.UtcNow.AddDays(14);
+            invite.DateUpdated        = DateTime.UtcNow;
+            invite.UpdatedByAppUserId = userId;
+            // A guest who asked for their own link and is now being vouched for by the guide gets
+            // the organiser's latitude from here on: same person, better standing.
+            invite.InvitedByAppUserId = userId;
+            if (!string.IsNullOrWhiteSpace(request.DisplayName)) invite.DisplayName = request.DisplayName.Trim();
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        if (_email.IsConfigured)
+        {
+            var link = _site.AbsoluteUrl($"/attending/{token}");
+            var safeTitle = Ben.Data.WebApi.Services.NotificationText.Safe(ev.Title);
+            try
+            {
+                await _email.SendAsync(email,
+                    $"You're signed up for {ev.Title}",
+                    $"<p>Someone from the group signed you up for <strong>{safeTitle}</strong> on "
+                    + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
+                    + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
+                    + "<p>Confirming lets you share photos, recordings and anything else from the "
+                    + "night with the group. That link is good for two weeks and only works once.</p>", ct);
+            }
+            catch (Exception ex)
+            {
+                // Logged, never surfaced: the same reasoning as the public flow, and a guide can
+                // do nothing about a bounced address anyway.
+                _logger.LogWarning(ex, "Could not send a guest sign-up link for event {EventId}.", eventId);
+            }
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Email is not configured; guest sign-up link for event {EventId} was not sent. Token: {Token}",
+                eventId, token);
+        }
+
+        return Ok(true);
+    }
+
     [HttpPut("{eventId:guid}/attendees/{attendeeId:guid}/rsvp")]
     public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> Rsvp(
         Guid orgId, Guid eventId, Guid attendeeId, [FromBody] RsvpRequest request, CancellationToken ct)
@@ -532,4 +651,11 @@ public sealed record UpsertCalendarEventRequest(
 public sealed record AddAttendeeByEmailRequest(string? Email);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
+
+/// <summary>A walk-up an organiser is signing up: an address, and a name if they gave one.</summary>
+/// <remarks>
+/// The name is optional because a guide taking details on a pavement in the dark will often get
+/// only the address, and half a record beats refusing the person.
+/// </remarks>
+public sealed record InviteGuestRequest(string? Email, string? DisplayName);
 public sealed record RsvpRequest(Ben.Data.Common.Enums.RsvpStatus RsvpStatus);
