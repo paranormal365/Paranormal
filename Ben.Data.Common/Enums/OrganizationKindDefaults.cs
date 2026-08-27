@@ -19,7 +19,16 @@ namespace Ben.Data.Common.Enums;
 /// </remarks>
 public static class OrganizationKindDefaults
 {
-    /// <summary>A tour runs public tours by definition; an investigation group says so itself.</summary>
+    /// <summary>
+    /// A tour runs public tours by definition; an investigation group says so itself.
+    /// </summary>
+    /// <remarks>
+    /// An event provider does NOT get this. It sells ticketed events, which the calendar already
+    /// carries — flagging it as running walking tours would put it in the tours filter under false
+    /// pretences, and the flag exists to answer exactly that question. It can still set the flag
+    /// itself if it also walks people around, which is the whole point of the flag being separate
+    /// from the kind.
+    /// </remarks>
     public static bool RunsPublicTours(OrganizationKind kind)
         => kind == OrganizationKind.GhostWalkingTour;
 
@@ -31,8 +40,8 @@ public static class OrganizationKindDefaults
                    OrganizationAddressDisplayMode PublicDisplayMode,
                    bool IsSearchable,
                    OrganizationAddressVisibility SearchVisibility) AddressDefaults(OrganizationKind kind)
-        => kind == OrganizationKind.GhostWalkingTour
-            // "Where do we meet?" is the first thing anybody asks a tour.
+        => IsPublicFacing(kind)
+            // "Where do we meet?" is the first thing anybody asks a tour, an event, or a hotel.
             ? (OrganizationAddressVisibility.Public,
                OrganizationAddressDisplayMode.FullAddressAndMap,
                true,
@@ -50,13 +59,29 @@ public static class OrganizationKindDefaults
     /// thing the group joined to advertise. An investigation group's calendar is mostly
     /// internal, so it keeps the members-only default and opts a public event in.
     /// </remarks>
-    public static bool EventsArePublicByDefault(OrganizationKind kind)
-        => kind == OrganizationKind.GhostWalkingTour;
+    public static bool EventsArePublicByDefault(OrganizationKind kind) => IsPublicFacing(kind);
+
+    /// <summary>
+    /// Whether this kind exists to be FOUND — its address and its calendar are the product.
+    /// </summary>
+    /// <remarks>
+    /// Three kinds share this and one does not, which is the whole distinction the kind exists to
+    /// draw. A tour, an event provider and a haunted property all sell a place and a date to the
+    /// public; an investigation group's headquarters is frequently somebody's home and its
+    /// calendar is mostly internal. Written once rather than repeated per default, so a kind added
+    /// later cannot pick up half of the behaviour.
+    /// </remarks>
+    public static bool IsPublicFacing(OrganizationKind kind) => kind is
+        OrganizationKind.GhostWalkingTour or
+        OrganizationKind.PublicEventProvider or
+        OrganizationKind.HauntedProperty;
 
     /// <summary>How a kind is named to a person.</summary>
     public static string DisplayName(OrganizationKind kind) => kind switch
     {
-        OrganizationKind.GhostWalkingTour => "Ghost walking tour",
+        OrganizationKind.GhostWalkingTour    => "Ghost walking tour",
+        OrganizationKind.PublicEventProvider => "Paranormal events",
+        OrganizationKind.HauntedProperty     => "Haunted property",
         _ => "Investigation group",
     };
 }

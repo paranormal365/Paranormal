@@ -65,13 +65,41 @@
                                     <label class="btn btn-outline-primary" for="newgroup-kind-tour">
                                         <BenIcon Name="map" Class="me-1" />Ghost walking tour
                                     </label>
+                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-events"
+                                           checked="@(_kind == OrganizationKind.PublicEventProvider)"
+                                           @onchange="@(() => SetKind(OrganizationKind.PublicEventProvider))" />
+                                    <label class="btn btn-outline-primary" for="newgroup-kind-events">
+                                        <BenIcon Name="calendar" Class="me-1" />Paranormal events
+                                    </label>
+                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-property"
+                                           checked="@(_kind == OrganizationKind.HauntedProperty)"
+                                           @onchange="@(() => SetKind(OrganizationKind.HauntedProperty))" />
+                                    <label class="btn btn-outline-primary" for="newgroup-kind-property">
+                                        <BenIcon Name="home" Class="me-1" />Haunted property
+                                    </label>
                                 </div>
                                 <div class="form-text">
+                                    @* One sentence per kind, saying what it STARTS as. None of it is a
+                                       gate — every kind can do everything, and all of this is editable
+                                       afterwards — so the wording promises a starting point, not a
+                                       category. *@
                                     @if (_kind == OrganizationKind.GhostWalkingTour)
                                     {
                                         <text>Tours are <strong>public by default</strong>: your meeting
                                         point is shown and searchable, and the tours you schedule are
                                         visible to everyone. You can change any of it later.</text>
+                                    }
+                                    else if (_kind == OrganizationKind.PublicEventProvider)
+                                    {
+                                        <text>Events are <strong>public by default</strong>: the venue
+                                        and the dates are shown and searchable, because that is what
+                                        people are looking for. You can change any of it later.</text>
+                                    }
+                                    else if (_kind == OrganizationKind.HauntedProperty)
+                                    {
+                                        <text>Your property is <strong>public by default</strong>: the
+                                        address is shown and searchable, since it is the place people
+                                        are coming to. You can change any of it later.</text>
                                     }
                                     else
                                     {
@@ -99,11 +127,14 @@
                             break;
 
                         case 1:
-                            @if (_kind == OrganizationKind.GhostWalkingTour)
+                            @if (Ben.Data.Common.Enums.OrganizationKindDefaults.IsPublicFacing(_kind))
                             {
                                 <p class="small text-secondary">
-                                    Where do your tours meet? This is shown publicly and feeds the
-                                    "near you" search, so visitors can find you.
+                                    @(_kind == OrganizationKind.HauntedProperty
+                                        ? "Where is the property? This is shown publicly and feeds the \"near you\" search, so visitors can find you."
+                                        : _kind == OrganizationKind.PublicEventProvider
+                                            ? "Where do your events happen? This is shown publicly and feeds the \"near you\" search, so visitors can find you."
+                                            : "Where do your tours meet? This is shown publicly and feeds the \"near you\" search, so visitors can find you.")
                                     <strong>Optional</strong> — you can add it later.
                                 </p>
                             }

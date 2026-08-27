@@ -22,6 +22,79 @@ public sealed class OrganizationKindTests
 {
     // ── The defaults ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The two kinds added on Ben's 2026-08-27 request start public, like a tour and for the same
+    /// reason: what they sell is a place and a date.
+    /// </summary>
+    [Theory]
+    [InlineData(OrganizationKind.PublicEventProvider)]
+    [InlineData(OrganizationKind.HauntedProperty)]
+    public void A_public_facing_kind_starts_findable(OrganizationKind kind)
+    {
+        var defaults = OrganizationKindDefaults.AddressDefaults(kind);
+
+        Assert.Equal(OrganizationAddressVisibility.Public, defaults.Visibility);
+        Assert.Equal(OrganizationAddressDisplayMode.FullAddressAndMap, defaults.PublicDisplayMode);
+        Assert.True(defaults.IsSearchable);
+        Assert.True(OrganizationKindDefaults.EventsArePublicByDefault(kind));
+    }
+
+    /// <summary>
+    /// An investigation group is the ONE kind that starts private, and adding kinds must not have
+    /// moved it.
+    /// </summary>
+    /// <remarks>
+    /// Asserted against every value of the enum rather than the three that exist today, so a kind
+    /// added later has to make a deliberate decision about this rather than inheriting one.
+    /// </remarks>
+    [Fact]
+    public void Only_an_investigation_group_starts_private()
+    {
+        foreach (var kind in Enum.GetValues<OrganizationKind>())
+        {
+            var isPrivate = OrganizationKindDefaults.AddressDefaults(kind).Visibility
+                            == OrganizationAddressVisibility.Private;
+
+            Assert.Equal(kind == OrganizationKind.InvestigationGroup, isPrivate);
+        }
+    }
+
+    /// <summary>
+    /// Only a walking tour claims to run walking tours.
+    /// </summary>
+    /// <remarks>
+    /// An events business sells ticketed events, which the calendar already carries. Flagging it
+    /// as running tours would put it in the tours filter under false pretences — and that flag
+    /// exists to answer exactly that question. It can still set the flag itself, which is the
+    /// point of the capability being separate from the kind.
+    /// </remarks>
+    [Fact]
+    public void Only_a_walking_tour_is_born_running_tours()
+    {
+        foreach (var kind in Enum.GetValues<OrganizationKind>())
+            Assert.Equal(kind == OrganizationKind.GhostWalkingTour,
+                OrganizationKindDefaults.RunsPublicTours(kind));
+    }
+
+    /// <summary>
+    /// Every kind names itself, so none can reach a screen as a bare number or the wrong label.
+    /// </summary>
+    /// <remarks>
+    /// The display name has a <c>_ =></c> fallback of "Investigation group", so a kind nobody gave
+    /// a name would silently present as something it is not — which is worse than a blank. This
+    /// catches that at the moment the value is added.
+    /// </remarks>
+    [Fact]
+    public void Every_kind_has_a_name_of_its_own()
+    {
+        var names = Enum.GetValues<OrganizationKind>()
+            .ToDictionary(k => k, OrganizationKindDefaults.DisplayName);
+
+        Assert.All(names.Values, n => Assert.False(string.IsNullOrWhiteSpace(n)));
+        Assert.Equal(names.Count, names.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+
     [Fact]
     public void A_tour_starts_public_and_a_group_starts_private()
     {

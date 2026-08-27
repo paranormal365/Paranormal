@@ -29,4 +29,30 @@ public enum OrganizationKind
 
     /// <summary>A ghost walking tour operator: public tours on a schedule, public by nature.</summary>
     GhostWalkingTour = 1,
+
+    /// <summary>
+    /// Sells tickets to paranormal events at venues it does not own — a night in a decommissioned
+    /// prison, a lock-in at a museum.
+    /// </summary>
+    /// <remarks>
+    /// Closer to a tour than to an investigation group, and distinct from both: the product is a
+    /// ticketed event on a date, the staff are guides rather than investigators, and the meeting
+    /// point is the thing customers need most. It shared the tour's defaults before this existed,
+    /// which cost nothing functionally — the kind is a label and a starting point, never a gate —
+    /// and read wrong everywhere the kind is shown (Ben, 2026-08-27: "I like those org types to be
+    /// available").
+    /// </remarks>
+    PublicEventProvider = 2,
+
+    /// <summary>
+    /// A property whose reported haunting IS the attraction: a hotel, an inn, a dormitory.
+    /// </summary>
+    /// <remarks>
+    /// <para>The owner runs the place rather than visiting it, so the usual privacy default is
+    /// backwards for them — the address is the product, and the reports are the marketing. Item
+    /// 197 has the fuller shape (rooms, offerings, standing investigations), all of it still to
+    /// design; this is the kind it will hang from, added now so a property owner is not made to
+    /// call themselves an investigation group in the meantime.</para>
+    /// </remarks>
+    HauntedProperty = 3,
 }

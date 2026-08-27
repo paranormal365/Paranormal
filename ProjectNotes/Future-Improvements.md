@@ -10113,13 +10113,24 @@ tours says so with the flag rather than by changing what it is. Resist a fifth k
 business idea: the test is whether the creation defaults genuinely differ, not whether the
 words differ.
 
-**Open for Ben, and only Ben:** whether an owner of several organizations should get any
-multi-org pricing at all (a discount, a single invoice covering both, a "same owner" link), or
-whether each business simply pays for itself. Each org paying for itself is the simplest, is
-what the code does now, and is defensible — a tour company and an investigation group are
-different businesses using different features. A single invoice is a billing convenience that
-can be added later without touching the subscription model, by grouping receipts at payment
-time rather than by making the person a subscriber.
+### Decided by Ben, 2026-08-27
+
+**Multi-group owner discount is case by case.** No rule, no automatic tier, nothing to build —
+each org keeps paying for itself, and where Ben wants to reward somebody running several, he
+applies it himself. The machinery for that already exists and needs no change: coupons and
+subscriptions are both keyed to an organization, so a SuperAdmin can price one group differently
+without the person ever becoming a billing subject. That is the property worth protecting, and a
+standing multi-org discount rule would have been the thing to erode it.
+
+**Both new org kinds are wanted** ("I like those org types to be available"), and are built:
+`PublicEventProvider` and `HauntedProperty`, appended to the enum with their own creation
+defaults, their own names, and a place in the creation wizard and the settings dropdown. The
+haunted-property kind is the seam item 197 will hang from when Ben takes it up; adding it now
+means a property owner is not made to call themselves an investigation group in the meantime.
+
+Three kinds are public-facing and one is not, which is the whole distinction the kind exists to
+draw — written once as `IsPublicFacing` rather than repeated per default, so a kind added later
+cannot pick up half of the behaviour.
 
 **Addendum (Ben, same day): the role is per-membership, and so is the seat charge.**
 
