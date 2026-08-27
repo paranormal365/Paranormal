@@ -10012,3 +10012,33 @@ it HOST visiting groups (which meets the existing model neatly — the hotel as 
 case never closes, or as a venue listing groups can book)? Do guest reports enter as
 occurrences, feed posts, or a new lightweight "guest log"? And which tier does a property pay
 on — the seats model fits groups, not businesses whose value is the public page.
+
+## 198. A business plan for tours and events — flat-rate, not member-banded (Ben, 2026-08-27)
+
+> "How do I make money off of people who have ghost walking tours? … a subscription for
+> businesses like ghost walking tours or ghost hunting events … different than a ghost hunting
+> group."
+
+The gap it names: the paid tiers sell private-residence casework, which a tour business will
+never want. Under free-is-a-choice they would stay free forever. What a business values is
+already built — the GhostWalkingTour kind and finder filter, public events with RSVP, guest
+evidence review at public events, promoted placement, publications, and the free iPhone/iPad
+apps with the Field Kit as the on-tour instrument.
+
+**Nothing blocks starting today.** Onboarding is manual and Ben-shaped: email the pitch PDF
+(docs/IsHaunted-Tour-Business-Offer.pdf, source docs/tour-business-pitch.html), and on a yes,
+SuperAdmin creates the org as GhostWalkingTour and attaches a subscription row by hand. The
+recommended intro price in the PDF is $29/month or $290/year, flat per business — one extra
+ticket sold covers the month — with the same three-month-free machinery item 195 verified.
+
+**What to build when there are a few of them:**
+- A Business tier that is flat-rate: member bands should not price a tour company whose "members"
+  are guides. Cheapest shape: a tier row the resolver never bands into, assigned only by
+  subscription — which is exactly how free-is-a-choice already works.
+- Self-serve signup for it on the pricing page, once the payment processor exists (item 144's
+  decision).
+- Per-event capacity/ticket links if operators ask — NOT a booking engine; the PDF deliberately
+  sells RSVP as "no booking software to buy", not as a replacement for their ticketing.
+
+The PDF keeps the investor-doc honesty rule: every feature claimed is live today, no invented
+metrics, and the trial line matches what the coupon machinery actually does.
