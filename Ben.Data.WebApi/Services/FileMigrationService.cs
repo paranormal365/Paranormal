@@ -73,7 +73,13 @@ public sealed class FileMigrationService : IHostedService
         while (true)
         {
             var batch = await db.UploadFiles
-                .Where(f => f.StoragePath == null && f.FileData != null)
+                // A row with no StoredFileName cannot be given a path, and asking for one throws
+                // rather than returning null — so it is excluded here instead of failing inside
+                // the loop on every startup. Such a row is still perfectly readable: the download
+                // path honours FileData directly, which is why nothing visible was ever broken by
+                // it (found 2026-08-27 on a freshly rebuilt database, where one seeded demo photo
+                // logged an ArgumentNullException at every start).
+                .Where(f => f.StoragePath == null && f.FileData != null && f.StoredFileName != null)
                 .OrderBy(f => f.DateCreated)
                 .Skip(skip)
                 .Take(BatchSize)

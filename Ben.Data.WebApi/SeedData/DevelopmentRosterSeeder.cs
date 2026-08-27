@@ -478,6 +478,12 @@ internal static class DevelopmentRosterSeeder
             // exactly prospective case evidence.
             UploadFileTypeId = new Guid("20000000-0000-0000-0000-000000000001"),
             FileName = "attic-hatch.jpg", ContentType = "image/jpeg",
+            // Set, unlike every other seeded file, it was not — and FileMigrationService walks
+            // exactly the rows with FileData and no StoragePath, builds a path from this, and
+            // threw ArgumentNullException on every startup of a fresh database (found 2026-08-27
+            // rebuilding Ben's). Harmless to the demo, which reads FileData directly, and noise
+            // in the log of every clean install forever.
+            StoredFileName = "51000004-0000-0000-0000-00000000f001.jpg",
             FileData = TinyJpeg, FileSize = TinyJpeg.Length,
             DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
         });
