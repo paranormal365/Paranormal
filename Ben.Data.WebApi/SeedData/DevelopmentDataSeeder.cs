@@ -120,6 +120,7 @@ internal static class DevelopmentDataSeeder
             // "Role 'Case Manager Role' not found").
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, tgh.Id, owner.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, tgh.Id, owner.Id);
+            // creation-time; the repair below covers groups that predate it
             Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id);
             await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
@@ -134,6 +135,7 @@ internal static class DevelopmentDataSeeder
             Console.WriteLine("[DevDataSeeder] Renamed Tennessee Ghost Hunters to Paranormal365.");
         }
 
+        await EnsureDefaultRolesAsync(db, tgh.Id, owner.Id);
         await SeedOrgMembersAsync(db, tgh, owner, sarah, james, now);
         await SeedOrgAddressAsync(db, tgh, addrType, "1200 Church St", "Nashville", "TN", "37203", "US", 36.1627m, -86.7816m, owner.Id, now);
 
@@ -160,11 +162,13 @@ internal static class DevelopmentDataSeeder
             // "Role 'Case Manager Role' not found").
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, nps.Id, owner.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, nps.Id, owner.Id);
+            // creation-time; the repair below covers groups that predate it
             Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id);
             await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Nashville Paranormal Society");
         }
 
+        await EnsureDefaultRolesAsync(db, nps.Id, owner.Id);
         await SeedOrgMembersAsync(db, nps, owner, emma, null, now);
         await SeedOrgAddressAsync(db, nps, addrType, "500 Commerce St", "Nashville", "TN", "37203", "US", 36.1651m, -86.7785m, owner.Id, now);
 
@@ -1048,6 +1052,37 @@ internal static class DevelopmentDataSeeder
     /// Ensures the owner is the org Owner and optionally adds an Admin and a Member membership.
     /// Safe to call on existing orgs — skips any memberships that already exist.
     /// </summary>
+
+    /// <summary>
+    /// Gives a demo group any default roles it is missing, on every run rather than only at
+    /// creation.
+    /// </summary>
+    /// <remarks>
+    /// <para>Creating them at creation time fixes groups made from now on and does nothing for
+    /// one already in a database: the seeder will not recreate a group that exists, and the
+    /// standalone backfill deliberately skips any group that has ANY role — so a demo group that
+    /// came out with exactly one kept that one for ever (found 2026-08-27, where it failed the
+    /// e2e suite with "Role 'Case Manager Role' not found").</para>
+    ///
+    /// <para>Safe here and nowhere else: these groups belong to the seeder. Nobody has decided to
+    /// delete a role from them, so there is no decision to overrule — which is exactly why the
+    /// backfill must keep its stricter rule for groups that belong to people.</para>
+    /// </remarks>
+    private static async Task EnsureDefaultRolesAsync(BenDataContext db, Guid orgId, Guid createdBy)
+    {
+        var existing = await db.OrganizationRoles
+            .Where(r => r.OrganizationId == orgId)
+            .Select(r => r.Name)
+            .ToListAsync();
+
+        var before = existing.Count;
+        Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, orgId, createdBy, existing);
+        await db.SaveChangesAsync();
+
+        var added = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == orgId) - before;
+        if (added > 0)
+            Console.WriteLine($"[DevDataSeeder] Repaired {added} missing default role(s) on an existing demo group.");
+    }
     private static async Task SeedOrgMembersAsync(
         BenDataContext db, Organization org, AppUser owner,
         AppUser? admin, AppUser? member, DateTime now)
