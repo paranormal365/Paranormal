@@ -514,6 +514,32 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
     // Last: needs the tiers, the groups and the past public event all to exist already.
     await Ben.Data.WebApi.SeedData.BillingDemoSeeder.SeedAsync(app.Services, app.Configuration);
+
+    // ── The backfills run a SECOND time, and have to ─────────────────────────
+    //
+    // MemberLevelSeeder, InvestigationDutySeeder and OrgRoleSeeder above give every organization
+    // its default ladder, duties and roles — every organization that exists WHEN THEY RUN. The
+    // development and roster seeders below them then create more organizations, and those got
+    // nothing: no title ladder, no duty board, no named roles.
+    //
+    // The first run cannot simply move later, because the roster seeder assigns those very roles
+    // to the members it creates and needs them to exist already. So they run at both ends. All
+    // three are backfills that skip any organization which already has the thing, so the second
+    // pass is free for everything the first pass covered and is the only pass the late-created
+    // groups ever get.
+    //
+    // Found 2026-08-27 by running the suite against a FRESH database: six tests failed with
+    // "Role 'Case Manager Role' not found — the default-role seed is missing", and the same for
+    // the ladder and the duty board. It never showed on a long-lived database because the NEXT
+    // startup backfills what the previous one missed — so the bug was invisible to anybody whose
+    // database had been started twice, which is everybody, which is why it survived this long.
+    //
+    // Only seeded organizations were ever affected: every real creation path
+    // (OrganizationController, AdminOrganizationController, OrganizationSecurityService) adds all
+    // three itself, so no group Ben has or will have is missing anything.
+    await Ben.Data.WebApi.SeedData.MemberLevelSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.InvestigationDutySeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.OrgRoleSeeder.SeedAsync(app.Services, app.Configuration);
 }
 else
 {
