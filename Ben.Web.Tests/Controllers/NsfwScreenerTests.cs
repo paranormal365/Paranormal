@@ -127,6 +127,8 @@ public sealed class NsfwScreenerTests
             => throw new NotSupportedException();
         public Task DeleteAsync(string relativePath, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public IReadOnlyList<string> ListFiles(string relativeDirectory)
+            => throw new NotSupportedException();
         public string UserFilePath(Guid userId, string storedFileName) => $"users/{userId}/{storedFileName}";
         public string OrgFilePath(Guid orgId, string storedFileName) => $"orgs/{orgId}/{storedFileName}";
         public string CaseFilePath(Guid caseId, string storedFileName) => $"cases/{caseId}/{storedFileName}";

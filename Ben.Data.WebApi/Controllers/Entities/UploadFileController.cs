@@ -199,8 +199,9 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     [HttpPost]
-    // No practical upload size limit for now — a future limit belongs at app-settings / per-person /
-    // per-org / per-case / per-investigation scope, not a blanket cap baked into the endpoint.
+    // The framework's own ceiling stays off; the limit that applies is the app-settings one
+    // (SiteSettingKeys.UploadMaxFileBytes) enforced below, where the refusal can be a sentence
+    // that names the number instead of a bare 413.
     [DisableRequestSizeLimit]
     public async Task<ActionResult<UploadFileRecord>> Upload(
         [FromForm] Guid uploadFileTypeId,
@@ -217,6 +218,11 @@ public sealed class UploadFileController : BenControllerBase
         if (callerId == Guid.Empty) return Unauthorized();
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        // The same configurable limit the chunked path enforces — one number governs both doors.
+        var limits = await UploadLimitsReader.ReadAsync(db, cancellationToken);
+        if (file.Length > limits.MaxFileBytes)
+            return BadRequest($"That file is {file.Length:N0} bytes; the largest allowed upload is {limits.MaxFileBytes:N0} bytes.");
 
         // The owner comes from the caller's token, not the form. This used to be taken straight
         // from `appUserId`, which meant any authenticated user could create a file owned by

@@ -65,6 +65,17 @@ public sealed class LocalFileStorageService : IFileStorageService
 
     public bool Exists(string relativePath) => File.Exists(FullPath(relativePath));
 
+    public IReadOnlyList<string> ListFiles(string relativeDirectory)
+    {
+        var fullDir = FullPath(relativeDirectory);
+        if (!Directory.Exists(fullDir)) return [];
+
+        var trimmed = relativeDirectory.TrimEnd('/');
+        return Directory.EnumerateFiles(fullDir)
+            .Select(f => $"{trimmed}/{Path.GetFileName(f)}")
+            .ToList();
+    }
+
     private string FullPath(string relativePath)
         => Path.Combine(_rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
 }
