@@ -520,6 +520,44 @@ else
     Log.Information("SeedData:Enabled is false — startup seeding skipped");
 }
 
+// ── Is the database actually current? ────────────────────────────────────────
+//
+// Nothing applies migrations at startup and nothing should: auto-migrating a live database on
+// every deploy means an unreviewed schema change runs unattended, and several instances starting
+// at once race each other. docs/deploy-production.md says to apply them by hand — which is
+// correct, and is also a step that gets forgotten under pressure.
+//
+// So the app does not fix it, it SAYS it. A missing migration otherwise surfaces as "Invalid
+// object name" from whichever feature happens to touch the new table first, which reads as a
+// broken feature rather than an unapplied migration and sends somebody debugging the wrong thing.
+// One line at startup names the real cause.
+//
+// Deliberately not fatal: refusing to start would turn a partly-degraded site into an outage, and
+// most of the site works fine while one new table is missing.
+try
+{
+    await using var schemaScope = app.Services.CreateAsyncScope();
+    var schemaFactory = schemaScope.ServiceProvider
+        .GetRequiredService<IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+    await using var schemaCheck = await schemaFactory.CreateDbContextAsync();
+
+    var pendingMigrations = (await schemaCheck.Database.GetPendingMigrationsAsync()).ToList();
+    if (pendingMigrations.Count > 0)
+    {
+        Log.Warning(
+            "DATABASE IS BEHIND: {Count} migration(s) have not been applied — {Names}. Features "
+            + "using them will fail with \"Invalid object name\" until somebody runs: dotnet ef "
+            + "database update --project Ben.Data.Source --startup-project Ben.Data.WebApi",
+            pendingMigrations.Count, string.Join(", ", pendingMigrations));
+    }
+}
+catch (Exception ex)
+{
+    // A check that cannot run must not stop the app: the database may simply be unreachable yet,
+    // and that failure announces itself loudly enough elsewhere.
+    Log.Warning(ex, "Could not check whether the database schema is current.");
+}
+
 app.Run();
 
 /// <summary>
