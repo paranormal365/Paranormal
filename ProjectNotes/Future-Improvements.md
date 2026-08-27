@@ -10146,3 +10146,39 @@ three charges. That is internally consistent — every organization pays for its
 but somebody guiding for a tour, working events for a second outfit and belonging to a third
 group may be surprised by three small charges. Not a bug, and if Ben wants it to feel like one
 relationship the fix is to group receipts at payment time, not to make the person a subscriber.
+
+## 200. The e2e suite is data-dependent, and that hid a real bug (found 2026-08-27)
+
+Chasing two e2e failures cost most of a session, and the lesson is worth more than the fix.
+
+**What happened.** Two tests failed on the long-lived dev database. The obvious theory —
+accumulated test data — was exactly backwards: running against a FRESH database produced *more*
+failures (six), and those six named the real defect. Three seeders create organizations without
+the default roles, title ladder and duty board that every real creation path adds. Fixed in
+026d101.
+
+**Why it was invisible.** The backfill seeders run early in startup, so they miss organizations
+created later — but the NEXT startup catches them. The bug therefore cannot be seen on any
+database that has been started twice, which is every database anybody actually uses. The
+known-good "401 tests, 0 failures on the rebuilt DB" run in the notes was itself a
+started-more-than-once database.
+
+**What is still open, and is the actual item:**
+
+- **The suite depends on state it does not create.** Tests assume roles, ladders and duties
+  exist; some appear to depend on data other tests leave behind. That is why two different runs
+  of identical code failed two different pairs of tests while both passing 373. A suite whose
+  result depends on run order and database age is a gate nobody can trust, and it will eventually
+  be ignored at exactly the wrong moment.
+- **Recommended shape:** each test that needs a role/ladder/duty should assert its precondition
+  with a clear message (`OrdinaryMemberBaselineTests.RoleIdAsync` already does this well — its
+  failure message is what found the bug) or create what it needs. The goal is that a first run on
+  a brand-new database is green, because that is the only run that proves the product rather than
+  the history of the machine it ran on.
+- **A first-run check is cheap:** stand a scratch database beside the real one, start the API
+  against it once, and assert every seeded organization has 8 roles, a full ladder and the four
+  duties. That single check would have caught this without a 400-test suite.
+
+**Do not fix this by rebuilding the shared dev database.** It also serves ishaunted.com, and
+rebuilding it has already caused one outage. Create a second database beside it instead — the
+whole investigation above was done that way, and IsHauntedDb was never touched.
