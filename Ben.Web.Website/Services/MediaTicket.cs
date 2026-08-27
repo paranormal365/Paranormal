@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
-
 namespace Ben.Web.Website.Services;
 
 /// <summary>
@@ -19,54 +17,45 @@ namespace Ben.Web.Website.Services;
 /// unprotects it, calls the API with that viewer's own token, and streams the reply straight
 /// through.</para>
 ///
-/// <para><b>What keeps it safe.</b> The payload is encrypted with ASP.NET Data Protection, so the
-/// token is never readable in a URL, a log or a referrer. It is bound to ONE file id, so a ticket
-/// lifted from one image cannot fetch another. It expires. And the API is still the authority:
-/// the ticket only carries the caller's identity, it never asserts what they may see.</para>
+/// <para><b>What keeps it safe.</b> The ticket is an opaque handle — it carries no payload at
+/// all, so there is nothing in the URL to read, log or replay without the server that issued it.
+/// It is bound to ONE file id, so a ticket lifted from one image cannot fetch another. It
+/// expires. And the API is still the authority: redeeming a ticket yields the caller's identity,
+/// it never asserts what they may see.</para>
+///
+/// <para><b>It used to be the token itself, encrypted.</b> That was unreadable but vast — 2504
+/// characters, past the 2048 IIS allows in a query string, so IIS answered 404.15 before the
+/// application saw the request and profile photos silently vanished on the deployed site while
+/// working on localhost. See <see cref="BrowserTicketStore"/> for why a handle replaced it and
+/// what that costs (item 201).</para>
 /// </remarks>
 public sealed class MediaTicketService
 {
-    private readonly IDataProtector _protector;
+    private readonly BrowserTicketStore _store;
+
+    /// <summary>Keeps media handles from ever being redeemable as upload handles.</summary>
+    private const string Scope = "media";
 
     /// <summary>
     /// Long enough to view a page and scroll it; short enough that a leaked URL is worthless.
     /// </summary>
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 
-    public MediaTicketService(IDataProtectionProvider provider)
-        => _protector = provider.CreateProtector("Ben.Web.Website.MediaTicket.v1");
+    public MediaTicketService(BrowserTicketStore store) => _store = store;
 
     /// <summary>Mints a ticket for one file, for the caller holding this token.</summary>
+    /// <remarks>
+    /// The store derives a stable handle for the same viewer, file and hour, so the URL does not
+    /// change between renders and the browser can cache the image — the same property the
+    /// rounded-down expiry gave the encrypted version, for the same reason.
+    /// </remarks>
     public string Protect(Guid fileId, string accessToken)
-    {
-        // The expiry is rounded DOWN to the hour so the same viewer gets the same URL for the
-        // same file across renders — otherwise every re-render would produce a new URL and the
-        // browser could never cache the image, which is half the point of getting the bytes out
-        // of the server.
-        var slot = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 3600 * 3600;
-        var payload = $"{fileId:N}|{slot}|{accessToken}";
-        return _protector.Protect(payload);
-    }
+        => _store.Issue(Scope, fileId, accessToken, Lifetime);
 
     /// <summary>
     /// Reads a ticket back, returning the access token when it is valid for this file.
     /// </summary>
-    /// <returns>Null when the ticket is unreadable, expired, or was minted for another file.</returns>
+    /// <returns>Null when the ticket is unknown, expired, or was minted for another file.</returns>
     public string? Unprotect(Guid fileId, string ticket)
-    {
-        string payload;
-        try { payload = _protector.Unprotect(ticket); }
-        catch { return null; }   // tampered, or from a previous key ring
-
-        var parts = payload.Split('|', 3);
-        if (parts.Length != 3) return null;
-        if (!Guid.TryParseExact(parts[0], "N", out var ticketFileId) || ticketFileId != fileId) return null;
-        if (!long.TryParse(parts[1], out var slot)) return null;
-
-        var issued = DateTimeOffset.FromUnixTimeSeconds(slot);
-        // The slot is rounded down, so a ticket is good for its hour plus the lifetime.
-        if (DateTimeOffset.UtcNow > issued + Lifetime + TimeSpan.FromHours(1)) return null;
-
-        return string.IsNullOrWhiteSpace(parts[2]) ? null : parts[2];
-    }
+        => _store.Redeem(Scope, fileId, ticket);
 }

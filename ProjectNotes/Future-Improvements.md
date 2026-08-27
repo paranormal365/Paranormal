@@ -10222,3 +10222,34 @@ a broken image.
 **Also worth a guard:** nothing anywhere asserts that a generated URL fits in a URL. A test that
 mints a ticket and checks the resulting query string against a stated ceiling would have caught
 this before deployment, and is three lines.
+
+### Done 2026-08-27
+
+`BrowserTicketStore` replaces the encrypted payload with an opaque handle: **43 characters
+against 2504**, and the token no longer travels at all. Both ticket services use it — media
+(1 hour) and chunked upload (12 hours) — under separate scopes, so one can never be redeemed as
+the other, which matters because their lifetimes differ by eleven hours.
+
+Everything the old design was careful about survives. Bound to one id, still checked on redeem
+even though the handle is derived from it — deriving is the optimisation, the check is the rule.
+Expires, absolutely rather than slidingly, so a handle cannot renew itself past the session it
+belongs to. And the handle is unguessable because the access token is part of what is hashed:
+256 bits of digest over a secret, so nobody without the token can construct the handle standing
+for it.
+
+**Derived, not random**, so the same viewer asking for the same file in the same hour gets the
+same URL and the browser can cache the bytes — the property the rounded-down expiry gave the old
+version, kept for the same reason.
+
+**In-memory, and that is fine here.** A restart empties it and every outstanding handle stops
+resolving, which sounds worse than it is: this is Blazor Server, and a restart has already
+destroyed every circuit, so the page holding those URLs is gone anyway and its viewer must
+reload. The store loses nothing that was not already lost.
+
+The guard exists too, and it is the point: `A_ticket_fits_inside_the_default_iis_query_string_limit`
+asserts against the **default** 2048 rather than the raised limit, because a ticket that only fits
+because of a config change is one waiting to break on the next server. Proven by reverting to the
+old design under it — it reports "A ticket is 2530 characters", within a few of the 2504 that
+actually broke.
+
+The raised limit in `web.config` stays as a belt: harmless, and it protects any other long URL.
