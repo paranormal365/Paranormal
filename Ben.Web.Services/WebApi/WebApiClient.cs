@@ -363,6 +363,26 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<UploadFileRecord>(cancellationToken: token);
     }
 
+    public async Task<(ChunkedUploadSessionRecord? Session, string? Error)> StartChunkedUploadAsync(
+        StartChunkedUploadRequest request, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, "/api/chunked-uploads");
+        req.Content = System.Net.Http.Json.JsonContent.Create(request);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<ChunkedUploadSessionRecord>(cancellationToken: token), null);
+
+        // The server refuses in sentences — a size limit that names the number, an extension
+        // policy that names the type. Keep them; a null here degrades to a generic failure.
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+        return (null, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public async Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);

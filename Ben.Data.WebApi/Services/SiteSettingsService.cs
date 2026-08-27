@@ -54,6 +54,12 @@ public static class SiteSettingKeys
     /// <summary>Requests per minute, per caller, allowed against everything else.</summary>
     public const string RateLimitGlobalPerMinute = "ratelimit.global-per-minute";
 
+    /// <summary>Largest file one upload may be, in bytes. Unset = the built-in 2 GiB default.</summary>
+    public const string UploadMaxFileBytes = "upload.max-file-bytes";
+
+    /// <summary>Largest single chunk a chunked upload may send, in bytes. Unset = 64 MiB.</summary>
+    public const string UploadChunkMaxBytes = "upload.chunk-max-bytes";
+
     // ── Feature flags ─────────────────────────────────────────────────────────
     //
     // One switch per major section of the site, so a SuperAdmin can turn a whole area off without
@@ -132,6 +138,11 @@ public static class SiteSettingKeys
             "How many sign-in or registration attempts one caller may make each minute. Low enough to stop password guessing, high enough that a person mistyping their password never notices. Leave empty for the default."),
         (RateLimitGlobalPerMinute, "Rate limit — everything else (per minute)",
             "A ceiling on all other requests from one caller each minute, so a runaway client cannot saturate the server. Generous by design — normal use should never reach it. Leave empty for the default."),
+
+        (UploadMaxFileBytes, "Upload limit — one file (bytes)",
+            "The largest file anyone may upload, in bytes. Applies to every upload path — the classic form and the chunked uploader alike. Leave empty for the built-in default of 2 GiB (2147483648)."),
+        (UploadChunkMaxBytes, "Upload limit — one chunk (bytes)",
+            "How large each piece of a chunked upload may be, in bytes. Keep this under 100 MB (104857600): the site is served through Cloudflare, which rejects any single request bigger than that. Leave empty for the built-in default of 64 MiB (67108864)."),
 
         (FeatureVideoEditor, "Feature — Video editor",
             "The video editor: My Videos, the editor on a case, and the links to the standalone editor. Turning this off hides those pages and makes their addresses stop working. Anything already exported or saved is untouched."),

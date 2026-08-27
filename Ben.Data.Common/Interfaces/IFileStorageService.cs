@@ -23,6 +23,15 @@ public interface IFileStorageService
     bool Exists(string relativePath);
 
     /// <summary>
+    /// Lists the files directly inside <paramref name="relativeDirectory"/>, as paths relative to
+    /// the storage root. An absent directory is an empty list, not an error. Added for
+    /// chunked-upload housekeeping — sweeping sessions that were started and then abandoned —
+    /// which is impossible to do through an abstraction that can only address files it already
+    /// knows the names of.
+    /// </summary>
+    IReadOnlyList<string> ListFiles(string relativeDirectory);
+
+    /// <summary>
     /// Builds the canonical relative storage path for a user-owned file.
     /// e.g. "users/{userId}/{storedFileName}"
     /// </summary>

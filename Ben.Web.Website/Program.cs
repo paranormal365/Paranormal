@@ -84,6 +84,7 @@ builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebA
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
+builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
 builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
 // ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
 // leading slash, which BaseAddress treats as root-relative and so discards the base path - see the
@@ -354,6 +355,114 @@ app.MapGet("/media/{fileId:guid}/{kind}", async (
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/upload-files/{fileId}/{kind}",
         accessToken, httpFactory, ctx, ct);
+});
+
+// ── Chunked upload relays ────────────────────────────────────────────────────
+//
+// The browser PUTs chunks HERE, not to the API: page JavaScript holds no bearer token (and must
+// not), so the circuit mints an UploadTicket bound to the session and the relay speaks to the API
+// with the token inside it — the same trust shape as the media endpoints above, in the opposite
+// direction. Each relay streams the body straight through; the file never lands in this process.
+// The framework's request-size ceiling is off on the chunk PUT because the real ceiling is the
+// API's configurable chunk limit — these chunks are also what keeps every request under
+// Cloudflare's 100 MB, which is the reason chunked uploads exist at all.
+
+app.MapPut("/uploads/chunked/{sessionId:guid}/chunks/{index:int}", async (
+    Guid sessionId, int index, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // one chunk on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Put,
+        $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}/chunks/{index}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapGet("/uploads/chunked/{sessionId:guid}", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    using var request = new HttpRequestMessage(
+        HttpMethod.Get, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapPost("/uploads/chunked/{sessionId:guid}/complete", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // assembly of a large file is a slow disk copy
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}/complete");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapDelete("/uploads/chunked/{sessionId:guid}", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    using var request = new HttpRequestMessage(
+        HttpMethod.Delete, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// The classic-upload relay: the same browser-side JS path, for the files chunking refuses (an
+// SVG is sanitised as a whole document) or doesn't help (anything small). The nonce is a random
+// id the circuit minted purely to bind the ticket to — one ticket, one upload gesture. The
+// multipart body streams through untouched, boundary and all.
+app.MapPost("/uploads/classic/{nonce:guid}", async (
+    Guid nonce, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(nonce, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/upload-files");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
 });
 
 app.MapRazorComponents<App>()
