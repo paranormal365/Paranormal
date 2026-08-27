@@ -42,20 +42,31 @@ public sealed class RateLimitAlerting
     public static readonly TimeSpan FlushInterval = TimeSpan.FromMinutes(1);
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
-    private readonly PlatformMessageService _messages;
+    private readonly IServiceScopeFactory? _scopes;
     private readonly ILogger<RateLimitAlerting> _logger;
     private readonly Func<DateTime> _now;
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, PolicyState> _byPolicy = new();
 
+    /// <summary>
+    /// Takes a scope factory rather than the message service itself.
+    /// </summary>
+    /// <remarks>
+    /// This is a singleton — it has to be, because the counters must outlive any one request —
+    /// and <see cref="PlatformMessageService"/> is scoped. Injecting it directly compiled, passed
+    /// every unit test, and then refused to start the API at all: the container validates
+    /// lifetimes at build time and a singleton capturing a scoped service is a hard failure.
+    /// Resolving it inside a scope, only when a message is actually being sent, is both correct
+    /// and cheaper — the common path never touches the container.
+    /// </remarks>
     public RateLimitAlerting(
         IDbContextFactory<BenDataContext> dbFactory,
-        PlatformMessageService messages,
+        IServiceScopeFactory? scopes,
         ILogger<RateLimitAlerting> logger,
         Func<DateTime>? now = null)
     {
         _dbFactory = dbFactory;
-        _messages  = messages;
+        _scopes    = scopes;
         _logger    = logger;
         _now       = now ?? (() => DateTime.UtcNow);
     }
@@ -197,7 +208,10 @@ public sealed class RateLimitAlerting
             // stamps CreatedByAppUserId, and an id matching no row would be a dangling author on
             // every screen that resolves names.
             var toSend = alert with { Refusals = row.Refusals, DistinctCallers = row.DistinctCallers };
-            await _messages.SendAsync(toSend.Subject(), toSend.Body(), superAdmins, superAdmins[0], ct);
+
+            using var scope = _scopes!.CreateScope();
+            var messages = scope.ServiceProvider.GetRequiredService<PlatformMessageService>();
+            await messages.SendAsync(toSend.Subject(), toSend.Body(), superAdmins, superAdmins[0], ct);
 
             row.DateNotified = _now();
             await db.SaveChangesAsync(ct);

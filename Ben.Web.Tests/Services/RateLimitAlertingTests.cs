@@ -26,7 +26,7 @@ public sealed class RateLimitAlertingTests
 
     private RateLimitAlerting Subject() => new(
         dbFactory: null!,                 // never reached: Record does no database work
-        messages:  null!,
+        scopes:    null!,
         logger:    NullLogger<RateLimitAlerting>.Instance,
         now:       () => _now);
 
