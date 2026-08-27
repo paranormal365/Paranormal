@@ -21,5 +21,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Ben.Data.WebApi\Ben.Data.WebApi.csproj" />
     <ProjectReference Include="..\Ben.Web.Website.Library\Ben.Web.Website.Library.csproj" />
+    <!-- The website host itself, for services that live there because they need the host's
+         Data Protection ring (UploadTicketService and kin). -->
+    <ProjectReference Include="..\Ben.Web.Website\Ben.Web.Website.csproj" />
   </ItemGroup>
 </Project>
