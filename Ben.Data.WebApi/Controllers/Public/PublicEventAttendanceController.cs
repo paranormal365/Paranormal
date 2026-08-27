@@ -231,7 +231,13 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         // Re-checked at the moment of use, not only when the link was sent. A fortnight is long
         // enough for an event to fill up or close.
-        if (DateTime.UtcNow > ev.RsvpClosingTime)
+        //
+        // Unless an organiser sent it. A guide signing up a group who turned up late is making
+        // that call in person, and refusing their link at the moment it is used would recreate
+        // exactly the failure the late-arrival grace exists to prevent — the guest is standing
+        // there, has paid, and would still lose the photograph they took on the walk. A link the
+        // guest asked for themselves gets no such latitude, because nobody vouched for it.
+        if (invite.InvitedByAppUserId is null && DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
         var attendees = await db.OrgCalendarEventAttendees
@@ -265,7 +271,11 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             }
         }
 
-        var alreadyFull = ev.AttendeeCapacity is int cap
+        // Capacity is likewise the organiser's own number, and likewise theirs to override in
+        // person — the direct AddAttendee path has never checked it either. A guest who asked for
+        // their own link still cannot walk past a full house.
+        var alreadyFull = invite.InvitedByAppUserId is null
+            && ev.AttendeeCapacity is int cap
             && attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted && a.AppUserId != user.Id) >= cap;
         if (alreadyFull) return Conflict("This event filled up before you confirmed.");
 

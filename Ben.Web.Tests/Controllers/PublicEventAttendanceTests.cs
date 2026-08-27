@@ -202,6 +202,95 @@ public sealed class PublicEventAttendanceTests
         Assert.IsType<OkResult>(again);
     }
 
+    /// <summary>
+    /// A guide's link still works after sign-ups close; a guest's own link does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>This pair is the walk-up feature. Confirmation re-checks the closing time, so without
+    /// the organiser exemption a guide could send a link to the group who turned up late and it
+    /// would be refused at the moment they used it — the guest would have paid, walked, and still
+    /// lost the photograph they took, which is the exact failure the late-arrival grace exists to
+    /// prevent.</para>
+    ///
+    /// <para>The negative half matters as much: latitude that applied to every link would just be
+    /// "sign-ups never close", and the closing rule is also what stops somebody signing up to last
+    /// week's event to reach the evidence submitted to it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task An_organiser_link_confirms_after_sign_ups_close()
+    {
+        var w = await SeedAsync();
+        var guide = Guid.NewGuid();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("walkup@example.com", "Walk Up"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            // The guide vouches for them, and the night is now well over.
+            var invite = await db.EventAttendanceInvites.FirstAsync(i => i.Email == "walkup@example.com");
+            invite.InvitedByAppUserId = guide;
+
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.StartDateTime = DateTime.UtcNow.AddHours(-6);
+            ev.EndDateTime   = DateTime.UtcNow.AddHours(-3);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "walkup@example.com"), default);
+
+        Assert.IsNotType<ConflictObjectResult>(result.Result);
+    }
+
+    /// <summary>The same night, the same closing time, a link nobody vouched for: refused.</summary>
+    [Fact]
+    public async Task A_self_service_link_does_not_confirm_after_sign_ups_close()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("selfserve@example.com", "Self Serve"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.StartDateTime = DateTime.UtcNow.AddHours(-6);
+            ev.EndDateTime   = DateTime.UtcNow.AddHours(-3);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "selfserve@example.com"), default);
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A guide's link also gets past a full house, because capacity is the organiser's own number.
+    /// </summary>
+    [Fact]
+    public async Task An_organiser_link_confirms_past_a_full_house()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("extra@example.com", "One More"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var invite = await db.EventAttendanceInvites.FirstAsync(i => i.Email == "extra@example.com");
+            invite.InvitedByAppUserId = Guid.NewGuid();
+
+            // Capacity of zero: full by definition, whoever turns up.
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.AttendeeCapacity = 0;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "extra@example.com"), default);
+
+        Assert.IsNotType<ConflictObjectResult>(result.Result);
+    }
+
     private static async Task<string> TokenFor(World w, string email)
     {
         await using var db = await w.Factory.CreateDbContextAsync();

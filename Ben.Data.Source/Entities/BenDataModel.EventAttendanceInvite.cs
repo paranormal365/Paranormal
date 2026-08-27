@@ -45,6 +45,27 @@ namespace Ben.Data.Source.Entities
         /// <summary>The account confirming created, or the existing one the address belonged to.</summary>
         public Guid? ConfirmedByAppUserId { get; set; }
 
+        /// <summary>
+        /// The organiser who sent this link on somebody's behalf, or null when the guest asked
+        /// for it themselves.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>The walk-up problem (Ben, 2026-08-27).</b> A guide standing at the meeting
+        /// point with a group who turned up late cannot use the self-service flow on their
+        /// behalf, and cannot add them as attendees either, because that path resolves an
+        /// existing account by published email and a walk-up has no account at all. So a guide
+        /// with the calendar permission sends the link instead, and the guest confirms it on
+        /// their own phone — the same machinery, started by somebody accountable.</para>
+        ///
+        /// <para><b>Why it is recorded rather than inferred.</b> Confirmation re-checks the
+        /// sign-up closing time, so a link sent for a late arrival would otherwise be refused at
+        /// the moment it is used — the exact failure the late-arrival grace exists to prevent.
+        /// A link the organiser sent carries their decision with it and confirms after closing;
+        /// one the guest asked for themselves does not. Keeping the organiser's id also means
+        /// "who let these thirty people in" has an answer.</para>
+        /// </remarks>
+        public Guid? InvitedByAppUserId { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
@@ -52,5 +73,6 @@ namespace Ben.Data.Source.Entities
 
         public virtual OrgCalendarEvent OrgCalendarEvent { get; set; } = null!;
         public virtual AppUser? ConfirmedByAppUser { get; set; }
+        public virtual AppUser? InvitedByAppUser { get; set; }
     }
 }

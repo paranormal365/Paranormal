@@ -1224,6 +1224,9 @@ public sealed record UpsertCaseNoteDto(string? Title, string Body, bool IsPinned
 
 // ── Sidecar telemetry records ────────────────────────────────────────────────
 
+/// <summary>A walk-up an organiser is signing up: an address, and a name if they gave one.</summary>
+public sealed record InviteGuestRequest(string? Email, string? DisplayName);
+
 /// <summary>One rate limit's running tally of refused requests (SuperAdmin).</summary>
 /// <remarks>
 /// <c>DistinctCallers</c> is the most recent flush window, not a lifetime figure: it answers

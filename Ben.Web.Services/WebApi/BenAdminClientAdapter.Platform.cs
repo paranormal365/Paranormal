@@ -227,6 +227,12 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/by-email",
                new AddAttendeeByEmailRequest(email), token);
 
+    public Task<bool> InviteEventGuestAsync(
+        Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default)
+        => _api.PostAsync<InviteGuestRequest, bool>(
+               $"/api/organizations/{orgId}/calendar/{eventId}/guest-invites",
+               new InviteGuestRequest(email, displayName), token);
+
     public Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
         => _api.PutAsync<object, OrgCalendarEventAttendeeRecord>(
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",

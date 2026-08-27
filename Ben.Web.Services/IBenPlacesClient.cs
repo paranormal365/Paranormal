@@ -153,6 +153,17 @@ public interface IBenPlacesClient
     /// Returns null when nobody with that address has an account.
     /// </summary>
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeByEmailAsync(Guid orgId, Guid eventId, string email, CancellationToken token = default);
+
+    /// <summary>
+    /// Sends a sign-up link to somebody who has no account here — the walk-up at the meeting point.
+    /// </summary>
+    /// <remarks>
+    /// The companion to <see cref="AddCalendarAttendeeByEmailAsync"/>, which can only resolve an
+    /// address an existing account has published. Requires the calendar permission, and the link
+    /// it sends carries the organiser's authority: it confirms after sign-ups close and past a
+    /// full house, which is what a late arrival needs.
+    /// </remarks>
+    Task<bool> InviteEventGuestAsync(Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
     Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
 

@@ -28,6 +28,14 @@ namespace Ben.Web.Tests.Controllers;
 /// </remarks>
 public class CalendarInviteByEmailTests
 {
+    /// <summary>Email off: these suites are about permission and data, never about delivery.</summary>
+    private static Ben.Data.Common.Interfaces.IEmailService UnconfiguredEmail()
+    {
+        var m = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        m.SetupGet(x => x.IsConfigured).Returns(false);
+        return m.Object;
+    }
+
     private static readonly Guid OrgId = Guid.NewGuid();
     private static readonly Guid EventId = Guid.NewGuid();
     private static readonly Guid MemberId = Guid.NewGuid();
@@ -43,7 +51,9 @@ public class CalendarInviteByEmailTests
     }
 
     private static OrgCalendarEventController Build(IDbContextFactory<BenDataContext> f)
-        => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
+        => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), UnconfiguredEmail(),
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -190,7 +200,9 @@ public class CalendarInviteByEmailTests
     {
         var factory = await SeedAsync(Guid.NewGuid(), "guest@example.com");
 
-        var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
+        var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -206,6 +218,89 @@ public class CalendarInviteByEmailTests
             OrgId, EventId, new AddAttendeeByEmailRequest("guest@example.com"), default);
 
         Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The walk-up: somebody with no account at all gets a sign-up link, which the account-based
+    /// paths could never give them.
+    /// </summary>
+    /// <remarks>
+    /// This is the gap Ben pointed at. <c>AddAttendeeByEmail</c> answers NotFound for an address
+    /// no account publishes — correctly, since it resolves existing accounts — and that is exactly
+    /// the person standing on the pavement handing the guide cash.
+    /// </remarks>
+    [Fact]
+    public async Task A_walk_up_with_no_account_can_be_sent_a_link()
+    {
+        var factory = await SeedAsync(Guid.NewGuid(), "guest@example.com");
+
+        // The account-based path cannot help this person.
+        var byEmail = await Build(factory).AddAttendeeByEmail(
+            OrgId, EventId, new AddAttendeeByEmailRequest("nobody@example.com"), default);
+        Assert.IsType<NotFoundObjectResult>(byEmail.Result);
+
+        // The guest-invite path can.
+        var invited = await Build(factory).InviteGuest(
+            OrgId, EventId, new InviteGuestRequest("nobody@example.com", "Walk Up"), default);
+        Assert.IsType<OkObjectResult>(invited.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var invite = await db.EventAttendanceInvites.SingleAsync(i => i.Email == "nobody@example.com");
+        Assert.Equal(MemberId, invite.InvitedByAppUserId);
+        Assert.False(string.IsNullOrWhiteSpace(invite.Token));
+    }
+
+    /// <summary>
+    /// Inviting a guest is editing the calendar, so it answers to the calendar permission — the
+    /// grant a tour operator gives a hired guide.
+    /// </summary>
+    [Fact]
+    public async Task A_non_member_cannot_send_a_guest_a_link()
+    {
+        var factory = await SeedAsync(Guid.NewGuid(), "guest@example.com");
+
+        var ctrl = new OrgCalendarEventController(
+            factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            UnconfiguredEmail(),
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"))
+                }
+            }
+        };
+
+        var result = await ctrl.InviteGuest(
+            OrgId, EventId, new InviteGuestRequest("nobody@example.com", null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// It answers identically whether or not that address already has an account.
+    /// </summary>
+    /// <remarks>
+    /// A guide is a hired stranger, not an administrator. The public flow is careful not to become
+    /// an account-existence oracle, and this endpoint must not undo that from the inside — so the
+    /// response to a known address and an unknown one is the same.
+    /// </remarks>
+    [Fact]
+    public async Task It_does_not_reveal_whether_an_address_has_an_account()
+    {
+        var factory = await SeedAsync(Guid.NewGuid(), "guest@example.com");
+
+        var known   = await Build(factory).InviteGuest(
+            OrgId, EventId, new InviteGuestRequest("guest@example.com", null), default);
+        var unknown = await Build(factory).InviteGuest(
+            OrgId, EventId, new InviteGuestRequest("stranger@example.com", null), default);
+
+        Assert.IsType<OkObjectResult>(known.Result);
+        Assert.IsType<OkObjectResult>(unknown.Result);
     }
 
     [Theory]
