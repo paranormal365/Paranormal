@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
-
 namespace Ben.Web.Website.Services;
 
 /// <summary>
@@ -23,37 +21,29 @@ namespace Ben.Web.Website.Services;
 /// </remarks>
 public sealed class UploadTicketService
 {
-    private readonly IDataProtector _protector;
+    private readonly BrowserTicketStore _store;
+
+    /// <summary>Keeps upload handles from ever being redeemable as media handles.</summary>
+    private const string Scope = "upload";
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(12);
 
-    public UploadTicketService(IDataProtectionProvider provider)
-        => _protector = provider.CreateProtector("Ben.Web.Website.UploadTicket.v1");
+    public UploadTicketService(BrowserTicketStore store) => _store = store;
 
     /// <summary>Mints a ticket for one upload session, for the caller holding this token.</summary>
+    /// <remarks>
+    /// A handle rather than the encrypted token, for the reason set out in
+    /// <see cref="BrowserTicketStore"/>: this one also travels in a query string, on every chunk
+    /// of a large upload, so it is the last place a two-and-a-half-kilobyte string belongs
+    /// (item 201).
+    /// </remarks>
     public string Protect(Guid sessionId, string accessToken)
-    {
-        var expires = DateTimeOffset.UtcNow.Add(Lifetime).ToUnixTimeSeconds();
-        var payload = $"{sessionId:N}|{expires}|{accessToken}";
-        return _protector.Protect(payload);
-    }
+        => _store.Issue(Scope, sessionId, accessToken, Lifetime);
 
     /// <summary>
     /// Reads a ticket back, returning the access token when it is valid for this session.
     /// </summary>
-    /// <returns>Null when the ticket is unreadable, expired, or minted for another session.</returns>
+    /// <returns>Null when the ticket is unknown, expired, or minted for another session.</returns>
     public string? Unprotect(Guid sessionId, string ticket)
-    {
-        string payload;
-        try { payload = _protector.Unprotect(ticket); }
-        catch { return null; }   // tampered, or from a previous key ring
-
-        var parts = payload.Split('|', 3);
-        if (parts.Length != 3) return null;
-        if (!string.Equals(parts[0], sessionId.ToString("N"), StringComparison.OrdinalIgnoreCase)) return null;
-        if (!long.TryParse(parts[1], out var expires)) return null;
-        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expires) return null;
-
-        return parts[2];
-    }
+        => _store.Redeem(Scope, sessionId, ticket);
 }

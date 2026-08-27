@@ -1,5 +1,5 @@
 using Ben.Web.Website.Services;
-using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Caching.Memory;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;
@@ -10,8 +10,9 @@ namespace Ben.Web.Tests.Services;
 /// </summary>
 public class UploadTicketServiceTests
 {
-    private static UploadTicketService Create()
-        => new(new EphemeralDataProtectionProvider());
+    private static BrowserTicketStore NewStore() => new(new MemoryCache(new MemoryCacheOptions()));
+
+    private static UploadTicketService Create() => new(NewStore());
 
     [Fact]
     public void A_ticket_round_trips_for_its_own_session()
@@ -42,7 +43,9 @@ public class UploadTicketServiceTests
 
         Assert.Null(svc.Unprotect(sessionId, "not-a-ticket"));
 
-        // Minted under a different key ring entirely — a ticket from another machine or epoch.
+        // Issued by a different store entirely — another machine, or this one before a restart.
+        // A handle means nothing without the server that minted it, which is the point of it
+        // carrying no payload (item 201).
         var foreign = Create().Protect(sessionId, "token");
         Assert.Null(svc.Unprotect(sessionId, foreign));
     }
@@ -50,11 +53,13 @@ public class UploadTicketServiceTests
     [Fact]
     public void Upload_and_media_tickets_are_not_interchangeable()
     {
-        // Same key ring, different protector purposes: a media ticket must never authorise an
-        // upload chunk, nor the reverse.
-        var provider = new EphemeralDataProtectionProvider();
-        var uploads = new UploadTicketService(provider);
-        var media = new MediaTicketService(provider);
+        // ONE store, as deployed — both services resolve the same singleton — so this really does
+        // test the scope separation rather than two isolated caches never seeing each other's
+        // handles. A media ticket must never authorise an upload chunk, nor the reverse: their
+        // lifetimes differ by eleven hours.
+        var store = NewStore();
+        var uploads = new UploadTicketService(store);
+        var media = new MediaTicketService(store);
         var id = Guid.NewGuid();
 
         Assert.Null(uploads.Unprotect(id, media.Protect(id, "token")));

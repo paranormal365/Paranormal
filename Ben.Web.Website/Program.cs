@@ -83,6 +83,11 @@ builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebA
 // and the link previews that carry a shared URL into a chat window.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
+// Backs both ticket services. Singleton and in-memory: a restart empties it, which costs nothing
+// this app had — a Blazor Server restart has already destroyed every circuit, so the pages holding
+// those URLs are gone anyway (item 201).
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<Ben.Web.Website.Services.BrowserTicketStore>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
 builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
