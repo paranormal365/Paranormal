@@ -122,7 +122,10 @@ public static class TierAreaResolution
         BenDataContext db, CancellationToken ct = default)
     {
         var free = await db.SubscriptionTiers.AsNoTracking()
-            .Where(t => t.IsActive && t.Prices.Any() && t.Prices.All(p => p.Price == 0m))
+            // Banded only: an unbanded business tier is never what "no subscription" means, even
+            // in the odd case where somebody prices one at zero.
+            .Where(t => t.IsActive && t.IsBandedByMembers
+                     && t.Prices.Any() && t.Prices.All(p => p.Price == 0m))
             .OrderBy(t => t.SortOrder)
             .Select(t => new { t.Id, t.Name })
             .FirstOrDefaultAsync(ct);

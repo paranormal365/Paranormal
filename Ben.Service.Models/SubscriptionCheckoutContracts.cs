@@ -63,7 +63,11 @@ public record PublicSubscriptionTier(
     IReadOnlyList<PublicTierPrice> Prices,
     IReadOnlyList<PublicTierLimit> Limits,
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null,
-    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null);
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null,
+    // Item 198: false means this plan is not a member band at all — it is sold to a kind of
+    // business, and showing it a headcount range says something untrue about who it is for.
+    // Appended, because this record is built positionally.
+    bool IsBandedByMembers = true);
 
 /// <summary>One cap as it actually binds a group right now.</summary>
 /// <param name="FromContract">

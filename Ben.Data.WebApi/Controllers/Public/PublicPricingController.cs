@@ -71,6 +71,7 @@ public sealed class PublicPricingController : ControllerBase
             t.ExcludedCapabilities.Count == 0
                 ? null
                 : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>()
-                    .Except(t.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)])));
+                    .Except(t.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)],
+            t.IsBandedByMembers)));
     }
 }

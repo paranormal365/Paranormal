@@ -79,11 +79,13 @@
                                range on the free one said the opposite — that a group outgrows
                                being free, which is not what it means. *@
                             <p class="text-secondary small mb-3">
-                                @(IsFree(tier)
-                                    ? "Any size group"
-                                    : tier.MaxMembers is { } max
-                                        ? $"{tier.MinMembers}–{max} active members"
-                                        : $"{tier.MinMembers}+ active members")
+                                @(!tier.IsBandedByMembers
+                                    ? "Tour and event businesses"
+                                    : IsFree(tier)
+                                        ? "Any size group"
+                                        : tier.MaxMembers is { } max
+                                            ? $"{tier.MinMembers}–{max} active members"
+                                            : $"{tier.MinMembers}+ active members")
                             </p>
 
                             @if (IsFree(tier))

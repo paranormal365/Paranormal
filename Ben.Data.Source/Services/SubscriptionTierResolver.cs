@@ -26,7 +26,11 @@ public static class SubscriptionTierResolver
     /// </remarks>
     public static string? Validate(IReadOnlyList<SubscriptionTier> tiers)
     {
-        var bands = tiers.Where(t => t.IsActive).OrderBy(t => t.MinMembers).ToList();
+        // Only the LADDER is validated for contiguity. A tier sold to a kind of business rather
+        // than a size of team (item 198) has no place in the ladder to be contiguous with, and
+        // including it would report a gap that is not one.
+        var bands = tiers.Where(t => t.IsActive && t.IsBandedByMembers)
+                         .OrderBy(t => t.MinMembers).ToList();
 
         if (bands.Count == 0)
             return "There are no active price bands, so no organization can be priced.";
@@ -91,7 +95,11 @@ public static class SubscriptionTierResolver
         // everyone left, or nobody has accepted yet — and it costs whatever one member costs.
         var count = Math.Max(1, memberCount);
 
-        var bands = tiers.Where(t => t.IsActive).OrderBy(t => t.MinMembers).ToList();
+        // Only the LADDER is validated for contiguity. A tier sold to a kind of business rather
+        // than a size of team (item 198) has no place in the ladder to be contiguous with, and
+        // including it would report a gap that is not one.
+        var bands = tiers.Where(t => t.IsActive && t.IsBandedByMembers)
+                         .OrderBy(t => t.MinMembers).ToList();
 
         // Item 144: a count beyond a bounded-but-overflowing top band still resolves to that
         // band — the extra members are the overflow seats, not a bigger group price.
