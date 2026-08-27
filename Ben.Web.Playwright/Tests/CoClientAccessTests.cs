@@ -293,6 +293,14 @@ public class CoClientAccessTests : BenTestBase
         // NOT conditional any more. Revocation is, by this test's own reckoning, the half that
         // matters — and a silent `if` around it meant a markup change could switch the check off
         // while the test still reported green.
+        //
+        // Waited for rather than counted. CountAsync is an instant snapshot and WaitUntilLoadedAsync
+        // only means the circuit is up, not that THIS row has rendered — so under a full-suite load
+        // the count was taken before the list arrived and the test reported a missing button on a
+        // page that was merely slow (once in 401 tests, 2026-08-27; passed alone). ToBeVisibleAsync
+        // retries, so it still fails when the button is genuinely absent and no longer fails when
+        // the page is just behind.
+        await Expect(removeButton).ToBeVisibleAsync(new() { Timeout = 30_000 });
         Assert.That(await removeButton.CountAsync(), Is.GreaterThan(0),
             "the shared person's row should offer a way to take the access back");
         {

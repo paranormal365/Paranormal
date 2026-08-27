@@ -33,10 +33,41 @@ const { FFmpeg } = FFmpegWASM;
  * @param {string} label
  * @returns {Promise<string>}
  */
+// The core is several megabytes fetched in one go, and a single blip loses the whole import:
+// `fetch` rejects with a bare "TypeError: Failed to fetch" that says nothing about which of DNS,
+// the connection or the transfer gave way. That surfaced as an editor stuck on "Error: Failed to
+// fetch" — recurring, never reproducible on demand, and hit once in a 401-test run on 2026-08-27.
+//
+// A transfer this size deserves the same courtesy any large download gets: try again. Three
+// attempts with a widening pause covers a transient far more often than it prolongs a real
+// outage, and an HTTP status is NOT retried — a 404 is an answer, and asking twice will not
+// change it.
 async function toBlobURL(url, mimeType, label) {
-    console.log(`[ffmpeg] ↓ ${label}…`);
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`[ffmpeg] ${label}: HTTP ${resp.status}`);
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            return await fetchAsBlobURL(url, mimeType, label, attempt);
+        } catch (err) {
+            if (err && err.httpStatus) throw err;      // the server answered; retrying is pointless
+            lastError = err;
+            if (attempt < 3) {
+                const pause = attempt * 750;
+                console.warn(`[ffmpeg] ${label}: ${err}. Retrying in ${pause}ms (${attempt}/2)…`);
+                await new Promise(r => setTimeout(r, pause));
+            }
+        }
+    }
+    throw new Error(`[ffmpeg] ${label}: failed after 3 attempts — ${lastError}`);
+}
+
+async function fetchAsBlobURL(url, mimeType, label, attempt) {
+    console.log(`[ffmpeg] ↓ ${label}${attempt > 1 ? ` (attempt ${attempt})` : ''}…`);
+    const resp = await fetch(url, { cache: 'force-cache' });
+    if (!resp.ok) {
+        const err = new Error(`[ffmpeg] ${label}: HTTP ${resp.status}`);
+        err.httpStatus = resp.status;
+        throw err;
+    }
 
     const total = parseInt(resp.headers.get('Content-Length') || '0');
     if (total > 0 && resp.body) {

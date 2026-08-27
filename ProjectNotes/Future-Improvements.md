@@ -10179,6 +10179,18 @@ started-more-than-once database.
   against it once, and assert every seeded organization has 8 roles, a full ladder and the four
   duties. That single check would have caught this without a 400-test suite.
 
+**A second cause of the same shape, found 2026-08-27:** localhost and ishaunted.com share ONE
+database but have SEPARATE file storage. A file uploaded on the live server leaves a row every
+local run can see and bytes no local run can read, so `/media/...` answers 404 and any test that
+asserts a thumbnail decodes fails — with nothing wrong in the code. `ThumbnailsActuallyLoad`
+failed exactly this way on three of Ben's own profile photos, and the share-dialog picker test
+most likely followed it, because a picker full of unloadable files never settles.
+
+That is not a bug to fix in the app; it is a property of pointing two environments with different
+storage at one database. Worth knowing before triaging any media failure locally: check whether
+the file's bytes were ever written on THIS machine before believing the code is wrong. The clean
+answer is a local database, which is also what would end this item's main complaint.
+
 **Do not fix this by rebuilding the shared dev database.** It also serves ishaunted.com, and
 rebuilding it has already caused one outage. Create a second database beside it instead — the
 whole investigation above was done that way, and IsHauntedDb was never touched.

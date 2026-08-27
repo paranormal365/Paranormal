@@ -76,11 +76,39 @@ public static class OrgRoleDefaults
 
     /// <summary>Stages the seven roles with their grants; the caller's SaveChangesAsync commits them.</summary>
     public static void AddDefaultRoles(BenDataContext db, Guid organizationId, Guid createdByAppUserId)
+        => AddDefaultRoles(db, organizationId, createdByAppUserId, existingRoleNames: []);
+
+    /// <summary>
+    /// Adds the defaults this group does not already have, leaving the ones it does alone.
+    /// </summary>
+    /// <param name="existingRoleNames">
+    /// The role names already on the group. Anything listed here is skipped.
+    /// </param>
+    /// <remarks>
+    /// <para><b>For repairing a group that was created half-finished</b>, which the plain overload
+    /// cannot do: it adds all eight unconditionally, so calling it on a group that has some would
+    /// duplicate them.</para>
+    ///
+    /// <para><b>Deliberately NOT what the backfill seeder uses.</b> That one skips any group with
+    /// ANY role, and should: a group that deleted a default meant it, and having it reappear at
+    /// the next restart would be the site overruling them. This overload is for callers that OWN
+    /// the group and know it was never finished — the development seeders repairing their own demo
+    /// groups, where nobody has made any such decision (found 2026-08-27: a demo group created
+    /// before the creation-time fix kept exactly one role forever, because the seeder would not
+    /// recreate it and the backfill would not touch it).</para>
+    /// </remarks>
+    public static void AddDefaultRoles(
+        BenDataContext db, Guid organizationId, Guid createdByAppUserId,
+        IReadOnlyCollection<string> existingRoleNames)
     {
         var now = DateTime.UtcNow;
         var sort = 0;
         foreach (var (name, description, grants) in Defaults)
         {
+            // Sort order still advances for a skipped role, so a repaired group orders its roles
+            // the same way a freshly created one does.
+            if (existingRoleNames.Contains(name, StringComparer.OrdinalIgnoreCase)) { sort++; continue; }
+
             var role = new OrganizationRole
             {
                 Id = Guid.NewGuid(),

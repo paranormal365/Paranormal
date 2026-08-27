@@ -136,6 +136,10 @@ internal static class DevelopmentRosterSeeder
             Console.WriteLine("[RosterSeeder] Created organization: Music City Spirit Seekers (owner: Emma).");
         }
 
+        // Every run, not only at creation: a demo group made before the creation-time fix is
+        // still in every database that has one, and nothing else will ever repair it.
+        await EnsureDefaultRolesAsync(db, mcss.Id, emma.Id);
+
         await MemberAsync(db, mcss, emma,   OrganizationMemberRole.Owner, now);
         await MemberAsync(db, mcss, grace,  OrganizationMemberRole.Administrator, now);
         await MemberAsync(db, mcss, olivia, OrganizationMemberRole.Member, now);   // in two groups
@@ -774,4 +778,31 @@ internal static class DevelopmentRosterSeeder
         }
     }
 
+    /// <summary>
+    /// Gives a demo group any default roles it is missing, on every run rather than only at
+    /// creation — the twin of the one in <c>DevelopmentDataSeeder</c>.
+    /// </summary>
+    /// <remarks>
+    /// Creating them at creation time fixes groups made from now on and does nothing for one
+    /// already in a database: the seeder will not recreate a group that exists, and the standalone
+    /// backfill deliberately skips any group holding ANY role — so a demo group that came out with
+    /// exactly one kept that one for ever. Safe here because these groups belong to the seeder:
+    /// nobody has chosen to delete a role from them, so there is no decision to overrule, which is
+    /// precisely why the backfill must keep its stricter rule for groups that belong to people.
+    /// </remarks>
+    private static async Task EnsureDefaultRolesAsync(BenDataContext db, Guid orgId, Guid createdBy)
+    {
+        var existing = await db.OrganizationRoles
+            .Where(r => r.OrganizationId == orgId)
+            .Select(r => r.Name)
+            .ToListAsync();
+
+        var before = existing.Count;
+        Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, orgId, createdBy, existing);
+        await db.SaveChangesAsync();
+
+        var added = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == orgId) - before;
+        if (added > 0)
+            Console.WriteLine($"[RosterSeeder] Repaired {added} missing default role(s) on an existing demo group.");
+    }
 }

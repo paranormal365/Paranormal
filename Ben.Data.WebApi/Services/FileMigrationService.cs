@@ -46,6 +46,24 @@ public sealed class FileMigrationService : IHostedService
         }
     }
 
+    /// <summary>
+    /// Rows still carrying their bytes in the database that can actually be given a path.
+    /// </summary>
+    /// <remarks>
+    /// <para>ONE expression, used by both the count and the batch, because they disagreed. The
+    /// count omitted the <c>StoredFileName</c> condition the batch had, so a row that could never
+    /// be migrated was still counted as pending — and the service announced "migrating 1 file(s)"
+    /// and then reported "0 succeeded, 0 failed", which is untrue in both directions. Found by
+    /// running the e2e suite against its own database, where the discrepancy had nowhere to
+    /// hide.</para>
+    ///
+    /// <para>A row with no <c>StoredFileName</c> cannot be given a path — asking for one throws
+    /// rather than returning null — and is still perfectly readable, because the download path
+    /// honours <c>FileData</c> directly. It is excluded, not failed.</para>
+    /// </remarks>
+    private static readonly System.Linq.Expressions.Expression<Func<UploadFile, bool>> NeedsMigrating =
+        f => f.StoragePath == null && f.FileData != null && f.StoredFileName != null;
+
     private async Task MigrateAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -54,7 +72,7 @@ public sealed class FileMigrationService : IHostedService
 
         // Count pending rows
         var pending = await db.UploadFiles
-            .Where(f => f.StoragePath == null && f.FileData != null)
+            .Where(NeedsMigrating)
             .CountAsync(cancellationToken);
 
         if (pending == 0)
@@ -79,7 +97,7 @@ public sealed class FileMigrationService : IHostedService
                 // path honours FileData directly, which is why nothing visible was ever broken by
                 // it (found 2026-08-27 on a freshly rebuilt database, where one seeded demo photo
                 // logged an ArgumentNullException at every start).
-                .Where(f => f.StoragePath == null && f.FileData != null && f.StoredFileName != null)
+                .Where(NeedsMigrating)
                 .OrderBy(f => f.DateCreated)
                 .Skip(skip)
                 .Take(BatchSize)

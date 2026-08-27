@@ -66,7 +66,18 @@ public class CmsAuthoringTests : BenTestBase
 
         // ── Author it ────────────────────────────────────────────────────────
         var dialog = Page.Locator(".modal.show");
-        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
+
+        // Wait for the button before trying to click it. WaitUntilLoadedAsync returns once the
+        // circuit is up, which is not the same as this page having rendered its toolbar — under a
+        // full-suite load the CMS list can still be arriving, and ClickUntilAsync then spends all
+        // four of its attempts clicking nothing and fails pointing at the MODAL, which was never
+        // the thing missing. Waiting on a signal the page itself produces is the rule this
+        // codebase keeps relearning (flaked exactly once in 401 tests on 2026-08-27, and passed
+        // alone in ten seconds).
+        var newPage = Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First;
+        await Expect(newPage).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await ClickUntilAsync(newPage, dialog);
 
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
         await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
@@ -144,7 +155,18 @@ public class CmsAuthoringTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         var dialog = Page.Locator(".modal.show");
-        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
+
+        // Wait for the button before trying to click it. WaitUntilLoadedAsync returns once the
+        // circuit is up, which is not the same as this page having rendered its toolbar — under a
+        // full-suite load the CMS list can still be arriving, and ClickUntilAsync then spends all
+        // four of its attempts clicking nothing and fails pointing at the MODAL, which was never
+        // the thing missing. Waiting on a signal the page itself produces is the rule this
+        // codebase keeps relearning (flaked exactly once in 401 tests on 2026-08-27, and passed
+        // alone in ten seconds).
+        var newPage = Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First;
+        await Expect(newPage).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await ClickUntilAsync(newPage, dialog);
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
         await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).First.ClickAsync();
