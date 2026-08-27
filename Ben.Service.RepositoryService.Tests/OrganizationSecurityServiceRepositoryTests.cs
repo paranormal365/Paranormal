@@ -577,8 +577,8 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.Equal(["Lead Investigator", "Equipment", "Evidence Collection", "Documentation"], duties);
 
         // …and the eight default permission roles (item 156 Phase C; the Investigator Role
-        // joined the defaults), every name carrying the "… Role" suffix that keeps titles
-        // and roles unconfusable.
+        // joined the defaults in 564f332d), every name carrying the "… Role" suffix that keeps
+        // titles and roles unconfusable.
         var roles = await verify.OrganizationRoles
             .Where(r => r.OrganizationId == org.Id)
             .OrderBy(r => r.SortOrder)

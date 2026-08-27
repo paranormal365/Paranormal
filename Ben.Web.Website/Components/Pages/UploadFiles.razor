@@ -1,10 +1,13 @@
 @page "/upload-files"
 
+@implements IDisposable
+
 @inject IWebApiClient Api
 @inject IWebApiTokenStore TokenStore
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject Ben.Web.Website.Services.UploadTicketService UploadTickets
 
 @using Ben.Data.Common.Enums
 @using Ben.Data.Common.Helpers
@@ -34,7 +37,7 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">File Type</label>
-                    <BenSelect Data="@_fileTypes" Value="@_newUpload.FileTypeId" ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(_selectedFile); })" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" Width="100%" />
+                    <BenSelect Data="@_fileTypes" Value="@_newUpload.FileTypeId" ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(); })" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" Width="100%" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="uploadfiles-description-f23a">Description</label>
@@ -45,16 +48,51 @@
                     <label class="ms-2" for="chkPublic">Public</label>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">File</label>
-                    <InputFile OnChange="@OnFileSelected" class="form-control" />
+                    <label class="form-label" for="@FileInputId">Files</label>
+                    @* A plain input rather than InputFile: the bytes leave through page JavaScript
+                       in chunks (see wwwroot/js/chunked-upload.js), never through the circuit —
+                       InputFile would stream a multi-gigabyte recording over SignalR. *@
+                    <input type="file" id="@FileInputId" multiple class="form-control" @onchange="OnFilesPicked" />
                 </div>
                 @if (_uploadError is not null)
                 {
                     <div class="col-12"><div class="alert alert-danger py-2">@_uploadError</div></div>
                 }
+                @if (_progress.Count > 0)
+                {
+                    <div class="col-12 d-flex flex-column gap-2">
+                        @for (var i = 0; i < _progress.Count; i++)
+                        {
+                            var p = _progress[i];
+                            <div>
+                                <div class="d-flex justify-content-between small">
+                                    <span>@p.Name <span class="text-secondary">(@FormatSize(p.Total))</span></span>
+                                    <span class="text-secondary">
+                                        @(p.State switch
+                                        {
+                                            UploadState.Done => "Done",
+                                            UploadState.Failed => "Failed",
+                                            UploadState.Sending => $"{(p.Total == 0 ? 0 : p.Sent * 100 / p.Total)}%",
+                                            _ => "Waiting"
+                                        })
+                                    </span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar @(p.State == UploadState.Failed ? "bg-danger" : p.State == UploadState.Done ? "bg-success" : "")"
+                                         role="progressbar"
+                                         style="width: @(p.Total == 0 ? 0 : p.Sent * 100 / p.Total)%"></div>
+                                </div>
+                                @if (p.Error is not null)
+                                {
+                                    <div class="small text-danger mt-1">@p.Error</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
                 <div class="col-12 d-flex gap-2">
-                    <button type="button" class="btn btn-primary" @onclick="UploadFile" disabled="@(!(_selectedFile is not null && !_isUploading))">
-                        @(_isUploading ? "Uploading..." : "Upload")
+                    <button type="button" class="btn btn-primary" @onclick="UploadFile" disabled="@(!(_pickedFiles.Count > 0 && !_isUploading))">
+                        @(_isUploading ? "Uploading..." : _pickedFiles.Count > 1 ? $"Upload {_pickedFiles.Count} Files" : "Upload")
                     </button>
                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showUploadPanel = false)">Cancel</button>
                 </div>
@@ -124,15 +162,14 @@
         {
             <p>You already have a file named <strong>@_sameNameMatch.FileName</strong>.</p>
             <p class="text-secondary small mb-0">
-                Replace it with the new file (keeps existing comments/votes/case links, updates every
-                case that holds a copy), or keep both as separate files?
+                Keep both as separate files, or cancel and use the grid's <em>Replace</em> button on
+                the existing file to swap its contents (which keeps comments, votes and case links).
             </p>
         }
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 
-            <button type="button" class="btn btn-primary" @onclick="ConfirmReplaceFromSameName">Replace It</button>
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="ConfirmKeepBoth">Keep Both</button>
+            <button type="button" class="btn btn-primary" @onclick="ConfirmKeepBoth">Keep Both</button>
             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showSameNameDialog = false)">Cancel</button>
         </div>
     </ChildContent>
@@ -237,7 +274,27 @@
     private bool _showUploadPanel;
     private bool _isUploading;
     private string? _uploadError;
-    private IBrowserFile? _selectedFile;
+
+    // ── Chunked upload state ─────────────────────────────────────────────────
+    // The picked files' FACTS live here; their bytes never enter the circuit. JavaScript holds
+    // the File objects (chunked-upload.js) and this page holds names, sizes and progress.
+    private const string FileInputId = "chunked-upload-input-7f31";
+    private IReadOnlyList<PickedFile> _pickedFiles = [];
+    private List<FileProgress> _progress = [];
+    private DotNetObjectReference<UploadFiles>? _selfRef;
+
+    private sealed record PickedFile(string Name, long Size, string ContentType);
+
+    private enum UploadState { Waiting, Sending, Done, Failed }
+
+    private sealed class FileProgress
+    {
+        public required string Name { get; init; }
+        public long Total { get; init; }
+        public long Sent { get; set; }
+        public UploadState State { get; set; } = UploadState.Waiting;
+        public string? Error { get; set; }
+    }
 
     private NewUploadModel _newUpload = new();
 
@@ -305,42 +362,55 @@
     }
 
     // ── Upload ───────────────────────────────────────────────────────────────
-    private void OnFileSelected(InputFileChangeEventArgs e)
+    //
+    // Chunked (item: uploads past Cloudflare's 100 MB): the browser cuts each file into chunks
+    // sized by the server and PUTs them to this site's relay endpoints — the bytes never ride
+    // the circuit. This page only starts sessions, mints tickets, and draws progress. SVGs are
+    // the one exception: the server sanitises them as a whole document, so they go through the
+    // classic multipart endpoint — also from the browser, via the classic relay.
+    private async Task OnFilesPicked()
     {
-        _selectedFile = e.File;
-        _uploadError = GetExtensionError(_selectedFile);
+        var picked = await JS.InvokeAsync<PickedFile[]>("benChunkedUpload.readSelection", FileInputId);
+        _pickedFiles = picked;
+        _progress = picked.Select(f => new FileProgress { Name = f.Name, Total = f.Size }).ToList();
+        _uploadError = GetExtensionError();
     }
 
-    private string? GetExtensionError(IBrowserFile? file)
+    private string? GetExtensionError()
     {
-        if (file is null) return null;
         var type = _fileTypes.FirstOrDefault(t => t.Id == _newUpload.FileTypeId);
         if (type is null || type.AllowAllExtensions) return null;
-        var ext = Path.GetExtension(file.Name);
-        if (!FileExtensionPatternMatcher.IsAllowedByPatterns(type.AllowedPatterns, ext))
-        {
-            var allowed = type.AllowedPatterns.Count > 0
-                ? string.Join(", ", type.AllowedPatterns)
-                : "(none defined)";
-            return $"File extension '{ext}' is not allowed for type '{type.Name}'. Allowed: {allowed}";
-        }
-        return null;
+
+        var refused = _pickedFiles
+            .Select(f => Path.GetExtension(f.Name))
+            .Where(ext => !FileExtensionPatternMatcher.IsAllowedByPatterns(type.AllowedPatterns, ext))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (refused.Count == 0) return null;
+
+        var allowed = type.AllowedPatterns.Count > 0
+            ? string.Join(", ", type.AllowedPatterns)
+            : "(none defined)";
+        return $"File extension{(refused.Count > 1 ? "s" : "")} {string.Join(", ", refused.Select(e => $"'{e}'"))} " +
+               $"not allowed for type '{type.Name}'. Allowed: {allowed}";
     }
 
     private async Task UploadFile()
     {
-        if (_selectedFile is null || TokenStore.UserEmail is null) return;
+        if (_pickedFiles.Count == 0 || TokenStore.UserEmail is null) return;
 
-        // Re-validate extension in case file type selection changed after file was picked
-        _uploadError = GetExtensionError(_selectedFile);
+        // Re-validate extensions in case the file type selection changed after files were picked
+        _uploadError = GetExtensionError();
         if (_uploadError is not null) return;
 
         // Same-name-on-upload detection (item #6 phase 3) — only among files this user actually
         // owns (GetUploadFilesAsync currently returns every user's files, tracked as a separate,
         // pre-existing authorization gap — not something to widen scope fixing here).
         var myUserId = TokenStore.UserId ?? Guid.Empty;
-        var existing = _files.FirstOrDefault(f =>
-            f.AppUserId == myUserId && string.Equals(f.FileName, _selectedFile.Name, StringComparison.OrdinalIgnoreCase));
+        var existing = _pickedFiles
+            .Select(p => _files.FirstOrDefault(f =>
+                f.AppUserId == myUserId && string.Equals(f.FileName, p.Name, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault(f => f is not null);
         if (existing is not null)
         {
             _sameNameMatch = existing;
@@ -357,69 +427,101 @@
         await DoUploadAsync();
     }
 
-    private void ConfirmReplaceFromSameName()
-    {
-        _showSameNameDialog = false;
-        if (_sameNameMatch is null || _selectedFile is null) return;
-
-        _replaceTarget = _sameNameMatch;
-        _replaceSelectedFile = _selectedFile;
-        _replaceImpact = null;
-        _replaceError = null;
-        _showReplaceDialog = true;
-        _ = LoadReplaceImpactAsync();
-    }
-
     private async Task DoUploadAsync()
     {
-        if (_selectedFile is null) return;
-
         _isUploading = true;
         _uploadError = null;
+        _selfRef ??= DotNetObjectReference.Create(this);
 
+        var anyFailed = false;
         try
         {
-            var userId = TokenStore.UserId ?? Guid.Empty;
-
-            var content = new MultipartFormDataContent();
-            content.Add(new StringContent(_newUpload.FileTypeId.ToString()), "uploadFileTypeId");
-            content.Add(new StringContent(userId.ToString()), "appUserId");
-            content.Add(new StringContent(_newUpload.Description ?? string.Empty), "description");
-            content.Add(new StringContent(_newUpload.IsPublic.ToString()), "isPublic");
-
-            // No practical upload size limit for now — a future limit belongs at app-settings /
-            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
-            var maxSize = long.MaxValue;
-            await using var stream = _selectedFile.OpenReadStream(maxSize);
-            var fileContent = new StreamContent(stream);
-            var contentType = string.IsNullOrWhiteSpace(_selectedFile.ContentType)
-                ? "application/octet-stream"
-                : _selectedFile.ContentType;
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-            content.Add(fileContent, "file", _selectedFile.Name);
-
-            var result = await Api.UploadFileAsync(content);
-            if (result is not null)
+            // One file at a time, deliberately: parallel files would split the same home-upstream
+            // bandwidth without finishing anything sooner, and sequential keeps every failure
+            // attributable to one file.
+            for (var i = 0; i < _pickedFiles.Count; i++)
             {
-                _files = [result, .._files];
+                var file = _pickedFiles[i];
+                var progress = _progress[i];
+                progress.State = UploadState.Sending;
+                StateHasChanged();
+
+                try
+                {
+                    var record = await UploadOneAsync(i, file);
+                    progress.State = UploadState.Done;
+                    progress.Sent = progress.Total;
+                    _files = [record, .._files];
+                }
+                catch (Exception ex)
+                {
+                    progress.State = UploadState.Failed;
+                    progress.Error = ex.Message;
+                    anyFailed = true;
+                }
+                StateHasChanged();
+            }
+
+            if (!anyFailed)
+            {
+                await JS.InvokeVoidAsync("benChunkedUpload.clearSelection", FileInputId);
+                _pickedFiles = [];
+                _progress = [];
                 _showUploadPanel = false;
                 _newUpload = new NewUploadModel { FileTypeId = _fileTypes.FirstOrDefault()?.Id ?? Guid.Empty };
-                _selectedFile = null;
             }
-            else
-            {
-                _uploadError = "Upload failed. Please try again.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _uploadError = $"Error: {ex.Message}";
         }
         finally
         {
             _isUploading = false;
         }
     }
+
+    private async Task<UploadFileRecord> UploadOneAsync(int fileIndex, PickedFile file)
+    {
+        var accessToken = TokenStore.AccessToken
+            ?? throw new InvalidOperationException("Your sign-in has expired — sign in again to upload.");
+
+        var isSvg = Path.GetExtension(file.Name).Equals(".svg", StringComparison.OrdinalIgnoreCase);
+        if (isSvg)
+        {
+            // The classic multipart path, relayed browser-side. The nonce exists purely to bind
+            // the ticket to this one upload gesture.
+            var nonce = Guid.NewGuid();
+            return await JS.InvokeAsync<UploadFileRecord>("benChunkedUpload.uploadClassic", fileIndex, new
+            {
+                nonce,
+                ticket = UploadTickets.Protect(nonce, accessToken),
+                uploadFileTypeId = _newUpload.FileTypeId,
+                appUserId = TokenStore.UserId ?? Guid.Empty,
+                description = _newUpload.Description ?? string.Empty,
+                isPublic = _newUpload.IsPublic,
+            });
+        }
+
+        var (session, error) = await Api.StartChunkedUploadAsync(new StartChunkedUploadRequest(
+            file.Name, file.ContentType, file.Size, _newUpload.FileTypeId,
+            _newUpload.Description, _newUpload.IsPublic));
+        if (session is null)
+            throw new InvalidOperationException(error ?? "The upload could not be started. Please try again.");
+
+        return await JS.InvokeAsync<UploadFileRecord>("benChunkedUpload.uploadFile", _selfRef, fileIndex, new
+        {
+            id = session.Id,
+            ticket = UploadTickets.Protect(session.Id, accessToken),
+            chunkMaxBytes = session.ChunkMaxBytes,
+        });
+    }
+
+    [JSInvokable]
+    public void OnChunkProgress(int fileIndex, long sent, long total)
+    {
+        if (fileIndex < 0 || fileIndex >= _progress.Count) return;
+        _progress[fileIndex].Sent = sent;
+        StateHasChanged();
+    }
+
+    public void Dispose() => _selfRef?.Dispose();
 
     // ── Download ─────────────────────────────────────────────────────────────
     private async Task DownloadFile(UploadFileRecord file)
@@ -490,7 +592,6 @@
             {
                 _files = [.._files.Select(f => f.Id == result.Id ? result : f)];
                 _showReplaceDialog = false;
-                _selectedFile = null; // clears the upload panel's selection if this came from the same-name prompt
             }
             else
             {

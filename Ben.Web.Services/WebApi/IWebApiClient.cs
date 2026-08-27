@@ -128,6 +128,8 @@ public interface IWebApiClient
     Task<LoadResult<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default);
     Task<LoadResult<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default);
     Task<UploadFileRecord?> UploadFileAsync(MultipartFormDataContent content, CancellationToken token = default);
+    /// <summary>Opens a chunked upload session; the browser then sends the chunks through the website relays. Returns (record, refusal-sentence).</summary>
+    Task<(ChunkedUploadSessionRecord? Session, string? Error)> StartChunkedUploadAsync(StartChunkedUploadRequest request, CancellationToken token = default);
     Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default);
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
 
