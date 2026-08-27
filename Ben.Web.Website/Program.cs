@@ -288,6 +288,24 @@ app.MapGet("/auth/entra-signout", async (HttpContext ctx) =>
 app.MapStaticAssets();
 app.UseAntiforgery();
 
+// ── /build-info.json - which build is actually on disk ───────────────────────
+//
+// Read from disk PER REQUEST, deliberately: this is what the deploy script's smoke check asks
+// for to prove the copy phase really happened, so a value cached at startup would answer for the
+// process rather than for the files and defeat the point.
+//
+// It needs its own endpoint because MapStaticAssets serves only what the build-time manifest
+// (Ben.Web.Website.staticwebassets.endpoints.json) lists, and the deploy script stamps this file
+// into wwwroot AFTER publish - so the framework 404s it while it sits there on disk. That 404 is
+// exactly what the first identity-checked deploy hit on 2026-08-27.
+app.MapGet("/build-info.json", (IWebHostEnvironment env) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "wwwroot", "build-info.json");
+    return File.Exists(path)
+        ? Results.Text(File.ReadAllText(path), "application/json")
+        : Results.NotFound();
+}).AllowAnonymous();
+
 
 // ── /go/{adId} — the counted door on a promoted card (item 186 F8) ───────────
 // A minimal endpoint, not a Blazor page: a redirect must not stand up a circuit. The API counts

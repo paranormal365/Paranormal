@@ -768,19 +768,24 @@ if (-not $SkipSmoke) {
     $checks = @()
     if ($Apps -contains 'webapi') {
         $checks += @{ url = "$ApiUrl/api/public/cases?page=1&pageSize=1"; what = 'API + database' }
-        # Process identity: a route that exists only in this build. The OLD worker answers (404)
-        # where the NEW one answers (401), so this catches the pool serving from a previous
-        # process - which the static-file stamp below cannot, because IIS reads wwwroot from disk
-        # no matter which process is running. Update the route if chunked-uploads ever moves.
-        $checks += @{ url = "$ApiUrl/api/chunked-uploads/00000000-0000-0000-0000-000000000000"
-                      what = 'API build identity (chunked-uploads route)'; expectStatus = 401 }
+        # Process identity is NOT checked here. It lives in the 'Build identity' step at the end,
+        # which asks /api/public/build which commit the worker is running - a direct answer that
+        # needs no route to keep existing. This spot briefly held a probe asserting the
+        # chunked-uploads route answered (401) where an older build says (404); that worked, but
+        # tied the check to one feature's URL surviving forever. The commit comparison is the
+        # better shape, so this is deliberately empty.
     }
     if ($Apps -contains 'website') {
         $checks += @{ url = "$SiteUrl/"; what = 'website' }
         if ($script:BuildStamp) {
-            # File identity: the GUID stamped into this run's artifact must come back from the
-            # live site. Cache-busted so nothing between here and the disk can answer from
-            # before the copy.
+            # File identity, which the commit comparison at the end cannot give: that one asks the
+            # WORKER what it is running, and a worker can be running new code while the website's
+            # static files are stale (or the reverse). This asks the FILES. Cache-busted so
+            # nothing between here and the disk can answer from before the copy.
+            #
+            # Served by a minimal endpoint in the website's Program.cs, not as a static file:
+            # MapStaticAssets serves only what the build-time manifest lists, and this stamp is
+            # written after publish - so as a plain wwwroot file it 404s while sitting on disk.
             $checks += @{ url = "$SiteUrl/build-info.json?cb=$([Guid]::NewGuid().ToString('N'))"
                           what = 'website build identity'; expect = $script:BuildStamp
                           why = 'the site is serving a build-info.json OLDER than the one just copied - the deploy did not land' }
