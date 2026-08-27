@@ -88,6 +88,20 @@ internal static class OrganizationSeeder
             };
             db.Organizations.Add(org);
             await db.SaveChangesAsync();
+
+            // The same three a real creation adds. This group DID get them before, but only
+            // because the backfill seeders happen to run immediately after this one in Program.cs
+            // — an ordering dependency nothing states and nothing checks. That is precisely how
+            // the development and roster seeders came to produce groups with no roles, ladder or
+            // duties: they were added later, below the backfills, and nobody noticed for as long
+            // as the NEXT startup covered for them. Adding them here makes every seeder
+            // self-sufficient, so the backfills go back to being what they are named for —
+            // a net for databases that predate all this, not a thing correctness leans on.
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, owner.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, owner.Id);
+            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, org.Id, owner.Id);
+            await db.SaveChangesAsync();
+
             Console.WriteLine($"[OrganizationSeeder] Created organization: {orgName}");
         }
 
