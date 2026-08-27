@@ -67,8 +67,36 @@ namespace Ben.Data.Source.Entities
         /// <summary>How many people may say they are coming, or null for no limit.</summary>
         public int? AttendeeCapacity { get; set; }
 
-        /// <summary>After this, no new attendees. Null means right up to the start.</summary>
+        /// <summary>
+        /// After this, no new attendees. Null means the start plus the late-sign-up grace.
+        /// </summary>
+        /// <remarks>
+        /// An explicit value is the organiser's own decision and is honoured exactly — set it
+        /// before the start to close early, or after to stay open longer. Null takes the default
+        /// in <see cref="LateSignUpGrace"/>.
+        /// </remarks>
         public DateTime? RsvpClosesAt { get; set; }
+
+        /// <summary>
+        /// How long after a public event starts somebody may still sign up (Ben, 2026-08-27).
+        /// </summary>
+        /// <remarks>
+        /// <para>Sign-ups used to stop dead on the start time, which is wrong for the thing this
+        /// mostly describes: a ghost walking tour, where a guest turns up at the meeting point a
+        /// few minutes after the guide set off — sometimes with friends in tow — and is waved in.
+        /// The guide takes their money and the site pretended they were never there, which also
+        /// cost them the ability to submit the photograph they took on the walk, since evidence
+        /// submission is gated on attendance.</para>
+        ///
+        /// <para>Half an hour, not open-ended, because the closing rule is also what stops
+        /// somebody signing up to LAST week's event to reach the evidence submitted to it. A grace
+        /// window keeps that protection while admitting the late arrival who is genuinely stood
+        /// there.</para>
+        /// </remarks>
+        public static readonly TimeSpan LateSignUpGrace = TimeSpan.FromMinutes(30);
+
+        /// <summary>When sign-ups actually close, explicit setting or the grace default.</summary>
+        public DateTime RsvpClosingTime => RsvpClosesAt ?? StartDateTime.Add(LateSignUpGrace);
 
         /// <summary>
         /// iCal RRULE string for recurring events (e.g. "FREQ=MONTHLY;BYDAY=TU;BYSETPOS=1").

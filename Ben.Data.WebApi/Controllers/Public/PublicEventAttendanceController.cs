@@ -76,10 +76,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         var ev = await VisiblePublicEvent(db).FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (ev is null) return NotFound();
 
-        if (ev.RsvpClosesAt is DateTime closes && DateTime.UtcNow > closes)
+        // One rule, not two: an explicit RsvpClosesAt is the organiser's decision, and otherwise
+        // sign-ups run to the start plus the late-arrival grace. Refusing on StartDateTime as well
+        // made the grace unreachable — a late guest who is standing at the meeting point could not
+        // sign up, and so could not submit what they photographed on the walk.
+        if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
-        if (ev.StartDateTime < DateTime.UtcNow)
-            return Conflict("That event has already started.");
 
         var accepted = await db.OrgCalendarEventAttendees
             .CountAsync(a => a.OrgCalendarEventId == eventId && a.RsvpStatus == RsvpStatus.Accepted, ct);
@@ -177,7 +179,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         // Re-checked at the moment of use, not only when the link was sent. A fortnight is long
         // enough for an event to fill up or close.
-        if (ev.RsvpClosesAt is DateTime closes && DateTime.UtcNow > closes)
+        if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
         var attendees = await db.OrgCalendarEventAttendees
