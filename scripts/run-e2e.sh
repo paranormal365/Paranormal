@@ -27,7 +27,7 @@ set -euo pipefail
 #   scripts/run-e2e.sh                    # everything
 #   scripts/run-e2e.sh --filter Nearby    # one slice, same isolation
 #   scripts/run-e2e.sh --keep             # leave the hosts up afterwards to poke at
-#   BEN_E2E_DB=OtherName scripts/run-e2e.sh
+#   BEN_E2E_DB=OtherName scripts/run-e2e.sh   # a fresh name = a fresh database AND uploads dir
 #
 # It starts the hosts it needs and stops the ones it started. Hosts already running on those
 # ports are left alone and REUSED — which is wrong for isolation, so it refuses instead and says
@@ -42,7 +42,13 @@ SQL_USER="${BEN_E2E_SQL_USER:-IsHaunted}"
 SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-ishaunted}"
 CONN="Server=${SQL_SERVER};Database=${DB_NAME};User Id=${SQL_USER};Password=${SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
 
-UPLOADS_DIR="$ROOT_DIR/.uploads-e2e"
+# Named AFTER the database, and that pairing is load-bearing. The database persists between runs,
+# and once a seeded file has been migrated to disk its row carries a StoragePath and its bytes are
+# no longer in the database — so deleting the uploads directory without the database leaves rows
+# pointing at files that do not exist, and every thumbnail silently 404s. (Done exactly that on
+# 2026-08-27 and spent a while reading it as a seeding bug.) Tying the name to the database means
+# a fresh database always gets a fresh directory, and the two can never drift apart.
+UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
 
 # 127.0.0.1 for the API, not localhost: "localhost" makes Kestrel open an IPv6 listener too, and
 # .NET on macOS can crash in its accept path (dotnet/runtime#102663). See item 187.
@@ -140,6 +146,41 @@ if grep -q "DATABASE IS BEHIND" "$LOG_DIR/api.log" 2>/dev/null; then
   echo "WARNING: the API says the schema is behind — see $LOG_DIR/api.log"
 fi
 
+echo "── Turning on the features the walks audit ─────────────────────────────"
+# The site-wide walks discover routes from the app itself, so they visit /publications and
+# /publications/{name}. Publications ships OFF by default ("Off until the feature ships"), and a
+# gated-off section deliberately renders the ordinary "Page not found" body — a section that is
+# off should look exactly like one that was never built. That is right, and it means the walk
+# cannot tell a working gate from a broken route by looking at the page: both failed as
+# "not routed".
+#
+# The gate's own behaviour is covered by unit tests (SiteFeatureFlagTests,
+# FeatureFlagGatesSomethingTests, PublicationControllerTests), so switching it on here loses no
+# coverage and gains the thing the walk exists for: actually rendering those pages. This is
+# exactly what an isolated database buys — a configuration can be set for the run without
+# touching anything Ben ships.
+SA_EMAIL="${BEN_E2E_ADMIN_EMAIL:-haveben@msn.com}"
+SA_PASSWORD="${BEN_E2E_ADMIN_PASSWORD:-Y@ung615}"
+SA_TOKEN=$(curl -fsS -X POST "$API_URL/login" -H "Content-Type: application/json" \
+  -d "{\"email\":\"$SA_EMAIL\",\"password\":\"$SA_PASSWORD\"}" 2>/dev/null \
+  | python3 -c "import sys,json;print(json.load(sys.stdin).get('accessToken',''))" 2>/dev/null || true)
+
+if [[ -z "${SA_TOKEN:-}" ]]; then
+  echo "   could not sign in as $SA_EMAIL — leaving features at their defaults."
+  echo "   (walks that visit a gated section will report it as 'not routed')"
+else
+  for feature in features.publications; do
+    code=$(curl -fsS -o /dev/null -w "%{http_code}" -X PUT \
+      "$API_URL/api/admin/site-settings/$feature" \
+      -H "Authorization: Bearer $SA_TOKEN" -H "Content-Type: application/json" \
+      -d '{"value":"true"}' 2>/dev/null || echo "000")
+    echo "   $feature -> $code"
+  done
+  # The website caches the feature snapshot, so give it a moment to notice.
+  sleep 3
+fi
+
+echo ""
 echo "── Running the suite ───────────────────────────────────────────────────"
 echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"

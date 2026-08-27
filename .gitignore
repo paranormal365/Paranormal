@@ -112,3 +112,4 @@ Ben.iOS/DerivedData/
 Ben.Data.WebApi/Models/nsfw/*.onnx
 
 .uploads-e2e/
+.uploads-IsHauntedDb_e2e*/

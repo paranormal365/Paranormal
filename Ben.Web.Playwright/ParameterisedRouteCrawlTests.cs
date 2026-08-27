@@ -20,6 +20,13 @@ public class ParameterisedRouteCrawlTests : BenTestBase
     private readonly Dictionary<string, string> _ids = new();
 
     /// <summary>
+    /// Values that apply only under a route prefix, because a parameter name does not always mean
+    /// the same thing: <c>{UrlName}</c> is an organization on <c>/o/{UrlName}</c> and a
+    /// publication on <c>/publications/{UrlName}</c>.
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<string, string>> _routeIds = new();
+
+    /// <summary>
     /// Routes keyed only by a token that gets emailed to someone — an invite, an attendance link,
     /// an email validation. A made-up token exercises the rejection path rather than the page, so
     /// these are covered by their own tests instead.
@@ -70,6 +77,17 @@ public class ParameterisedRouteCrawlTests : BenTestBase
 
         if (FirstValue(orgs, "urlName") is { } urlName) _ids["UrlName"] = urlName;
 
+        // /publications/{UrlName} wants a PUBLICATION's slug, not an organization's — the two
+        // routes spell the parameter the same way, so the shared lookup above quietly handed the
+        // publications page an org slug and it correctly answered "not found". Created rather
+        // than assumed, exactly as the field session below is: nothing seeds a publication, and
+        // without one the site's newest public surface is never visited by the crawl at all.
+        if (_ids.TryGetValue("OrgId", out var pubOrgId)
+            && await EnsurePublicationAsync(pubOrgId, token) is { } publicationSlug)
+        {
+            _routeIds["/publications/"] = new Dictionary<string, string> { ["UrlName"] = publicationSlug };
+        }
+
         if (FirstValue(await ApiAsync("/api/admin/app-users", token), "id", "userId") is { } userId)
             _ids["UserId"] = userId;
 
@@ -112,6 +130,36 @@ public class ParameterisedRouteCrawlTests : BenTestBase
     }
 
     /// <summary>Uploads a tiny field session for the crawler, or returns null if it cannot.</summary>
+    /// <summary>
+    /// Finds a publication on this group, creating one if there is none, and returns its slug.
+    /// </summary>
+    /// <remarks>
+    /// Nothing seeds a publication, so before this the crawl filled /publications/{UrlName} with
+    /// an ORGANIZATION slug — the parameter is spelled the same on both routes — and reported the
+    /// resulting 404 as a broken route. Creating one makes the page genuinely testable and gives
+    /// publications their first end-to-end coverage.
+    ///
+    /// Idempotent: an existing publication is reused, so running this repeatedly leaves one row
+    /// rather than a hundred, the same rule the field-session helper follows.
+    /// </remarks>
+    private async Task<string?> EnsurePublicationAsync(string orgId, string token)
+    {
+        var existing = await ApiAsync($"/api/organizations/{orgId}/publications", token);
+        if (FirstValue(existing, "urlName") is { } already) return already;
+
+        var created = await Page.APIRequest.PostAsync(
+            $"{ApiUrl}/api/organizations/{orgId}/publications",
+            new()
+            {
+                Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+                DataObject = new { Title = "Field Notes", Description = "Crawl fixture.", IsPublic = true },
+            });
+
+        if (!created.Ok) return null;
+        var again = await ApiAsync($"/api/organizations/{orgId}/publications", token);
+        return FirstValue(again, "urlName");
+    }
+
     private async Task<string?> EnsureFieldSessionAsync(string token)
     {
         if (FirstValue(await ApiAsync("/api/field-sessions/mine", token), "id", "sessionId")
@@ -169,7 +217,20 @@ public class ParameterisedRouteCrawlTests : BenTestBase
         {
             if (TokenPlaceholders.Any(route.Contains)) { skipped.Add($"{route} (token only)"); continue; }
 
-            var url = RouteCrawlHelper.Fill(route, _ids);
+            // A parameter name does not always mean the same thing: {UrlName} is an organization
+            // on /o/{UrlName} and a publication on /publications/{UrlName}. Route-specific values
+            // win where they exist.
+            var idsForRoute = _ids;
+            foreach (var (prefix, overrides) in _routeIds)
+            {
+                if (!route.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                var merged = new Dictionary<string, string>(_ids);
+                foreach (var (k, v) in overrides) merged[k] = v;
+                idsForRoute = merged;
+                break;
+            }
+
+            var url = RouteCrawlHelper.Fill(route, idsForRoute);
             if (url is null) { skipped.Add($"{route} (no id available)"); continue; }
 
             visited++;
