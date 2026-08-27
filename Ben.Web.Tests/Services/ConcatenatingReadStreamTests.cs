@@ -44,12 +44,16 @@ public class ConcatenatingReadStreamTests
             ct => { opened.Add(1); return Task.FromResult<Stream>(new MemoryStream("BB"u8.ToArray())); },
         ]);
 
+        // The COUNT matters here, not just the call: a stream that returns fewer bytes than asked
+        // is legal, and ignoring the return (CA2022) would hide a short read behind an assertion
+        // about which sources are open. Asserting it also states what this stream promises —
+        // one source per read, never a silent straddle.
         var buffer = new byte[2];
-        await concat.ReadAsync(buffer);
+        Assert.Equal(2, await concat.ReadAsync(buffer));
         Assert.Equal([0], opened);          // the second source is not open yet
         Assert.False(first.Disposed);
 
-        await concat.ReadAsync(buffer);     // drains first, rolls into second
+        Assert.Equal(2, await concat.ReadAsync(buffer));   // drains first, rolls into second
         Assert.True(first.Disposed);
         Assert.Equal([0, 1], opened);
     }

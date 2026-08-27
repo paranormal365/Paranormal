@@ -238,6 +238,16 @@ function Enable-WebConfigStdoutLog ([string]$path, [string]$outDir) {
 
 # ---- process helpers --------------------------------------------------------
 
+# The commit being deployed. Resolved once so every published app carries the same stamp, and so
+# the smoke checks have something to compare the running build against. Empty when the source is
+# not a git checkout, which downgrades the identity check to a warning rather than failing a
+# deploy that is otherwise fine.
+$script:DeployCommit = ''
+try {
+    $script:DeployCommit = (& git -C $Repo rev-parse HEAD 2>$null).Trim()
+    if ($LASTEXITCODE -ne 0) { $script:DeployCommit = '' }
+} catch { $script:DeployCommit = '' }
+
 function Invoke-Publish ([string]$project, [string]$outDir, [switch]$RidSpecific) {
     Write-Detail "publishing $project -> $outDir"
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
@@ -248,6 +258,10 @@ function Invoke-Publish ([string]$project, [string]$outDir, [switch]$RidSpecific
     # ~444 MB could never execute on the target.
     $publishArgs = @((Join-Path $Repo $project), '-c', 'Release', '-o', $outDir, '--nologo', '-v', 'q')
     if ($RidSpecific) { $publishArgs += @('-r', 'win-x64', '--self-contained', 'false') }
+    # Stamp the commit into the binary. .NET appends it to InformationalVersion as "+<sha>", which
+    # is how /api/public/build can later say WHICH build is answering - the check that would have
+    # caught the 2026-08-26 deploy that reported success and shipped the previous build.
+    if ($script:DeployCommit) { $publishArgs += "-p:SourceRevisionId=$script:DeployCommit" }
     & dotnet publish @publishArgs
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project (exit $LASTEXITCODE)" }
 }
@@ -843,6 +857,37 @@ if (-not $SkipSmoke) {
         }
     }
     if ($failed.Count -gt 0) { throw "smoke checks failed: $($failed -join ', ')" }
+
+    # ---- Build identity -------------------------------------------------------
+    # The check every one above is missing. They ask whether the site RESPONDS; this asks whether
+    # what is responding is what we just published. On 2026-08-26 a deploy reported success and
+    # served the previous build - stale files and a not-recycled pool both pass a liveness check
+    # cleanly - and it was found by hand, comparing an endpoint that should have existed against
+    # one that did. Answered from inside the running worker, so it also catches the case where the
+    # files copied correctly and IIS kept serving the old process.
+    if (($Apps -contains 'webapi') -and $script:DeployCommit) {
+        Write-Step 'Build identity'
+        $expected = $script:DeployCommit
+        $running  = $null
+        try {
+            $running = (Invoke-RestMethod -Uri "$ApiUrl/api/public/build" -TimeoutSec 20).commit
+        } catch {
+            Write-Host "   WARN could not read $ApiUrl/api/public/build - $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "        An API older than 2026-08-26 has no such route; deploy it once and this check starts working." -ForegroundColor DarkGray
+        }
+
+        if ($running) {
+            if ($running -eq $expected) {
+                Write-Host "   OK   API is running $($expected.Substring(0,[Math]::Min(9,$expected.Length)))" -ForegroundColor Green
+            } else {
+                $r = if ($running) { $running.Substring(0,[Math]::Min(9,$running.Length)) } else { '(none)' }
+                throw ("the API is serving $r but this deploy published " +
+                       "$($expected.Substring(0,[Math]::Min(9,$expected.Length))). " +
+                       'The copy landed or it did not, and the pool restarted or it did not - ' +
+                       'check the publish output above, then run iisreset.')
+            }
+        }
+    }
 }
 
 Write-Step 'Done'

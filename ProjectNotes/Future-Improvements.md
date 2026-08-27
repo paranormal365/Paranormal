@@ -9900,6 +9900,17 @@ the credit flag. Three tests, each proven by reverting the fix under them.
 notices before EVERY period end, so a trial's last period meets the same warning a paid one does
 — no surprise charge, and the machinery needed no change.
 
+**The quote is proven too (2026-08-26, later).** The half a group actually READS before deciding
+had no tests at all. Six now cover it: 100% off quotes nothing payable and no tax, the quote names
+how many periods the trial covers, no code quotes full price, a trial before its ValidFromUtc and
+one past its RedeemByUtc both decline to discount and say why, and a wrong code reads identically
+to a withdrawn one (distinguishing them would let anybody probe which codes exist). Proven by
+capping the discount at 90% and watching the right test fail.
+
+Two things learned seeding them, worth knowing before configuring the real thing: the quote
+resolves the tier from the group's MEMBER COUNT rather than taking a tier id, and the ladder's
+lowest band must start at 1 member or every quote answers 503.
+
 **Still worth Ben's attention before the trial goes on sale:** those notices say "your paid period
 ends" and "renewing before then keeps everything exactly as it is". Accurate for a renewal,
 slightly wrong for a trial ending — the group is about to start paying for the first time, and the
