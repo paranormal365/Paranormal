@@ -65,10 +65,30 @@ public static class TierAreaResolution
     }
 
     /// <summary>
-    /// The tier that governs this group: its subscription row's tier when one exists, else the
-    /// band its member count lands in. (null, null) means the fail-open rules answer
-    /// everything-included without landing on a tier at all.
+    /// The tier that governs this group: its subscription's tier when it has one, otherwise the
+    /// free tier.
     /// </summary>
+    /// <remarks>
+    /// <para><b>Free is a choice, not a size (Ben, 2026-08-27).</b> "A free version doesn't care
+    /// about the number of people. It only cares about privacy." Any group may stay free forever
+    /// and do public investigations; paying is what buys private-residence work, and member count
+    /// then decides only what the paid plan COSTS.</para>
+    ///
+    /// <para><b>What this replaced, and the hole it closed.</b> A group with no subscription used
+    /// to be assigned a band by headcount, so growing past three members silently granted the paid
+    /// capability to somebody paying nothing — two of the five seeded groups were in exactly that
+    /// state when this was found. Headcount buying privacy is backwards, and it was also a
+    /// straightforward revenue leak.</para>
+    ///
+    /// <para><b>Member-count banding still exists</b>, and is still right, for PRICING: the quote
+    /// asks what a group of this size would pay. It just no longer decides whether they are free.
+    /// See <see cref="SubscriptionTierResolver.Resolve"/>, still used there.</para>
+    ///
+    /// <para><b>Fail-open survives where it belongs.</b> No tiers configured at all means no
+    /// pricing model to enforce, and everything stays included — that is the state every database
+    /// is in before pricing is set up. Once tiers EXIST, "no subscription" is an answer rather
+    /// than an absence, and the answer is free.</para>
+    /// </remarks>
     private static async Task<(Guid? TierId, string? TierName)> EffectiveTierAsync(
         BenDataContext db, Guid organizationId, CancellationToken ct)
     {
@@ -86,14 +106,30 @@ public static class TierAreaResolution
             return (tierId, tierName);
         }
 
-        var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
-        if (tiers.Count == 0 || SubscriptionTierResolver.Validate(tiers) is not null)
-            return (null, null);
+        return await FreeTierAsync(db, ct);
+    }
 
-        var members = await db.OrganizationUserMemberships.AsNoTracking()
-            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-        var resolved = SubscriptionTierResolver.Resolve(tiers, members);
-        return (resolved.Id, resolved.Name);
+    /// <summary>
+    /// The tier a group is on when it pays nothing, or (null, null) when no pricing exists yet.
+    /// </summary>
+    /// <remarks>
+    /// Identified by costing nothing rather than by a name or a flag: "free" is a fact about the
+    /// price list, so reading it from the price list keeps the two from drifting. Renaming the
+    /// band, or reordering it, cannot break this; only changing its price can, which is the one
+    /// change that SHOULD.
+    /// </remarks>
+    public static async Task<(Guid? TierId, string? TierName)> FreeTierAsync(
+        BenDataContext db, CancellationToken ct = default)
+    {
+        var free = await db.SubscriptionTiers.AsNoTracking()
+            .Where(t => t.IsActive && t.Prices.Any() && t.Prices.All(p => p.Price == 0m))
+            .OrderBy(t => t.SortOrder)
+            .Select(t => new { t.Id, t.Name })
+            .FirstOrDefaultAsync(ct);
+
+        // No free band configured means the pricing model does not describe this case, and
+        // inventing a restriction would lock people out of a site that never said it would.
+        return free is null ? (null, null) : (free.Id, free.Name);
     }
 
     /// <summary>
@@ -116,8 +152,10 @@ public static class TierAreaResolution
         var holders = new HashSet<Guid>(organizationIds);
         if (organizationIds.Count == 0) return holders;
 
-        var tiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync(ct);
-        var tiersUsable = tiers.Count > 0 && SubscriptionTierResolver.Validate(tiers) is null;
+        // Free is a choice, not a size: a group with no subscription is on the free tier, whatever
+        // its headcount. Resolved once for the whole page, the same answer EffectiveTierAsync
+        // gives one group at a time.
+        var (freeTierId, _) = await FreeTierAsync(db, ct);
 
         // The tier each group actually answers to: its subscription's, else its member band.
         var subs = await db.OrganizationSubscriptions.AsNoTracking()
@@ -130,23 +168,9 @@ public static class TierAreaResolution
             .Where(g => g.First().SubscriptionTierId is not null)
             .ToDictionary(g => g.Key, g => g.First().SubscriptionTierId!.Value);
 
-        if (tiersUsable)
-        {
-            var needBand = organizationIds.Where(id => !tierByOrg.ContainsKey(id)).ToList();
-            if (needBand.Count > 0)
-            {
-                var counts = await db.OrganizationUserMemberships.AsNoTracking()
-                    .Where(m => needBand.Contains(m.OrganizationId) && m.IsActive)
-                    .GroupBy(m => m.OrganizationId)
-                    .Select(g => new { OrganizationId = g.Key, Count = g.Count() })
-                    .ToListAsync(ct);
-                var countByOrg = counts.ToDictionary(c => c.OrganizationId, c => c.Count);
-
-                foreach (var id in needBand)
-                    tierByOrg[id] = SubscriptionTierResolver
-                        .Resolve(tiers, countByOrg.TryGetValue(id, out var n) ? n : 0).Id;
-            }
-        }
+        if (freeTierId is { } freeId)
+            foreach (var id in organizationIds.Where(id => !tierByOrg.ContainsKey(id)))
+                tierByOrg[id] = freeId;
 
         if (tierByOrg.Count == 0) return holders;   // nothing resolvable: everyone holds it
 

@@ -38,9 +38,14 @@ public sealed class IncludedAreasResolverTests
         return orgId;
     }
 
+    /// <summary>
+    /// Seeds one band. <paramref name="price"/> is what makes a tier the FREE one — free is
+    /// identified by costing nothing, so a test about the no-subscription case has to price its
+    /// bands or it is describing a site with no pricing model at all.
+    /// </summary>
     private static async Task<Guid> SeedTierAsync(
         IDbContextFactory<BenDataContext> factory, int min, int? max,
-        params OrganizationPermissionArea[] areas)
+        decimal? price = null, params OrganizationPermissionArea[] areas)
     {
         var tierId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
@@ -50,6 +55,13 @@ public sealed class IncludedAreasResolverTests
             SortOrder = min, IsActive = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
         });
+        if (price is { } p)
+            db.SubscriptionTierPrices.Add(new SubscriptionTierPrice
+            {
+                Id = Guid.NewGuid(), SubscriptionTierId = tierId,
+                Interval = BillingInterval.Monthly, Price = p,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
         foreach (var area in areas)
             db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
             {
@@ -77,8 +89,7 @@ public sealed class IncludedAreasResolverTests
     {
         var factory = CreateFactory();
         var orgId = await SeedOrgAsync(factory);
-        var tierId = await SeedTierAsync(factory, 1, null,
-            OrganizationPermissionArea.Cases, OrganizationPermissionArea.Equipment);
+        var tierId = await SeedTierAsync(factory, 1, null, null, OrganizationPermissionArea.Cases, OrganizationPermissionArea.Equipment);
         await SubscribeAsync(factory, orgId, tierId);
 
         var areas = await new IncludedAreasResolver(factory).ForOrganizationAsync(orgId);
@@ -88,13 +99,22 @@ public sealed class IncludedAreasResolverTests
             areas);
     }
 
+    /// <summary>
+    /// With no subscription the FREE tier decides — whatever the headcount.
+    /// </summary>
+    /// <remarks>
+    /// Was "the member-resolved tier decides", which is the rule Ben replaced on 2026-08-27: "a
+    /// free version doesn't care about the number of people, it only cares about privacy". The
+    /// group here is seeded ABOVE the free band's range deliberately; under the old rule its
+    /// headcount promoted it into the paid band and it received that band's areas without paying.
+    /// </remarks>
     [Fact]
-    public async Task With_no_subscription_the_member_resolved_tier_decides()
+    public async Task With_no_subscription_the_free_tier_decides()
     {
         var factory = CreateFactory();
-        var orgId = await SeedOrgAsync(factory, members: 3);
-        await SeedTierAsync(factory, 1, 5, OrganizationPermissionArea.Cases);           // small: 1-5
-        await SeedTierAsync(factory, 6, null, OrganizationPermissionArea.Equipment);    // large: 6+
+        var orgId = await SeedOrgAsync(factory, members: 9);
+        await SeedTierAsync(factory, 1, 5, 0m, OrganizationPermissionArea.Cases);   // the FREE band
+        await SeedTierAsync(factory, 6, null, 15m, OrganizationPermissionArea.Equipment); // paid
 
         var areas = await new IncludedAreasResolver(factory).ForOrganizationAsync(orgId);
 
@@ -132,7 +152,7 @@ public sealed class IncludedAreasResolverTests
     {
         var factory = CreateFactory();
         var orgId = await SeedOrgAsync(factory);
-        var tierId = await SeedTierAsync(factory, 1, null, OrganizationPermissionArea.Cases);
+        var tierId = await SeedTierAsync(factory, 1, null, null, OrganizationPermissionArea.Cases);
         await SubscribeAsync(factory, orgId, tierId);
         var resolver = new IncludedAreasResolver(factory);
 
