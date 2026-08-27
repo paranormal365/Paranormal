@@ -22,6 +22,27 @@ public sealed partial class BenAdminClientAdapter
     public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
 
+    // ── Rooms inside a place (item 197) ───────────────────────────────────────
+
+    private static string Rooms(Guid orgId, Guid placeId)
+        => $"/api/organizations/{orgId}/places/{placeId}/rooms";
+
+    public Task<LoadResult<PlaceRoomRecord>> GetPlaceRoomsAsync(
+        Guid orgId, Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceRoomRecord>(Rooms(orgId, placeId), token);
+
+    public Task<PlaceRoomRecord?> CreatePlaceRoomAsync(
+        Guid orgId, Guid placeId, SavePlaceRoomRequest request, CancellationToken token = default)
+        => _api.PostAsync<SavePlaceRoomRequest, PlaceRoomRecord>(Rooms(orgId, placeId), request, token);
+
+    public Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default)
+        => _api.PutAsync<SavePlaceRoomRequest, PlaceRoomRecord>($"{Rooms(orgId, placeId)}/{roomId}", request, token);
+
+    public Task<bool> DeletePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default)
+        => _api.DeleteAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
+
     public Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default)
         => _api.GetListAsync<PlaceInvestigationRow>($"/api/places/{placeId}/investigations", token);
