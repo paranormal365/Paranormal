@@ -126,15 +126,44 @@ public sealed class SubscriptionLapseJob : IScheduledJob
               + " will come off the public site until the plan is renewed. Nothing is deleted, "
               + "and republishing after renewal is one click.";
 
+            // ── Is this a renewal, or the end of a free ride? (item 195) ──────
+            // The same date means two different things to two different groups, and the notice
+            // was written for only one of them. Telling somebody who has never been charged that
+            // renewing "keeps everything exactly as it is" is not a small inaccuracy: they read
+            // reassurance and then meet a first invoice, which is being misled by us rather than
+            // surprised by circumstance. Ben called this "the moment the relationship is won or
+            // lost", so it is worth the extra query to say the true thing.
+            var trialEnding = await db.CouponRedemptions.AsNoTracking()
+                .Where(r => r.OrganizationId == sub.OrganizationId)
+                .OrderByDescending(r => r.RedeemedAtUtc)
+                .FirstOrDefaultAsync(ct) is { } redemption
+                && CouponMath.IsLastFreePeriod(redemption);
+
+            // What they will actually pay. Named, because "your trial is ending" without a number
+            // makes the reader go looking, and a price found by hunting feels like one that was
+            // hidden.
+            var priceLine = await NextPriceLineAsync(db, sub, ct);
+
             if (sub.TwoWeekNoticeSentForPeriodEnd != end)
             {
-                await _messages.SendAsync(
-                    $"{sub.Organization.Name}: your subscription period ends {end:MM/dd/yyyy}",
-                    $"Your group's paid period ends on {end:MM/dd/yyyy}.\n\n"
-                  + "Renewing before then keeps everything exactly as it is. If the period ends "
-                  + "without renewal, your group keeps read access to everything, but nothing new "
-                  + "can be added and open cases are paused for your clients."
-                  + unpublishWarning,
+                var subject = trialEnding
+                    ? $"{sub.Organization.Name}: your free trial ends {end:MM/dd/yyyy}"
+                    : $"{sub.Organization.Name}: your subscription period ends {end:MM/dd/yyyy}";
+
+                var body = trialEnding
+                    ? $"Your group's free trial ends on {end:MM/dd/yyyy}.\n\n"
+                      + $"After that, keeping the plan you are on costs {priceLine}. Nothing "
+                      + "changes about how the site works — the only change is that it starts "
+                      + "being billed.\n\n"
+                      + "If you would rather not continue, you do not have to do anything, and "
+                      + "you will not be charged. Your group keeps read access to everything, but "
+                      + "nothing new can be added and open cases are paused for your clients."
+                    : $"Your group's paid period ends on {end:MM/dd/yyyy}.\n\n"
+                      + "Renewing before then keeps everything exactly as it is. If the period "
+                      + "ends without renewal, your group keeps read access to everything, but "
+                      + "nothing new can be added and open cases are paused for your clients.";
+
+                await _messages.SendAsync(subject, body + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
                 sub.TwoWeekNoticeSentForPeriodEnd = end;
@@ -146,12 +175,23 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                 // their clients hear from the platform only when the date actually passes, so the
                 // human conversation has to happen first, and this is the prompt for it.
                 await _messages.SendAsync(
-                    $"{sub.Organization.Name}: one week left — tell your clients",
-                    $"Your group's paid period ends on {end:MM/dd/yyyy} — one week from now.\n\n"
-                  + "If you are not renewing, please tell your clients directly: when the date "
-                  + "passes their cases will be paused, and they will be offered the choice of "
-                  + "another organization. That news should come from you before it comes from "
-                  + "the platform."
+                    trialEnding
+                        ? $"{sub.Organization.Name}: one week of your trial left"
+                        : $"{sub.Organization.Name}: one week left — tell your clients",
+                    (trialEnding
+                        ? $"Your group's free trial ends on {end:MM/dd/yyyy} — one week from "
+                          + $"now, after which the plan costs {priceLine}.\n\n"
+                          + "If you are continuing, there is nothing to do. If you are not, "
+                          + "please tell your clients directly: when the date passes their cases "
+                          + "will be paused, and they will be offered the choice of another "
+                          + "organization. That news should come from you before it comes from "
+                          + "the platform."
+                        : $"Your group's paid period ends on {end:MM/dd/yyyy} — one week from "
+                          + "now.\n\n"
+                          + "If you are not renewing, please tell your clients directly: when the "
+                          + "date passes their cases will be paused, and they will be offered the "
+                          + "choice of another organization. That news should come from you "
+                          + "before it comes from the platform.")
                   + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
@@ -160,6 +200,35 @@ public sealed class SubscriptionLapseJob : IScheduledJob
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// What the plan costs once the free ride ends, written the way a person says it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Falls back to a plain phrase rather than inventing a number. A notice that names the
+    /// wrong price is worse than one that names none — the first is a broken promise and the
+    /// second is a link to click — so an unresolvable price says so and points at the page that
+    /// always knows.</para>
+    ///
+    /// <para>The frozen <c>ListPrice</c> on the redemption is deliberately NOT used: it was
+    /// correct when the coupon was taken and the group may have grown bands since. What the
+    /// reader needs is what they are about to be charged.</para>
+    /// </remarks>
+    private static async Task<string> NextPriceLineAsync(
+        BenDataContext db, OrganizationSubscription sub, CancellationToken ct)
+    {
+        if (sub.SubscriptionTierId is not { } tierId) return "what your plan lists";
+
+        var price = await db.SubscriptionTierPrices.AsNoTracking()
+            .Where(p => p.SubscriptionTierId == tierId && p.Interval == sub.Interval && p.IsActive)
+            .Select(p => (decimal?)p.Price)
+            .FirstOrDefaultAsync(ct);
+
+        if (price is not { } amount) return "what your plan lists";
+
+        var per = sub.Interval == BillingInterval.Yearly ? "year" : "month";
+        return $"{amount:C} per {per}";
     }
 
     // ── the lapse ─────────────────────────────────────────────────────────────

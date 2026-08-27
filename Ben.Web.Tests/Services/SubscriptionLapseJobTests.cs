@@ -77,6 +77,161 @@ public sealed class SubscriptionLapseJobTests
         return new World(f, orgId, ownerId, clientId, activeCase, closedCase);
     }
 
+    // ── the end of a free trial is not a renewal (item 195) ──────────────────
+
+    /// <summary>Puts the org on a tier with a real price, and gives it a coupon redemption.</summary>
+    private static async Task GiveTrialAsync(
+        World w, decimal payable, int? periodsRemaining, decimal price = 49m)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+
+        var tierId = Guid.NewGuid();
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = tierId, Name = "Standard", MinMembers = 1, SortOrder = 1, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+        db.SubscriptionTierPrices.Add(new SubscriptionTierPrice
+        {
+            Id = Guid.NewGuid(), SubscriptionTierId = tierId,
+            Interval = BillingInterval.Monthly, Price = price, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+
+        var sub = await db.OrganizationSubscriptions.FirstAsync(x => x.OrganizationId == w.OrgId);
+        sub.SubscriptionTierId = tierId;
+        sub.Interval = BillingInterval.Monthly;
+
+        db.CouponRedemptions.Add(new CouponRedemption
+        {
+            Id = Guid.NewGuid(), CouponId = Guid.NewGuid(), CouponCodeId = Guid.NewGuid(),
+            OrganizationId = w.OrgId, PeriodsRemaining = periodsRemaining,
+            RedeemedAtUtc = DateTime.UtcNow.AddMonths(-3),
+            ListPrice = price, Discount = price - payable, Payable = payable,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<string> LatestNoticeBodyAsync(World w)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        return await db.UserMessages.OrderByDescending(m => m.DateCreated)
+            .Select(m => m.MessageBody!).FirstAsync();
+    }
+
+    private static async Task<List<string>> NoticeSubjectsAsync(World w)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        return await db.UserMessages.Select(m => m.MessageSubject!).ToListAsync();
+    }
+
+    /// <summary>
+    /// A group finishing a free trial is told the trial is ending and what it will cost — never
+    /// that renewing "keeps everything exactly as it is".
+    /// </summary>
+    /// <remarks>
+    /// Item 195 called this "the moment the relationship is won or lost". Telling somebody who has
+    /// never been charged that nothing will change is not a small inaccuracy: they read
+    /// reassurance and then meet a first invoice, which is being misled rather than surprised.
+    /// </remarks>
+    [Fact]
+    public async Task A_trial_ending_says_so_and_names_the_price()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(10));
+        await GiveTrialAsync(w, payable: 0m, periodsRemaining: 1, price: 49m);
+
+        await Job(w.F).RunAsync(default);
+
+        var subjects = await NoticeSubjectsAsync(w);
+        Assert.Contains(subjects, x => x.Contains("free trial ends"));
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("free trial ends", body);
+        Assert.Contains("49", body);
+        Assert.DoesNotContain("exactly as it is", body);
+    }
+
+    /// <summary>An ordinary paid renewal keeps the wording it always had.</summary>
+    [Fact]
+    public async Task An_ordinary_renewal_is_unchanged()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(10));
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("exactly as it is", body);
+        Assert.DoesNotContain("free trial", body);
+    }
+
+    /// <summary>
+    /// A trial with periods still to run is not ending, so it gets the ordinary notice.
+    /// </summary>
+    /// <remarks>
+    /// The distinguishing case. Without it, "is there a coupon?" would be mistaken for "is the
+    /// trial over?", and a group two months into three would be told to start paying.
+    /// </remarks>
+    [Fact]
+    public async Task A_trial_with_periods_left_is_not_treated_as_ending()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(10));
+        await GiveTrialAsync(w, payable: 0m, periodsRemaining: 2);
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.DoesNotContain("free trial", body);
+    }
+
+    /// <summary>
+    /// A discount that still leaves something payable is not a free trial ending.
+    /// </summary>
+    [Fact]
+    public async Task A_partial_discount_is_not_a_trial()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(10));
+        await GiveTrialAsync(w, payable: 20m, periodsRemaining: 1);
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.DoesNotContain("free trial", body);
+    }
+
+    /// <summary>
+    /// With no resolvable price the notice says so rather than inventing a number.
+    /// </summary>
+    /// <remarks>
+    /// A notice naming the WRONG price is a broken promise; one naming none is a link to click.
+    /// </remarks>
+    [Fact]
+    public async Task An_unresolvable_price_is_described_rather_than_invented()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(10));
+
+        // A redemption, but the subscription is on no tier at all.
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            db.CouponRedemptions.Add(new CouponRedemption
+            {
+                Id = Guid.NewGuid(), CouponId = Guid.NewGuid(), CouponCodeId = Guid.NewGuid(),
+                OrganizationId = w.OrgId, PeriodsRemaining = 1,
+                RedeemedAtUtc = DateTime.UtcNow.AddMonths(-3),
+                ListPrice = 49m, Discount = 49m, Payable = 0m,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("free trial ends", body);
+        Assert.Contains("what your plan lists", body);
+    }
+
     // ── the lapse ─────────────────────────────────────────────────────────────
 
     [Fact]

@@ -9911,11 +9911,28 @@ Two things learned seeding them, worth knowing before configuring the real thing
 resolves the tier from the group's MEMBER COUNT rather than taking a tier id, and the ladder's
 lowest band must start at 1 member or every quote answers 503.
 
-**Still worth Ben's attention before the trial goes on sale:** those notices say "your paid period
-ends" and "renewing before then keeps everything exactly as it is". Accurate for a renewal,
-slightly wrong for a trial ending — the group is about to start paying for the first time, and the
-wording does not say so or name the price. That is a copy decision, not a mechanism one, and item
-195 called this "the moment the relationship is won or lost".
+### The trial-ending wording — fixed 2026-08-27
+
+Both notices now ask whether this is a renewal or the end of a free ride, and say the true thing
+either way. A group finishing a trial reads "your free trial ends on DATE. After that, keeping
+the plan you are on costs $49.00 per month" — never "renewing keeps everything exactly as it
+is", which was reassurance that would have been contradicted by their first invoice.
+
+The distinction is `CouponMath.IsLastFreePeriod`: the redemption still applies, it is paying
+nothing (`Payable <= 0`), and exactly one period remains. All three matter — a `Forever` coupon
+is never a trial ending however free it is, a group two months into three is not ending yet, and
+a discount that still leaves something payable was never free. The two negative cases are pinned
+by tests and were proven by treating any coupon as a trial and watching them fail.
+
+The price is read from the tier's CURRENT active price, not the `ListPrice` frozen on the
+redemption, because the group may have changed bands since. When no price resolves, the notice
+says "what your plan lists" rather than inventing a figure — a notice naming the wrong price is
+a broken promise, one naming none is a link to click.
+
+Five tests. **Still Ben's to decide:** whether the trial notice should also carry a link
+straight to the billing page, and whether "you do not have to do anything, and you will not be
+charged" is the tone he wants for a group choosing to walk away — it is deliberately
+low-pressure, which is a judgement about the relationship rather than about the mechanism.
 
 ## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
 
