@@ -1224,6 +1224,23 @@ public sealed record UpsertCaseNoteDto(string? Title, string Body, bool IsPinned
 
 // ── Sidecar telemetry records ────────────────────────────────────────────────
 
+/// <summary>One rate limit's running tally of refused requests (SuperAdmin).</summary>
+/// <remarks>
+/// <c>DistinctCallers</c> is the most recent flush window, not a lifetime figure: it answers
+/// whether a crowd or a single script is being turned away, which is the only thing that decides
+/// whether the limit should be raised or left alone.
+/// </remarks>
+public sealed record RateLimitRefusalRecord(
+    string    PolicyName,
+    string    FriendlyName,
+    long      Refusals,
+    int       DistinctCallers,
+    int       PeakDistinctCallers,
+    int       LimitPerMinute,
+    DateTime  DateFirstSeen,
+    DateTime  DateLastSeen,
+    DateTime? DateNotified);
+
 /// <summary>One recorded sidecar install or pairing.</summary>
 public sealed record SidecarInstallLogRecord(
     Guid Id,

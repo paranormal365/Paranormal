@@ -294,6 +294,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
         => _api.RemoveMyVoteAsync(fileId, token);
 
+    // ── Rate limits (item 199) ────────────────────────────────────────────────
+
+    public Task<LoadResult<RateLimitRefusalRecord>> GetRateLimitRefusalsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<RateLimitRefusalRecord>("/api/admin/rate-limits", token);
+
+    public Task<bool> ReArmRateLimitNoticeAsync(
+        string policyName, CancellationToken token = default)
+        => _api.PostAsync<object, bool>(
+               $"/api/admin/rate-limits/{Uri.EscapeDataString(policyName)}/notify-again",
+               new object(), token);
+
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
 
     public Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(

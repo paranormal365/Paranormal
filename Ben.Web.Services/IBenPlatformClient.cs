@@ -38,6 +38,13 @@ public interface IBenPlatformClient
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
     Task<LoadResult<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
 
+    // ── Rate limits (item 199) ────────────────────────────────────────────────
+    /// <summary>What each rate limit has refused, worst first (SuperAdmin).</summary>
+    Task<LoadResult<RateLimitRefusalRecord>> GetRateLimitRefusalsAsync(CancellationToken token = default);
+
+    /// <summary>Re-arms the one-time notice for a limit, so the next burst sends a fresh message.</summary>
+    Task<bool> ReArmRateLimitNoticeAsync(string policyName, CancellationToken token = default);
+
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
     /// <summary>Recorded sidecar install/pair events, newest first (SuperAdmin).</summary>
     Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);

@@ -54,6 +54,12 @@ public static class SiteSettingKeys
     /// <summary>Requests per minute, per caller, allowed against everything else.</summary>
     public const string RateLimitGlobalPerMinute = "ratelimit.global-per-minute";
 
+    /// <summary>
+    /// Requests per minute, per caller, allowed against public event sign-up — where a whole
+    /// tour group shares one address and must not look like one script.
+    /// </summary>
+    public const string RateLimitEventAttendancePerMinute = "ratelimit.event-attendance-per-minute";
+
     /// <summary>Largest file one upload may be, in bytes. Unset = the built-in 2 GiB default.</summary>
     public const string UploadMaxFileBytes = "upload.max-file-bytes";
 
@@ -138,6 +144,8 @@ public static class SiteSettingKeys
             "How many sign-in or registration attempts one caller may make each minute. Low enough to stop password guessing, high enough that a person mistyping their password never notices. Leave empty for the default."),
         (RateLimitGlobalPerMinute, "Rate limit — everything else (per minute)",
             "A ceiling on all other requests from one caller each minute, so a runaway client cannot saturate the server. Generous by design — normal use should never reach it. Leave empty for the default."),
+        (RateLimitEventAttendancePerMinute, "Rate limit — public event sign-up (per minute)",
+            "How many event sign-up requests may come from one address each minute. Deliberately much higher than the others: a tour group of thirty all signing up at the meeting point shares the venue's wifi, so they reach the site as a single caller. Raise this if a busy operator reports guests being turned away; it does not affect how many people may attend. Leave empty for the default."),
 
         (UploadMaxFileBytes, "Upload limit — one file (bytes)",
             "The largest file anyone may upload, in bytes. Applies to every upload path — the classic form and the chunked uploader alike. Leave empty for the built-in default of 2 GiB (2147483648)."),

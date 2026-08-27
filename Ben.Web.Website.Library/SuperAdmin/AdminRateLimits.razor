@@ -1,0 +1,184 @@
+@page "/admin/rate-limits"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Rate Limits</PageTitle>
+
+@* Ben's rule: one message per limit however many times it happens, and this page is the place to
+   track it afterwards — "650 takes less of a look than 6,500". The magnitude is the reason the
+   page exists, so the count is the biggest thing on each row, and the distinct-address figure sits
+   next to it because that is what decides whether to raise the limit or leave it alone. *@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Rate Limits</h3>
+            <p class="text-secondary small mb-0">
+                What the site's rate limits have turned away. You are told once per limit, by
+                message; the totals here are where to look after that. Counts are written about
+                once a minute, so the newest few refusals may not be included yet.
+            </p>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_result.Failed || _loading)
+    {
+        @* "Nothing has been turned away" printed over a refusal would be the worst possible lie
+           this page could tell — it is the exact reassurance a SuperAdmin would act on. *@
+        <BenListState TItem="RateLimitRefusalRecord" Result="@_result" Loading="@_loading"
+                      LoadingText="Loading rate limits…" OnRetry="@LoadAsync" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="alert alert-success" role="alert" data-testid="rate-limits-empty">
+            <strong>Nothing has been turned away.</strong>
+            No rate limit has refused a request since this table was created. That is the normal
+            state — a row appearing here means somebody, or something, hit a limit.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle" data-testid="rate-limits-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Limit</th>
+                        <th scope="col" class="text-end">Refused</th>
+                        <th scope="col" class="text-end">Addresses</th>
+                        <th scope="col" class="text-end">Allowed / min</th>
+                        <th scope="col">Reading</th>
+                        <th scope="col">Last seen</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr data-testid="rate-limit-row">
+                        <td>
+                            <div class="fw-semibold">@row.FriendlyName</div>
+                            <div class="text-secondary small">@row.PolicyName</div>
+                        </td>
+                        <td class="text-end fs-5 fw-semibold">@row.Refusals.ToString("N0")</td>
+                        <td class="text-end">
+                            @row.DistinctCallers.ToString("N0")
+                            @if (row.PeakDistinctCallers > row.DistinctCallers)
+                            {
+                                <div class="text-secondary small">peak @row.PeakDistinctCallers.ToString("N0")</div>
+                            }
+                        </td>
+                        <td class="text-end">@row.LimitPerMinute.ToString("N0")</td>
+                        <td>
+                            @if (row.DistinctCallers > 1)
+                            {
+                                <span class="badge bg-warning text-dark">Several callers</span>
+                                <div class="text-secondary small">
+                                    Real people are probably being turned away — consider raising this limit.
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">One caller</span>
+                                <div class="text-secondary small">
+                                    Usually a script or a stuck client. The limit is doing its job.
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            <div>@row.DateLastSeen.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</div>
+                            <div class="text-secondary small">
+                                since @row.DateFirstSeen.ToLocalTime().ToString("MM/dd/yyyy")
+                            </div>
+                        </td>
+                        <td class="text-nowrap">
+                            @if (row.DateNotified is null)
+                            {
+                                <span class="text-secondary small">Notice armed</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                        disabled="@(_busy == row.PolicyName)"
+                                        @onclick="() => ReArmAsync(row.PolicyName)">
+                                    Notify me again
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-secondary small">
+            Limits themselves are changed on the Site Settings page. A change takes effect within a
+            minute and needs no restart.
+        </p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RateLimitRefusalRecord> _rows = [];
+    private LoadResult<RateLimitRefusalRecord> _result;
+    private bool _loading = true;
+    private string? _error;
+    private string? _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The circuit is not necessarily live when this first runs; checking IsAuthenticated
+        // before auth is ready is the race this app has been caught by repeatedly.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error   = null;
+
+        try
+        {
+            _result = await AdminClient.GetRateLimitRefusalsAsync();
+            _rows   = _result.Items;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ReArmAsync(string policyName)
+    {
+        _busy = policyName;
+        try
+        {
+            // A refusal the UI discards is worse than no rule at all: if the server declines,
+            // say so rather than silently re-rendering the same row.
+            if (!await AdminClient.ReArmRateLimitNoticeAsync(policyName))
+            {
+                _error = "Could not re-arm that notice. It is still set to stay quiet.";
+                return;
+            }
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+}

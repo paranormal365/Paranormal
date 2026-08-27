@@ -132,6 +132,76 @@ public sealed class PublicEventAttendanceTests
         return new World(factory, publicId, privateId);
     }
 
+    /// <summary>
+    /// A crowd may sign up; a mailer may not (item 199).
+    /// </summary>
+    /// <remarks>
+    /// <para>The per-caller rate limit cannot separate these two: thirty guests on the venue's
+    /// wifi and one attacker with an address list arrive from the same NAT'd address. So the
+    /// per-caller limit is deliberately generous for this endpoint and the real bound is per
+    /// event, which is what these exercise.</para>
+    ///
+    /// <para>The floor is what applies here, because the seeded event states no capacity — which
+    /// is also the common case in production and therefore the one worth testing.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_crowd_of_new_guests_is_not_refused()
+    {
+        var w = await SeedAsync();
+
+        // Ninety guests: three sessions of thirty, the night Ben described.
+        for (var i = 0; i < 90; i++)
+        {
+            var result = await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"guest{i}@example.com", $"Guest {i}"), default);
+
+            Assert.IsType<OkResult>(result);
+        }
+    }
+
+    /// <summary>Past the ceiling, a new address is refused rather than mailed.</summary>
+    [Fact]
+    public async Task An_event_stops_issuing_invitations_once_it_is_being_used_as_a_mailer()
+    {
+        var w = await SeedAsync();
+
+        for (var i = 0; i < PublicEventAttendanceController.InviteCeilingFloor; i++)
+            await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"bulk{i}@example.com", null), default);
+
+        var refused = await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("one-too-many@example.com", null), default);
+
+        Assert.IsType<ConflictObjectResult>(refused);
+    }
+
+    /// <summary>
+    /// Somebody asking again for their own link is never the person the ceiling refuses.
+    /// </summary>
+    /// <remarks>
+    /// The guest whose first email went to spam is the most likely person to re-request, and
+    /// refusing them at the meeting point would be the exact failure this whole change exists to
+    /// prevent. Only new addresses count toward the ceiling.
+    /// </remarks>
+    [Fact]
+    public async Task A_guest_may_always_ask_again_for_their_own_link()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("late@example.com", "Late"), default);
+
+        for (var i = 0; i < PublicEventAttendanceController.InviteCeilingFloor; i++)
+            await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"bulk{i}@example.com", null), default);
+
+        // The event is now at its ceiling, and this address already has a row.
+        var again = await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("late@example.com", "Late"), default);
+
+        Assert.IsType<OkResult>(again);
+    }
+
     private static async Task<string> TokenFor(World w, string email)
     {
         await using var db = await w.Factory.CreateDbContextAsync();

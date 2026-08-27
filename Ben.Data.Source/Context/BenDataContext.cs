@@ -20,6 +20,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SupportTicket> SupportTickets { get; set; }
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
+        public virtual DbSet<RateLimitRefusal> RateLimitRefusals { get; set; }
         public virtual DbSet<SignInEvent> SignInEvents { get; set; }
         public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
@@ -560,6 +561,15 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<VideoAsset>().Property(e => e.ContentHash).HasMaxLength(64).IsRequired();
             // The catalog is read in full on every editor sync — index the filter it uses.
             modelBuilder.Entity<VideoAsset>().HasIndex(e => new { e.IsActive, e.SortOrder });
+
+            // ── RateLimitRefusal ─────────────────────────────────────────────
+            // One row per policy, so the tally is an update rather than an insert per refusal.
+            // Unique on the name for the same reason SiteSetting.Key is: two rows disagreeing
+            // about a total would make the number on the admin page meaningless.
+            modelBuilder.Entity<RateLimitRefusal>()
+                .Property(e => e.PolicyName).HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<RateLimitRefusal>()
+                .HasIndex(e => e.PolicyName).IsUnique();
 
             // ── SiteSetting ──────────────────────────────────────────────────
             modelBuilder.Entity<SiteSetting>()

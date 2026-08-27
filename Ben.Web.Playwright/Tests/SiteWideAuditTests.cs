@@ -233,6 +233,7 @@ public class SiteWideAuditTests : BenTestBase
             ("/admin/experience-taxonomy", null),
             ("/admin/feed-reports", null),
             ("/admin/sidecar-telemetry", null),
+            ("/admin/rate-limits", null),
             ("/upload-files", null),
             ("/admin/cases", null),
             ("/admin/investigations", null),
