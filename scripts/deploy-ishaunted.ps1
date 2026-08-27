@@ -451,6 +451,19 @@ if ($Apps -contains 'website') {
         }
     }
 
+    # Build identity, asserted by the smoke checks in section 6. A fresh GUID is written into the
+    # artifact's wwwroot on every run - including -SkipBuild runs, because this section always
+    # executes - and the smoke check demands the live site serve it back. Without this, a deploy
+    # that copies nothing passes its own checks: the OLD build answers 200 just as happily, which
+    # is exactly what happened on 2026-08-27 when three "successful" deploys had shipped nothing.
+    $script:BuildStamp = [Guid]::NewGuid().ToString('N')
+    $stampCommit = ''
+    try { $stampCommit = (& git -C (Split-Path $PSScriptRoot -Parent) rev-parse HEAD 2>$null) } catch { }
+    $stampJson = '{"stamp":"' + $script:BuildStamp + '","commit":"' + $stampCommit + '","stampedUtc":"' + [DateTime]::UtcNow.ToString('o') + '"}'
+    [IO.File]::WriteAllText((Join-Path $websiteOut 'wwwroot\build-info.json'), $stampJson)
+    $commitShort = if ($stampCommit) { $stampCommit.Substring(0, 8) } else { 'unknown' }
+    Write-Detail ("build stamp {0}  (commit {1})" -f $script:BuildStamp, $commitShort)
+
     # Same reasoning as the API: appsettings.json, not appsettings.Production.json. (The bash
     # publish-website.sh still writes Production.json - this is the deliberate divergence.)
     $cfgPath = Join-Path $websiteOut 'appsettings.json'
@@ -741,9 +754,23 @@ if (-not $SkipSmoke) {
     $checks = @()
     if ($Apps -contains 'webapi') {
         $checks += @{ url = "$ApiUrl/api/public/cases?page=1&pageSize=1"; what = 'API + database' }
+        # Process identity: a route that exists only in this build. The OLD worker answers (404)
+        # where the NEW one answers (401), so this catches the pool serving from a previous
+        # process - which the static-file stamp below cannot, because IIS reads wwwroot from disk
+        # no matter which process is running. Update the route if chunked-uploads ever moves.
+        $checks += @{ url = "$ApiUrl/api/chunked-uploads/00000000-0000-0000-0000-000000000000"
+                      what = 'API build identity (chunked-uploads route)'; expectStatus = 401 }
     }
     if ($Apps -contains 'website') {
         $checks += @{ url = "$SiteUrl/"; what = 'website' }
+        if ($script:BuildStamp) {
+            # File identity: the GUID stamped into this run's artifact must come back from the
+            # live site. Cache-busted so nothing between here and the disk can answer from
+            # before the copy.
+            $checks += @{ url = "$SiteUrl/build-info.json?cb=$([Guid]::NewGuid().ToString('N'))"
+                          what = 'website build identity'; expect = $script:BuildStamp
+                          why = 'the site is serving a build-info.json OLDER than the one just copied - the deploy did not land' }
+        }
     }
     if ($Apps -contains 'editor') {
         $checks += @{ url = "$SiteUrl$EditorBase"; what = 'editor'; expect = "<base href=""$EditorBase""" }
@@ -774,12 +801,26 @@ if (-not $SkipSmoke) {
 
         for ($attempt = 1; $attempt -le $SmokeRetries -and -not $ok; $attempt++) {
             try {
-                $r = Invoke-WebRequest -Uri $check['url'] -UseBasicParsing -TimeoutSec 60
-                if ($r.StatusCode -ne 200) { throw "HTTP $($r.StatusCode)" }
-                if ($check.ContainsKey('expect') -and $r.Content -notlike "*$($check['expect'])*") {
+                # Some checks EXPECT a refusal: the build-identity probe asserts (401) from a route
+                # the old build does not have. A non-2xx makes Invoke-WebRequest throw, so the
+                # status is fished out of the WebException rather than treated as failure outright.
+                $expectStatus = if ($check.ContainsKey('expectStatus')) { [int]$check['expectStatus'] } else { 200 }
+                $r = $null
+                $status = $null
+                try {
+                    $r = Invoke-WebRequest -Uri $check['url'] -UseBasicParsing -TimeoutSec 60
+                    $status = [int]$r.StatusCode
+                } catch [System.Net.WebException] {
+                    if ($null -eq $_.Exception.Response) { throw }
+                    $status = [int]$_.Exception.Response.StatusCode
+                }
+                if ($status -ne $expectStatus) { throw "HTTP ($status) where ($expectStatus) was expected" }
+                if ($check.ContainsKey('expect') -and ($null -eq $r -or $r.Content -notlike "*$($check['expect'])*")) {
                     # A 200 is not proof on its own: if the sub-application was never created, the
                     # website answers with its own 404 page, which is also HTML and also 200-shaped.
-                    throw "200, but the body is not the editor - is $EditorBase an IIS Application?"
+                    $why = if ($check.ContainsKey('why')) { $check['why'] }
+                           else { "200, but the body is not the editor - is $EditorBase an IIS Application?" }
+                    throw $why
                 }
                 $ok = $true
                 $suffix = if ($attempt -gt 1) { "  (after $attempt attempts)" } else { '' }
