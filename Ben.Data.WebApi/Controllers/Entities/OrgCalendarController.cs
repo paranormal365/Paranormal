@@ -384,7 +384,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
     public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> AddAttendeeByEmail(
         Guid orgId, Guid eventId, [FromBody] AddAttendeeByEmailRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        // Adding somebody to an event is EDITING THE CALENDAR, not merely belonging to the group
+        // (Ben, 2026-08-27: make it "part of the permissions when hiring someone meant to run a
+        // walking ghost tour"). A guide is given the calendar grant and can sign up the walk-up
+        // standing in front of them; a member without it cannot put names on a night they have
+        // nothing to do with. There is deliberately no time limit here — the guide is present,
+        // which is the whole basis for trusting the judgement.
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
 
         var email = request.Email?.Trim();
@@ -430,7 +436,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
     public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> AddAttendee(
         Guid orgId, Guid eventId, [FromBody] AddAttendeeRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        // Adding somebody to an event is EDITING THE CALENDAR, not merely belonging to the group
+        // (Ben, 2026-08-27: make it "part of the permissions when hiring someone meant to run a
+        // walking ghost tour"). A guide is given the calendar grant and can sign up the walk-up
+        // standing in front of them; a member without it cannot put names on a night they have
+        // nothing to do with. There is deliberately no time limit here — the guide is present,
+        // which is the whole basis for trusting the judgement.
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))

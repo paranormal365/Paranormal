@@ -46,6 +46,22 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// Whether member count can put a group on this tier, or it is only ever chosen.
+        /// </summary>
+        /// <remarks>
+        /// <para>True for the ordinary ladder — Free, then the paid bands — where headcount decides
+        /// what a group would pay. False for a tier sold to a KIND of business rather than to a
+        /// size of team: a ghost walking tour company has three guides and two hundred customers a
+        /// week, so banding it by staff prices the wrong thing entirely (item 198).</para>
+        ///
+        /// <para>An unbanded tier is invisible to <see cref="SubscriptionTierResolver.Resolve"/>
+        /// and to the contiguity rules in <c>Validate</c> — it has no place in the ladder to be
+        /// contiguous with — and reaches a group exactly one way: somebody puts them on it. That
+        /// is the same shape free-is-a-choice already uses, pointed the other way.</para>
+        /// </remarks>
+        public bool IsBandedByMembers { get; set; } = true;
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

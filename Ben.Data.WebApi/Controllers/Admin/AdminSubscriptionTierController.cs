@@ -249,6 +249,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         tier.MaxMembers = request.MaxMembers;
         tier.SortOrder  = request.SortOrder;
         tier.IsActive   = request.IsActive;
+        tier.IsBandedByMembers = request.IsBandedByMembers;
 
         if (!isNew)
         {
@@ -427,5 +428,6 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             // The record speaks in INCLUSIONS (what the checklist renders); storage is
             // exclusion rows — see SubscriptionTierExcludedCapability for why.
             [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>()
-                .Except(tier.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)]);
+                .Except(tier.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)],
+            tier.IsBandedByMembers);
 }

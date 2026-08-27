@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260827034513_AddUnbandedBusinessTiers")]
+    partial class AddUnbandedBusinessTiers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -6057,43 +6060,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("SubscriberAppUserId", "CancelledUtc");
 
                     b.ToTable("PublicationSubscriptions");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.RateLimitRefusal", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateFirstSeen")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateLastSeen")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateNotified")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DistinctCallers")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PeakDistinctCallers")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PolicyName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<long>("Refusals")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PolicyName")
-                        .IsUnique();
-
-                    b.ToTable("RateLimitRefusals");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ScheduleProposalSlot", b =>

@@ -32,6 +32,7 @@ public class AdminPageTests : BenTestBase
         ("/admin/equipment-taxonomy", "Equipment"),
         ("/admin/video-assets",       "Clipart"),   // the route and the heading differ
         ("/admin/sidecar-telemetry",  "Sidecar"),
+        ("/admin/rate-limits",        "Rate Limits"),
         // The Billing trio (items 85/84). Price Bands earns its place the hard way: its first
         // production load killed the circuit, because the healthy price list answers the
         // validation call with an empty 204 the HTTP client then threw on. Only a real browser

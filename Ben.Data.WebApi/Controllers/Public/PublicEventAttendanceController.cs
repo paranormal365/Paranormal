@@ -37,6 +37,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 [ApiController]
 [Route("api/public/event-attendance")]
 [Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureEvents)]
+[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.EventAttendancePolicy)]
 public sealed class PublicEventAttendanceController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -47,6 +48,27 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
     /// <summary>A link is good for a fortnight — long enough to act on, short enough to expire.</summary>
     private static readonly TimeSpan LinkLifetime = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// How many invitations one event may issue per seat before it is refusing rather than filling.
+    /// </summary>
+    /// <remarks>
+    /// Well above one, because not everybody who asks turns up and an organiser would rightly be
+    /// furious at a cap that stopped a tour selling out. Three per seat means a thirty-guest walk
+    /// can hand out ninety links before anything is questioned, which no real evening reaches and
+    /// no mailer is satisfied by.
+    /// </remarks>
+    internal const int InviteCeilingMultiple = 3;
+
+    /// <summary>
+    /// The bound for an event that never stated a capacity, and the floor under the multiple.
+    /// </summary>
+    /// <remarks>
+    /// Most events set no capacity, so without a floor the multiple would have nothing to multiply
+    /// and the guard would be unreachable exactly where it is most needed. Five hundred is chosen
+    /// to be beyond any single tour, talk or public hunt this site hosts while still being a number.
+    /// </remarks>
+    internal const int InviteCeilingFloor = 500;
 
     public PublicEventAttendanceController(
         IDbContextFactory<BenDataContext> db, IEmailService email, UserManager<AppUser> users,
@@ -76,10 +98,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         var ev = await VisiblePublicEvent(db).FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (ev is null) return NotFound();
 
-        if (ev.RsvpClosesAt is DateTime closes && DateTime.UtcNow > closes)
+        // One rule, not two: an explicit RsvpClosesAt is the organiser's decision, and otherwise
+        // sign-ups run to the start plus the late-arrival grace. Refusing on StartDateTime as well
+        // made the grace unreachable — a late guest who is standing at the meeting point could not
+        // sign up, and so could not submit what they photographed on the walk.
+        if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
-        if (ev.StartDateTime < DateTime.UtcNow)
-            return Conflict("That event has already started.");
 
         var accepted = await db.OrgCalendarEventAttendees
             .CountAsync(a => a.OrgCalendarEventId == eventId && a.RsvpStatus == RsvpStatus.Accepted, ct);
@@ -93,6 +117,36 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         if (invite is { DateConfirmed: not null })
             return Ok();   // already coming; say nothing that distinguishes the case
+
+        // ── The mailer guard (item 199) ──────────────────────────────────────
+        // This endpoint sends an email to any address typed into it, so the per-caller rate limit
+        // is the wrong instrument: a crowd of thirty guests at a meeting point and one attacker
+        // with a list arrive from the same NAT'd address and are identical to the limiter. That is
+        // why the per-caller limit here is deliberately generous, and why the real ceiling is this
+        // one — an event that has issued far more invitations than it could ever seat is not
+        // hosting a rush, it is being used as a mailer.
+        //
+        // Only NEW addresses count. Somebody re-requesting their own link takes the branch above
+        // and never reaches here, so a guest whose first email went to spam is never the person
+        // this refuses. Capacity is the honest measure when it is set, and an event with no stated
+        // capacity still gets a bound rather than none.
+        if (invite is null)
+        {
+            var issued = await db.EventAttendanceInvites
+                .CountAsync(i => i.OrgCalendarEventId == eventId, ct);
+            var ceiling = ev.AttendeeCapacity is int seats
+                ? Math.Max(seats * InviteCeilingMultiple, InviteCeilingFloor)
+                : InviteCeilingFloor;
+
+            if (issued >= ceiling)
+            {
+                _logger.LogWarning(
+                    "Event {EventId} has issued {Issued} attendance invitations against a ceiling of "
+                    + "{Ceiling}; refusing further requests. Raise the event's capacity if this is a "
+                    + "genuinely large event.", eventId, issued, ceiling);
+                return Conflict("Sign-ups for this event are temporarily unavailable.");
+            }
+        }
 
         var token = NewToken();
 
@@ -177,7 +231,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         // Re-checked at the moment of use, not only when the link was sent. A fortnight is long
         // enough for an event to fill up or close.
-        if (ev.RsvpClosesAt is DateTime closes && DateTime.UtcNow > closes)
+        if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
         var attendees = await db.OrgCalendarEventAttendees

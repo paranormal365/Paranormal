@@ -38,7 +38,8 @@
     <div class="text-center mb-4">
         <h2>Pricing<HelpLink Slug="organization-administration" Anchor="your-groups-plan" /></h2>
         <p class="text-secondary">
-            Priced by active members, per group. Every plan includes the whole platform — cases,
+            Free for public investigations, whatever your size. Paid plans add work at private
+            homes, and are priced by active members. Every plan includes the whole platform — cases,
             investigations, equipment, the video editor.
         </p>
 
@@ -72,10 +73,19 @@
                     <div class="card h-100 text-center">
                         <div class="card-body d-flex flex-column">
                             <h5>@tier.Name</h5>
+                            @* Free is a choice, not a size (Ben, 2026-08-27): "a free version
+                               doesn't care about the number of people, it only cares about
+                               privacy". Member bands price the PAID plans; showing a headcount
+                               range on the free one said the opposite — that a group outgrows
+                               being free, which is not what it means. *@
                             <p class="text-secondary small mb-3">
-                                @(tier.MaxMembers is { } max
-                                    ? $"{tier.MinMembers}–{max} active members"
-                                    : $"{tier.MinMembers}+ active members")
+                                @(!tier.IsBandedByMembers
+                                    ? "Tour and event businesses"
+                                    : IsFree(tier)
+                                        ? "Any size group"
+                                        : tier.MaxMembers is { } max
+                                            ? $"{tier.MinMembers}–{max} active members"
+                                            : $"{tier.MinMembers}+ active members")
                             </p>
 
                             @if (IsFree(tier))

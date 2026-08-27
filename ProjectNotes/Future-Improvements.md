@@ -9900,6 +9900,17 @@ the credit flag. Three tests, each proven by reverting the fix under them.
 notices before EVERY period end, so a trial's last period meets the same warning a paid one does
 — no surprise charge, and the machinery needed no change.
 
+**The quote is proven too (2026-08-26, later).** The half a group actually READS before deciding
+had no tests at all. Six now cover it: 100% off quotes nothing payable and no tax, the quote names
+how many periods the trial covers, no code quotes full price, a trial before its ValidFromUtc and
+one past its RedeemByUtc both decline to discount and say why, and a wrong code reads identically
+to a withdrawn one (distinguishing them would let anybody probe which codes exist). Proven by
+capping the discount at 90% and watching the right test fail.
+
+Two things learned seeding them, worth knowing before configuring the real thing: the quote
+resolves the tier from the group's MEMBER COUNT rather than taking a tier id, and the ladder's
+lowest band must start at 1 member or every quote answers 503.
+
 **Still worth Ben's attention before the trial goes on sale:** those notices say "your paid period
 ends" and "renewing before then keeps everything exactly as it is". Accurate for a renewal,
 slightly wrong for a trial ending — the group is about to start paying for the first time, and the
@@ -10001,3 +10012,120 @@ it HOST visiting groups (which meets the existing model neatly — the hotel as 
 case never closes, or as a venue listing groups can book)? Do guest reports enter as
 occurrences, feed posts, or a new lightweight "guest log"? And which tier does a property pay
 on — the seats model fits groups, not businesses whose value is the public page.
+
+## 198. A business plan for tours and events — flat-rate, not member-banded (Ben, 2026-08-27)
+
+> "How do I make money off of people who have ghost walking tours? … a subscription for
+> businesses like ghost walking tours or ghost hunting events … different than a ghost hunting
+> group."
+
+The gap it names: the paid tiers sell private-residence casework, which a tour business will
+never want. Under free-is-a-choice they would stay free forever. What a business values is
+already built — the GhostWalkingTour kind and finder filter, public events with RSVP, guest
+evidence review at public events, promoted placement, publications, and the free iPhone/iPad
+apps with the Field Kit as the on-tour instrument.
+
+**Nothing blocks starting today.** Onboarding is manual and Ben-shaped: email the pitch PDF
+(docs/IsHaunted-Tour-Business-Offer.pdf, source docs/tour-business-pitch.html), and on a yes,
+SuperAdmin creates the org as GhostWalkingTour and attaches a subscription row by hand. The
+recommended intro price in the PDF is $29/month or $290/year, flat per business — one extra
+ticket sold covers the month — with the same three-month-free machinery item 195 verified.
+
+**What to build when there are a few of them:**
+- A Business tier that is flat-rate: member bands should not price a tour company whose "members"
+  are guides. Cheapest shape: a tier row the resolver never bands into, assigned only by
+  subscription — which is exactly how free-is-a-choice already works.
+- Self-serve signup for it on the pricing page, once the payment processor exists (item 144's
+  decision).
+- Per-event capacity/ticket links if operators ask — NOT a booking engine; the PDF deliberately
+  sells RSVP as "no booking software to buy", not as a replacement for their ticketing.
+
+The PDF keeps the investor-doc honesty rule: every feature claimed is live today, no invented
+metrics, and the trial line matches what the coupon machinery actually does.
+
+## 199. One person, many organizations — the account is the person, the bill is the org (Ben, 2026-08-27)
+
+> "So maybe the ghost walk tours and the ghost hunter organization are actually two separate…
+> While a person could potentially work for a ghost walking tour and be a ghost hunter
+> organization owner, they would need two separate payments or need to expand their account to
+> cover both. But they could work for a ghost hunting walking tour and a ghost hunting event
+> provider, and still have their own ghost hunting organization they own."
+
+**Ben's instinct is what the schema already does, and it is worth stating so it stops being
+re-litigated.** Three facts already hold today:
+
+1. **A kind belongs to an organization, not to a person.** `OrganizationKind` is a column on
+   `Organization`. A tour company and an investigation group are two rows, each with its own
+   kind, defaults, address visibility, calendar behaviour and public page.
+2. **A subscription is keyed to an organization.** `OrganizationSubscription.OrganizationId`
+   and `MemberSeatSubscription.OrganizationId` — there is no user-level subscription anywhere
+   in the model. Two organizations therefore already means two bills, with no work required to
+   make it so. "Expand their account to cover both" would be the *new* idea, and it should be
+   resisted: it re-introduces the person as a billing subject, which is what makes the seat
+   model, the referral ledger, and the contract rules coherent today.
+3. **A person's memberships are unbounded and independent.** One account can guide for a tour
+   company, work events for a second organization, and own a third — each with its own roles,
+   permissions and title rung. The sidebar's group switcher and the my-memberships endpoint
+   (item 159) already exist for exactly this life.
+
+**So the answer to "two separate?" is yes — separate organizations, one account.** What should
+NOT happen is a second login, a second profile, or a "tour operator account type". The person
+is one identity with a history that spans employers; that is also what makes guest tour history
+and cross-org reputation possible later.
+
+**The real gap Ben's sentence exposes is the kind list, not the account model.** He named four
+kinds of business in three sentences — walking tour, *event provider*, investigation group,
+and (item 197) haunted property — and the enum has two:
+
+```
+InvestigationGroup = 0
+GhostWalkingTour   = 1
+```
+
+A "ghost hunting event provider" — the outfit that rents a decommissioned prison for a Saturday
+night and sells tickets — is neither. It is closer to a tour (public, ticketed, meeting point is
+the product, guides not investigators) than to a group, so today it would be created as a
+GhostWalkingTour and mislabelled everywhere its kind is displayed. That costs nothing
+functionally, since **the kind is a label and a set of defaults, never a gate**, but it reads
+wrong on the public page and in discovery filters.
+
+**Recommended when the kinds are next touched (with 197):** add `PublicEventProvider = 2` and
+`HauntedProperty = 3` in one append-only change, with their own `OrganizationKindDefaults`, and
+keep `RunsPublicTours` as the orthogonal capability it already is — a group that *also* runs
+tours says so with the flag rather than by changing what it is. Resist a fifth kind per new
+business idea: the test is whether the creation defaults genuinely differ, not whether the
+words differ.
+
+**Open for Ben, and only Ben:** whether an owner of several organizations should get any
+multi-org pricing at all (a discount, a single invoice covering both, a "same owner" link), or
+whether each business simply pays for itself. Each org paying for itself is the simplest, is
+what the code does now, and is defensible — a tour company and an investigation group are
+different businesses using different features. A single invoice is a billing convenience that
+can be added later without touching the subscription model, by grouping receipts at payment
+time rather than by making the person a subscriber.
+
+**Addendum (Ben, same day): the role is per-membership, and so is the seat charge.**
+
+Ben's third variation — "work for a walking tour, own a ghost hunting event provider and be
+part of an organization" — is three rows for one `AppUserId`, and it works today because
+authority is carried by the membership, never by the person:
+
+```
+OrganizationUserMembership: Id, OrganizationId, AppUserId, Role, MemberLevelId, IsActive
+HasIndex("OrganizationId", "AppUserId").IsUnique()
+```
+
+`Owner` is a value in `OrganizationMemberRole` ("exactly one owner exists per organization"),
+not a column on `Organization` and not a flag on `AppUser` — which is precisely why owning one
+organization grants nothing in another. Checked `AppUser` for anything global that could leak
+across orgs: no role, no admin flag, no tier, no subscription. The title rung (`MemberLevelId`)
+sits on the membership too, so "Lead Investigator" at your own group and "Guide" at the tour
+company do not collide.
+
+**The consequence to decide on:** `MemberSeatSubscription` is keyed `(OrganizationId,
+AppUserId)` in the same way. A person who is the *overflow* seat (item 144) in more than one
+organization is therefore billed separately by each of them, with no single place showing all
+three charges. That is internally consistent — every organization pays for its own headcount —
+but somebody guiding for a tour, working events for a second outfit and belonging to a third
+group may be surprised by three small charges. Not a bug, and if Ben wants it to feel like one
+relationship the fix is to group receipts at payment time, not to make the person a subscriber.

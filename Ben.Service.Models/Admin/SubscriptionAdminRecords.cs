@@ -41,7 +41,11 @@ public record SubscriptionTierAdminRecord(
     // callers written before the field existed keep deserializing.
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null,
     // Item 167: the checklist of capabilities (case transfers, …), same contract.
-    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null);
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null,
+    // Item 198: false means member count never assigns this tier — it is chosen, not banded into.
+    // Appended rather than inserted: this record is built positionally, and a parameter added in
+    // the middle silently reassigns every argument after it.
+    bool IsBandedByMembers = true);
 
 /// <summary>Replaces a tier's included-areas checklist (item 156 Phase A).</summary>
 public sealed record SetTierPermissionAreasRequest(
@@ -69,7 +73,11 @@ public record SaveSubscriptionTierRequest(
     int SortOrder,
     bool IsActive,
     IReadOnlyList<SaveTierPriceRequest> Prices,
-    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits);
+    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits,
+    // Item 198: false for a tier sold to a KIND of business rather than a size of team, which
+    // member count must never assign. Defaulted so every existing caller keeps making ladder
+    // bands, which is what they all are.
+    bool IsBandedByMembers = true);
 
 /// <summary>One redeemable string under a campaign.</summary>
 /// <param name="RestrictedToAppUserName">

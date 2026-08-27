@@ -447,7 +447,13 @@ If somebody cancels, the address stops being shown to them.
 ### Places and sign-ups
 
 - **Places** caps how many people can come. Leave it empty for no limit.
-- **Sign-ups close** sets a cut-off. Leave it empty and people can sign up right up to the start.
+- **Sign-ups close** sets a cut-off. Leave it empty and people can sign up until half an hour
+  after the start — the late-arrival grace, for the guest who reaches the meeting point a few
+  minutes after you set off. Set it earlier to require booking ahead, or later to hold a
+  particular night open longer.
+- **Anyone who can edit the calendar can add a guest by hand**, at any time, from the event's
+  attendee list. That is the walk-up who has no account, or the latecomer who turns up with three
+  friends — you are standing there, so you decide.
 - Somebody who cancels frees their place for somebody else.
 
 ### The link you can share

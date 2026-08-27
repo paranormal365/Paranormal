@@ -256,10 +256,8 @@ public sealed class PublicEventController : BenControllerBase
         if (existing is { RsvpStatus: RsvpStatus.Accepted })
             return await GetEvent(eventId, ct);
 
-        if (ev.RsvpClosesAt is DateTime closes && DateTime.UtcNow > closes)
+        if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
-        if (ev.StartDateTime < DateTime.UtcNow)
-            return Conflict("That event has already started.");
 
         // Counted excluding this caller's own row, so somebody re-accepting after cancelling is not
         // refused by a seat they are not occupying.
@@ -380,8 +378,9 @@ public sealed class PublicEventController : BenControllerBase
         OrgCalendarEvent ev, Guid userId, bool hasRsvpd, int acceptedCount)
     {
         var isFull    = ev.AttendeeCapacity is int cap && acceptedCount >= cap;
-        var hasClosed = (ev.RsvpClosesAt is DateTime c && DateTime.UtcNow > c)
-                     || ev.StartDateTime < DateTime.UtcNow;
+        // The SAME rule the sign-up endpoints enforce. When this said "closed" and the endpoint
+        // still accepted, the button vanished from a tour a guest could legitimately still join.
+        var hasClosed = DateTime.UtcNow > ev.RsvpClosingTime;
 
         var reason =
             hasRsvpd            ? null

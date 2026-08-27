@@ -21,6 +21,7 @@ public class RateLimitSettingsProviderTests
     private const int ConfiguredGeocoding = 11;
     private const int ConfiguredAuth      = 22;
     private const int ConfiguredGlobal    = 333;
+    private const int ConfiguredEventAttendance = 444;
 
     private static IConfiguration Configuration() =>
         new ConfigurationBuilder()
@@ -29,6 +30,7 @@ public class RateLimitSettingsProviderTests
                 ["RateLimits:GeocodingPerMinute"] = ConfiguredGeocoding.ToString(),
                 ["RateLimits:AuthPerMinute"]      = ConfiguredAuth.ToString(),
                 ["RateLimits:GlobalPerMinute"]    = ConfiguredGlobal.ToString(),
+                ["RateLimits:EventAttendancePerMinute"] = ConfiguredEventAttendance.ToString(),
             })
             .Build();
 
@@ -123,11 +125,13 @@ public class RateLimitSettingsProviderTests
         await StoreAsync(factory, SiteSettingKeys.RateLimitGeocodingPerMinute, "1");
         await StoreAsync(factory, SiteSettingKeys.RateLimitAuthPerMinute,      "2");
         await StoreAsync(factory, SiteSettingKeys.RateLimitGlobalPerMinute,    "3");
+        await StoreAsync(factory, SiteSettingKeys.RateLimitEventAttendancePerMinute, "4");
         var provider = Provider(factory);
 
-        var snapshot = await WaitForAsync(provider, s => s is { Geocoding: 1, Auth: 2, Global: 3 });
+        var snapshot = await WaitForAsync(
+            provider, s => s is { Geocoding: 1, Auth: 2, Global: 3, EventAttendance: 4 });
 
-        Assert.Equal(new RateLimitSnapshot(1, 2, 3), snapshot);
+        Assert.Equal(new RateLimitSnapshot(1, 2, 3, 4), snapshot);
     }
 
     [Fact]

@@ -40,6 +40,26 @@ public static class RateLimiting
     /// <summary>Identity endpoints — login, registration, password reset.</summary>
     public const string AuthPolicy = "auth";
 
+    /// <summary>
+    /// Guests signing themselves up for a public event — the one place a crowd of strangers all
+    /// calls at once from a single address.
+    /// </summary>
+    /// <remarks>
+    /// <para>A ghost walking tour is thirty guests a session and three sessions a night, none of
+    /// them members, each signing up on their own phone at the meeting point. Every one of those
+    /// phones is behind the venue's wifi or a carrier NAT, so to the limiter they are one caller
+    /// making thirty sign-ups in the same minute — indistinguishable from a script, and refused by
+    /// the global ceiling once the crowd is browsing as well as signing up. That crowd is the tour
+    /// operator's entire business, so it gets a partition of its own rather than a share of the
+    /// ceiling meant for one runaway client.</para>
+    ///
+    /// <para>Generous here is safe only because the abuse this endpoint invites — using it as a
+    /// mailer, since it sends to any address typed in — is stopped by a per-event ceiling in the
+    /// controller rather than by the per-caller limit. An IP cannot tell thirty guests from one
+    /// attacker; an event that has issued far more invitations than it has seats can.</para>
+    /// </remarks>
+    public const string EventAttendancePolicy = "event-attendance";
+
     // Defaults, all per caller per minute. A SuperAdmin can override each one from the site
     // settings page; configuration (RateLimits:*) is the fallback, and these are the last resort.
     // See RateLimitSettingsProvider for how the current values reach the partition factory without
@@ -48,10 +68,18 @@ public static class RateLimiting
     internal const int DefaultAuthPerMinute      = 20;
     internal const int DefaultGlobalPerMinute    = 600;
 
+    /// <summary>
+    /// Sized for a crowd rather than a person: a sold-out tour signing up at the meeting point,
+    /// several sessions running over, and everyone reloading the page while they wait.
+    /// </summary>
+    internal const int DefaultEventAttendancePerMinute = 300;
+
     public static IServiceCollection AddBenRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<RateLimitSettingsProvider>();
+        services.AddSingleton<RateLimitAlerting>();
+        services.AddHostedService<RateLimitFlushService>();
 
         services.AddRateLimiter(options =>
         {
@@ -70,15 +98,30 @@ public static class RateLimiting
                 context.HttpContext.Response.ContentType = "application/json";
                 await context.HttpContext.Response.WriteAsync(
                     "{\"error\":\"Too many requests. Please retry shortly.\"}", ct);
+
+                // Somebody was just turned away. Counting is in-memory and synchronous; only a
+                // threshold crossing reaches the database, and it does so without holding up the
+                // response that is already being written.
+                var alerting = context.HttpContext.RequestServices
+                    .GetRequiredService<RateLimitAlerting>();
+
+                if (alerting.Record(PolicyNameOf(context.HttpContext), ClientKey(context.HttpContext))
+                    is { } alert)
+                {
+                    _ = Task.Run(() => alerting.TryNotifyAsync(alert, CancellationToken.None), CancellationToken.None);
+                }
             };
 
             // Limits are read per request from the provider's in-memory snapshot, so a change made
             // in the admin page applies to a running server.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-                context => FixedWindowByClient(context, Limits(context).Global));
+                context => HasOwnPolicy(context)
+                    ? RateLimitPartition.GetNoLimiter<string>("named-policy")
+                    : FixedWindowByClient(context, Limits(context).Global));
 
-            options.AddPolicy(GeocodingPolicy, context => FixedWindowByClient(context, Limits(context).Geocoding));
-            options.AddPolicy(AuthPolicy,      context => FixedWindowByClient(context, Limits(context).Auth));
+            options.AddPolicy(GeocodingPolicy,       context => FixedWindowByClient(context, Limits(context).Geocoding));
+            options.AddPolicy(AuthPolicy,            context => FixedWindowByClient(context, Limits(context).Auth));
+            options.AddPolicy(EventAttendancePolicy, context => FixedWindowByClient(context, Limits(context).EventAttendance));
         });
 
         return services;
@@ -86,6 +129,41 @@ public static class RateLimiting
 
     private static RateLimitSnapshot Limits(HttpContext context)
         => context.RequestServices.GetRequiredService<RateLimitSettingsProvider>().Current;
+
+    /// <summary>
+    /// Whether this endpoint declares a rate-limiting policy of its own, in which case the global
+    /// ceiling steps aside and lets that policy be the whole answer.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The global limiter applies to every request, named policy or not</b> — they stack,
+    /// and the stricter of the two decides. That went unnoticed for as long as every policy here
+    /// was stricter than the ceiling: geocoding at 20 and auth at 20 both bite long before 600, so
+    /// which one refused made no difference to anybody.</para>
+    ///
+    /// <para>The event-attendance policy is the first that must be <i>more</i> generous than the
+    /// ceiling, and stacking would have silently thrown it away — the setting would exist, be
+    /// editable, read back correctly, and change nothing above 600, which is the write-only
+    /// failure this codebase keeps finding. A policy chosen for an endpoint is a deliberate
+    /// statement about that endpoint; it should replace the catch-all, not be quietly floored
+    /// by it.</para>
+    /// </remarks>
+    private static bool HasOwnPolicy(HttpContext context)
+        => context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>() is not null;
+
+    /// <summary>
+    /// Which limit refused this request — the endpoint's own policy, or the global ceiling.
+    /// </summary>
+    /// <remarks>
+    /// Reported so an alert can name the setting a SuperAdmin would edit. Since
+    /// <see cref="HasOwnPolicy"/> exempts a policied endpoint from the ceiling, exactly one limit
+    /// can have done the refusing and there is no ambiguity to resolve.
+    /// </remarks>
+    private static string PolicyNameOf(HttpContext context)
+        => context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName
+           ?? GlobalPolicyName;
+
+    /// <summary>What the global ceiling is called when an alert has to name it.</summary>
+    public const string GlobalPolicyName = "global";
 
     /// <summary>
     /// One fixed one-minute window per client, <paramref name="permitLimit"/> requests wide.
