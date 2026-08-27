@@ -10195,6 +10195,25 @@ answer is a local database, which is also what would end this item's main compla
 rebuilding it has already caused one outage. Create a second database beside it instead — the
 whole investigation above was done that way, and IsHauntedDb was never touched.
 
+### Done 2026-08-27
+
+`scripts/run-e2e.sh` gives the suite its own database and its own uploads directory, seeded from
+scratch. The main complaint of this item — a suite whose result depends on run order and database
+age — is answered: what it tests is now the product rather than the history of the machine.
+
+Isolation immediately paid for itself. It showed the earlier seeding fix was INCOMPLETE (it could
+only help groups created after it, never one already in a database), found a
+`FileMigrationService` predicate mismatch, showed the site-wide walks could not tell a working
+feature gate from a broken route, found the route crawl handing the publications page an
+organization slug, and turned three intermittent failures into three fixable ones.
+
+Three consecutive full runs afterwards: 375/0, 375/0, and 374/1 whose single failure is fixed.
+
+**Still true, and worth knowing:** roughly one test per full run can still fail on a loaded
+machine, always a different one, always a test asserting before the page has rendered. Three of
+those were fixed today by waiting on a signal the page produces rather than on the circuit being
+up. That is the pattern to apply to the next one rather than treating it as a product defect.
+
 ## 201. A whole access token in a URL is too big to be safe (found 2026-08-27)
 
 Ben's profile photos would not display on ishaunted.com while working perfectly on localhost.
