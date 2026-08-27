@@ -200,4 +200,28 @@ public static class CouponMath
     /// <summary>Whether a redemption still has a period left to discount.</summary>
     public static bool IsStillApplying(CouponRedemption redemption) =>
         redemption.PeriodsRemaining is null || redemption.PeriodsRemaining > 0;
+
+    /// <summary>
+    /// Whether this redemption is carrying a group through a period that costs them nothing.
+    /// </summary>
+    public static bool IsFreeRide(CouponRedemption redemption) =>
+        IsStillApplying(redemption) && redemption.Payable <= 0m;
+
+    /// <summary>
+    /// Whether the period now ending is the LAST free one — the group is about to pay for the
+    /// first time.
+    /// </summary>
+    /// <remarks>
+    /// <para>Item 195 called the end of a trial "the moment the relationship is won or lost", and
+    /// the renewal notice was written for a renewal: it said that renewing "keeps everything
+    /// exactly as it is", which is precisely wrong for somebody who has never been charged. The
+    /// difference is worth detecting rather than papering over — a group that reads a reassuring
+    /// notice and then meets a first invoice has been misled by us, not surprised by
+    /// circumstance.</para>
+    ///
+    /// <para>A <c>Forever</c> coupon has null periods and never runs out, so it is never a trial
+    /// ending however free it is. One remaining period means this one is the last.</para>
+    /// </remarks>
+    public static bool IsLastFreePeriod(CouponRedemption redemption) =>
+        IsFreeRide(redemption) && redemption.PeriodsRemaining is 1 or 0;
 }

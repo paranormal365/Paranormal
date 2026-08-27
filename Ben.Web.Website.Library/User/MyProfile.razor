@@ -34,9 +34,23 @@
         <div class="alert alert-success py-2">Saved.</div>
     }
 
-    @if (_profile is null)
+    @if (_profile is null && !_loadAttempted)
     {
         <p class="text-secondary">Loading…</p>
+    }
+    else if (_profile is null)
+    {
+        @* Asked, and got nothing back. Anything other than saying so leaves somebody waiting on a
+           request that already failed — the bug this replaces. *@
+        <div class="alert alert-warning d-flex align-items-center gap-3" role="alert"
+             data-testid="profile-load-failed">
+            <div class="flex-grow-1">
+                <strong>Your profile couldn't be loaded.</strong>
+                <div class="small">@(_error ?? "The server didn't answer.")</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                    @onclick="RetryLoadAsync">Try again</button>
+        </div>
     }
     else
     {
@@ -406,6 +420,15 @@
         StateHasChanged();
     }
 
+    /// <summary>Whether the profile has been asked for yet, however that turned out.</summary>
+    /// <remarks>
+    /// Without this the page cannot tell "still waiting" from "asked, and got nothing", and both
+    /// look like a null profile. It showed "Loading…" for ever in the second case — reported by
+    /// Ben on 2026-08-27, and reproduced here after a restart invalidated the stored token, which
+    /// is the ordinary way a call comes back null.
+    /// </remarks>
+    private bool _loadAttempted;
+
     private async Task LoadAsync()
     {
         try
@@ -421,8 +444,25 @@
                 await LoadPreviewsAsync();
                 await LoadMapAsync();
             }
+            else
+            {
+                // A null is a refusal, not a slow answer. Saying so is the whole point: the page
+                // used to sit on "Loading…" and let somebody wait for something that had already
+                // finished failing.
+                _error = "Couldn't load your profile — the server didn't answer. "
+                       + "Your session may have expired; try signing in again.";
+            }
         }
         catch { _error = "Couldn't load your profile. Please refresh."; }
+        finally { _loadAttempted = true; }
+    }
+
+    /// <summary>Try again without a full page reload.</summary>
+    private async Task RetryLoadAsync()
+    {
+        _error = null;
+        _loadAttempted = false;
+        await LoadAsync();
     }
 
     /// <summary>Points the two profile photos at URLs the browser fetches.</summary>

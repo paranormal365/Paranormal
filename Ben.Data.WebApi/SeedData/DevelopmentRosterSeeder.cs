@@ -120,6 +120,19 @@ internal static class DevelopmentRosterSeeder
             };
             db.Organizations.Add(mcss);
             await db.SaveChangesAsync();
+
+            // Everything a real creation gives a group, given to a seeded one too. Every genuine
+            // path — OrganizationController, AdminOrganizationController and
+            // OrganizationSecurityService — adds these three at creation; a seeder that skips
+            // them produces a group no real group resembles. The standalone backfill seeders do
+            // NOT cover this: OrgRoleSeeder deliberately leaves alone any group that already has
+            // a role, so the one role created below would mask the eight missing defaults
+            // forever (found 2026-08-27 — six e2e tests failed on a fresh database with
+            // "Role 'Case Manager Role' not found").
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, mcss.Id, emma.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, mcss.Id, emma.Id);
+            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, mcss.Id, emma.Id);
+            await db.SaveChangesAsync();
             Console.WriteLine("[RosterSeeder] Created organization: Music City Spirit Seekers (owner: Emma).");
         }
 
@@ -465,6 +478,12 @@ internal static class DevelopmentRosterSeeder
             // exactly prospective case evidence.
             UploadFileTypeId = new Guid("20000000-0000-0000-0000-000000000001"),
             FileName = "attic-hatch.jpg", ContentType = "image/jpeg",
+            // Set, unlike every other seeded file, it was not — and FileMigrationService walks
+            // exactly the rows with FileData and no StoragePath, builds a path from this, and
+            // threw ArgumentNullException on every startup of a fresh database (found 2026-08-27
+            // rebuilding Ben's). Harmless to the demo, which reads FileData directly, and noise
+            // in the log of every clean install forever.
+            StoredFileName = "51000004-0000-0000-0000-00000000f001.jpg",
             FileData = TinyJpeg, FileSize = TinyJpeg.Length,
             DateCreated = now.AddDays(-2), CreatedByAppUserId = client.Id,
         });

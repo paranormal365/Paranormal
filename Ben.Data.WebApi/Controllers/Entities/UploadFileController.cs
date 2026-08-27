@@ -287,6 +287,36 @@ public sealed class UploadFileController : BenControllerBase
             }
         }
 
+        // ── Is it actually the picture it says it is? ────────────────────────
+        //
+        // The extension check above trusts the NAME, and the content type is whatever the browser
+        // guessed from that same name. Neither is evidence. An iPhone photo keeps its HEIC bytes
+        // while picking up a .JPG name, passes both checks, is stored, and is later served back
+        // as image/jpeg — bytes no browser can decode. The upload reports success and the profile
+        // shows "Photo unavailable" with nothing anywhere saying why (Ben, 2026-08-27, uploading
+        // IMG_3702.JPG; reproduced exactly with HEIC bytes named .JPG).
+        //
+        // Checked by SIGNATURE rather than by trying to decode. Decoding sounds stricter and is
+        // worse: Skia refuses some perfectly displayable images — a valid 8x8 RGBA PNG among them,
+        // found while testing this — so "the decoder disliked it" would reject files browsers
+        // render happily. What actually matters is narrower and decidable from the first few
+        // bytes: is this one of the raster formats a browser can draw?
+        if (!isSvg && contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            var signature = new byte[12];
+            await using (var head = file.OpenReadStream())
+            {
+                var read = await head.ReadAtLeastAsync(signature, signature.Length, throwOnEndOfStream: false, cancellationToken);
+                if (read < signature.Length) Array.Resize(ref signature, read);
+            }
+
+            if (!ImageSignature.IsBrowserDisplayable(signature))
+                return BadRequest(
+                    $"'{file.FileName}' isn't one of the image formats browsers can show, even "
+                    + "though it is named like one. iPhone photos are often HEIC underneath — "
+                    + "export or convert it to JPEG and try again.");
+        }
+
         var entity = new UploadFile
         {
             Id = Guid.NewGuid(),

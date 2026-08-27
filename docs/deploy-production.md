@@ -63,6 +63,14 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+If you forget, the API says so. It checks on startup and logs
+`DATABASE IS BEHIND: N migration(s) have not been applied — <names>`, naming them and the command
+to run. It is a warning, not a refusal: most of the site works fine while one new table is
+missing, and refusing to start would turn a partly-degraded site into an outage. **Worth grepping
+the log for after any deploy that shipped a schema change** — otherwise the first symptom is an
+"Invalid object name" error from whichever feature touches the new table first, which reads as a
+broken feature rather than an unapplied migration.
+
 ## Deploy
 
 ```powershell

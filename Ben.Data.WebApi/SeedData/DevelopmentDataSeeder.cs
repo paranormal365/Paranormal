@@ -109,6 +109,19 @@ internal static class DevelopmentDataSeeder
             };
             db.Organizations.Add(tgh);
             await db.SaveChangesAsync();
+
+            // Everything a real creation gives a group, given to a seeded one too. Every genuine
+            // path — OrganizationController, AdminOrganizationController and
+            // OrganizationSecurityService — adds these three at creation; a seeder that skips
+            // them produces a group no real group resembles. The standalone backfill seeders do
+            // NOT cover this: OrgRoleSeeder deliberately leaves alone any group that already has
+            // a role, so the one role created below would mask the eight missing defaults
+            // forever (found 2026-08-27 — six e2e tests failed on a fresh database with
+            // "Role 'Case Manager Role' not found").
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, tgh.Id, owner.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, tgh.Id, owner.Id);
+            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id);
+            await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
         }
         else if (tgh.Name == "Tennessee Ghost Hunters")
@@ -135,6 +148,19 @@ internal static class DevelopmentDataSeeder
                 DateCreated = now, CreatedByAppUserId = owner.Id,
             };
             db.Organizations.Add(nps);
+            await db.SaveChangesAsync();
+
+            // Everything a real creation gives a group, given to a seeded one too. Every genuine
+            // path — OrganizationController, AdminOrganizationController and
+            // OrganizationSecurityService — adds these three at creation; a seeder that skips
+            // them produces a group no real group resembles. The standalone backfill seeders do
+            // NOT cover this: OrgRoleSeeder deliberately leaves alone any group that already has
+            // a role, so the one role created below would mask the eight missing defaults
+            // forever (found 2026-08-27 — six e2e tests failed on a fresh database with
+            // "Role 'Case Manager Role' not found").
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, nps.Id, owner.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, nps.Id, owner.Id);
+            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id);
             await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Nashville Paranormal Society");
         }
