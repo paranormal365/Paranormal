@@ -1,4 +1,4 @@
-using Ben.Service.Models.People;
+﻿using Ben.Service.Models.People;
 using Ben.Service.Models.Entities;
 using Ben.Data.Common.Enums;
 
@@ -6,8 +6,37 @@ namespace Ben.Web.Services.WebApi;
 
 public interface IWebApiClient
 {
+    /// <summary>
+    /// Fetches one object, answering <c>null</c> for every kind of failure.
+    /// </summary>
+    /// <remarks>
+    /// Prefer <see cref="GetItemAsync{TResponse}"/> on any surface a person looks at. This overload
+    /// cannot tell a 401 from a 404 from an empty success, which is precisely the confusion item 120
+    /// removed from lists; it stays because ~90 call sites use it and converting them is a migration,
+    /// not an edit. It is no longer able to kill a circuit, though — see <c>SendItemAsync</c>.
+    /// </remarks>
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>The anonymous counterpart to <see cref="GetAsync{TResponse}"/>, with the same caveat.</summary>
     Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>
+    /// Fetches one object and reports what actually happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>The counterpart to <see cref="GetListAsync{T}"/> for endpoints that return an object.
+    /// <see cref="GetAsync{TResponse}"/> answers any refusal — 401, 403, 404, 500, an unreachable
+    /// API — with the same <c>null</c> a genuinely absent record produces, so the page is left
+    /// guessing at a sentence to show. <see cref="ItemResult{T}"/> carries the difference.</para>
+    /// </remarks>
+    Task<ItemResult<TResponse>> GetItemAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>The same as <see cref="GetItemAsync{TResponse}"/> for an endpoint that takes no bearer token.</summary>
+    /// <remarks>
+    /// Anonymous surfaces need this as much as signed-in ones — a public page whose fetch was
+    /// refused shows a visitor nothing, and that visitor has no account and no reason to retry.
+    /// </remarks>
+    Task<ItemResult<TResponse>> GetAnonymousItemAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
 

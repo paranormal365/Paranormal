@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
@@ -31,22 +31,82 @@ public sealed class WebApiClient : IWebApiClient
         return req;
     }
 
+    /// <inheritdoc />
     public async Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => (await GetItemAsync<TResponse>(relativeUrl, token)).Item;
+
+    /// <inheritdoc />
+    public Task<ItemResult<TResponse>> GetItemAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => SendItemAsync<TResponse>(Auth(HttpMethod.Get, relativeUrl), token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<TResponse>> GetAnonymousItemAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => SendItemAsync<TResponse>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+
+    /// <summary>
+    /// The body every single-object GET shares — the counterpart to <see cref="SendListAsync{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two untyped entry points above it (<c>GetAsync</c>, <c>GetAnonymousAsync</c>) are
+    /// now thin wrappers that drop the outcome and keep the value. That is on purpose: it makes the
+    /// ~90 existing call sites behave exactly as they did, while every one of them silently gains
+    /// the <c>HttpRequestException</c> catch they never had. An unreachable API used to throw
+    /// straight out of <c>OnInitializedAsync</c> and kill the circuit; the list path has caught this
+    /// since item 120 and the object path never did.</para>
+    /// </remarks>
+    private async Task<ItemResult<T>> SendItemAsync<T>(HttpRequestMessage request, CancellationToken token)
     {
-        using var req = Auth(HttpMethod.Get, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
-        if (!response.IsSuccessStatusCode) return default;
+        using var req = request;
 
-        // Ok(null) from a controller becomes 204 WITH AN EMPTY BODY (HttpNoContentOutputFormatter),
-        // and ReadFromJsonAsync throws on an empty stream. That exception surfaced inside a page's
-        // OnInitializedAsync and killed the circuit — the Price Bands screen died on production
-        // precisely when the price list was HEALTHY, because healthy is when the endpoint answers
-        // "nothing to report". Null is the honest reading of an empty success either way.
-        if (response.StatusCode == System.Net.HttpStatusCode.NoContent
-            || response.Content.Headers.ContentLength == 0)
-            return default;
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(req, token);
+        }
+        catch (HttpRequestException)
+        {
+            // The API is unreachable — emphatically not "this thing does not exist".
+            return ItemResult<T>.Failure();
+        }
 
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                // 401 before anything else, and this is the case the whole type exists for: a dead
+                // token is not a missing record. On 2026-08-27 a restarted API had invalidated every
+                // bearer token and the profile page could only say the session "may" have expired,
+                // because null was all it was given. Now it is told.
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    return ItemResult<T>.SessionEnded();
+
+                var body = await response.Content.ReadAsStringAsync(token);
+
+                // Same prose test as SendListAsync and SendExpectingReasonAsync: a refusal we wrote
+                // is a sentence, a framework error is a ProblemDetails blob or an HTML page, and
+                // showing either to a person is worse than saying nothing useful.
+                var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                                  && body.Length < 400
+                                  && !body.TrimStart().StartsWith('{')
+                                  && !body.TrimStart().StartsWith('<');
+
+                return ItemResult<T>.Failure(
+                    looksLikeProse
+                        ? body.Trim('"', ' ', '\n')
+                        : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).");
+            }
+
+            // Ok(null) from a controller becomes 204 WITH AN EMPTY BODY (HttpNoContentOutputFormatter),
+            // and ReadFromJsonAsync throws on an empty stream. That exception surfaced inside a page's
+            // OnInitializedAsync and killed the circuit — the Price Bands screen died on production
+            // precisely when the price list was HEALTHY, because healthy is when the endpoint answers
+            // "nothing to report". An empty success is a success with nothing in it.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return ItemResult<T>.Ok(default);
+
+            return ItemResult<T>.Ok(await response.Content.ReadFromJsonAsync<T>(cancellationToken: token));
+        }
     }
 
     /// <inheritdoc />
@@ -120,19 +180,9 @@ public sealed class WebApiClient : IWebApiClient
         }
     }
 
+    /// <inheritdoc />
     public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
-        if (!response.IsSuccessStatusCode) return default;
-
-        // Same empty-success guard as GetAsync — see the comment there.
-        if (response.StatusCode == System.Net.HttpStatusCode.NoContent
-            || response.Content.Headers.ContentLength == 0)
-            return default;
-
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
-    }
+        => (await GetAnonymousItemAsync<TResponse>(relativeUrl, token)).Item;
 
     /// <inheritdoc />
     public async Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
