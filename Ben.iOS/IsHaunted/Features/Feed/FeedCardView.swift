@@ -19,6 +19,7 @@ struct FeedCardView: View {
     var onReply: (() -> Void)?
     var onFollow: (() -> Void)?
     var onReport: (() -> Void)?
+    var onBlock: (() -> Void)?
     var onRecategorize: (() -> Void)?
 
     var body: some View {
@@ -192,6 +193,15 @@ struct FeedCardView: View {
                                 onReport?()
                             } label: {
                                 Label("Report", systemImage: "flag")
+                            }
+                        }
+                        // Report asks a moderator to act eventually; Block acts now, for this
+                        // reader (App Review 1.2 wants both on the content itself).
+                        if onBlock != nil {
+                            Button(role: .destructive) {
+                                onBlock?()
+                            } label: {
+                                Label("Block \(post.authorDisplayName)", systemImage: "hand.raised")
                             }
                         }
                     } label: {

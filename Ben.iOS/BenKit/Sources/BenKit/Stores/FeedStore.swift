@@ -119,6 +119,17 @@ public final class FeedStore {
         }
     }
 
+    /// Blocks a post's author and removes everything of theirs already on screen.
+    ///
+    /// The local removal is not an optimistic nicety: the server filters the NEXT fetch, but the
+    /// posts a person just blocked somebody over are the ones in front of them right now, and a
+    /// block that leaves the abuse visible until a refresh reads as a block that did nothing.
+    public func blockAuthor(of post: FeedPostRecord, actions: FeedActions) async -> Bool {
+        guard await actions.block(appUserId: post.authorAppUserId) else { return false }
+        posts.removeAll { $0.authorAppUserId == post.authorAppUserId }
+        return true
+    }
+
     /// Reporting is idempotent server-side; the card's control flips to "Reported" and stays.
     public func report(_ post: FeedPostRecord, reason: String?, actions: FeedActions) async -> Bool {
         guard await actions.report(postId: post.id, reason: reason) else { return false }

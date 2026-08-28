@@ -71,6 +71,25 @@ public struct FeedActions: Sendable {
         return await api.send(endpoint).isOk
     }
 
+    /// Blocks a person: their posts and replies stop being shown to you, immediately
+    /// (App Review 1.2 — the half of the abuse story that doesn't wait for a moderator).
+    /// The server also severs any follow in either direction. Blocking twice is blocking once.
+    public func block(appUserId: UUID) async -> Bool {
+        await api.send(Endpoint(.post, "api/me/blocks/\(appUserId.uuidString.lowercased())")).isOk
+    }
+
+    /// Unblocks. Their posts come back on the next fetch; severed follows stay severed —
+    /// re-following somebody you blocked is a choice, not a side effect.
+    public func unblock(appUserId: UUID) async -> Bool {
+        await api.send(Endpoint(.delete, "api/me/blocks/\(appUserId.uuidString.lowercased())")).isOk
+    }
+
+    /// Everyone you have blocked, most recent first — the Settings management list.
+    /// Nil means the list could not be fetched, which is different from an empty list.
+    public func blockedUsers() async -> [BlockedUserRecord]? {
+        await api.load(Endpoint(.get, "api/me/blocks"), as: [BlockedUserRecord].self).value
+    }
+
     /// The author's answer to the mismatch nudge (item 186 F6). Nil clears the category.
     public func recategorize(
         postId: UUID, experienceTypeId: UUID?
