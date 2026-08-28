@@ -52,6 +52,26 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
     }
 
     /// <summary>
+    /// A closed account can never sign in again, by any route.
+    /// </summary>
+    /// <remarks>
+    /// <para>The permanent lockout set by <see cref="AccountClosureService"/> already stops the
+    /// password path, and the anonymised email means nothing can find the account by address. This
+    /// is the third answer, and the one that does not depend on either of those holding: Identity
+    /// calls <c>CanSignInAsync</c> before every sign-in, including two-factor and external
+    /// providers, so a closed account is refused even if some future path forgets to check.</para>
+    ///
+    /// <para>Deliberately no distinct message. Identity's caller turns this into the same "invalid
+    /// email or password" every other refusal gives, and that is right — telling a stranger that
+    /// an address belonged to a closed account tells them the address existed.</para>
+    /// </remarks>
+    public override async Task<bool> CanSignInAsync(AppUser user)
+    {
+        if (user.DateClosed is not null) return false;
+        return await base.CanSignInAsync(user);
+    }
+
+    /// <summary>
     /// The password check itself. Overridden rather than <c>PasswordSignInAsync</c> because this
     /// is the one both the sign-in endpoint and the two-factor path funnel through.
     /// </summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Ben.Data.Source.Entities
@@ -87,6 +87,24 @@ namespace Ben.Data.Source.Entities
         public int? BirthYear { get; set; }
 
         public bool SharePrivatePhotoWithClients { get; set; }
+
+        /// <summary>
+        /// When this person closed their account, or null while it is open.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>The row survives the person.</b> Closing an account anonymises it rather than
+        /// deleting it: identity, credentials and contact details go, while the cases, evidence,
+        /// reports and messages they authored stay where their group left them, attributed to
+        /// <c>AccountClosure.FormerMemberName</c>. Deleting the row would take a group's case
+        /// history with it — see <c>AccountClosureService</c> for the whole argument, and for why
+        /// an organization's owner has to hand it over before they can leave.</para>
+        ///
+        /// <para>This is the flag everything else keys on: a closed account cannot sign in, cannot
+        /// be invited, and does not appear in people-pickers. Nullable because "not closed" is the
+        /// normal state and a sentinel date would be a lie about when it happened.</para>
+        /// </remarks>
+        public DateTime? DateClosed { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
 
