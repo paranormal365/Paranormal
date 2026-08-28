@@ -65,6 +65,11 @@ enum AppRoute: Hashable {
     case eventsList
     case eventDetail(UUID)
     case security
+    /// Deleting your own account — App Review 5.1.1(v) requires this to live in the app.
+    case deleteAccount
+    /// What the app is and what it does with your data. Reachable signed OUT — a
+    /// reviewer with no account still has to be able to find the privacy statement.
+    case about
     case developerSettings
     case register
     case confirmEmail(token: String)
