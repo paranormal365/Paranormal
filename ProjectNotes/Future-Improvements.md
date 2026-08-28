@@ -10113,13 +10113,24 @@ tours says so with the flag rather than by changing what it is. Resist a fifth k
 business idea: the test is whether the creation defaults genuinely differ, not whether the
 words differ.
 
-**Open for Ben, and only Ben:** whether an owner of several organizations should get any
-multi-org pricing at all (a discount, a single invoice covering both, a "same owner" link), or
-whether each business simply pays for itself. Each org paying for itself is the simplest, is
-what the code does now, and is defensible — a tour company and an investigation group are
-different businesses using different features. A single invoice is a billing convenience that
-can be added later without touching the subscription model, by grouping receipts at payment
-time rather than by making the person a subscriber.
+### Decided by Ben, 2026-08-27
+
+**Multi-group owner discount is case by case.** No rule, no automatic tier, nothing to build —
+each org keeps paying for itself, and where Ben wants to reward somebody running several, he
+applies it himself. The machinery for that already exists and needs no change: coupons and
+subscriptions are both keyed to an organization, so a SuperAdmin can price one group differently
+without the person ever becoming a billing subject. That is the property worth protecting, and a
+standing multi-org discount rule would have been the thing to erode it.
+
+**Both new org kinds are wanted** ("I like those org types to be available"), and are built:
+`PublicEventProvider` and `HauntedProperty`, appended to the enum with their own creation
+defaults, their own names, and a place in the creation wizard and the settings dropdown. The
+haunted-property kind is the seam item 197 will hang from when Ben takes it up; adding it now
+means a property owner is not made to call themselves an investigation group in the meantime.
+
+Three kinds are public-facing and one is not, which is the whole distinction the kind exists to
+draw — written once as `IsPublicFacing` rather than repeated per default, so a kind added later
+cannot pick up half of the behaviour.
 
 **Addendum (Ben, same day): the role is per-membership, and so is the seat charge.**
 
@@ -10194,6 +10205,25 @@ answer is a local database, which is also what would end this item's main compla
 **Do not fix this by rebuilding the shared dev database.** It also serves ishaunted.com, and
 rebuilding it has already caused one outage. Create a second database beside it instead — the
 whole investigation above was done that way, and IsHauntedDb was never touched.
+
+### Done 2026-08-27
+
+`scripts/run-e2e.sh` gives the suite its own database and its own uploads directory, seeded from
+scratch. The main complaint of this item — a suite whose result depends on run order and database
+age — is answered: what it tests is now the product rather than the history of the machine.
+
+Isolation immediately paid for itself. It showed the earlier seeding fix was INCOMPLETE (it could
+only help groups created after it, never one already in a database), found a
+`FileMigrationService` predicate mismatch, showed the site-wide walks could not tell a working
+feature gate from a broken route, found the route crawl handing the publications page an
+organization slug, and turned three intermittent failures into three fixable ones.
+
+Three consecutive full runs afterwards: 375/0, 375/0, and 374/1 whose single failure is fixed.
+
+**Still true, and worth knowing:** roughly one test per full run can still fail on a loaded
+machine, always a different one, always a test asserting before the page has rendered. Three of
+those were fixed today by waiting on a signal the page produces rather than on the circuit being
+up. That is the pattern to apply to the next one rather than treating it as a product defect.
 
 ## 201. A whole access token in a URL is too big to be safe (found 2026-08-27)
 

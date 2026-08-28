@@ -1,0 +1,231 @@
+@page "/organizations/{OrgId:guid}/places/{PlaceId:guid}/rooms"
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Rooms — @(_place?.Name ?? "Place")</PageTitle>
+
+@* Item 197. A property whose reported haunting IS the attraction is described by its rooms, not
+   its address — "Room 217's history" is what a guest reads. The phone already stamps a room name
+   onto every reading it takes; this is where those names come from, so two nights running use the
+   same one instead of two spellings of it. *@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Rooms</h3>
+            <p class="text-secondary small mb-0">
+                @if (_place is not null)
+                {
+                    <text>The spaces inside <strong>@_place.Name</strong> your group has named.</text>
+                }
+                Naming them lets a night's readings be attributed to a room rather than typed out
+                again each time, and lets a room carry its own history.
+            </p>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_result.Failed || _loading)
+    {
+        @* A refusal must not read as "this property has no rooms" — that is the reassuring lie
+           somebody would act on by adding them all again. *@
+        <BenListState TItem="PlaceRoomRecord" Result="@_result" Loading="@_loading"
+                      LoadingText="Loading rooms…" OnRetry="@LoadAsync" />
+    }
+    else
+    {
+        <div class="card mb-3"><div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-3">
+                    <label class="form-label" for="room-name">Name</label>
+                    <input id="room-name" class="form-control" maxlength="120" placeholder="Room 217"
+                           @bind="_name" @bind:event="oninput" />
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label" for="room-floor">Floor or wing</label>
+                    <input id="room-floor" class="form-control" maxlength="60" placeholder="Second floor"
+                           @bind="_floor" @bind:event="oninput" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label" for="room-desc">Description</label>
+                    <input id="room-desc" class="form-control" maxlength="1000"
+                           placeholder="Guests report a knock at 3am." @bind="_description" @bind:event="oninput" />
+                </div>
+                <div class="col-6 col-md-2 d-flex align-items-center gap-2 pt-md-4">
+                    <input type="checkbox" class="form-check-input" id="room-public" @bind="_isPublic" />
+                    <label class="form-label mb-0" for="room-public">Show publicly</label>
+                </div>
+                <div class="col-6 col-md-1">
+                    <button type="button" class="btn btn-primary w-100"
+                            disabled="@(_saving || string.IsNullOrWhiteSpace(_name))"
+                            @onclick="AddAsync">Add</button>
+                </div>
+            </div>
+            <div class="form-text mt-2">
+                A room is private until you say otherwise — it is somewhere people sleep, so
+                publishing one stays a decision.
+            </div>
+        </div></div>
+
+        @if (_rooms.Count == 0)
+        {
+            <div class="alert alert-secondary" role="alert" data-testid="rooms-empty">
+                <strong>No rooms named yet.</strong>
+                Add the ones people ask about — the room with the story, the cellar, the corridor.
+                You don't have to list the whole building.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle" data-testid="rooms-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Room</th>
+                            <th scope="col">Floor</th>
+                            <th scope="col">Description</th>
+                            <th scope="col">Public</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var room in _rooms)
+                    {
+                        <tr data-testid="room-row">
+                            <td class="fw-semibold">@room.Name</td>
+                            <td class="text-secondary">@(room.Floor ?? "—")</td>
+                            <td class="text-secondary small">@(room.Description ?? "—")</td>
+                            <td>
+                                @if (room.IsPublic)
+                                {
+                                    <span class="badge bg-success-subtle text-success-emphasis">Public</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-body-secondary text-body-emphasis">Private</span>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap me-1"
+                                        disabled="@_saving" @onclick="() => TogglePublicAsync(room)">
+                                    @(room.IsPublic ? "Make private" : "Make public")
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
+                                        disabled="@_saving" @onclick="() => RemoveAsync(room)">Remove</button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid PlaceId { get; set; }
+
+    private IReadOnlyList<PlaceRoomRecord> _rooms = [];
+    private LoadResult<PlaceRoomRecord> _result;
+    private PlaceRecord? _place;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private string _name = "";
+    private string _floor = "";
+    private string _description = "";
+    private bool _isPublic;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The circuit is not necessarily live on a hard navigation, and checking IsAuthenticated
+        // before auth is ready is the race this app has been caught by repeatedly.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        _place = await AdminClient.GetPlaceAsync(PlaceId);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _result = await AdminClient.GetPlaceRoomsAsync(OrgId, PlaceId);
+            _rooms = _result.Items;
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task AddAsync()
+    {
+        var name = _name.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await AdminClient.CreatePlaceRoomAsync(OrgId, PlaceId,
+                new SavePlaceRoomRequest(name, _floor, _description, _isPublic));
+
+            // A refusal the page discards is worse than no rule at all: the server declines a
+            // duplicate name, and saying nothing would look like the Add button was broken.
+            if (created is null)
+            {
+                _error = $"Couldn't add \"{name}\" — this place may already have a room by that name.";
+                return;
+            }
+
+            _name = ""; _floor = ""; _description = ""; _isPublic = false;
+            await LoadAsync();
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task TogglePublicAsync(PlaceRoomRecord room)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var updated = await AdminClient.UpdatePlaceRoomAsync(OrgId, PlaceId, room.Id,
+                new SavePlaceRoomRequest(room.Name, room.Floor, room.Description, !room.IsPublic));
+
+            if (updated is null) { _error = "Couldn't change that room."; return; }
+            await LoadAsync();
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task RemoveAsync(PlaceRoomRecord room)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (!await AdminClient.DeletePlaceRoomAsync(OrgId, PlaceId, room.Id))
+            {
+                _error = $"Couldn't remove \"{room.Name}\".";
+                return;
+            }
+            await LoadAsync();
+        }
+        finally { _saving = false; }
+    }
+}

@@ -117,6 +117,41 @@ public struct AccountActions: Sendable {
         }
     }
 
+    // ── Closing it ──────────────────────────────────────────────────────────
+
+    /// What stands in the way of deleting this account, if anything.
+    ///
+    /// Asked BEFORE the destructive screen is shown, not after the button is pressed. Exactly
+    /// one owner exists per organization, and anonymising them would strand the group — so an
+    /// owner is refused, and the only useful thing to do with that refusal is name the groups
+    /// on the screen where the person is standing. `nil` means the question could not be asked
+    /// (offline, a dead session); the screen says so rather than guessing a yes.
+    public func accountClosureCheck() async -> AccountClosureCheck? {
+        await api.load(Endpoint(.get, "api/me/closure"), as: AccountClosureCheck.self).value
+    }
+
+    /// Deletes the account. There is no undo.
+    ///
+    /// The confirmation word is required by the SERVER, not just the screen — this is the one
+    /// call where a stray retry destroys something nobody can restore. Anything the person
+    /// authored stays with their group, attributed to a name that is nobody; their identity,
+    /// credentials and contact details are gone.
+    public func closeAccount() async -> Result<Void, FeedActionError> {
+        struct Body: Encodable { let confirmation: String }
+        guard let endpoint = try? Endpoint.json(
+            .delete, "api/me", payload: Body(confirmation: AccountClosureCheck.confirmationWord))
+        else { return .failure(.failed(reason: nil)) }
+
+        switch await api.send(endpoint) {
+        case .ok: return .success(())
+        // The server's own sentence names the groups to hand over. Losing it here would leave
+        // the person with a button that fails and no idea why.
+        case .failed(let reason, _): return .failure(.failed(reason: reason))
+        case .sessionEnded: return .failure(.sessionEnded)
+        case .rateLimited(let after): return .failure(.rateLimited(retryAfter: after))
+        }
+    }
+
     /// Spaces and hyphens are how people read a code back off a screen; the server wants
     /// neither. Stripping here means a correct code typed comfortably is not rejected.
     static func normalizeCode(_ code: String) -> String {

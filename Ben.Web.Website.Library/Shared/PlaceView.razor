@@ -49,6 +49,28 @@
             }
         </p>
 
+        @* Rooms (item 197). Offered once per group the viewer belongs to, because rooms are named
+           PER GROUP for a shared place — a hotel describes its own building, a group that visits
+           keeps its own list, and neither sees the other's. Without a link here the page existed
+           only for somebody who already knew its address, which is the write-only shape this
+           codebase keeps finding. *@
+        @if (_myOrgs.Count > 0)
+        {
+            <p class="mb-2 small">
+                @foreach (var org in _myOrgs)
+                {
+                    <a class="btn btn-sm btn-outline-secondary me-1 mb-1"
+                       href="@($"/organizations/{org.OrganizationId}/places/{PlaceId}/rooms")">
+                        <BenIcon Name="home" Class="me-1" />Rooms
+                        @if (_myOrgs.Count > 1)
+                        {
+                            <span class="text-secondary">· @org.Name</span>
+                        }
+                    </a>
+                }
+            </p>
+        }
+
         @* The line that turns a list into a history. Counted over what this viewer may see, so it
            never advertises how much is being withheld. *@
         @if (_summary is { InvestigationCount: > 0 } s)
@@ -160,6 +182,15 @@
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
 
+    /// <summary>
+    /// The groups this viewer belongs to, so the rooms link can name which one it means.
+    /// </summary>
+    /// <remarks>
+    /// Empty for a signed-out visitor, and that is the whole gate: rooms are a group's own notes
+    /// about a building, so somebody with no group has nothing to link to.
+    /// </remarks>
+    private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
+
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)
         : _place!.Name!;
@@ -190,6 +221,10 @@
         _rowsResult = await AdminClient.GetPlaceInvestigationsAsync(PlaceId);
         _rows       = _rowsResult.Items.ToList();
         _summary = await AdminClient.GetPlaceSummaryAsync(PlaceId);
+
+        // For the rooms link. A failure here costs a link, not the page, so it is not reported —
+        // the rest of this view is about the place itself and stands without it.
+        _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }
 

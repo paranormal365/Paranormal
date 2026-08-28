@@ -1,4 +1,4 @@
-using Microsoft.Playwright;
+﻿using Microsoft.Playwright;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Tests;
@@ -73,6 +73,10 @@ public class SiteWideAuditTests : BenTestBase
             ("/login", null),
             ("/signup", null),
             ("/contact", null),
+            // The URL given to App Store Connect. Apple's reviewer opens it with no account,
+            // and a /privacy that has become gated or moved is a rejected app submission
+            // rather than a broken footer link — so it is walked as a stranger, on purpose.
+            ("/privacy", "Privacy"),
             ("/forgot-password", null),
         ], findings);
 
