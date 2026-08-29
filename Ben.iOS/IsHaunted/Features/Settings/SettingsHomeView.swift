@@ -38,6 +38,10 @@ struct SettingsHomeView: View {
                     NavigationLink(value: AppRoute.security) {
                         Label("Password & two-step sign-in", systemImage: "lock")
                     }
+                    NavigationLink(value: AppRoute.blockedAccounts) {
+                        Label("Blocked accounts", systemImage: "hand.raised")
+                    }
+                    .accessibilityIdentifier("settings-blocked-accounts")
                 }
                 // App Review 5.1.1(v): an app that creates accounts must let you delete one
                 // here, and not buried — a reviewer looks for it in the account settings. The

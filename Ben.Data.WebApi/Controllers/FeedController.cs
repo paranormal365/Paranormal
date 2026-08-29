@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -109,7 +109,7 @@ public sealed class FeedController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
-        var query = VisiblePosts(db);
+        var query = ExceptBlockedBy(VisiblePosts(db), db, userId);
 
         if (author is { } authorId)
         {
@@ -185,10 +185,13 @@ public sealed class FeedController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
-        var root = await VisiblePosts(db).FirstOrDefaultAsync(m => m.Id == id, ct);
+        // A blocked author's thread is NotFound for this reader, not a page with a hole where
+        // the root should be — and their replies vanish from other people's threads the same way.
+        var root = await ExceptBlockedBy(VisiblePosts(db), db, userId)
+            .FirstOrDefaultAsync(m => m.Id == id, ct);
         if (root is null) return NotFound();
 
-        var replies = await VisiblePosts(db)
+        var replies = await ExceptBlockedBy(VisiblePosts(db), db, userId)
             .Where(m => m.ParentMessageId == id)
             .OrderBy(m => m.DateCreated).ThenBy(m => m.Id)
             .ToListAsync(ct);
@@ -760,6 +763,31 @@ public sealed class FeedController : BenControllerBase
     private static IQueryable<OrgMessage> VisiblePosts(BenDataContext db)
         => db.OrgMessages.AsNoTracking()
              .Where(m => m.ChannelType == OrgMessageChannel.PublicFeed && m.HiddenUtc == null);
+
+    /// <summary>
+    /// Removes posts whose author this reader has blocked (App Review 1.2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Per-reader, so it cannot live inside <see cref="VisiblePosts"/>, which answers the
+    /// reader-independent half ("is this post public and not hidden"). It composes into the SQL as
+    /// a NOT IN over the reader's block list rather than filtering in memory, because the feed
+    /// pages BEFORE materialising — a post filtered after the Take would silently shorten pages
+    /// and break the cursor.</para>
+    ///
+    /// <para>A visitor blocks nobody, and skipping the subquery entirely for <c>Guid.Empty</c>
+    /// keeps the anonymous path identical to what it was before blocks existed.</para>
+    /// </remarks>
+    private static IQueryable<OrgMessage> ExceptBlockedBy(
+        IQueryable<OrgMessage> query, BenDataContext db, Guid userId)
+    {
+        if (userId == Guid.Empty) return query;
+
+        var blocked = db.UserBlocks.AsNoTracking()
+            .Where(b => b.BlockerAppUserId == userId)
+            .Select(b => b.BlockedAppUserId);
+
+        return query.Where(m => !blocked.Contains(m.AuthorAppUserId));
+    }
 
     /// <summary>
     /// The accounts a post's <c>@names</c> refer to.

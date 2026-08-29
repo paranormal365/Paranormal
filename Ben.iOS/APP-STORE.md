@@ -136,7 +136,7 @@ There are no third-party SDKs in the app at all — verified by search, not by m
 - [x] **Report objectionable content** — feed posts can be reported; reports reach an admin.
 - [x] **Published contact** — `/contact`, no account needed.
 
-### Open — one hard blocker left
+### Requirements — all met
 
 - [x] **Account deletion inside the app** (Guideline 5.1.1(v)) — built 08/28/2026. Profile →
       Delete account. `DELETE /api/me` with a typed `DELETE` confirmation the *server* also
@@ -168,15 +168,33 @@ There are no third-party SDKs in the app at all — verified by search, not by m
       account deleted with 204, sign-in afterwards answered 401, and the row came back as
       "A former member" with the address anonymised.
 
-- [ ] **Block an abusive user** (Guideline 1.2, for apps with user-generated content). Apple
-      asks for four things: filter objectionable material, report content, **block abusive
-      users**, and published contact. The first, second and fourth exist. There is no block or
-      mute anywhere — no server support and no UI. Needs a `BlockedUser` relationship and
-      filtering on the feed read path.
+- [x] **Block an abusive user** (Guideline 1.2) — built 08/28/2026. All four obligations now
+      stand: filter (NSFW screening + moderation), report, **block**, published contact.
+
+      Blocking is the reader's own act and takes effect immediately, unlike Report which waits
+      for a moderator. `POST/DELETE /api/me/blocks/{userId}` + `GET /api/me/blocks`; the feed
+      read path excludes blocked authors' posts and replies for that reader (list, ranked page,
+      and threads — a blocked author's own thread is NotFound). Blocking severs follows in both
+      directions; unblocking does not restore them. Deliberately not gated on feed participation
+      or the feed flag — being abused doesn't require standing to post.
+
+      In the app: Block on every post's menu (with confirmation; removes their posts from screen
+      at once), and Profile → Blocked accounts to review and unblock. The person blocked is not
+      told and sees nothing different.
+
+      Migration `20260828172652_AddUserBlocks` applied to dev; production gets it with the next
+      deploy's `database update`. The WEBSITE has no block UI yet — server filtering is in place,
+      so it is a small follow-up, not a launch blocker (the feed is dark on the site anyway).
 
 ### Before the first upload
 
-- [ ] Enrol in the Apple Developer Program — the last remaining item on Sign in with Apple.
-- [ ] Screenshots: 6.9" iPhone and 13" iPad, both required.
-- [ ] Fill in the demo account in the review notes above.
-- [ ] Bump `MARKETING_VERSION` from 0.1.0 to 1.0.0 for a first public release.
+- [x] Enrol in the Apple Developer Program — Ben has this (2026-08-28).
+- [x] Screenshots: captured 08/28/2026 by `AppStoreScreenshotTests` on iPhone 17 Pro Max
+      (1320×2868) and iPad Pro 13-inch (2064×2752) — five per device in `Ben.iOS/screenshots/`
+      (feed, cases, investigations, field kit, events). No profile shot: Debug builds show the
+      Developer section there, and debug UI in a screenshot is a rejection. The folder README
+      has the refresh procedure, including why `simctl keychain reset` is part of it.
+- [ ] **Demo account** — the one item only Ben can do: the reviewer signs into PRODUCTION, so
+      the account must exist on ishaunted.com (a member of a group with a case or two to see).
+      Create it on the live site, then paste the credentials into the review notes above.
+- [x] `MARKETING_VERSION` bumped to 1.0.0 (build 1) 08/28/2026.

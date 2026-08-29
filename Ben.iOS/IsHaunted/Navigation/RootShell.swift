@@ -168,6 +168,8 @@ struct RootShell: View {
             CaseReportPDFView(caseId: caseId, reportId: reportId)
         case .security:
             SecurityView()
+        case .blockedAccounts:
+            BlockedAccountsView()
         case .about:
             AboutView()
         case .deleteAccount:

@@ -1,4 +1,4 @@
-using Ben.Data.Source.Entities;
+﻿using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +99,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FeedTypeWeightSet> FeedTypeWeightSets { get; set; }
         public virtual DbSet<FeedPostConsent> FeedPostConsents { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
+        public virtual DbSet<UserBlock> UserBlocks { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
@@ -1675,6 +1676,20 @@ namespace Ben.Data.Source.Context
             // "Who follows this person" — the follower count, and the other direction of the feed.
             modelBuilder.Entity<UserFollow>()
                 .HasIndex(e => e.FollowedAppUserId);
+
+            // ── UserBlock ─────────────────────────────────────────────────────
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(e => e.BlockerAppUser).WithMany()
+                .HasForeignKey(e => e.BlockerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(e => e.BlockedAppUser).WithMany()
+                .HasForeignKey(e => e.BlockedAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // Blocking somebody twice is blocking them once — same idempotency-by-index as follows.
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(e => new { e.BlockerAppUserId, e.BlockedAppUserId }).IsUnique();
+            // The read path's one question, asked on every feed page: whom does this reader block?
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(e => e.BlockerAppUserId);
 
             // ── Publication ──────────────────────────────────────────────────
             modelBuilder.Entity<Publication>()
