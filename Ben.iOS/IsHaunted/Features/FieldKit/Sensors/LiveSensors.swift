@@ -1,4 +1,5 @@
 import Foundation
+import os
 import CoreMotion
 import CoreLocation
 import AVFoundation
@@ -388,11 +389,46 @@ extension LiveAltimeter {
     fileprivate func stop() { altimeterHandle.stopRelativeAltitudeUpdates() }
 }
 
+/// The battery level, readable from any thread.
+///
+/// `UIDevice` is main-actor-isolated and `SensorSuite.batteryPercent` is a synchronous
+/// `@Sendable` closure the engine calls from its own actor on every heartbeat — it cannot hop
+/// to the main actor and must not block waiting for it. So the level is cached: primed on the
+/// main actor, kept fresh by the system's own `batteryLevelDidChange` notification (monitoring
+/// is enabled in `suite()`, which is what makes that notification fire), and read through a
+/// lock. A heartbeat therefore reports the level as of the last change, which for a battery is
+/// the same thing as "now".
+private final class BatteryLevelCache: Sendable {
+    @MainActor static let shared = BatteryLevelCache()
+
+    /// -1 mirrors UIDevice's own "unknown" sentinel.
+    private let level = OSAllocatedUnfairLock<Float>(initialState: -1)
+
+    @MainActor
+    private init() {
+        let read: @Sendable (Float) -> Void = { [level] value in level.withLock { $0 = value } }
+        read(UIDevice.current.batteryLevel)
+        NotificationCenter.default.addObserver(
+            forName: UIDevice.batteryLevelDidChangeNotification, object: nil, queue: .main
+        ) { _ in
+            // The .main queue IS the main actor; assumeIsolated states that rather than
+            // silencing it. Never deallocated — one battery, one cache, app lifetime.
+            MainActor.assumeIsolated { read(UIDevice.current.batteryLevel) }
+        }
+    }
+
+    func percent() -> Double? {
+        let value = level.withLock { $0 }
+        return value < 0 ? nil : Double(value) * 100
+    }
+}
+
 enum LiveSensors {
     /// The real instruments, plus the battery reading that rides on every heartbeat.
     @MainActor
     static func suite() -> SensorSuite {
         UIDevice.current.isBatteryMonitoringEnabled = true
+        let battery = BatteryLevelCache.shared
         // One object for both audio jobs — see LiveAudioCapture on why that matters.
         let audio = LiveAudioCapture()
         return SensorSuite(
@@ -403,9 +439,6 @@ enum LiveSensors {
             altitude: LiveAltimeter(),
             deviceMovement: LiveDeviceMovement(),
             dictation: LiveDictation(),
-            batteryPercent: {
-                let level = UIDevice.current.batteryLevel
-                return level < 0 ? nil : Double(level) * 100
-            })
+            batteryPercent: { battery.percent() })
     }
 }

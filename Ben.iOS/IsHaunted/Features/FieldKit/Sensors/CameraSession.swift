@@ -1,5 +1,9 @@
 import Foundation
-import AVFoundation
+// @preconcurrency: AVCaptureSession predates Sendable and is not marked, but start/stopRunning
+// are documented as callable from any thread — hopping them through a queue is exactly what
+// Apple's own sample code does. This treats the module's missing annotations as the legacy they
+// are instead of decorating every capture with its own unsafe marker.
+@preconcurrency import AVFoundation
 import CoreMotion
 import UIKit
 import SwiftUI
