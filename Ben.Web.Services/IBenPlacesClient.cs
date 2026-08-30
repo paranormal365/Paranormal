@@ -1,4 +1,4 @@
-using Ben.Web.Services.WebApi;
+﻿using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -196,4 +196,19 @@ public interface IBenPlacesClient
     /// <summary>One published investigation, by the address people share.</summary>
     Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
         string orgUrlName, string investigationSlug, CancellationToken token = default);
+
+    /// <summary>
+    /// Places close enough to one another to be one place typed twice. SuperAdmin.
+    /// </summary>
+    /// <remarks>
+    /// A finder rather than a list: the pairs worth showing are exactly the ones the automatic
+    /// matcher could not settle, and they are few.
+    /// </remarks>
+    Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Moves everything off one place onto another and deletes the empty one. Irreversible.
+    /// </summary>
+    Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
+        Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default);
 }

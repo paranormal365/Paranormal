@@ -872,4 +872,127 @@ public sealed class PlaceMergeTests
         Assert.IsType<NotFoundObjectResult>((await Controller(factory, Guid.NewGuid())
             .Merge(id, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(Guid.NewGuid()), default)).Result);
     }
+
+    // ── The finder ────────────────────────────────────────────────────────────
+
+    private static void SeedPlace(
+        BenDataContext db, Guid userId, Guid id, string name,
+        decimal lat, decimal lon, int published = 0, DateTime? created = null)
+    {
+        db.Places.Add(new Place
+        {
+            Id = id, Name = name, City = "Adams", State = "TN",
+            Kind = PlaceKind.PublicLocation, Latitude = lat, Longitude = lon,
+            DateCreated = created ?? DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        for (var i = 0; i < published; i++)
+        {
+            var fileId = Guid.NewGuid();
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, FileName = "d.json", StoredFileName = "d.json",
+                ContentType = "application/json", AppUserId = userId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.FieldSessionUploads.Add(new FieldSessionUpload
+            {
+                Id = Guid.NewGuid(), SubmittedByAppUserId = userId, DeviceSessionId = Guid.NewGuid(),
+                DocumentUploadFileId = fileId, DeviceModel = "iPhone17,2", PlaceId = id,
+                StartedAt = DateTime.UtcNow.AddHours(-2), EndedAt = DateTime.UtcNow.AddHours(-1),
+                PublishedAtUtc = DateTime.UtcNow,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+        }
+    }
+
+    private static async Task<IReadOnlyList<Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.DuplicatePlaceGroup>>
+        FindAsync(IDbContextFactory<BenDataContext> factory)
+    {
+        var response = await Controller(factory, Guid.NewGuid()).GetDuplicates(default);
+        return Assert.IsType<List<Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.DuplicatePlaceGroup>>(
+            Assert.IsType<OkObjectResult>(response.Result).Value);
+    }
+
+    [Fact]
+    public async Task Places_far_apart_are_not_offered_as_duplicates()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Adams and Nashville: the same name, forty miles apart, and genuinely two places.
+            SeedPlace(db, userId, Guid.NewGuid(), "Bell Witch Cave", 36.5806m, -87.0644m);
+            SeedPlace(db, userId, Guid.NewGuid(), "Bell Witch Cave", 36.1627m, -86.7816m);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty(await FindAsync(factory));
+    }
+
+    [Fact]
+    public async Task Near_neighbours_are_grouped_and_the_busiest_record_is_offered_first()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+        var quiet = Guid.NewGuid();
+        var busy = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // The quiet one is created first, so ordering by age would put it first: what puts
+            // the busy record at the top is the published work, which is the whole point.
+            SeedPlace(db, userId, quiet, "Bell Witch Cave, Adams", 36.5806m, -87.0644m,
+                published: 0, created: DateTime.UtcNow.AddDays(-10));
+            SeedPlace(db, userId, busy, "Bell Witch Cave", 36.5807m, -87.0645m,
+                published: 3, created: DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+
+        var group = Assert.Single(await FindAsync(factory));
+        Assert.Equal(2, group.Places.Count);
+        Assert.Equal(busy, group.Places[0].Id);
+        Assert.Equal(3, group.Places[0].PublishedSessions);
+        Assert.Equal(quiet, group.Places[1].Id);
+    }
+
+    [Fact]
+    public async Task A_chain_of_near_neighbours_becomes_one_group()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // A is near B and B is near C, but A and C are not within the radius of each other.
+            // Three records of one landmark is still one decision, not two.
+            SeedPlace(db, userId, Guid.NewGuid(), "A", 36.5800m, -87.0644m);
+            SeedPlace(db, userId, Guid.NewGuid(), "B", 36.5810m, -87.0644m);
+            SeedPlace(db, userId, Guid.NewGuid(), "C", 36.5820m, -87.0644m);
+            await db.SaveChangesAsync();
+        }
+
+        var group = Assert.Single(await FindAsync(factory));
+        Assert.Equal(3, group.Places.Count);
+    }
+
+    [Fact]
+    public async Task Places_without_coordinates_are_left_alone()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Nothing to measure. Offering them would be guessing, and the merge is irreversible.
+            foreach (var name in new[] { "Bell Witch Cave", "Bell Witch Cave" })
+                db.Places.Add(new Place
+                {
+                    Id = Guid.NewGuid(), Name = name, City = "Adams", State = "TN",
+                    Kind = PlaceKind.PublicLocation, DateCreated = DateTime.UtcNow,
+                    CreatedByAppUserId = userId,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty(await FindAsync(factory));
+    }
 }

@@ -1347,3 +1347,26 @@ public sealed record FieldSessionFileSummary(
 /// </remarks>
 public sealed record FieldSessionDetailRecord(
     FieldSessionSummaryRecord Session, string Document);
+
+// ── Place duplicates and merging (SuperAdmin) ────────────────────────────────
+// Mirrors of AdminPlaceMergeController's records — this library cannot reference the WebApi
+// project, so the shapes are restated here and married by property name.
+
+/// <summary>Places close enough to each other to be one place typed twice.</summary>
+public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places);
+
+/// <param name="PublishedSessions">The count that decides which record should survive: an archive
+/// people can already read is the one with something to lose.</param>
+public sealed record DuplicatePlaceRow(
+    Guid Id, string? Name, string? StreetAddress1, string? City, string? State,
+    Ben.Data.Common.Enums.PlaceKind Kind, DateTime DateCreated,
+    int Investigations, int Cases, int Events, int Sessions, int PublishedSessions, int Rooms)
+{
+    /// <summary>Everything a merge would move off this record.</summary>
+    public int TotalAttached => Investigations + Cases + Events + Sessions + Rooms;
+}
+
+/// <summary>What a merge moved, so the screen can say so rather than just going quiet.</summary>
+public sealed record PlaceMergeResult(
+    Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
+    int FieldSessions, int Rooms);
