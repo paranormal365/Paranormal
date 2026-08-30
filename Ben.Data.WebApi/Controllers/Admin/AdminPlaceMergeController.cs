@@ -1,4 +1,6 @@
 using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
+using Ben.Data.WebApi.Services.Places;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -51,6 +53,107 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         foreach (var row in loaded) repoint(row);
         return loaded.Count;
     }
+
+    /// <summary>
+    /// Places that look like duplicates of each other, grouped.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A finder, not a list.</b> Showing every place and asking somebody to spot the
+    /// pairs is the job the computer should be doing — and the pairs are exactly what the
+    /// automatic matcher could not decide on its own, so they are few. Anything within the
+    /// matcher's own radius of another place is offered here, with what each record is carrying,
+    /// because "this one has three sessions and that one has none" is the whole decision.</para>
+    ///
+    /// <para><b>Proximity only, deliberately loose.</b> No name test: the pairs worth surfacing
+    /// are the ones the name rules already failed on. A human reading two rows decides in a
+    /// second what no string comparison was going to get right.</para>
+    /// </remarks>
+    [HttpGet("duplicates")]
+    public async Task<ActionResult<IReadOnlyList<DuplicatePlaceGroup>>> GetDuplicates(
+        CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Projected straight into the row the caller gets, with the coordinates alongside.
+        // An anonymous type read back through `dynamic` was the first shape of this, and it threw
+        // at runtime on every group: a `decimal?` boxes as a plain `decimal`, so `.Value` binds
+        // to nothing. Typed all the way through, the compiler has the argument instead.
+        var places = await db.Places.AsNoTracking()
+            .Where(p => p.Latitude != null && p.Longitude != null)
+            .Select(p => new Candidate(
+                (double)p.Latitude!.Value, (double)p.Longitude!.Value,
+                new DuplicatePlaceRow(
+                    p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.Kind, p.DateCreated,
+                    db.Investigations.Count(x => x.PlaceId == p.Id),
+                    db.Cases.Count(x => x.PlaceId == p.Id),
+                    db.OrgCalendarEvents.Count(x => x.PlaceId == p.Id),
+                    db.FieldSessionUploads.Count(x => x.PlaceId == p.Id),
+                    db.FieldSessionUploads.Count(x => x.PlaceId == p.Id && x.PublishedAtUtc != null),
+                    db.PlaceRooms.Count(x => x.PlaceId == p.Id))))
+            .ToListAsync(ct);
+
+        // Single-link clustering: A near B and B near C puts all three in one group, which is
+        // what a row of near-identical records actually looks like once somebody has typed the
+        // same landmark three times.
+        var remaining = places.ToList();
+        var groups = new List<DuplicatePlaceGroup>();
+
+        while (remaining.Count > 0)
+        {
+            var seed = remaining[0];
+            remaining.RemoveAt(0);
+            var cluster = new List<Candidate> { seed };
+            var frontier = new Queue<Candidate>();
+            frontier.Enqueue(seed);
+
+            while (frontier.Count > 0)
+            {
+                var current = frontier.Dequeue();
+                for (var i = remaining.Count - 1; i >= 0; i--)
+                {
+                    var other = remaining[i];
+                    if (PlaceMatcher.DistanceMiles(
+                            current.Latitude, current.Longitude,
+                            other.Latitude, other.Longitude)
+                        >= PlaceMatcher.MatchRadiusMiles) continue;
+
+                    cluster.Add(other);
+                    frontier.Enqueue(other);
+                    remaining.RemoveAt(i);
+                }
+            }
+
+            if (cluster.Count < 2) continue;   // a place alone is not a duplicate of anything
+
+            groups.Add(new DuplicatePlaceGroup(
+                [.. cluster.Select(c => c.Row)
+                    .OrderByDescending(r => r.PublishedSessions)
+                    .ThenByDescending(r => r.Investigations + r.Cases + r.Sessions)
+                    .ThenBy(r => r.DateCreated)]));
+        }
+
+        // Busiest clusters first: the duplicate that is actually splitting an archive matters
+        // more than two empty records nobody has reached.
+        return Ok(groups
+            .OrderByDescending(g => g.Places.Sum(p => p.PublishedSessions))
+            .ThenByDescending(g => g.Places.Count)
+            .ToList());
+    }
+
+    /// <summary>A place with its coordinates kept out to one side, for the distance pass only.</summary>
+    private sealed record Candidate(double Latitude, double Longitude, DuplicatePlaceRow Row);
+
+    /// <summary>Places close enough to each other to be one place typed twice.</summary>
+    /// <remarks>Ordered so the record carrying the most published work comes first — it is
+    /// almost always the one that should survive, and the screen defaults to it.</remarks>
+    public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places);
+
+    /// <param name="PublishedSessions">The count that decides which record should survive: an
+    /// archive people can already read is the one with something to lose.</param>
+    public sealed record DuplicatePlaceRow(
+        Guid Id, string? Name, string? StreetAddress1, string? City, string? State,
+        PlaceKind Kind, DateTime DateCreated,
+        int Investigations, int Cases, int Events, int Sessions, int PublishedSessions, int Rooms);
 
     /// <param name="IntoPlaceId">The record that survives and inherits everything.</param>
     public sealed record MergeRequest(Guid IntoPlaceId);

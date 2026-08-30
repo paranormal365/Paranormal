@@ -250,6 +250,7 @@ public class SiteWideAuditTests : BenTestBase
             ("/admin/video-assets", null),
             ("/admin/org-ads", null),
             ("/admin/merge-groups", "Merge Groups"),
+            ("/admin/place-duplicates", "Duplicate places"),
             ("/admin/subscription-tiers", null),
             ("/admin/coupons", null),
             ("/admin/org-subscriptions", null),

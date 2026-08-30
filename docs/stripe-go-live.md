@@ -16,6 +16,14 @@ in the browser. The rule for the other two is the `Smtp__Password` rule: **pool 
 never a deployed file, never source control, never chat.** The double underscore is how .NET maps
 an environment variable onto the nested key — `Stripe__SecretKey` becomes `Stripe:SecretKey`.
 
+## The two keys are easy to swap, and the script now refuses it
+
+`sk_live_…` and `whsec_…` are both opaque strings on an app pool, so putting one in the other's
+slot fails **silently, at the worst moment**. It happened once here: a `pk_live_` went into
+`StripeWebhookSecret`, which would have made every live webhook delivery answer 400 while payments
+appeared to work. `deploy-ishaunted.ps1` now checks the prefixes and refuses to deploy with a
+sentence naming which key belongs where — and warns if a `sk_test_` key reaches production.
+
 ## Path A — the deploy script does it (use this one)
 
 `deploy-ishaunted.ps1` now carries both keys the same way it carries the SMTP password:

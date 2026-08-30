@@ -210,7 +210,10 @@
 
         // Moderators and SuperAdmins. The server refuses either way — this only decides whether
         // somebody is shown a page they cannot use.
-        if (!UserState.IsModerator) { NavManager.NavigateTo("/"); return; }
+        // OR SuperAdmin, matching the sentence above: the two roles are granted separately,
+        // and a SuperAdmin without the moderator flag was being sent home from a queue the
+        // server would have let them work.
+        if (!UserState.IsModerator && !UserState.IsSuperAdmin) { NavManager.NavigateTo("/"); return; }
 
         await LoadAsync();
     }

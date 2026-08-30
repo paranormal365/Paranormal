@@ -1,0 +1,205 @@
+@page "/admin/place-duplicates"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Folding two records of one place into one.
+
+    A finder, not a list: showing every place and asking somebody to spot the pairs is the job the
+    computer should be doing, and the pairs left over are exactly the ones the automatic matcher
+    could not settle on its own. There are never many.
+
+    The counts are the decision. "This one has three published sessions and that one has none" is
+    the whole judgement, so each row carries what it is holding and the busiest record is offered
+    as the survivor by default.
+
+    Nothing here is reversible — no row records which place it used to point at — so the button
+    says so, and the confirmation names both records rather than asking "are you sure?".
+*@
+
+<PageTitle>Duplicate places — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <h3 class="mb-1">Duplicate places</h3>
+    <p class="text-secondary small mb-3">
+        Places sitting within a tenth of a mile of each other — close enough to be one location
+        typed twice. Merging moves everything onto the record you keep and deletes the other.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="alert @_messageCss d-flex justify-content-between align-items-center">
+            <span>@_message</span>
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <BenListState TItem="DuplicatePlaceGroup" Result="@_groups" Loading="@_loading"
+                  LoadingText="Looking for duplicates…"
+                  EmptyText="No duplicates — every place is on its own."
+                  OnRetry="@LoadAsync">
+
+        @foreach (var group in _groups.Items)
+        {
+            var survivor = _survivors.TryGetValue(GroupKey(group), out var chosen)
+                ? chosen
+                : group.Places[0].Id;
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">
+                        @(group.Places[0].Name ?? "Unnamed place")
+                        <span class="text-secondary fw-normal">— @group.Places.Count records</span>
+                    </h6>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-2">
+                            <thead><tr>
+                                <th style="width:5rem;">Keep</th><th>Name</th><th>Address</th>
+                                <th>Kind</th><th class="text-end">Published</th>
+                                <th class="text-end">Attached</th><th>Created</th>
+                            </tr></thead>
+                            <tbody>
+                            @foreach (var place in group.Places)
+                            {
+                                <tr class="@(place.Id == survivor ? "table-active" : "")">
+                                    <td>
+                                        <input type="radio" class="form-check-input"
+                                               name="@($"survivor-{GroupKey(group)}")"
+                                               checked="@(place.Id == survivor)"
+                                               @onchange="() => _survivors[GroupKey(group)] = place.Id" />
+                                    </td>
+                                    <td>
+                                        <a href="@($"/places/{place.Id}")" target="_blank">@(place.Name ?? "—")</a>
+                                    </td>
+                                    <td class="small text-secondary">
+                                        @(string.Join(", ", new[] { place.StreetAddress1, place.City, place.State }
+                                            .Where(x => !string.IsNullOrWhiteSpace(x))))
+                                    </td>
+                                    <td>
+                                        @* A private residence in a duplicate group is worth seeing:
+                                           merging a home into a public location would make its
+                                           work archivable, which the archive refuses on purpose. *@
+                                        <span class="badge @(place.Kind == PlaceKind.PublicLocation ? "bg-info text-dark" : "bg-secondary")">
+                                            @(place.Kind == PlaceKind.PublicLocation ? "Public" : "Residence")
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        @if (place.PublishedSessions > 0)
+                                        {
+                                            <span class="badge bg-success">@place.PublishedSessions</span>
+                                        }
+                                        else { <span class="text-secondary">0</span> }
+                                    </td>
+                                    <td class="text-end">@place.TotalAttached</td>
+                                    <td class="small text-secondary text-nowrap">@place.DateCreated.ToLocalTime().ToDisplayDate()</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @{
+                        var losers = group.Places.Where(p => p.Id != survivor).ToList();
+                        var kinds = group.Places.Select(p => p.Kind).Distinct().Count();
+                    }
+
+                    @if (kinds > 1)
+                    {
+                        @* Said before the button, not after the merge. *@
+                        <div class="alert alert-warning py-2 small mb-2">
+                            These records are not all the same kind. Merging a private residence
+                            into a public location would let its work be archived publicly — check
+                            that is what you mean.
+                        </div>
+                    }
+
+                    <button type="button" class="btn btn-danger btn-sm"
+                            disabled="@(_busy is not null)"
+                            @onclick="() => MergeAsync(group, survivor)">
+                        @if (_busy == GroupKey(group))
+                        {
+                            <span>Merging…</span>
+                        }
+                        else
+                        {
+                            <span>
+                                Merge @losers.Count other@(losers.Count == 1 ? "" : "s") into this one
+                            </span>
+                        }
+                    </button>
+                    <span class="text-secondary small ms-2">Cannot be undone.</span>
+                </div>
+            </div>
+        }
+    </BenListState>
+</div>
+
+@code {
+    private LoadResult<DuplicatePlaceGroup> _groups;
+    private bool _loading = true;
+    private string? _busy;
+    private string? _message;
+    private string _messageCss = "alert-success";
+
+    /// <summary>Stable per group across re-renders — the first place's id, which never moves
+    /// because the server orders a group deterministically.</summary>
+    private readonly Dictionary<string, Guid> _survivors = [];
+
+    private static string GroupKey(DuplicatePlaceGroup group) => group.Places[0].Id.ToString();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _groups = await AdminClient.GetDuplicatePlacesAsync();
+        _loading = false;
+    }
+
+    private async Task MergeAsync(DuplicatePlaceGroup group, Guid survivor)
+    {
+        _busy = GroupKey(group);
+        _message = null;
+        try
+        {
+            var moved = 0;
+            foreach (var loser in group.Places.Where(p => p.Id != survivor))
+            {
+                var (result, error) = await AdminClient.MergePlaceAsync(loser.Id, survivor);
+                if (result is null)
+                {
+                    // Stops at the first refusal rather than carrying on: a partly-merged group
+                    // is worse than an unmerged one, and the operator should see why.
+                    _messageCss = "alert-danger";
+                    _message = error ?? "That merge could not be completed.";
+                    return;
+                }
+                moved += result.Investigations + result.Cases + result.CalendarEvents
+                       + result.FieldSessions + result.Rooms;
+            }
+
+            _messageCss = "alert-success";
+            _message = $"Merged. {moved} record{(moved == 1 ? "" : "s")} moved onto the place you kept.";
+            _survivors.Remove(GroupKey(group));
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+}

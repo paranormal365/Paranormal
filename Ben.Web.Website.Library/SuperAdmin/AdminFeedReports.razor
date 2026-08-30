@@ -182,7 +182,10 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         // Item 186 F5: moderators too, matching the endpoint's policy. A page that turned away
         // somebody the API would have served is a menu item leading nowhere.
-        if (!UserState.IsModerator || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        // SuperAdmin counts too — the roles are granted separately. Impersonation still does
+        // not: moderating as somebody else would attribute a decision to them.
+        if ((!UserState.IsModerator && !UserState.IsSuperAdmin) || UserState.IsImpersonating)
+        { NavManager.NavigateTo("/"); return; }
 
         await LoadAsync();
     }
