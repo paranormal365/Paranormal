@@ -28,6 +28,7 @@ final class AppDependencies {
     let imageLoader: AuthenticatedImageLoader
     /// Getting an account and looking after it (Slice 8).
     let accountActions: AccountActions
+    let archiveActions: ArchiveActions
 
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
@@ -56,6 +57,7 @@ final class AppDependencies {
         self.notifications = NotificationsStore(api: api)
         self.imageLoader = AuthenticatedImageLoader(api: api)
         self.accountActions = AccountActions(api: api)
+        self.archiveActions = ArchiveActions(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
 // The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
         // want it — then handed to the store as a value it can hold. A simulator has no

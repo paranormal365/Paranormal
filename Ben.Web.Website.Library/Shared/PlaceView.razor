@@ -125,6 +125,62 @@
             }
         }
 
+        @* ── The field archive ────────────────────────────────────────────── *@
+        @* The part of this page no other tool has. One person's readings at a location are an
+           anecdote; the same location recorded by eleven people over two years is either a
+           persistent artifact or a demonstrated absence of one. Shown to visitor and member
+           alike from the anonymous endpoint, because published is published. *@
+        @if (_sessions is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Field archive</h6>
+            <p class="text-secondary small mb-2">
+                <strong>@_sessions.Count</strong>
+                @(_sessions.Count == 1 ? "session" : "sessions")
+                by <strong>@_sessions.Select(x => x.ContributorAppUserId).Distinct().Count()</strong>
+                @(_sessions.Select(x => x.ContributorAppUserId).Distinct().Count() == 1 ? "person" : "people"),
+                <strong>@_sessions.Sum(x => x.MarkerCount)</strong> flagged
+                @(_sessions.Sum(x => x.MarkerCount) == 1 ? "moment" : "moments") between them.
+                Readings are what people recorded; what they mean is for you to judge.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr>
+                        <th>When</th><th>Who</th><th>Where they stood</th>
+                        <th class="text-end">Readings</th><th class="text-end">Flagged</th><th>Device</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var fs in _sessions)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@fs.StartedAt.ToLocalTime().ToDisplayDate()</td>
+                                <td><UserNameLink AppUserId="@fs.ContributorAppUserId" DisplayName="@fs.ContributorName" /></td>
+                                <td>@(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "—" : fs.LocationLabel)</td>
+                                <td class="text-end">@fs.ReadingCount.ToString("N0")</td>
+                                @* The single most comparable number across visits — "eleven of
+                                   twelve people flagged something on those stairs". *@
+                                <td class="text-end">
+                                    @if (fs.MarkerCount > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark">@fs.MarkerCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">0</span>
+                                    }
+                                </td>
+                                <td class="text-secondary small">@fs.DeviceModel</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-secondary small fst-italic mt-2 mb-0">
+                Magnetic field readings only — a phone measures the DC field, not the AC fields a
+                K-II style meter responds to, and different phones differ. Compare visits with that
+                in mind.
+            </p>
+        }
+
         @* ── Visitor view ─────────────────────────────────────────────────── *@
         @if (_publicRows is not null)
         {
@@ -173,6 +229,8 @@
 
 @code {
     [Parameter] public Guid PlaceId { get; set; }
+
+    private List<Ben.Web.Services.PublicPlaceSessionRow>? _sessions;
 
     private PlaceRecord? _place;
     private PlaceSummary? _summary;
@@ -225,6 +283,7 @@
         // For the rooms link. A failure here costs a link, not the page, so it is not reported —
         // the rest of this view is about the place itself and stands without it.
         _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+        await LoadArchiveAsync();
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }
 
@@ -236,8 +295,20 @@
         _place = response.Place;
         _publicRows = response.Investigations.ToList();
         _summary = response.Summary;
+        _sessions = response.Sessions?.ToList();
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
+
+    /// <summary>
+    /// The archive, for a signed-in reader.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the SAME anonymous endpoint the visitor view uses. Published is published, and
+    /// a second query with its own idea of who may see what is how the rule that holds in one
+    /// place stops holding in the other. A failure costs the archive, not the page.
+    /// </remarks>
+    private async Task LoadArchiveAsync()
+        => _sessions = (await AdminClient.GetPublicPlaceAsync(PlaceId))?.Sessions?.ToList();
 
     /// <summary>
     /// One pin per visible investigation, all at the place's own coordinates.
