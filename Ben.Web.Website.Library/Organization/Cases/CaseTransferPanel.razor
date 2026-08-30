@@ -13,9 +13,21 @@
         <span class="fw-semibold">Case Transfers</span>
         @if (_canPropose)
         {
-            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenPropose"><BenIcon Name="rotate-ccw" Class="me-1" />Propose Transfer</button>
+            @* Item 193: the plan is knowable before the dialog opens. This used to let a
+               free-tier group pick a destination, write a reason, submit, and only then collect
+               the sending gate's 400 — the whole form filled in to learn one thing. *@
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenPropose"
+                    disabled="@(!_planIncludesTransfers)"><BenIcon Name="rotate-ccw" Class="me-1" />Propose Transfer</button>
         }
     </div>
+
+    @if (_canPropose && !_planIncludesTransfers)
+    {
+        <div class="alert alert-warning py-2 small" data-testid="transfers-need-plan">
+            Your group's plan does not include case transfers.
+            <a href="/pricing">See what each plan includes.</a>
+        </div>
+    }
 
     @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
 
@@ -64,9 +76,20 @@
                             @* Accept/Reject for pending incoming transfers *@
                             @if (transfer.Status == CaseTransferStatus.Pending && transfer.ToOrganizationId == OrgId)
                             {
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-success btn-sm" @onclick="@(() => OpenRespond(transfer, true))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />Accept</button>
-                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenRespond(transfer, false))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Reject</button>
+                                @* Item 193 at the receiving door. Accept is gated on the same two
+                                   things the server re-checks at the moment the case moves; Reject
+                                   never is, because declining work must not require a plan. *@
+                                <div class="d-flex flex-column align-items-end gap-1">
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-success btn-sm" @onclick="@(() => OpenRespond(transfer, true))" disabled="@(_isBusy || _acceptRefusal is not null)"><BenIcon Name="check" Class="me-1" />Accept</button>
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenRespond(transfer, false))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Reject</button>
+                                    </div>
+                                    @if (_acceptRefusal is { } refusal)
+                                    {
+                                        <div class="form-text text-warning text-end mb-0" data-testid="accept-needs-plan">
+                                            @refusal <a href="/pricing">See plans.</a>
+                                        </div>
+                                    }
                                 </div>
                             }
                             @* Cancel button for outgoing pending transfers *@
@@ -141,12 +164,23 @@
     [Parameter] public Guid OrgId  { get; set; }
     [Parameter] public Guid CaseId { get; set; }
 
+    /// <summary>Whether this case is a private engagement — accepting one needs the private lane
+    /// on top of transfers, which is the second thing the server re-checks on the way in.</summary>
+    [Parameter] public bool IsPrivateEngagement { get; set; }
+
     private List<CaseTransferLogRecord>? _transfers;
     private LoadResult<CaseTransferLogRecord> _transfersResult;
     private List<OrgOption> _otherOrgs = [];
     private string? _error;
     private string? _dialogError;
     private bool _isBusy;
+
+    // Item 193. The rule itself lives in CaseTransferPlanGate so it can be tested — a Razor
+    // expression cannot be. Null permissions mean "not known", and the gate fails open on that.
+    private MyOrgPermissionsItem? _perms;
+
+    private bool _planIncludesTransfers => CaseTransferPlanGate.MayPropose(_perms);
+    private string? _acceptRefusal => CaseTransferPlanGate.AcceptRefusal(_perms, IsPrivateEngagement);
 
     // Propose dialog
     private bool _showProposeDialog;
@@ -172,6 +206,12 @@
         {
             _transfersResult = await AdminClient.GetCaseTransfersAsync(OrgId, CaseId);
             _transfers       = _transfersResult.Items.ToList();
+
+            // What the PLAN allows, so the buttons can say it rather than the server saying it
+            // after the click. Separate try: a permissions failure must not blank the history,
+            // which is somebody's record of where their case went.
+            try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+            catch { _perms = null; }   // not known — the gate leaves the buttons working
             var allOrgs = (await AdminClient.GetOrganizationsAsync()).Items;
             _otherOrgs = allOrgs
                 .Where(o => o.Id != OrgId)
