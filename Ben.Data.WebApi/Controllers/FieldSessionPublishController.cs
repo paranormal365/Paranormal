@@ -70,6 +70,80 @@ public sealed class FieldSessionPublishController : BenControllerBase
         string Name, string? StreetAddress1, string? City, string? State, string? ZipCode,
         decimal? Latitude, decimal? Longitude);
 
+    /// <summary>
+    /// Public locations near a point, so somebody publishing is OFFERED the archive that already
+    /// exists there instead of starting a second one beside it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This endpoint is the duplicate-prevention.</b> Matching on submitted text catches
+    /// the easy cases and missed a real one on the feature's first three-person run — two people
+    /// described one cave differently and got two pages. A person shown "Bell Witch Cave · 3
+    /// sessions · 300 ft away" picks it; no string comparison has to be clever.</para>
+    ///
+    /// <para><b>Offered wider than merged.</b> A mile here against the matcher's tenth: showing
+    /// somebody a place they then decline costs a glance, while auto-merging at a mile would pool
+    /// half a town. Offering is allowed to be generous precisely because a person decides.</para>
+    ///
+    /// <para>Session counts are included because they are the reason to pick one — a place with
+    /// an archive is a place worth adding to.</para>
+    /// </remarks>
+    [HttpGet("/api/places/archive-candidates")]
+    public async Task<ActionResult<IReadOnlyList<ArchivePlaceCandidate>>> Candidates(
+        [FromQuery] decimal? latitude, [FromQuery] decimal? longitude,
+        [FromQuery] string? name, CancellationToken ct)
+    {
+        if (GetCurrentUserId() == Guid.Empty) return Unauthorized();
+
+        // Without coordinates there is nothing to be near. An empty list rather than a refusal:
+        // a session recorded with location declined is a normal session, and its owner should
+        // meet "name where you were" rather than an error.
+        if (latitude is not { } lat || longitude is not { } lon)
+            return Ok(Array.Empty<ArchivePlaceCandidate>());
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // A coarse degree box first so the database does the volume, then the real distance in
+        // memory — a mile is ~0.0145 degrees of latitude, and this box is deliberately generous.
+        const decimal box = 0.03m;
+        var nearby = await db.Places.AsNoTracking()
+            .Where(p => p.Kind == PlaceKind.PublicLocation
+                     && p.Latitude != null && p.Longitude != null
+                     && p.Latitude > lat - box && p.Latitude < lat + box
+                     && p.Longitude > lon - box && p.Longitude < lon + box)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.City, p.State, p.Latitude, p.Longitude,
+                Sessions = db.FieldSessionUploads
+                    .Count(s => s.PlaceId == p.Id && s.PublishedAtUtc != null),
+            })
+            .ToListAsync(ct);
+
+        var candidates = nearby
+            .Select(p => new
+            {
+                p.Id, p.Name, p.City, p.State, p.Sessions,
+                Miles = PlaceMatcher.DistanceMiles(
+                    (double)p.Latitude!.Value, (double)p.Longitude!.Value, (double)lat, (double)lon),
+            })
+            .Where(p => p.Miles <= CandidateRadiusMiles)
+            .OrderBy(p => p.Miles)
+            .Take(10)
+            .Select(p => new ArchivePlaceCandidate(
+                p.Id, p.Name, p.City, p.State, Math.Round(p.Miles, 2), p.Sessions))
+            .ToList();
+
+        return Ok(candidates);
+    }
+
+    /// <summary>How far out the picker looks. Ten times the radius at which two records merge.</summary>
+    public const double CandidateRadiusMiles = 1.0;
+
+    /// <param name="Miles">Distance from where the session was recorded, for ordering and for
+    /// the person to judge — "0.02 miles" is the same cave, "0.8 miles" is probably not.</param>
+    /// <param name="PublishedSessions">How much archive is already here. The reason to pick it.</param>
+    public sealed record ArchivePlaceCandidate(
+        Guid Id, string? Name, string? City, string? State, double Miles, int PublishedSessions);
+
     /// <summary>Publishes this session to a place's archive.</summary>
     [HttpPost]
     public async Task<IActionResult> Publish(

@@ -362,3 +362,131 @@ public sealed class ArchivePlaceMatchingTests
             noCoords, "Bell Witch Cave", 36.5806m, -87.0644m));
     }
 }
+
+/// <summary>
+/// The picker: offering the archive that already exists rather than letting somebody start a
+/// second one beside it.
+/// </summary>
+/// <remarks>
+/// String matching catches the easy duplicates and missed a real one on this feature's first
+/// three-person run. A person shown "Bell Witch Cave · 3 sessions · 300 ft away" needs no
+/// cleverness at all, which is why the picker — not the matcher — is the real answer.
+/// </remarks>
+public sealed class ArchiveCandidateTests
+{
+    private static IDbContextFactory<BenDataContext> Db()
+        => new PooledDbContextFactory<BenDataContext>(
+            new DbContextOptionsBuilder<BenDataContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+    private static FieldSessionPublishController Controller(
+        IDbContextFactory<BenDataContext> db, Guid userId)
+        => new(db, NullLogger<FieldSessionPublishController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+    private static async Task<Guid> SeedAsync(
+        IDbContextFactory<BenDataContext> factory, string name, PlaceKind kind,
+        decimal lat, decimal lon, int publishedSessions = 0)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var userId = Guid.NewGuid();
+        db.AppUsers.Add(new AppUser
+        {
+            Id = userId, UserName = $"{userId}@t.com", NormalizedUserName = $"{userId}@T.COM".ToUpperInvariant(),
+            Email = $"{userId}@t.com", DisplayName = "Contributor", DateCreated = DateTime.UtcNow,
+        });
+        var placeId = Guid.NewGuid();
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = name, City = "Adams", State = "TN", Kind = kind,
+            Latitude = lat, Longitude = lon, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        for (var i = 0; i < publishedSessions; i++)
+        {
+            var fileId = Guid.NewGuid();
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, FileName = "d.json", StoredFileName = $"{fileId}.json",
+                ContentType = "application/json", AppUserId = userId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.FieldSessionUploads.Add(new FieldSessionUpload
+            {
+                Id = Guid.NewGuid(), SubmittedByAppUserId = userId, DeviceSessionId = Guid.NewGuid(),
+                DocumentUploadFileId = fileId, DeviceModel = "iPhone", StartedAt = DateTime.UtcNow,
+                PlaceId = placeId, PublishedAtUtc = DateTime.UtcNow,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+        }
+        await db.SaveChangesAsync();
+        return placeId;
+    }
+
+    private static async Task<IReadOnlyList<FieldSessionPublishController.ArchivePlaceCandidate>> AskAsync(
+        IDbContextFactory<BenDataContext> factory, decimal? lat, decimal? lon)
+    {
+        var result = await Controller(factory, Guid.NewGuid()).Candidates(lat, lon, null, default);
+        return (IReadOnlyList<FieldSessionPublishController.ArchivePlaceCandidate>)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+    }
+
+    [Fact]
+    public async Task The_place_you_are_standing_in_is_offered_with_the_archive_it_already_has()
+    {
+        var factory = Db();
+        await SeedAsync(factory, "Bell Witch Cave", PlaceKind.PublicLocation, 36.5806m, -87.0644m,
+            publishedSessions: 3);
+
+        var candidate = Assert.Single(await AskAsync(factory, 36.5807m, -87.0645m));
+        Assert.Equal("Bell Witch Cave", candidate.Name);
+        Assert.Equal(3, candidate.PublishedSessions);   // the reason to pick it
+        Assert.True(candidate.Miles < 0.05);
+    }
+
+    [Fact]
+    public async Task Somebody_s_home_is_never_offered_however_close_it_is()
+    {
+        // The safety hinge again, one layer earlier: a private residence must not even appear as
+        // a suggestion, or the refusal at publish time reads as the app changing its mind.
+        var factory = Db();
+        await SeedAsync(factory, "A House", PlaceKind.PrivateResidence, 36.5806m, -87.0644m);
+
+        Assert.Empty(await AskAsync(factory, 36.5806m, -87.0644m));
+    }
+
+    [Fact]
+    public async Task Nearest_first_and_nothing_beyond_the_radius()
+    {
+        var factory = Db();
+        await SeedAsync(factory, "Right Here", PlaceKind.PublicLocation, 36.5806m, -87.0644m);
+        await SeedAsync(factory, "Half A Mile", PlaceKind.PublicLocation, 36.5878m, -87.0644m);
+        // ~5 miles north: inside the coarse database box, outside the real radius — which is
+        // exactly the case the in-memory distance pass exists to reject.
+        await SeedAsync(factory, "Next Town", PlaceKind.PublicLocation, 36.6530m, -87.0644m);
+
+        var candidates = await AskAsync(factory, 36.5806m, -87.0644m);
+        Assert.Equal(2, candidates.Count);
+        Assert.Equal("Right Here", candidates[0].Name);
+        Assert.Equal("Half A Mile", candidates[1].Name);
+    }
+
+    [Fact]
+    public async Task Without_coordinates_it_offers_nothing_rather_than_refusing()
+    {
+        // A session recorded with location declined is an ordinary session. Its owner should
+        // meet "name where you were", not an error.
+        var factory = Db();
+        await SeedAsync(factory, "Bell Witch Cave", PlaceKind.PublicLocation, 36.5806m, -87.0644m);
+
+        Assert.Empty(await AskAsync(factory, null, null));
+    }
+}

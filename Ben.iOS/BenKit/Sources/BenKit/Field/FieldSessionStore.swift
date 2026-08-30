@@ -210,6 +210,24 @@ public final class FieldSessionStore {
             log: ReadingLog(fileURL: files.readingLogURL(for: id)))
     }
 
+    /// Where a session happened, as best the recording knows.
+    ///
+    /// Readings, markers and captures are all location-stamped while a session runs, so the first
+    /// one carrying coordinates answers "where was this" without opening the reading log. Nil when
+    /// location was declined or unavailable — an ordinary session, whose owner is then asked to
+    /// name the place rather than being shown suggestions for somewhere they never were.
+    public func coordinates(for id: UUID) -> (latitude: Double, longitude: Double)? {
+        guard let context, let session = try? fetch(id, in: context) else { return nil }
+
+        for capture in session.captures.sorted(by: { $0.at < $1.at }) {
+            if let lat = capture.latitude, let lon = capture.longitude { return (lat, lon) }
+        }
+        for marker in session.markers.sorted(by: { $0.at < $1.at }) {
+            if let lat = marker.latitude, let lon = marker.longitude { return (lat, lon) }
+        }
+        return nil
+    }
+
     /// Everything captured in a session, for choosing what to hand over.
     public func captures(for id: UUID) -> [CaptureMark] {
         guard let context, let session = try? fetch(id, in: context) else { return [] }
