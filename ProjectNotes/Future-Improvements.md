@@ -9799,7 +9799,7 @@ Two things worth doing before any of it:
 ishaunted.com shows "File data is unavailable" for files uploaded on the Mac. Whatever storage
 plan is chosen should say plainly which machines share which file store.
 
-## 193. The private-engagement toggle is offered to groups whose plan refuses it (found 2026-08-26)
+## 193. The private-engagement toggle is offered to groups whose plan refuses it (CLOSED 2026-08-30 — toggle fixed 2026-08-26, the TierCapability sweep finished 2026-08-30)
 
 The "Private engagement" checkbox on the case editor renders unconditionally. A free-tier group can
 tick it, save, and get a 400 back from `PrivateCaseGate`. The help text beside it does say a plan is
@@ -9814,6 +9814,40 @@ step-2 work on `feature/role-grants-visible`.
 
 Worth checking the same pattern elsewhere while there: anything gated by `TierCapability` almost
 certainly renders the same way, since none of it could see the plan until now.
+
+### The sweep — done 2026-08-30
+
+All three `TierCapability` values checked for the same shape, a control that renders without
+knowing what the plan allows:
+
+| Capability | Surface | Verdict |
+|---|---|---|
+| `PrivateResidenceCases` | case editor toggle | fixed 2026-08-26 (this item's headline) |
+| `MediaMetadataStripping` | group settings | **already correct** — `MediaStrippingPolicy` returns `CanChoose`/`NeedsUpgrade` and `OrgSettingsManager` renders them (item 181 built it right) |
+| `CaseTransfers` | `CaseTransferPanel` | **was blind — fixed here** |
+
+`CaseTransferPanel` was the only one left, and it was blind at both doors. A free-tier group could
+open the propose dialog, pick a destination, write a reason and submit, and only then collect the
+sending gate's 400 — the whole form filled in to learn one thing. A group *receiving* a case could
+press Accept and be refused for the same reason, or, for a private case, because its plan lacks the
+private lane.
+
+Both answers were already on the wire: `my-permissions` returns every capability, so this needed no
+server change. The rule went into `Ben.Web.Services/CaseTransferPlanGate.cs` rather than a Razor
+expression, because a Razor expression cannot be tested and this one has three ways to get it
+backwards. Nine tests; four of them fail against the pre-fix behaviour, which is the check that
+they discriminate.
+
+**Reject is deliberately not gated.** The server says declining work never requires a plan, and a
+UI that disabled Reject would trap a group with an incoming case it can neither accept nor turn
+down.
+
+**Left undone, on purpose.** The propose dialog's destination picker still lists groups whose own
+plan cannot receive a transfer; picking one produces a clear server refusal naming that group's
+plan. Fixing it properly means widening `OrganizationListItemResponse` — a DTO used all over the
+site — and running a capability lookup per row on a general list endpoint. That is the same shape
+as item 194 (a client cannot tell which groups may take their case), and belongs with it rather
+than bolted onto a transfer dialog.
 
 ## 194. A client cannot tell which groups may take their case until after they pick one (found 2026-08-26)
 
