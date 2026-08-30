@@ -33,6 +33,24 @@ public sealed record StripeCheckoutSpec(
 /// session was opened under (created on first use).</summary>
 public sealed record StripeCheckoutHandle(string SessionUrl, string CustomerRef);
 
+/// <summary>One off-session renewal charge: whose saved card, how much, and the frozen facts.</summary>
+/// <param name="IdempotencyKey">Caps Stripe at ONE PaymentIntent per key however many times the
+/// scheduler passes — the job derives it from subscription, period and day, so a crash between
+/// charge and record cannot double-bill anybody.</param>
+public sealed record StripeRenewalCharge(
+    string CustomerRef,
+    string PaymentMethodRef,
+    decimal Total,
+    string Description,
+    IReadOnlyDictionary<string, string> Metadata,
+    string IdempotencyKey);
+
+/// <summary>What an off-session charge came back as, reduced to what the job acts on.</summary>
+/// <param name="Succeeded">True when the card was charged there and then. False is a decline or
+/// an authentication demand — either way the money did not move and the lapse machinery owns
+/// what happens next.</param>
+public sealed record StripeChargeOutcome(bool Succeeded, string PaymentIntentRef, string? FailureReason);
+
 /// <summary>A completed checkout, reduced to what fulfillment needs.</summary>
 public sealed record StripeCompletedCheckout(
     string SessionId,
@@ -56,6 +74,9 @@ public interface IStripeGateway
     /// <summary>Opens a hosted Checkout session for one period's payment, card saved for
     /// off-session renewal.</summary>
     Task<StripeCheckoutHandle> CreateCheckoutSessionAsync(StripeCheckoutSpec spec, CancellationToken ct);
+
+    /// <summary>Charges a saved card with nobody present — the renewal job's whole ask.</summary>
+    Task<StripeChargeOutcome> ChargeSavedCardAsync(StripeRenewalCharge charge, CancellationToken ct);
 
     /// <summary>
     /// Verifies a webhook delivery's signature and returns the completed checkout it announces,
@@ -150,6 +171,43 @@ public sealed class StripeGateway : IStripeGateway
         return new StripeCheckoutHandle(session.Url, customerId);
     }
 
+    public async Task<StripeChargeOutcome> ChargeSavedCardAsync(
+        StripeRenewalCharge charge, CancellationToken ct)
+    {
+        if (_client is null) throw new InvalidOperationException("Stripe is not configured.");
+
+        try
+        {
+            var intent = await new PaymentIntentService(_client).CreateAsync(
+                new PaymentIntentCreateOptions
+                {
+                    Amount = (long)(charge.Total * 100m),
+                    Currency = "usd",
+                    Customer = charge.CustomerRef,
+                    PaymentMethod = charge.PaymentMethodRef,
+                    // The pair that makes this a merchant-initiated charge: confirmed now, with
+                    // the person absent. A card demanding fresh authentication fails here rather
+                    // than waiting on a screen nobody is looking at.
+                    Confirm = true,
+                    OffSession = true,
+                    Description = charge.Description,
+                    Metadata = new Dictionary<string, string>(charge.Metadata),
+                },
+                new RequestOptions { IdempotencyKey = charge.IdempotencyKey },
+                ct);
+
+            return new StripeChargeOutcome(
+                intent.Status == "succeeded", intent.Id,
+                intent.Status == "succeeded" ? null : intent.Status);
+        }
+        catch (StripeException ex) when (ex.StripeError?.PaymentIntent is { } failed)
+        {
+            // A decline arrives as an exception that still carries the intent. The intent id is
+            // kept so the failure can be found in the dashboard by reference.
+            return new StripeChargeOutcome(false, failed.Id, ex.StripeError.Code ?? ex.Message);
+        }
+    }
+
     public StripeCompletedCheckout? ParseCompletedCheckout(string payload, string signatureHeader)
     {
         // Throws on a bad signature — deliberately not caught here. Verification failing is the
@@ -159,6 +217,19 @@ public sealed class StripeGateway : IStripeGateway
         // shipped a minor version bump would silently stop fulfilling real payments.
         var stripeEvent = EventUtility.ConstructEvent(
             payload, signatureHeader, _options.WebhookSecret, throwOnApiVersionMismatch: false);
+
+        // A renewal's payment intent succeeds with no checkout session anywhere — the charge WAS
+        // the whole interaction. Reduced to the same shape: the intent id serves as both session
+        // and payment reference, and fulfillment's idempotency-by-reference makes the overlap
+        // with checkout.session.completed (both fire for a checkout payment, in either order)
+        // harmless rather than double-billed.
+        if (stripeEvent.Type == "payment_intent.succeeded"
+            && stripeEvent.Data.Object is PaymentIntent renewal)
+        {
+            return new StripeCompletedCheckout(
+                renewal.Id, renewal.Id, renewal.CustomerId, renewal.PaymentMethodId,
+                renewal.Metadata ?? new Dictionary<string, string>());
+        }
 
         if (stripeEvent.Type != "checkout.session.completed") return null;
         if (stripeEvent.Data.Object is not Session session) return null;

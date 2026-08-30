@@ -195,6 +195,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.TierChangeNoticeJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.SubscriptionLapseJob>();
+// Charges saved cards as periods run out. Registered BEFORE the lapse job in source as a hint of
+// the intended order, though each pass runs every job regardless: renew first, lapse what
+// renewal could not save.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeRenewalJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();

@@ -107,6 +107,39 @@ public sealed class StripeWebhookSignatureTests
     }
 
     [Fact]
+    public void A_signed_renewal_payment_parses_to_the_same_shape_as_a_checkout()
+    {
+        // The renewal job's charge has no checkout session — payment_intent.succeeded IS its
+        // whole announcement, and it reduces to the same StripeCompletedCheckout so fulfillment
+        // has exactly one door.
+        var payload = """
+        {
+          "id": "evt_test_2",
+          "object": "event",
+          "api_version": "2026-01-01",
+          "type": "payment_intent.succeeded",
+          "data": {
+            "object": {
+              "id": "pi_renewal_1",
+              "object": "payment_intent",
+              "customer": "cus_test_signed",
+              "payment_method": "pm_test_signed",
+              "metadata": {"ih_org": "11111111-1111-1111-1111-111111111111"}
+            }
+          }
+        }
+        """;
+
+        var checkout = Gateway().ParseCompletedCheckout(payload, Sign(payload));
+
+        Assert.NotNull(checkout);
+        Assert.Equal("pi_renewal_1", checkout.SessionId);
+        Assert.Equal("pi_renewal_1", checkout.PaymentIntentRef);
+        Assert.Equal("pm_test_signed", checkout.PaymentMethodRef);
+        Assert.Equal("11111111-1111-1111-1111-111111111111", checkout.Metadata["ih_org"]);
+    }
+
+    [Fact]
     public void An_event_type_fulfillment_does_not_care_about_is_null_not_an_error()
     {
         var payload = CompletedSessionPayload().Replace(

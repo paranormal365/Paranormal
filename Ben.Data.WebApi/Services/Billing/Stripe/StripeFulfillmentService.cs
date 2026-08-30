@@ -40,7 +40,8 @@ public sealed class StripeFulfillmentService
         Guid OrganizationId, Guid TierId, BillingInterval Interval, int MemberCount,
         decimal Payable, decimal TaxRatePercent, decimal TaxAmount,
         Guid InitiatedByUserId, string? CouponCode,
-        decimal ListPrice, decimal Discount)
+        decimal ListPrice, decimal Discount,
+        DateTime? PeriodStartUtc = null)
     {
         public static class Keys
         {
@@ -55,6 +56,7 @@ public sealed class StripeFulfillmentService
             public const string Coupon       = "ih_coupon";
             public const string List         = "ih_list";
             public const string Discount     = "ih_discount";
+            public const string PeriodStart  = "ih_period_start";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -70,6 +72,7 @@ public sealed class StripeFulfillmentService
             [Keys.Coupon]       = CouponCode ?? string.Empty,
             [Keys.List]         = ListPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [Keys.Discount]     = Discount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [Keys.PeriodStart]  = PeriodStartUtc?.ToString("O") ?? string.Empty,
         };
 
         /// <summary>Null when the metadata is not ours or is torn — a session created by
@@ -95,10 +98,15 @@ public sealed class StripeFulfillmentService
             if (m.TryGetValue(Keys.Discount, out var d))
                 decimal.TryParse(d, System.Globalization.NumberStyles.Number, inv, out discount);
 
+            DateTime? periodStart = null;
+            if (m.TryGetValue(Keys.PeriodStart, out var psRaw) && !string.IsNullOrWhiteSpace(psRaw)
+                && DateTime.TryParse(psRaw, inv, System.Globalization.DateTimeStyles.RoundtripKind, out var ps))
+                periodStart = ps;
+
             return new CheckoutFacts(orgId, tierId, (BillingInterval)ivInt, members,
                 payable, taxRate, taxAmount, userId,
                 string.IsNullOrWhiteSpace(coupon) ? null : coupon,
-                list, discount);
+                list, discount, periodStart);
         }
     }
 
@@ -162,8 +170,11 @@ public sealed class StripeFulfillmentService
 
         // ── the period, via the one opener every provider shares ──
         sub.CancelAtPeriodEnd = false;
-        var periodStart = now;
-        var periodEnd   = now.AddMonths((int)facts.Interval);
+        // A first checkout starts NOW. A renewal charged before the old period ends starts where
+        // that period stops — the metadata says which this is, so a card charged a day early
+        // neither gifts a free day nor bills one twice.
+        var periodStart = facts.PeriodStartUtc ?? now;
+        var periodEnd   = periodStart.AddMonths((int)facts.Interval);
         var snapshot = PeriodOpener.Open(
             sub, tier, SubscriptionStatus.Active, facts.Interval,
             periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId);
@@ -260,9 +271,21 @@ public sealed class StripeFulfillmentService
             .FirstOrDefaultAsync(c => c.Code == normalised, ct);
         if (code is null) return;   // validated at checkout creation; a code deleted since is a no-op, not a lost payment
 
-        var alreadyRedeemed = await db.CouponRedemptions
-            .AnyAsync(r => r.CouponId == code.CouponId && r.OrganizationId == facts.OrganizationId, ct);
-        if (alreadyRedeemed) return;
+        var existing = await db.CouponRedemptions
+            .FirstOrDefaultAsync(r => r.CouponId == code.CouponId
+                                   && r.OrganizationId == facts.OrganizationId, ct);
+        if (existing is not null)
+        {
+            // A renewal under a multi-period coupon: the discount was honoured in the price the
+            // job computed, and the redemption's meter moves one period. Null means Forever and
+            // has no meter to move.
+            if (existing.PeriodsRemaining is > 0)
+            {
+                existing.PeriodsRemaining--;
+                existing.DateUpdated = now;
+            }
+            return;
+        }
 
         db.CouponRedemptions.Add(new CouponRedemption
         {
