@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
@@ -113,6 +113,26 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Which provider wrote <see cref="ProviderSubscriptionRef"/>, when one has.</summary>
         public string? ProviderName { get; set; }
+
+        /// <summary>
+        /// The provider's customer record for this group (Stripe: <c>cus_…</c>).
+        /// </summary>
+        /// <remarks>
+        /// One customer per organization, created at first checkout and reused forever — a group
+        /// that re-subscribes after lapsing keeps its payment history on the provider's side too.
+        /// </remarks>
+        public string? ProviderCustomerRef { get; set; }
+
+        /// <summary>
+        /// The saved payment method renewals charge (Stripe: <c>pm_…</c>).
+        /// </summary>
+        /// <remarks>
+        /// An opaque token, never card data — the card itself lives in the provider's vault. Set
+        /// from the payment method the group's first checkout used; replaced whenever a checkout
+        /// uses a different one, on the theory that the card a person typed most recently is the
+        /// card they mean.
+        /// </remarks>
+        public string? ProviderPaymentMethodRef { get; set; }
 
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }

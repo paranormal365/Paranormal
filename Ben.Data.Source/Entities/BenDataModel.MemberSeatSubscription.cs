@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
@@ -32,6 +32,19 @@ namespace Ben.Data.Source.Entities
 
         public DateTime? CurrentPeriodStart { get; set; }
         public DateTime? CurrentPeriodEnd { get; set; }
+
+        /// <summary>Which provider bills this seat, when one does. Null in the manual era.</summary>
+        public string? ProviderName { get; set; }
+
+        /// <summary>The provider's customer record for THIS MEMBER (Stripe: <c>cus_…</c>).</summary>
+        /// <remarks>
+        /// The member's own, never the group's: a seat is a bill addressed to one person, and
+        /// their card must never be charged under the group's customer or vice versa.
+        /// </remarks>
+        public string? ProviderCustomerRef { get; set; }
+
+        /// <summary>The saved payment method seat renewals charge (Stripe: <c>pm_…</c>).</summary>
+        public string? ProviderPaymentMethodRef { get; set; }
 
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
