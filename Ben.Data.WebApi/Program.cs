@@ -209,6 +209,14 @@ builder.Services.Configure<Ben.Data.WebApi.Services.MediaToolOptions>(
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IAvMetadataStripper,
                               Ben.Data.WebApi.Services.AvMetadataStripper>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
+// Stripe: the card-charging arm of the billing engine. Gateway is a singleton (a thin client
+// around config); fulfillment is scoped like every other database writer. With no SecretKey the
+// gateway reports itself unconfigured and the checkout endpoint says so in a sentence.
+builder.Services.Configure<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeOptions>(
+    builder.Configuration.GetSection("Stripe"));
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway,
+                              Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
