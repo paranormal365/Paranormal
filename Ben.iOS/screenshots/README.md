@@ -7,8 +7,8 @@ through the real moderation queue).
 | Folder | Device | Size |
 |---|---|---|
 | `iphone-6.5-dark` | iPhone 17 Pro Max, dark mode | 1242×2688 — captured at native 1320×2868, scaled to width and centre-cropped 10 px (the two sizes differ 0.4% in aspect) |
-| `ipad-13` | iPad Pro 13-inch, light | 2064×2752 — the required 13" slot |
-| `app-preview` | Field Kit demo video | 886×1920, 27.5 s, 30 fps, H.264 + silent AAC — Apple's portrait App Preview spec for this size class (previews do NOT use screenshot dimensions) |
+| `ipad-13-dark` | iPad Pro 13-inch, dark mode | 2064×2752 native — the required 13" slot |
+| `app-preview` | Field Kit demo videos, dark | iPhone 886×1920 and iPad 1200×1600, 28 s, 30 fps, H.264 + silent AAC — Apple's App Preview specs (previews do NOT use screenshot dimensions) |
 
 The video is `FieldKitDemoDriveUITests` acting while `simctl io recordVideo` films: the
 `-fieldKitFakeSensors` scripted night through the real engine — naming the room, starting the
