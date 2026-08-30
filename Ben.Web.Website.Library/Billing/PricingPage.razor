@@ -95,13 +95,22 @@
                             }
                             else if (price is not null)
                             {
-                                <div class="display-6 mb-1">@($"{price.Price:C0}")</div>
+                                @* C2, not C0: the bands are priced at .99 and rounding them up
+                                   for display showed $20 for a $19.99 plan — a difference the
+                                   person only meets at checkout, which is the one direction a
+                                   price is not allowed to move. *@
+                                <div class="display-6 mb-1">@($"{price.Price:C2}")</div>
                                 <div class="text-secondary small mb-3">
                                     per @CadenceNoun(_selectedInterval)
                                     @if (price.SavingPercentAgainstMonthly is { } save)
                                     {
                                         <span class="badge bg-success ms-1">save @save%</span>
                                     }
+                                    @* Sales tax is resolved from the GROUP's own address at
+                                       checkout (many states do not tax this at all), so no
+                                       single number can be shown here — but the total at
+                                       checkout must not be the first time tax is mentioned. *@
+                                    <div>plus sales tax where your state requires it</div>
                                 </div>
                             }
                             else
