@@ -6,8 +6,14 @@ through the real moderation queue).
 
 | Folder | Device | Size |
 |---|---|---|
-| `iphone-6.9` | iPhone 17 Pro Max | 1320×2868 — the required 6.9" slot |
-| `ipad-13` | iPad Pro 13-inch | 2064×2752 — the required 13" slot |
+| `iphone-6.5-dark` | iPhone 17 Pro Max, dark mode | 1242×2688 — captured at native 1320×2868, scaled to width and centre-cropped 10 px (the two sizes differ 0.4% in aspect) |
+| `ipad-13` | iPad Pro 13-inch, light | 2064×2752 — the required 13" slot |
+| `app-preview` | Field Kit demo video | 886×1920, 27.5 s, 30 fps, H.264 + silent AAC — Apple's portrait App Preview spec for this size class (previews do NOT use screenshot dimensions) |
+
+The video is `FieldKitDemoDriveUITests` acting while `simctl io recordVideo` films: the
+`-fieldKitFakeSensors` scripted night through the real engine — naming the room, starting the
+session, gauges and the readings log moving. Re-cut points and the encode line live in the
+session that made it; the raw capture is disposable.
 
 `01-home` (feed), `03-investigations`, `04-field-kit`, `05-events` are the signed-in owner
 account; `02-cases` is the client seed account, which is the one with a case to show.
