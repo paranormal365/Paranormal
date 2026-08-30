@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Publishes and deploys IsHaunted.com - website, WebApi and WASM editor - to the local IIS box,
     and stages the sidecar downloads.
@@ -332,6 +332,8 @@ $sqlConn = Get-JsonValue $secrets 'SqlConnectionString'
 if (-not $sqlConn) { $sqlConn = $SqlConnectionString }
 
 $smtpPassword = Get-JsonValue $secrets 'SmtpPassword'
+$stripeSecret  = Get-JsonValue $secrets 'StripeSecretKey'
+$stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
 if (-not $smtpPassword) {
     Write-Warn 'SmtpPassword is not in the secrets file. Email will fail, and because accounts require a confirmed address, anyone who registers will never be able to sign in.'
 }
@@ -736,6 +738,16 @@ if (($Apps -contains 'webapi') -or ($Apps -contains 'website')) {
 
     if (($Apps -contains 'webapi') -and $smtpPassword) {
         Set-PoolEnv $WebApiPool 'Smtp__Password' $smtpPassword
+    }
+
+    # Stripe's two secrets ride the same rail as the SMTP password: pool environment, never a
+    # deployed file. Both empty is a valid state - checkout answers with a sentence and the
+    # manual admin path keeps working - so absence warns rather than fails.
+    if ($Apps -contains 'webapi') {
+        if ($stripeSecret)  { Set-PoolEnv $WebApiPool 'Stripe__SecretKey' $stripeSecret }
+        else { Write-Warn 'StripeSecretKey is not in the secrets file. Online payment will report itself unavailable; manual subscription entry still works.' }
+        if ($stripeWebhook) { Set-PoolEnv $WebApiPool 'Stripe__WebhookSecret' $stripeWebhook }
+        elseif ($stripeSecret) { Write-Warn 'StripeSecretKey is set but StripeWebhookSecret is not. Checkouts and renewals still fulfill synchronously, but Stripe''s webhook deliveries will all be refused - register the endpoint in the dashboard and put its whsec here.' }
     }
 
     # On the root pool, not the API's: Ben.Web.Website is the confidential client that redeems the

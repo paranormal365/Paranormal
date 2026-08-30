@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Authorization;
@@ -91,13 +91,18 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
     [HttpGet("receipts/{entryId:guid}")]
     public async Task<IActionResult> GetReceipt(Guid organizationId, Guid entryId, CancellationToken ct)
     {
-        if (!await MayReadAsync(organizationId, ct)) return Forbid();
-
         await using var db = await _db.CreateDbContextAsync(ct);
         var e = await db.BillingLedgerEntries.AsNoTracking()
             .Include(x => x.Organization)
             .FirstOrDefaultAsync(x => x.Id == entryId && x.OrganizationId == organizationId, ct);
         if (e is null) return NotFound();
+
+        // Settings permission, OR being the person who paid: a member's seat payment lands on
+        // the group's ledger, and the one who handed over the card must be able to reprint
+        // their own receipt without holding the group's keys.
+        if (!await MayReadAsync(organizationId, ct)
+            && e.CreatedByAppUserId != GetCurrentUserId())
+            return Forbid();
         if (e.Kind != BillingLedgerKind.Payment || e.ReceiptNumber is null)
             return BadRequest("Only payments have receipts.");
 

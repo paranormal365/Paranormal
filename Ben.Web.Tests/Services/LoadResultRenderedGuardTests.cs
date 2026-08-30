@@ -55,7 +55,7 @@ public sealed class LoadResultRenderedGuardTests
         "GetInvestigationAttendeesAsync", "GetInvestigationFindingsAsync",
         "GetInvestigationRosterAsync", "GetInvestigationsAsync", "GetListAsync",
         "GetLookupTypesAsync", "GetMediaLibraryFilesAsync", "GetMembershipQuestionsAsync",
-        "GetMembershipRequestsAsync", "GetMembershipVotesAsync", "GetMyAddressesAsync",
+        "GetMembershipRequestsAsync", "GetMembershipVotesAsync", "GetMyAddressesAsync", "GetOrgBillingHistoryAsync",
         "GetMyAskedQuestionsAsync", "GetMyCaseMessagesAsync", "GetMyCaseReportsAsync",
         "GetMyCasesAsync", "GetMyClientRequestsAsync", "GetMyEmailsAsync", "GetMyEquipmentAsync",
         "GetMyEquipmentCheckoutsAsync", "GetMyEquipmentSharesAsync", "GetMyInvestigationsAsync",
