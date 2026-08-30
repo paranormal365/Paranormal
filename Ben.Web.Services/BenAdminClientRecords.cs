@@ -370,7 +370,9 @@ public sealed record PublicPlaceSessionRow(
     int MarkerCount,
     string DeviceModel,
     DateTime PublishedAtUtc,
-    Guid DocumentUploadFileId);
+    Guid DocumentUploadFileId,
+    /// <summary>Media a reviewer has cleared — zero until one has, by the fail-closed default.</summary>
+    int ApprovedMediaCount = 0);
 
 // ── Org-wide investigation records (Area 9) ───────────────────────────────────
 // Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference

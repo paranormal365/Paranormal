@@ -114,6 +114,28 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public DateTime? PublishedAtUtc { get; set; }
 
+        /// <summary>
+        /// Whether this session's photos, video and audio may be shown to the public.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Fail-closed by the data model.</b> <c>Pending</c> is zero, so a session that
+        /// has never been looked at cannot show its media however published its readings are.
+        /// Getting this backwards would put strangers' photographs on a public page the moment
+        /// somebody pressed publish, which is the feed's problem with none of the feed's
+        /// answers.</para>
+        ///
+        /// <para>Per session rather than per file, matching <c>OrgMessage.MediaReviewState</c>:
+        /// a reviewer looks at a night's captures together, and a night that contains one thing
+        /// that should not be public is a night that stays private.</para>
+        /// </remarks>
+        public Ben.Data.Common.Enums.FeedMediaReviewState MediaReviewState { get; set; }
+
+        /// <summary>Why a reviewer decided as they did, when they wrote it down.</summary>
+        public string? MediaReviewNote { get; set; }
+
+        public Guid? MediaReviewedByAppUserId { get; set; }
+        public DateTime? MediaReviewedUtc { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

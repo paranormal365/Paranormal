@@ -365,6 +365,26 @@ rows show their sharing setting: how another group chose to share something is t
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
 
+### The field archive
+
+Below the investigations, a place shows its **field archive** — sessions that individual people
+have published there, from the phone app. These are not your group's work and not tied to any
+case: somebody went somewhere public, recorded, and chose to share the readings.
+
+Each row shows who recorded, when, roughly where they stood, how many readings the session holds,
+and how many moments they flagged. That last number is the one worth reading across rows. A spike
+that eleven of twelve visitors flagged on the same stairs is a feature of the building; one that
+appears once is noise. Comparing visits is the only way to tell, and it is the only place on this
+site — or anywhere else we know of — where you can.
+
+Phones differ, and so do their magnetometers, so the device is listed too. Compare with that in
+mind, and remember the reading is a DC magnetic field, not the AC field a K-II style meter
+responds to.
+
+Anyone can flag a session whose photos or audio should not be public; doing so hides that media
+straight away until a moderator has looked. The readings stay visible, because a magnetic-field
+number cannot be objectionable.
+
 ## Group messages
 
 The **Messages** tab on your group is its internal mail. It is not the same thing as the message

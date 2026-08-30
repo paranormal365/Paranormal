@@ -3,6 +3,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Places;
 using Ben.Service.RepositoryService.Services;
+using Ben.Data.WebApi.Services.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,12 +43,15 @@ namespace Ben.Data.WebApi.Controllers;
 public sealed class FieldSessionPublishController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly IFeedMediaScreener _screener;
     private readonly ILogger<FieldSessionPublishController> _log;
 
     public FieldSessionPublishController(
-        IDbContextFactory<BenDataContext> db, ILogger<FieldSessionPublishController> log)
+        IDbContextFactory<BenDataContext> db, IFeedMediaScreener screener,
+        ILogger<FieldSessionPublishController> log)
     {
         _db = db;
+        _screener = screener;
         _log = log;
     }
 
@@ -138,6 +142,62 @@ public sealed class FieldSessionPublishController : BenControllerBase
     /// <summary>How far out the picker looks. Ten times the radius at which two records merge.</summary>
     public const double CandidateRadiusMiles = 1.0;
 
+    /// <summary>
+    /// Flags a published session, hiding its media immediately and until somebody looks.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The flag acts, then a person decides — not the other way round.</b> Waiting for a
+    /// moderator before hiding leaves the thing somebody objected to up for however long that
+    /// takes, which is the failure a report exists to prevent. Hiding first costs a contributor
+    /// some visibility for a while; not hiding costs somebody whatever the picture was.</para>
+    ///
+    /// <para><b>The readings stay.</b> A flag is about what a photograph shows; magnetic-field
+    /// numbers cannot be objectionable, and pulling the whole session would let one flag erase a
+    /// contribution to the archive rather than hide a picture.</para>
+    ///
+    /// <para><b>One flag is enough, for now.</b> It is trivially abusable at scale — anybody can
+    /// suppress anybody — and the answer then is to require several distinct reporters. At this
+    /// size the abuse does not exist yet and the latency does, so the balance sits here, and is
+    /// worth revisiting the first time somebody games it.</para>
+    /// </remarks>
+    [HttpPost("/api/field-sessions/{id:guid}/flag")]
+    public async Task<IActionResult> Flag(Guid id, [FromBody] FlagRequest? request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var session = await db.FieldSessionUploads
+            .FirstOrDefaultAsync(s => s.Id == id && s.PublishedAtUtc != null, ct);
+        if (session is null) return NotFound();
+
+        // Already held is already held. Flagging twice is one flag, and the reporter is told the
+        // same thing either way — whether somebody else already objected is not their business.
+        if (session.MediaReviewState != FeedMediaReviewState.Held)
+        {
+            session.MediaReviewState = FeedMediaReviewState.Held;
+            session.MediaReviewNote = string.IsNullOrWhiteSpace(request?.Reason)
+                ? "Flagged by a reader."
+                : $"Flagged: {request!.Reason!.Trim()}";
+            // Cleared so the queue shows this as awaiting a decision even if a reviewer had
+            // approved it before.
+            session.MediaReviewedUtc = null;
+            session.MediaReviewedByAppUserId = null;
+            session.DateUpdated = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(ct);
+
+            _log.LogInformation(
+                "Field session {SessionId} media held after a flag from {UserId}.", id, userId);
+        }
+
+        return NoContent();
+    }
+
+    /// <param name="Reason">Optional, and shown to the moderator rather than to the contributor.</param>
+    public sealed record FlagRequest(string? Reason);
+
     /// <param name="Miles">Distance from where the session was recorded, for ordering and for
     /// the person to judge — "0.02 miles" is the same cave, "0.8 miles" is probably not.</param>
     /// <param name="PublishedSessions">How much archive is already here. The reason to pick it.</param>
@@ -172,6 +232,22 @@ public sealed class FieldSessionPublishController : BenControllerBase
         // Re-publishing an already-public session keeps its original date: the answer to "when
         // did this become public" must not move because somebody pressed the button twice.
         session.PublishedAtUtc ??= DateTime.UtcNow;
+
+        // ── the media, if there is any ────────────────────────────────────────
+        // Post-moderation, Ben's call 2026-08-30: publish first, pull on the first flag. Pre-
+        // screening every night means a queue somebody must work daily before anything appears,
+        // and a solo operator either staffs it or the archive silently never fills. Flagging
+        // moves that cost onto the rare bad case — which is how essentially every UGC platform
+        // actually runs, and Apple's 1.2 asks for a report path and TIMELY action rather than for
+        // pre-approval.
+        //
+        // Only ever screened on the FIRST publish: a decision must not be undone by its owner
+        // republishing.
+        if (session.MediaReviewState == FeedMediaReviewState.Pending
+            && session.MediaReviewedUtc is null)
+        {
+            await ScreenMediaAsync(db, session, ct);
+        }
         session.DateUpdated = DateTime.UtcNow;
         session.UpdatedByAppUserId = userId;
 
@@ -182,6 +258,69 @@ public sealed class FieldSessionPublishController : BenControllerBase
             id, place.Id, userId);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Asks the screener about this session's captures, and records the strictest answer.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The strictest wins.</b> A night is reviewed as a night: one file a screener holds
+    /// holds the whole session, because a page showing four of somebody's five photographs invites
+    /// exactly the question the fifth was withheld to avoid.</para>
+    /// <para>A screener that throws leaves the state Pending — the fail-closed default — rather
+    /// than approving by accident. An outage must never publish a photograph.</para>
+    /// </remarks>
+    private async Task ScreenMediaAsync(
+        BenDataContext db, Ben.Data.Source.Entities.FieldSessionUpload session, CancellationToken ct)
+    {
+        // With no automatic screener, publishing wins. The manual screener approves nothing by
+        // design — deferring to it here would leave every night waiting on a person forever,
+        // which is the pre-moderation cost this feature deliberately does not pay. A real
+        // classifier, if one is ever wired up, still gets to hold the obvious cases below.
+        if (!_screener.IsAutomatic)
+        {
+            session.MediaReviewState = FeedMediaReviewState.Approved;
+            return;
+        }
+
+        var files = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.FieldSessionUploadId == session.Id)
+            .Join(db.UploadFiles.AsNoTracking(), f => f.UploadFileId, u => u.Id,
+                  (f, u) => new { u.StoragePath, u.ContentType })
+            .ToListAsync(ct);
+
+        if (files.Count == 0)
+        {
+            // Nothing to review. Approved is honest here and keeps a readings-only session out of
+            // a queue that would otherwise fill with sessions containing no media at all.
+            session.MediaReviewState = FeedMediaReviewState.Approved;
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            FeedMediaVerdict verdict;
+            try
+            {
+                verdict = await _screener.ScreenAsync(file.StoragePath, file.ContentType, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Screening failed for session {SessionId}; media stays private.",
+                    session.Id);
+                session.MediaReviewState = FeedMediaReviewState.Pending;
+                return;
+            }
+
+            if (verdict.State != FeedMediaReviewState.Approved)
+            {
+                session.MediaReviewState = verdict.State;
+                session.MediaReviewNote = verdict.Reason;
+                return;
+            }
+        }
+
+        session.MediaReviewState = FeedMediaReviewState.Approved;
     }
 
     /// <summary>

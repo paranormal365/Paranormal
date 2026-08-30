@@ -31,7 +31,10 @@ public sealed class FieldSessionArchiveTests
 
     private static FieldSessionPublishController Publisher(
         IDbContextFactory<BenDataContext> db, Guid userId)
-        => new(db, NullLogger<FieldSessionPublishController>.Instance)
+        // The shipping screener: approves nothing, routes everything to a person. These suites
+        // are about publication, not media, and this is what production actually does.
+        => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
+               NullLogger<FieldSessionPublishController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -381,7 +384,8 @@ public sealed class ArchiveCandidateTests
 
     private static FieldSessionPublishController Controller(
         IDbContextFactory<BenDataContext> db, Guid userId)
-        => new(db, NullLogger<FieldSessionPublishController>.Instance)
+        => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
+               NullLogger<FieldSessionPublishController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -488,5 +492,282 @@ public sealed class ArchiveCandidateTests
         await SeedAsync(factory, "Bell Witch Cave", PlaceKind.PublicLocation, 36.5806m, -87.0644m);
 
         Assert.Empty(await AskAsync(factory, null, null));
+    }
+}
+
+/// <summary>
+/// Media in the archive, which is the part that fails closed or fails badly.
+/// </summary>
+/// <remarks>
+/// Readings carry no abuse risk; strangers' photographs on a public page do. So the rule is that
+/// media is invisible until a person has approved the night — and the screener that ships approves
+/// nothing, which means publishing today shares the numbers and leaves the pictures waiting. That
+/// is the intended shape until somebody is actually working the queue.
+/// </remarks>
+public sealed class ArchiveMediaTests
+{
+    private sealed class Screener(FeedMediaReviewState state, bool throws = false)
+        : Ben.Data.WebApi.Services.Feed.IFeedMediaScreener
+    {
+        public bool IsAutomatic => true;
+        public Task<Ben.Data.WebApi.Services.Feed.FeedMediaVerdict> ScreenAsync(
+            string storagePath, string? contentType, CancellationToken ct)
+            => throws
+                ? throw new InvalidOperationException("the classifier fell over")
+                : Task.FromResult(new Ben.Data.WebApi.Services.Feed.FeedMediaVerdict(state, null));
+    }
+
+    private static IDbContextFactory<BenDataContext> Db()
+        => new PooledDbContextFactory<BenDataContext>(
+            new DbContextOptionsBuilder<BenDataContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+    private static FieldSessionPublishController Controller(
+        IDbContextFactory<BenDataContext> db, Guid userId,
+        Ben.Data.WebApi.Services.Feed.IFeedMediaScreener screener)
+        => new(db, screener, NullLogger<FieldSessionPublishController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+    private sealed record Seeded(Guid UserId, Guid PlaceId, Guid SessionId);
+
+    private static async Task<Seeded> SeedAsync(
+        IDbContextFactory<BenDataContext> factory, int mediaFiles)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var userId = Guid.NewGuid();
+        db.AppUsers.Add(new AppUser
+        {
+            Id = userId, UserName = "c@t.com", NormalizedUserName = "C@T.COM",
+            Email = "c@t.com", DisplayName = "Contributor", DateCreated = DateTime.UtcNow,
+        });
+        var placeId = Guid.NewGuid();
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "Bell Witch Cave", City = "Adams", State = "TN",
+            Kind = PlaceKind.PublicLocation, Latitude = 36.5806m, Longitude = -87.0644m,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        var docId = Guid.NewGuid();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = docId, FileName = "data.json", StoredFileName = "d.json",
+            ContentType = "application/json", AppUserId = userId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        var sessionId = Guid.NewGuid();
+        db.FieldSessionUploads.Add(new FieldSessionUpload
+        {
+            Id = sessionId, SubmittedByAppUserId = userId, DeviceSessionId = Guid.NewGuid(),
+            DocumentUploadFileId = docId, DeviceModel = "iPhone", StartedAt = DateTime.UtcNow,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        for (var i = 0; i < mediaFiles; i++)
+        {
+            var fileId = Guid.NewGuid();
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, FileName = $"photo{i}.jpg", StoredFileName = $"{fileId}.jpg",
+                ContentType = "image/jpeg", StoragePath = $"x/{fileId}.jpg", AppUserId = userId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
+            {
+                Id = Guid.NewGuid(), FieldSessionUploadId = sessionId, UploadFileId = fileId,
+                RelativePath = $"media/photo{i}.jpg", DateCreated = DateTime.UtcNow,
+            });
+        }
+        await db.SaveChangesAsync();
+        return new Seeded(userId, placeId, sessionId);
+    }
+
+    private static async Task PublishAsync(
+        IDbContextFactory<BenDataContext> factory, Seeded seed,
+        Ben.Data.WebApi.Services.Feed.IFeedMediaScreener screener)
+        => await Controller(factory, seed.UserId, screener).Publish(
+            seed.SessionId,
+            new FieldSessionPublishController.PublishRequest(seed.PlaceId), default);
+
+    private static async Task<int> ApprovedMediaCountAsync(
+        IDbContextFactory<BenDataContext> factory, Guid placeId)
+    {
+        var result = await new Ben.Data.WebApi.Controllers.Public.PublicPlaceController(factory)
+            .GetById(placeId, default);
+        var response = (Ben.Data.WebApi.Controllers.Public.PublicPlaceResponse)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+        return response.Sessions!.Single().ApprovedMediaCount;
+    }
+
+    /// <summary>The one that ships: examines nothing, defers to a person.</summary>
+    private sealed class ManualScreener : Ben.Data.WebApi.Services.Feed.IFeedMediaScreener
+    {
+        public bool IsAutomatic => false;
+        public Task<Ben.Data.WebApi.Services.Feed.FeedMediaVerdict> ScreenAsync(
+            string storagePath, string? contentType, CancellationToken ct)
+            => Task.FromResult(new Ben.Data.WebApi.Services.Feed.FeedMediaVerdict(
+                FeedMediaReviewState.Pending, null));
+    }
+
+    [Fact]
+    public async Task With_no_automatic_screener_publishing_wins_rather_than_waiting_forever()
+    {
+        // Post-moderation, Ben's call: deferring to the manual screener would leave every night
+        // waiting on a person before anything appeared, and a solo operator either staffs that
+        // queue daily or the archive silently never fills. The flag path below is what pays for
+        // it — the cost moves onto the rare bad case instead of onto every good one.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 2);
+
+        await PublishAsync(factory, seed, new ManualScreener());
+
+        await using var db = await factory.CreateDbContextAsync();
+        var session = await db.FieldSessionUploads.SingleAsync();
+        Assert.NotNull(session.PublishedAtUtc);
+        Assert.Equal(FeedMediaReviewState.Approved, session.MediaReviewState);
+        Assert.Equal(2, await ApprovedMediaCountAsync(factory, seed.PlaceId));
+    }
+
+    [Fact]
+    public async Task One_flag_hides_the_media_at_once_and_keeps_the_readings()
+    {
+        // The trade that makes publish-by-default safe: the flag ACTS, then a person decides.
+        // Waiting for a moderator before hiding leaves the objected-to thing up for however long
+        // that takes, which is the failure a report exists to prevent.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 2);
+        await PublishAsync(factory, seed, new ManualScreener());
+        Assert.Equal(2, await ApprovedMediaCountAsync(factory, seed.PlaceId));
+
+        Assert.IsType<NoContentResult>(await Controller(factory, Guid.NewGuid(), new ManualScreener())
+            .Flag(seed.SessionId,
+                  new FieldSessionPublishController.FlagRequest("that is my house"), default));
+
+        await using var db = await factory.CreateDbContextAsync();
+        var session = await db.FieldSessionUploads.SingleAsync();
+        Assert.Equal(FeedMediaReviewState.Held, session.MediaReviewState);
+        Assert.Contains("that is my house", session.MediaReviewNote);
+        Assert.Null(session.MediaReviewedUtc);   // shows in the queue as awaiting a decision
+
+        // The pictures are gone; the contribution is not. Magnetic-field numbers cannot be
+        // objectionable, and one flag must not erase somebody's session from the archive.
+        Assert.Equal(0, await ApprovedMediaCountAsync(factory, seed.PlaceId));
+        Assert.NotNull(session.PublishedAtUtc);
+    }
+
+    [Fact]
+    public async Task Flagging_twice_is_one_flag_and_an_unpublished_session_cannot_be_flagged()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 1);
+
+        // Nothing published — there is nothing public to object to.
+        Assert.IsType<NotFoundResult>(await Controller(factory, Guid.NewGuid(), new ManualScreener())
+            .Flag(seed.SessionId, null, default));
+
+        await PublishAsync(factory, seed, new ManualScreener());
+        await Controller(factory, Guid.NewGuid(), new ManualScreener()).Flag(seed.SessionId, null, default);
+        DateTime? afterFirst;
+        await using (var db = await factory.CreateDbContextAsync())
+            afterFirst = (await db.FieldSessionUploads.SingleAsync()).DateUpdated;
+
+        Assert.IsType<NoContentResult>(await Controller(factory, Guid.NewGuid(), new ManualScreener())
+            .Flag(seed.SessionId, null, default));
+
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Equal(afterFirst, (await after.FieldSessionUploads.SingleAsync()).DateUpdated);
+    }
+
+    [Fact]
+    public async Task An_automatic_screener_still_gets_to_hold_the_obvious_cases()
+    {
+        // Post-moderation is the DEFAULT, not a refusal to screen. Wire a real classifier up and
+        // it still pre-holds what it recognises; only the manual no-op is overridden.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 1);
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Held));
+
+        Assert.Equal(0, await ApprovedMediaCountAsync(factory, seed.PlaceId));
+    }
+
+    [Fact]
+    public async Task One_held_file_holds_the_whole_night()
+    {
+        // A page showing four of somebody's five photographs invites exactly the question the
+        // fifth was withheld to avoid.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 3);
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Held));
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(FeedMediaReviewState.Held, (await db.FieldSessionUploads.SingleAsync()).MediaReviewState);
+        Assert.Equal(0, await ApprovedMediaCountAsync(factory, seed.PlaceId));
+    }
+
+    [Fact]
+    public async Task A_screener_that_falls_over_leaves_the_media_private()
+    {
+        // An outage must never publish a photograph.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 1);
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Approved, throws: true));
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(FeedMediaReviewState.Pending, (await db.FieldSessionUploads.SingleAsync()).MediaReviewState);
+    }
+
+    [Fact]
+    public async Task A_session_with_no_media_never_enters_the_queue()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 0);
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Pending));
+
+        await using var db = await factory.CreateDbContextAsync();
+        // Approved is honest for a night containing nothing to review, and keeps a readings-only
+        // session out of a queue it would only clutter.
+        Assert.Equal(FeedMediaReviewState.Approved, (await db.FieldSessionUploads.SingleAsync()).MediaReviewState);
+    }
+
+    [Fact]
+    public async Task Republishing_never_undoes_a_reviewer_s_decision()
+    {
+        // Otherwise held media becomes public by its owner pressing publish again.
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 1);
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Held));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var held = await db.FieldSessionUploads.SingleAsync();
+            held.MediaReviewedUtc = DateTime.UtcNow;      // a person decided
+            await db.SaveChangesAsync();
+        }
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Approved));
+
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Equal(FeedMediaReviewState.Held, (await after.FieldSessionUploads.SingleAsync()).MediaReviewState);
+    }
+
+    [Fact]
+    public async Task Once_approved_the_count_reaches_the_public_page()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory, mediaFiles: 2);
+
+        await PublishAsync(factory, seed, new Screener(FeedMediaReviewState.Approved));
+
+        Assert.Equal(2, await ApprovedMediaCountAsync(factory, seed.PlaceId));
     }
 }

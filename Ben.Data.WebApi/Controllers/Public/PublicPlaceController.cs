@@ -112,7 +112,12 @@ public sealed class PublicPlaceController : ControllerBase
                 s.MarkerCount,
                 s.DeviceModel,
                 s.PublishedAtUtc!.Value,
-                s.DocumentUploadFileId))
+                s.DocumentUploadFileId,
+                // Fail-closed: media is offered only once a reviewer has approved the night.
+                // Pending is zero, so a session nobody has looked at counts as none.
+                s.MediaReviewState == Ben.Data.Common.Enums.FeedMediaReviewState.Approved
+                    ? s.Files.Count
+                    : 0))
             .ToListAsync(ct);
 }
 
@@ -149,7 +154,16 @@ public sealed record PublicPlaceSessionRow(
     int MarkerCount,
     string DeviceModel,
     DateTime PublishedAtUtc,
-    Guid DocumentUploadFileId);
+    Guid DocumentUploadFileId,
+    /// <summary>
+    /// Photos, video and audio a reviewer has cleared for this page — zero until one has.
+    /// </summary>
+    /// <remarks>
+    /// A count rather than the files themselves: the archive's value is the readings, and a
+    /// visitor is told media exists before anything decides to serve it. Serving comes with the
+    /// reporting and blocking the feed already has, and not before.
+    /// </remarks>
+    int ApprovedMediaCount = 0);
 
 /// <summary>
 /// One published investigation. Deliberately thinner than the signed-in row: no visibility (every

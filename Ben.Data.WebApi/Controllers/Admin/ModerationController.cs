@@ -207,6 +207,67 @@ public sealed class ModerationController : BenControllerBase
         return NoContent();
     }
 
+    /// <summary>Published sessions whose media is waiting on a person, oldest first.</summary>
+    /// <remarks>
+    /// Separate from the feed queue rather than merged into it: a field session is a night's
+    /// recording at a place, not a post, and a reviewer deciding about one is answering a
+    /// different question — "should strangers see the inside of this building" rather than
+    /// "should this image be on a public feed".
+    /// </remarks>
+    [HttpGet("archive-media")]
+    public async Task<ActionResult<IReadOnlyList<ArchiveMediaReviewRow>>> GetArchiveMedia(
+        [FromQuery] bool includeHeld, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        return Ok(await db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.PublishedAtUtc != null
+                     && s.Files.Any()
+                     && (s.MediaReviewState == FeedMediaReviewState.Pending
+                         || (includeHeld && s.MediaReviewState == FeedMediaReviewState.Held)))
+            .OrderBy(s => s.PublishedAtUtc)
+            .Select(s => new ArchiveMediaReviewRow(
+                s.Id,
+                s.SubmittedByAppUser.DisplayName ?? s.SubmittedByAppUser.Email ?? "Unknown",
+                s.Place!.Name,
+                s.PlaceId!.Value,
+                s.LocationLabel,
+                s.StartedAt,
+                s.PublishedAtUtc!.Value,
+                s.Files.Count,
+                s.MediaReviewState,
+                s.MediaReviewNote))
+            .ToListAsync(ct));
+    }
+
+    /// <summary>Approves or holds one published session's media.</summary>
+    /// <remarks>
+    /// Idempotent in the way that matters, like the feed's: deciding the same way twice moves
+    /// only the timestamp, and deciding the other way is how a mistake is undone.
+    /// </remarks>
+    [HttpPost("archive-media/{sessionId:guid}")]
+    public async Task<IActionResult> ReviewArchiveMedia(
+        Guid sessionId, [FromBody] ReviewFeedMediaRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var session = await db.FieldSessionUploads.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null) return NotFound();
+
+        session.MediaReviewState = request.Approve
+            ? FeedMediaReviewState.Approved
+            : FeedMediaReviewState.Held;
+        session.MediaReviewNote = string.IsNullOrWhiteSpace(request.Note)
+            ? session.MediaReviewNote
+            : request.Note.Trim();
+        session.MediaReviewedByAppUserId = userId;
+        session.MediaReviewedUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>How much is waiting, and whether anything is screening it automatically.</summary>
     [HttpGet("summary")]
     public async Task<ActionResult<FeedModerationSummary>> GetSummary(CancellationToken ct)
@@ -230,3 +291,21 @@ public sealed class ModerationController : BenControllerBase
                 .CountAsync(m => m.ChannelType == OrgMessageChannel.PublicFeed, ct)));
     }
 }
+
+/// <summary>One published session waiting on a reviewer's decision about its media.</summary>
+/// <remarks>
+/// Carries the place and the contributor because that is what the decision turns on: a night at a
+/// public landmark and a night somewhere a reviewer does not recognise are different questions,
+/// and the readings are already public either way.
+/// </remarks>
+public sealed record ArchiveMediaReviewRow(
+    Guid SessionId,
+    string ContributorName,
+    string? PlaceName,
+    Guid PlaceId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime PublishedAtUtc,
+    int FileCount,
+    Ben.Data.Common.Enums.FeedMediaReviewState State,
+    string? Note);

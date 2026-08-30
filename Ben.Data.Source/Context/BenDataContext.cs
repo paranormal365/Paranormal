@@ -2694,6 +2694,10 @@ namespace Ben.Data.Source.Context
             // The archive's one query: everything published at this place, newest first.
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.PlaceId, e.PublishedAtUtc });
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.MediaReviewNote).HasMaxLength(500);
+            // The moderator's queue: what is waiting, oldest first.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.MediaReviewState, e.PublishedAtUtc });
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.DeviceModel).HasMaxLength(100);
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.LocationLabel).HasMaxLength(400);
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.RecordedByName).HasMaxLength(200);
