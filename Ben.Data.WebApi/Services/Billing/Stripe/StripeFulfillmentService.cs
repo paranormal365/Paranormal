@@ -57,6 +57,9 @@ public sealed class StripeFulfillmentService
             public const string List         = "ih_list";
             public const string Discount     = "ih_discount";
             public const string PeriodStart  = "ih_period_start";
+            /// <summary>Present exactly when this payment buys an overflow SEAT, not the
+            /// group's subscription — the two fulfill along entirely different paths.</summary>
+            public const string Seat         = "ih_seat";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -115,6 +118,13 @@ public sealed class StripeFulfillmentService
     /// </summary>
     public async Task FulfillAsync(StripeCompletedCheckout checkout, CancellationToken ct = default)
     {
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Seat, out var seatRaw)
+            && Guid.TryParse(seatRaw, out var seatId))
+        {
+            await FulfillSeatAsync(seatId, checkout, ct);
+            return;
+        }
+
         var facts = CheckoutFacts.FromMetadata(checkout.Metadata);
         if (facts is null)
         {
@@ -260,6 +270,98 @@ public sealed class StripeFulfillmentService
         _log.LogInformation(
             "Stripe fulfilled: org {OrganizationId} on \"{Tier}\" {Interval} for ${Payable} (+${Tax} tax), receipt R-{Receipt:00000}.",
             facts.OrganizationId, tier?.Name, facts.Interval, facts.Payable, facts.TaxAmount, payment.ReceiptNumber);
+    }
+
+    /// <summary>
+    /// A paid seat: the member's PendingPayment becomes Active, and the money lands on the
+    /// GROUP's ledger with the member named in the description.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately none of the organization path runs here — no PeriodOpener, no contract
+    /// snapshot, no coupons. A seat is one person's flat-priced ride on a band the group already
+    /// bought; giving it the group's machinery would let a seat payment rewrite the group's
+    /// period, which is exactly the confusion the two tables exist to prevent.</para>
+    /// <para>The ledger row is the org's because the ledger's schema says money belongs to a
+    /// group or to a referrer — and the seat IS group revenue, paid by a member. The payment row
+    /// carries the member as <c>CreatedByAppUserId</c>, which is also what lets the payer fetch
+    /// their own receipt without settings permission.</para>
+    /// </remarks>
+    private async Task FulfillSeatAsync(
+        Guid seatId, StripeCompletedCheckout checkout, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var reference = checkout.PaymentIntentRef ?? checkout.SessionId;
+        if (await db.BillingLedgerEntries.AnyAsync(e => e.PaymentReference == reference, ct))
+        {
+            _log.LogInformation("Seat payment {Reference} delivered again — already fulfilled.", reference);
+            return;
+        }
+
+        var seat = await db.MemberSeatSubscriptions
+            .Include(s => s.AppUser)
+            .FirstOrDefaultAsync(s => s.Id == seatId, ct);
+        if (seat is null)
+        {
+            _log.LogError("Seat payment {Reference} names seat {SeatId} which does not exist.",
+                reference, seatId);
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        // Renewals stitch onto the old period's end, first payments start now — the same rule
+        // as the group path, carried in the same metadata key.
+        DateTime periodStart = now;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.PeriodStart, out var psRaw)
+            && DateTime.TryParse(psRaw, System.Globalization.CultureInfo.InvariantCulture,
+                                 System.Globalization.DateTimeStyles.RoundtripKind, out var ps))
+            periodStart = ps;
+
+        seat.Status             = SubscriptionStatus.Active;
+        seat.CurrentPeriodStart = periodStart;
+        seat.CurrentPeriodEnd   = periodStart.AddMonths((int)seat.Interval);
+        seat.ProviderName       = "Stripe";
+        seat.ProviderCustomerRef      = checkout.CustomerRef ?? seat.ProviderCustomerRef;
+        seat.ProviderPaymentMethodRef = checkout.PaymentMethodRef ?? seat.ProviderPaymentMethodRef;
+        seat.DateUpdated        = now;
+        seat.UpdatedByAppUserId = seat.AppUserId;
+
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, seat.OrganizationId, ct);
+        var tax = TaxResolver.TaxOn(seat.PriceAtStart, taxRate);
+        var description = $"Overflow seat — {seat.AppUser.DisplayName ?? seat.AppUser.Email} "
+                        + $"({Cadence(seat.Interval)})";
+
+        db.BillingLedgerEntries.Add(new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
+            OrganizationId = seat.OrganizationId,
+            Amount = seat.PriceAtStart, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = description, PaymentReference = reference,
+            PeriodStart = seat.CurrentPeriodStart, PeriodEnd = seat.CurrentPeriodEnd,
+            DateCreated = now, CreatedByAppUserId = seat.AppUserId,
+        });
+        var payment = new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,
+            OrganizationId = seat.OrganizationId,
+            Amount = seat.PriceAtStart, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = $"Card payment — {description}", PaymentReference = reference,
+            PeriodStart = seat.CurrentPeriodStart, PeriodEnd = seat.CurrentPeriodEnd,
+            DateCreated = now, CreatedByAppUserId = seat.AppUserId,
+        };
+
+        for (var attempt = 0; ; attempt++)
+        {
+            payment.ReceiptNumber = 1 + await db.BillingLedgerEntries
+                .MaxAsync(e => (int?)e.ReceiptNumber, ct) ?? 1;
+            db.BillingLedgerEntries.Add(payment);
+            try { await db.SaveChangesAsync(ct); break; }
+            catch (DbUpdateException) when (attempt < 2) { db.BillingLedgerEntries.Remove(payment); }
+        }
+
+        _log.LogInformation(
+            "Stripe fulfilled seat: {Member} in org {OrganizationId} for ${Price}, receipt R-{Receipt:00000}.",
+            seat.AppUserId, seat.OrganizationId, seat.PriceAtStart, payment.ReceiptNumber);
     }
 
     private static async Task RedeemCouponAsync(

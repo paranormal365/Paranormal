@@ -38,14 +38,19 @@
     }
     else if (_forbidden)
     {
-        @* A refusal the person can act on, never a blank page over a 403. *@
+        @* The seat card renders even here, FIRST: the ordinary member paying their own seat is
+           exactly the person without settings permission, and hiding their bill behind the
+           group's keys would make the one thing they came for invisible. *@
+        @SeatCard
         <div class="alert alert-warning">
-            Billing is visible to people who can manage this group's settings. If you think you
-            should see it, ask the group's owner.
+            The group's own billing is visible to people who can manage its settings. If you
+            think you should see it, ask the group's owner.
         </div>
     }
     else
     {
+        @SeatCard
+
         @* ── The plan as it stands ────────────────────────────────────────── *@
         <div class="card mb-4">
             <div class="card-body">
@@ -203,6 +208,44 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>The caller's own overflow seat, when they hold one (item 144).</summary>
+    private RenderFragment SeatCard => __builder =>
+    {
+        if (_mySeat is not { } seat) return;
+
+        <div class="card mb-4 @(seat.Status == SubscriptionStatus.PendingPayment ? "border-warning" : "")">
+            <div class="card-body">
+                <h2 class="h5 card-title">Your member seat</h2>
+                @if (seat.Status == SubscriptionStatus.PendingPayment)
+                {
+                    <p class="mb-2">
+                        This group's plan covers a set number of members, and you joined past
+                        that line — your seat is
+                        <strong>$@seat.PriceAtStart.ToString("0.00")/@(seat.Interval == BillingInterval.Yearly ? "year" : "month")</strong>,
+                        billed to you. Joining was never blocked; paying keeps it that way.
+                    </p>
+                    <button type="button" class="btn btn-warning" @onclick="PaySeatAsync"
+                            disabled="@_startingSeatCheckout">
+                        @(_startingSeatCheckout ? "Opening…" : "Pay for your seat")
+                    </button>
+                    @if (_seatError is not null)
+                    {
+                        <div class="alert alert-danger mt-2 mb-0">@_seatError</div>
+                    }
+                }
+                else
+                {
+                    <p class="mb-0">
+                        <span class="badge bg-success me-2">Active</span>
+                        $@seat.PriceAtStart.ToString("0.00")/@(seat.Interval == BillingInterval.Yearly ? "year" : "month"),
+                        paid through <strong>@(seat.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "—")</strong>.
+                        Renews automatically on your saved card.
+                    </p>
+                }
+            </div>
+        </div>
+    };
+
     private bool _loading = true;
     private bool _forbidden;
     private OrgSubscriptionView? _subscription;
@@ -214,6 +257,9 @@
     private BillingInterval _interval = BillingInterval.Monthly;
     private bool _startingCheckout;
     private (string Css, string Text)? _checkoutBanner;
+    private MyMemberSeatRecord? _mySeat;
+    private bool _startingSeatCheckout;
+    private string? _seatError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -230,6 +276,9 @@
                 "Payment received — your subscription is active. The receipt is in the history below.");
         else if (query.Contains("checkout=free"))
             _checkoutBanner = ("alert-success", "You're subscribed — the coupon covered this period in full.");
+        else if (query.Contains("checkout=seat-paid"))
+            _checkoutBanner = ("alert-success",
+                "Seat paid — you're all set. Your receipt is available below.");
         else if (query.Contains("checkout=cancelled"))
             _checkoutBanner = ("alert-secondary", "Checkout was cancelled. Nothing was charged.");
 
@@ -240,6 +289,9 @@
 
     private async Task LoadAsync()
     {
+        // At most one, and gated on being the holder — loads for members the rest of the page
+        // refuses, which is why the seat is fetched before permission is judged.
+        _mySeat = (await AdminClient.GetMySeatAsync(OrgId)).Items.FirstOrDefault();
         _subscription = await AdminClient.GetMySubscriptionAsync(OrgId);
         _history = await AdminClient.GetOrgBillingHistoryAsync(OrgId);
         // The subscription view answers null for BOTH "no row yet" (a free group) and a refusal.
@@ -287,6 +339,19 @@
         {
             _startingCheckout = false;
         }
+    }
+
+    private async Task PaySeatAsync()
+    {
+        _startingSeatCheckout = true;
+        _seatError = null;
+        try
+        {
+            var (result, error) = await AdminClient.StartSeatCheckoutAsync(OrgId);
+            if (result is null) { _seatError = error ?? "Couldn't start checkout — try again."; return; }
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _startingSeatCheckout = false; }
     }
 
     private async Task DownloadReceiptAsync(Guid entryId, int number)

@@ -97,6 +97,13 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<StartCheckoutRequest, StartCheckoutResponse>(
             HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout", request, token);
 
+    /// <inheritdoc />
+    public Task<(StartCheckoutResponse? Result, string? Error)> StartSeatCheckoutAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
+            HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout/my-seat",
+            new { }, token);
+
     // ── the money trail (item 168) ────────────────────────────────────────────
 
     public Task<LoadResult<BillingLedgerEntryRecord>> GetBillingLedgerAsync(Guid? orgId = null, CancellationToken token = default)

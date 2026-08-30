@@ -88,6 +88,82 @@ public sealed class StripeRenewalJob : IScheduledJob
                     sub.OrganizationId);
             }
         }
+
+        // ── overflow seats, same window, their holder's own card ─────────────
+        var dueSeats = await db.MemberSeatSubscriptions.AsNoTracking()
+            .Include(s => s.Organization)
+            .Where(s => s.ProviderName == "Stripe"
+                     && s.Status == SubscriptionStatus.Active
+                     && s.ProviderCustomerRef != null
+                     && s.ProviderPaymentMethodRef != null
+                     && s.CurrentPeriodEnd != null
+                     && s.CurrentPeriodEnd <= now + RenewalWindow)
+            .ToListAsync(ct);
+
+        foreach (var seat in dueSeats)
+        {
+            try
+            {
+                await RenewSeatAsync(db, seat, now, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Seat renewal failed unexpectedly for seat {SeatId}.", seat.Id);
+            }
+        }
+    }
+
+    private async Task RenewSeatAsync(
+        BenDataContext db, Ben.Data.Source.Entities.MemberSeatSubscription seat,
+        DateTime now, CancellationToken ct)
+    {
+        // A member who left the group is not charged for a seat they no longer occupy — the
+        // seat simply runs out. Nothing lapses it; an expired seat with an inactive membership
+        // is its own explanation on the admin screen.
+        var stillMember = await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == seat.OrganizationId
+                        && m.AppUserId == seat.AppUserId && m.IsActive, ct);
+        if (!stillMember)
+        {
+            _log.LogInformation(
+                "Seat {SeatId} not renewed — the member has left {OrganizationName}.",
+                seat.Id, seat.Organization.Name);
+            return;
+        }
+
+        // The frozen price, forever: the offer said what the ride costs, and unlike the group's
+        // banded subscription there is no live world to re-read — a seat has no band.
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, seat.OrganizationId, ct);
+        var tax = TaxResolver.TaxOn(seat.PriceAtStart, taxRate);
+        var periodStart = seat.CurrentPeriodEnd!.Value;
+
+        var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
+            seat.ProviderCustomerRef!, seat.ProviderPaymentMethodRef!,
+            seat.PriceAtStart + tax,
+            $"IsHaunted member seat renewal — {seat.Organization.Name}",
+            new Dictionary<string, string>
+            {
+                [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
+                [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
+            },
+            IdempotencyKey: $"seat-{seat.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
+
+        if (!outcome.Succeeded)
+        {
+            _log.LogWarning(
+                "Seat renewal declined for {SeatId}: {Reason} (intent {Intent}). Tomorrow retries.",
+                seat.Id, outcome.FailureReason, outcome.PaymentIntentRef);
+            return;
+        }
+
+        await _fulfillment.FulfillAsync(new StripeCompletedCheckout(
+            outcome.PaymentIntentRef, outcome.PaymentIntentRef,
+            seat.ProviderCustomerRef, seat.ProviderPaymentMethodRef,
+            new Dictionary<string, string>
+            {
+                [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
+                [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
+            }), ct);
     }
 
     private async Task RenewOneAsync(

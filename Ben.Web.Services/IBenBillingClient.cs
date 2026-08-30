@@ -102,6 +102,13 @@ public interface IBenBillingClient
     Task<(StartCheckoutResponse? Result, string? Error)> StartCheckoutAsync(
         Guid organizationId, StartCheckoutRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// The seat-holder pays for their own overflow seat — gated on holding it, never on the
+    /// group's settings keys. Frozen price, no choices; the button is only "yes".
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartSeatCheckoutAsync(
+        Guid organizationId, CancellationToken token = default);
+
     // ── the money trail (item 168) ────────────────────────────────────────────
 
     /// <summary>The whole ledger, or one group's slice of it. SuperAdmin.</summary>

@@ -146,6 +146,63 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));
     }
 
+    /// <summary>
+    /// The seat-holder pays for their own overflow seat (item 144 meets Stripe).
+    /// </summary>
+    /// <remarks>
+    /// <para>Gated on HOLDING the seat, not on settings permission — the exact rule of
+    /// <c>GetMySeats</c>: a seat is a bill addressed to one person, and an ordinary member
+    /// paying their own way must not need the group's keys to do it.</para>
+    /// <para>The price is the one frozen on the seat at offer time — no re-pricing, no coupons,
+    /// no interval choice. The offer said what the ride costs; this button is only "yes".</para>
+    /// </remarks>
+    [HttpPost("my-seat")]
+    public async Task<ActionResult<StartCheckoutResponse>> StartSeatCheckout(
+        Guid organizationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+
+        var org = await db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == organizationId, ct);
+        if (org is null) return NotFound();
+
+        var seat = await db.MemberSeatSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.AppUserId == userId, ct);
+        if (seat is null) return NotFound("You don't hold a seat in this group.");
+        if (seat.Status == SubscriptionStatus.Active
+            && seat.CurrentPeriodEnd is { } end && end > DateTime.UtcNow)
+            return BadRequest($"Your seat is already paid through {end:MM/dd/yyyy}.");
+
+        if (!_stripe.IsConfigured)
+            return Problem("Online payment isn't set up yet — contact us and we'll sort your seat out directly.",
+                statusCode: 503);
+
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+        var tax = TaxResolver.TaxOn(seat.PriceAtStart, taxRate);
+
+        var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
+        var billingUrl = $"{baseUrl}/organizations/{organizationId}/billing";
+
+        var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
+            organizationId,
+            // The customer is the MEMBER, so the name Stripe files the card under is theirs.
+            $"{org.Name} — member seat",
+            seat.ProviderCustomerRef,
+            seat.PriceAtStart, tax,
+            $"IsHaunted member seat in {org.Name}, billed {Cadence(seat.Interval)}",
+            SuccessUrl: $"{billingUrl}?checkout=seat-paid",
+            CancelUrl:  $"{billingUrl}?checkout=cancelled",
+            new Dictionary<string, string>
+            {
+                [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
+            }), ct);
+
+        return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));
+    }
+
     private static string Cadence(BillingInterval interval) => interval switch
     {
         BillingInterval.Monthly    => "monthly",
