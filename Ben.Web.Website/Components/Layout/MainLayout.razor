@@ -236,6 +236,7 @@
                     TokenStore.IsSuperAdmin,
                     TokenStore.IsAdmin,
                     TokenStore.IsImpersonating,
+                    TokenStore.IsModerator,
                     TokenStore.OriginalAccessToken,
                     TokenStore.OriginalRefreshToken,
                     TokenStore.OriginalUserId?.ToString(),
@@ -269,6 +270,7 @@
                 TokenStore.IsSuperAdmin = state.IsSuperAdmin;
                 TokenStore.IsAdmin = state.IsAdmin;
                 TokenStore.IsImpersonating = state.IsImpersonating;
+                TokenStore.IsModerator = state.IsModerator;
                 TokenStore.OriginalAccessToken = state.OriginalAccessToken;
                 TokenStore.OriginalRefreshToken = state.OriginalRefreshToken;
                 TokenStore.OriginalUserId = Guid.TryParse(state.OriginalUserId, out var origId) ? origId : null;
@@ -305,6 +307,12 @@
         // the SuperAdmin's original session — leaving them silently stuck as the other person
         // until they logged out. Same defaulting rule as IsAdmin.
         bool IsImpersonating = false,
+        // The bug this closes: IsModerator was set at sign-in and then never persisted, so every
+        // reload restored it as false and the moderation queue bounced its own moderator — and a
+        // SuperAdmin with the flag — straight back to the home page, with nothing anywhere saying
+        // why. Same defaulting rule as IsAdmin, so sessions written before this field still
+        // deserialize rather than throwing the whole restore away and signing somebody out.
+        bool IsModerator = false,
         string? OriginalAccessToken = null,
         string? OriginalRefreshToken = null,
         string? OriginalUserId = null,
