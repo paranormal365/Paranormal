@@ -771,3 +771,105 @@ public sealed class ArchiveMediaTests
         Assert.Equal(2, await ApprovedMediaCountAsync(factory, seed.PlaceId));
     }
 }
+
+/// <summary>
+/// Folding two records of one place into one.
+/// </summary>
+/// <remarks>
+/// Matching prevents most duplicates and the picker prevents most of the rest, but neither heals
+/// what already exists — one afternoon's testing left three "Bell Witch Cave" records on the live
+/// site, which is exactly the mess the archive promises not to make. These pin that a merge moves
+/// EVERYTHING, because a row left pointing at a deleted place is somebody's work orphaned.
+/// </remarks>
+public sealed class PlaceMergeTests
+{
+    private static IDbContextFactory<BenDataContext> Db()
+        => new PooledDbContextFactory<BenDataContext>(
+            new DbContextOptionsBuilder<BenDataContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                // The merge opens a transaction; the in-memory store has none. See the note in
+                // AccountClosureTests — the transaction is right, it is just not what is tested.
+                .ConfigureWarnings(w => w.Ignore(
+                    Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+                .Options);
+
+    private static Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController Controller(
+        IDbContextFactory<BenDataContext> db, Guid userId)
+        => new(db, new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object,
+               NullLogger<Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+    [Fact]
+    public async Task Everything_moves_and_the_duplicate_disappears()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+        var keep = Guid.NewGuid();
+        var drop = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser
+            {
+                Id = userId, UserName = "a@t.com", NormalizedUserName = "A@T.COM",
+                Email = "a@t.com", DisplayName = "Admin", DateCreated = DateTime.UtcNow,
+            });
+            foreach (var (id, name) in new[] { (keep, "Bell Witch Cave"), (drop, "Bell Witch Cave, Adams") })
+                db.Places.Add(new Place
+                {
+                    Id = id, Name = name, City = "Adams", State = "TN",
+                    Kind = PlaceKind.PublicLocation, Latitude = 36.5806m, Longitude = -87.0644m,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+                });
+
+            var fileId = Guid.NewGuid();
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, FileName = "d.json", StoredFileName = "d.json",
+                ContentType = "application/json", AppUserId = userId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.FieldSessionUploads.Add(new FieldSessionUpload
+            {
+                Id = Guid.NewGuid(), SubmittedByAppUserId = userId, DeviceSessionId = Guid.NewGuid(),
+                DocumentUploadFileId = fileId, DeviceModel = "iPhone", StartedAt = DateTime.UtcNow,
+                PlaceId = drop, PublishedAtUtc = DateTime.UtcNow,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Controller(factory, userId).Merge(
+            drop, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(keep), default);
+        var merged = (Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeResult)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+        Assert.Equal(1, merged.FieldSessions);
+
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Null(await after.Places.FindAsync(drop));
+        // The session followed rather than being orphaned at a place that no longer exists.
+        Assert.Equal(keep, (await after.FieldSessionUploads.SingleAsync()).PlaceId);
+    }
+
+    [Fact]
+    public async Task A_place_cannot_be_merged_into_itself_or_into_nothing()
+    {
+        var factory = Db();
+        var id = Guid.NewGuid();
+
+        Assert.IsType<BadRequestObjectResult>((await Controller(factory, Guid.NewGuid())
+            .Merge(id, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(id), default)).Result);
+
+        Assert.IsType<NotFoundObjectResult>((await Controller(factory, Guid.NewGuid())
+            .Merge(id, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(Guid.NewGuid()), default)).Result);
+    }
+}
