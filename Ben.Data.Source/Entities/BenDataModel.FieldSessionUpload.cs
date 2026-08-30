@@ -1,4 +1,4 @@
-using Ben.Data.Common.Interfaces;
+﻿using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
 {
@@ -86,11 +86,62 @@ namespace Ben.Data.Source.Entities
         public int ReadingCount { get; set; }
         public int MarkerCount { get; set; }
 
+        /// <summary>
+        /// The place this session was recorded at, when its owner has said which.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Independent of <see cref="InvestigationId"/>.</b> A session belongs to an
+        /// investigation when a group ran one; it belongs to a PLACE when somebody simply went
+        /// somewhere and recorded. Most archive sessions have a place and no investigation — but
+        /// a group's investigation session may name a place too, and that is precisely how a
+        /// group's published work and a stranger's walk-through become comparable at all.
+        /// </para>
+        /// <para>Nullable forever: a session recorded before anybody thought about places, or
+        /// somewhere with no record, is still a session.</para>
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        /// <summary>
+        /// When the owner published this session to its place's public archive, or null.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Publishing is an act, with a time, done by a person</b> — never a side effect
+        /// of an upload, a plan or a status. A session is private to whoever sent it until they
+        /// say otherwise, and the whole archive rests on that being unambiguous.</para>
+        /// <para>A date rather than a flag because "when did this become public" is a question
+        /// somebody eventually needs answered — about their own data or somebody else's — and a
+        /// bool cannot answer it.</para>
+        /// </remarks>
+        public DateTime? PublishedAtUtc { get; set; }
+
+        /// <summary>
+        /// Whether this session's photos, video and audio may be shown to the public.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Fail-closed by the data model.</b> <c>Pending</c> is zero, so a session that
+        /// has never been looked at cannot show its media however published its readings are.
+        /// Getting this backwards would put strangers' photographs on a public page the moment
+        /// somebody pressed publish, which is the feed's problem with none of the feed's
+        /// answers.</para>
+        ///
+        /// <para>Per session rather than per file, matching <c>OrgMessage.MediaReviewState</c>:
+        /// a reviewer looks at a night's captures together, and a night that contains one thing
+        /// that should not be public is a night that stays private.</para>
+        /// </remarks>
+        public Ben.Data.Common.Enums.FeedMediaReviewState MediaReviewState { get; set; }
+
+        /// <summary>Why a reviewer decided as they did, when they wrote it down.</summary>
+        public string? MediaReviewNote { get; set; }
+
+        public Guid? MediaReviewedByAppUserId { get; set; }
+        public DateTime? MediaReviewedUtc { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
+        public virtual Place? Place { get; set; }
         public virtual Investigation? Investigation { get; set; }
         public virtual AppUser SubmittedByAppUser { get; set; } = null!;
         public virtual AppUser? RecordedByAppUser { get; set; }

@@ -22,6 +22,7 @@ struct UploadSessionView: View {
     @State private var finished = false
     @State private var errorMessage: String?
     @State private var offeringCleanup = false
+    @State private var offeringArchive = false
 
     private enum FileState: Equatable {
         case waiting, sending, sent, failed(String)
@@ -44,6 +45,7 @@ struct UploadSessionView: View {
                     destinationSection
                     filesSection
                     sendSection
+                    archiveSection
                 }
             }
             .navigationTitle("Send session")
@@ -158,6 +160,34 @@ struct UploadSessionView: View {
         } footer: {
             if let uploadedAt = summary?.uploadedAt {
                 Text("Last sent \(uploadedAt.formatted(date: .abbreviated, time: .shortened)).")
+            }
+        }
+    }
+
+    /// Offered only once the session is actually on the server, because publishing is a thing
+    /// that happens to an uploaded row — and only for sessions with no investigation, since a
+    /// group's work reaches a place page through the investigation it belongs to.
+    @ViewBuilder
+    private var archiveSection: some View {
+        if summary?.isUploaded == true, chosenInvestigationId == nil,
+           let serverId = summary?.serverSessionId {
+            Section {
+                Button {
+                    offeringArchive = true
+                } label: {
+                    Label("Add to the public archive", systemImage: "building.columns")
+                }
+                .disabled(busy)
+                .accessibilityIdentifier("add-to-archive")
+            } header: {
+                Text("Share what you found")
+            } footer: {
+                Text("Puts your readings on the location's own page, next to everyone else who "
+                   + "has recorded there. Photos and audio stay private. You can undo it later.")
+            }
+            .sheet(isPresented: $offeringArchive) {
+                PublishToArchiveView(serverSessionId: serverId, localSessionId: sessionId)
+                    .environment(dependencies)
             }
         }
     }

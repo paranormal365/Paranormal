@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260830200818_AddFieldSessionPlaceAndPublication")]
+    partial class AddFieldSessionPlaceAndPublication
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3029,19 +3032,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("MarkerCount")
                         .HasColumnType("int");
 
-                    b.Property<string>("MediaReviewNote")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("MediaReviewState")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("MediaReviewedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("MediaReviewedUtc")
-                        .HasColumnType("datetime2");
-
                     b.Property<Guid?>("PlaceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3078,8 +3068,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.HasIndex("InvestigationId", "StartedAt");
-
-                    b.HasIndex("MediaReviewState", "PublishedAtUtc");
 
                     b.HasIndex("PlaceId", "PublishedAtUtc");
 

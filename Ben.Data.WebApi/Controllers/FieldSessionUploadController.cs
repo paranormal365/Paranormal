@@ -501,7 +501,7 @@ public sealed class FieldSessionUploadController : BenControllerBase
         new(session.Id, session.InvestigationId, session.DeviceSessionId, session.DeviceModel, session.LocationLabel,
             session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
             session.DocumentUploadFileId, session.RecordedByAppUserId, session.RecordedByName,
-            session.DateCreated,
+            session.DateCreated, session.PlaceId, session.PublishedAtUtc,
             session.Files
                 .OrderBy(f => f.RelativePath)
                 .Select(f => new FieldSessionFileRecord(
@@ -573,7 +573,12 @@ public sealed record FieldSessionRecord(
     Guid Id, Guid? InvestigationId, Guid DeviceSessionId, string DeviceModel, string? LocationLabel,
     DateTime StartedAt, DateTime? EndedAt, int ReadingCount, int MarkerCount,
     Guid DocumentUploadFileId, Guid? RecordedByAppUserId, string? RecordedByName,
-    DateTime DateCreated, IReadOnlyList<FieldSessionFileRecord> Files);
+    DateTime DateCreated,
+    // Where it was recorded, and when its owner put it in that place's public archive. Both here
+    // because a person must be able to see the answer for their OWN session — a publication
+    // nobody can see the state of is one nobody can knowingly retract.
+    Guid? PlaceId, DateTime? PublishedAtUtc,
+    IReadOnlyList<FieldSessionFileRecord> Files);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

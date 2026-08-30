@@ -272,6 +272,43 @@ A session can also be exported as a **.zip in the IsHaunted device data format**
 published format any instrument maker can write. That file can go by AirDrop, email or Files to
 anyone, whether or not they use this site.
 
+## Sharing what you found — the field archive
+
+A session normally belongs to you, or to the investigation you recorded it for. There is a third
+option, and it is the reason the app is worth having without a group at all.
+
+After a session has been sent, the send screen offers **Add to the public archive**. That puts the
+session's readings on the page for the place you recorded at — alongside everybody else who has
+ever recorded there.
+
+### Why that is worth doing
+
+One person's readings at a location are a story. The same location recorded by ten people, over
+years, is something anybody can check. If eleven of twelve visits show a magnetic anomaly on the
+same set of stairs, that is a persistent feature of the building. If one visit in twelve shows it,
+it was noise. Nothing else in this field can tell those two apart, because everybody's recordings
+normally stay on the phone that made them.
+
+### How it works
+
+1. Send the session as usual.
+2. Tap **Add to the public archive**.
+3. The app offers **public locations near where you recorded**, each showing how many sessions are
+   already there. Picking one is what keeps a location on a single page — two people typing the
+   same cave slightly differently would otherwise create two.
+4. Nothing nearby? Name the place, and it will still be matched against any existing record before
+   a new one is created.
+
+### What becomes public, and what does not
+
+- **Your readings, your name, and when you recorded** go on the location's page.
+- **Photos, video and audio** are shared too, and can be flagged by any reader — a flagged session
+  has its media hidden immediately, until a moderator looks. The readings stay either way.
+- **Public locations only.** A session recorded at somebody's home can never be archived. That
+  work stays with you and your group, which is what the paid plans are for.
+- **You can take it back.** Retracting removes the session from the page at any time. What people
+  have already read cannot be unread, which is worth a moment's thought before the first publish.
+
 ## A note on what the app shows you
 
 The app follows exactly the same rules as the website about who may see what. A private
@@ -281,4 +318,5 @@ it is on a phone.
 
 ## Getting the app
 
-The apps are not on the App Store yet. When they are, this page will say so and link to them.
+The iPhone and iPad app has been submitted to the App Store and is awaiting Apple's review. When
+it is approved, this page will link to it.
