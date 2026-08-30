@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -213,4 +213,18 @@ public sealed partial class BenAdminClientAdapter
         var tLon = toLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
         return _api.GetAsync<DirectionsResult>($"/api/directions?fromLat={fLat}&fromLon={fLon}&toLat={tLat}&toLon={tLon}", token);
     }
+
+    /// <inheritdoc />
+    public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
+        => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
+
+    /// <inheritdoc />
+    public Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
+        Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<MergePlaceRequest, PlaceMergeResult>(
+            HttpMethod.Post, $"/api/admin/places/{losingPlaceId}/merge",
+            new MergePlaceRequest(intoPlaceId), token);
 }
+
+/// <summary>The body the merge endpoint expects.</summary>
+public sealed record MergePlaceRequest(Guid IntoPlaceId);
