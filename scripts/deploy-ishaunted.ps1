@@ -300,6 +300,36 @@ function Clear-AppOffline ([string]$dir) {
 }
 
 # =============================================================================
+# 0. One deploy at a time
+# =============================================================================
+# Staging the sidecar drop and publishing the apps both write into the same site folders, and a
+# second run starting while the first is mid-publish interleaves file copies — producing a site
+# that is neither the old build nor the new one, with nothing in any log saying so. A lock file
+# is enough: this is one machine, and the failure being prevented is a person running the script
+# twice, not a distributed race.
+#
+# The handle is held for the life of the process, so an abandoned lock dies with the shell that
+# owned it rather than needing a stale-lock timeout nobody would tune correctly.
+$lockPath = Join-Path ([System.IO.Path]::GetTempPath()) 'ishaunted-deploy.lock'
+try {
+    $script:DeployLock = [System.IO.File]::Open(
+        $lockPath, [System.IO.FileMode]::OpenOrCreate,
+        [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+}
+catch {
+    throw @"
+Another deploy or stage is already running on this machine (lock: $lockPath).
+Wait for it to finish. If you are certain nothing is running - the previous run was killed, say -
+close that PowerShell window and try again; the lock is released when its process exits.
+"@
+}
+
+# No explicit release, and none is needed: the handle belongs to this process, so Windows drops it
+# when PowerShell exits — normally, on a throw, or if the window is closed. Wrapping the whole
+# script in try/finally would release it a few milliseconds earlier and would be a structural
+# change to a script that cannot be syntax-checked from the machine it is edited on.
+
+# =============================================================================
 # 1. Preflight
 # =============================================================================
 Write-Step 'Preflight'
@@ -334,6 +364,28 @@ if (-not $sqlConn) { $sqlConn = $SqlConnectionString }
 $smtpPassword = Get-JsonValue $secrets 'SmtpPassword'
 $stripeSecret  = Get-JsonValue $secrets 'StripeSecretKey'
 $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
+
+# The two Stripe values are indistinguishable to everything downstream — both are opaque strings
+# on an app pool — so the wrong one in the wrong slot fails silently, at the worst moment, in a
+# way nothing explains. It has already happened once: a pk_live_ was pasted into
+# StripeWebhookSecret, which would have made every live webhook delivery answer 400 while
+# payments appeared to work. The prefixes are Stripe's own and are worth checking here, where
+# somebody is watching, rather than in a dashboard delivery log three days later.
+if ($stripeSecret -and -not $stripeSecret.StartsWith('sk_')) {
+    if ($stripeSecret.StartsWith('pk_')) {
+        throw "StripeSecretKey holds a PUBLISHABLE key (pk_...). The publishable key is not used by this app at all - it belongs to browser-side checkout, which this site does not use. Put the SECRET key (sk_live_... from Stripe > Developers > API keys) here."
+    }
+    throw "StripeSecretKey does not look like a Stripe secret key - it should start with sk_ (sk_live_ in production, sk_test_ in a sandbox)."
+}
+if ($stripeWebhook -and -not $stripeWebhook.StartsWith('whsec_')) {
+    if ($stripeWebhook.StartsWith('pk_') -or $stripeWebhook.StartsWith('sk_')) {
+        throw "StripeWebhookSecret holds an API key, not a signing secret. The signing secret starts with whsec_ and is shown on the webhook endpoint's own page in Stripe > Developers > Webhooks - not on the API keys page."
+    }
+    throw "StripeWebhookSecret does not look like a Stripe signing secret - it should start with whsec_."
+}
+if ($stripeSecret -and $stripeSecret.StartsWith('sk_test_')) {
+    Write-Warn 'StripeSecretKey is a TEST key. Real cards will be refused and no money will move. Use sk_live_ for production.'
+}
 if (-not $smtpPassword) {
     Write-Warn 'SmtpPassword is not in the secrets file. Email will fail, and because accounts require a confirmed address, anyone who registers will never be able to sign in.'
 }
@@ -723,10 +775,12 @@ if ($Apps -contains 'website') {
 # administrators, and deliberately never appear in any appsettings file in the deployed package.
 function Set-PoolEnv ([string]$pool, [string]$name, [string]$value) {
     $filter = "system.applicationHost/applicationPools/add[@name='$pool']/environmentVariables"
-    try {
-        Remove-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter `
-            -Name '.' -AtElement @{ name = $name } -ErrorAction Stop
-    } catch { }   # not there yet, which is the normal case on a first deploy
+    # -ErrorAction SilentlyContinue rather than Stop-inside-try: with Stop, the cmdlet still
+    # writes its complaint to the error stream on the way out, so a first deploy printed a red
+    # "element not found" for every variable it was about to add correctly. Alarming, meaningless,
+    # and the thing an operator then learns to ignore — which is how a real error gets missed.
+    Remove-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter `
+        -Name '.' -AtElement @{ name = $name } -ErrorAction SilentlyContinue -ErrorVariable null
     Add-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter `
         -Name '.' -Value @{ name = $name; value = $value }
     Write-Detail "$name set on $pool"

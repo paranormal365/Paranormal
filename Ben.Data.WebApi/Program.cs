@@ -489,6 +489,19 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// ── Security response headers ───────────────────────────────────────────────
+// The API's need for nosniff is sharper than the website's: this is what actually SERVES the
+// uploaded bytes — evidence photos, session documents, receipts — and a browser that decides an
+// uploaded "image" is really HTML would run it as HTML on this origin, with the caller's bearer
+// token in play. Referrer-Policy matters here because API paths carry case, place and
+// organization ids in the URL.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    await next();
+});
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();

@@ -1,4 +1,4 @@
-using Ben.Data.Common;
+﻿using Ben.Data.Common;
 using Microsoft.AspNetCore.HttpOverrides;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
@@ -227,6 +227,30 @@ var app = builder.Build();
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+});
+
+// ── Security response headers ───────────────────────────────────────────────
+// Two headers, both cheap, both closing a real gap the deploy audit named:
+//
+//   X-Content-Type-Options: nosniff — stops a browser second-guessing a declared content type.
+//     This site serves user-uploaded files, and a browser that decides an uploaded "image" is
+//     really HTML will run it as HTML on this origin. The upload paths already refuse SVG for
+//     exactly that reason; this is the same defence applied to everything at once.
+//
+//   Referrer-Policy: strict-origin-when-cross-origin — the full URL stops travelling to other
+//     sites in the Referer header. Paths here carry case, investigation, place and organization
+//     ids, so a link out to a map or an evidence source was quietly handing that address to a
+//     third party. Same-origin navigation keeps the full path, so nothing internal changes.
+//
+// Deliberately NOT a Content-Security-Policy: this site loads Telerik, wavesurfer, mapping and
+// inline Blazor bootstrap script, and a CSP written blind would either be so loose it means
+// nothing or would break the editor in ways only found in production. It is worth doing
+// properly, on its own, with the browser console open.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    await next();
 });
 
 // Configure the HTTP request pipeline.
