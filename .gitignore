@@ -103,7 +103,9 @@ TestResults/
 *.secrets
 
 # ── Ben.iOS (Xcode / SwiftPM) ────────────────────────────────────────────────
-Ben.iOS/**/xcuserdata/
+# Anywhere, not just Ben.iOS: a stray workspace made during Xcode Cloud troubleshooting shipped
+# its window-state binary because the old rule was path-scoped.
+**/xcuserdata/
 Ben.iOS/**/.DS_Store
 Ben.iOS/BenKit/.build/
 Ben.iOS/DerivedData/
@@ -113,3 +115,6 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 
 .uploads-e2e/
 .uploads-IsHauntedDb_e2e*/
+
+# Working-copy-only secrets, e.g. the App Review demo password
+*.local.md

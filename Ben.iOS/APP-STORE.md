@@ -55,7 +55,11 @@ Bundle id `com.ishaunted.ios`, version 0.1.0 (build 1), iPhone and iPad, iOS 18.
 
 **Category:** Primary — Lifestyle. Secondary — Utilities.
 
-**Age rating:** 12+ (infrequent/mild horror themes; user-generated content with moderation).
+**Age rating:** 13+ as computed by the questionnaire (2026-08-30, 171 countries/regions).
+Driven by: Horror/Fear themes = infrequent/mild, Social Media = yes, Messaging and Chat = yes,
+Declared Age Range API gating = **no** (nothing in the app calls it — do not answer yes to that
+one without building the gate). The 13+ floor is what keeps under-13 accounts from downloading
+a social app with no age gating, and it matches the privacy policy's under-13 statement.
 
 **URLs**
 | Field | Value |
@@ -104,7 +108,9 @@ There are no third-party SDKs in the app at all — verified by search, not by m
 > without signing in, and in full at https://ishaunted.com/privacy
 >
 > **Demo account** for the group-side features (cases, investigations, rosters):
-> — supply credentials here before submitting —
+> apple@apple.com — password in `demo-credentials.local.md` (gitignored) and in
+> App Store Connect's sign-in fields. Verified working against production 08/29,
+> member of Paranormal365, rostered on an investigation.
 >
 > Sign in with Apple is offered alongside email and Microsoft sign-in.
 
@@ -150,11 +156,11 @@ There are no third-party SDKs in the app at all — verified by search, not by m
       erase a group's history. An organization's owner is refused until they have handed the group
       over — exactly one owner exists per organization — and is told by name which groups those
       are, because Apple rejects a blocked path that cannot say what to do about it.
-
+      
       External logins go with it, so Sign in with Apple cannot walk back into a closed account; a
       later Apple sign-in creates a new one. `RecordingSignInManager.CanSignInAsync` refuses a
       closed account by any route.
-
+      
       **Needs a migration applied before this works anywhere:**
       ```
       dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi
@@ -162,7 +168,7 @@ There are no third-party SDKs in the app at all — verified by search, not by m
       `20260828164309_AddAppUserDateClosed` — one nullable column on `AppUsers`, additive, and
       invisible to the currently deployed build. Not applied here: it is a schema change to the
       database serving the live site, which is Ben's call rather than a side effect of a feature.
-
+      
       Verified end-to-end against a scratch database instead (`IsHauntedDb_closure`, safe to
       drop): an owner is refused by name, a lower-case confirmation is rejected, a non-owner
       account deleted with 204, sign-in afterwards answered 401, and the row came back as
@@ -177,11 +183,11 @@ There are no third-party SDKs in the app at all — verified by search, not by m
       and threads — a blocked author's own thread is NotFound). Blocking severs follows in both
       directions; unblocking does not restore them. Deliberately not gated on feed participation
       or the feed flag — being abused doesn't require standing to post.
-
+      
       In the app: Block on every post's menu (with confirmation; removes their posts from screen
       at once), and Profile → Blocked accounts to review and unblock. The person blocked is not
       told and sees nothing different.
-
+      
       Migration `20260828172652_AddUserBlocks` applied to dev; production gets it with the next
       deploy's `database update`. The WEBSITE has no block UI yet — server filtering is in place,
       so it is a small follow-up, not a launch blocker (the feed is dark on the site anyway).

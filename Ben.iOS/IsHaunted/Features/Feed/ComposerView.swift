@@ -262,7 +262,7 @@ struct CameraPicker: UIViewControllerRepresentable {
                 let size = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? Int64) ?? 0
                 parent.onCaptured(MediaUpload(
                     fileURL: destination, filename: destination.lastPathComponent,
-                    contentType: "video/quicktime", byteCount: size ?? 0))
+                    contentType: "video/quicktime", byteCount: size))
                 return
             }
 
