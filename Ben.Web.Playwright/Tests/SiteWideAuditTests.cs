@@ -77,6 +77,9 @@ public class SiteWideAuditTests : BenTestBase
             // and a /privacy that has become gated or moved is a rejected app submission
             // rather than a broken footer link — so it is walked as a stranger, on purpose.
             ("/privacy", "Privacy"),
+            // The written basis for the app-store content-rights answer and the feed's
+            // moderation authority — worthless behind a sign-in, so walked as a stranger.
+            ("/terms", "Terms"),
             ("/forgot-password", null),
         ], findings);
 
