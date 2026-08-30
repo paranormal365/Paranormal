@@ -1,4 +1,4 @@
-
+﻿
 <!DOCTYPE html>
 <html lang="en">
 
@@ -70,7 +70,14 @@
     <script src="/js/timezone.js"></script>
     <script src="/js/chunked-upload.js"></script>
     <link rel="stylesheet" href="/@Assets["Ben.Web.Website.styles.css"]" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    @* The IsHaunted ghost, rasterized from static/images/is-haunted-logo.svg — until 08/30/2026
+       this was the default Blazor flame, which nobody had looked at in a tab bar. The
+       apple-touch icon is flattened onto the site's dark ground on purpose: iOS discards alpha
+       and would pick the backdrop itself. *@
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <HeadOutlet @rendermode="@InteractiveServer" />
     <!-- The dark half of ApexCharts' theming; the template ships only the light half. After the
          theme file so it can override it, before app.css so app.css still has the last word. -->

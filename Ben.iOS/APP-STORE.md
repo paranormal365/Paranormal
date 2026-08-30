@@ -55,6 +55,11 @@ Bundle id `com.ishaunted.ios`, version 0.1.0 (build 1), iPhone and iPad, iOS 18.
 
 **Category:** Primary — Lifestyle. Secondary — Utilities.
 
+**Availability:** United States only at launch (2026-08-30). Deliberate: every real group is in
+Tennessee, the discovery surfaces are empty screens elsewhere, and worldwide availability is
+worldwide data-rights obligations on day one. Expanding is an instant no-review checkbox edit —
+second wave when wanted: Canada, United Kingdom, Ireland, Australia, New Zealand. Price: Free.
+
 **Age rating:** 13+ as computed by the questionnaire (2026-08-30, 171 countries/regions).
 Driven by: Horror/Fear themes = infrequent/mild, Social Media = yes, Messaging and Chat = yes,
 Declared Age Range API gating = **no** (nothing in the app calls it — do not answer yes to that
