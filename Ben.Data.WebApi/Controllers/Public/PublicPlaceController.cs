@@ -75,15 +75,81 @@ public sealed class PublicPlaceController : ControllerBase
                 i.OrganizationUrlName))
             .ToList();
 
-        return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows)));
+        return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows),
+            await PublishedSessionsAsync(db, id, ct)));
     }
+
+    /// <summary>
+    /// The archive: every field session somebody published here, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This is the part no other tool has.</b> A single person's readings at a location
+    /// are an anecdote; the same location recorded by eleven people over two years is either a
+    /// persistent artifact or a demonstrated absence of one. The rows carry marker and reading
+    /// counts precisely so a reader can compare visits rather than take one on faith.</para>
+    ///
+    /// <para><b>PublishedAtUtc is the only gate.</b> Not the place's kind, not the session's
+    /// owner, not a visibility enum — publication is an act somebody performed, and the query
+    /// asks whether they performed it. The kind is checked when publishing, which is where a
+    /// refusal can still be explained to the person it affects.</para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublicPlaceSessionRow>> PublishedSessionsAsync(
+        BenDataContext db, Guid placeId, CancellationToken ct)
+        => await db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.PlaceId == placeId && s.PublishedAtUtc != null)
+            .OrderByDescending(s => s.StartedAt)
+            .Select(s => new PublicPlaceSessionRow(
+                s.Id,
+                // The recorder's own name when they gave one, otherwise the account that sent
+                // it. Attribution is what makes an archive citable — an anonymous pile of
+                // numbers is worth less than one reading somebody put their name to.
+                s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                s.SubmittedByAppUserId,
+                s.LocationLabel,
+                s.StartedAt,
+                s.EndedAt,
+                s.ReadingCount,
+                s.MarkerCount,
+                s.DeviceModel,
+                s.PublishedAtUtc!.Value,
+                s.DocumentUploadFileId))
+            .ToListAsync(ct);
 }
 
 /// <summary>What a visitor gets for one place.</summary>
 public sealed record PublicPlaceResponse(
     PlaceRecord Place,
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
-    PlaceSummary Summary);
+    PlaceSummary Summary,
+    // Defaulted so every existing caller — the website's place page among them — keeps compiling
+    // and simply renders no archive until it asks for one.
+    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null);
+
+/// <summary>
+/// One published field session in a place's archive.
+/// </summary>
+/// <remarks>
+/// <para><b>Readings, not media.</b> The document's numbers are what make visits comparable, and
+/// they carry no moderation problem. Photos and audio wait for the archive to have the screening,
+/// reporting and blocking the feed already has.</para>
+/// <para><see cref="DeviceModel"/> is here for an unglamorous but necessary reason: phone
+/// magnetometers differ, and a reader comparing a spike across two visits deserves to know
+/// whether they are comparing two instruments as well as two nights.</para>
+/// </remarks>
+public sealed record PublicPlaceSessionRow(
+    Guid Id,
+    string ContributorName,
+    Guid ContributorAppUserId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime? EndedAt,
+    int ReadingCount,
+    /// <summary>Moments the recorder flagged. The single most comparable number across visits —
+    /// "eleven of twelve people marked something on those stairs" is the archive's whole point.</summary>
+    int MarkerCount,
+    string DeviceModel,
+    DateTime PublishedAtUtc,
+    Guid DocumentUploadFileId);
 
 /// <summary>
 /// One published investigation. Deliberately thinner than the signed-in row: no visibility (every

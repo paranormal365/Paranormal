@@ -1,4 +1,4 @@
-using Ben.Service.Models.Admin;
+﻿using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
@@ -346,7 +346,31 @@ public sealed record PublicPlaceInvestigationRow(
 public sealed record PublicPlaceResponse(
     PlaceRecord Place,
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
-    PlaceSummary Summary);
+    PlaceSummary Summary,
+    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null);
+
+/// <summary>
+/// One published field session in a place's archive.
+/// </summary>
+/// <remarks>
+/// <para>Mirrors <c>PublicPlaceSessionRow</c> in PublicPlaceController — this library cannot
+/// reference the WebApi project, so the shape is restated. It is decoded from the server's JSON
+/// by name, so a rename on either side has to happen on both.</para>
+/// <para><c>MarkerCount</c> is the number the archive exists for: moments the recorder flagged,
+/// and the only figure directly comparable between two people's visits to one location.</para>
+/// </remarks>
+public sealed record PublicPlaceSessionRow(
+    Guid Id,
+    string ContributorName,
+    Guid ContributorAppUserId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime? EndedAt,
+    int ReadingCount,
+    int MarkerCount,
+    string DeviceModel,
+    DateTime PublishedAtUtc,
+    Guid DocumentUploadFileId);
 
 // ── Org-wide investigation records (Area 9) ───────────────────────────────────
 // Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference

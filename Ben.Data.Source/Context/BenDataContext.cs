@@ -2686,6 +2686,14 @@ namespace Ben.Data.Source.Context
             // people handed the same exported session each keep their own copy.
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.SubmittedByAppUserId, e.DeviceSessionId }).IsUnique();
+            // NoAction: a place is a shared reference, and deleting one must never silently take
+            // somebody's session recording with it.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            // The archive's one query: everything published at this place, newest first.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.PlaceId, e.PublishedAtUtc });
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.DeviceModel).HasMaxLength(100);
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.LocationLabel).HasMaxLength(400);
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.RecordedByName).HasMaxLength(200);
