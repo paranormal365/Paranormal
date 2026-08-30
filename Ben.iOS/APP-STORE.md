@@ -55,7 +55,11 @@ Bundle id `com.ishaunted.ios`, version 0.1.0 (build 1), iPhone and iPad, iOS 18.
 
 **Category:** Primary — Lifestyle. Secondary — Utilities.
 
-**Age rating:** 12+ (infrequent/mild horror themes; user-generated content with moderation).
+**Age rating:** 13+ as computed by the questionnaire (2026-08-30, 171 countries/regions).
+Driven by: Horror/Fear themes = infrequent/mild, Social Media = yes, Messaging and Chat = yes,
+Declared Age Range API gating = **no** (nothing in the app calls it — do not answer yes to that
+one without building the gate). The 13+ floor is what keeps under-13 accounts from downloading
+a social app with no age gating, and it matches the privacy policy's under-13 statement.
 
 **URLs**
 | Field | Value |
