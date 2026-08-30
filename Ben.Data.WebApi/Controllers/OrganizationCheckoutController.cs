@@ -47,14 +47,6 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         _configuration = configuration;
     }
 
-    public sealed record StartCheckoutRequest(BillingInterval Interval, string? CouponCode);
-
-    /// <param name="RedirectUrl">Where to send the person: Stripe's hosted page — or, for a
-    /// 100%-off period that charges nothing, straight back to the group, already subscribed.</param>
-    /// <param name="PaidWithoutCharge">True on the free-coupon path, so the screen can say
-    /// "you're subscribed" instead of "redirecting to payment…".</param>
-    public sealed record StartCheckoutResponse(string RedirectUrl, bool PaidWithoutCharge);
-
     [HttpPost]
     public async Task<ActionResult<StartCheckoutResponse>> Start(
         Guid organizationId, [FromBody] StartCheckoutRequest request, CancellationToken ct)
@@ -122,7 +114,9 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             listPrice, discount);
 
         var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
-        var groupUrl = $"{baseUrl}/o/{org.UrlName}";
+        // Back to the billing page either way: the person left it to pay, and landing them on
+        // the public group page instead would make a successful payment feel like a wrong turn.
+        var billingUrl = $"{baseUrl}/organizations/{organizationId}/billing";
 
         // ── the 100%-off period: real subscription, no card ──────────────────
         // A free trial coupon prices the period at zero, and Stripe refuses zero-amount
@@ -134,7 +128,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
                 SessionId: $"free-{Guid.NewGuid():N}",
                 PaymentIntentRef: null, CustomerRef: null, PaymentMethodRef: null,
                 facts.ToMetadata()), ct);
-            return Ok(new StartCheckoutResponse($"{groupUrl}?billing=subscribed", PaidWithoutCharge: true));
+            return Ok(new StartCheckoutResponse($"{billingUrl}?checkout=free", PaidWithoutCharge: true));
         }
 
         if (!_stripe.IsConfigured)
@@ -145,8 +139,8 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             organizationId, org.Name, sub?.ProviderCustomerRef,
             payable, tax,
             $"IsHaunted \"{tier.Name}\" — {members} members, billed {Cadence(request.Interval)}",
-            SuccessUrl: $"{groupUrl}?billing=paid",
-            CancelUrl:  $"{groupUrl}?billing=cancelled",
+            SuccessUrl: $"{billingUrl}?checkout=success",
+            CancelUrl:  $"{billingUrl}?checkout=cancelled",
             facts.ToMetadata()), ct);
 
         return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));

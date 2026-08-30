@@ -1,4 +1,4 @@
-using Ben.Service.Models;
+﻿using Ben.Service.Models;
 using Ben.Service.Models.Admin;
 
 namespace Ben.Web.Services.WebApi;
@@ -90,6 +90,12 @@ public sealed partial class BenAdminClientAdapter
         Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SubscriptionQuoteRequest, SubscriptionQuoteResponse>(
             HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/quote", request, token);
+
+    /// <inheritdoc />
+    public Task<(StartCheckoutResponse? Result, string? Error)> StartCheckoutAsync(
+        Guid organizationId, StartCheckoutRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<StartCheckoutRequest, StartCheckoutResponse>(
+            HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout", request, token);
 
     // ── the money trail (item 168) ────────────────────────────────────────────
 

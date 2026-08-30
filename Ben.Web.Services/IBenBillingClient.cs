@@ -1,4 +1,4 @@
-using Ben.Service.Models;
+﻿using Ben.Service.Models;
 using Ben.Service.Models.Admin;
 using Ben.Web.Services.WebApi;
 
@@ -93,6 +93,14 @@ public interface IBenBillingClient
     /// </summary>
     Task<(SubscriptionQuoteResponse? Result, string? Error)> QuoteSubscriptionAsync(
         Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Turns an accepted quote into money: Stripe's hosted page URL to redirect to, or — for a
+    /// 100%-off period — a subscription already opened. The error is the server's own sentence
+    /// (a dead coupon, an unsold cadence), which the screen shows beside the button.
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartCheckoutAsync(
+        Guid organizationId, StartCheckoutRequest request, CancellationToken token = default);
 
     // ── the money trail (item 168) ────────────────────────────────────────────
 

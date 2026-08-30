@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 
 namespace Ben.Service.Models;
 
@@ -97,3 +97,12 @@ public record OrgSubscriptionView(
     bool CancelAtPeriodEnd,
     IReadOnlyList<OrgEffectiveLimit> Limits,
     bool AnyTermsHeldByContract);
+
+/// <summary>Starts a paid checkout: the cadence, and whatever coupon was typed.</summary>
+public record StartCheckoutRequest(BillingInterval Interval, string? CouponCode);
+
+/// <param name="RedirectUrl">Where to send the person: Stripe's hosted page — or, for a
+/// 100%-off period that charges nothing, straight back to billing, already subscribed.</param>
+/// <param name="PaidWithoutCharge">True on the free-coupon path, so the screen can say
+/// "you're subscribed" instead of "redirecting to payment…".</param>
+public record StartCheckoutResponse(string RedirectUrl, bool PaidWithoutCharge);

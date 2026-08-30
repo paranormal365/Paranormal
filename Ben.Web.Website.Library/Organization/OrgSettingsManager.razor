@@ -13,6 +13,20 @@ else
     @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
     @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
 
+    @* The door to billing — its own page, not a card here: a payment flow, plan, history and
+       receipts are a manage-everything surface (pages-over-windows), and half of it was
+       write-only until the page existed. *@
+    <div class="card mb-3">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="credit-card" Class="fs-4 text-success" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Billing &amp; subscription</h6>
+                <span class="small text-secondary">Your plan, payments, receipts — and where to subscribe.</span>
+            </div>
+            <a class="btn btn-outline-primary" href="/organizations/@OrgId/billing">Open billing</a>
+        </div>
+    </div>
+
     @* Item 166 W3: the door to the promotion wizard. *@
     <div class="card mb-3">
         <div class="card-body d-flex align-items-center gap-3">
