@@ -115,3 +115,6 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 
 .uploads-e2e/
 .uploads-IsHauntedDb_e2e*/
+
+# Working-copy-only secrets, e.g. the App Review demo password
+*.local.md
