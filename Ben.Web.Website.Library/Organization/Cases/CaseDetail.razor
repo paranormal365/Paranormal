@@ -253,7 +253,7 @@
             @* ── Transfers ────────────────────────────────────────────────── *@
             <BenTab Title="Transfers" Id="transfers">
                 <div class="mt-2">
-                    <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)" />
                 </div>
             </BenTab>
 
