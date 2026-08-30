@@ -168,6 +168,12 @@ struct RootShell: View {
             CaseReportPDFView(caseId: caseId, reportId: reportId)
         case .security:
             SecurityView()
+        case .blockedAccounts:
+            BlockedAccountsView()
+        case .about:
+            AboutView()
+        case .deleteAccount:
+            DeleteAccountView()
         case .confirmEmail(let token):
             // The website's link carries userId and code as query values; the app's own
             // /validate-email/{token} form packs them as "userId:code".

@@ -572,6 +572,26 @@ public sealed record MyOrgPermissionsItem(
 public sealed record OrgAreaActions(bool Create, bool Read, bool Update, bool Delete);
 
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
+/// <summary>One named space inside a place — a hotel's Room 217, a cellar (item 197).</summary>
+public sealed record PlaceRoomRecord(
+    Guid     Id,
+    Guid     PlaceId,
+    string   Name,
+    string?  Floor,
+    string?  Description,
+    bool     IsPublic,
+    int      SortOrder,
+    bool     IsActive);
+
+/// <summary>Naming or editing a room. Sort order and active state are optional on an edit.</summary>
+public sealed record SavePlaceRoomRequest(
+    string? Name,
+    string? Floor,
+    string? Description,
+    bool    IsPublic,
+    int?    SortOrder = null,
+    bool?   IsActive = null);
+
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
 
 /// <summary>One candidate for the share-from-user picker (item 175).</summary>

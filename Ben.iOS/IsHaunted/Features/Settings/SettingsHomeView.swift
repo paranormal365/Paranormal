@@ -38,6 +38,22 @@ struct SettingsHomeView: View {
                     NavigationLink(value: AppRoute.security) {
                         Label("Password & two-step sign-in", systemImage: "lock")
                     }
+                    NavigationLink(value: AppRoute.blockedAccounts) {
+                        Label("Blocked accounts", systemImage: "hand.raised")
+                    }
+                    .accessibilityIdentifier("settings-blocked-accounts")
+                }
+                // App Review 5.1.1(v): an app that creates accounts must let you delete one
+                // here, and not buried — a reviewer looks for it in the account settings. The
+                // screen itself explains what survives and what does not.
+                Section {
+                    NavigationLink(value: AppRoute.deleteAccount) {
+                        Label("Delete account", systemImage: "person.crop.circle.badge.xmark")
+                            .foregroundStyle(Theme.danger)
+                    }
+                    .accessibilityIdentifier("settings-delete-account")
+                } footer: {
+                    Text("Removes your name, sign-in and contact details. What you posted for a group stays with that group.")
                 }
             } else {
                 Section {
@@ -71,11 +87,30 @@ struct SettingsHomeView: View {
                 }
             }
 
+            // Deliberately outside the signed-in branch. App Review works through a build
+            // without an account for as long as it can, and "where does this app say what it
+            // does with my data" must be answerable from that state.
+            Section {
+                NavigationLink(value: AppRoute.about) {
+                    Label("About & Privacy", systemImage: "hand.raised")
+                }
+                .accessibilityIdentifier("settings-about")
+            } footer: {
+                Text("What IsHaunted does with what you give it — and what it doesn't.")
+            }
+
+            #if DEBUG
+            // Debug builds only. The base URL is not a user setting: a shipped app that can be
+            // pointed at localhost or an arbitrary host is one support call away from a person
+            // who cannot tell a broken app from a mistyped address. `AppRoute.developerSettings`
+            // is unreachable in release — nothing else navigates to it and DeepLinkParser does
+            // not produce it — so removing the row removes the screen.
             Section("Developer") {
                 NavigationLink(value: AppRoute.developerSettings) {
                     LabeledContent("API environment", value: dependencies.environment.name)
                 }
             }
+            #endif
         }
         .navigationTitle("Profile")
         .sheet(isPresented: $showSignIn) {
@@ -87,9 +122,10 @@ struct SettingsHomeView: View {
     }
 }
 
-/// Environment picker: Dev (localhost), UAT (ishaunted.com), or a custom base
-/// URL — path-preserving, so `https://host/webapi` works. Switching signs out
-/// and clears caches.
+/// Environment picker: Dev (localhost), the live site, or a custom base URL — path-preserving,
+/// so `https://host/webapi` works. Switching signs out and clears caches.
+///
+/// DEBUG builds only. Nothing in a release build navigates here.
 struct DeveloperSettingsView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var customURL: String = ""

@@ -17,6 +17,7 @@ struct FeedListView: View {
     @State private var replyingTo: FeedPostRecord?
     @State private var recategorizing: FeedPostRecord?
     @State private var reporting: FeedPostRecord?
+    @State private var blocking: FeedPostRecord?
     @State private var toast: String?
 
     init(fixedFilter: FeedFilter? = nil) {
@@ -104,6 +105,23 @@ struct FeedListView: View {
             }
         } message: {
             Text("An administrator will look at it. Reporting twice is one report.")
+        }
+        .alert("Block \(blocking?.authorDisplayName ?? "this person")?", isPresented: Binding(
+            get: { blocking != nil }, set: { if !$0 { blocking = nil } })
+        ) {
+            Button("Cancel", role: .cancel) { blocking = nil }
+            Button("Block", role: .destructive) {
+                if let post = blocking, let store {
+                    Task {
+                        let ok = await store.blockAuthor(of: post, actions: dependencies.feedActions)
+                        toast = ok ? "Blocked. You won't see their posts."
+                                   : "Couldn't block them — try again."
+                        blocking = nil
+                    }
+                }
+            }
+        } message: {
+            Text("Their posts and replies stop being shown to you. They aren't told, and you can undo this under Profile → Blocked accounts.")
         }
         .overlay(alignment: .bottom) {
             if let toast {
@@ -193,6 +211,7 @@ struct FeedListView: View {
                             onReply: { replyingTo = post },
                             onFollow: { Task { await store.toggleFollow(post, actions: dependencies.feedActions) } },
                             onReport: { reporting = post },
+                            onBlock: { blocking = post },
                             onRecategorize: { recategorizing = post })
                     }
                     if store.hasMore {

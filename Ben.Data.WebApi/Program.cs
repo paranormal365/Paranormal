@@ -1,4 +1,4 @@
-using Ben.Data.Common;
+﻿using Ben.Data.Common;
 using Microsoft.AspNetCore.HttpOverrides;
 using AutoMapper;
 using Ben.Data.WebApi.Services;
@@ -199,6 +199,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.CasePrivacyRetrofit>();
+// Deleting your own account — required by App Review 5.1.1(v). See AccountClosureService
+// for why it anonymises rather than deletes, and why an organization's owner is refused.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.AccountClosureService>();
 // Item 181: audio/video metadata stripping. No configured ffmpeg means the feature reports
 // itself unavailable rather than failing an upload.
 builder.Services.Configure<Ben.Data.WebApi.Services.MediaToolOptions>(
@@ -212,6 +215,11 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledW
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
+
+// Bearer tokens issued by MapIdentityApi are protected with Data Protection, so the key ring has
+// to outlive the process — without this, every restart of this API silently invalidates every
+// access and refresh token ever issued. See DataProtectionSetup for the full account.
+builder.Services.AddBenDataProtection(builder.Configuration, Log.Logger);
 
 // Sends Identity's confirmation / password-reset mail. Registered before AddIdentityApiEndpoints
 // so it wins over the framework's silent no-op sender — which, with RequireConfirmedAccount below,

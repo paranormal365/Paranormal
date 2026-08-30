@@ -183,8 +183,13 @@ struct FieldCameraPicker: UIViewControllerRepresentable {
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
             if let movie = info[.mediaURL] as? URL {
-                let duration = AVURLAsset(url: movie).duration.seconds
-                Task { await parent.onCaptured(movie, duration.isFinite ? duration : nil) }
+                Task {
+                    // load(.duration) replaced the synchronous property, which blocked the
+                    // calling thread while the container was parsed. A capture that failed to
+                    // yield a duration is still a capture — nil, never a lost recording.
+                    let duration = try? await AVURLAsset(url: movie).load(.duration).seconds
+                    await parent.onCaptured(movie, (duration?.isFinite == true) ? duration : nil)
+                }
             } else if let image = info[.originalImage] as? UIImage,
                       let data = image.jpegData(compressionQuality: 0.85) {
                 let scratch = FileManager.default.temporaryDirectory

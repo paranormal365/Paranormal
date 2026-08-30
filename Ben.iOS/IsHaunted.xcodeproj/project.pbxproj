@@ -10,6 +10,16 @@
 		BE00000000000000000000B3 /* BenKit in Frameworks */ = {isa = PBXBuildFile; productRef = BE00000000000000000000B2 /* BenKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		BE00000000000000000000DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BE00000000000000000000A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE00000000000000000000A2;
+			remoteInfo = IsHaunted;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		BE00000000000000000000C4 /* IsHaunted.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IsHaunted.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE00000000000000000000D4 /* IsHauntedUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IsHauntedUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -141,6 +151,7 @@
 			packageReferences = (
 				BE00000000000000000000B1 /* XCLocalSwiftPackageReference "BenKit" */,
 			);
+			preferredProjectObjectVersion = 77;
 			productRefGroup = BE00000000000000000000C2 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -185,16 +196,6 @@
 			targetProxy = BE00000000000000000000DC /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin PBXContainerItemProxy section */
-		BE00000000000000000000DC /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BE00000000000000000000A1 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BE00000000000000000000A2;
-			remoteInfo = IsHaunted;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		BE00000000000000000000A4 /* Debug */ = {
@@ -256,6 +257,7 @@
 				CODE_SIGN_ENTITLEMENTS = Support/IsHaunted.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5778H75249;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -264,7 +266,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -280,6 +282,7 @@
 				CODE_SIGN_ENTITLEMENTS = Support/IsHaunted.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5778H75249;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -288,7 +291,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -302,7 +305,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -318,7 +321,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

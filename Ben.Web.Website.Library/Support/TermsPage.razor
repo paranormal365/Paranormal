@@ -1,0 +1,145 @@
+@page "/terms"
+@namespace Ben.Web.Website.Library.Support
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@* Anonymous for the same reason /privacy is: this is the written basis for the content-rights
+   answer given to Apple and for the moderation authority the feed exercises, and both are only
+   worth anything on a page anybody can read without an account. Nothing here reads the signed-in
+   user — see feedback_author_sees_what_visitor_cannot. *@
+
+<PageTitle>Terms of Service — @SiteOptions.Value.Name</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:860px; margin:auto;">
+
+    <h1 class="mb-1">Terms of Service</h1>
+    <p class="text-secondary mb-4">
+        The agreement between you and @SiteOptions.Value.Name, covering the website and the
+        IsHaunted iPhone and iPad app. Last updated 08/30/2026.
+    </p>
+
+    <div class="card border-primary mb-4">
+        <div class="card-body">
+            <h2 class="h5 card-title mb-2">The short version</h2>
+            <p class="mb-0">
+                Your work stays yours. By posting it here you let us show it to the people you
+                aimed it at. Be lawful and decent, get permission before you record other people
+                or investigate their property, and we can remove content or accounts that break
+                these rules. The service comes as it is, and being about the paranormal, it
+                proves nothing.
+            </p>
+        </div>
+    </div>
+
+    <h2 class="h5 mt-4">1. Who may use it</h2>
+    <p>
+        You must be at least 13 years old. If you use @SiteOptions.Value.Name for a group, you
+        confirm you may act for that group. You are responsible for what happens under your
+        account and for keeping your sign-in to yourself.
+    </p>
+
+    <h2 class="h5 mt-4">2. Your content stays yours</h2>
+    <p>
+        Everything you create or upload — posts, photos, audio, video, readings, reports, case
+        notes — remains yours. We claim no ownership of any of it.
+    </p>
+    <p>
+        So that the service can work, you give us a non-exclusive, worldwide, royalty-free
+        licence to host, store, reproduce and display your content <em>to the audience you chose
+        for it</em>: a private case file to the people on that case, a group post to your group,
+        a public feed post or published page to anyone. Delete something and the licence for it
+        ends, except in backups for a short time and in things other people lawfully made from
+        it while it was published, such as a quote of a public post.
+    </p>
+    <p>
+        We never sell your content, never use it for advertising, and publishing something
+        beyond the audience you set is done only by you or with your consent — the same rule the
+        <a href="/privacy">privacy policy</a> makes about your information.
+    </p>
+
+    <h2 class="h5 mt-4">3. Your responsibilities in the field</h2>
+    <p>
+        Paranormal investigation happens in the real world, on real property, around real
+        people. You agree that:
+    </p>
+    <ul>
+        <li>You have permission to be where you investigate. Trespassing is not investigation.</li>
+        <li>You have the consent the law requires before recording people — audio recording
+            consent laws vary by state and country, and they are your responsibility.</li>
+        <li>Client work stays confidential to the case unless the client agrees otherwise. The
+            platform's private-engagement protections help, but the obligation is yours.</li>
+        <li>You will not present evidence as something it is not. Label what you captured
+            honestly; the community and your clients rely on it.</li>
+    </ul>
+
+    <h2 class="h5 mt-4">4. Rules of conduct</h2>
+    <p>Do not use @SiteOptions.Value.Name to:</p>
+    <ul>
+        <li>harass, threaten, or target anyone — including the living occupants of allegedly
+            haunted places;</li>
+        <li>post content that is unlawful, sexually explicit, or gratuitously violent;</li>
+        <li>publish someone's private information — a name, an address, a face — without their
+            consent;</li>
+        <li>impersonate a person or group, or misrepresent who you are;</li>
+        <li>spam, scrape, probe, overload, or interfere with the service or other people's use
+            of it;</li>
+        <li>charge vulnerable people for services you know to be baseless. Investigation is
+            welcome here; exploitation is not.</li>
+    </ul>
+
+    <h2 class="h5 mt-4">5. Moderation, and what we may remove</h2>
+    <p>
+        You can report any feed post, and block any user — blocking takes effect for you
+        immediately. Reports go to a moderator. We may remove content, restrict features, or
+        close accounts that break these terms, with or without notice, and we may preserve and
+        disclose content where the law requires it. We are not obliged to monitor everything,
+        and a post being visible is not our endorsement of it.
+    </p>
+
+    <h2 class="h5 mt-4">6. Groups, clients and payments</h2>
+    <p>
+        Groups manage their own membership, cases and clients; the group you join or hire is
+        responsible for its own conduct and its own agreements with you. Paid subscriptions for
+        groups are billed by @SiteOptions.Value.Name on the website, with the price and what it
+        covers shown before you pay. Subscriptions are not bought inside the iPhone or iPad app.
+    </p>
+
+    <h2 class="h5 mt-4">7. No promises about the paranormal</h2>
+    <p>
+        The instruments here measure real, ordinary things — magnetic fields, sound, position —
+        and the app tells you exactly what they are and are not. Neither the readings nor
+        anything published on this service is a claim that any place is haunted, that any
+        phenomenon is paranormal, or that any evidence proves anything. Entertainment,
+        investigation and community — not certification.
+    </p>
+
+    <h2 class="h5 mt-4">8. The service comes as it is</h2>
+    <p>
+        We provide @SiteOptions.Value.Name "as is" and "as available", without warranties of any
+        kind, and we may change, suspend or discontinue features. To the fullest extent the law
+        allows, our liability to you is limited to the amount you paid us in the twelve months
+        before the claim, and we are not liable for indirect or consequential losses — including
+        anything that happens on an investigation. Nothing here limits liability that the law
+        does not allow to be limited.
+    </p>
+
+    <h2 class="h5 mt-4">9. Leaving, and being asked to leave</h2>
+    <p>
+        You can <a href="/privacy">delete your account</a> at any time, from the app or by
+        asking us; what you authored for a group stays with that group, no longer under your
+        name, as the privacy policy describes. We may suspend or close accounts that break these
+        terms. Sections 2, 7 and 8 survive account closure.
+    </p>
+
+    <h2 class="h5 mt-4">10. Changes to these terms</h2>
+    <p>
+        If we change these terms in a way that matters, we will say so on the site before the
+        change takes effect. Using the service after that is acceptance of the new terms.
+    </p>
+
+    <h2 class="h5 mt-4">11. Questions</h2>
+    <p class="mb-4">
+        The <a href="/contact">contact form</a> reaches us — no account needed. These terms are
+        governed by the laws of the State of Tennessee, United States.
+    </p>
+
+</div>

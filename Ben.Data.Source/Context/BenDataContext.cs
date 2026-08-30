@@ -1,4 +1,4 @@
-using Ben.Data.Source.Entities;
+﻿using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +21,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
         public virtual DbSet<RateLimitRefusal> RateLimitRefusals { get; set; }
+        public virtual DbSet<PlaceRoom> PlaceRooms { get; set; }
         public virtual DbSet<SignInEvent> SignInEvents { get; set; }
         public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
@@ -98,6 +99,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FeedTypeWeightSet> FeedTypeWeightSets { get; set; }
         public virtual DbSet<FeedPostConsent> FeedPostConsents { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
+        public virtual DbSet<UserBlock> UserBlocks { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
@@ -566,6 +568,30 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<VideoAsset>().Property(e => e.ContentHash).HasMaxLength(64).IsRequired();
             // The catalog is read in full on every editor sync — index the filter it uses.
             modelBuilder.Entity<VideoAsset>().HasIndex(e => new { e.IsActive, e.SortOrder });
+
+            // ── PlaceRoom (item 197) ─────────────────────────────────────────
+            // Rooms belong to the ORGANIZATION that named them for a place, not to the place: a
+            // Place is shared, and two groups describing the same building must not edit each
+            // other's rooms.
+            modelBuilder.Entity<PlaceRoom>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceRoom>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceRoom>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceRoom>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceRoom>().Property(e => e.Name).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<PlaceRoom>().Property(e => e.Floor).HasMaxLength(60);
+            modelBuilder.Entity<PlaceRoom>().Property(e => e.Description).HasMaxLength(1000);
+            // One "Room 217" per group per building. The Field Kit sends a room by NAME, so a
+            // duplicate would make an attributed reading ambiguous rather than merely untidy.
+            modelBuilder.Entity<PlaceRoom>()
+                .HasIndex(e => new { e.OrganizationId, e.PlaceId, e.Name }).IsUnique();
 
             // ── RateLimitRefusal ─────────────────────────────────────────────
             // One row per policy, so the tally is an update rather than an insert per refusal.
@@ -1650,6 +1676,20 @@ namespace Ben.Data.Source.Context
             // "Who follows this person" — the follower count, and the other direction of the feed.
             modelBuilder.Entity<UserFollow>()
                 .HasIndex(e => e.FollowedAppUserId);
+
+            // ── UserBlock ─────────────────────────────────────────────────────
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(e => e.BlockerAppUser).WithMany()
+                .HasForeignKey(e => e.BlockerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(e => e.BlockedAppUser).WithMany()
+                .HasForeignKey(e => e.BlockedAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // Blocking somebody twice is blocking them once — same idempotency-by-index as follows.
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(e => new { e.BlockerAppUserId, e.BlockedAppUserId }).IsUnique();
+            // The read path's one question, asked on every feed page: whom does this reader block?
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(e => e.BlockerAppUserId);
 
             // ── Publication ──────────────────────────────────────────────────
             modelBuilder.Entity<Publication>()

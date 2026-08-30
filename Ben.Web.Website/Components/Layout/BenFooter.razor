@@ -1,4 +1,4 @@
-@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+﻿@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 <footer class="app-footer">
     <span class="app-footer-text">@SiteOptions.Value.Name &copy; @DateTime.Today.Year</span>
@@ -6,4 +6,9 @@
        for people without an account, and so is the contact form. *@
     <a href="/help" class="app-footer-link ms-3">Help</a>
     <a href="/contact" class="app-footer-link ms-3">Contact</a>
+    @* Also the privacy-policy URL given to App Store Connect, so it has to stay anonymous and
+       stay at this path — a moved or gated /privacy is a rejected app submission, not just a
+       broken footer link. *@
+    <a href="/privacy" class="app-footer-link ms-3">Privacy</a>
+    <a href="/terms" class="app-footer-link ms-3">Terms</a>
 </footer>

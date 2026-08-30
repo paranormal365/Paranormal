@@ -85,14 +85,22 @@ else
 
                 @* What kind of group this is (2026-08-24). It decided the defaults this group
                    started with; changing it now re-badges the group and is otherwise harmless —
-                   nothing is withheld from either kind. *@
+                   nothing is withheld from any kind. *@
                 <div class="col-12 col-md-6">
                     <label class="form-label" for="set-org-kind">What kind of group is this?</label>
                     <select id="set-org-kind" class="form-select"
                             value="@((int)_kind)"
                             @onchange="@(e => _kind = (OrganizationKind)int.Parse(e.Value?.ToString() ?? "0"))">
-                        <option value="0">Investigation group</option>
-                        <option value="1">Ghost walking tour</option>
+                        @* Enumerated, not listed. Two hardcoded options is how a kind added to the
+                           enum becomes unreachable from the one screen that can change it — the
+                           write-only pattern this codebase keeps finding. Adding a value to
+                           OrganizationKind now puts it here on its own. *@
+                        @foreach (var kind in Enum.GetValues<OrganizationKind>())
+                        {
+                            <option value="@((int)kind)">
+                                @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(kind)
+                            </option>
+                        }
                     </select>
                     <div class="form-text">
                         Shown as a badge on your public page and in the group finder. It set the

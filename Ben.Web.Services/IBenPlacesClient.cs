@@ -19,6 +19,23 @@ public interface IBenPlacesClient
 {
     // ── Places (Area 9) ───────────────────────────────────────────────────────
 
+    // ── Rooms inside a place (item 197) ───────────────────────────────────────
+    //
+    // Per ORGANIZATION as well as per place: a Place is shared, so two groups describing the same
+    // building keep separate lists and neither can edit the other's.
+
+    /// <summary>The rooms this group has named in this place, in the order it arranged them.</summary>
+    Task<LoadResult<PlaceRoomRecord>> GetPlaceRoomsAsync(Guid orgId, Guid placeId, CancellationToken token = default);
+
+    /// <summary>Names a room. Null when the name is taken or the caller may not.</summary>
+    Task<PlaceRoomRecord?> CreatePlaceRoomAsync(Guid orgId, Guid placeId, SavePlaceRoomRequest request, CancellationToken token = default);
+
+    /// <summary>Edits a room.</summary>
+    Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default);
+
+    /// <summary>Removes a room.</summary>
+    Task<bool> DeletePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
+
     /// <summary>One place, for the place page header and map.</summary>
     Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);
 

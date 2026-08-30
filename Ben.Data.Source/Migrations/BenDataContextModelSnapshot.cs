@@ -38,6 +38,9 @@ namespace Ben.Data.Source.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("DateClosed")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("datetime2");
 
@@ -5922,6 +5925,66 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("Places");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceRoom", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Floor")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("PlaceId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("OrganizationId", "PlaceId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("PlaceRooms");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7555,6 +7618,33 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("UserAddressTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserBlock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BlockedAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BlockerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BlockedAppUserId");
+
+                    b.HasIndex("BlockerAppUserId");
+
+                    b.HasIndex("BlockerAppUserId", "BlockedAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("UserBlocks");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UserEmail", b =>
@@ -11810,6 +11900,40 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceRoom", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Place");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -12590,6 +12714,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserBlock", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "BlockedAppUser")
+                        .WithMany()
+                        .HasForeignKey("BlockedAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "BlockerAppUser")
+                        .WithMany()
+                        .HasForeignKey("BlockerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("BlockedAppUser");
+
+                    b.Navigation("BlockerAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UserEmail", b =>
