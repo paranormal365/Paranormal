@@ -41,9 +41,26 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         begin.tap()
 
-        // Two full scripted cycles. The test asserts almost nothing on purpose: its judgement
-        // criteria are visual and applied by a person reviewing the footage.
+        // The needle draws only against a baseline — AnalogMeterView renders an empty dial
+        // until one is set, because a delta from nothing would be a lie. So do what a real
+        // investigator does: let the room settle for a beat, then set base. The scripted
+        // excursion that follows swings the needle off that base, which is the entire shot.
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+        Thread.sleep(forTimeInterval: 4)
+        let base = app.buttons["set-base-level"].firstMatch
+        XCTAssertTrue(base.waitForExistence(timeout: 10), "the live session should offer Set base")
+        if !base.isHittable { app.swipeUp() }
+        base.tap()
+
+        // The swipe that reached the button left the gauge above the fold, and the first cut
+        // with a baseline was 26 seconds of the controls it swung out of frame. Come back up:
+        // the needle is the shot.
+        app.swipeDown()
+        Thread.sleep(forTimeInterval: 1)
+        app.swipeDown()
+
+        // Two full scripted cycles against the base. The test asserts almost nothing on
+        // purpose: its judgement criteria are visual, applied by a person reviewing footage.
         Thread.sleep(forTimeInterval: 26)
     }
 }
