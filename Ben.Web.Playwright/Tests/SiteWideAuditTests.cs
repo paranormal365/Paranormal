@@ -100,6 +100,10 @@ public class SiteWideAuditTests : BenTestBase
             ("/my-investigations", null),
             ("/my-requests", null),
             ("/my-requests/new", null),
+            // The guest's own copy of what they offered at somebody's public event. Walked as an
+            // ordinary signed-in person, because that is exactly who it is for — attendance, not
+            // membership, is what puts anything on it.
+            ("/my-evidence", null),
             ("/notifications", null),
             ("/profile", null),
             ("/pricing", "Pricing"),

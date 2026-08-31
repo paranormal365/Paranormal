@@ -1,0 +1,211 @@
+@page "/my-evidence"
+@namespace Ben.Web.Website.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Everything this account has offered at somebody's public event.
+
+    It exists because the operator's gallery is not the only place a photograph belongs. They
+    curate what their EVENT shows; the person who took the picture decides whether it joins the
+    public record of the PLACE. Before this page there was no route to a submission except through
+    the event, and only once accepted — so a guest whose evidence was declined had handed over the
+    only copy the product would show them.
+*@
+
+<PageTitle>My evidence — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:900px; margin:auto;">
+
+    <h3 class="mb-1">My evidence</h3>
+    <p class="text-secondary small">
+        What you've offered at public events. The group running the event decides what their own
+        record shows — but the picture is still yours, and you can add it to the archive of the
+        place it was taken at.
+    </p>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else if (_rows is { Count: 0 })
+    {
+        <div class="card"><div class="card-body text-center py-5">
+            <p class="mb-1">You haven't offered anything yet.</p>
+            <p class="text-secondary small mb-0">
+                Evidence is offered from a public event you attended.
+            </p>
+        </div></div>
+    }
+    else if (_rows is not null)
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead><tr>
+                    <th>Event</th><th>File</th><th>The group's answer</th>
+                    <th>Place archive</th><th></th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>
+                                <div class="text-truncate" style="max-width:220px;">@row.EventTitle</div>
+                                <div class="text-secondary small">@row.DateCreated.ToLocalTime().ToDisplayDate()</div>
+                            </td>
+                            <td>
+                                @* Their own copy, whatever the verdict — the whole point of the page. *@
+                                <a href="@AdminClient.GetEventEvidenceFileUrl(row.OrgCalendarEventId, row.Id)"
+                                   target="_blank" rel="noopener" class="text-truncate d-inline-block"
+                                   style="max-width:180px;">@row.FileName</a>
+                            </td>
+                            <td>
+                                @switch (row.Status)
+                                {
+                                    case EvidenceSubmissionStatus.Accepted:
+                                        <span class="badge bg-success">Shown on their event</span>
+                                        break;
+                                    case EvidenceSubmissionStatus.Rejected:
+                                        <span class="badge bg-secondary">Not used</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-warning text-dark">Waiting</span>
+                                        break;
+                                }
+                                @if (!string.IsNullOrWhiteSpace(row.RejectionReason))
+                                {
+                                    <div class="text-secondary small">@row.RejectionReason</div>
+                                }
+                            </td>
+                            <td>
+                                @if (row.PublishedToPlaceAtUtc is not null)
+                                {
+                                    <span class="badge bg-info">In the archive</span>
+                                }
+                                else if (!row.PlaceAcceptsArchive)
+                                {
+                                    @* Said plainly rather than hidden: a missing button with no
+                                       explanation reads as the site being broken. *@
+                                    <span class="text-secondary small">This event isn't at a public place</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary small">Not added</span>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                @if (row.PlaceAcceptsArchive)
+                                {
+                                    @if (row.PublishedToPlaceAtUtc is null)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                                id="@($"publish-{row.Id}")"
+                                                disabled="@(_busy == row.Id)"
+                                                @onclick="@(() => PublishAsync(row))">
+                                            <BenIcon Name="upload" Class="me-1" />Add to place archive
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                id="@($"retract-{row.Id}")"
+                                                disabled="@(_busy == row.Id)"
+                                                @onclick="@(() => RetractAsync(row))">
+                                            <BenIcon Name="x" Class="me-1" />Remove from archive
+                                        </button>
+                                    }
+                                }
+                                @if (_message.TryGetValue(row.Id, out var note))
+                                {
+                                    <div class="small mt-1 @(note.Ok ? "text-success" : "text-danger")">@note.Text</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<EventEvidenceRecord>? _rows;
+    private bool _loading = true;
+    private string? _error;
+
+    /// <summary>The row whose button is mid-flight, so only that one is disabled.</summary>
+    private Guid? _busy;
+
+    private readonly Dictionary<Guid, (bool Ok, string Text)> _message = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var result = await AdminClient.GetMyEvidenceEverywhereAsync();
+        _rows = result.Items.ToList();
+
+        // Null items with a failure is a FAILURE, not "nothing here" — the empty state would
+        // otherwise tell somebody they had contributed nothing when the server had refused.
+        _error = result.Failed ? "Couldn't load what you've offered. Please try again." : null;
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task PublishAsync(EventEvidenceRecord row)
+    {
+        _busy = row.Id;
+        _message.Remove(row.Id);
+        StateHasChanged();
+
+        var (ok, error) = await AdminClient.PublishEvidenceToPlaceAsync(row.OrgCalendarEventId, row.Id);
+
+        _busy = null;
+        _message[row.Id] = ok
+            ? (true, "Added — it's on the place's page now.")
+            : (false, error ?? "Couldn't add that just now.");
+
+        if (ok) await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task RetractAsync(EventEvidenceRecord row)
+    {
+        _busy = row.Id;
+        _message.Remove(row.Id);
+        StateHasChanged();
+
+        var (ok, error) = await AdminClient.RetractEvidenceFromPlaceAsync(row.OrgCalendarEventId, row.Id);
+
+        _busy = null;
+        // The refusal on a free account is a real sentence from the server explaining that
+        // taking it back is a paid feature — rendered as-is rather than replaced with a generic
+        // failure, because it is the one that tells somebody what to do.
+        _message[row.Id] = ok
+            ? (true, "Removed from the place's archive.")
+            : (false, error ?? "Couldn't remove that just now.");
+
+        if (ok) await LoadAsync();
+        StateHasChanged();
+    }
+}

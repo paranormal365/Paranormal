@@ -192,6 +192,25 @@ public sealed partial class BenAdminClientAdapter
             $"/api/events/{eventId}/evidence", form, token);
     }
 
+    public Task<LoadResult<EventEvidenceRecord>> GetMyEvidenceEverywhereAsync(CancellationToken token = default)
+        => _api.GetListAsync<EventEvidenceRecord>("/api/my-evidence", token);
+
+    public async Task<(bool Ok, string? Error)> PublishEvidenceToPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/events/{eventId}/evidence/{submissionId}/publish-to-place", new { }, token);
+        return (error is null, error);
+    }
+
+    public async Task<(bool Ok, string? Error)> RetractEvidenceFromPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Delete, $"/api/events/{eventId}/evidence/{submissionId}/publish-to-place", new { }, token);
+        return (error is null, error);
+    }
+
     public Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/mine", token);
 

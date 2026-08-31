@@ -4,6 +4,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,10 +43,14 @@ public sealed class EventEvidenceController : BenControllerBase
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
+    /// <summary>Decides the archive copy's review state on publication — see PublishToPlace.</summary>
+    private readonly IFeedMediaScreener _screener;
+
     public EventEvidenceController(
         IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         PlatformMessageService messages, IMediaIngestService mediaIngest,
-        IAvMetadataStripper avStripper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+        IAvMetadataStripper avStripper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        IFeedMediaScreener screener)
     {
         _db          = db;
         _fileStorage = fileStorage;
@@ -53,13 +58,21 @@ public sealed class EventEvidenceController : BenControllerBase
         _mediaIngest = mediaIngest;
         _avStripper  = avStripper;
         _security    = security;
+        _screener    = screener;
     }
 
     public sealed record EvidenceSubmissionRecord(
         Guid Id, Guid OrgCalendarEventId, string EventTitle,
         string SubmitterDisplayName, Guid UploadFileId, string FileName, string ContentType,
         string? Note, EvidenceSubmissionStatus Status, string? RejectionReason,
-        DateTime DateCreated);
+        DateTime DateCreated,
+        /// <summary>
+        /// When the submitter contributed this to the place's archive, or null. Separate from
+        /// <paramref name="Status"/>, which is the operator's verdict on their own gallery.
+        /// </summary>
+        DateTime? PublishedToPlaceAtUtc = null,
+        /// <summary>Whether the event has a public place to contribute to at all.</summary>
+        bool PlaceAcceptsArchive = false);
 
     // ── the visitor's door ────────────────────────────────────────────────────
 
@@ -179,6 +192,126 @@ public sealed class EventEvidenceController : BenControllerBase
             .OrderByDescending(s => s.DateCreated), ct));
     }
 
+    // ── the guest's own publication, to the place ─────────────────────────────
+
+    /// <summary>
+    /// Publishes this submission to the archive of the place the event was held at.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The guest's act, not the operator's.</b> A tour walks the same route every week,
+    /// which makes public events the one activity that happens repeatedly at fixed locations —
+    /// exactly what a location-keyed archive needs. Whether a photograph joins that record is for
+    /// the person who took it, under their own name.</para>
+    ///
+    /// <para><b>Independent of the operator's verdict, in both directions.</b> A photograph
+    /// declined for the event's gallery is still the photographer's to contribute here; one
+    /// accepted is not thereby published here. Consenting to somebody's gallery is not consent
+    /// to publish.</para>
+    ///
+    /// <para>Post-moderation, as the field archive settled it: approved on publication unless a
+    /// real screener is configured, and pulled the moment anybody flags it.</para>
+    /// </remarks>
+    [HttpPost("{submissionId:guid}/publish-to-place")]
+    public async Task<IActionResult> PublishToPlace(
+        Guid eventId, Guid submissionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var submission = await db.EventEvidenceSubmissions
+            .Include(e => e.OrgCalendarEvent).ThenInclude(e => e.Place)
+            .FirstOrDefaultAsync(e => e.Id == submissionId && e.OrgCalendarEventId == eventId, ct);
+
+        // Same answer for "no such submission" and "not yours" — whether somebody else's exists
+        // is not a thing to let a caller probe for.
+        if (submission is null || submission.SubmittedByAppUserId != userId) return NotFound();
+
+        if (submission.OrgCalendarEvent.PlaceId is null)
+            return BadRequest("This event isn't recorded at a place yet, so there is no archive to add it to.");
+
+        if (submission.OrgCalendarEvent.Place!.Kind != PlaceKind.PublicLocation)
+            return BadRequest("The archive is for public places. This event was held somewhere private.");
+
+        if (submission.PublishedToPlaceAtUtc is not null) return NoContent();   // already there
+
+        submission.PublishedToPlaceAtUtc = DateTime.UtcNow;
+        // Fail closed if a real classifier exists; approved on publication when none does, which
+        // is what post-moderation means for a solo operator who cannot staff a daily queue.
+        submission.ArchiveReviewState = _screener.IsAutomatic
+            ? FeedMediaReviewState.Pending
+            : FeedMediaReviewState.Approved;
+        submission.DateUpdated = DateTime.UtcNow;
+        submission.UpdatedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Takes it back off the place's archive. The paid half, as for field sessions.</summary>
+    [HttpDelete("{submissionId:guid}/publish-to-place")]
+    public async Task<IActionResult> RetractFromPlace(
+        Guid eventId, Guid submissionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var submission = await db.EventEvidenceSubmissions
+            .FirstOrDefaultAsync(e => e.Id == submissionId && e.OrgCalendarEventId == eventId, ct);
+        if (submission is null || submission.SubmittedByAppUserId != userId) return NotFound();
+
+        // The same bargain the field archive strikes: publishing is free, taking it back is not.
+        // One rule for both, from one place, or the two come to disagree.
+        if (await Services.Billing.PaidPlan.WhyCannotKeepPrivateAsync(db, userId, ct) is { } paidOnly)
+            return StatusCode(StatusCodes.Status402PaymentRequired, paidOnly);
+
+        submission.PublishedToPlaceAtUtc = null;
+        submission.DateUpdated = DateTime.UtcNow;
+        submission.UpdatedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Reports published evidence, hiding it until a moderator looks.</summary>
+    /// <remarks>
+    /// Needs an account for the reason the field archive's flag does: one flag hides, so an
+    /// anonymous version would let anybody erase the archive.
+    /// </remarks>
+    [HttpPost("{submissionId:guid}/flag")]
+    public async Task<IActionResult> FlagPublished(
+        Guid eventId, Guid submissionId, [FromBody] FlagEvidenceRequest? request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var submission = await db.EventEvidenceSubmissions
+            .FirstOrDefaultAsync(e => e.Id == submissionId
+                                   && e.OrgCalendarEventId == eventId
+                                   && e.PublishedToPlaceAtUtc != null, ct);
+        if (submission is null) return NotFound();
+
+        if (submission.ArchiveReviewState != FeedMediaReviewState.Held)
+        {
+            submission.ArchiveReviewState = FeedMediaReviewState.Held;
+            submission.ArchiveReviewNote = string.IsNullOrWhiteSpace(request?.Reason)
+                ? "Flagged by a reader."
+                : $"Flagged: {request!.Reason!.Trim()}";
+            submission.DateUpdated = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return NoContent();
+    }
+
+    /// <param name="Reason">Optional, and shown to the moderator rather than to the contributor.</param>
+    public sealed record FlagEvidenceRequest(string? Reason);
+
     // ── the group's review ────────────────────────────────────────────────────
 
     /// <summary>Everything waiting on this organization's answer, oldest first.</summary>
@@ -295,6 +428,11 @@ public sealed class EventEvidenceController : BenControllerBase
                         && s.Status == EvidenceSubmissionStatus.Accepted
                         && s.OrgCalendarEvent.IsPublic, ct);
 
+        // The archive route: published by its photographer to the place's public record, and not
+        // currently held. Independent of the operator's verdict — see ArchiveEvidencePublication.
+        if (!allowed)
+            allowed = await Controllers.Public.ArchiveEvidencePublication.MayServeAsync(db, submissionId, ct);
+
         // And the owner's route, whatever the verdict (Ben, 2026-08-31). Until this, a guest whose
         // evidence was pending or declined had NO way to reach their own photograph through the
         // site: they had handed over the only copy the product would show them, and a decline made
@@ -373,7 +511,13 @@ public sealed class EventEvidenceController : BenControllerBase
             s.Id, s.OrgCalendarEventId, s.OrgCalendarEvent.Title,
             s.SubmittedByAppUser.DisplayName ?? s.SubmittedByAppUser.UserName ?? "Attendee",
             s.UploadFileId, s.UploadFile.FileName, s.UploadFile.ContentType,
-            s.Note, s.Status, s.RejectionReason, s.DateCreated)).ToListAsync(ct);
+            s.Note, s.Status, s.RejectionReason, s.DateCreated,
+            s.PublishedToPlaceAtUtc,
+            // Whether the button should be offered at all. Computed here rather than in the page,
+            // because "is there an archive to contribute to" is a fact about the event, and a page
+            // deciding it for itself is how a screen comes to offer what the server refuses.
+            s.OrgCalendarEvent.PlaceId != null
+                && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation)).ToListAsync(ct);
 
     private static async Task<EvidenceSubmissionRecord> ToRecordAsync(
         BenDataContext db, Guid id, CancellationToken ct) =>
