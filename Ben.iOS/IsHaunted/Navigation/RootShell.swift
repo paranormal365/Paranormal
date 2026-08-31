@@ -148,6 +148,8 @@ struct RootShell: View {
             FieldKitHomeView()
         case .eventsList:
             EventsView()
+        case .myEvidence:
+            MyEvidenceView()
         case .developerSettings:
             DeveloperSettingsView()
         case .feedPost(let id):

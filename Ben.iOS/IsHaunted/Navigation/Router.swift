@@ -65,6 +65,9 @@ enum AppRoute: Hashable {
     case eventsList
     case eventDetail(UUID)
     case security
+    /// The guest's own copy of what they offered at somebody's public event, and contributing it
+    /// to the place's archive. Theirs, whatever the operator decided about their own gallery.
+    case myEvidence
     /// Managing who you've blocked (App Review 1.2) — the block itself happens on a post.
     case blockedAccounts
     /// Deleting your own account — App Review 5.1.1(v) requires this to live in the app.
