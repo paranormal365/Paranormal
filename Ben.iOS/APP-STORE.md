@@ -37,6 +37,16 @@ Bundle id `com.ishaunted.ios`, version 0.1.0 (build 1), iPhone and iPad, iOS 18.
 > • Investigations, rosters and schedules
 > • Public events and ghost-walk tours near you
 >
+> **On a ghost walk**
+> • Offer what you photographed to the group running the event
+> • Keep your own copy of everything you offered, whatever they decide
+> • Add it to the public archive of the place it was taken at
+>
+> **The archive**
+> • Publish your readings to a location's public record
+> • See every session anybody has recorded there — one person's readings are an anecdote,
+>   eleven people's are evidence, or a demonstrated absence of it
+>
 > **Who it is for**
 > Paranormal investigation groups and their members; guides who run public ghost walks; and
 > clients who have asked a group to look at their property. Anyone can browse the public feed
@@ -118,6 +128,29 @@ There are no third-party SDKs in the app at all — verified by search, not by m
 > member of Paranormal365, rostered on an investigation.
 >
 > Sign in with Apple is offered alongside email and Microsoft sign-in.
+
+---
+
+## 3b. What changed since the 1.0 submission (2026-08-31)
+
+An update built while 1.0 was in review. Everything here is additive; nothing that a reviewer
+exercised on 1.0 behaves differently.
+
+- **Settings → My evidence.** What this account offered at other people's public events, openable
+  whatever the organiser decided, and addable to the public archive of the place it was taken at.
+  Two independent decisions, shown separately: the organiser curates their own event's gallery,
+  the photographer decides about the place's record.
+- **The app offers only the sections that apply.** A person investigating alone no longer carries
+  a My Cases tab that can never hold anything, or Investigations belonging to groups they have not
+  joined. Driven by `GET api/me/surfaces`, which answers "is there anything here?" — permission is
+  still decided at every endpoint, unchanged.
+- **Retracting an archive publication now requires a paid plan.** Publishing stays free and
+  available to anybody. This is the paywall, and the app surfaces the server's own sentence
+  explaining it rather than a generic failure.
+
+**For App Review:** the demo account still reaches the group-side features exactly as before. A
+reviewer signing in as `apple@apple.com` sees the same cases, investigations and rosters; the
+adaptive sections ADD nothing to hide from that account, since it is a group member.
 
 ---
 

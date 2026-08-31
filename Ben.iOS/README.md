@@ -190,3 +190,26 @@ the OS confirmation dialog — used by automation and the future UI test target.
 Later phases: equipment + checkout, org-side management, org messaging,
 discovery/places, publications, APNs push (needs server work), universal links
 (needs AASA hosting).
+
+
+## Slice: guest evidence and adaptive sections (2026-08-31)
+
+**`EvidenceActions` + `MyEvidenceView`** — Settings → My evidence. Everything this account has
+offered at other people's public events, openable whatever the organiser decided, and addable to
+the archive of the place it was photographed at. The organiser's verdict and the archive state are
+rendered as two separate things on purpose: being accepted for somebody's event gallery does not
+publish it to the place, and being declined does not stop the photographer contributing it.
+
+**`MeSurfaces` + `SurfacesStore`** — `GET api/me/surfaces` decides which sections the shell offers.
+A solo investigator carries no My Cases and no Investigations tab; a client with no group still
+sees their case; a ghost-walk guest gets Events. The store's default is deliberately PERMISSIVE
+(`.all`) — it is not a gate, and hiding somebody's daily tab while a request is in flight makes
+the app look broken on every cold start.
+
+`RootShell.settleSelection()` moves off a tab that has just stopped existing. A `TabView` whose
+selection names a tab it is not showing renders **blank** — not the first tab, nothing at all —
+and that state is reachable simply by signing out of an account with cases into one without.
+
+**Verified:** builds clean for the simulator; launches and runs against the local API. Tap-level
+verification needs `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, which the
+Simulator integration requires and which needs Ben's password.

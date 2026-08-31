@@ -204,6 +204,40 @@ public sealed class FieldSessionPublishController : BenControllerBase
     public sealed record ArchivePlaceCandidate(
         Guid Id, string? Name, string? City, string? State, double Miles, int PublishedSessions);
 
+    /// <summary>
+    /// What everybody else's visits to this place say about this session.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The individual's reason to hold a plan.</b> A group buys people, cases and
+    /// privacy. Somebody investigating alone has none of those to buy and their recordings are
+    /// already private, so a plan sold on privacy sells them what they have. What they cannot get
+    /// at any price on their own is context — whether that cellar spike was remarkable, or
+    /// whether the building does it to everybody.</para>
+    ///
+    /// <para><b>Free keeps everything of theirs.</b> Their own figures are untouched, and the
+    /// public counts stay visible because they are on the place's page anyway; withholding those
+    /// would be theatre. The comparison is what a plan buys, and the free response says so in the
+    /// same shape rather than pretending the feature does not exist.</para>
+    /// </remarks>
+    [HttpGet("/api/field-sessions/{id:guid}/insights")]
+    public async Task<ActionResult<Services.Archive.SessionInsights>> Insights(
+        Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var detailed = await Services.Billing.PaidPlan.CoversAsync(db, userId, ct);
+
+        var insights = await Services.Archive.SessionInsightsService
+            .ForSessionAsync(db, id, userId, detailed, ct);
+
+        // Null covers "not yours", "no place" and "not a public location" with one answer, which
+        // is right: none of them is a thing to let a caller distinguish.
+        return insights is null ? NotFound() : Ok(insights);
+    }
+
     /// <summary>Publishes this session to a place's archive.</summary>
     [HttpPost]
     public async Task<IActionResult> Publish(
