@@ -312,7 +312,9 @@ public abstract class BenTestBase : PageTest
 
         Assert.That(Page.Url, Does.Not.Contain("/login"),
             $"sign-in as {email} never left the login page. Page reported: {shown}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Not NetworkIdle: sign-in usually lands on the home page, which streams map tiles and
+        // may never go quiet. Every test in the suite passes through here.
+        await WaitUntilLoadedAsync();
     }
 
     private const string EmailSelector =
@@ -727,7 +729,15 @@ public abstract class BenTestBase : PageTest
     protected async Task LogoutAsync()
     {
         await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // NOT NetworkIdle. This navigates to the HOME page, and the home page carries a map
+        // that streams OpenStreetMap tiles for as long as it is displayed — so "no network
+        // activity for 500ms" is a condition it may never reach. Under the full suite's load it
+        // did not: AVisitorOpensAThreadAndAProfile died here on a bare 30s timeout that named
+        // this helper and nothing about what was wrong.
+        //
+        // OpenProfileMenuAsync below already retries until the circuit is live, so all this wait
+        // has to do is let the placeholders clear.
+        await WaitUntilLoadedAsync();
 
         await OpenProfileMenuAsync();
 
@@ -749,7 +759,9 @@ public abstract class BenTestBase : PageTest
         {
             // Fall through: LoginAsync retries and reports honestly if it never takes.
         }
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            // Not NetworkIdle: see LogoutAsync's first wait. Bounded, and it does not require
+            // the page to fall silent.
+            await WaitUntilLoadedAsync();
     }
 
     // ── Promoted from AccountTests for the journey fixture: erasure-safe input on
