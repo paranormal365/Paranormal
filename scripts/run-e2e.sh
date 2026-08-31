@@ -50,9 +50,31 @@ CONN="Server=${SQL_SERVER};Database=${DB_NAME};User Id=${SQL_USER};Password=${SQ
 # a fresh database always gets a fresh directory, and the two can never drift apart.
 UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
 
-# 127.0.0.1 for the API, not localhost: "localhost" makes Kestrel open an IPv6 listener too, and
-# .NET on macOS can crash in its accept path (dotnet/runtime#102663). See item 187.
-API_URL="http://127.0.0.1:5252"
+# BIND on 127.0.0.1; BROWSE on localhost. The two are deliberately different.
+#
+# "localhost" makes Kestrel open an IPv4 AND an IPv6 listener, and .NET on macOS has a bug in the
+# IPv6 accept path (dotnet/runtime#102663) that kills the process from a threadpool thread — nine
+# times in one run on 2026-08-25. Binding the address directly leaves only IPv4, so that accept
+# path is never taken.
+#
+# All three hosts now bind IPv4, not just the API. The website and the WASM host had kept their
+# IPv6 listeners on the grounds that neither had been SEEN to crash, which is an argument about
+# observation rather than exposure: the API crashed because it takes the most connections, not
+# because it was built differently.
+#
+# What clients ASK FOR stays "localhost", and it has to: :5078 is the redirect URI registered with
+# Entra and an allow-listed CORS origin on the API, both of which are matched on the browser's URL.
+# Nothing about those changes, because a browser asking for localhost still reaches an IPv4-only
+# listener — it falls back from ::1 to 127.0.0.1.
+#
+# The readiness probes below deliberately use the localhost form. That makes startup itself the
+# proof that the fallback works: if it ever stops, the run fails immediately with "never became
+# ready" instead of dying strangely somewhere in the middle.
+API_BIND="http://127.0.0.1:5252"
+WEB_BIND="http://127.0.0.1:5078"
+WASM_BIND="http://127.0.0.1:5180"
+
+API_URL="http://localhost:5252"
 WEB_URL="http://localhost:5078"
 WASM_URL="http://localhost:5180"
 
@@ -114,7 +136,8 @@ echo "   schema is current"
 mkdir -p "$UPLOADS_DIR"
 
 start_host() {
-  local name="$1" dir="$2" url="$3" ready="$4" extra_env="$5"
+  # bind_url is what Kestrel LISTENS on (IPv4); ready_url is what a client ASKS for (localhost).
+  local name="$1" dir="$2" bind_url="$3" ready="$4" extra_env="$5"
   echo "── Starting $name ──────────────────────────────────────────────────────"
   (
     cd "$dir"
@@ -122,7 +145,7 @@ start_host() {
     env ASPNETCORE_ENVIRONMENT=Development \
         ConnectionStrings__BenDbConnectionString="$CONN" \
         $extra_env \
-        nohup dotnet run --no-launch-profile --urls "$url" >"$LOG_DIR/$name.log" 2>&1 &
+        nohup dotnet run --no-launch-profile --urls "$bind_url" >"$LOG_DIR/$name.log" 2>&1 &
     echo $! >"$LOG_DIR/$name.pid"
   )
   STARTED_PIDS+=("$(cat "$LOG_DIR/$name.pid")")
@@ -135,12 +158,13 @@ start_host() {
   exit 1
 }
 
-start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_URL"  "$API_URL/api/public/build" \
+# Bound on the IPv4 address, probed on the localhost name — see the note by the URLs.
+start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
   "FileStorage__RootPath=$UPLOADS_DIR"
-start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_URL"  "$WEB_URL/" ""
+start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
-start_host wasm "$ROOT_DIR/Ben.Wasm.Video"   "$WASM_URL" "$WASM_URL/_framework/dotnet.js" ""
+start_host wasm "$ROOT_DIR/Ben.Wasm.Video"   "$WASM_BIND" "$WASM_URL/_framework/dotnet.js" ""
 
 if grep -q "DATABASE IS BEHIND" "$LOG_DIR/api.log" 2>/dev/null; then
   echo "WARNING: the API says the schema is behind — see $LOG_DIR/api.log"

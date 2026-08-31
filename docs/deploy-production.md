@@ -206,6 +206,23 @@ end-to-end test went from failing at 21 s to passing at 1 s.
 **Production is not affected and was never wrong** — `appsettings.json` pairs 465 with
 `SslOnConnect`, which is correct. If you ever want real mail locally, 587 goes with `StartTls`.
 
+## A second DEVELOPMENT-settings note: the API base URL
+
+`Ben.Web.Website/appsettings.Development.json` is gitignored too, so this is recorded here for the
+same reason as the SMTP trap above.
+
+Set `Services:BaseUrl` (both occurrences) to **`http://127.0.0.1:5252`**, not
+`http://localhost:5252`.
+
+Local hosts bind IPv4 only — see backlog item 187: `localhost` makes Kestrel open an IPv6 listener
+as well, and .NET on macOS has a bug in the IPv6 accept path that kills the process outright, which
+made every long test run flaky. With the API listening on `127.0.0.1` alone, a `localhost` base URL
+still works, but every server-to-server connection first attempts `::1`, is refused, and falls back.
+Naming the address skips the doomed attempt.
+
+**Production is unaffected and must not copy this.** There the value is overridden per-deployment,
+and Windows/IIS does not have the bug.
+
 ## Moving evidence storage to a bigger drive
 
 Ben's plan (2026-08-31): move everything onto a 4 TB drive when the site launches, and add the
