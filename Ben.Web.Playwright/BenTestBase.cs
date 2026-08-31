@@ -401,8 +401,20 @@ public abstract class BenTestBase : PageTest
 
             try
             {
+                // 8s, not 4s. The old figure was tuned on an idle machine, where every one of
+                // these round trips lands in well under a second. Running 405 tests it does not:
+                // a Blazor Server sign-in has to reach the API, the database and back over the
+                // circuit, and 4s was close enough to that to lose occasionally — which is how
+                // SigningUpRequiresConfirmingTheEmail failed a full run and then passed alone in
+                // one second.
+                //
+                // Raising a timeout is the standard way to paper over a real defect, so it is
+                // worth being precise about why it is not that here: this waits longer for a
+                // CORRECT condition and cannot make a wrong one pass. Nothing became more
+                // permissive, only more patient, and a genuinely broken page still fails — it just
+                // takes about twenty seconds longer to say so.
                 await expected.First.WaitForAsync(
-                    new() { State = WaitForSelectorState.Visible, Timeout = 4_000 });
+                    new() { State = WaitForSelectorState.Visible, Timeout = 8_000 });
                 return;
             }
             catch (TimeoutException)
@@ -411,8 +423,10 @@ public abstract class BenTestBase : PageTest
             }
         }
 
-        // Out of attempts: assert so the failure names what was actually missing.
-        await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        // Out of attempts: assert so the failure names what was actually missing. Generous,
+        // because this is the message somebody will read — a timeout here should mean "it never
+        // arrived", not "the machine was busy at the wrong moment".
+        await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     /// <summary>
