@@ -56,6 +56,30 @@ switch would bring the noise straight back.
 **Six tests, one per clause, mutation-verified:** dropping the source-context clause fails exactly
 `The_same_exception_from_anywhere_else_still_logs`, on a clean build.
 
+### Proven live, against the real database
+
+Unit tests prove the predicate; they cannot prove it is wired to anything. So the same 26 Playwright
+tests were run twice against the live database, counting rows in `Logs`:
+
+| | `Logs` before | after | delta |
+|---|---|---|---|
+| Filter **removed** | 2022 | 2096 | **+74**, every one a `FileNotFoundException` |
+| Filter **in place** | 2096 | 2096 | **0** |
+
+Identical tests, identical results otherwise — 23 passed, 3 skipped, both times. And the console
+carried **72 `Stored file missing` Warnings** on the fixed run: the noise is gone and the record is
+still being kept, which is the whole point.
+
+Two earlier attempts at this proof failed and are worth recording, because both looked like
+success:
+- `/api/upload-files/{id}/thumbnail` returns 404 **from the controller** — that route already
+  handles a missing file, so it never had the bug. A green result there meant nothing.
+- `/api/users/{id}/avatar` is the route that actually throws, but it needs a token, so curl gets
+  401 and never reaches storage.
+
+The first run of `MediaLibraryTests` showed zero new rows **with the filter removed**, which is the
+tell: a "pass" that a broken build also produces is not evidence.
+
 ## Deliberately NOT in scope
 
 - The remaining eight open items. **183** (case delete), **197** (haunted hotels) and **198** (tour
