@@ -15,6 +15,18 @@ public class VideoEditorTests : BenTestBase
 {
     private static string EditorUrl => $"{BaseUrl}/video-editor";
 
+    /// <summary>
+    /// The editor ships behind a switch, and this suite runs against deployments where it is off.
+    /// </summary>
+    /// <remarks>
+    /// Every test here asserts the editor's SHELL renders. With the feature off the route does not
+    /// exist at all, so each one fails on a page that is behaving exactly as configured — six
+    /// failures that say nothing and hide the ones that would.
+    /// </remarks>
+    [SetUp]
+    public async Task SkipWhenTheEditorIsSwitchedOff()
+        => await SkipIfFeatureOffAsync("features.video-editor");
+
     // ── Auth guard ────────────────────────────────────────────────────────────
 
     [Test]

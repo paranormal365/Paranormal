@@ -27,15 +27,28 @@ public class PublicSurfaceTests : BenTestBase
         // by design, so presence of the bands is the assertion that the anonymous fetch worked.
         await Expect(Page.GetByText("Small group", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Page.GetByText("$15", new() { Exact = false }).First)
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        // Yearly shows the yearly price and the derived saving.
+        // ANY price, not a specific one. This asserted "$15" and broke the day the ladder moved to
+        // whole dollars — a test that pins a number the business is free to change reports a
+        // pricing decision as a defect. What is worth guarding is that a price rendered at all,
+        // because a blank band is the failure this test exists to catch.
+        var anyMonthlyPrice = Page.GetByText(new System.Text.RegularExpressions.Regex(@"\$\d"));
+        await Expect(anyMonthlyPrice.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var monthly = await anyMonthlyPrice.First.InnerTextAsync();
+
+        // Yearly shows a DIFFERENT figure and the derived saving. Same reasoning: the relationship
+        // is the contract, not the number.
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false }),
-            Page.GetByText("$150", new() { Exact = false }));
+            Page.GetByText("save", new() { Exact = false }).First);
+
         await Expect(Page.GetByText("save", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var yearly = await Page.GetByText(new System.Text.RegularExpressions.Regex(@"\$\d")).First.InnerTextAsync();
+        Assert.That(yearly, Is.Not.EqualTo(monthly),
+            "The cadence toggle did not change the price shown, so it is not switching cadence.");
     }
 
     [Test]
