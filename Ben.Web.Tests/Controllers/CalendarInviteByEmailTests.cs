@@ -53,7 +53,7 @@ public class CalendarInviteByEmailTests
     private static OrgCalendarEventController Build(IDbContextFactory<BenDataContext> f)
         => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance, new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {
@@ -202,7 +202,7 @@ public class CalendarInviteByEmailTests
 
         var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance, new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {
@@ -263,7 +263,7 @@ public class CalendarInviteByEmailTests
             factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
             UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance, new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {

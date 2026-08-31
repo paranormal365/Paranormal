@@ -41,7 +41,7 @@ public sealed class PublicEventControllerTests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     private static PublicEventController Build(IDbContextFactory<BenDataContext> f, Guid? userId)
-        => new(f)
+        => new(f, new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {
