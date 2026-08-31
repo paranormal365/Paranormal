@@ -3,6 +3,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -203,17 +204,21 @@ public sealed class PersonalOrganizationTests
         Assert.Contains("does not take client work", why);
     }
 
+    /// <summary>
+    /// Adding people is a question about the PLAN, not about being personal — a solo person who
+    /// pays may work with somebody. So the rule lives in one place, and it is not this one.
+    /// </summary>
     [Fact]
-    public async Task A_personal_organization_may_not_add_members()
+    public async Task Adding_a_member_is_refused_by_the_plan_rather_than_by_being_personal()
     {
         var f = CreateFactory();
-        await StartAsync(f, await AddUserAsync(f));
+        var plan = await StartAsync(f, await AddUserAsync(f));
 
         await using var db = await f.CreateDbContextAsync();
-        var org = await db.Organizations.SingleAsync();
 
-        Assert.NotNull(PersonalOrganizations.WhyNotInAPersonalOrganization(
-            org, PersonalOrganizations.PersonalAction.AddMembers));
+        var why = await PaidPlan.WhyCannotAddMemberAsync(db, plan.OrganizationId, default);
+        Assert.NotNull(why);
+        Assert.Contains("part of a paid plan", why);
     }
 
     [Fact]
@@ -234,7 +239,6 @@ public sealed class PersonalOrganizationTests
     /// and it is false everywhere it was not deliberately set.
     /// </summary>
     [Theory]
-    [InlineData(PersonalOrganizations.PersonalAction.AddMembers)]
     [InlineData(PersonalOrganizations.PersonalAction.CreateCase)]
     [InlineData(PersonalOrganizations.PersonalAction.CreatePrivateInvestigation)]
     public void An_ordinary_group_is_refused_none_of_them(PersonalOrganizations.PersonalAction action)

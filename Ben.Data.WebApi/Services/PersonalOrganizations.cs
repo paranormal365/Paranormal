@@ -60,9 +60,6 @@ public static class PersonalOrganizations
 
         return action switch
         {
-            PersonalAction.AddMembers =>
-                "A solo plan is just you — there is no group here to add anybody to. "
-                + "Creating a group, or joining one, is how you work with other people.",
             PersonalAction.CreateCase =>
                 "Cases are how a group takes on somebody else's haunting. A solo plan covers your "
                 + "own investigating and keeps your data private; it does not take client work.",
@@ -77,8 +74,11 @@ public static class PersonalOrganizations
     /// <summary>The group-shaped things a personal organization does not do.</summary>
     public enum PersonalAction
     {
-        /// <summary>Inviting or adding somebody to the organization.</summary>
-        AddMembers = 1,
+        // AddMembers deliberately does NOT live here. "May this organization take another
+        // member" is one question with one answer — PaidPlan.WhyCannotAddMemberAsync — and it is
+        // about the plan, not about being personal: a solo person who pays may work with somebody,
+        // at which point their organization stops being personal and becomes a group. Two rules
+        // answering one question is how the two come to disagree.
 
         /// <summary>Opening a case — client work, which a solo plan does not cover.</summary>
         CreateCase = 2,

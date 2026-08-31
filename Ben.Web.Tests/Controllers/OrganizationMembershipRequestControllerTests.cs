@@ -80,7 +80,14 @@ public class OrganizationMembershipRequestControllerTests
         return ctrl;
     }
 
-    private static async Task<(IDbContextFactory<BenDataContext>, Guid orgId, Guid applicantId, Guid adminId)> SeedAsync(bool acceptingApps = true)
+    /// <param name="paidPlan">
+    /// Whether the group is on an active plan. Accepting a member beyond the first became a paid
+    /// feature on 2026-08-31 (Ben: "group management is a paid feature after 1 user"), so a test
+    /// about what ACCEPTANCE does has to be run by a group entitled to accept — see
+    /// <see cref="Respond_Accept_OnAFreeGroupOfOne_AsksForAPlan"/> for the free answer.
+    /// </param>
+    private static async Task<(IDbContextFactory<BenDataContext>, Guid orgId, Guid applicantId, Guid adminId)> SeedAsync(
+        bool acceptingApps = true, bool paidPlan = true)
     {
         var factory     = CreateFactory();
         var orgId       = Guid.NewGuid();
@@ -94,6 +101,15 @@ public class OrganizationMembershipRequestControllerTests
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = adminId, Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
         // Seed a UserMessageType so the Respond notification doesn't fail
         db.UserMessageTypes.Add(new UserMessageType { Id = new Guid("00000000-0000-0000-0000-000000000001"), Name = "Org Membership Response", DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
+        if (paidPlan)
+        {
+            db.OrganizationSubscriptions.Add(new OrganizationSubscription
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId,
+                Status = SubscriptionStatus.Active, Interval = BillingInterval.Monthly,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId,
+            });
+        }
         await db.SaveChangesAsync();
         return (factory, orgId, applicantId, adminId);
     }
@@ -204,6 +220,33 @@ public class OrganizationMembershipRequestControllerTests
         var req = await db.OrganizationMembershipRequests.FindAsync(reqId);
         Assert.Equal(OrganizationMembershipRequestStatus.Denied, req!.Status);
         Assert.Equal("Capacity issues", req.DenialReason);
+    }
+
+    /// <summary>
+    /// One person is free; working with somebody else is the paid part (Ben, 2026-08-31). The
+    /// refusal lands at ACCEPTANCE — where the member would actually be added — and the applicant
+    /// is never punished for a decision that is not theirs, so Apply itself stays open.
+    /// </summary>
+    [Fact]
+    public async Task Respond_Accept_OnAFreeGroupOfOne_AsksForAPlan()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync(paidPlan: false);
+        await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest(null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var requestId = (await db.OrganizationMembershipRequests.SingleAsync()).Id;
+
+        var result = await Build(factory, adminId).Respond(
+            orgId, requestId,
+            new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null),
+            default);
+
+        var refusal = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status402PaymentRequired, refusal.StatusCode);
+
+        // And nobody was added on the way to saying no.
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await after.OrganizationUserMemberships.CountAsync(m => m.OrganizationId == orgId && m.IsActive));
     }
 
     [Fact]

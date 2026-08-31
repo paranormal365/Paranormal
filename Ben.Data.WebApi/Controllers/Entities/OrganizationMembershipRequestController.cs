@@ -157,15 +157,11 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         if (org is null) return NotFound("Organization not found.");
         if (!org.IsAcceptingApplications) return BadRequest("This organization is not currently accepting membership applications.");
 
-        // Belt as well as braces. A personal organization is created with
-        // IsAcceptingApplications false and is excluded from every listing, so nobody should
-        // reach this with one — but "nobody should" is not a rule, and the flag is a value
-        // somebody could set. A solo plan is one person, permanently.
-        if (Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
-                org, Services.PersonalOrganizations.PersonalAction.AddMembers) is { } soloOnly)
-        {
-            return BadRequest(soloOnly);
-        }
+        // Deliberately NOT gated on the plan here. The paid gate sits on the ADVERTISING switch,
+        // so a free group cannot invite applications in the first place, and on ACCEPTANCE, where
+        // the member would actually be added. Refusing the applicant as well would punish the
+        // wrong person for a decision that is not theirs — and this door is already closed by
+        // IsAcceptingApplications above.
 
         // Prevent duplicate active requests
         var existing = await db.OrganizationMembershipRequests
@@ -273,6 +269,29 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         {
             var alreadyMember = await db.OrganizationUserMemberships
                 .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == membershipRequest.AppUserId && m.IsActive, ct);
+
+            // One person is free; working with other people is the paid part. Guarded here as
+            // well as on the advertising switch, because an application can arrive by a route
+            // that never reads that flag — an invite link, a direct call.
+            if (!alreadyMember
+                && await Services.Billing.PaidPlan.WhyCannotAddMemberAsync(db, orgId, ct) is { } needsPlan)
+            {
+                return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
+            }
+
+            // A personal organization that gains a second person has become a group, and should
+            // stop being hidden from the places groups are found. Leaving the flag set would give
+            // them a group nobody can discover — the opposite of what they just paid for.
+            if (!alreadyMember)
+            {
+                var joined = await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId, ct);
+                if (joined is { IsPersonal: true })
+                {
+                    joined.IsPersonal = false;
+                    joined.DateUpdated = DateTime.UtcNow;
+                    joined.UpdatedByAppUserId = userId.Value;
+                }
+            }
 
             if (!alreadyMember)
             {

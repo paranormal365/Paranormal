@@ -229,6 +229,16 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         // Keeps the old address working. A group's address is the one part of this product that
         // ends up on a business card, and renaming used to break every printed link in silence.
         await OrganizationUrlNames.ApplyAsync(db, org, request.UrlName, userId, ct);
+        // Advertising for members is where the paid gate is felt FIRST, on purpose. Refusing only
+        // at acceptance would let a free group collect applications it cannot accept — the
+        // dead-end pattern items 149/150 made policy against. Turning the switch OFF is always
+        // allowed: a rule that trapped somebody with a setting they could not undo would be worse
+        // than the one it is enforcing.
+        if (request.IsAcceptingApplications && !org.IsAcceptingApplications
+            && await Services.Billing.PaidPlan.WhyCannotAddMemberAsync(db, id, ct) is { } needsPlan)
+        {
+            return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
+        }
         org.IsAcceptingApplications = request.IsAcceptingApplications;
         if (request.Kind is { } kind) org.Kind = kind;
         if (request.RunsPublicTours is { } runsTours) org.RunsPublicTours = runsTours;
