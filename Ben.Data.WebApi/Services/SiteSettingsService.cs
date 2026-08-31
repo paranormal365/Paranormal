@@ -66,6 +66,12 @@ public static class SiteSettingKeys
     /// <summary>Largest single chunk a chunked upload may send, in bytes. Unset = 64 MiB.</summary>
     public const string UploadChunkMaxBytes = "upload.chunk-max-bytes";
 
+    /// <summary>
+    /// How much a person with no paying group may store, in megabytes. See
+    /// <c>AccountStorageGuard</c>, which owns the rule and the fallback.
+    /// </summary>
+    public const string FreeAccountStorageMegabytes = "storage.free-account-megabytes";
+
     // ── Feature flags ─────────────────────────────────────────────────────────
     //
     // One switch per major section of the site, so a SuperAdmin can turn a whole area off without
@@ -147,6 +153,8 @@ public static class SiteSettingKeys
         (RateLimitEventAttendancePerMinute, "Rate limit — public event sign-up (per minute)",
             "How many event sign-up requests may come from one address each minute. Deliberately much higher than the others: a tour group of thirty all signing up at the meeting point shares the venue's wifi, so they reach the site as a single caller. Raise this if a busy operator reports guests being turned away; it does not affect how many people may attend. Leave empty for the default."),
 
+        (FreeAccountStorageMegabytes, "Free account storage (MB)",
+            "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),
         (UploadMaxFileBytes, "Upload limit — one file (bytes)",
             "The largest file anyone may upload, in bytes. Applies to every upload path — the classic form and the chunked uploader alike. Leave empty for the built-in default of 2 GiB (2147483648)."),
         (UploadChunkMaxBytes, "Upload limit — one chunk (bytes)",

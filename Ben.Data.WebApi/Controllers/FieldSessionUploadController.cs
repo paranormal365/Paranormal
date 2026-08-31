@@ -5,6 +5,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -73,6 +74,37 @@ public sealed class FieldSessionUploadController : BenControllerBase
 
         return Ok(sessions.Select(ToRecord));
     }
+
+    /// <summary>
+    /// How much of their own storage this account has used, and how much it may use.
+    /// </summary>
+    /// <remarks>
+    /// So the cap can be seen before it is met. A limit somebody only discovers by being refused
+    /// mid-upload is a limit that reads as a fault — the refusal explains itself, but by then
+    /// they have already recorded the night and carried the phone home.
+    /// </remarks>
+    [HttpGet("my-storage")]
+    public async Task<ActionResult<AccountStorageRecord>> GetMyStorage(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Null cap rather than a number for somebody a group's plan covers — a figure they are
+        // not measured against would be a lie however carefully it were labelled.
+        var covered = await AccountStorageGuard.WhyCannotStoreAsync(db, userId, long.MaxValue, ct) is null;
+
+        return Ok(new AccountStorageRecord(
+            UsedBytes: await AccountStorageGuard.UsedBytesAsync(db, userId, ct),
+            CapBytes: covered ? null : await AccountStorageGuard.CapBytesAsync(db, ct)));
+    }
+
+    /// <param name="CapBytes">
+    /// Null when nothing caps this account — a member of a group on a paid plan, whose personal
+    /// sessions ride along with what the group already pays for.
+    /// </param>
+    public sealed record AccountStorageRecord(long UsedBytes, long? CapBytes);
 
     /// <summary>Everything anyone has sent up for one investigation.</summary>
     [HttpGet("for-investigation/{investigationId:guid}")]
@@ -361,6 +393,18 @@ public sealed class FieldSessionUploadController : BenControllerBase
             ? await MayContributeAsync(db, linked, userId, ct)
             : session.SubmittedByAppUserId == userId;
         if (!allowed) return NotFound();
+
+        // A session belonging to no investigation is stored against the person, so it is the
+        // person's own allowance that has to cover it. Group work is not checked here: those
+        // files live under the organization's path and answer to the group's plan.
+        //
+        // Asked BEFORE the bytes are written, so this is a limit rather than something noticed
+        // afterwards — and answered with the reason, so somebody who hits it knows what to do.
+        if (session.InvestigationId is null
+            && await AccountStorageGuard.WhyCannotStoreAsync(db, userId, file.Length, ct) is { } full)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+        }
 
         var storedName = $"{Guid.NewGuid()}{Path.GetExtension(relativePath)}";
         var storagePath = session.Investigation is null
