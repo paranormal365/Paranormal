@@ -1439,3 +1439,23 @@ public sealed record SessionInsightsRecord(
     double? PlaceMedianMarkersPerHour,
     bool? StandsOut,
     bool Detailed);
+
+// ── Mail diagnostics ──────────────────────────────────────────────────────────
+
+/// <summary>What this machine is configured to send mail with. Carries no secret.</summary>
+/// <param name="HasPassword">
+/// Whether a password is PRESENT, never what it is. Its absence is the single most likely reason a
+/// configuration that looks complete still cannot send: the value arrives as the
+/// <c>Smtp__Password</c> environment variable on the API's app pool, so it can be missing there
+/// while every visible setting is correct.
+/// </param>
+public sealed record MailSettingsRecord(
+    bool IsConfigured, string? Host, int Port, string Security,
+    string? User, string? FromAddress, bool HasPassword);
+
+/// <summary>The outcome of one real test send.</summary>
+/// <param name="ServerSaid">
+/// The SMTP error verbatim. Kept because "535 authentication failed" and "connection timed out"
+/// call for completely different fixes, and a tidied-up "could not send" tells you neither.
+/// </param>
+public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid);

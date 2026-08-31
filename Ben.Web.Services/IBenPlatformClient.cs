@@ -42,6 +42,12 @@ public interface IBenPlatformClient
     /// <summary>What each rate limit has refused, worst first (SuperAdmin).</summary>
     Task<LoadResult<RateLimitRefusalRecord>> GetRateLimitRefusalsAsync(CancellationToken token = default);
 
+    /// <summary>How this machine is configured to send mail. No secrets.</summary>
+    Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default);
+
+    /// <summary>Sends one real test message and reports what the server said.</summary>
+    Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
+
     /// <summary>Re-arms the one-time notice for a limit, so the next burst sends a fresh message.</summary>
     Task<bool> ReArmRateLimitNoticeAsync(string policyName, CancellationToken token = default);
 
