@@ -62,9 +62,9 @@
     {
         <div class="row g-2 mb-3">
             @*
-                Each card links to the list behind its number. "Signed in this week" is the one
-                that does not: there is no page listing recent sign-ins, and a card that links
-                somewhere approximate is worse than one that stays put.
+                Each card links to the list behind its number. "Signed in this week" links down
+                the page rather than away from it — the sign-in panels are the list behind that
+                number, and they live here because they are read alongside the rest.
             *@
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="People" Icon="users" Value="@_summary.People.ToString("N0")"
@@ -85,6 +85,7 @@
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="Signed in this week" Icon="log-in"
                           Value="@_summary.ActivePeopleThisWeek.ToString("N0")"
+                          Href="#sign-ins" LinkLabel="Who, and when"
                           Caption="@ActiveCaption"
                           Sparkline="@RecentSignIns" />
             </div>
@@ -173,6 +174,194 @@
             </div>
         </div>
     }
+
+    @*
+        Sign-ins (Ben, 2026-08-31). The only part of this dashboard that names people, and the
+        reason is that "who signed in last" has no useful shape-shaped answer. Kept to accounts,
+        counts and times — nothing here says what anybody did after arriving.
+    *@
+    @if (!_loading && _signIns is not null)
+    {
+        <h5 class="mt-4 mb-2" id="sign-ins">Sign-ins</h5>
+        <p class="text-secondary small">
+            Password and Apple sign-ins over the selected period.
+            @if (!_signIns.CoversAppleSignIns)
+            {
+                <span class="text-warning">
+                    No Apple sign-in has been recorded yet — figures here may be password-only.
+                </span>
+            }
+            Microsoft sign-ins are never counted: they arrive as a token on every request, so
+            there is no single moment to record as the sign-in.
+        </p>
+
+        <div class="row g-3">
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Who has been here</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        The last @SignInInsightsPageSize people to arrive — one row each, however
+                        many times they signed in.
+                    </p>
+                    @if (_signIns.Recent.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">Nobody has signed in yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.Recent)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                        @if (row.Method != "password")
+                                        {
+                                            <span class="badge bg-secondary ms-1">@MethodLabel(row.Method)</span>
+                                        }
+                                    </span>
+                                    <span class="text-secondary small text-nowrap">@row.Utc.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Signing in most</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Successful sign-ins in this period. A high number is a heavy user or a
+                        short-lived session, not a problem.
+                    </p>
+                    @if (_signIns.TopPeople.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">Nobody has signed in during this period.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.TopPeople)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                    </span>
+                                    <span class="text-nowrap"><strong>@row.Count.ToString("N0")</strong></span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Groups whose people show up</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Sign-ins by active members. Somebody in two groups counts for both — the
+                        question is which group's people are turning up, not how a total divides.
+                    </p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(_signIns.TopGroups)"
+                               Series="@Single("Sign-ins", _signIns.TopGroups)"
+                               NoDataText="No group's members signed in during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">When people sign in</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        By hour, UTC — the site records no per-account timezone, so these are not
+                        anybody's local hours. US Central is six behind in summer.
+                    </p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@Labels(_signIns.ByHourUtc)"
+                               Series="@Single("Sign-ins", _signIns.ByHourUtc)"
+                               NoDataText="No sign-ins during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Failed sign-ins</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Attempts against a real account with the wrong password. An account that
+                        appears here and nowhere above is either locked out or being guessed at.
+                    </p>
+                    @if (_signIns.MostFailures.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">No failed sign-ins during this period.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.MostFailures)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                    </span>
+                                    <span class="text-nowrap">
+                                        <strong>@row.Count.ToString("N0")</strong>
+                                        <span class="text-secondary small ms-1">@row.LastUtc.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">How people sign in</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        The split between a password and Sign in with Apple.
+                    </p>
+                    <ApexChart Type="donut" Height="260"
+                               Categories="@Labels(_signIns.ByMethod)"
+                               Values="@Counts(_signIns.ByMethod)"
+                               NoDataText="No sign-ins during this period." />
+                </div></div>
+            </div>
+
+            @*
+                The oddities panel is last because it is usually empty, and an empty panel at the
+                top reads as a broken one. Every line here is an observation with its basis
+                attached — never a verdict, because the data cannot support one.
+            *@
+            <div class="col-12">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Worth a look</div>
+                    @if (_signIns.Oddities.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">
+                            Nothing unusual in the sign-in record for this period.
+                        </p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var odd in _signIns.Oddities)
+                            {
+                                <li class="d-flex gap-2 border-bottom py-2">
+                                    <BenIcon Name="@OddityIcon(odd.Kind)" Class="mt-1 flex-shrink-0" />
+                                    <span>
+                                        <strong>@odd.Headline</strong>
+                                        <span class="d-block text-secondary small">@odd.Detail</span>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+        </div>
+    }
+
 </div>
 
 @code {
@@ -211,6 +400,10 @@
 
     private AdminStatsSummary? _summary;
     private AdminStatsCharts? _charts;
+    private AdminSignInInsights? _signIns;
+
+    /// <summary>Matches the server's own cap, so the caption cannot drift from the list.</summary>
+    private const int SignInInsightsPageSize = 10;
     private int _days = 30;
     private bool _loading = true;
     private string? _error;
@@ -242,6 +435,11 @@
             // only fetched once; the charts are what the range applies to.
             _summary ??= await AdminClient.GetAdminStatsSummaryAsync();
             _charts = await AdminClient.GetAdminStatsChartsAsync(_days);
+
+            // Deliberately NOT part of the null check below. The sign-in panels are an addition
+            // to this page, not a precondition for it: if that one endpoint fails, the dashboard
+            // should still draw everything else rather than replace itself with an error.
+            _signIns = await AdminClient.GetAdminSignInInsightsAsync(_days);
 
             // Null here is a FAILURE, not "no data" — these endpoints always return an object when
             // they answer at all. The client swallows the status code and returns null for any
@@ -302,4 +500,28 @@
     private string? ActiveCaption => _summary is not null
         ? $"{_summary.SignInsThisWeek:N0} sign-in{(_summary.SignInsThisWeek == 1 ? "" : "s")} in total"
         : null;
+
+    // ── Sign-in panels ────────────────────────────────────────────────────────
+
+    /// <summary>The method slug in the words a reader would use.</summary>
+    private static string MethodLabel(string method) => method switch
+    {
+        "password" => "Password",
+        "apple"    => "Apple",
+        _          => method,
+    };
+
+    /// <summary>
+    /// An icon per oddity kind, chosen from the slug rather than by matching on the sentence —
+    /// the prose is written for a person and will be reworded; the slug is the contract.
+    /// </summary>
+    private static string OddityIcon(string kind) => kind switch
+    {
+        "failures" => "alert-triangle",
+        "woke"     => "clock",
+        "hours"    => "clock",
+        "never"    => "user",
+        "surge"    => "trending-up",
+        _          => "help-circle",
+    };
 }

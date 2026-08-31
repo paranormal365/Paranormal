@@ -80,6 +80,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default)
         => _api.GetAsync<AdminStatsCharts>($"/api/admin/stats/charts?days={days}", token);
 
+    public Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default)
+        => _api.GetAsync<AdminSignInInsights>($"/api/admin/stats/sign-ins?days={days}", token);
+
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 

@@ -64,12 +64,17 @@ public sealed class StripeRenewalJob : IScheduledJob
 
         // Due: an Active, uncancelled Stripe subscription whose period ends inside the window —
         // or has already ended without lapsing yet, which is a decline being retried.
+        //
+        // Deliberately NOT filtered on a saved card. A group on a 100%-off trial never saw a card
+        // form, so it has neither a customer nor a payment method — and it is exactly the group
+        // whose next period must still be granted, because that period is free and there is
+        // nothing to collect. Requiring a card here made "your first three months are free"
+        // deliver one month and then lapse. Whether a card is NEEDED is a question about the
+        // price, so it is asked in RenewOneAsync once the price is known.
         var due = await db.OrganizationSubscriptions.AsNoTracking()
             .Where(s => s.ProviderName == "Stripe"
                      && s.Status == SubscriptionStatus.Active
                      && !s.CancelAtPeriodEnd
-                     && s.ProviderCustomerRef != null
-                     && s.ProviderPaymentMethodRef != null
                      && s.CurrentPeriodEnd != null
                      && s.CurrentPeriodEnd <= now + RenewalWindow)
             .ToListAsync(ct);
@@ -235,8 +240,23 @@ public sealed class StripeRenewalJob : IScheduledJob
             return;
         }
 
+        // Something IS owed, and there is no card on file — a trial that has run out of free
+        // periods, or a subscription whose card was never saved. Nothing to charge and nothing to
+        // grant: the period simply ends, and SubscriptionLapseJob owns that consequence exactly as
+        // it owns a decline. The pre-renewal notices have already told them (CouponMath's
+        // IsLastFreePeriod writes the trial-ending wording), so this is the moment they were warned
+        // about rather than a surprise.
+        if (sub.ProviderCustomerRef is null || sub.ProviderPaymentMethodRef is null)
+        {
+            _log.LogInformation(
+                "Organization {OrganizationId} owes ${Payable} at renewal but has no saved card — "
+              + "not charged; the lapse job owns the consequence.",
+                sub.OrganizationId, payable);
+            return;
+        }
+
         var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
-            sub.ProviderCustomerRef!, sub.ProviderPaymentMethodRef!,
+            sub.ProviderCustomerRef, sub.ProviderPaymentMethodRef,
             payable + tax,
             $"IsHaunted renewal — {tier.Name}, {members} members",
             facts.ToMetadata(),

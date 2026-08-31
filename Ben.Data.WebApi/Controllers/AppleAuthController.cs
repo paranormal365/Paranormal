@@ -202,6 +202,15 @@ public sealed class AppleAuthController : BenControllerBase
     {
         _signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
         await _signInManager.SignInAsync(user, isPersistent: false);
+
+        // The one place an Apple session is minted, and so the one place to count it. Without
+        // this the dashboard's sign-in figures were password-only and said nothing about it —
+        // the Method column existed for a distinction that never arrived. Recording cannot fail
+        // the sign-in: RecordExternalSignInAsync swallows its own errors, for the same reason the
+        // password path does.
+        if (_signInManager is Services.RecordingSignInManager recorder)
+            await recorder.RecordExternalSignInAsync(user.Id, Services.RecordingSignInManager.AppleMethod);
+
         // The handler has already written the response body; returning anything else would
         // append to it.
         return new EmptyResult();
