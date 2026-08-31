@@ -264,6 +264,11 @@ builder.Services.AddBenDataProtection(builder.Configuration, Log.Logger);
 // would otherwise mean every new account is created and then locked out with no error anywhere.
 builder.Services.AddTransient<Microsoft.AspNetCore.Identity.IEmailSender<AppUser>,
     Ben.Data.WebApi.Services.IdentityEmailSender>();
+// The same class under its own interface, so the sign-up path can learn whether the confirmation
+// actually went out instead of assuming it did. See IConfirmationMailer for why a bare Task was
+// not enough.
+builder.Services.AddTransient<Ben.Data.WebApi.Services.IConfirmationMailer,
+    Ben.Data.WebApi.Services.IdentityEmailSender>();
 
 builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        {

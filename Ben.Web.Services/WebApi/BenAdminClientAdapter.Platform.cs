@@ -344,6 +344,16 @@ public sealed partial class BenAdminClientAdapter
                $"/api/admin/rate-limits/{Uri.EscapeDataString(policyName)}/notify-again",
                new object(), token);
 
+    // ── Mail diagnostics ──────────────────────────────────────────────────────
+
+    public Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default)
+        => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);
+
+    public Task<MailTestResultRecord?> SendTestEmailAsync(
+        string to, CancellationToken token = default)
+        => _api.PostAsync<object, MailTestResultRecord>(
+               "/api/admin/mail/test", new { To = to }, token);
+
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
 
     public Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(

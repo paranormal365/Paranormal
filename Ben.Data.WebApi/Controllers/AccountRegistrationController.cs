@@ -41,6 +41,7 @@ public sealed class AccountRegistrationController : ControllerBase
     private readonly UserManager<AppUser> _userManager;
     private readonly UserHandleService _handles;
     private readonly IEmailSender<AppUser> _emailSender;
+    private readonly Ben.Data.WebApi.Services.IConfirmationMailer _mailer;
     private readonly Ben.Data.Common.Interfaces.IEmailService _email;
     private readonly SiteIdentity _site;
     private readonly IConfiguration _configuration;
@@ -50,6 +51,7 @@ public sealed class AccountRegistrationController : ControllerBase
         UserManager<AppUser> userManager,
         UserHandleService handles,
         IEmailSender<AppUser> emailSender,
+        Ben.Data.WebApi.Services.IConfirmationMailer mailer,
         Ben.Data.Common.Interfaces.IEmailService email,
         IOptions<SiteIdentity> site,
         IConfiguration configuration,
@@ -58,6 +60,7 @@ public sealed class AccountRegistrationController : ControllerBase
         _userManager = userManager;
         _handles = handles;
         _emailSender = emailSender;
+        _mailer      = mailer;
         _email = email;
         _site = site.Value;
         _configuration = configuration;
@@ -194,15 +197,18 @@ public sealed class AccountRegistrationController : ControllerBase
 
         var link = $"{baseUrl}/confirm-email?userId={user.Id}&code={code}";
 
-        try
+        // This used to be a try/catch around SendConfirmationLinkAsync whose catch COULD NEVER
+        // RUN: the sender swallows its own exceptions and returns a completed Task, so the
+        // "Could not send" error below it was dead code. That is exactly why a failed confirmation
+        // left no trace — the layer that would have recorded it was never reached.
+        var sent = await _mailer.TrySendConfirmationAsync(user, user.Email!, link);
+
+        if (sent)
         {
-            await _emailSender.SendConfirmationLinkAsync(user, user.Email!, link);
-        }
-        catch (Exception ex)
-        {
-            // The account exists either way. IdentityEmailSender already logs the link on failure
-            // so a local flow can still be completed; this is the layer above saying so too.
-            _logger.LogError(ex, "Could not send the confirmation email for {UserId}.", user.Id);
+            // Stamped only on a real send. An account with no DateConfirmationSent has never been
+            // told how to complete itself, and that is now a question the database can answer.
+            user.DateConfirmationSent = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
         }
     }
 
@@ -275,6 +281,14 @@ public sealed class AccountRegistrationController : ControllerBase
         }
 
         var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (result.Succeeded)
+        {
+            // Identity records confirmation as a bare bool. The time is what makes it readable
+            // next to DateConfirmationSent — "sent Monday, confirmed Monday" against "sent Monday,
+            // still nothing" is the whole diagnostic.
+            user.DateEmailConfirmed = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+        }
 
         return Ok(result.Succeeded
             ? new ConfirmEmailResponse(true, "Your email is confirmed. You can sign in now.")
