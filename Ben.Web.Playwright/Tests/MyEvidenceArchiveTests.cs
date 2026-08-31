@@ -23,6 +23,19 @@ namespace Ben.Web.Playwright.Tests;
 [Category("EventEvidence")]
 public class MyEvidenceArchiveTests : BenTestBase
 {
+    /// <summary>
+    /// Waits for the list to actually arrive — a row, or the empty state.
+    /// </summary>
+    /// <remarks>
+    /// The page fetches after its first render (it must: auth is not ready before that), so every
+    /// assertion about its CONTENT has to wait on the content. Waiting on the heading, or on the
+    /// URL, passes on a page that has drawn its title and nothing else.
+    /// </remarks>
+    private async Task SettleAsync()
+        => await Expect(Main.Locator("table tbody tr").First
+                .Or(Main.GetByText("You haven't offered anything yet")))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
     [Test]
     public async Task My_evidence_is_reachable_from_the_profile()
     {
@@ -47,14 +60,13 @@ public class MyEvidenceArchiveTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-evidence");
 
-        await Expect(Main.GetByRole(AriaRole.Heading, new() { Name = "My evidence" }))
-            .ToBeVisibleAsync();
-
-        var hasRows = await Main.Locator("table tbody tr").CountAsync() > 0;
-        var hasEmptyState = await Main.GetByText("You haven't offered anything yet").IsVisibleAsync();
-
-        Assert.That(hasRows || hasEmptyState, Is.True,
-            "The page rendered neither rows nor an empty state, which is what a failed load looks like.");
+        // WAIT for one of the two, rather than sampling once. The page loads its rows after the
+        // first render — it has to, or auth is not ready yet — so a bare count runs before the
+        // table exists and reports an empty page that is merely a slow one. The heading is
+        // static and proves nothing about the load.
+        await Expect(Main.Locator("table tbody tr").First
+                .Or(Main.GetByText("You haven't offered anything yet")))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     /// <summary>
@@ -72,6 +84,9 @@ public class MyEvidenceArchiveTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-evidence");
         await Expect(Main.GetByRole(AriaRole.Heading, new() { Name = "My evidence" })).ToBeVisibleAsync();
+
+        // Settle first, for the same reason: the buttons arrive with the rows.
+        await SettleAsync();
 
         var publish = Main.Locator("button[id^='publish-']").First;
         if (await publish.CountAsync() == 0)
@@ -95,6 +110,8 @@ public class MyEvidenceArchiveTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-evidence");
         await Expect(Main.GetByRole(AriaRole.Heading, new() { Name = "My evidence" })).ToBeVisibleAsync();
+
+        await SettleAsync();
 
         var retract = Main.Locator("button[id^='retract-']").First;
         if (await retract.CountAsync() == 0)

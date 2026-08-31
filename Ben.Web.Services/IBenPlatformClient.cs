@@ -117,6 +117,26 @@ public interface IBenPlatformClient
     /// </summary>
     string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId);
 
+    /// <summary>
+    /// What deleting a group would destroy. SuperAdmin, and changes nothing.
+    /// </summary>
+    Task<OrganizationPurgePreview?> GetOrganizationPurgePreviewAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a group and everything belonging to it. SuperAdmin, and irreversible.
+    /// </summary>
+    /// <param name="confirmName">The group's exact name, typed back by the administrator.</param>
+    Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
+        Guid organizationId, string confirmName, CancellationToken token = default);
+
+    /// <summary>
+    /// What the place's archive says about one of your own field sessions.
+    /// </summary>
+    /// <remarks>Null when the session is not yours, has no place, or the place is not public.</remarks>
+    Task<SessionInsightsRecord?> GetSessionInsightsAsync(
+        Guid sessionId, CancellationToken token = default);
+
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 

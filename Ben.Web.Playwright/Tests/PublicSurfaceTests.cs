@@ -27,13 +27,29 @@ public class PublicSurfaceTests : BenTestBase
         // by design, so presence of the bands is the assertion that the anonymous fetch worked.
         await Expect(Page.GetByText("Small group", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Page.GetByText("$15", new() { Exact = false }).First)
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        // Yearly shows the yearly price and the derived saving.
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false }),
-            Page.GetByText("$150", new() { Exact = false }));
+        // ANY price, not a specific one. This asserted "$15" and broke the day the ladder moved to
+        // whole dollars — a test that pins a number the business is free to change reports a
+        // pricing decision as a defect. What is worth guarding is that a price rendered at all,
+        // because a blank band is the failure this test exists to catch.
+        var anyMonthlyPrice = Page.GetByText(new System.Text.RegularExpressions.Regex(@"\$\d"));
+        await Expect(anyMonthlyPrice.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var monthly = await anyMonthlyPrice.First.InnerTextAsync();
+
+        // Yearly shows a DIFFERENT figure. Same reasoning as above: the relationship is the
+        // contract, not the number.
+        //
+        // Waiting on the PRICE to change, not on the word "save" — the saving line is already on
+        // screen before the toggle is touched, so a click-until-"save" returns instantly and reads
+        // the monthly figure back as though nothing happened. Not.ToHaveTextAsync retries, which
+        // is what makes this wait for the render rather than sample once.
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false })
+            .First.ClickAsync();
+
+        await Expect(anyMonthlyPrice.First)
+            .Not.ToHaveTextAsync(monthly, new() { Timeout = 10_000 });
+
         await Expect(Page.GetByText("save", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }

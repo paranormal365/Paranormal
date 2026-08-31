@@ -26,8 +26,26 @@ var builder = WebApplication.CreateBuilder(args);
 //
 // The Development config still turns those namespaces up — that is where the setting belongs, and
 // where it is switched off by simply running in another environment.
+// The one rule expressed in code rather than configuration, and deliberately so.
+//
+// A stored file that is not on disk is answered 404 and logged at Warning by the exception handler
+// below — that decision is made carefully and explained there. But ASP.NET Core's own
+// ExceptionHandlerMiddleware logs the exception at ERROR, with a full stack trace, BEFORE it ever
+// invokes our handler. So the downgrade never took effect: every missing file wrote an Error
+// anyway, and the handler's Warning went underneath it.
+//
+// Measured on 2026-08-31: 1,978 of the 2,022 rows in the Logs table — 96% — were this, and 1,934
+// of those were THREE files. The error log had stopped being a place a real fault could be seen,
+// which is precisely what the handler's comment says it was trying to prevent.
+//
+// Scoped as tightly as the problem: that one middleware, that one exception family, that one
+// level. A FileNotFoundException thrown anywhere else still logs at Error, and every other
+// exception this middleware sees still logs in full. This lives in code because it is a
+// correctness rule about not contradicting ourselves, not a verbosity preference — a config
+// setting that silently turned it off would bring the noise straight back.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
+    .Filter.ByExcluding(Ben.Data.WebApi.Logging.LogNoise.IsDuplicateOfAHandledMissingFile)
     .WriteTo.Console(
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}")
     .CreateLogger();
@@ -200,6 +218,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // renewal could not save.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeRenewalJob>();
+// Housekeeping, and the only job here that removes rows. It ships inert — the window is 30 days
+// and nothing in the table was older than four days when it was written — and it will never touch
+// the audit log, which item 191 settled is archived rather than deleted.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
@@ -223,6 +246,8 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration
                               Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+// The most destructive operation in the product, and SuperAdmin-only at its controller.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 

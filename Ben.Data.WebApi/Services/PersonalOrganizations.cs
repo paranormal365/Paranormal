@@ -35,7 +35,15 @@ public static class PersonalOrganizations
     /// Written as an expression so EF translates it into the same SQL a hand-written clause
     /// would, with no client-side evaluation and no cost for using the shared form.
     /// </remarks>
-    public static Expression<Func<Organization, bool>> Discoverable => o => !o.IsPersonal;
+    /// <remarks>
+    /// Two reasons a group may not appear, answered together: it is one person's subscription and
+    /// never was a group (<c>IsPersonal</c>), or it is a real group that has chosen not to be found
+    /// (<c>IsUnlisted</c>). One question with two causes belongs in one predicate — split across
+    /// two, they drift, and the drift is invisible until somebody turns up in a directory who
+    /// should not be there.
+    /// </remarks>
+    public static Expression<Func<Organization, bool>> Discoverable =>
+        o => !o.IsPersonal && !o.IsUnlisted;
 
     /// <summary>
     /// Why this thing may not be done inside a personal organization, or null when it may.
@@ -94,10 +102,14 @@ public static class PersonalOrganizations
     public static Expression<Func<T, bool>> DiscoverableVia<T>(
         Expression<Func<T, Organization>> organization)
     {
-        // Rebuilds `x => !organization(x).IsPersonal` so callers keep one rule rather than
-        // remembering which property name carries it.
+        // Rebuilds the Discoverable predicate against a navigation property, so callers keep one
+        // rule rather than remembering which flags carry it.
         var parameter = organization.Parameters[0];
-        var isPersonal = Expression.Property(organization.Body, nameof(Organization.IsPersonal));
-        return Expression.Lambda<Func<T, bool>>(Expression.Not(isPersonal), parameter);
+        var notPersonal = Expression.Not(
+            Expression.Property(organization.Body, nameof(Organization.IsPersonal)));
+        var notUnlisted = Expression.Not(
+            Expression.Property(organization.Body, nameof(Organization.IsUnlisted)));
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.AndAlso(notPersonal, notUnlisted), parameter);
     }
 }

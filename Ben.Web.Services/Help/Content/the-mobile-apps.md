@@ -45,6 +45,7 @@ show them to you again.
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Events** | Public events, readable without an account, and you can reserve a place. **Add to calendar** puts one straight into your own calendar. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
+| **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
 
 Anything the app cannot do yet says so plainly rather than showing you an empty screen. A count
@@ -306,8 +307,52 @@ normally stay on the phone that made them.
   has its media hidden immediately, until a moderator looks. The readings stay either way.
 - **Public locations only.** A session recorded at somebody's home can never be archived. That
   work stays with you and your group, which is what the paid plans are for.
-- **You can take it back.** Retracting removes the session from the page at any time. What people
-  have already read cannot be unread, which is worth a moment's thought before the first publish.
+- **Taking it back is part of a paid plan.** Publishing is something anybody may do; removing it
+  afterwards is not. A free account's contribution stays on the location's page — that is what
+  makes the archive worth reading, and what a paid plan buys is keeping your work to yourself in
+  the first place. So it is worth a moment's thought before the first publish: what people have
+  already read cannot be unread either way.
+
+## What you photographed on somebody else's event
+
+If you go on a ghost walk or a paid event, you can offer what you caught to the group running it
+— and **Settings → My evidence** is where everything you have offered lives afterwards.
+
+It exists because the two decisions involved are not the same decision, and only one of them is
+theirs:
+
+- **The group decides what their own event shows.** They accept a photograph for their event's
+  record, or they do not. That is their gallery to curate.
+- **You decide whether it joins the archive of the place.** Yours, whatever they decided. A
+  picture they did not use is still yours to contribute; one they did use is not published to the
+  location by that alone.
+
+So the screen shows both, side by side: the group's answer, and whether it is in the place's
+archive. A photograph you offered is **always yours to open**, whether it is waiting, accepted or
+turned down — you never hand over your only copy.
+
+![My evidence: what you offered, what the group said, and whether it is in the place's archive](/help/media/the-mobile-apps/iphone-my-evidence.png)
+
+Where the event was held at a public location, each row offers **Add to place archive**. Where it
+was not, the row says so rather than showing a button that could only refuse. This is the part
+that makes a tour worth more than a night out: a walk that visits the same building every week
+builds that building's public record faster than anything else on the site.
+
+## The app only shows you what applies to you
+
+The app is a **tool**, and a tool should not be cluttered with parts that do nothing in your
+hands. What it offers follows who you actually are:
+
+| If you are | You see |
+|---|---|
+| **Investigating on your own** | The feed, Field Kit, and your profile. No case list, no investigations — you have neither, and an empty screen is worse than no screen. |
+| **Somebody's client** | Your case as well, even though you belong to no group. You asked for the investigation; it is yours to follow. |
+| **In a group** | Cases, investigations and events, as your group's roles allow. |
+| **On a ghost walk** | Events, and My evidence for what you photographed there. |
+
+Nothing is hidden that you have permission to use — this is about whether a section leads
+anywhere for you today, which is a different question from whether you are allowed through the
+door. Join a group and the sections appear; leave one and they go quiet again.
 
 ## A note on what the app shows you
 

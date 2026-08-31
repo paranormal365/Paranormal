@@ -72,6 +72,101 @@
                 </span>
             </div>
 
+            @* ── What the place's archive says about this night ─────────────
+               The one question a person recording alone cannot answer for themselves: was that
+               unusual, or does this building do it to everybody? It sits directly under the
+               header because it is the sentence they came for — not at the bottom under the
+               chart, where it would read as a footnote. *@
+            @if (_insights is { OthersWhoRecordedHere: > 0 } insights)
+            {
+                <div class="card mb-3 border-info">
+                    <div class="card-body py-3">
+                        <div class="small text-secondary mb-1">
+                            What @insights.PlaceName's archive says
+                        </div>
+
+                        <p class="mb-2">
+                            <strong>@insights.OthersWhoRecordedHere</strong>
+                            other @(insights.OthersWhoRecordedHere == 1 ? "person has" : "people have")
+                            recorded here,
+                            @if (insights.OthersWhoFlaggedSomething > 0)
+                            {
+                                <text>and <strong>@insights.OthersWhoFlaggedSomething</strong>
+                                of them flagged something.</text>
+                            }
+                            else
+                            {
+                                @* The deflating answer is the archive's most valuable one, so it
+                                   is said as plainly as the exciting one. *@
+                                <text>and <strong>none</strong> of them flagged anything.</text>
+                            }
+                            @if (insights.YourSessionsHere > 1)
+                            {
+                                <text> This is your <strong>@Ordinal(insights.YourSessionsHere)</strong>
+                                session here.</text>
+                            }
+                        </p>
+
+                        @if (insights.Detailed)
+                        {
+                            @if (insights.YourMarkersPerHour is { } mine
+                                 && insights.PlaceMedianMarkersPerHour is { } median)
+                            {
+                                <div class="d-flex flex-wrap gap-3 align-items-center">
+                                    <div class="border rounded px-3 py-2 text-center">
+                                        <div class="fs-5 fw-semibold">@mine.ToString("0.#")</div>
+                                        <div class="text-secondary" style="font-size:.75rem;">
+                                            your flags per hour
+                                        </div>
+                                    </div>
+                                    <div class="border rounded px-3 py-2 text-center">
+                                        <div class="fs-5 fw-semibold">@median.ToString("0.#")</div>
+                                        <div class="text-secondary" style="font-size:.75rem;">
+                                            typical here
+                                        </div>
+                                    </div>
+                                    <div>
+                                        @if (insights.StandsOut == true)
+                                        {
+                                            <span class="badge bg-warning text-dark">
+                                                Busier than this place usually is
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">
+                                                About what this place usually gives people
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                @* Detailed, but nothing comparable — said rather than left blank,
+                                   so nobody reads a missing panel as a quiet night. *@
+                                <p class="text-secondary small mb-0">
+                                    Not enough comparable sessions here yet to say whether this one
+                                    was unusual.
+                                </p>
+                            }
+                        }
+                        else
+                        {
+                            @* The upsell names exactly what it is withholding. A paywall that
+                               hides the shape of what you would get teaches people to assume it
+                               is nothing. *@
+                            <p class="text-secondary small mb-2">
+                                A paid plan compares this session with theirs — your flagged moments
+                                per hour against what this place typically gives people, and whether
+                                this night stood out.
+                            </p>
+                            <a class="btn btn-outline-primary btn-sm" href="/pricing">See plans</a>
+                        }
+                    </div>
+                </div>
+            }
+
             @if (_readings.Count == 0)
             {
                 <div class="alert alert-secondary">
@@ -266,6 +361,22 @@
     private string SiteName => SiteOptions.Value.Name;
 
     private FieldSessionSummaryRecord? _session;
+
+    /// <summary>What the place's archive says about this night. Null when there is nothing to say.</summary>
+    private SessionInsightsRecord? _insights;
+
+    /// <summary>"3rd", "12th" — the count said the way somebody would say it.</summary>
+    /// <remarks>
+    /// The teens are the whole reason this is a method: 11, 12 and 13 take "th" despite ending in
+    /// 1, 2 and 3, and every naive version of this ships "11st".
+    /// </remarks>
+    private static string Ordinal(int n)
+    {
+        var suffix = (n % 100) is >= 11 and <= 13
+            ? "th"
+            : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+        return $"{n}{suffix}";
+    }
     private bool _loading = true;
     private string? _refusal;
 
@@ -331,6 +442,12 @@
         }
 
         _session = detail.Session;
+
+        // Fetched separately and allowed to fail quietly: the comparison is an addition to this
+        // page, not a precondition for it. A session that will not draw because the archive was
+        // slow would be a worse page than one with no comparison on it.
+        _insights = await AdminClient.GetSessionInsightsAsync(SessionId);
+
         try
         {
             ReadDocument(detail.Document);

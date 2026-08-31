@@ -148,10 +148,27 @@
 
     private readonly Dictionary<Guid, (bool Ok, string Text)> _message = [];
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>
+    /// Loaded after the first render, not during initialisation.
+    /// </summary>
+    /// <remarks>
+    /// The same shape <c>PlaceView</c> uses, and for a reason a Playwright run found rather than
+    /// a review: from <c>OnInitializedAsync</c> during prerender there is no interactive renderer,
+    /// so <c>WaitUntilAuthReadyAsync</c> returns false, the method returns early — and
+    /// <c>_loading</c> stays true forever. The page then sits on its spinner with no error and no
+    /// content, which looks exactly like a slow network and is actually a dead page.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        if (!firstRender) return;
+
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
 
         await LoadAsync();
     }

@@ -220,7 +220,18 @@
                                             <span class="badge bg-secondary ms-1">@MethodLabel(row.Method)</span>
                                         }
                                     </span>
-                                    <span class="text-secondary small text-nowrap">@row.Utc.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()</span>
+                                    @* Both, deliberately. The relative form answers "is this
+                                       fresh?" at a glance, which is what somebody scanning the
+                                       list is actually asking; the absolute one answers "which
+                                       night was that?". Either alone makes the reader do
+                                       arithmetic. Local to the VIEWER and 12-hour, like every
+                                       other time on the site. *@
+                                    <span class="text-secondary small text-nowrap text-end">
+                                        @row.Utc.ToRelativeTime()
+                                        <span class="d-block" style="font-size:.7rem;">
+                                            @row.Utc.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
+                                        </span>
+                                    </span>
                                 </li>
                             }
                         </ul>
@@ -274,12 +285,13 @@
                 <div class="card h-100"><div class="card-body">
                     <div class="small text-secondary mb-2">When people sign in</div>
                     <p class="text-secondary" style="font-size:.78rem;">
-                        By hour, UTC — the site records no per-account timezone, so these are not
-                        anybody's local hours. US Central is six behind in summer.
+                        By hour, in <strong>your</strong> local time (@TimeZoneLabel). The site
+                        records no per-account timezone, so these are when sign-ins happened as
+                        <em>you</em> would have read the clock — not each person's own hour.
                     </p>
                     <ApexChart Type="bar" Height="260"
-                               Categories="@Labels(_signIns.ByHourUtc)"
-                               Series="@Single("Sign-ins", _signIns.ByHourUtc)"
+                               Categories="@Labels(LocalHours)"
+                               Series="@Single("Sign-ins", LocalHours)"
                                NoDataText="No sign-ins during this period." />
                 </div></div>
             </div>
@@ -306,7 +318,7 @@
                                     </span>
                                     <span class="text-nowrap">
                                         <strong>@row.Count.ToString("N0")</strong>
-                                        <span class="text-secondary small ms-1">@row.LastUtc.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                                        <span class="text-secondary small ms-1">@row.LastUtc.ToRelativeTime()</span>
                                     </span>
                                 </li>
                             }
@@ -502,6 +514,47 @@
         : null;
 
     // ── Sign-in panels ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The hour histogram rotated from UTC into the viewer's own hours, and relabelled 12-hour.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rotated here rather than re-bucketed on the server: the counts are per whole hour and
+    /// a timezone shift of whole hours is exactly a rotation, so this costs nothing and keeps one
+    /// cached server answer correct for every viewer.</para>
+    ///
+    /// <para>A negative offset must not produce a negative index — the modulo is written to wrap
+    /// in both directions, which is the arithmetic everybody gets wrong once.</para>
+    /// </remarks>
+    private IReadOnlyList<StatSlice> LocalHours
+    {
+        get
+        {
+            if (_signIns is null) return [];
+
+            var offset = UserState.UtcHourOffset();
+
+            return Enumerable.Range(0, 24)
+                .Select(localHour =>
+                {
+                    var utcHour = ((localHour - offset) % 24 + 24) % 24;
+                    return new StatSlice(HourLabel(localHour), _signIns.ByHourUtc[utcHour].Count);
+                })
+                .ToList();
+        }
+    }
+
+    /// <summary>"3 PM" — 12-hour, like every other time the site shows.</summary>
+    private static string HourLabel(int hour) => hour switch
+    {
+        0  => "12 AM",
+        12 => "12 PM",
+        < 12 => $"{hour} AM",
+        _  => $"{hour - 12} PM",
+    };
+
+    /// <summary>Whose clock the histogram is drawn on, named so nobody has to guess.</summary>
+    private string TimeZoneLabel => UserState.BrowserTimeZone.StandardName;
 
     /// <summary>The method slug in the words a reader would use.</summary>
     private static string MethodLabel(string method) => method switch

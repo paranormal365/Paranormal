@@ -84,7 +84,10 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
-    bool? AllowMemberPrivatePhotosToClients = null);
+    bool? AllowMemberPrivatePhotosToClients = null,
+    // Null means "leave as-is": a caller predating this must not list a group that chose not
+    // to be found.
+    bool? IsUnlisted = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
@@ -1414,3 +1417,25 @@ public sealed record DuplicatePlaceRow(
 public sealed record PlaceMergeResult(
     Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
     int FieldSessions, int Rooms);
+
+
+/// <summary>
+/// What everybody else's visits to a place say about one of your sessions.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>SessionInsights</c> beside <c>SessionInsightsService</c> in the WebApi project;
+/// decoded from the server's JSON by name, so a rename has to happen on both sides.
+/// </remarks>
+/// <param name="Detailed">
+/// False when the comparison is withheld on a free plan. The counts are still real — they are on
+/// the place's public page anyway — so a page can show them and say what it is not showing.
+/// </param>
+public sealed record SessionInsightsRecord(
+    string PlaceName,
+    int OthersWhoRecordedHere,
+    int OthersWhoFlaggedSomething,
+    int YourSessionsHere,
+    double? YourMarkersPerHour,
+    double? PlaceMedianMarkersPerHour,
+    bool? StandsOut,
+    bool Detailed);

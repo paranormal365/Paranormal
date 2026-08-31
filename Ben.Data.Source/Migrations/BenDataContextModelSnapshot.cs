@@ -4152,6 +4152,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsPersonal")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsUnlisted")
+                        .HasColumnType("bit");
+
                     b.Property<int>("Kind")
                         .HasColumnType("int");
 
