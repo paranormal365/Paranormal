@@ -215,11 +215,64 @@ public sealed class FieldSessionArchiveTests
 
     // ── taking it back ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Puts this person on an active plan. Retraction is the paid half of the archive's bargain
+    /// (Ben, 2026-08-31), so a test about what retraction DOES has to be run by somebody entitled
+    /// to do it — see the test below for the free account's answer.
+    /// </summary>
+    private static async Task GiveAPaidPlanAsync(IDbContextFactory<BenDataContext> factory, Guid userId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var orgId = Guid.NewGuid();
+        db.Organizations.Add(new Ben.Data.Source.Entities.Organization
+        {
+            Id = orgId, Name = "Paid", UrlName = $"paid-{orgId:N}",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        db.OrganizationUserMemberships.Add(new Ben.Data.Source.Entities.OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = userId,
+            Role = Ben.Data.Common.Enums.OrganizationMemberRole.Owner, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        db.OrganizationSubscriptions.Add(new Ben.Data.Source.Entities.OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId,
+            Status = Ben.Data.Common.Enums.SubscriptionStatus.Active,
+            Interval = Ben.Data.Common.Enums.BillingInterval.Monthly,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A free account may publish, and may not un-publish. Publish-then-hide is the whole exploit
+    /// the paywall closes — take the credit for a contribution, then remove it from the archive
+    /// everybody else's readings are compared against.
+    /// </summary>
+    [Fact]
+    public async Task A_free_account_cannot_retract_what_it_published()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+        await Publisher(factory, seed.UserId)
+            .Publish(seed.SessionId, new FieldSessionPublishController.PublishRequest(seed.PublicPlaceId), default);
+
+        var refusal = Assert.IsType<ObjectResult>(
+            await Publisher(factory, seed.UserId).Retract(seed.SessionId, default));
+        Assert.Equal(StatusCodes.Status402PaymentRequired, refusal.StatusCode);
+
+        // Still there, which is the point — a refusal that left it half-retracted would be worse
+        // than allowing it.
+        Assert.Single((await VisitAsync(factory, seed.PublicPlaceId)).Sessions!);
+    }
+
     [Fact]
     public async Task Retracting_removes_it_from_the_archive_but_keeps_where_it_happened()
     {
         var factory = Db();
         var seed = await SeedAsync(factory);
+        await GiveAPaidPlanAsync(factory, seed.UserId);
         await Publisher(factory, seed.UserId)
             .Publish(seed.SessionId, new FieldSessionPublishController.PublishRequest(seed.PublicPlaceId), default);
 

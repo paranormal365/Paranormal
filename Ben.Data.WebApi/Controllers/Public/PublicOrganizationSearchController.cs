@@ -47,6 +47,9 @@ public sealed class PublicOrganizationSearchController : ControllerBase
         // Load orgs that are accepting clients AND have an area configured
         var orgs = await db.Organizations
             .AsNoTracking()
+            // A personal organization is one person's subscription, not a group taking clients.
+            // Listing one here would tell a stranger that a named individual pays for the site.
+            .Where(Services.PersonalOrganizations.Discoverable)
             .Where(o => o.IsAcceptingClients && o.AreaOfOperation != null)
             .Select(o => new
             {
@@ -153,7 +156,8 @@ public sealed class PublicOrganizationSearchController : ControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var query = db.Organizations.AsNoTracking();
+        var query = db.Organizations.AsNoTracking()
+            .Where(Services.PersonalOrganizations.Discoverable);
         if (toursOnly) query = query.Where(o => o.RunsPublicTours);
         var total = await query.CountAsync(ct);
 

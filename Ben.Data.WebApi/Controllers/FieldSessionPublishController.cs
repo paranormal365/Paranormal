@@ -401,6 +401,13 @@ public sealed class FieldSessionPublishController : BenControllerBase
         var session = await db.FieldSessionUploads.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (session is null || session.SubmittedByAppUserId != userId) return NotFound();
 
+        // Retraction is the paid half of the archive's bargain. Publishing stays a deliberate act
+        // anybody may perform; pulling it back afterwards is what a free account cannot do,
+        // because publish-then-hide is the whole exploit — take the credit for a contribution,
+        // then remove it. Choosing never to publish is not gaming anything and is not refused.
+        if (await Services.Billing.PaidPlan.WhyCannotKeepPrivateAsync(db, userId, ct) is { } paidOnly)
+            return StatusCode(StatusCodes.Status402PaymentRequired, paidOnly);
+
         // The PLACE is left alone on purpose: where a session happened is a fact about the
         // recording, not a consequence of having shared it, and somebody who retracts today may
         // republish tomorrow without re-answering "where were you".

@@ -59,6 +59,27 @@ public enum SubscriptionLimit
     /// <summary>Public pages the group may publish.</summary>
     PublishedPages = 7,
 
+    /// <summary>
+    /// New cases that may be STARTED in one billing period — an allowance, not a ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The first limit here that is not a concurrent count</b>, and the distinction is the
+    /// whole point of it. <see cref="OpenCases"/> asks "how many are open right now", so closing
+    /// one makes room immediately. This asks "how many did you start since your period began", so
+    /// closing one makes no room at all until the period rolls over.</para>
+    ///
+    /// <para>Written for the solo tier (Ben, 2026-08-30: "one open case per month"), where the
+    /// thing being sold is a rate of work rather than a stock of it. A single investigator who
+    /// could close and reopen freely would have an unlimited plan with extra steps.</para>
+    ///
+    /// <para><b>The period is the BILLING period, not the calendar month.</b> It is what the
+    /// person is paying for, the dates already exist on the subscription, and it means the
+    /// allowance resets on a date the site can name in the refusal rather than one the reader has
+    /// to work out. An organization with no subscription has no period and so is not metered —
+    /// fail open, like every other cap here.</para>
+    /// </remarks>
+    CasesPerPeriod = 9,
+
     /// <summary>Custom roles the group can define for itself.</summary>
     /// <remarks>
     /// In the enum because Ben raised it; probably best left unset on every band. Ben's own
