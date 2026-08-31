@@ -203,20 +203,33 @@
                                     }
                                 </Template>
                             </GridColumn>
-                            <GridCommandColumn Width="240px">
-                                @* The referral link: hand the URL to whoever is selling access,
-                                   and the visitor lands on /pricing with the code attached. Their
-                                   results are this row's redemption count — attribution rides the
-                                   redemption records that already exist. *@
-                                <GridCommandButton Command="CopyLink" Icon="@SvgIcon.Link"
-                                                   OnClick="@((GridCommandEventArgs e) => CopyReferralLinkAsync((CouponCodeAdminRecord)e.Items.First()))">
-                                    Copy link
-                                </GridCommandButton>
-                                <GridCommandButton Command="Withdraw" Icon="@SvgIcon.Cancel"
-                                                   OnClick="@((GridCommandEventArgs e) => ToggleCodeAsync((CouponCodeAdminRecord)e.Items.First()))">
-                                    @((_codesResult.Items.FirstOrDefault()?.IsActive ?? true) ? "Withdraw" : "Restore")
-                                </GridCommandButton>
-                            </GridCommandColumn>
+                            @* A Template rather than a GridCommandColumn, because one of these
+                               buttons is LABELLED from the row it sits on. A GridCommandButton's
+                               content has no row context, so the label had to read the grid's
+                               first item — and every row in a generated batch then wore code #1's
+                               verb, telling somebody they were about to Restore a live code the
+                               click would withdraw. The handler was right all along; only the
+                               word was wrong. *@
+                            <GridColumn Title="Actions" Width="240px">
+                                <Template>
+                                    @{ var row = (CouponCodeAdminRecord)context; }
+                                    <span class="text-nowrap">
+                                        @* The referral link: hand the URL to whoever is selling
+                                           access, and the visitor lands on /pricing with the code
+                                           attached. Their results are this row's redemption count
+                                           — attribution rides the redemption records that already
+                                           exist. *@
+                                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                @onclick="@(() => CopyReferralLinkAsync(row))">
+                                            <BenIcon Name="link" Class="me-1" />Copy link
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm ms-1"
+                                                @onclick="@(() => ToggleCodeAsync(row))">
+                                            <BenIcon Name="@(row.IsActive ? "x" : "rotate-ccw")" Class="me-1" />@(row.IsActive ? "Withdraw" : "Restore")
+                                        </button>
+                                    </span>
+                                </Template>
+                            </GridColumn>
                         </GridColumns>
                     </TelerikGrid>
                 </BenListState>
