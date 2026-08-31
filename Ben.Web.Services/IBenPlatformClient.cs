@@ -100,6 +100,23 @@ public interface IBenPlatformClient
     /// <remarks>The one dashboard call that names accounts — see AdminStatsController.</remarks>
     Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>
+    /// Reports a published field session's media, hiding it until a moderator looks.
+    /// </summary>
+    /// <remarks>
+    /// Requires an account on purpose: one flag hides, so an anonymous version would let anybody
+    /// erase the archive's pictures. The page shows the control to everyone and asks a visitor to
+    /// sign in, rather than hiding a refusal the server would give anyway.
+    /// </remarks>
+    Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
+        Guid fieldSessionId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// Absolute URL for one approved archive recording's bytes — the API origin, not the site's,
+    /// which is the trap every raw /api href falls into on the split deployment.
+    /// </summary>
+    string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId);
+
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 

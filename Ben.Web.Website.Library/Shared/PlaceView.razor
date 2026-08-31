@@ -170,6 +170,74 @@
                                 </td>
                                 <td class="text-secondary small">@fs.DeviceModel</td>
                             </tr>
+                            @* The recordings themselves, in a row under the numbers they belong
+                               to. Media shipped as a COUNT nobody could open, which asked a
+                               reader to take the archive on faith — the one thing the archive
+                               exists to end. Empty while a flag is being looked at. *@
+                            @if (fs.ApprovedMediaCount > 0)
+                            {
+                                <tr>
+                                    <td colspan="6" class="pt-0 pb-3">
+                                        <div class="d-flex flex-wrap gap-2 align-items-start">
+                                            @foreach (var m in fs.Media!)
+                                            {
+                                                var url = AdminClient.GetArchiveMediaUrl(fs.Id, m.UploadFileId);
+                                                @if (m.ContentType.StartsWith("image/"))
+                                                {
+                                                    <a href="@url" target="_blank" rel="noopener"
+                                                       title="@m.RelativePath">
+                                                        <img src="@url" alt="@m.RelativePath"
+                                                             class="rounded border"
+                                                             style="height:96px;width:auto;object-fit:cover;" />
+                                                    </a>
+                                                }
+                                                else if (m.ContentType.StartsWith("audio/"))
+                                                {
+                                                    <span class="d-inline-block">
+                                                        <audio controls preload="none" src="@url"
+                                                               style="height:40px;max-width:260px;"></audio>
+                                                        <span class="d-block text-secondary"
+                                                              style="font-size:.7rem;">@m.RelativePath</span>
+                                                    </span>
+                                                }
+                                                else if (m.ContentType.StartsWith("video/"))
+                                                {
+                                                    <video controls preload="metadata" src="@url"
+                                                           class="rounded border"
+                                                           style="height:140px;max-width:260px;"></video>
+                                                }
+                                                else
+                                                {
+                                                    <a href="@url" target="_blank" rel="noopener"
+                                                       class="btn btn-outline-secondary btn-sm">
+                                                        <BenIcon Name="file" Class="me-1" />@m.RelativePath
+                                                    </a>
+                                                }
+                                            }
+
+                                            @* The report path. Shown to everyone, because a
+                                               control that appears only for people who can use it
+                                               leaves a visitor with nothing to do about a picture
+                                               they object to. Flagging needs an account: one flag
+                                               hides, so an anonymous version would let anybody
+                                               erase the archive. *@
+                                            <button type="button"
+                                                    class="btn btn-link btn-sm text-secondary text-nowrap align-self-center"
+                                                    disabled="@(_flagging == fs.Id)"
+                                                    @onclick="@(() => FlagAsync(fs.Id))">
+                                                <BenIcon Name="alert-triangle" Class="me-1" />
+                                                @(_flagging == fs.Id ? "Reporting…" : "Report")
+                                            </button>
+                                        </div>
+                                        @if (_flagMessage.TryGetValue(fs.Id, out var note))
+                                        {
+                                            <div class="small mt-1 @(note.Ok ? "text-success" : "text-danger")">
+                                                @note.Text
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -249,6 +317,12 @@
     /// </remarks>
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
 
+    /// <summary>The session whose Report button is mid-flight, so it can disable just that one.</summary>
+    private Guid? _flagging;
+
+    /// <summary>What to say under a session's gallery after its Report button was used.</summary>
+    private readonly Dictionary<Guid, (bool Ok, string Text)> _flagMessage = [];
+
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)
         : _place!.Name!;
@@ -309,6 +383,44 @@
     /// </remarks>
     private async Task LoadArchiveAsync()
         => _sessions = (await AdminClient.GetPublicPlaceAsync(PlaceId))?.Sessions?.ToList();
+
+    /// <summary>
+    /// Reports a session's media, which hides it until somebody looks.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A visitor is answered here rather than by the server.</b> The endpoint requires an
+    /// account — one flag hides, so an anonymous version would let anybody erase the archive's
+    /// pictures — and a signed-out reader clicking Report would otherwise get a bare 401 the page
+    /// turns into "something went wrong". Saying what to do instead is the whole point of showing
+    /// the control to everybody.</para>
+    ///
+    /// <para>The archive is reloaded on success so the gallery empties in front of the person who
+    /// objected. Being told "reported" while the picture stays on screen reads as a report that
+    /// did nothing.</para>
+    /// </remarks>
+    private async Task FlagAsync(Guid sessionId)
+    {
+        if (!UserState.IsAuthenticated)
+        {
+            _flagMessage[sessionId] =
+                (false, "Please sign in to report this — an account is needed so a report can be traced.");
+            return;
+        }
+
+        _flagging = sessionId;
+        _flagMessage.Remove(sessionId);
+        StateHasChanged();
+
+        var (ok, error) = await AdminClient.FlagFieldSessionAsync(sessionId, reason: null);
+
+        _flagging = null;
+        _flagMessage[sessionId] = ok
+            ? (true, "Reported. It's hidden until a moderator has looked at it.")
+            : (false, error ?? "Couldn't report that just now. Please try again.");
+
+        if (ok) await LoadArchiveAsync();
+        StateHasChanged();
+    }
 
     /// <summary>
     /// One pin per visible investigation, all at the place's own coordinates.

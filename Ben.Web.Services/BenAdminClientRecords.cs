@@ -371,8 +371,31 @@ public sealed record PublicPlaceSessionRow(
     string DeviceModel,
     DateTime PublishedAtUtc,
     Guid DocumentUploadFileId,
-    /// <summary>Media a reviewer has cleared — zero until one has, by the fail-closed default.</summary>
-    int ApprovedMediaCount = 0);
+    /// <summary>
+    /// Media a reviewer has cleared for this page — empty until one has, by the fail-closed
+    /// default, and empty again the moment somebody reports it.
+    /// </summary>
+    IReadOnlyList<ArchiveMediaItem>? Media = null)
+{
+    /// <summary>How many recordings this row can show. Derived, so it cannot disagree with the list.</summary>
+    public int ApprovedMediaCount => Media?.Count ?? 0;
+}
+
+/// <summary>
+/// One servable recording from a session's archive entry.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>ArchiveMediaItem</c> beside <c>ArchiveMediaPublication</c> in the WebApi project;
+/// decoded from the server's JSON by name, so a rename has to happen on both sides.
+/// </remarks>
+/// <param name="RelativePath">What the session document calls this file — <c>media/audio-001.m4a</c>.</param>
+/// <param name="ContentType">The type of the copy that is actually SERVED, which for a sanitized
+/// derivative is not necessarily what the device uploaded.</param>
+public sealed record ArchiveMediaItem(
+    Guid UploadFileId,
+    string RelativePath,
+    string ContentType,
+    string FileName);
 
 // ── Org-wide investigation records (Area 9) ───────────────────────────────────
 // Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference
