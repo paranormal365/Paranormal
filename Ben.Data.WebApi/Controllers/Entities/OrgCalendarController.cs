@@ -129,12 +129,28 @@ public sealed class OrgCalendarEventController : BenControllerBase
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<OrgCalendarEventController> _logger;
 
+    /// <summary>
+    /// Event descriptions are authored in a rich-text editor and shown on a PUBLIC page, so the
+    /// markup is cleaned before it is stored — the same rule the CMS and publication controllers
+    /// follow.
+    /// </summary>
+    private readonly ICmsMarkupSanitizer _sanitizer;
+
     public OrgCalendarEventController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        ILogger<OrgCalendarEventController> logger)
-    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; }
+        ILogger<OrgCalendarEventController> logger,
+        ICmsMarkupSanitizer sanitizer)
+    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; _sanitizer = sanitizer; }
+
+    /// <summary>Cleans a description, preserving "no description" as null rather than "".</summary>
+    private string? CleanDescription(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+        var cleaned = _sanitizer.SanitizeHtml(description).Trim();
+        return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;
+    }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -188,7 +204,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         {
             Id = Guid.NewGuid(), OrganizationId = orgId,
             EventTypeId = request.EventTypeId, CaseId = request.CaseId,
-            Title = request.Title.Trim(), Description = request.Description?.Trim(),
+            Title = request.Title.Trim(), Description = CleanDescription(request.Description),
             Location = request.Location?.Trim(),
             OrganizationAddressId = request.OrganizationAddressId,
             MeetingUrl = NormaliseUrl(request.MeetingUrl),
@@ -295,7 +311,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
         entity.EventTypeId = request.EventTypeId; entity.CaseId = request.CaseId;
-        entity.Title = request.Title.Trim(); entity.Description = request.Description?.Trim();
+        entity.Title = request.Title.Trim(); entity.Description = CleanDescription(request.Description);
         entity.Location = request.Location?.Trim();
         entity.OrganizationAddressId = request.OrganizationAddressId;
         entity.MeetingUrl = NormaliseUrl(request.MeetingUrl);
