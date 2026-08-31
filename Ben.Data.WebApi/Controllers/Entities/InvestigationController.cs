@@ -125,6 +125,23 @@ public sealed class InvestigationController : BenControllerBase
         if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
             return BadRequest(scopeError);
 
+        // A solo plan's investigations are public ones. Checked AFTER the default is resolved, so
+        // somebody who states nothing is judged on what they would actually have got — the place's
+        // cautious default is private, and refusing them for a value they never typed would be
+        // both baffling and correct-looking.
+        if (entity.Visibility != InvestigationVisibility.Public)
+        {
+            var org = await db.Organizations.AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == entity.OrganizationId, ct);
+            if (org is not null
+                && Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
+                       org, Services.PersonalOrganizations.PersonalAction.CreatePrivateInvestigation)
+                   is { } notForSolo)
+            {
+                return BadRequest(notForSolo);
+            }
+        }
+
         if (await EnsurePublicSlugAsync(db, entity, ct) is string newSlugRefusal)
             return BadRequest(newSlugRefusal);
 

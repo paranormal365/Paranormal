@@ -261,6 +261,18 @@ public sealed class CaseController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // A solo plan covers the person's own investigating and keeps their data private; it
+        // does not take client work, and a case is client work by definition. Asked before the
+        // subscription caps because "your plan does not do cases" is the more useful answer than
+        // "you have used this period's case".
+        var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orgId, ct);
+        if (org is not null
+            && Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
+                   org, Services.PersonalOrganizations.PersonalAction.CreateCase) is { } notForSolo)
+        {
+            return BadRequest(notForSolo);
+        }
+
         if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
         var entity = new Case

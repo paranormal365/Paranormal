@@ -157,6 +157,16 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         if (org is null) return NotFound("Organization not found.");
         if (!org.IsAcceptingApplications) return BadRequest("This organization is not currently accepting membership applications.");
 
+        // Belt as well as braces. A personal organization is created with
+        // IsAcceptingApplications false and is excluded from every listing, so nobody should
+        // reach this with one — but "nobody should" is not a rule, and the flag is a value
+        // somebody could set. A solo plan is one person, permanently.
+        if (Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
+                org, Services.PersonalOrganizations.PersonalAction.AddMembers) is { } soloOnly)
+        {
+            return BadRequest(soloOnly);
+        }
+
         // Prevent duplicate active requests
         var existing = await db.OrganizationMembershipRequests
             .AnyAsync(r => r.OrganizationId == orgId && r.AppUserId == userId.Value

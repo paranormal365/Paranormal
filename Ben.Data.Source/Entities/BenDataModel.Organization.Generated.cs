@@ -28,6 +28,31 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public bool RunsPublicTours { get; set; }
 
+        /// <summary>
+        /// True when this organization exists only to carry one person's own subscription, and is
+        /// not a group anybody joins.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Why an organization at all for somebody who has no group.</b> Everything a
+        /// paid solo tier sells is org-scoped: cases, subscriptions, privacy, private-residence
+        /// work. Giving the solo investigator a hidden organization means all of it works with no
+        /// second implementation, rather than a parallel account-level version of each that could
+        /// drift from the group one.</para>
+        ///
+        /// <para><b>A flag, not an <see cref="Ben.Data.Common.Enums.OrganizationKind"/>.</b> That
+        /// enum's own contract is that a kind is "a starting point and a label, never a gate", and
+        /// hiding an organization is exactly a gate. Overloading it would have cost no migration
+        /// and quietly contradicted the rule every other reader of Kind relies on.</para>
+        ///
+        /// <para><b>What it changes is visibility, nothing else.</b> A personal organization is a
+        /// real organization in every other respect. It is excluded from the places that present
+        /// groups to be found or joined, because a person who bought a solo plan did not create a
+        /// group and must not turn up in a directory as one — that would publish the fact that
+        /// they subscribed, under their own name. See <c>PersonalOrganizations</c>, which owns the
+        /// filter.</para>
+        /// </remarks>
+        public bool IsPersonal { get; set; }
+
         public bool IsAcceptingApplications { get; set; }
 
         /// <summary>When true, the public can submit investigation requests to this organization.</summary>

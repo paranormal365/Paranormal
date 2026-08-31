@@ -356,10 +356,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.RunsPublicTours = OrganizationKindDefaults.RunsPublicTours(request.Kind);
 
         db.Organizations.Add(org);
-        OrgCalendarDefaults.AddDefaultEventTypes(db, org.Id, userId.Value);
-        OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, userId.Value);
-        OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, userId.Value);
-        OrgRoleDefaults.AddDefaultRoles(db, org.Id, userId.Value);
+        NewOrganizationDefaults.AddAll(db, org.Id, userId.Value);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
