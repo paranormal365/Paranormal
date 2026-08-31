@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using Ben.Data.WebApi.Services;
+
 namespace Ben.Data.WebApi.Controllers.Public;
 
 /// <summary>
@@ -42,7 +44,21 @@ public sealed class PublicEventController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public PublicEventController(IDbContextFactory<BenDataContext> db) => _db = db;
+    /// <summary>
+    /// Cleans the description on the way OUT, not only on the way in.
+    /// </summary>
+    /// <remarks>
+    /// The save path sanitizes too, so nothing new can land dirty. This exists for everything that
+    /// landed BEFORE it did: descriptions have been authored in a rich-text editor and stored raw
+    /// since events were built, and this endpoint is <c>[AllowAnonymous]</c> — the markup is handed
+    /// to every visitor. Cleaning here covers those rows without a migration that rewrites
+    /// somebody's content, and it keeps the guarantee true even if a future write path forgets.
+    /// The same reasoning as asking publication rules per request instead of caching them.
+    /// </remarks>
+    private readonly ICmsMarkupSanitizer _sanitizer;
+
+    public PublicEventController(IDbContextFactory<BenDataContext> db, ICmsMarkupSanitizer sanitizer)
+    { _db = db; _sanitizer = sanitizer; }
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
@@ -139,7 +155,7 @@ public sealed class PublicEventController : BenControllerBase
 
         return Ok(new PublicEventRecord(
             ev.Id, ev.OrganizationId, ev.Organization.Name, ev.Organization.UrlName,
-            ev.Title, ev.Description,
+            ev.Title, _sanitizer.SanitizeHtml(ev.Description),
             ev.StartDateTime, ev.EndDateTime, ev.IsAllDay, ev.MeetingUrl,
             BuildLocation(ev, mayHaveExact),
             acceptedCount, ev.AttendeeCapacity, ev.RsvpClosesAt,

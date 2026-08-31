@@ -9553,7 +9553,7 @@ for the iOS app (needs server device-token registry); universal links incl. /att
 (needs AASA hosting); the iOS app's feed fixtures must be re-captured before its Slice 3
 (FeedPostRecord grew: categories, badges, attribution).
 
-## 187. The dev WebApi dies under load — .NET's IPv6 accept path on macOS (found 2026-08-25)
+## 187. The dev WebApi dies under load — .NET's IPv6 accept path on macOS (CLOSED 2026-08-31 — every host now binds IPv4)
 
 **Symptom.** The local WebApi process disappears during long test runs. Nothing in the
 application log explains it; the last thing written is an ordinary request. What follows in the
@@ -9598,14 +9598,57 @@ plus the WASM host on 5180). Observed on .NET SDK 10.0.301 / runtime 10.0.9.
 - `DOTNET_SYSTEM_NET_DISABLEIPV6=1` was tried first and does **not** help: Kestrel still opens
   both listeners for a `localhost` binding. Recorded so nobody spends the time twice.
 
-**What is left open:**
+### Closed 2026-08-31 — and the mitigation was leakier than it looked
 
-- The website (5078) and the WASM host (5180) still bind `localhost` and so still have an IPv6
-  listener. Neither has been seen to crash — every observed crash was the API, which takes by far
-  the most connections — but the exposure is identical and the same one-word change would remove
-  it.
+**Measured before changing anything.** All three hosts were listening on BOTH stacks:
+
+```
+Ben.Data.WebApi   127.0.0.1:5252   AND   [::1]:5252
+Ben.Web.Website   127.0.0.1:5078   AND   [::1]:5078
+Ben.Wasm.Video    127.0.0.1:5180   AND   [::1]:5180
+```
+
+The API was supposed to be IPv4-only already. It was not, **because the mitigation lived only in
+the shell scripts** — every `applicationUrl` in every `launchSettings.json` still said `localhost`,
+so an IDE run, a plain `dotnet run`, or a hand-typed `ASPNETCORE_URLS` put the IPv6 listener
+straight back. That is exactly how it came back here: a host started by hand earlier the same day
+had silently undone it. **A workaround that one ordinary command defeats is not a workaround.**
+
+**What was done:**
+
+- **Every `applicationUrl` on the three loaded ports now binds `127.0.0.1`** — `launchSettings.json`
+  for `Ben.Data.WebApi`, `Ben.Web.Website` (both its profiles and the IIS Express one) and
+  `Ben.Wasm.Video`. The HTTPS profiles keep `localhost` for their own port, because the ASP.NET dev
+  certificate is issued for the name `localhost` and would fail validation against an address.
+- **`run-e2e.sh` now separates BIND from BROWSE.** `*_BIND` is `127.0.0.1` and is what Kestrel
+  listens on; `*_URL` stays `localhost` and is what tests and browsers ask for. The **readiness
+  probes deliberately use the localhost form**, which makes startup itself the proof that the
+  fallback works — if it ever stops, the run fails at once with "never became ready" instead of
+  dying strangely in the middle.
+- **`start-website-with-api.sh`** binds `127.0.0.1:5078` and still opens the browser at
+  `localhost:5078`.
+- The website's own `Services:BaseUrl` for the API is now `127.0.0.1:5252` locally, so
+  server-to-server calls stop making a doomed `::1` attempt before every connection. **That file is
+  gitignored**, so it is recorded in `docs/deploy-production.md` beside the SMTP trap rather than
+  committed.
+
+**Why `localhost` is still what everything ASKS for, and must be.** `:5078` is the redirect URI
+registered with Entra and an allow-listed CORS origin on the API; both are matched on the URL the
+browser used, not on what Kestrel bound. A client asking for `localhost` still reaches an
+IPv4-only listener because it falls back from `::1` to `127.0.0.1`.
+
+**Verified:** after the change, `lsof` shows **no `[::1]` listener on any of the three ports**, all
+three still answer `localhost` with 200, and the Playwright suite passes — including Blazor
+Server's SignalR websocket, which is the part that actually rides the connection.
+
+**Still true, and worth keeping:**
+
 - **UAT/production are unaffected**: Windows/IIS, not macOS Kestrel-on-loopback. This is a local
   development problem, which is precisely why it is easy to keep re-diagnosing as "flaky tests".
+- `scripts/dev-api-supervisor.sh` stays. **A run with restarts in it is a run whose failures cannot
+  be trusted** — `grep -c restarting /tmp/ben-api-supervisor.log`.
+- `DOTNET_SYSTEM_NET_DISABLEIPV6=1` does **not** help; Kestrel still opens both listeners for a
+  `localhost` binding. Recorded so nobody spends the time twice.
 - Worth re-testing on a later .NET 10 patch and dropping the workaround if upstream fixes it. The
   same class of bug was fixed once before, in 9.0.2, and evidently returned.
 

@@ -32,6 +32,17 @@ public record AppUserRecord
     public DateTime? DateUpdated { get; init; }
     public string? Email { get; init; }
     public bool IsEmailConfirmed { get; init; }
+
+    /// <summary>When a confirmation link was last successfully handed to the mail server.</summary>
+    /// <remarks>
+    /// Null means no message has ever gone out. Read beside <see cref="IsEmailConfirmed"/> this
+    /// separates "they have not got round to it" from "they were never told how" — which were
+    /// indistinguishable before, and cost a real sign-up.
+    /// </remarks>
+    public DateTime? DateConfirmationSent { get; init; }
+
+    /// <summary>When the address was confirmed. Identity keeps only the bool.</summary>
+    public DateTime? DateEmailConfirmed { get; init; }
     public string? PhoneNumber { get; init; }
     public bool IsPhoneNumberConfirmed { get; init; }
     public bool IsTwoFactorEnabled { get; init; }

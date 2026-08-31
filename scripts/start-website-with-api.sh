@@ -22,9 +22,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # during one Playwright run on 2026-08-25 and made every long local run flaky. Binding IPv4 only
 # removes that accept path entirely; clients asking for "localhost" still reach it, because both
 # curl and Chromium fall back from ::1 to 127.0.0.1.
+#
+# The website binds IPv4 too, as of 2026-08-31. It had kept its IPv6 listener on the grounds that
+# it had never been SEEN to crash — an argument about observation, not exposure. The API crashed
+# because it takes the most connections, not because it was built differently.
+#
+# BEN_WEBSITE_URL stays "localhost" and is what gets OPENED in the browser: :5078 is the redirect
+# URI registered with Entra and an allow-listed CORS origin, and both are matched on the URL the
+# browser used. Binding does not change that.
 API_URL="${BEN_WEBAPI_URL:-http://127.0.0.1:5252}"
 APP_PROJECT="${BEN_APP_PROJECT:-Ben.Web.Website/Ben.Web.Website.csproj}"
 WEBSITE_URL="${BEN_WEBSITE_URL:-http://localhost:5078}"
+WEBSITE_BIND="${BEN_WEBSITE_BIND:-http://127.0.0.1:5078}"
 API_PID_FILE="$ROOT_DIR/.vscode/.webapi.pid"
 
 is_api_up() {
@@ -62,7 +71,7 @@ else
   start_api
 fi
 
-echo "[startup] Launching $APP_PROJECT at $WEBSITE_URL"
+echo "[startup] Launching $APP_PROJECT — binding $WEBSITE_BIND, browse at $WEBSITE_URL"
 
 # Open the browser once the site is accepting connections.
 # Runs as an orphaned background process so exec can replace this shell immediately.
@@ -78,4 +87,4 @@ echo "[startup] Launching $APP_PROJECT at $WEBSITE_URL"
 
 cd "$ROOT_DIR"
 exec env ASPNETCORE_ENVIRONMENT=Development \
-  dotnet run --project "$APP_PROJECT" --urls "$WEBSITE_URL"
+  dotnet run --project "$APP_PROJECT" --urls "$WEBSITE_BIND"
