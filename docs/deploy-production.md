@@ -236,6 +236,34 @@ Do it in this order:
 photographs living on one USB disk with no second copy is a promise the site is implicitly making
 and cannot keep.
 
+## How long the error log is kept
+
+`LogRetentionJob` deletes rows from the `Logs` table older than a window. **Default 30 days**, set
+by `Logging:Retention:Days`.
+
+| Value | Effect |
+|---|---|
+| unset | 30 days |
+| `0` or negative | **Off.** Nothing is ever deleted. |
+| 1–6 | **Clamped up to 7** and a warning is logged. A mistyped `1` must not empty the table. |
+| 7 or more | Honoured exactly. |
+
+`Logging:Retention:TableName` exists for completeness and defaults to `Logs`. It is validated as a
+plain SQL identifier and the job refuses to run rather than guess if it is anything else.
+
+**It touches nothing but that one table.** `AuditLogs` is deliberately excluded — the audit trail
+is archived, never deleted, because *who did what, when* is part of what the platform sells.
+`SignInEvents` is excluded too; it feeds the sign-in insights dashboard.
+
+**On first deployment it will delete nothing**, because no row is older than the window yet. That
+is expected, not a misconfiguration. It sweeps at most once every six hours, and says nothing at
+all when there was nothing to do.
+
+**Watch out when querying these tables by hand.** `AuditLogs.OccurredAt` is **UTC**;
+`Logs.TimeStamp` is **LOCAL** time — Serilog's sink stores the logging process's clock. Measured
+2026-08-31, the same instant read 19:31 in one table and 14:30 in the other. Nothing in the column
+names warns you, and a cutoff built from the wrong clock shifts the window by the whole UTC offset.
+
 ## Check it, in this order
 
 The deploy script does the first four automatically and fails if any of them do:

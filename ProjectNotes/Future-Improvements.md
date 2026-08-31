@@ -10437,6 +10437,53 @@ ourselves, and a config setting that silently turned it off would bring the nois
 Six tests, each holding one clause, and mutation-verified — removing the source-context clause
 fails exactly the test that guards it, on a clean build.
 
-**Worth doing next, but separate:** nothing prunes `Logs` at all. Once it is signal rather than
-noise, a retention window for it is a much better use of item 191's roll-off design than the audit
-log is.
+**What each of those rows cost.** Measured after the fix, when 74 fresh error rows were generated
+deliberately to prove the filter: `Logs` went from 36.5 MB to 38.0 MB for 84 rows — roughly
+**18 KB per row**, because every one carries a full stack trace plus its properties XML. So the
+1,978 noise rows accounted for essentially the entire table, and `Logs` was 14% of the whole
+272 MB database.
+
+**Follow-up now built as item 203:** nothing pruned `Logs` at all.
+
+## 203. Nothing pruned the error log (built 2026-08-31, alongside 202)
+
+Item 202 removed the message that made up 96% of `Logs`. That fixes the noise and not the shape of
+the problem: **no window existed at all**, so whatever grows next simply takes its place.
+
+`LogRetentionJob` is a scheduled job in the existing `IScheduledJob` loop. Default window **30
+days**, `Logging:Retention:Days`.
+
+**It deletes rather than archives, and the difference from item 191 is the point.** The audit
+trail is archived and never deleted, because *who did what, when* is part of what is being sold
+and holds its value for years. This is Serilog's Error sink — diagnostic value that decays in
+days. Nobody has ever wanted an unhandled exception from three months ago, and rolling these into
+compressed files would spend the disk space the platform is short of on the least valuable bytes
+it holds.
+
+**The safety properties, in the order they matter:**
+
+- **0 or less switches it off.** Read literally, `0` means "keep nothing" and `-30` is a cutoff
+  thirty days in the *future* — either would empty the table. Both mean off.
+- **A window below 7 days is clamped up, not obeyed.** A mistyped `1` is the realistic accident.
+  Obeying it destroys nearly everything; refusing outright leaves a misconfigured site with no
+  retention at all. Clamping does neither, and logs that it did.
+- **The table name is validated** against a plain-identifier pattern before it can reach a
+  command. It is the one part of the statement that comes from configuration.
+- **Bounded batches** (5,000 a statement, 50,000 a pass, swept at most every 6 hours), so a first
+  run against years of rows is many cheap passes rather than one long lock.
+
+**On deployment it deletes nothing**, deliberately: the oldest row in the table was four days old.
+The job ships inert and starts working when there is genuinely something old — the cheapest way to
+roll out a statement that removes rows.
+
+**A trap found while writing it, worth knowing beyond this job.** The two log tables in this
+database keep time differently. `AuditLogs.OccurredAt` is **UTC**; Serilog's sink writes
+`Logs.TimeStamp` in the logging process's **LOCAL** time (`ColumnOptions.TimeStamp.ConvertToUtc`
+defaults to false). Measured 2026-08-31: the newest row in `Logs` read 14:30 while `AuditLogs`
+read 19:31 — the same instant, five hours apart. The first draft built its cutoff from
+`DateTime.UtcNow` and would have shifted the window by the offset, silently and in the wrong
+direction in half the world. **Any query joining or comparing these two tables has the same
+trap**, and nothing about the column names warns you.
+
+**Not covered, and correct:** `AuditLogs` and `SignInEvents`. The first is item 191's business;
+the second feeds the sign-in insights dashboard and is 0.7 MB.

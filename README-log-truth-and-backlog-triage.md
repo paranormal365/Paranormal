@@ -88,8 +88,37 @@ tell: a "pass" that a broken build also produces is not evidence.
   lawyer's default or an explicit "starting point, not legal advice" decision. **189/190** are
   large designs. **187** is a macOS/.NET diagnosis. **192** is answered and now documented in
   `docs/deploy-production.md`.
-- Nothing prunes `Logs` at all. Worth doing **next**, and a far better use of item 191's roll-off
-  design than the audit log — but only now that the table is signal instead of noise.
+- **(Now done — item 203, below.)**
+
+## 4. Item 203 — nothing pruned the error log either
+
+Fixing 202 removes the message that was 96% of the table. It does not fix the shape: **no window
+existed at all**, so whatever grows next takes its place.
+
+`LogRetentionJob` joins the existing `IScheduledJob` loop. Default 30 days, `Logging:Retention:Days`.
+
+**It deletes rather than archives, and that is the whole distinction from item 191.** The audit
+trail is archived and never deleted — *who did what, when* is part of what is sold and keeps its
+value for years. This is Serilog's Error sink, whose value decays in days. Compressing these into
+files would spend scarce disk on the least valuable bytes on the platform.
+
+Guards, in the order they matter:
+
+| Setting | What it does | Why |
+|---|---|---|
+| `0` or negative | Off | `0` read literally is "keep nothing"; `-30` is a cutoff in the **future**. Both empty the table. |
+| Below 7 days | Clamped up, logged | A mistyped `1` is the realistic accident. Obeying destroys the table; refusing leaves no retention at all. |
+| Table name | Validated as a plain identifier | The only part of the statement that comes from configuration. |
+| Batches | 5,000/statement, 50,000/pass, swept every 6h | A first run over years of rows must not hold a lock. |
+
+**A trap found while writing it.** `AuditLogs.OccurredAt` is UTC; Serilog writes `Logs.TimeStamp`
+in **local** time. Measured: 14:30 against 19:31 for the same instant. The first draft built its
+cutoff from `DateTime.UtcNow` and would have shifted the window by five hours. Any query comparing
+those two tables has the same trap, and the column names give no hint.
+
+**It ships inert.** The oldest row in the table is four days old, so on deployment it deletes
+nothing and starts working when something is genuinely old — the cheapest possible rollout for a
+statement that removes rows. `AuditLogs` and `SignInEvents` are never touched.
 
 ## Done when
 

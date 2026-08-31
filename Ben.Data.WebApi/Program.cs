@@ -218,6 +218,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // renewal could not save.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeRenewalJob>();
+// Housekeeping, and the only job here that removes rows. It ships inert — the window is 30 days
+// and nothing in the table was older than four days when it was written — and it will never touch
+// the audit log, which item 191 settled is archived rather than deleted.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
