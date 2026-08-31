@@ -7,6 +7,16 @@ public record OrganizationAdminRecord
     public required string UrlName { get; init; }
     /// <summary>When true, registered users can submit membership applications.</summary>
     public bool IsAcceptingApplications { get; init; }
+
+    /// <summary>
+    /// True when this group has chosen not to appear in search, browse or nearby results.
+    /// </summary>
+    /// <remarks>
+    /// Carried so the settings form can round-trip it. A form that loaded only the fields it was
+    /// written for silently reset the ones it did not know about — the reason every optional flag
+    /// on the update request means "leave as-is" rather than false.
+    /// </remarks>
+    public bool IsUnlisted { get; init; }
     /// <summary>When true, the public can submit investigation requests.</summary>
     public bool IsAcceptingClients { get; init; }
     /// <summary>When true, the org considers requests from outside their operating area.</summary>

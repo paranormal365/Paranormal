@@ -34,7 +34,16 @@ prevent, not to commit.
 
 - **`IFileStorageService` has no directory delete.** `OrganizationPurge` deletes a group's files
   and leaves the emptied folder behind. Ben asked for "then location for the files if none other
-  exist"; the interface cannot express it yet.
+  exist".
+
+  **DECIDED 2026-08-31: do not add one.** Ben intends to move to cloud hosting if the site takes
+  off, and `LocalFileStorageService` is the only implementation of the interface — a blob store is
+  a new class, not a rewrite, precisely because the interface stays small and the database holds
+  relative paths. A directory is a local-filesystem concept that does not exist in S3 or Azure
+  Blob, so putting `DeleteDirectory` on the interface would make the cloud implementation lie
+  about a concept it does not have. An emptied folder costs nothing locally and will not exist at
+  all after the move. If prefix cleanup is ever wanted, `ListFiles` + `DeleteAsync` expresses it
+  in terms both implementations can honour.
 - **The insights panel has never been seen populated.** It draws only when other people have
   recorded at the same place, and no seeded session satisfies that. The logic has 12
   mutation-verified tests; the rendered panel has been seen only in its absent state.

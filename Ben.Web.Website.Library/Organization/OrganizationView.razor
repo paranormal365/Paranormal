@@ -82,6 +82,20 @@
                 <input type="checkbox" class="form-check-input" id="edit-accepting-apps" @bind="@_editIsAcceptingApplications" />
                 <label for="edit-accepting-apps" class="form-label mb-0">Accepting Membership Applications</label>
             </div>
+            @* Unlisted is about being FOUND, not about being private: the group's own page still
+               works for anybody given the link, and everything inside it is unchanged. Said on the
+               label, because "hidden" would suggest a privacy guarantee this does not make. *@
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="edit-unlisted"
+                       checked="@_editIsUnlisted"
+                       @onchange="@(e => _editIsUnlisted = (bool)(e.Value ?? false))" />
+                <label for="edit-unlisted" class="form-label mb-0">
+                    Unlisted — keep this group out of search, browse and nearby results.
+                    <span class="d-block text-secondary small">
+                        Its page still works for anyone with the link, and nothing inside changes.
+                    </span>
+                </label>
+            </div>
             @* Half of a two-key rule — the member must opt in as well, so this switch alone
                shares nothing. The label says so, because an admin who thinks flipping this
                exposes their team's photos would reasonably leave it off forever. *@
@@ -354,6 +368,7 @@
     private string? _editPublicEmail;
     private string? _editPublicWebsite;
     private bool    _editIsAcceptingApplications;
+    private bool    _editIsUnlisted;
     private bool    _editAllowMemberPrivatePhotos;
 
     protected override async Task OnInitializedAsync()
@@ -533,6 +548,7 @@
         _editPublicEmail            = _org.PublicEmail;
         _editPublicWebsite          = _org.PublicWebsite;
         _editIsAcceptingApplications = _org.IsAcceptingApplications;
+        _editIsUnlisted             = _org.IsUnlisted;
         _editAllowMemberPrivatePhotos = _org.AllowMemberPrivatePhotosToClients;
         _editMode = true;
     }
@@ -555,7 +571,8 @@
                 PublicPhone:    _editPublicPhone?.Trim(),
                 PublicEmail:    _editPublicEmail?.Trim(),
                 PublicWebsite:  _editPublicWebsite?.Trim(),
-                AllowMemberPrivatePhotosToClients: _editAllowMemberPrivatePhotos));
+                AllowMemberPrivatePhotosToClients: _editAllowMemberPrivatePhotos,
+                IsUnlisted: _editIsUnlisted));
 
         _isSaving = false;
 

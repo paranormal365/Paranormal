@@ -53,6 +53,28 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public bool IsPersonal { get; set; }
 
+        /// <summary>
+        /// True when this group exists but should not appear in any public directory.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Different from <see cref="IsPersonal"/> in what it means, identical in what it
+        /// does.</b> A personal organization is one person's subscription and was never a group; an
+        /// unlisted one is a real group that has chosen not to be found. Both are excluded from the
+        /// same places for the same reason — they are not offering themselves to strangers — so
+        /// both are answered by one filter rather than two that could drift.</para>
+        ///
+        /// <para><b>It hides the group from directories, not from its own members.</b> Everything
+        /// inside works unchanged: the roster, cases, investigations, its public page for anybody
+        /// given the link. What stops is appearing in search, browse, nearby results and promoted
+        /// cards — the surfaces whose job is to introduce strangers to groups.</para>
+        ///
+        /// <para>Ben, 2026-08-31: the immediate need is the account App Review signs into, which
+        /// exists to get the iOS app approved and has no business turning up in a directory of
+        /// real groups. Built as a setting rather than a one-off because a group that does not
+        /// want to be found is an ordinary thing to want.</para>
+        /// </remarks>
+        public bool IsUnlisted { get; set; }
+
         public bool IsAcceptingApplications { get; set; }
 
         /// <summary>When true, the public can submit investigation requests to this organization.</summary>

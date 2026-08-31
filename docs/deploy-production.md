@@ -182,6 +182,36 @@ The certificate still validates: the request carries the right SNI host name, II
 real certificate, and the router is simply not involved. Without this the site works — until it
 doesn't, for a few seconds, for no reason visible in any log.
 
+## Moving evidence storage to a bigger drive
+
+Ben's plan (2026-08-31): move everything onto a 4 TB drive when the site launches, and add the
+second drive when it fills. The database stores **relative** paths (`orgs/{guid}/{file}`), so
+this is a config change and not a migration — every existing row keeps resolving.
+
+**There is one trap, and it does not look like a storage problem.**
+`DataProtectionSetup.ResolveKeyRingPath` falls back to
+`FileStorage:RootPath/data-protection-keys` when `DataProtection:KeyRingPath` is unset. So
+repointing the upload path **moves the Data Protection key ring with it** — and if the keys do
+not travel, every signed-in person is silently signed out and every outstanding media ticket
+stops resolving. Nobody connects that to a storage change, which is why it is written here rather
+than remembered.
+
+Do it in this order:
+
+1. **Pin the key ring somewhere stable and OFF the external drive**, in `appsettings.json`:
+   `"DataProtection": { "KeyRingPath": "C:\\ishaunted-deploy\\keys" }`
+2. **Copy the existing key files** from `<current FileStorage:RootPath>\data-protection-keys`
+   into that folder.
+3. **Recycle the application pools** and confirm you are still signed in. If you were signed out,
+   stop — the keys did not travel, and going further will hide the cause.
+4. **Now** change `FileStorage:RootPath` to the new drive and move the files across.
+5. Check a thumbnail and a media download, not just a page load: those go through the ticket
+   path, which is what the key ring protects.
+
+**Before it holds client evidence**, an external drive wants a backup story. A private residence's
+photographs living on one USB disk with no second copy is a promise the site is implicitly making
+and cannot keep.
+
 ## Check it, in this order
 
 The deploy script does the first four automatically and fails if any of them do:
