@@ -113,11 +113,19 @@ public sealed class PublicPlaceController : ControllerBase
                 s.DeviceModel,
                 s.PublishedAtUtc!.Value,
                 s.DocumentUploadFileId,
-                // Fail-closed: media is offered only once a reviewer has approved the night.
-                // Pending is zero, so a session nobody has looked at counts as none.
+                // Fail-closed, and on the SAME predicate the serving endpoint uses. Listing media
+                // this page cannot serve would draw a gallery of broken frames; the place-kind
+                // clause is what stops a place later corrected to a private residence from
+                // keeping its pictures up. See ArchiveMediaPublication, which owns the rule.
                 s.MediaReviewState == Ben.Data.Common.Enums.FeedMediaReviewState.Approved
-                    ? s.Files.Count
-                    : 0))
+                 && s.Place!.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                    ? s.Files
+                        .OrderBy(f => f.RelativePath)
+                        .Select(f => new ArchiveMediaItem(
+                            f.UploadFileId, f.RelativePath,
+                            f.UploadFile.ContentType, f.UploadFile.FileName))
+                        .ToList()
+                    : new List<ArchiveMediaItem>()))
             .ToListAsync(ct);
 }
 
@@ -134,9 +142,12 @@ public sealed record PublicPlaceResponse(
 /// One published field session in a place's archive.
 /// </summary>
 /// <remarks>
-/// <para><b>Readings, not media.</b> The document's numbers are what make visits comparable, and
-/// they carry no moderation problem. Photos and audio wait for the archive to have the screening,
-/// reporting and blocking the feed already has.</para>
+/// <para><b>Readings first, and media now too.</b> The document's numbers are what make visits
+/// comparable and they carry no moderation problem, which is why they shipped alone: photos and
+/// audio were to wait until the archive had the screening, reporting and blocking the feed
+/// already has. Those exist — post-moderation on publish, a flag that hides immediately, and the
+/// moderator queue behind it — so <see cref="Media"/> now carries the files themselves rather
+/// than a count nobody could open.</para>
 /// <para><see cref="DeviceModel"/> is here for an unglamorous but necessary reason: phone
 /// magnetometers differ, and a reader comparing a spike across two visits deserves to know
 /// whether they are comparing two instruments as well as two nights.</para>
@@ -156,14 +167,30 @@ public sealed record PublicPlaceSessionRow(
     DateTime PublishedAtUtc,
     Guid DocumentUploadFileId,
     /// <summary>
-    /// Photos, video and audio a reviewer has cleared for this page — zero until one has.
+    /// Photos, video and audio a reviewer has cleared for this page — empty until one has.
     /// </summary>
     /// <remarks>
-    /// A count rather than the files themselves: the archive's value is the readings, and a
-    /// visitor is told media exists before anything decides to serve it. Serving comes with the
-    /// reporting and blocking the feed already has, and not before.
+    /// <para>This shipped as a COUNT, on the reasoning that serving should wait until the archive
+    /// had the screening, reporting and blocking the feed already has. Those exist now
+    /// (post-moderation, the flag endpoint and the moderator queue), so the files themselves are
+    /// offered — a visitor told that eleven people recorded here and shown none of it was being
+    /// asked to take the archive on faith, which is the one thing this feature exists to end.</para>
+    ///
+    /// <para>Nulled rather than empty for callers that never ask, so an older client renders no
+    /// gallery rather than an empty one.</para>
     /// </remarks>
-    int ApprovedMediaCount = 0);
+    IReadOnlyList<ArchiveMediaItem>? Media = null)
+{
+    /// <summary>
+    /// How many recordings this row can show.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than carried. It was a stored count while nothing could serve the bytes,
+    /// and a stored count beside a list is two answers to one question that drift the first time
+    /// somebody edits one predicate and not the other.
+    /// </remarks>
+    public int ApprovedMediaCount => Media?.Count ?? 0;
+}
 
 /// <summary>
 /// One published investigation. Deliberately thinner than the signed-in row: no visibility (every

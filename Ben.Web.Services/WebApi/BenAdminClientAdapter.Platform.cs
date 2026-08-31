@@ -83,6 +83,17 @@ public sealed partial class BenAdminClientAdapter
     public Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default)
         => _api.GetAsync<AdminSignInInsights>($"/api/admin/stats/sign-ins?days={days}", token);
 
+    public async Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
+        Guid fieldSessionId, string? reason, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/field-sessions/{fieldSessionId}/flag", new { Reason = reason }, token);
+        return (error is null, error);
+    }
+
+    public string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId)
+        => $"{_webApiBaseUrl}/api/public/field-sessions/{fieldSessionId}/media/{uploadFileId}";
+
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 
