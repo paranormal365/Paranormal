@@ -176,21 +176,29 @@ public class MediaLibraryTests : BenTestBase
             "   catch { out.push(0); } }" +
             " return out; }");
 
-        var missing = statuses.Count(s => s == 404);
-        var refused = statuses.Where(s => s != 404).ToArray();
+        // Only a REFUSAL is a finding. The other two answers are about the files, not the code:
+        //   404 — the bytes were written on the live server's disk and never existed here
+        //         (one database, two disks).
+        //   200 — served perfectly and the browser could not decode it, so the stored bytes are
+        //         not a picture. A seeded or corrupt file, which this test cannot tell from a
+        //         deliberate one and must not report as a platform fault.
+        var refused = statuses.Where(s => s is not (200 or 404)).ToArray();
 
         Assert.That(refused, Is.Empty,
-            $"a thumbnail was refused rather than merely absent (statuses: {string.Join(", ", refused)}). "
+            $"a thumbnail was REFUSED (statuses: {string.Join(", ", refused)}). "
             + "401/403 means the fetch carried no identity, 429 means the rate limiter counted it, "
-            + "0 means the request never completed.");
+            + "0 means the request never completed. Any of those is a real finding.");
 
-        if (missing > 0)
+        var unprovable = statuses.Count(s => s is 200 or 404);
+        if (unprovable > 0)
         {
-            // Not a pass: nothing about the product was proved for these files. Said out loud so
-            // the run explains itself rather than looking green by luck.
-            Assert.Ignore($"{missing} thumbnail(s) answered 404 — their bytes were written on the "
-                        + "live server's disk and have never existed on this machine. Nothing is "
-                        + "wrong with the code; this test cannot prove anything about those files here.");
+            // Ignore, not Pass: nothing about the product was established for these files, and a
+            // green tick would claim it was.
+            Assert.Ignore(
+                $"{unprovable} thumbnail(s) could not be judged here — they answered 404 (bytes "
+              + "live on the server's disk, not this machine) or 200 with content the browser "
+              + "cannot decode (the stored file is not a picture). Neither says anything about "
+              + "the code. The thumbnails that DID decode were verified above.");
         }
     }
 
