@@ -28,6 +28,21 @@ struct RootShell: View {
         // A session left recording when the app went away is closed as interrupted, its log
         // recovered, before anything can show a stale "recording" row.
         .task { await dependencies.fieldKit.recoverInterruptedSessions() }
+        // Which sections apply follows the account, in both directions: asking before sign-in
+        // resolves would answer as a visitor, and keeping the answer after sign-out would show
+        // one person's tabs to the next.
+        .onChange(of: dependencies.session.me?.userId) { _, userId in
+            Task {
+                if userId == nil {
+                    dependencies.surfaces.reset()
+                } else {
+                    await dependencies.surfaces.refresh()
+                }
+                // The tabs may have just changed underneath the selection.
+                settleSelection()
+                router.availableSections = shownSections
+            }
+        }
         // The badge follows the session in both directions. Loading it before sign-in
         // resolves would ask as a visitor and be told nothing is waiting; leaving it up
         // after sign-out would show one person's count to the next.
@@ -78,15 +93,32 @@ struct RootShell: View {
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    /// iPad shows everything; iPhone shows five tabs and keeps Events on Profile.
+    /// Moves off a tab that no longer exists.
+    ///
+    /// A TabView whose selection names a tab it is not showing renders BLANK — not the first tab,
+    /// nothing at all. That is the state somebody would report as "the app broke after I signed
+    /// in", and it is reachable simply by signing out of an account with cases into one without.
+    private func settleSelection() {
+        let shown = shownSections
+        if !shown.contains(router.selection), let first = shown.first {
+            router.selection = first
+        }
+    }
+
+    /// iPad shows everything that applies; iPhone shows the tabs that apply, Events on Profile.
+    ///
+    /// Filtered by what the server says this person actually has (Ben, 2026-08-31): a solo
+    /// investigator carries no My Cases tab and no Investigations tab, because neither can ever
+    /// hold anything for them.
     private var shownSections: [AppSection] {
-        sizeClass == .regular ? AppSection.allCases : AppSection.compactTabs
+        let all = sizeClass == .regular ? AppSection.allCases : AppSection.compactTabs
+        return all.filter { $0.applies(to: dependencies.surfaces.surfaces) }
     }
 
     private var tabView: some View {
         @Bindable var router = router
         return TabView(selection: $router.selection) {
-            ForEach(AppSection.compactTabs) { section in
+            ForEach(shownSections) { section in
                 sectionStack(section)
                     .tabItem { Label(section.title, systemImage: section.icon) }
                     .tag(section)

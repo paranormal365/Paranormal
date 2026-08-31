@@ -33,6 +33,9 @@ final class AppDependencies {
     /// The guest's own copy of what they offered at somebody's public event (2026-08-31).
     let evidenceActions: EvidenceActions
 
+    /// Which parts of the app apply to this person — the server decides, the shell renders it.
+    let surfaces: SurfacesStore
+
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
 
@@ -62,6 +65,7 @@ final class AppDependencies {
         self.accountActions = AccountActions(api: api)
         self.archiveActions = ArchiveActions(api: api)
         self.evidenceActions = EvidenceActions(api: api)
+        self.surfaces = SurfacesStore(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
 // The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
         // want it — then handed to the store as a value it can hold. A simulator has no
