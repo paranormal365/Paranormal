@@ -160,6 +160,19 @@ public class AccountTests : BenTestBase
             Page.GetByText("Confirm your email address first"));
         await Expect(Page.GetByText("Confirm your email address first"))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The message must carry a way FORWARD. The inbox it says to check may hold nothing —
+        // a send can fail silently, and it did for a real sign-up on 2026-08-31 — and without
+        // this button the only paths left were signing up again or walking away.
+        var resend = Page.Locator("#login-resend-confirmation");
+        await Expect(resend).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await ClickUntilAsync(resend, Page.Locator("#login-resend-result"));
+
+        // The reply is deliberately neutral — the endpoint refuses to reveal whether an address
+        // holds an account, so the page must not either. Locally SMTP is off and the send fails;
+        // the sentence is identical, which is exactly the property under test.
+        await Expect(Page.Locator("#login-resend-result"))
+            .ToContainTextAsync("unconfirmed account", new() { Timeout = 15_000 });
     }
 
     [Test]

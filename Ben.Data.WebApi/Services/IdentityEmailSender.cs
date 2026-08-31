@@ -77,20 +77,20 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
 
     public Task SendConfirmationLinkAsync(AppUser user, string email, string confirmationLink)
         => SendAsync(email, "Confirm your email",
-            $"""
-             <p>Confirm your email address to finish setting up your account.</p>
-             <p><a href="{WebUtility.HtmlEncode(confirmationLink)}">Confirm email</a></p>
-             <p>If you did not create this account, you can ignore this message.</p>
-             """,
+            BenEmailLayout.Wrap(_site, "Confirm your email",
+                "<p>You're one click from finishing your account. Confirm this address and you "
+              + "can sign in.</p>"
+              + "<p>If you did not create this account, ignore this message and nothing happens.</p>",
+                buttonText: "Confirm my email", buttonUrl: confirmationLink),
             linkKind: "confirmation", link: confirmationLink);
 
     public Task SendPasswordResetLinkAsync(AppUser user, string email, string resetLink)
         => SendAsync(email, "Reset your password",
-            $"""
-             <p>Use the link below to choose a new password.</p>
-             <p><a href="{WebUtility.HtmlEncode(resetLink)}">Reset password</a></p>
-             <p>If you did not request this, you can ignore this message — your password will not change.</p>
-             """,
+            BenEmailLayout.Wrap(_site, "Reset your password",
+                "<p>Use the button below to choose a new password.</p>"
+              + "<p>If you did not request this, ignore this message — your password will not "
+              + "change.</p>",
+                buttonText: "Reset password", buttonUrl: resetLink),
             linkKind: "password reset", link: resetLink);
 
     /// <summary>
@@ -108,14 +108,15 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
             $"/reset-password?email={Uri.EscapeDataString(email)}&code={Uri.EscapeDataString(resetCode)}");
 
         return SendAsync(email, "Reset your password",
-            $"""
-             <p>Use the link below to choose a new password{(user.PasswordHash is null
-                 ? ", or to add a password to an account that signs in with Microsoft" : "")}.</p>
-             <p><a href="{WebUtility.HtmlEncode(resetUrl)}">Reset password</a></p>
-             <p>If the link does not work, go to the reset page and enter this code:
-                <strong>{WebUtility.HtmlEncode(resetCode)}</strong></p>
-             <p>If you did not request this, you can ignore this message — your password will not change.</p>
-             """,
+            BenEmailLayout.Wrap(_site, "Reset your password",
+                $"""
+                 <p>Use the button below to choose a new password{(user.PasswordHash is null
+                     ? ", or to add a password to an account that signs in with Microsoft" : "")}.</p>
+                 <p>If the button does not work, go to the reset page and enter this code:
+                    <strong>{WebUtility.HtmlEncode(resetCode)}</strong></p>
+                 <p>If you did not request this, ignore this message — your password will not change.</p>
+                 """,
+                buttonText: "Reset password", buttonUrl: resetUrl),
             linkKind: "password reset", link: resetUrl);
     }
 
