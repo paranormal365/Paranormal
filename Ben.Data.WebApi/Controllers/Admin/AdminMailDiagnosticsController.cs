@@ -28,7 +28,10 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// </remarks>
 [ApiController]
 [Route("api/admin/mail")]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+// Policy, NOT Roles: [Authorize(Roles = ...)] re-authenticates with the default scheme only
+// and answers 401 to a valid Entra caller. AdminAuthorizationIsAPolicyTests enforces this, and
+// caught it here.
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminMailDiagnosticsController : ControllerBase
 {
     private readonly IEmailService _email;

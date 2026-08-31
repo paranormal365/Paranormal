@@ -151,7 +151,7 @@ public sealed class SlugCaseInsensitivityTests
     public async Task A_public_event_resolves(string orgSegment)
     {
         var factory = await SeedAsync();
-        var ctrl = new PublicEventController(factory) { ControllerContext = Anonymous() };
+        var ctrl = new PublicEventController(factory, new Ben.Data.WebApi.Services.CmsMarkupSanitizer()) { ControllerContext = Anonymous() };
 
         Assert.IsType<OkObjectResult>(
             (await ctrl.GetEventBySlug(orgSegment, "2026-08-24-GHOST-WALK", default)).Result);
@@ -165,7 +165,7 @@ public sealed class SlugCaseInsensitivityTests
     public async Task The_events_list_for_an_organization_resolves(string orgSegment)
     {
         var factory = await SeedAsync();
-        var ctrl = new PublicEventController(factory) { ControllerContext = Anonymous() };
+        var ctrl = new PublicEventController(factory, new Ben.Data.WebApi.Services.CmsMarkupSanitizer()) { ControllerContext = Anonymous() };
 
         var result = await ctrl.GetUpcoming(orgSegment, 50, default);
         var items = Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
