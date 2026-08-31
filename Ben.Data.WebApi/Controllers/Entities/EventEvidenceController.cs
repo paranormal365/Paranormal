@@ -145,6 +145,40 @@ public sealed class EventEvidenceController : BenControllerBase
             .Where(s => s.OrgCalendarEventId == eventId && s.SubmittedByAppUserId == userId), ct));
     }
 
+    /// <summary>
+    /// Everything this account has ever offered, across every event — the guest's own copy.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Both sides keep what the guest contributed</b> (Ben, 2026-08-31). The operator
+    /// curates what the EVENT publishes; that is a decision about their gallery, not a transfer of
+    /// ownership of somebody else's photograph. Before this there was no route to a submission
+    /// except through the event it belonged to, and only once accepted — so a guest whose evidence
+    /// was declined had handed over the only copy the product would show them.</para>
+    ///
+    /// <para><b>One file, two references — not two copies.</b> The bytes already carry the
+    /// submitter as <c>UploadFile.AppUserId</c>; what was missing was a door, not a duplicate.
+    /// Copying every guest upload would double storage on the one feature designed to attract
+    /// volume, and the codebase prefers binding over copying everywhere else for the same
+    /// reason.</para>
+    ///
+    /// <para><b>It is not charged to the guest.</b> The bytes live under the organization's path
+    /// and are the operator's cost, on the operator's plan. Counting them against the guest's free
+    /// allowance as well would bill one file to two people.</para>
+    /// </remarks>
+    [HttpGet("~/api/my-evidence")]
+    public async Task<ActionResult<IEnumerable<EvidenceSubmissionRecord>>> MineEverywhere(
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        return Ok(await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(s => s.SubmittedByAppUserId == userId)
+            .OrderByDescending(s => s.DateCreated), ct));
+    }
+
     // ── the group's review ────────────────────────────────────────────────────
 
     /// <summary>Everything waiting on this organization's answer, oldest first.</summary>
@@ -254,11 +288,26 @@ public sealed class EventEvidenceController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // The public route: an accepted submission at a public event, servable to anybody.
         var allowed = await db.EventEvidenceSubmissions.AsNoTracking()
             .AnyAsync(s => s.Id == submissionId
                         && s.OrgCalendarEventId == eventId
                         && s.Status == EvidenceSubmissionStatus.Accepted
                         && s.OrgCalendarEvent.IsPublic, ct);
+
+        // And the owner's route, whatever the verdict (Ben, 2026-08-31). Until this, a guest whose
+        // evidence was pending or declined had NO way to reach their own photograph through the
+        // site: they had handed over the only copy the product would show them, and a decline made
+        // it unreachable. The operator curates what the EVENT publishes; they do not thereby come
+        // to own what somebody else photographed.
+        if (!allowed && GetCurrentUserId() is var userId && userId != Guid.Empty)
+        {
+            allowed = await db.EventEvidenceSubmissions.AsNoTracking()
+                .AnyAsync(s => s.Id == submissionId
+                            && s.OrgCalendarEventId == eventId
+                            && s.SubmittedByAppUserId == userId, ct);
+        }
+
         if (!allowed) return NotFound();
 
         var file = await db.EventEvidenceSubmissions.AsNoTracking()
