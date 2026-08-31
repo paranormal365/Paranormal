@@ -312,7 +312,9 @@ public abstract class BenTestBase : PageTest
 
         Assert.That(Page.Url, Does.Not.Contain("/login"),
             $"sign-in as {email} never left the login page. Page reported: {shown}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Not NetworkIdle: sign-in usually lands on the home page, which streams map tiles and
+        // may never go quiet. Every test in the suite passes through here.
+        await WaitUntilLoadedAsync();
     }
 
     private const string EmailSelector =
@@ -401,8 +403,20 @@ public abstract class BenTestBase : PageTest
 
             try
             {
+                // 8s, not 4s. The old figure was tuned on an idle machine, where every one of
+                // these round trips lands in well under a second. Running 405 tests it does not:
+                // a Blazor Server sign-in has to reach the API, the database and back over the
+                // circuit, and 4s was close enough to that to lose occasionally — which is how
+                // SigningUpRequiresConfirmingTheEmail failed a full run and then passed alone in
+                // one second.
+                //
+                // Raising a timeout is the standard way to paper over a real defect, so it is
+                // worth being precise about why it is not that here: this waits longer for a
+                // CORRECT condition and cannot make a wrong one pass. Nothing became more
+                // permissive, only more patient, and a genuinely broken page still fails — it just
+                // takes about twenty seconds longer to say so.
                 await expected.First.WaitForAsync(
-                    new() { State = WaitForSelectorState.Visible, Timeout = 4_000 });
+                    new() { State = WaitForSelectorState.Visible, Timeout = 8_000 });
                 return;
             }
             catch (TimeoutException)
@@ -411,8 +425,10 @@ public abstract class BenTestBase : PageTest
             }
         }
 
-        // Out of attempts: assert so the failure names what was actually missing.
-        await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        // Out of attempts: assert so the failure names what was actually missing. Generous,
+        // because this is the message somebody will read — a timeout here should mean "it never
+        // arrived", not "the machine was busy at the wrong moment".
+        await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     /// <summary>
@@ -713,7 +729,15 @@ public abstract class BenTestBase : PageTest
     protected async Task LogoutAsync()
     {
         await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // NOT NetworkIdle. This navigates to the HOME page, and the home page carries a map
+        // that streams OpenStreetMap tiles for as long as it is displayed — so "no network
+        // activity for 500ms" is a condition it may never reach. Under the full suite's load it
+        // did not: AVisitorOpensAThreadAndAProfile died here on a bare 30s timeout that named
+        // this helper and nothing about what was wrong.
+        //
+        // OpenProfileMenuAsync below already retries until the circuit is live, so all this wait
+        // has to do is let the placeholders clear.
+        await WaitUntilLoadedAsync();
 
         await OpenProfileMenuAsync();
 
@@ -735,7 +759,9 @@ public abstract class BenTestBase : PageTest
         {
             // Fall through: LoginAsync retries and reports honestly if it never takes.
         }
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            // Not NetworkIdle: see LogoutAsync's first wait. Bounded, and it does not require
+            // the page to fall silent.
+            await WaitUntilLoadedAsync();
     }
 
     // ── Promoted from AccountTests for the journey fixture: erasure-safe input on

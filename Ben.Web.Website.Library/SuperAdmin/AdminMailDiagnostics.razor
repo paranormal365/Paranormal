@@ -1,0 +1,219 @@
+@page "/admin/mail"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Outgoing Mail</PageTitle>
+
+@* This page exists because a sign-up produced no email and there was no way to find out why: the
+   sender swallowed its own failure and the only record of it was below the log's storage
+   threshold. Everything here runs INSIDE the application on purpose — the SMTP password arrives as
+   an environment variable on the API's app pool, and the server's own firewall decides whether it
+   can reach port 465, so a probe from anywhere else proves the mail host is up and nothing about
+   whether this machine can send through it. *@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3">
+        <div class="col">
+            <h3 class="mb-0">Outgoing Mail</h3>
+            <p class="text-secondary small mb-0">
+                Whether this machine can actually send. Run it on the server you care about —
+                the answer is different on each one.
+            </p>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading mail settings…</p>
+    }
+    else if (_settings is null)
+    {
+        <div class="alert alert-warning" role="alert" data-testid="mail-settings-missing">
+            Could not read the mail settings from the API. That is itself a finding — this page is
+            SuperAdmin-only, so a refusal here means the request never arrived as you.
+        </div>
+    }
+    else
+    {
+        @if (!_settings.IsConfigured)
+        {
+            <div class="alert alert-danger" data-testid="mail-not-configured">
+                <strong>Mail is switched off on this machine.</strong>
+                No SMTP host is set, so nothing is attempted at all — every confirmation,
+                invitation and reset is going nowhere silently. On a deployed site that means people
+                can sign up and never be able to finish.
+            </div>
+        }
+        else if (!_settings.HasPassword)
+        {
+            @* The likeliest real fault, and the one that looks like nothing is wrong. *@
+            <div class="alert alert-danger" data-testid="mail-no-password">
+                <strong>A host is set but no password is present.</strong>
+                Every visible setting can be correct and sending will still fail. The value comes
+                from the <code>Smtp__Password</code> environment variable on the API's
+                <em>application pool</em> — not from a file, and not from your shell — so it can be
+                missing here while looking fine everywhere else.
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">What this machine will send with</div>
+            <div class="card-body">
+                <dl class="row mb-0" data-testid="mail-settings">
+                    <dt class="col-sm-3">Host</dt>
+                    <dd class="col-sm-9">@(_settings.Host ?? "(none)")</dd>
+
+                    <dt class="col-sm-3">Port</dt>
+                    <dd class="col-sm-9">@_settings.Port</dd>
+
+                    <dt class="col-sm-3">Security</dt>
+                    <dd class="col-sm-9">@_settings.Security</dd>
+
+                    <dt class="col-sm-3">User</dt>
+                    <dd class="col-sm-9">@(_settings.User ?? "(none)")</dd>
+
+                    <dt class="col-sm-3">From</dt>
+                    <dd class="col-sm-9">@(_settings.FromAddress ?? "(none)")</dd>
+
+                    <dt class="col-sm-3">Password</dt>
+                    <dd class="col-sm-9">
+                        @* Presence only. A diagnostic that prints a secret is one nobody can
+                           safely run in front of another person. *@
+                        @if (_settings.HasPassword)
+                        {
+                            <span class="text-success">present</span>
+                            <span class="text-secondary small ms-1">(value never shown)</span>
+                        }
+                        else
+                        {
+                            <span class="text-danger">missing</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold">Send a test message</div>
+            <div class="card-body">
+                <p class="text-secondary small">
+                    A real send, not a connection check — the failures that matter happen after the
+                    socket opens: authentication rejected, sender not permitted, relay denied. None
+                    of those appear until a message is actually offered.
+                </p>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-sm-6">
+                        <label class="form-label" for="mail-test-to">Send to</label>
+                        <input id="mail-test-to" type="email" class="form-control"
+                               data-testid="mail-test-to"
+                               @bind="@_to" @bind:event="oninput"
+                               placeholder="you@example.com" />
+                    </div>
+                    <div class="col-sm-auto">
+                        <button class="btn btn-primary text-nowrap" data-testid="mail-test-send"
+                                disabled="@(_sending || string.IsNullOrWhiteSpace(_to))"
+                                @onclick="SendAsync">
+                            @(_sending ? "Sending…" : "Send test")
+                        </button>
+                    </div>
+                </div>
+
+                @if (_test is not null)
+                {
+                    <div class="alert @(_test.Sent ? "alert-success" : "alert-danger") mt-3"
+                         role="alert" data-testid="mail-test-result">
+                        <div>@_test.Message</div>
+                        @if (!string.IsNullOrWhiteSpace(_test.ServerSaid))
+                        {
+                            @* Verbatim, deliberately: "535 authentication failed" and "connection
+                               timed out" need completely different fixes. *@
+                            <div class="mt-2">
+                                <div class="small fw-semibold">The server said:</div>
+                                <pre class="small mb-0 mt-1" style="white-space:pre-wrap;"
+                                     data-testid="mail-test-server-said">@_test.ServerSaid</pre>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private MailSettingsRecord?   _settings;
+    private MailTestResultRecord? _test;
+    private string  _to      = "";
+    private bool    _loading = true;
+    private bool    _sending;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth is not ready during prerender; checking IsSuperAdmin before it is, is the race this
+        // app has been caught by repeatedly.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error   = null;
+        try
+        {
+            _settings = await AdminClient.GetMailSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not read the mail settings: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        _sending = true;
+        _test    = null;
+        _error   = null;
+        try
+        {
+            _test = await AdminClient.SendTestEmailAsync(_to.Trim());
+
+            // A refusal the UI discards is worse than no rule at all — say so rather than
+            // re-rendering an unchanged page and letting it read as success.
+            if (_test is null)
+                _error = "The API did not answer the test send. Nothing can be concluded from that "
+                       + "except that the request itself failed.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"The test send could not be attempted: {ex.Message}";
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+}

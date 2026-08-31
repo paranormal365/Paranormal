@@ -16,7 +16,15 @@ public class HomeMapTests : BenTestBase
     public async Task GoHome()
     {
         await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // NOT NetworkIdle. The home page carries a map, and the map streams OpenStreetMap tiles
+        // for as long as it is on screen — so "no network activity for 500ms" is a condition this
+        // page may simply never satisfy. Under the full suite's load it did not, and every test in
+        // this fixture failed in SetUp with a bare 30s timeout that named nothing.
+        //
+        // Waiting for the placeholders instead waits for the thing actually being tested to exist,
+        // and it does not care how much unrelated traffic the map is generating.
+        await WaitUntilLoadedAsync();
     }
 
     [Test]

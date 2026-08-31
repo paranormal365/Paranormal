@@ -114,7 +114,11 @@ else
 
         @if (!string.IsNullOrWhiteSpace(_event.Description))
         {
-            <p style="white-space:pre-line;">@_event.Description</p>
+            @* The description is authored in a rich-text editor, so it IS markup and was being
+               shown as its own source — a visitor read a literal "<p>". Rendered as HTML here and
+               sanitized twice on the way: once when saved, and again by the public endpoint that
+               serves it, which is what makes the rows written before that rule safe. *@
+            <div class="event-description">@((MarkupString)(_event.Description ?? ""))</div>
         }
 
         @* Rendered from the server's verdict, never worked out here. *@

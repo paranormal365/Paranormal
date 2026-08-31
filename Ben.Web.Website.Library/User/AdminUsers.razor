@@ -65,11 +65,33 @@
                     @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="80px">
+            @* A tick alone could not tell "has not got round to it" from "was never told how" —
+               the two states that matter when somebody says they never received the email. The
+               sent time is what separates them. *@
+            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="180px">
                 <Template>
-                    @if (((AppUserRecord)context).IsEmailConfirmed)
+                    @{ var u = (AppUserRecord)context; }
+                    @if (u.IsEmailConfirmed)
                     {
                         <BenIcon Name="check" Class="text-success" />
+                        @if (u.DateEmailConfirmed is { } confirmed)
+                        {
+                            <span class="text-secondary small ms-1">
+                                @confirmed.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </span>
+                        }
+                    }
+                    else if (u.DateConfirmationSent is { } sent)
+                    {
+                        <span class="text-warning small text-nowrap">
+                            Sent @sent.ToViewerLocalTime(UserState).ToDisplayDate()
+                        </span>
+                    }
+                    else
+                    {
+                        @* The state Ben hit: an account nobody can complete, because no message
+                           ever left. Named rather than left blank — a blank cell is what hid it. *@
+                        <span class="text-danger small text-nowrap">No email sent</span>
                     }
                 </Template>
             </GridColumn>
