@@ -108,6 +108,10 @@ public sealed partial class BenAdminClientAdapter
         return (removed, error);
     }
 
+    public Task<SessionInsightsRecord?> GetSessionInsightsAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<SessionInsightsRecord>($"/api/field-sessions/{sessionId}/insights", token);
+
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 

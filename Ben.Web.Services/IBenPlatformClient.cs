@@ -130,6 +130,13 @@ public interface IBenPlatformClient
     Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
         Guid organizationId, string confirmName, CancellationToken token = default);
 
+    /// <summary>
+    /// What the place's archive says about one of your own field sessions.
+    /// </summary>
+    /// <remarks>Null when the session is not yours, has no place, or the place is not public.</remarks>
+    Task<SessionInsightsRecord?> GetSessionInsightsAsync(
+        Guid sessionId, CancellationToken token = default);
+
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 

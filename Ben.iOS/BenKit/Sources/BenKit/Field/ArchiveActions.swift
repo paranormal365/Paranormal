@@ -122,3 +122,48 @@ public struct ArchiveActions: Sendable {
         }
     }
 }
+
+
+/// What everybody else's visits to a place say about one of your own sessions.
+///
+/// **The individual's reason to hold a plan.** A group buys people, cases and privacy. Somebody
+/// investigating alone has none of those to buy and their recordings are already private, so a
+/// plan sold to them on privacy sells them what they have. What they cannot get at any price on
+/// their own is context: was that spike remarkable, or does this building do it to everybody?
+public struct SessionInsights: Codable, Sendable, Equatable {
+    public let placeName: String
+    /// Distinct PEOPLE, never sessions — twelve visits by one enthusiast is not a consensus.
+    public let othersWhoRecordedHere: Int
+    public let othersWhoFlaggedSomething: Int
+    public let yourSessionsHere: Int
+    public let yourMarkersPerHour: Double?
+    public let placeMedianMarkersPerHour: Double?
+    public let standsOut: Bool?
+    /// False when the comparison is withheld on a free plan. The counts are still real.
+    public let detailed: Bool
+
+    public init(placeName: String, othersWhoRecordedHere: Int, othersWhoFlaggedSomething: Int,
+                yourSessionsHere: Int, yourMarkersPerHour: Double?,
+                placeMedianMarkersPerHour: Double?, standsOut: Bool?, detailed: Bool) {
+        self.placeName = placeName
+        self.othersWhoRecordedHere = othersWhoRecordedHere
+        self.othersWhoFlaggedSomething = othersWhoFlaggedSomething
+        self.yourSessionsHere = yourSessionsHere
+        self.yourMarkersPerHour = yourMarkersPerHour
+        self.placeMedianMarkersPerHour = placeMedianMarkersPerHour
+        self.standsOut = standsOut
+        self.detailed = detailed
+    }
+}
+
+extension ArchiveActions {
+    /// What the place's archive says about this session, or nil when it has nothing to say.
+    ///
+    /// Nil covers "not yours", "no place" and "not a public location" with one answer, which is
+    /// what the server returns and what the screen wants: no panel rather than an explanation of
+    /// why there is no panel.
+    public func insights(serverSessionId: UUID) async -> SessionInsights? {
+        let path = "api/field-sessions/\(serverSessionId.uuidString.lowercased())/insights"
+        return await api.load(Endpoint(.get, path), as: SessionInsights.self).value
+    }
+}

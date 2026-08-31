@@ -1414,3 +1414,25 @@ public sealed record DuplicatePlaceRow(
 public sealed record PlaceMergeResult(
     Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
     int FieldSessions, int Rooms);
+
+
+/// <summary>
+/// What everybody else's visits to a place say about one of your sessions.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>SessionInsights</c> beside <c>SessionInsightsService</c> in the WebApi project;
+/// decoded from the server's JSON by name, so a rename has to happen on both sides.
+/// </remarks>
+/// <param name="Detailed">
+/// False when the comparison is withheld on a free plan. The counts are still real — they are on
+/// the place's public page anyway — so a page can show them and say what it is not showing.
+/// </param>
+public sealed record SessionInsightsRecord(
+    string PlaceName,
+    int OthersWhoRecordedHere,
+    int OthersWhoFlaggedSomething,
+    int YourSessionsHere,
+    double? YourMarkersPerHour,
+    double? PlaceMedianMarkersPerHour,
+    bool? StandsOut,
+    bool Detailed);

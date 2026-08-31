@@ -20,6 +20,8 @@ struct SessionReviewView: View {
     @State private var exporting = false
     @State private var uploading = false
     @State private var choosingPhoto = false
+    /// What the place's archive says about this night. Nil until asked, or when it has nothing.
+    @State private var insights: SessionInsights?
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
@@ -105,6 +107,89 @@ struct SessionReviewView: View {
             mediaPane
             ReplayTransport(replay: replay)
             instrumentsAtPlayhead
+            archiveVerdict
+        }
+    }
+
+    /// What the place's archive says about this night.
+    ///
+    /// **The one question somebody recording alone cannot answer for themselves:** was that
+    /// unusual, or does this building do it to everybody? Shown under the instruments because it
+    /// is read AFTER the numbers, as the thing that gives them meaning.
+    ///
+    /// Absent entirely when nobody else has recorded there — a panel saying "no comparison
+    /// available" is a worse answer than no panel, and the first person at a place must never be
+    /// told their night was unremarkable against no evidence at all.
+    @ViewBuilder
+    private var archiveVerdict: some View {
+        if let insights, insights.othersWhoRecordedHere > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What \(insights.placeName)'s archive says")
+                    .font(.caption)
+                    .foregroundStyle(Theme.fog)
+
+                Text(headline(insights))
+                    .font(.subheadline)
+
+                if insights.detailed {
+                    if let mine = insights.yourMarkersPerHour,
+                       let median = insights.placeMedianMarkersPerHour {
+                        HStack(spacing: 16) {
+                            figure(String(format: "%.1f", mine), "your flags/hr")
+                            figure(String(format: "%.1f", median), "typical here")
+                        }
+                        Text(insights.standsOut == true
+                             ? "Busier than this place usually is."
+                             // The deflating answer is the archive's most valuable one, so it is
+                             // said as plainly as the exciting one.
+                             : "About what this place usually gives people.")
+                            .font(.caption)
+                            .foregroundStyle(insights.standsOut == true ? Theme.warning : Theme.fog)
+                    } else {
+                        Text("Not enough comparable sessions here yet to say whether this one was unusual.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.fog)
+                    }
+                } else {
+                    // The upsell names exactly what it withholds. A paywall that hides the SHAPE
+                    // of what you would get teaches people to assume it is nothing.
+                    Text("A paid plan compares this session with theirs — your flagged moments per "
+                       + "hour against what this place typically gives people, and whether this "
+                       + "night stood out.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.fog)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func figure(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.title3).bold()
+            Text(label).font(.caption2).foregroundStyle(Theme.fog)
+        }
+    }
+
+    private func headline(_ i: SessionInsights) -> String {
+        let people = i.othersWhoRecordedHere == 1 ? "1 other person has" : "\(i.othersWhoRecordedHere) other people have"
+        let flagged = i.othersWhoFlaggedSomething > 0
+            ? "\(i.othersWhoFlaggedSomething) of them flagged something."
+            : "none of them flagged anything."
+        let yours = i.yourSessionsHere > 1 ? " This is your \(ordinal(i.yourSessionsHere)) session here." : ""
+        return "\(people) recorded here, and \(flagged)\(yours)"
+    }
+
+    /// "3rd", "12th". The teens are why this is a function — every naive version ships "11st".
+    private func ordinal(_ n: Int) -> String {
+        if (11...13).contains(n % 100) { return "\(n)th" }
+        switch n % 10 {
+        case 1:  return "\(n)st"
+        case 2:  return "\(n)nd"
+        case 3:  return "\(n)rd"
+        default: return "\(n)th"
         }
     }
 
@@ -267,6 +352,14 @@ struct SessionReviewView: View {
         await replay.load(readingLog: source.log, markers: source.markers,
                           media: source.media, baselines: source.baselines,
                           startedAt: source.startedAt, endedAt: source.endedAt)
+
+        // Asked only once the session exists on the server: a recording still sitting on the
+        // phone has nothing to compare against, and there is no id to ask about. Failing quietly
+        // is right — the comparison is an addition to this screen, not a precondition for it, and
+        // a session that would not replay because the archive was slow is a worse screen.
+        if let serverId = summary?.serverSessionId {
+            insights = await dependencies.archiveActions.insights(serverSessionId: serverId)
+        }
     }
 
     /// Keeps the player on the playhead.
