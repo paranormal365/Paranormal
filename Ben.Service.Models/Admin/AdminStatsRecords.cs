@@ -70,3 +70,80 @@ public sealed record OrgStatsSummary(
     int? OpenCases,
     IReadOnlyList<StatSlice>? CasesByStatus,
     IReadOnlyList<StatPoint>? CasesPerMonth);
+
+// ── Sign-in insights ─────────────────────────────────────────────────────────
+// Unlike everything above, these records NAME accounts. See AdminStatsController's remarks for
+// why that boundary is crossed deliberately here and nowhere else on the dashboard.
+
+/// <summary>One account, with its sign-in activity over the window.</summary>
+/// <param name="Name">Display name, falling back to the handle and then to the account id.</param>
+/// <param name="Handle">The permanent @name, when they have one.</param>
+/// <param name="Count">Attempts of the kind this list is about — successes or failures.</param>
+/// <param name="LastUtc">The most recent of those attempts.</param>
+public sealed record SignInPerson(
+    Guid AppUserId,
+    string Name,
+    string? Handle,
+    int Count,
+    DateTime LastUtc);
+
+/// <summary>One sign-in, for the "who just arrived" list.</summary>
+/// <param name="Method">"password" or "apple" — see <c>RecordingSignInManager</c>.</param>
+public sealed record RecentSignIn(
+    Guid AppUserId,
+    string Name,
+    string? Handle,
+    string Method,
+    DateTime Utc);
+
+/// <summary>
+/// Something in the sign-in record worth a second look.
+/// </summary>
+/// <remarks>
+/// Deliberately a sentence rather than a number. Each of these is a pattern an administrator
+/// would act on — and the action is always "go and look", never "the system has decided". Naming
+/// the account is the point where one is about a person; <paramref name="AppUserId"/> is null for
+/// the ones that are about the site as a whole.
+/// </remarks>
+/// <param name="Kind">A stable slug, so the UI can pick an icon without matching on prose.</param>
+/// <param name="Headline">The finding, in one short line.</param>
+/// <param name="Detail">What it is based on, so a reader can judge it rather than trust it.</param>
+public sealed record SignInOddity(
+    string Kind,
+    string Headline,
+    string Detail,
+    Guid? AppUserId);
+
+/// <summary>
+/// Who has been signing in, and anything odd about how.
+/// </summary>
+/// <param name="Recent">
+/// The most recent sign-in of each of the last ten DISTINCT accounts — not the last ten events,
+/// which one busy person can fill on their own.
+/// </param>
+/// <param name="TopPeople">Accounts ranked by successful sign-ins in the window.</param>
+/// <param name="TopGroups">
+/// Groups ranked by their active members' sign-ins. A person in two groups counts once for each:
+/// the question is which group's people are showing up, not how the total divides.
+/// </param>
+/// <param name="ByMethod">The split between password and Apple sign-ins.</param>
+/// <param name="ByHourUtc">
+/// Twenty-four buckets, midnight-first, labelled in UTC. Shape, not schedule — the site has no
+/// per-account timezone to reduce these to local hours.
+/// </param>
+/// <param name="MostFailures">Accounts ranked by FAILED attempts in the window.</param>
+/// <param name="Oddities">Patterns worth a look, most pointed first.</param>
+/// <param name="CoversAppleSignIns">
+/// Whether Apple sign-ins are represented in these numbers at all. False on a server whose
+/// records predate the change that started recording them, so a reader can tell a genuine absence
+/// of Apple sign-ins from a blind spot.
+/// </param>
+public sealed record AdminSignInInsights(
+    IReadOnlyList<RecentSignIn> Recent,
+    IReadOnlyList<SignInPerson> TopPeople,
+    IReadOnlyList<StatSlice> TopGroups,
+    IReadOnlyList<StatSlice> ByMethod,
+    IReadOnlyList<StatSlice> ByHourUtc,
+    IReadOnlyList<SignInPerson> MostFailures,
+    IReadOnlyList<SignInOddity> Oddities,
+    bool CoversAppleSignIns);

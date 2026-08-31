@@ -9968,6 +9968,54 @@ straight to the billing page, and whether "you do not have to do anything, and y
 charged" is the tone he wants for a group choosing to walk away — it is deliberately
 low-pressure, which is a judgement about the relationship rather than about the mechanism.
 
+### The Stripe door reopened it — three months free delivered ONE (fixed 2026-08-31)
+
+Everything above was verified on **2026-08-26 against the manual admin path**. Stripe went live on
+**08-30** and added a second door to the same offer, with a rule of its own: Stripe refuses a
+zero-amount session, so `OrganizationCheckoutController` routes a 100%-off period straight to
+`FulfillAsync` with a **null customer ref and a null payment method** — the group never sees a card
+form, because there is nothing to collect.
+
+`StripeRenewalJob`'s due query then required both refs to be non-null. **A trial group was skipped
+by the very job meant to carry it.** Month two never opened and `SubscriptionLapseJob` wound them
+down: "your first three months are free" would have delivered one month and a lapse notice, to
+exactly the groups Ben was courting on 1 September. `RenewOneAsync` already had a correct "a free
+continuing period skips the card entirely" branch — it was unreachable for the only groups it was
+written for.
+
+**Fix.** The card predicates come off the ORG due query, and the question moves to where the price
+is known: if something is owed and there is no card, log and return, leaving it to the lapse job —
+the one-consequence-engine rule. Whether a card is NEEDED is a question about the price, not a
+precondition for being looked at. The SEAT query keeps its predicates: a seat is always born from a
+real card checkout and takes no coupons, so a seat without one is genuinely un-renewable.
+
+**Two tests, both proven to discriminate.** `TrialCheckoutTests` covers the act of redeeming (six —
+the fake gateway asserts `Payable > 0`, so a regression that sends a free period to Stripe fails
+loudly here rather than in production) and `TrialRenewalTests` covers months two and three (two).
+The renewal test fails before the fix; the charge-site guard test fails with the guard removed,
+where the job calls Stripe with an **empty** customer ref and payment method — what `!` on a null
+was hiding. Full suite 3658 passed, 0 failed.
+
+**The lesson, which is the general one:** a feature verified on one path is not verified on a path
+added after it. Item 195 was closed as "nothing needs building, two things need proving", and both
+were proven — on the only door that existed that week.
+
+**Not a bug, but worth knowing:** the Stripe free path records a $0 CHARGE naming the coupon and
+**no** PAYMENT row, so no receipt number is taken. The admin path gives a zero payment the next
+receipt number precisely so the sequence has no gap. Two defensible rules on two paths; reconcile
+if an accountant ever asks which.
+
+### The campaign as configured
+
+Ben settled it 2026-08-31: **one shared code, 100% off, 3 monthly periods, first subscription
+only, valid 1 September through 30 November, capped at 25 redemptions.** Proposed code `FOUNDING`
+rather than the form's `LAUNCH25` placeholder — a number inside a 100%-off code reads as the
+discount. Created through `/admin/coupons`; the form turns a "Redeem by" date into 23:59:59 on that
+day, so the window closes at the end of 30 November rather than its start.
+
+**The fix must be deployed before the first trial group's month two** — roughly 1 October if anyone
+redeems on the first day.
+
 ## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
 
 > "We may need to provide a hold harmless form to generate for groups visiting private residences."
