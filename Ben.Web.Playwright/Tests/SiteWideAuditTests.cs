@@ -45,10 +45,47 @@ public class SiteWideAuditTests : BenTestBase
         return null;
     }
 
+    /// <summary>
+    /// Routes that only exist when a feature switch is on, so a walk can tell "off" from "broken".
+    /// </summary>
+    /// <remarks>
+    /// A page behind a switch that is OFF is not routed, and reporting that as a finding makes the
+    /// audit fail on a deployment that is behaving exactly as configured. On the 2026-08-31 run
+    /// this was two of the personas' only complaints.
+    /// </remarks>
+    private static readonly (string Flag, string Prefix)[] SwitchedRoutes =
+    [
+        ("features.publications",  "/publications"),
+        ("features.video-editor",  "/video-editor"),
+        ("features.video-editor",  "/my-videos"),
+        ("features.voting",        "/vote"),
+        ("features.equipment",     "/equipment-catalog"),
+        ("features.media-library", "/media"),
+        ("features.discovery",     "/find"),
+        ("features.events",        "/events"),
+    ];
+
+    private async Task<bool> IsSwitchedOffAsync(string path)
+    {
+        foreach (var (flag, prefix) in SwitchedRoutes)
+        {
+            if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && await FeatureIsOffAsync(flag))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private async Task WalkAsync(string persona, IEnumerable<(string Path, string? Expect)> pages, List<string> findings)
     {
         foreach (var (path, expect) in pages)
         {
+            // Skipped, not walked: the route genuinely does not exist while its switch is off, and
+            // an audit that calls that a defect trains people to ignore the audit.
+            if (await IsSwitchedOffAsync(path)) continue;
+
             var problem = await ProblemWithAsync(path, expect);
             if (problem is not null) findings.Add($"[{persona}] {problem}");
         }

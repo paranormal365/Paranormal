@@ -84,7 +84,10 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
-    bool? AllowMemberPrivatePhotosToClients = null);
+    bool? AllowMemberPrivatePhotosToClients = null,
+    // Null means "leave as-is": a caller predating this must not list a group that chose not
+    // to be found.
+    bool? IsUnlisted = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);

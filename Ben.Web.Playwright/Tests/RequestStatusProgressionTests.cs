@@ -33,11 +33,26 @@ public class RequestStatusProgressionTests : BenTestBase
     public async Task OrgRequests_Tab_RendersWithRequestCards()
     {
         await NavigateToRequestsTabAsync();
+
+        // The panel loads its rows over the circuit AFTER the tab opens, so reading the body
+        // straight away catches the tab's own render and none of its content. NetworkIdle does
+        // not help — Blazor Server's data never was an HTTP request — which is what
+        // WaitUntilLoadedAsync exists for.
+        await WaitUntilLoadedAsync();
+
+        // A RETRYING expectation, not a one-shot InnerText. Under the full suite's load the panel
+        // takes longer to arrive than it does alone, and reading the body once catches the tab's
+        // own render and none of its content — which is how this passed 12/12 in isolation and
+        // still failed in the full run.
+        await Expect(Main.GetByText("Submitted", new() { Exact = false })
+                .Or(Main.GetByText("Viewed", new() { Exact = false }))
+                .Or(Main.GetByText("Under Review", new() { Exact = false }))
+                .Or(Main.GetByText("No pending", new() { Exact = false }))
+                .First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
-        // Should show either request cards or empty state
-        Assert.That(body, Does.Contain("Submitted").Or.Contain("Viewed").Or.Contain("Under Review")
-                       .Or.Contain("No pending"), "Expected status labels or empty state.");
     }
 
     [Test]

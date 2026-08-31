@@ -240,6 +240,8 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
         }
         org.IsAcceptingApplications = request.IsAcceptingApplications;
+        // A group that has chosen not to be found stays that way unless this call says otherwise.
+        if (request.IsUnlisted is { } unlisted) org.IsUnlisted = unlisted;
         if (request.Kind is { } kind) org.Kind = kind;
         if (request.RunsPublicTours is { } runsTours) org.RunsPublicTours = runsTours;
         org.PublicPhone             = request.PublicPhone?.Trim();
@@ -501,5 +503,8 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
-    bool? AllowMemberPrivatePhotosToClients = null);
+    bool? AllowMemberPrivatePhotosToClients = null,
+    // Null means "leave as-is" for the same reason: a caller that predates this field must not
+    // silently list a group that had chosen to be unlisted.
+    bool? IsUnlisted = null);
 

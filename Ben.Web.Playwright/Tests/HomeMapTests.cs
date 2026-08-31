@@ -117,6 +117,10 @@ public class HomeMapTests : BenTestBase
     [Test]
     public async Task List_AuthUser_SeesVoteButtons()
     {
+        // Only this test is about the vote widget; the rest of the fixture is not, so the
+        // gate is per test rather than on the fixture.
+        await SkipIfFeatureOffAsync("features.voting");
+
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
