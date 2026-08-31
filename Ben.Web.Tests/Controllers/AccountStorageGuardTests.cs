@@ -46,7 +46,8 @@ public sealed class AccountStorageGuardTests
 
     /// <summary>One stored session file of a given size, personal unless an investigation is passed.</summary>
     private static async Task StoreAsync(
-        IDbContextFactory<BenDataContext> f, Guid userId, long bytes, Guid? investigationId = null)
+        IDbContextFactory<BenDataContext> f, Guid userId, long bytes,
+        Guid? investigationId = null, bool published = false)
     {
         await using var db = await f.CreateDbContextAsync();
         var now = DateTime.UtcNow;
@@ -63,6 +64,7 @@ public sealed class AccountStorageGuardTests
         {
             Id = sessionId, SubmittedByAppUserId = userId,
             InvestigationId = investigationId,
+            PublishedAtUtc = published ? now : null,
             DocumentUploadFileId = Guid.NewGuid(),
             StartedAt = now, DeviceModel = "iPhone 17",
             DateCreated = now, CreatedByAppUserId = userId,
@@ -216,6 +218,58 @@ public sealed class AccountStorageGuardTests
         await StoreAsync(f, heavy, AccountStorageGuard.DefaultFreeMegabytes * Megabyte);
 
         Assert.Null(await AskAsync(f, light, 10 * Megabyte));
+    }
+
+    // ── contributed storage is not charged for ───────────────────────────────
+
+    /// <summary>
+    /// Ben, 2026-08-31: "I just want to make sure I am not giving out space for things that do not
+    /// benefit me." A published recording earns its disk — it is what makes the archive worth
+    /// reading and what the comparison engine measures against. One nobody else will ever see
+    /// earns nothing.
+    /// </summary>
+    [Fact]
+    public async Task Published_sessions_do_not_count_against_the_cap()
+    {
+        var f = CreateFactory();
+        var user = await AddUserAsync(f);
+
+        await StoreAsync(f, user, 5000 * Megabyte, published: true);
+
+        Assert.Null(await AskAsync(f, user, 100 * Megabyte));
+    }
+
+    [Fact]
+    public async Task What_is_kept_private_still_counts()
+    {
+        var f = CreateFactory();
+        var user = await AddUserAsync(f);
+
+        await StoreAsync(f, user, AccountStorageGuard.DefaultFreeMegabytes * Megabyte, published: false);
+
+        Assert.NotNull(await AskAsync(f, user, Megabyte));
+    }
+
+    /// <summary>
+    /// The cap is a nudge, not a tax: publishing what you already uploaded gives the room back.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_what_you_stored_frees_the_room_again()
+    {
+        var f = CreateFactory();
+        var user = await AddUserAsync(f);
+
+        await StoreAsync(f, user, AccountStorageGuard.DefaultFreeMegabytes * Megabyte);
+        Assert.NotNull(await AskAsync(f, user, Megabyte));   // full
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            foreach (var session in await db.FieldSessionUploads.ToListAsync())
+                session.PublishedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Null(await AskAsync(f, user, Megabyte));      // contributed, so not charged
     }
 
     // ── the setting ──────────────────────────────────────────────────────────

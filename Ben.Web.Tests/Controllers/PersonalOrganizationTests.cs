@@ -252,6 +252,101 @@ public sealed class PersonalOrganizationTests
         Assert.Null(PersonalOrganizations.WhyNotInAPersonalOrganization(group, action));
     }
 
+    // ── unlisted: a real group that has chosen not to be found ───────────────
+
+    /// <summary>
+    /// Ben, 2026-08-31: the account App Review signs into exists to get the app approved and has
+    /// no business appearing in a directory of real groups.
+    /// </summary>
+    [Fact]
+    public async Task An_unlisted_group_is_excluded_from_directories()
+    {
+        var f = CreateFactory();
+        var owner = await AddUserAsync(f);
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = Guid.NewGuid(), Name = "Paranormal365", UrlName = "paranormal365",
+                IsUnlisted = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await f.CreateDbContextAsync();
+        Assert.Empty(await read.Organizations.Where(PersonalOrganizations.Discoverable).ToListAsync());
+    }
+
+    /// <summary>
+    /// Unlisted is about being FOUND, not about being private. The group is still there, its
+    /// members are still members, and its page still works for anybody given the link — so a
+    /// filter that removed the ROW rather than hiding it from directories would be a different
+    /// and much worse feature.
+    /// </summary>
+    [Fact]
+    public async Task An_unlisted_group_still_exists_and_keeps_its_members()
+    {
+        var f = CreateFactory();
+        var owner = await AddUserAsync(f);
+        var orgId = Guid.NewGuid();
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = orgId, Name = "Paranormal365", UrlName = "paranormal365",
+                IsUnlisted = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = owner,
+                Role = OrganizationMemberRole.Owner, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await f.CreateDbContextAsync();
+        Assert.Single(await read.Organizations.ToListAsync());
+        Assert.Single(await read.OrganizationUserMemberships.Where(m => m.IsActive).ToListAsync());
+    }
+
+    /// <summary>
+    /// Unlisted and personal are different reasons answered by one predicate. Neither implies the
+    /// other: an unlisted group is a real group, and a personal organization was never one.
+    /// </summary>
+    [Fact]
+    public async Task Unlisted_and_personal_are_independent()
+    {
+        var f = CreateFactory();
+        var owner = await AddUserAsync(f);
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = Guid.NewGuid(), Name = "Unlisted only", UrlName = "u1",
+                IsUnlisted = true, IsPersonal = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            db.Organizations.Add(new Organization
+            {
+                Id = Guid.NewGuid(), Name = "Listed group", UrlName = "u2",
+                IsUnlisted = false, IsPersonal = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await f.CreateDbContextAsync();
+        var visible = await read.Organizations.Where(PersonalOrganizations.Discoverable).ToListAsync();
+
+        Assert.Equal("Listed group", Assert.Single(visible).Name);
+    }
+
     // ── and an ordinary group is untouched ───────────────────────────────────
 
     /// <summary>

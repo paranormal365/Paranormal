@@ -34,6 +34,28 @@ public class ParameterisedRouteCrawlTests : BenTestBase
     private static readonly string[] TokenPlaceholders =
         { "{Token}", "{AccessToken:guid}" };
 
+    /// <summary>Whether this URL only exists when a feature switch is on, and that switch is off.</summary>
+    private static async Task<bool> IsBehindAnOffSwitchAsync(string url)
+    {
+        (string Flag, string Prefix)[] switched =
+        [
+            ("features.publications",  "/publications"),
+            ("features.video-editor",  "/video-editor"),
+            ("features.media-library", "/media"),
+            ("features.equipment",     "/equipment-catalog"),
+        ];
+
+        foreach (var (flag, prefix) in switched)
+        {
+            if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && await FeatureIsOffAsync(flag))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private async Task<JsonElement?> ApiAsync(string path, string token)
     {
         var response = await Page.APIRequest.GetAsync($"{ApiUrl}{path}",
@@ -232,6 +254,15 @@ public class ParameterisedRouteCrawlTests : BenTestBase
 
             var url = RouteCrawlHelper.Fill(route, idsForRoute);
             if (url is null) { skipped.Add($"{route} (no id available)"); continue; }
+
+            // A route behind a switch that is OFF is genuinely not routed. Crawling it and
+            // reporting "not routed" makes the crawl fail on a deployment behaving exactly as
+            // configured — which is how a crawl stops being read.
+            if (await IsBehindAnOffSwitchAsync(url))
+            {
+                skipped.Add($"{route} (feature switched off)");
+                continue;
+            }
 
             visited++;
             try

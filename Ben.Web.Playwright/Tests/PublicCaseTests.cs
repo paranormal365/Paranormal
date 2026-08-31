@@ -41,6 +41,10 @@ public class PublicCaseTests : BenTestBase
     [Description("Unauthenticated visitors see a 'Sign in to vote' prompt in the vote widget.")]
     public async Task CaseDetail_AnonymousUser_SeesSignInPrompt()
     {
+        // Only this test is about the vote widget; the rest of the fixture is not, so the
+        // gate is per test rather than on the fixture.
+        await SkipIfFeatureOffAsync("features.voting");
+
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -53,6 +57,10 @@ public class PublicCaseTests : BenTestBase
     [Description("Authenticated users see vote buttons (Confirms / Disputes / Inconclusive).")]
     public async Task CaseDetail_AuthenticatedUser_SeesVoteButtons()
     {
+        // Only this test is about the vote widget; the rest of the fixture is not, so the
+        // gate is per test rather than on the fixture.
+        await SkipIfFeatureOffAsync("features.voting");
+
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -68,6 +76,10 @@ public class PublicCaseTests : BenTestBase
     [Description("Clicking a vote button updates the vote count display.")]
     public async Task CaseDetail_CastingVote_UpdatesCount()
     {
+        // Only this test is about the vote widget; the rest of the fixture is not, so the
+        // gate is per test rather than on the fixture.
+        await SkipIfFeatureOffAsync("features.voting");
+
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

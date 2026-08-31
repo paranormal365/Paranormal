@@ -11,6 +11,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Sidelined: AzureBlobFileStorageService is written but NOT registered. The reference
+             exists so it compiles and stays honest as the storage interface changes; nothing
+             constructs it until somebody swaps the registration in Program.cs. -->
+        <PackageReference Include="Azure.Storage.Blobs" Version="12.29.2" />
         <PackageReference Include="HtmlSanitizer" Version="9.2.995" />
         <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="MetadataExtractor" Version="2.9.3" />

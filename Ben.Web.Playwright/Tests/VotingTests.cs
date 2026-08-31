@@ -13,6 +13,18 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Voting")]
 public class VotingTests : BenTestBase
 {
+    /// <summary>
+    /// Voting ships behind a switch, and this suite runs against deployments where it is off.
+    /// </summary>
+    /// <remarks>
+    /// The whole fixture is about the vote widget, so the gate belongs on the fixture. With the
+    /// feature off the widget is not rendered anywhere and every test here fails on a site that
+    /// is behaving exactly as configured.
+    /// </remarks>
+    [SetUp]
+    public async Task SkipWhenVotingIsSwitchedOff()
+        => await SkipIfFeatureOffAsync("features.voting");
+
     private const string TghCaseRef  = "2026-001";
     private const string TghUrlName  = "paranormal365";
 

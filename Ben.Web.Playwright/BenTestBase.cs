@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
 using NUnit.Framework;
@@ -48,6 +49,81 @@ public abstract class BenTestBase : PageTest
 
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
+
+    // ── Site feature switches ────────────────────────────────────────────────
+    //
+    // Several features ship dark and are turned on per deployment. A suite that fails when one is
+    // OFF is reporting the deployment's configuration as a defect: 21 of 27 failures on the
+    // 2026-08-31 run were exactly this, and they drown the failures somebody should act on.
+    //
+    // The rule this enforces: a test may be SKIPPED only when the thing it tests is genuinely
+    // switched off in the environment it is pointed at. Anything else, it must still fail.
+
+    private static Dictionary<string, bool>? _features;
+    private static readonly SemaphoreSlim FeatureLock = new(1, 1);
+
+    /// <summary>The site's feature switches, read once per run.</summary>
+    /// <remarks>
+    /// An unreachable API returns an EMPTY map rather than "everything off". Treating a failed
+    /// request as "the feature is off" would skip the whole suite the first time the host was
+    /// slow to start, and report it as a pass.
+    /// </remarks>
+    protected static async Task<Dictionary<string, bool>> SiteFeaturesAsync()
+    {
+        if (_features is not null) return _features;
+
+        await FeatureLock.WaitAsync();
+        try
+        {
+            if (_features is not null) return _features;
+
+            var map = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(20) };
+                var json = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/public/site-features");
+                if (json.TryGetProperty("features", out var features))
+                {
+                    foreach (var flag in features.EnumerateObject())
+                    {
+                        if (flag.Value.ValueKind is System.Text.Json.JsonValueKind.True
+                                                 or System.Text.Json.JsonValueKind.False)
+                        {
+                            map[flag.Name] = flag.Value.ValueKind == System.Text.Json.JsonValueKind.True;
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Left empty on purpose — see the remarks. Unknown is not off.
+            }
+
+            _features = map;
+            return _features;
+        }
+        finally
+        {
+            FeatureLock.Release();
+        }
+    }
+
+    /// <summary>True only when the switch is present AND explicitly off.</summary>
+    protected static async Task<bool> FeatureIsOffAsync(string flag)
+        => (await SiteFeaturesAsync()).TryGetValue(flag, out var on) && !on;
+
+    /// <summary>
+    /// Skips this test when the feature it covers is switched off on the target deployment.
+    /// </summary>
+    /// <remarks>
+    /// Ignore rather than Pass: a skipped test is visible in the run summary as something that
+    /// did not execute, and a passed one claims a guarantee nobody checked.
+    /// </remarks>
+    protected static async Task SkipIfFeatureOffAsync(string flag)
+    {
+        if (await FeatureIsOffAsync(flag))
+            Assert.Ignore($"'{flag}' is switched off on this deployment, so there is nothing to test.");
+    }
 
     // ── Seeded org ids, resolved once per run ─────────────────────────────────
     // Fixtures used to hardcode these GUIDs, which survives exactly until the next database
