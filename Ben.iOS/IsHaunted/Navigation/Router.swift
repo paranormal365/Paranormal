@@ -14,6 +14,27 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     /// What the compact shell shows as tabs — five, in the order a night actually runs.
     static let compactTabs: [AppSection] = [.feed, .cases, .investigations, .fieldKit, .profile]
 
+    /// Whether this section leads anywhere for the person described by `surfaces`.
+    ///
+    /// **Ben, 2026-08-31:** somebody investigating alone should not be carrying a My Cases tab
+    /// that can never hold anything, or an Investigations tab belonging to groups they have not
+    /// joined. An empty screen is not neutral — it reads either as a broken app or as a feature
+    /// the person is failing to find.
+    ///
+    /// Feed, Field Kit and Profile are unconditional on purpose. The first two are the whole of
+    /// the app for a solo investigator, and Profile is where signing in and out lives, so hiding
+    /// any of them would strand somebody.
+    func applies(to surfaces: MeSurfaces) -> Bool {
+        switch self {
+        case .feed, .fieldKit, .profile: true
+        case .cases:          surfaces.hasCases
+        case .investigations: surfaces.hasInvestigations
+        // Events earns its place for a ghost-walk guest, and for anybody in a group that runs
+        // them. A solo investigator who has never attended one is not shown it.
+        case .events:         surfaces.attendsPublicEvents || surfaces.hasGroups
+        }
+    }
+
     var id: String { rawValue }
 
     var title: String {
@@ -65,6 +86,9 @@ enum AppRoute: Hashable {
     case eventsList
     case eventDetail(UUID)
     case security
+    /// The guest's own copy of what they offered at somebody's public event, and contributing it
+    /// to the place's archive. Theirs, whatever the operator decided about their own gallery.
+    case myEvidence
     /// Managing who you've blocked (App Review 1.2) — the block itself happens on a post.
     case blockedAccounts
     /// Deleting your own account — App Review 5.1.1(v) requires this to live in the app.

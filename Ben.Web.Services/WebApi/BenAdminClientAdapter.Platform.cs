@@ -94,6 +94,20 @@ public sealed partial class BenAdminClientAdapter
     public string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/public/field-sessions/{fieldSessionId}/media/{uploadFileId}";
 
+    public Task<OrganizationPurgePreview?> GetOrganizationPurgePreviewAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationPurgePreview>(
+            $"/api/admin/organizations/{organizationId}/purge", token);
+
+    public async Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
+        Guid organizationId, string confirmName, CancellationToken token = default)
+    {
+        var (removed, error) = await _api.SendExpectingReasonAsync<object, OrganizationPurgePreview>(
+            HttpMethod.Delete, $"/api/admin/organizations/{organizationId}/purge",
+            new { ConfirmName = confirmName }, token);
+        return (removed, error);
+    }
+
     public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
 

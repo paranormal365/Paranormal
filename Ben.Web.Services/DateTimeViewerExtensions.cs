@@ -31,6 +31,56 @@ public static class DateTimeViewerExtensions
     public static DateTime NowInViewerTimeZone(this IBenUserState userState) =>
         DateTime.UtcNow.ToViewerLocalTime(userState);
 
+    /// <summary>
+    /// How long ago a stored UTC instant was, in the words somebody would use: "3 minutes ago",
+    /// "yesterday", "last week".
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Paired with an absolute time, never replacing it.</b> Relative time answers "is
+    /// this fresh?" at a glance, which is the question somebody scanning a list actually has, and
+    /// it is useless for "which night was that?". Showing only one of the two makes a reader do
+    /// arithmetic; showing both makes the list readable AND citable.</para>
+    ///
+    /// <para>Computed against UTC now rather than the viewer's clock on purpose: an ELAPSED
+    /// duration is the same number in every timezone, and converting both ends first is a way to
+    /// introduce an offset bug into a subtraction that never needed one.</para>
+    /// </remarks>
+    public static string ToRelativeTime(this DateTime utc, DateTime? nowUtc = null)
+    {
+        var elapsed = (nowUtc ?? DateTime.UtcNow) - DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+
+        // A clock a little ahead of the server should read as "just now", not "in -3 seconds".
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+
+        return elapsed switch
+        {
+            { TotalSeconds: < 45 }  => "just now",
+            { TotalMinutes: < 2 }   => "a minute ago",
+            { TotalMinutes: < 60 }  => $"{(int)elapsed.TotalMinutes} minutes ago",
+            { TotalHours: < 2 }     => "an hour ago",
+            { TotalHours: < 24 }    => $"{(int)elapsed.TotalHours} hours ago",
+            { TotalDays: < 2 }      => "yesterday",
+            { TotalDays: < 7 }      => $"{(int)elapsed.TotalDays} days ago",
+            { TotalDays: < 14 }     => "last week",
+            { TotalDays: < 60 }     => $"{(int)(elapsed.TotalDays / 7)} weeks ago",
+            { TotalDays: < 365 }    => $"{(int)(elapsed.TotalDays / 30)} months ago",
+            _                       => $"{(int)(elapsed.TotalDays / 365)} years ago",
+        };
+    }
+
+    /// <summary>
+    /// The viewer's whole-hour offset from UTC right now — how far to rotate a 24-hour histogram
+    /// built in UTC so its buckets read as the viewer's own hours.
+    /// </summary>
+    /// <remarks>
+    /// Whole hours because the buckets are whole hours. The half-hour zones (India, parts of
+    /// Australia) cannot be represented by rotating hourly buckets at all, and rounding is the
+    /// honest approximation — the alternative is re-bucketing per viewer on the server, which is
+    /// a great deal of machinery for a shape somebody reads to spot "most of this is overnight".
+    /// </remarks>
+    public static int UtcHourOffset(this IBenUserState userState) =>
+        (int)Math.Round(userState.BrowserTimeZone.GetUtcOffset(DateTime.UtcNow).TotalHours);
+
     // ── Display formats ──────────────────────────────────────────────────────
     // One place decides how a date looks, so pages cannot drift apart the way they had.
     //

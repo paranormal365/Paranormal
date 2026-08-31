@@ -255,6 +255,10 @@ public class SiteWideAuditTests : BenTestBase
             ("/admin/org-ads", null),
             ("/admin/merge-groups", "Merge Groups"),
             ("/admin/place-duplicates", "Duplicate places"),
+            // Walked for the same reason as the rest: a screen that renders nothing is how a
+            // SuperAdmin tool quietly stops existing. This one destroys data, so the version
+            // that silently fails to draw is the worst of the set.
+            ("/admin/delete-group", "Delete a group"),
             ("/admin/subscription-tiers", null),
             ("/admin/coupons", null),
             ("/admin/org-subscriptions", null),

@@ -87,6 +87,22 @@ struct SettingsHomeView: View {
                 }
             }
 
+            // The guest's own copy of what they offered at somebody's public event. Gated on
+            // being signed in, and that gate is the point: submissions belong to an account, so
+            // offering the row to a signed-out visitor would be a link that can only ever end in
+            // a refusal — the dead-end click the site made policy against.
+            if session.me != nil {
+                Section {
+                    NavigationLink(value: AppRoute.myEvidence) {
+                        Label("My evidence", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .accessibilityIdentifier("settings-my-evidence")
+                } footer: {
+                    Text("Photos and recordings you've offered at public events — yours to keep, "
+                       + "and to add to the archive of the place they were taken at.")
+                }
+            }
+
             // Deliberately outside the signed-in branch. App Review works through a build
             // without an account for as long as it can, and "where does this app say what it
             // does with my data" must be answerable from that state.

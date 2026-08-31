@@ -349,6 +349,10 @@
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
+            // Last in the group, and named for what it does rather than something softer:
+            // it destroys a group and everything belonging to it, and a menu entry that
+            // read "Tidy up" would be the first half of an accident.
+            new NavItem("Delete a Group",       "trash-2", "/admin/delete-group"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
         {

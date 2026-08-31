@@ -147,3 +147,25 @@ public sealed record AdminSignInInsights(
     IReadOnlyList<SignInPerson> MostFailures,
     IReadOnlyList<SignInOddity> Oddities,
     bool CoversAppleSignIns);
+
+
+/// <summary>
+/// What deleting a group would destroy, counted before anything is.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>OrganizationPurgePreview</c> beside <c>OrganizationPurge</c> in the WebApi project;
+/// decoded from the server's JSON by name, so a rename has to happen on both sides.
+/// </remarks>
+/// <param name="StoredFiles">Files whose BYTES are deleted from storage, not merely their rows.</param>
+public sealed record OrganizationPurgePreview(
+    Guid OrganizationId,
+    string OrganizationName,
+    int Members,
+    int Cases,
+    int Investigations,
+    int Events,
+    int FieldSessions,
+    int EventEvidence,
+    int StoredFiles,
+    int CmsPages,
+    int BillingRows);
