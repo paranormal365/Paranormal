@@ -56,6 +56,20 @@ The open backlog items (183 case deletion, 187, 189–192, 196–198, 200). Thos
 decisions and features; this branch is about the suite telling the truth. Mixing them would make
 this branch impossible to review and impossible to abandon.
 
+## What the suite found that was not a test problem
+
+**There is no free band, so an unsubscribed group gets the whole product.**
+`TierAreaResolution.FreeTierAsync` identifies the free band by PRICE — a banded, active tier whose
+prices are all zero. The live ladder starts at $20, so nothing matches; `EffectiveTierAsync`
+resolves no tier for a group that pays nothing, and the resolver fails open to ALL NINE AREAS.
+That fail-open is deliberate and correct — "inventing a restriction would lock people out of a
+site that never said it would" — but it means the free lane currently has no ceiling at all.
+
+The fix is a pricing decision, not code: create a **$0 banded tier** in Admin → Price Bands whose
+area checklist defines what free includes. Everything then resolves on its own — areas, limits,
+the pricing page, and the role editor's plan note. `Excluding_an_area_grays_the_role_editor_for_a_free_band_group`
+skips until that band exists, and enforces it again the moment it does.
+
 ## Done when
 
 - A clean `vstest` run reports zero failures, with every skip explained by a flag that is genuinely off.
