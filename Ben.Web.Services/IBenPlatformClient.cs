@@ -94,6 +94,12 @@ public interface IBenPlatformClient
     /// <summary>The dashboard's charts over a window of days. SuperAdmin.</summary>
     Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>
+    /// Who has been signing in over a window of days, and anything odd about how. SuperAdmin.
+    /// </summary>
+    /// <remarks>The one dashboard call that names accounts — see AdminStatsController.</remarks>
+    Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default);
+
     /// <summary>One group's own numbers. Visible to that group's active members.</summary>
     Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
 

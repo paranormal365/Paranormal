@@ -32,6 +32,9 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
     /// <summary>Value written to <see cref="SignInEvent.Method"/> for password sign-ins.</summary>
     public const string PasswordMethod = "password";
 
+    /// <summary>Value written to <see cref="SignInEvent.Method"/> for Sign in with Apple.</summary>
+    public const string AppleMethod = "apple";
+
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly ILogger<RecordingSignInManager> _log;
 
@@ -87,6 +90,22 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
 
         return result;
     }
+
+    /// <summary>
+    /// Records a sign-in that never passes a password check — Sign in with Apple.
+    /// </summary>
+    /// <remarks>
+    /// <para>Called explicitly rather than by overriding <see cref="SignInAsync"/>, which the
+    /// password path also runs: overriding it would count every password sign-in twice, once here
+    /// and once from <see cref="CheckPasswordSignInAsync"/>. An explicit call at the one place an
+    /// Apple session is minted is the only shape that counts each sign-in exactly once.</para>
+    ///
+    /// <para><b>Entra still is not covered</b>, and not by oversight. Those sessions arrive as a
+    /// bearer token validated per-request by the JWT handler; there is no moment that is "the
+    /// sign-in", so the honest options are to invent one or to say so. The dashboard says so.</para>
+    /// </remarks>
+    public Task RecordExternalSignInAsync(Guid appUserId, string method)
+        => RecordAsync(appUserId, succeeded: true, method);
 
     private async Task RecordAsync(Guid? appUserId, bool succeeded, string method)
     {
