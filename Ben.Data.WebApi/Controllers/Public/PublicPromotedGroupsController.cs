@@ -51,6 +51,11 @@ public sealed class PublicPromotedGroupsController : ControllerBase
 
         var ads = await db.OrganizationAds.AsNoTracking()
             .Where(a => a.Status == OrganizationAdStatus.Approved)
+            // Belt as well as braces: a personal organization should never have an approved ad,
+            // because nobody would approve one — but "a human would have caught it" is not a
+            // rule, and this card is the most prominent placement on the site.
+            .Where(Services.PersonalOrganizations.DiscoverableVia<Ben.Data.Source.Entities.OrganizationAd>(
+                a => a.Organization))
             .Select(a => new
             {
                 a.Id, a.Headline, a.Body,

@@ -47,6 +47,36 @@ namespace Ben.Data.Source.Entities
         /// <summary>Why it was declined, when it was. Shown to the submitter — a bare no helps nobody.</summary>
         public string? RejectionReason { get; set; }
 
+        /// <summary>
+        /// When the SUBMITTER published this to the event's place archive, or null.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>A separate act from the operator's verdict, and deliberately so.</b>
+        /// <see cref="Status"/> is the operator deciding what their EVENT shows. This is the
+        /// photographer deciding what the PLACE's public record shows, under their own name.
+        /// Consenting to somebody's gallery is not consent to publish, and a declined submission
+        /// is still the guest's to contribute — the operator curates their event, they do not
+        /// come to own what somebody else photographed.</para>
+        ///
+        /// <para>A date rather than a flag, matching the field archive: publication is an act
+        /// with a time, performed by the owner, and reversible.</para>
+        /// </remarks>
+        public DateTime? PublishedToPlaceAtUtc { get; set; }
+
+        /// <summary>
+        /// Moderation state for the ARCHIVE copy — independent of the operator's verdict.
+        /// </summary>
+        /// <remarks>
+        /// Post-moderation, as the field archive settled it: approved on publication when no
+        /// automatic screener is configured, and pulled to Held the moment anybody flags it. The
+        /// operator accepting or declining says nothing about whether a stranger should see it on
+        /// a place page, so it cannot be the same field.
+        /// </remarks>
+        public Ben.Data.Common.Enums.FeedMediaReviewState ArchiveReviewState { get; set; }
+
+        /// <summary>Why the archive copy was held, for the moderator queue. Never shown publicly.</summary>
+        public string? ArchiveReviewNote { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
