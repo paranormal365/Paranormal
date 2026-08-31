@@ -67,8 +67,42 @@ public sealed class CaseController : BenControllerBase
         var open = await db.Cases.CountAsync(c =>
             c.OrganizationId == orgId && c.Status <= CaseStatus.Summarized, ct);
 
+        if (await _limits.WhyNotOneMoreAsync(
+                orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenCases, open, ct) is { } ceiling)
+        {
+            return ceiling;
+        }
+
+        return await WhyNotAnotherCaseThisPeriodAsync(db, orgId, ct);
+    }
+
+    /// <summary>
+    /// The subscription ALLOWANCE on new work — cases started since the billing period began.
+    /// </summary>
+    /// <remarks>
+    /// <para>A different question from the cap above, and both apply. The ceiling asks how many
+    /// are open right now, so closing one makes room. This asks how many were STARTED this
+    /// period, so closing one makes no room until the period turns over — which is the whole
+    /// point on a plan that sells a rate of work rather than a stock of it.</para>
+    ///
+    /// <para>Counted on <c>DateCreated</c> rather than <c>DateCaseOpened</c>: the latter is a
+    /// fact about the haunting somebody can type, and an allowance keyed to a date the person
+    /// being metered chooses is not a limit.</para>
+    ///
+    /// <para>No billing period means nothing meters it — the guard's own fail-open rule, and the
+    /// reason a group with no subscription never meets this.</para>
+    /// </remarks>
+    private async Task<string?> WhyNotAnotherCaseThisPeriodAsync(
+        BenDataContext db, Guid orgId, CancellationToken ct)
+    {
+        if (await _limits.AllowanceWindowAsync(orgId, ct) is not { } window) return null;
+
+        var startedThisPeriod = await db.Cases.CountAsync(c =>
+            c.OrganizationId == orgId
+            && c.DateCreated >= window.Start && c.DateCreated < window.End, ct);
+
         return await _limits.WhyNotOneMoreAsync(
-            orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenCases, open, ct);
+            orgId, Ben.Data.Common.Enums.SubscriptionLimit.CasesPerPeriod, startedThisPeriod, ct);
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────

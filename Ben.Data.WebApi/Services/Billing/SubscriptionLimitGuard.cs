@@ -73,6 +73,13 @@ public sealed class SubscriptionLimitGuard
         // subscription that has actually ended.
         if (await WhyReadOnlyAsync(organizationId, ct) is { } readOnly) return readOnly;
 
+        // An allowance with no period to count over does not bind. Without this, a group with no
+        // subscription still picks up a band by member count — and so inherits its per-period
+        // allowance with no period in sight, refusing work on a plan they are not even on. The
+        // ceiling limits have no such problem: "how many are open now" is answerable without dates.
+        var window = IsPerPeriod(limit) ? await AllowanceWindowAsync(organizationId, ct) : null;
+        if (IsPerPeriod(limit) && window is null) return null;
+
         var effective = await EffectiveLimitAsync(organizationId, limit, ct);
 
         if (effective.Max is null) return null;                    // uncapped, or nothing configured
@@ -82,11 +89,69 @@ public sealed class SubscriptionLimitGuard
                  + "A larger plan does — see the pricing page.";
 
         if (currentCount >= effective.Max)
+        {
+            // An allowance and a ceiling need different words. "You are using all of it" is
+            // advice to close something — true for a concurrent cap, and actively misleading for
+            // an allowance, where closing a case frees nothing until the period turns over. So
+            // the allowance says when it resets instead, which is the only thing that helps.
+            if (window is { } period)
+            {
+                return $"Your plan ({effective.TierName}) includes "
+                     + $"{Amount(limit, effective.Max.Value)}, and you have used it for this "
+                     + $"period. It resets on {period.End:MM/dd/yyyy}. Closing a case does not "
+                     + "free one up — a larger plan does, and so does waiting.";
+            }
+
             return $"Your group's plan ({effective.TierName}) includes "
                  + $"{Amount(limit, effective.Max.Value)}, and you are using all of it. "
                  + "A larger plan raises the limit — see the pricing page.";
+        }
 
         return null;
+    }
+
+    /// <summary>
+    /// Which limits are counted per billing period rather than as a running total.
+    /// </summary>
+    /// <remarks>
+    /// One place says so, rather than each call site knowing. A caller that counted a per-period
+    /// allowance the concurrent way would produce a cap that closing a case silently resets —
+    /// which is the exact loophole the allowance exists to close, and it would look correct.
+    /// </remarks>
+    public static bool IsPerPeriod(SubscriptionLimit limit)
+        => limit is SubscriptionLimit.CasesPerPeriod;
+
+    /// <summary>
+    /// The billing period a per-period allowance is counted over, or null when nothing meters it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Null for a group with no subscription or no open period. That is the fail-open state,
+    /// not an error: a caller with no window has nothing to count over, and a cap that appeared
+    /// because dates were missing would lock people out of work they are entitled to.</para>
+    ///
+    /// <para>Callers count over this window and pass the result to
+    /// <see cref="WhyNotOneMoreAsync"/>, which re-reads it for the reset date in its refusal.
+    /// Two reads rather than a counting delegate: the extra query is cheap and the alternative is
+    /// an API nobody can call without reading its implementation.</para>
+    /// </remarks>
+    public async Task<(DateTime Start, DateTime End)?> AllowanceWindowAsync(
+        Guid organizationId, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await AllowanceWindowAsync(db, organizationId, ct);
+    }
+
+    private static async Task<(DateTime Start, DateTime End)?> AllowanceWindowAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+    {
+        var period = await db.OrganizationSubscriptions.AsNoTracking()
+            .Where(s => s.OrganizationId == organizationId)
+            .Select(s => new { s.CurrentPeriodStart, s.CurrentPeriodEnd })
+            .FirstOrDefaultAsync(ct);
+
+        return period is { CurrentPeriodStart: { } start, CurrentPeriodEnd: { } end }
+            ? (start, end)
+            : null;
     }
 
     /// <summary>The cap that actually binds, with the band name for the refusal sentence.</summary>
@@ -143,6 +208,7 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.StorageMegabytes     => "file storage",
         SubscriptionLimit.PublishedPages       => "public pages",
         SubscriptionLimit.CustomRoles          => "custom roles",
+        SubscriptionLimit.CasesPerPeriod       => "new cases this period",
         _                                      => limit.ToString(),
     };
 
@@ -156,6 +222,7 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.StorageMegabytes     => max >= 1024 ? $"{max / 1024m:0.#} GB of storage" : $"{max} MB of storage",
         SubscriptionLimit.PublishedPages       => $"{max} public page(s)",
         SubscriptionLimit.CustomRoles          => $"{max} custom role(s)",
+        SubscriptionLimit.CasesPerPeriod       => $"{max} new case(s) a period",
         _                                      => max.ToString(),
     };
 }
