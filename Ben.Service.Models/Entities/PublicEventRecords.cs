@@ -163,4 +163,12 @@ public sealed record EventEvidenceRecord(
     string? Note,
     Ben.Data.Common.Enums.EvidenceSubmissionStatus Status,
     string? RejectionReason,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    /// <summary>
+    /// When the SUBMITTER contributed this to the place's archive, or null. Deliberately separate
+    /// from <paramref name="Status"/>: that is the operator's verdict on their own gallery, and
+    /// this is the photographer's decision about the place's public record.
+    /// </summary>
+    DateTime? PublishedToPlaceAtUtc = null,
+    /// <summary>Whether the event is at a public place, so there is an archive to contribute to.</summary>
+    bool PlaceAcceptsArchive = false);

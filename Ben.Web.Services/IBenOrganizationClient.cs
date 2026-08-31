@@ -295,6 +295,19 @@ public interface IBenOrganizationClient
     /// <summary>The caller's own submissions for an event, with review state.</summary>
     Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default);
 
+    /// <summary>
+    /// Everything this account has ever offered, across every event — the guest's own copy.
+    /// </summary>
+    Task<LoadResult<EventEvidenceRecord>> GetMyEvidenceEverywhereAsync(CancellationToken token = default);
+
+    /// <summary>Contributes one submission to the archive of the place its event was held at.</summary>
+    Task<(bool Ok, string? Error)> PublishEvidenceToPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default);
+
+    /// <summary>Takes it back off the place's archive. Paid, as retraction is for field sessions.</summary>
+    Task<(bool Ok, string? Error)> RetractEvidenceFromPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default);
+
     /// <summary>Accepted evidence — the public half of the record. Anonymous.</summary>
     Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default);
 

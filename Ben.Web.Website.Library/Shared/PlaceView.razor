@@ -249,6 +249,59 @@
             </p>
         }
 
+        @* ── What guests photographed on events here ──────────────────────── *@
+        @* A tour walks the same route every week, which makes public events the one activity
+           that happens repeatedly at a fixed location — so this is where the archive fills
+           fastest. Kept as its own section rather than folded into the sessions table, because
+           one picture from a walk is not a night of readings and a table of magnetometer
+           columns is the wrong shape for it. *@
+        @if (_evidence is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">From events here</h6>
+            <p class="text-secondary small mb-2">
+                Contributed by the people who took them, on public events at this place.
+            </p>
+            <div class="d-flex flex-wrap gap-3">
+                @foreach (var ev in _evidence)
+                {
+                    var url = AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.SubmissionId);
+                    <div class="card" style="width:220px;">
+                        @if (ev.ContentType.StartsWith("image/"))
+                        {
+                            <a href="@url" target="_blank" rel="noopener">
+                                <img src="@url" alt="@ev.EventTitle" class="card-img-top"
+                                     style="height:150px;object-fit:cover;" />
+                            </a>
+                        }
+                        else if (ev.ContentType.StartsWith("video/"))
+                        {
+                            <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
+                        }
+                        else if (ev.ContentType.StartsWith("audio/"))
+                        {
+                            <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
+                        }
+                        <div class="card-body p-2">
+                            <div class="small fw-semibold text-truncate">@ev.EventTitle</div>
+                            <div class="text-secondary" style="font-size:.75rem;">
+                                @* The operator's name, on a page they did not have to buy an ad
+                                   on — the tour that ran the walk earned the credit. *@
+                                <a href="/organizations/@ev.OrganizationId">@ev.OrganizationName</a>
+                                · @ev.EventStartedAt.ToLocalTime().ToDisplayDate()
+                            </div>
+                            <div class="text-secondary" style="font-size:.75rem;">
+                                by <UserNameLink AppUserId="@ev.ContributorAppUserId" DisplayName="@ev.ContributorName" />
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(ev.Note))
+                            {
+                                <div class="small mt-1">@ev.Note</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         @* ── Visitor view ─────────────────────────────────────────────────── *@
         @if (_publicRows is not null)
         {
@@ -323,6 +376,9 @@
     /// <summary>What to say under a session's gallery after its Report button was used.</summary>
     private readonly Dictionary<Guid, (bool Ok, string Text)> _flagMessage = [];
 
+    /// <summary>Guest evidence published to this place from public events held here.</summary>
+    private List<PlaceEvidenceRow>? _evidence;
+
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)
         : _place!.Name!;
@@ -370,6 +426,7 @@
         _publicRows = response.Investigations.ToList();
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
+        _evidence = response.EventEvidence?.ToList();
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
 
@@ -382,7 +439,11 @@
     /// place stops holding in the other. A failure costs the archive, not the page.
     /// </remarks>
     private async Task LoadArchiveAsync()
-        => _sessions = (await AdminClient.GetPublicPlaceAsync(PlaceId))?.Sessions?.ToList();
+    {
+        var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
+        _sessions = response?.Sessions?.ToList();
+        _evidence = response?.EventEvidence?.ToList();
+    }
 
     /// <summary>
     /// Reports a session's media, which hides it until somebody looks.

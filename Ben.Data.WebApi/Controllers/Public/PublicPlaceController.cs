@@ -76,7 +76,8 @@ public sealed class PublicPlaceController : ControllerBase
             .ToList();
 
         return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows),
-            await PublishedSessionsAsync(db, id, ct)));
+            await PublishedSessionsAsync(db, id, ct),
+            await ArchiveEvidencePublication.ForPlaceAsync(db, id, ct)));
     }
 
     /// <summary>
@@ -136,7 +137,18 @@ public sealed record PublicPlaceResponse(
     PlaceSummary Summary,
     // Defaulted so every existing caller — the website's place page among them — keeps compiling
     // and simply renders no archive until it asks for one.
-    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null);
+    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
+    /// <summary>
+    /// What guests photographed at public events HERE and chose to contribute.
+    /// </summary>
+    /// <remarks>
+    /// A separate list from <paramref name="Sessions"/> rather than folded into it, because the
+    /// two are different things and pretending otherwise would be dishonest: a field session is a
+    /// document of readings taken over a night, and this is one picture somebody took on a walk.
+    /// Merging them would put a photograph in a table whose columns are reading counts and
+    /// magnetometer models.
+    /// </remarks>
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
 
 /// <summary>
 /// One published field session in a place's archive.

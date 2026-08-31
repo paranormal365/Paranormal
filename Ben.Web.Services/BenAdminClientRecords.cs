@@ -347,7 +347,28 @@ public sealed record PublicPlaceResponse(
     PlaceRecord Place,
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
-    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null);
+    IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
+
+/// <summary>
+/// One piece of guest evidence photographed at a public event here and contributed by its owner.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>PlaceEvidenceRow</c> beside <c>ArchiveEvidencePublication</c> in the WebApi project;
+/// decoded from the server's JSON by name, so a rename has to happen on both sides.
+/// </remarks>
+public sealed record PlaceEvidenceRow(
+    Guid SubmissionId,
+    Guid OrgCalendarEventId,
+    string ContributorName,
+    Guid ContributorAppUserId,
+    string EventTitle,
+    Guid OrganizationId,
+    string OrganizationName,
+    DateTime EventStartedAt,
+    string? Note,
+    string ContentType,
+    DateTime PublishedAtUtc);
 
 /// <summary>
 /// One published field session in a place's archive.

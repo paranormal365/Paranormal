@@ -154,7 +154,10 @@ public sealed class EventEvidenceTests
                 "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role)
             : new ClaimsIdentity();
 
-        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
+        return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f),
+            // ManualReviewScreener is the no-automatic-classifier case: post-moderation,
+            // which is what the archive settled on and what production runs today.
+            new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
         {
             ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(claims) } }

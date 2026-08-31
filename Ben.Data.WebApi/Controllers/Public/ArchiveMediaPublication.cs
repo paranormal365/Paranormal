@@ -67,6 +67,81 @@ public static class ArchiveMediaPublication
 }
 
 /// <summary>
+/// Whether one piece of guest evidence, offered at an event, may be shown on the place's page.
+/// </summary>
+/// <remarks>
+/// <para><b>A tour walks the same route every week</b>, which makes public events the one
+/// activity that happens repeatedly at fixed locations — exactly what a location-keyed archive
+/// needs. The guest who photographed something is the one who decides whether it joins that
+/// record, under their own name.</para>
+///
+/// <para><b>Independent of the operator's verdict, on purpose.</b> The event's own gallery is
+/// the operator's to curate. A photograph they declined for their gallery is still the
+/// photographer's to contribute here, and one they accepted is not thereby published here —
+/// consenting to somebody's gallery is not consent to publish. So this asks
+/// <c>PublishedToPlaceAtUtc</c> and never <c>Status</c>.</para>
+///
+/// <para>The place-kind clause carries the same weight it does for field sessions: an event at a
+/// private address cannot feed a public archive, and re-asking per request means a place later
+/// corrected takes its pictures down with it.</para>
+/// </remarks>
+public static class ArchiveEvidencePublication
+{
+    /// <summary>True when an anonymous caller may receive this evidence file's bytes.</summary>
+    public static Task<bool> MayServeAsync(
+        BenDataContext db, Guid submissionId, CancellationToken ct)
+        => db.EventEvidenceSubmissions.AsNoTracking()
+            .AnyAsync(e => e.Id == submissionId
+                        && e.PublishedToPlaceAtUtc != null
+                        && e.ArchiveReviewState == FeedMediaReviewState.Approved
+                        && e.OrgCalendarEvent.PlaceId != null
+                        && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation, ct);
+
+    /// <summary>Everything published to this place from an event held there, newest first.</summary>
+    public static async Task<IReadOnlyList<PlaceEvidenceRow>> ForPlaceAsync(
+        BenDataContext db, Guid placeId, CancellationToken ct)
+        => await db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.OrgCalendarEvent.PlaceId == placeId
+                     && e.PublishedToPlaceAtUtc != null
+                     && e.ArchiveReviewState == FeedMediaReviewState.Approved
+                     && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation)
+            .OrderByDescending(e => e.PublishedToPlaceAtUtc)
+            .Select(e => new PlaceEvidenceRow(
+                e.Id,
+                e.OrgCalendarEventId,
+                // Attribution is what makes a contribution citable, and it is the guest's own
+                // name because publishing here was the guest's own act.
+                e.SubmittedByAppUser.DisplayName ?? "A contributor",
+                e.SubmittedByAppUserId,
+                e.OrgCalendarEvent.Title,
+                e.OrgCalendarEvent.OrganizationId,
+                e.OrgCalendarEvent.Organization.Name,
+                e.OrgCalendarEvent.StartDateTime,
+                e.Note,
+                e.UploadFile.ContentType,
+                e.PublishedToPlaceAtUtc!.Value))
+            .ToListAsync(ct);
+}
+
+/// <summary>
+/// One piece of guest evidence on a place's page.
+/// </summary>
+/// <param name="EventTitle">Which walk or event it came from — the context that makes it readable.</param>
+/// <param name="OrganizationName">Who ran it. Free advertising for the operator, and earned.</param>
+public sealed record PlaceEvidenceRow(
+    Guid SubmissionId,
+    Guid OrgCalendarEventId,
+    string ContributorName,
+    Guid ContributorAppUserId,
+    string EventTitle,
+    Guid OrganizationId,
+    string OrganizationName,
+    DateTime EventStartedAt,
+    string? Note,
+    string ContentType,
+    DateTime PublishedAtUtc);
+
+/// <summary>
 /// One servable recording from a session's archive entry.
 /// </summary>
 /// <param name="RelativePath">
