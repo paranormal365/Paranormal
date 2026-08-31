@@ -28,10 +28,9 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// </remarks>
 [ApiController]
 [Route("api/admin/mail")]
-// Policy, not Roles: [Authorize(Roles = ...)] re-authenticates with the default scheme only, so it
-// answers 401 to a valid Entra caller - which would have made this page unreachable for exactly
-// the sign-in most likely to be in use. AdminAuthorizationIsAPolicyTests guards the whole
-// controller folder against the mistake; every other admin controller uses the policy form.
+// Policy, NOT Roles: [Authorize(Roles = ...)] re-authenticates with the default scheme only
+// and answers 401 to a valid Entra caller. AdminAuthorizationIsAPolicyTests enforces this, and
+// caught it here.
 [Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminMailDiagnosticsController : ControllerBase
 {
