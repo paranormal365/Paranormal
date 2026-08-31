@@ -37,18 +37,21 @@ public class PublicSurfaceTests : BenTestBase
 
         var monthly = await anyMonthlyPrice.First.InnerTextAsync();
 
-        // Yearly shows a DIFFERENT figure and the derived saving. Same reasoning: the relationship
-        // is the contract, not the number.
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false }),
-            Page.GetByText("save", new() { Exact = false }).First);
+        // Yearly shows a DIFFERENT figure. Same reasoning as above: the relationship is the
+        // contract, not the number.
+        //
+        // Waiting on the PRICE to change, not on the word "save" — the saving line is already on
+        // screen before the toggle is touched, so a click-until-"save" returns instantly and reads
+        // the monthly figure back as though nothing happened. Not.ToHaveTextAsync retries, which
+        // is what makes this wait for the render rather than sample once.
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false })
+            .First.ClickAsync();
+
+        await Expect(anyMonthlyPrice.First)
+            .Not.ToHaveTextAsync(monthly, new() { Timeout = 10_000 });
 
         await Expect(Page.GetByText("save", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
-
-        var yearly = await Page.GetByText(new System.Text.RegularExpressions.Regex(@"\$\d")).First.InnerTextAsync();
-        Assert.That(yearly, Is.Not.EqualTo(monthly),
-            "The cadence toggle did not change the price shown, so it is not switching cadence.");
     }
 
     [Test]

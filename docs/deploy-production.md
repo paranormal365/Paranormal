@@ -182,6 +182,30 @@ The certificate still validates: the request carries the right SNI host name, II
 real certificate, and the router is simply not involved. Without this the site works — until it
 doesn't, for a few seconds, for no reason visible in any log.
 
+## A trap in the DEVELOPMENT settings, recorded here because that file is gitignored
+
+`appsettings.Development.json` is not in source control, so this cannot be fixed once for
+everybody — if it is ever recreated, it will be recreated wrong.
+
+Configuration **layers**. An overlay that simply omits `Smtp:Host` does not disable mail: it
+inherits the real host from `appsettings.json`, and every local sign-up then opens a connection
+to the live mail server. Ben's overlay also set `Port` to 587 while leaving
+`Security: SslOnConnect` from the base — the one pairing MailKit refuses — so each attempt failed
+slowly, and the sign-up button sat on "Creating your account…" long enough to look broken.
+
+To genuinely disable mail locally, set the values to **null**, not absent:
+
+```json
+"Smtp": { "Host": null, "User": null, "Password": null }
+```
+
+`IEmailService.IsConfigured` is then false, every caller skips it, and `IdentityEmailSender` logs
+the confirmation link so a local sign-up can still be completed. Measured effect: the sign-up
+end-to-end test went from failing at 21 s to passing at 1 s.
+
+**Production is not affected and was never wrong** — `appsettings.json` pairs 465 with
+`SslOnConnect`, which is correct. If you ever want real mail locally, 587 goes with `StartTls`.
+
 ## Moving evidence storage to a bigger drive
 
 Ben's plan (2026-08-31): move everything onto a 4 TB drive when the site launches, and add the
