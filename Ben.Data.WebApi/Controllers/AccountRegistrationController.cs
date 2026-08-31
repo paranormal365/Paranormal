@@ -235,14 +235,15 @@ public sealed class AccountRegistrationController : ControllerBase
                 ?? string.Empty;
 
             var name = System.Net.WebUtility.HtmlEncode(_site.Name);
-            var body =
+            var body = Ben.Data.WebApi.Services.BenEmailLayout.Wrap(_site,
+                "You already have an account",
                 $"<p>Somebody tried to create an account on {name} using this email address, and one "
                 + "already exists.</p>"
-                + "<p>If that was you, you already have an account — "
-                + $"<a href=\"{baseUrl}/login\">sign in here</a>, or reset your password if you have "
-                + "forgotten it.</p>"
+                + "<p>If that was you, you already have an account — sign in below, or reset your "
+                + "password if you have forgotten it.</p>"
                 + "<p>If it was not you, there is nothing to do. Your account has not changed and "
-                + "nobody has been given access to it.</p>";
+                + "nobody has been given access to it.</p>",
+                buttonText: "Sign in", buttonUrl: $"{baseUrl}/login");
 
             await _email.SendAsync(existing.Email!, $"Someone tried to sign up with your email on {_site.Name}", body, ct);
         }
@@ -261,6 +262,51 @@ public sealed class AccountRegistrationController : ControllerBase
     /// load. Mail scanners and link previewers fetch URLs found in messages; a confirmation that
     /// happens on GET is a confirmation a scanner can perform on somebody's behalf.
     /// </remarks>
+    /// <summary>
+    /// Sends the confirmation link again, on request from the sign-in page.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The answer is identical in every case</b> — account absent, already confirmed,
+    /// throttled, sent, or send failed. This endpoint is anonymous and takes an email address, so
+    /// any distinction in its reply is an oracle for which addresses hold accounts; the register
+    /// endpoint above pays the same discipline for the same reason. The truthful phrasing that
+    /// covers all of it: if the address has an unconfirmed account, a link is on its way.</para>
+    ///
+    /// <para><b>Throttled by <c>DateConfirmationSent</c></b> — the column added when Ben's own
+    /// sign-up produced no email — at the same 60 seconds the contact-info resend uses. The
+    /// throttle window also absorbs a stale read: the stamp is written before any distinct caller
+    /// could retry.</para>
+    ///
+    /// <para>A send that succeeds re-stamps the column, so Admin → Users shows the LATEST attempt
+    /// rather than the first — "Sent 09/01" on a row whose owner asked again today would send an
+    /// administrator investigating yesterday's mail problem.</para>
+    /// </remarks>
+    [HttpPost("resend-confirmation")]
+    public async Task<ActionResult<ResendConfirmationResponse>> ResendConfirmation(
+        [FromBody] ResendConfirmationRequest request, CancellationToken ct)
+    {
+        var neutral = new ResendConfirmationResponse(
+            "If that address has an unconfirmed account, a new link is on its way. "
+          + "Check your spam folder too.");
+
+        var email = request.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+            return Ok(neutral);
+
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user is null || user.EmailConfirmed)
+            return Ok(neutral);
+
+        if (user.DateConfirmationSent is { } last && DateTime.UtcNow - last < ResendCooldown)
+            return Ok(neutral);
+
+        await SendConfirmationAsync(user, ct);
+        return Ok(neutral);
+    }
+
+    /// <summary>Matches the contact-info resend, deliberately — one number for one idea.</summary>
+    private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
+
     [HttpPost("confirm-email")]
     public async Task<ActionResult<ConfirmEmailResponse>> ConfirmEmail(
         [FromBody] ConfirmEmailRequest request, CancellationToken ct)
@@ -305,6 +351,11 @@ public sealed record RegisterRequest(
 public sealed record RegisterResponse(bool Succeeded, string Message, string? Field);
 
 public sealed record HandleAvailabilityResponse(string Handle, bool Available, string? Reason);
+
+public sealed record ResendConfirmationRequest(string? Email);
+
+/// <summary>One field, always the same sentence. See ResendConfirmation for why.</summary>
+public sealed record ResendConfirmationResponse(string Message);
 
 public sealed record ConfirmEmailRequest(Guid UserId, string Code);
 

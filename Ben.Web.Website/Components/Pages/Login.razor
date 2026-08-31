@@ -1,6 +1,7 @@
 @page "/login"
 
 @inject IWebApiAuthService AuthService
+@inject IBenAdminClient AccountClient
 @inject IWebApiTokenStore TokenStore
 @inject NavigationManager NavManager
 @inject IConfiguration Configuration
@@ -94,7 +95,29 @@
 
                 @if (_errorMessage is not null)
                 {
-                    <div class="alert alert-danger py-2 mb-3">@_errorMessage</div>
+                    <div class="alert alert-danger py-2 mb-3">
+                        @_errorMessage
+                        @if (_offerResend)
+                        {
+                            @* Inside the message, because that is where the reader is stuck. The
+                               inbox they are told to check may hold NOTHING — a send can fail
+                               silently (it did for Ben on 2026-08-31), and without this button the
+                               only ways forward were signing up again or giving up. *@
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-light"
+                                        id="login-resend-confirmation"
+                                        disabled="@_resending" @onclick="ResendConfirmationAsync">
+                                    @(_resending ? "Sending…" : "Send the email again")
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+                @if (_resendResult is not null)
+                {
+                    @* Its own quieter box: this is an answer, not another error, and stacking it
+                       inside the red alert would read as a second failure. *@
+                    <div class="alert alert-info py-2 mb-3" id="login-resend-result">@_resendResult</div>
                 }
 
                 <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
@@ -133,6 +156,9 @@
 
     private LoginModel _model = new();
     private string? _errorMessage;
+    private bool _offerResend;
+    private bool _resending;
+    private string? _resendResult;
     private bool _isLoading;
     private bool _entraEnabled;
 
@@ -171,6 +197,8 @@
     {
         _isLoading = true;
         _errorMessage = null;
+        _offerResend  = false;
+        _resendResult = null;
 
         var code = string.IsNullOrWhiteSpace(_twoFactorCode) ? null : _twoFactorCode.Trim();
 
@@ -214,6 +242,10 @@
 
             case LoginFailure.EmailNotConfirmed:
                 _errorMessage = "Confirm your email address first — check your inbox for the link we sent.";
+                // The one refusal where a resend can actually help, so the offer appears only
+                // here. Offering it on a wrong password would invite mailing links to an address
+                // whose owner never asked.
+                _offerResend = true;
                 break;
 
             case LoginFailure.LockedOut:
@@ -242,6 +274,21 @@
                               + "your account may not have a password yet — you can set one via "
                               + "\"Forgot your password?\" below.";
                 break;
+        }
+    }
+
+    private async Task ResendConfirmationAsync()
+    {
+        _resending = true;
+        try
+        {
+            // The reply is one deliberately neutral sentence whatever happened — the endpoint
+            // will not reveal whether an address has an account, and neither will this page.
+            _resendResult = await AccountClient.ResendConfirmationAsync(_model.Email.Trim());
+        }
+        finally
+        {
+            _resending = false;
         }
     }
 

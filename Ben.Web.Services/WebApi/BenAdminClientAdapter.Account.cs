@@ -39,6 +39,20 @@ public sealed partial class BenAdminClientAdapter
         return result ?? new ConfirmEmailOutcome(false, "Couldn't reach the server. Try the link again.");
     }
 
+    public async Task<string> ResendConfirmationAsync(string email, CancellationToken token = default)
+    {
+        var result = await _api.PostAnonymousReadingBodyAsync<object, ResendConfirmationOutcome>(
+            "/api/account/resend-confirmation", new { email }, token);
+
+        // Null is the server not answering in shape — which includes the rate limiter's 429,
+        // since this anonymous endpoint sits behind the auth policy. Honest about that rather
+        // than pretending a send happened.
+        return result?.Message
+            ?? "Couldn't ask for a new link just now. Wait a minute and try again.";
+    }
+
+    private sealed record ResendConfirmationOutcome(string Message);
+
     // ── Password ─────────────────────────────────────────────────────────────
 
     public async Task<bool?> GetHasPasswordAsync(CancellationToken token = default)

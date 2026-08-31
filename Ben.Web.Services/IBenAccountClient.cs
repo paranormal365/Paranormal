@@ -30,6 +30,12 @@ public interface IBenAccountClient
     /// <summary>Confirms an email address from the link in the confirmation email.</summary>
     Task<ConfirmEmailOutcome> ConfirmEmailAsync(Guid userId, string code, CancellationToken token = default);
 
+    /// <summary>
+    /// Asks for the confirmation email again. Always answers the same sentence — the endpoint
+    /// refuses to reveal whether the address has an account, so neither can this.
+    /// </summary>
+    Task<string> ResendConfirmationAsync(string email, CancellationToken token = default);
+
     // ── Two-factor ───────────────────────────────────────────────────────────
 
     /// <summary>Whether the signed-in account has a password at all — an Entra-born one does not.</summary>
