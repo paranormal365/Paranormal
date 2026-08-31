@@ -9736,7 +9736,7 @@ Related: `NearbyInteraction` gives direction and distance between devices on U1/
 separate idea, but the same permission and pairing surface, and "who else is in this building and
 roughly where" is obviously useful during an investigation.
 
-## 191. The audit log will outgrow the database — archive it, never delete it (Ben, 2026-08-26)
+## 191. The audit log will outgrow the database — archive it, never delete it (DEFERRED 2026-08-31 — measured, and it is nowhere near)
 
 Ben's question: the audit log grows without bound because nearly everything is audited; should
 old records be archived after a period, rather than deleted?
@@ -9764,6 +9764,30 @@ what is being sold.
 If SQL Server Enterprise features are ever available, table partitioning with partition switching
 is the tidier mechanism for the same idea — but the file-based roll-off works on any edition and
 keeps the archive portable.
+
+### Measured 2026-08-31 — the premise does not hold yet
+
+The item's own instruction was "do the sums before choosing the window". Done, against the live
+database:
+
+| | |
+|---|---|
+| Whole database | **272 MB** |
+| `AuditLogs` | **444 rows, 1.1 MB** |
+| Largest table (`Logs`) | 6,066 rows, **36.5 MB** |
+
+Every table's oldest row is 2026-08-27, so this is four days of a rebuilt database — but the rate
+is the point: ~111 audit rows a day is roughly **40,000 a year, well under 100 MB**. A hot window,
+an NDJSON roll-off and a tested restore path is the right design *eventually*, and it is written
+down above so it does not have to be re-derived. Building it now would be effort spent on the
+smallest number in the table.
+
+**Revisit when `AuditLogs` passes about a million rows, or when the database as a whole becomes
+awkward to back up.** Neither is close.
+
+**What the measurement actually found is the opposite of what was expected**, and it is now item
+202: the biggest table is not the audit log but the ERROR log, and 96% of it was one avoidable
+message. The instinct to measure before building was right; it just found a different problem.
 
 ## 192. Running out of room for files — yes, a new drive works (Ben, 2026-08-26)
 
@@ -9849,7 +9873,7 @@ site — and running a capability lookup per row on a general list endpoint. Tha
 as item 194 (a client cannot tell which groups may take their case), and belongs with it rather
 than bolted onto a transfer dialog.
 
-## 194. A client cannot tell which groups may take their case until after they pick one (found 2026-08-26)
+## 194. A client cannot tell which groups may take their case until after they pick one (CLOSED — built 2026-08-26)
 
 The gate works — `MyCaseController` refuses a transfer to a group whose plan does not cover
 private-residence work, with "Pick a different group, or ask them about upgrading." But `/find` and
@@ -10240,7 +10264,7 @@ but somebody guiding for a tour, working events for a second outfit and belongin
 group may be surprised by three small charges. Not a bug, and if Ben wants it to feel like one
 relationship the fix is to group receipts at payment time, not to make the person a subscriber.
 
-## 200. The e2e suite is data-dependent, and that hid a real bug (found 2026-08-27)
+## 200. The e2e suite is data-dependent, and that hid a real bug (CLOSED 2026-08-27)
 
 Chasing two e2e failures cost most of a session, and the lesson is worth more than the fix.
 
@@ -10307,7 +10331,7 @@ machine, always a different one, always a test asserting before the page has ren
 those were fixed today by waiting on a signal the page produces rather than on the circuit being
 up. That is the pattern to apply to the next one rather than treating it as a product defect.
 
-## 201. A whole access token in a URL is too big to be safe (found 2026-08-27)
+## 201. A whole access token in a URL is too big to be safe (CLOSED 2026-08-27 — BrowserTicketStore, 43 chars against 2504)
 
 Ben's profile photos would not display on ishaunted.com while working perfectly on localhost.
 Root cause: `/media/{id}/{kind}?t=...` carries the viewer's API access token, encrypted with Data
@@ -10377,3 +10401,42 @@ old design under it — it reports "A ticket is 2530 characters", within a few o
 actually broke.
 
 The raised limit in `web.config` stays as a belt: harmless, and it protects any other long URL.
+
+## 202. The error log was 96% noise, so it could not show a real fault (found 2026-08-31 — FIXED)
+
+Found while measuring item 191. `Logs` is the largest table in the database, every row is `Error`,
+and **1,978 of its 2,022 rows were one message** — `An unhandled exception has occurred while
+executing the request` — carrying a `FileNotFoundException` and a full stack trace. **1,934 of
+those stood for just THREE files**, one of them requested 1,695 times in four days.
+
+**Why it happened, and why it is not the missing files' fault.** Those particular rows are the
+known one-database-two-disks condition: the row exists here, the bytes live on the server. But the
+handler in `Program.cs` already treats a missing stored file correctly — 404 to the caller, and a
+**Warning**, with a comment explaining that a routine data gap must not fill the error log and hide
+real faults.
+
+That decision never took effect. ASP.NET Core's `ExceptionHandlerMiddleware` **logs the exception
+at Error, with the stack trace, BEFORE it invokes the registered handler.** The Error was written
+regardless; the deliberate Warning landed underneath it. The code was right and was being
+overruled by the framework, which is why nobody noticed by reading it.
+
+**The damage is not disk.** 36 MB is nothing. It is that a log where one missing avatar outnumbers
+everything else twenty to one **cannot show a real fault** — the precise outcome the handler was
+written to prevent. On production the same mechanism applies to any file whose bytes genuinely go
+missing.
+
+**Fixed** with `LogNoise.IsDuplicateOfAHandledMissingFile`, a Serilog `ByExcluding` filter scoped
+as tightly as the problem: that one middleware, that one exception family, that one level. The
+same exception from anywhere else still logs at Error; every other exception from that middleware
+still logs in full; and the handler's own Warning is untouched, because **the Warning is the record
+being kept** — the database and the disk disagreeing is worth knowing.
+
+In code rather than configuration, deliberately: it is a correctness rule about not contradicting
+ourselves, and a config setting that silently turned it off would bring the noise straight back.
+
+Six tests, each holding one clause, and mutation-verified — removing the source-context clause
+fails exactly the test that guards it, on a clean build.
+
+**Worth doing next, but separate:** nothing prunes `Logs` at all. Once it is signal rather than
+noise, a retention window for it is a much better use of item 191's roll-off design than the audit
+log is.
