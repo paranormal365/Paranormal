@@ -136,7 +136,20 @@ and security filters visit every link they find in a message, and a confirmation
 opening would be one they could complete for you, which would prove nothing about whether the
 address reaches a person.
 
-If the link has expired, sign up again.
+**If the email never arrives**, do not sign up a second time — a second account on the same address
+is refused anyway. Try to sign in instead. The message that stops you says *"Confirm your email
+address first"*, and it now carries a **Send the email again** button; press that and a new link
+goes out.
+
+The reply is the same sentence whatever happens behind it: *"If that address has an unconfirmed
+account, a new link is on its way."* It says nothing about whether the address is registered, on
+purpose — anyone can type any address into that box, and a page that answered differently for a
+real one would be a way to discover who has an account here. Check your spam folder too; a message
+carrying a link is exactly what filters are suspicious of.
+
+There is a minute's wait between requests, so pressing it repeatedly will not send more mail.
+
+If the link itself has expired, use the same button for a fresh one.
 
 ## Your first minute
 
@@ -180,7 +193,7 @@ The message says which of these it is, because the answer is different every tim
 | What it says | What to do |
 |---|---|
 | Invalid email or password | Check both — or see the note below if you usually sign in with Microsoft. |
-| Confirm your email address first | Open the link we emailed you when you signed up. |
+| Confirm your email address first | Open the link we emailed you when you signed up — or press **Send the email again** in that message if it never arrived. |
 | This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
 | Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
 | Couldn't reach the sign-in service | Nothing is wrong with your password — it was never checked. The site could not reach the service behind it. Try again shortly. |
