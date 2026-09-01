@@ -64,6 +64,15 @@ public interface IBenPlatformClient
     Task<LoadResult<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
     Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default);
 
+    // ── Error Log (Serilog) ───────────────────────────────────────────────────
+    // Easily confused with the audit log above, and worth keeping apart: that one records what
+    // people deliberately did and is kept for years; this one records what broke and is pruned on
+    // a retention window.
+
+    Task<ErrorLogPagedResponse?> GetErrorLogsAsync(int page = 1, int pageSize = 50, string? search = null, string? source = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
+    Task<ErrorLogSummary?> GetErrorLogSummaryAsync(CancellationToken token = default);
+    Task<LoadResult<string>> GetErrorLogSourcesAsync(CancellationToken token = default);
+
     // ── Generic Lookup Types ──────────────────────────────────────────────────
     // Covers UserAddressType, UserEmailType, UserPhoneType, UserLinkType, UserNoteType,
     // UserMessageType, and the five Org equivalents — all share the same schema.

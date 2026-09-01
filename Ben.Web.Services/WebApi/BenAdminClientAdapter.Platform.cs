@@ -50,6 +50,26 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendAuditLogMessageRequest, bool>("/api/admin/audit-logs/send-message", request, token);
 
+    // ── Error Log (Serilog) ───────────────────────────────────────────────────
+
+    public async Task<ErrorLogPagedResponse?> GetErrorLogsAsync(
+        int page = 1, int pageSize = 50, string? search = null, string? source = null,
+        DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default)
+    {
+        var qs = $"?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) qs += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrWhiteSpace(source)) qs += $"&source={Uri.EscapeDataString(source)}";
+        if (dateFrom.HasValue) qs += $"&dateFrom={Uri.EscapeDataString(dateFrom.Value.ToString("o"))}";
+        if (dateTo.HasValue)   qs += $"&dateTo={Uri.EscapeDataString(dateTo.Value.ToString("o"))}";
+        return await _api.GetAsync<ErrorLogPagedResponse>($"/api/admin/error-logs{qs}", token);
+    }
+
+    public Task<ErrorLogSummary?> GetErrorLogSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<ErrorLogSummary>("/api/admin/error-logs/summary", token);
+
+    public Task<LoadResult<string>> GetErrorLogSourcesAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/admin/error-logs/sources", token);
+
     // ── Generic Lookup Types ──────────────────────────────────────────────────
 
     public Task<LoadResult<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
