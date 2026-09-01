@@ -238,6 +238,58 @@ Three numbers and a chart:
 The table below lists the individual events. Nothing here identifies a machine beyond the
 installation id the sidecar generates for itself.
 
+## Outgoing mail
+
+**Administration → System → Outgoing Mail** answers one question: *can this machine actually send
+email right now?*
+
+It matters because a failure here is invisible from everywhere else. Somebody signs up, no message
+arrives, and nothing on the site looks wrong — the account exists, the site is up, and the person
+simply cannot get in. That happened on this site, which is why the page exists.
+
+**The answer is different on every machine, so run it on the one you care about.** The password is
+supplied to the running application as an environment variable on its application pool, not from a
+file in the repository. That means a developer's laptop, a shell on the server, and the website
+itself can each get a different answer, and only the website's answer is the one your members
+experience.
+
+The page shows what the machine will send with — host, port, security, user, from-address — and
+whether a **password is present**. It never shows the password itself. Three states are worth
+knowing:
+
+| What it says | What it means |
+|---|---|
+| Mail is switched off on this machine | No host is set, so nothing is even attempted. Every confirmation, invitation and reset is going nowhere silently. |
+| A host is set but no password is present | The likeliest real fault, and the one that looks like nothing is wrong. Every visible setting can be correct and sending will still fail. |
+| Settings listed, password present | Configured. Send a test to be sure. |
+
+**Send a test message** does exactly that — a real send, not a connection check. The failures that
+matter happen after the connection opens: authentication rejected, sender not permitted, relay
+denied. None of them appear until a message is actually offered.
+
+If it fails, the server's own words are shown verbatim rather than tidied into "could not send".
+That is deliberate: *"535 authentication failed"* and *"connection timed out"* need completely
+different fixes, and a polite summary tells you neither.
+
+If it succeeds and the message still does not arrive, the mail left this server and the problem is
+delivery — spam filtering, or the recipient's provider rejecting it after accepting it.
+
+## Knowing whether a member was ever emailed
+
+**Administration → Users** has a **Verified** column, and it distinguishes three things that used
+to look identical:
+
+- A tick with a date — confirmed, and when.
+- **Sent \<date\>** — the link went out and they have not used it yet. Nothing is wrong; they
+  have not got round to it, or it is in their spam.
+- **No email sent**, in red — no confirmation has ever successfully left this machine for that
+  account. **Nobody can complete it**, however long they wait. This is a fault on the site, not on
+  the member, and Outgoing Mail above is where to look.
+
+That last row is the one worth scanning for. Before it existed, an unconfirmed account was just an
+empty box, and there was no way to tell somebody who had not bothered from somebody who was never
+given the chance.
+
 ## Audit log
 
 ![The audit log with its filters](help-media:site-administration/audit-log.png)
@@ -245,6 +297,34 @@ installation id the sidecar generates for itself.
 
 **Administration → Audit Log** records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.
+
+## Error log
+
+**Administration → Error Log** is the other half of the pair, and the two are easily confused. The
+audit log records what people did on purpose and is kept for years. This one records what broke,
+and is pruned on a retention window — thirty days unless configured otherwise.
+
+Open a row for the full message, the exception, and the request path. The path is usually the
+fastest way to place a fault, because it names the endpoint that was being called when it happened.
+
+**Read the cards before the rows.** *Most repeated message* exists because of something this log
+did once already: it grew to 96% one repeated message, which made it useless for finding a real
+fault while looking perfectly healthy entry by entry. When one message accounts for half the log
+or more the page says so, because that domination is itself the finding — it will hide everything
+underneath it until it is dealt with.
+
+**What is not here.** Only errors are recorded: the database sink is set to Error level, so
+warnings never arrive. That matters more than it sounds. A failure logged as a warning leaves no
+trace on this page at all, which is exactly how a broken confirmation email went unnoticed for
+hours. If something is clearly failing and nothing appears here, suspect the level before
+concluding there is no fault.
+
+**Nothing on this page deletes.** Pruning belongs to the retention job, which has a minimum window
+and works in batches. There is deliberately no button that empties the log, because it would sit
+one click away from evidence somebody was about to need.
+
+Administrators and SuperAdministrators can both open it. Diagnosing a fault is the job it exists
+for, and restricting it further would mean the person on call cannot see why the site is failing.
 
 ## Billing
 

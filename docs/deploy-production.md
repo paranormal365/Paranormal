@@ -281,6 +281,30 @@ all when there was nothing to do.
 2026-08-31, the same instant read 19:31 in one table and 14:30 in the other. Nothing in the column
 names warns you, and a cutoff built from the wrong clock shifts the window by the whole UTC offset.
 
+## What the site sends, and what it records
+
+Every account email — confirmation, both password resets, and the "somebody tried to sign up with
+your address" notice — goes out through one branded layout with the site logo. The logo is an
+**absolute** URL to `/icon-192.png` on the public site, because a mail client resolves nothing
+relative, and it is a **PNG** because most clients strip SVG. If that path stops being served, the
+emails still arrive but every one shows a broken image.
+
+Two columns on `AppUsers` record what happened, and both are visible in Administration → Users:
+
+- `DateConfirmationSent` — stamped only when a send actually **succeeds**. "Handed to the mail
+  server" is all it can honestly claim; acceptance is not delivery. But it separates *we never
+  tried, or we failed* from *it left here*, which is the distinction that was missing when a real
+  sign-up produced no email and nothing anywhere could say why.
+- `DateEmailConfirmed` — Identity keeps confirmation as a bare true/false with no time on it.
+
+A failure is logged at **Error** with no link in it, so it survives in the `Logs` table where the
+sink keeps only Error; and separately at **Warning** *with* the link, which stays in console output
+for completing a flow locally. The split is deliberate — a confirmation link is a credential, and
+the durable line is the one that gets stored.
+
+Members can ask for a new link themselves: the "Confirm your email address first" message on the
+sign-in page carries a **Send the email again** button, throttled to one a minute.
+
 ## Check it, in this order
 
 The deploy script does the first four automatically and fails if any of them do:
@@ -299,7 +323,20 @@ The rest is not provable from a status code:
    setting is right, and only an actual API call tells you.
 6. **Sign in inside the editor**, and open the Server tab — that is what proves the editor's own
    API URL.
-7. **Register a test account.** The confirmation email is the SMTP check.
+7. **Open `/admin/mail`** (Administration → System → Outgoing Mail) as a SuperAdmin, and press
+   **Send a test message**. This is now the SMTP check, and it is a far better one than registering
+   a test account: it runs inside the web application, so it sees the app pool's own
+   `Smtp__Password` — the value a shell on the same server cannot read — and it prints the SMTP
+   server's error verbatim instead of failing silently.
+
+   **If it says "A host is set but no password is present", that is the fault**, and no amount of
+   retrying will fix it: add `Smtp__Password` to the API's app pool environment and recycle the
+   pool.
+
+8. **Then register a test account** and confirm the branded email arrives with the logo showing.
+   That proves the whole path end to end, including that the logo URL is reachable from a mail
+   client — the layout points at `https://ishaunted.com/icon-192.png`, so a site that is up but
+   serving that path wrongly gives everyone a broken image.
 
 The smoke checks run *from the server* on purpose. The website calls the API server-side at the
 same public URL, so if the router cannot route a request back to itself — no NAT hairpin — they
