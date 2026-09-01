@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset='utf-8'><title>IsHaunted — The visitor</title><style>
+@page { size: A4; margin: 15mm 13mm; }
+body { font: 11pt/1.55 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #16181c; margin: 0; }
+h1 { font-size: 25pt; margin: 0 0 2mm; letter-spacing: -0.4px; }
+h2 { font-size: 14.5pt; margin: 8mm 0 2mm; padding-top: 3mm; border-top: 1px solid #d8dce2;
+     page-break-after: avoid; }
+.sub { color: #5b626d; font-size: 11pt; margin: 0 0 5mm; }
+p { margin: 0 0 3mm; }
+code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 9.5pt;
+              background: #f1f3f6; padding: 0 3px; border-radius: 3px; }
+.rule { border-left: 3px solid #2e6b34; padding-left: 4mm; background: #f4f8f4;
+        padding-top: 2mm; padding-bottom: 2mm; }
+.cover { border: 1px solid #d8dce2; border-radius: 6px; padding: 5mm; background: #fafbfc;
+         margin-bottom: 6mm; }
+figure { margin: 4mm 0; page-break-inside: avoid; text-align: center; }
+figure img { max-width: 100%; max-height: 130mm; border: 1px solid #d0d5dc; border-radius: 6px; }
+figcaption { color: #5b626d; font-size: 9pt; margin-top: 1.5mm; }
+table { border-collapse: collapse; width: 100%; margin: 3mm 0; font-size: 9.5pt; }
+th, td { border: 1px solid #d8dce2; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+th { background: #f1f3f6; }
+</style></head><body>
+<h1>IsHaunted &mdash; The visitor</h1>
+<p class='sub'>Somebody with no account, who arrived from a search or a link. Written for a developer joining the project.</p>
+<div class='cover'><p style='margin:0'><b>Every screenshot shows simulated, seeded data</b>, captured in dark mode while signed in as this user type. Nothing here is a real person, case or investigation. Where a page shows a refusal, that is the designed behaviour for this seat.</p></div>
+
+<p>The visitor is the largest audience and the one with the least patience. Everything they can
+reach is public on purpose: the site's whole growth argument is that somebody researching a
+haunted address finds a real archive rather than a sign-up wall.</p>
+
+<p>What they can do: read the feed, browse public places and their archives, find groups near them,
+read published investigations, and ask a group for help. What they cannot do is anything tied to an
+identity — which is where the refusals below come from.</p>
+
+
+<h2>How this site decides what you may see</h2>
+
+<p>Two things gate every surface, and they are different questions:</p>
+
+<p><b>Your seat in a group</b> — owner, administrator, member, viewer — answers "may this person do
+this?". <b>The group's plan</b> answers "does this group pay for this at all?". A member of a group
+whose plan excludes an area is refused for a completely different reason than a viewer who is not
+allowed to write, and the site says which.</p>
+
+<p class="rule"><b>A refusal is never rendered as "nothing here."</b> An empty list and a server
+saying no are different facts, and a page that shows the same grey nothing for both teaches people
+to distrust it. Every list goes through <code>LoadResult</code>, which carries loading, empty,
+refused, session-ended and rate-limited as distinct states — and every one of them has its own
+words on screen.</p>
+
+<p>This matters when reading this document: where a screenshot shows a refusal, that <i>is</i> the
+designed behaviour for this seat, not a broken page.</p>
+
+<h2>What this user sees, screen by screen</h2>
+<p><b>Home.</b> The front door. Search by place, and what is near you.</p>
+<figure><img src='web-media/visitor/10-home.png'><figcaption>Home</figcaption></figure>
+<p><b>Find groups.</b> Groups a person can approach, with what each one covers.</p>
+<figure><img src='web-media/visitor/11-find-groups.png'><figcaption>Find groups</figcaption></figure>
+<p><b>Feed.</b> The public feed. Reading is open to everyone; posting is not.</p>
+<figure><img src='web-media/visitor/12-feed.png'><figcaption>Feed</figcaption></figure>
+<p><b>Request an investigation.</b> The request flow — the main conversion path on the site.</p>
+<figure><img src='web-media/visitor/13-request-an-investigation.png'><figcaption>Request an investigation</figcaption></figure>
+<p><b>Sign in.</b> Sign in, including Microsoft and Apple.</p>
+<figure><img src='web-media/visitor/14-sign-in.png'><figcaption>Sign in</figcaption></figure>
+<p><b>Sign up.</b> Registration. The @name is permanent and the form says so.</p>
+<figure><img src='web-media/visitor/15-sign-up.png'><figcaption>Sign up</figcaption></figure>
+<p><b>Help.</b> The in-app help, readable without an account.</p>
+<figure><img src='web-media/visitor/16-help.png'><figcaption>Help</figcaption></figure>
+<p><b>Refused my cases.</b> A page that needs an account. Note it explains rather than showing an empty list — this is the refusal rule in action.</p>
+<figure><img src='web-media/visitor/17-refused-my-cases.png'><figcaption>Refused my cases</figcaption></figure>
+</body></html>

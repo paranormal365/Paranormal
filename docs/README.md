@@ -53,6 +53,71 @@ Sanity check afterwards: the PDF's byte size should change whenever the help did
 Do **not** try to grep the PDF for text. Chrome subsets its fonts and writes glyph indices, so even
 text that is plainly present will not match — a search there returns false negatives, not answers.
 
+## The developer handover documents
+
+Eight documents for handing the project to another developer — two for the apps, six for the
+website, **one per user type**, each named for its audience:
+
+| Document | Who it is for |
+|---|---|
+| `IsHaunted-iOS-iPhone.pdf` / `IsHaunted-iOS-iPad.pdf` | Somebody picking up the native app |
+| `IsHaunted-Web-Visitor.pdf` | The site with no account |
+| `IsHaunted-Web-Client.pdf` | Someone who asked a group for help |
+| `IsHaunted-Web-Member.pdf` | An ordinary member of a group |
+| `IsHaunted-Web-Viewer.pdf` | A member who may look and change nothing |
+| `IsHaunted-Web-Owner.pdf` | A group's owner or administrator |
+| `IsHaunted-Web-Superadmin.pdf` | Runs the platform |
+
+**One document per seat rather than one with six chapters.** The permission model is real: the site
+is a different application from each of those seats, and a reader only needs their own. More to the
+point, an administrator passes every permission check by role, so a surface broken for everybody
+else looks perfect from that seat — which is why each document is CAPTURED while signed in as that
+person rather than described from the code.
+
+### Rebuilding them
+
+Website — one run per seat, with all three hosts up:
+
+```bash
+for p in visitor client member viewer owner superadmin; do
+  BEN_PERSONA=$p BEN_PERSONA_OUT="$PWD/docs/web-media" BEN_BASE_URL=http://localhost:5078 \
+    dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll \
+    --TestCaseFilter:"FullyQualifiedName~PersonaDocCaptureTests"
+done
+python3 docs/build-persona-documentation.py
+```
+
+Apps — once per device, from `Ben.iOS/`. **The flag must be a shell environment variable, not a
+build setting**, or the test silently skips and reports a pass in under a second:
+
+```bash
+TEST_RUNNER_BEN_DOC_SHOTS=1 xcodebuild -project IsHaunted.xcodeproj -scheme IsHaunted \
+  -destination 'platform=iOS Simulator,id=<udid>' \
+  -only-testing:IsHauntedUITests/DeveloperDocCaptureTests \
+  -resultBundlePath /tmp/doc.xcresult test
+xcrun xcresulttool export attachments --path /tmp/doc.xcresult --output-path docs/ios-media/<device>
+python3 docs/build-ios-documentation.py iphone
+```
+
+Set the simulator to dark first: `xcrun simctl ui <udid> appearance dark`. The website captures
+force dark by emulating `prefers-color-scheme`, which is the path `ben-boot.js` already falls back
+to — the site choosing dark for itself rather than a test writing a stored preference.
+
+### Everything in them is simulated
+
+Seeded accounts, seeded cases, and generated media. `scripts/generate-media-posters.py` gives every
+stored file a poster so no post renders as a grey box: video gets an atmospheric frame with a
+semi-transparent play button, and audio gets **its own real waveform** — decoded with `afconvert`
+and drawn in the site's WaveSurfer bar style. Headless WaveSurfer was tried first and does not
+work: `decodeAudioData` never resolves there, so its loader hangs until the screenshot is taken.
+
+Every frame is captioned `SIMULATED`, and each document says so on its first page, so nothing can
+be mistaken for a real investigation.
+
+**The builders name any section whose screenshot is missing** rather than shipping a silent gap.
+`53-session-review` is currently unfilled on both devices: the capture cannot reliably reach the
+review screen after a live session, and the text describes it without a picture.
+
 ## What it deliberately leaves out
 
 No business, market or financial information, and no usage figures — only what the software does.

@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset='utf-8'><title>IsHaunted — The ordinary member</title><style>
+@page { size: A4; margin: 15mm 13mm; }
+body { font: 11pt/1.55 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #16181c; margin: 0; }
+h1 { font-size: 25pt; margin: 0 0 2mm; letter-spacing: -0.4px; }
+h2 { font-size: 14.5pt; margin: 8mm 0 2mm; padding-top: 3mm; border-top: 1px solid #d8dce2;
+     page-break-after: avoid; }
+.sub { color: #5b626d; font-size: 11pt; margin: 0 0 5mm; }
+p { margin: 0 0 3mm; }
+code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 9.5pt;
+              background: #f1f3f6; padding: 0 3px; border-radius: 3px; }
+.rule { border-left: 3px solid #2e6b34; padding-left: 4mm; background: #f4f8f4;
+        padding-top: 2mm; padding-bottom: 2mm; }
+.cover { border: 1px solid #d8dce2; border-radius: 6px; padding: 5mm; background: #fafbfc;
+         margin-bottom: 6mm; }
+figure { margin: 4mm 0; page-break-inside: avoid; text-align: center; }
+figure img { max-width: 100%; max-height: 130mm; border: 1px solid #d0d5dc; border-radius: 6px; }
+figcaption { color: #5b626d; font-size: 9pt; margin-top: 1.5mm; }
+table { border-collapse: collapse; width: 100%; margin: 3mm 0; font-size: 9.5pt; }
+th, td { border: 1px solid #d8dce2; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+th { background: #f1f3f6; }
+</style></head><body>
+<h1>IsHaunted &mdash; The ordinary member</h1>
+<p class='sub'>Belongs to a group, holds no named role and no extra grants. Written for a developer joining the project.</p>
+<div class='cover'><p style='margin:0'><b>Every screenshot shows simulated, seeded data</b>, captured in dark mode while signed in as this user type. Nothing here is a real person, case or investigation. Where a page shows a refusal, that is the designed behaviour for this seat.</p></div>
+
+<p><b>This is the most useful seat to test and the easiest to get wrong.</b> An ordinary member
+belongs to the group but holds no grants, so the permission service returns false on every table.
+Anything a member is meant to reach that is gated on a grant is broken from here <i>and nowhere
+else</i> — an owner or administrator would never see it.</p>
+
+<p>A developer changing permissions should check this seat first. The test suite keeps a permanent
+account for exactly this reason.</p>
+
+
+<h2>How this site decides what you may see</h2>
+
+<p>Two things gate every surface, and they are different questions:</p>
+
+<p><b>Your seat in a group</b> — owner, administrator, member, viewer — answers "may this person do
+this?". <b>The group's plan</b> answers "does this group pay for this at all?". A member of a group
+whose plan excludes an area is refused for a completely different reason than a viewer who is not
+allowed to write, and the site says which.</p>
+
+<p class="rule"><b>A refusal is never rendered as "nothing here."</b> An empty list and a server
+saying no are different facts, and a page that shows the same grey nothing for both teaches people
+to distrust it. Every list goes through <code>LoadResult</code>, which carries loading, empty,
+refused, session-ended and rate-limited as distinct states — and every one of them has its own
+words on screen.</p>
+
+<p>This matters when reading this document: where a screenshot shows a refusal, that <i>is</i> the
+designed behaviour for this seat, not a broken page.</p>
+
+<h2>What this user sees, screen by screen</h2>
+<p><b>Home.</b> The member's landing page.</p>
+<figure><img src='web-media/member/30-home.png'><figcaption>Home</figcaption></figure>
+<p><b>Organizations.</b> The groups they belong to.</p>
+<figure><img src='web-media/member/31-organizations.png'><figcaption>Organizations</figcaption></figure>
+<p><b>My investigations.</b> Investigations they are part of.</p>
+<figure><img src='web-media/member/32-my-investigations.png'><figcaption>My investigations</figcaption></figure>
+<p><b>Media library.</b> Shared media for their group.</p>
+<figure><img src='web-media/member/33-media-library.png'><figcaption>Media library</figcaption></figure>
+<p><b>My equipment.</b> Equipment assigned to or borrowed by them.</p>
+<figure><img src='web-media/member/34-my-equipment.png'><figcaption>My equipment</figcaption></figure>
+<p><b>Events.</b> Events, including public ones they can attend.</p>
+<figure><img src='web-media/member/35-events.png'><figcaption>Events</figcaption></figure>
+<p><b>Feed.</b> The feed, where a member can post as themselves or as the group.</p>
+<figure><img src='web-media/member/36-feed.png'><figcaption>Feed</figcaption></figure>
+<p><b>Profile.</b> Account, security and privacy.</p>
+<figure><img src='web-media/member/37-profile.png'><figcaption>Profile</figcaption></figure>
+<p><b>Refused admin.</b> Site administration, refused.</p>
+<figure><img src='web-media/member/38-refused-admin.png'><figcaption>Refused admin</figcaption></figure>
+</body></html>
