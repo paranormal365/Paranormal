@@ -369,6 +369,9 @@
             new NavItem("Site Settings",    "settings", "/admin/site-settings"),
             new NavItem("Support Tickets",  "mail",     "/admin/support-tickets"),
             new NavItem("Audit Log",        "list",     "/admin/audit-log"),
+            // Beside the audit log, because that is where somebody looks for either, and named
+            // "Error Log" so the pair reads as what-people-did against what-broke.
+            new NavItem("Error Log",        "alert-triangle", "/admin/error-log"),
             new NavItem("Sidecar Installs", "download", "/admin/sidecar-telemetry"),
             new NavItem("Rate Limits", "shield", "/admin/rate-limits"),
             new NavItem("Outgoing Mail", "send", "/admin/mail"),

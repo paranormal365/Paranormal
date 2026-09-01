@@ -246,6 +246,34 @@ installation id the sidecar generates for itself.
 **Administration → Audit Log** records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.
 
+## Error log
+
+**Administration → Error Log** is the other half of the pair, and the two are easily confused. The
+audit log records what people did on purpose and is kept for years. This one records what broke,
+and is pruned on a retention window — thirty days unless configured otherwise.
+
+Open a row for the full message, the exception, and the request path. The path is usually the
+fastest way to place a fault, because it names the endpoint that was being called when it happened.
+
+**Read the cards before the rows.** *Most repeated message* exists because of something this log
+did once already: it grew to 96% one repeated message, which made it useless for finding a real
+fault while looking perfectly healthy entry by entry. When one message accounts for half the log
+or more the page says so, because that domination is itself the finding — it will hide everything
+underneath it until it is dealt with.
+
+**What is not here.** Only errors are recorded: the database sink is set to Error level, so
+warnings never arrive. That matters more than it sounds. A failure logged as a warning leaves no
+trace on this page at all, which is exactly how a broken confirmation email went unnoticed for
+hours. If something is clearly failing and nothing appears here, suspect the level before
+concluding there is no fault.
+
+**Nothing on this page deletes.** Pruning belongs to the retention job, which has a minimum window
+and works in batches. There is deliberately no button that empties the log, because it would sit
+one click away from evidence somebody was about to need.
+
+Administrators and SuperAdministrators can both open it. Diagnosing a fault is the job it exists
+for, and restricting it further would mean the person on call cannot see why the site is failing.
+
 ## Billing
 
 ### Role areas on a price band

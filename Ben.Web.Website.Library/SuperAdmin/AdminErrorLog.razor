@@ -1,0 +1,315 @@
+@page "/admin/error-log"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Admin
+@using Ben.Web.Website.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+
+<PageTitle>Error Log</PageTitle>
+
+@* Serilog's Error table, which until now nothing read: the only way to see it was a SQL client on
+   the server. The mail failure of 2026-08-31 is what that costs - it went unnoticed for hours
+   because nobody could look. *@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Error Log</h3>
+            <div class="text-secondary small">
+                What the server recorded when something failed. Separate from the
+                <a href="/admin/audit-log">audit log</a>, which records what people did on purpose.
+            </div>
+        </div>
+    </div>
+
+    @* ── Shape of the table ───────────────────────────────────────────────────
+       Shown before the rows, because item 202 found this log was 96% one repeated
+       message - useless for finding a fault while looking perfectly healthy row by
+       row. A dominant message here is itself the finding. *@
+    @if (_summary is not null)
+    {
+        <div class="row g-2 mb-3">
+            <div class="col-sm-3">
+                <div class="card h-100"><div class="card-body py-2">
+                    <div class="text-secondary small">Rows</div>
+                    <div class="fs-4">@_summary.TotalRows.ToString("N0")</div>
+                </div></div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card h-100"><div class="card-body py-2">
+                    <div class="text-secondary small">Oldest kept</div>
+                    <div>@(_summary.OldestUtc?.ToDisplayDateTime() ?? "—")</div>
+                </div></div>
+            </div>
+            <div class="col-sm-5">
+                <div class="card h-100"><div class="card-body py-2">
+                    <div class="text-secondary small">Most repeated message</div>
+                    @if (_summary.TopMessages.Count > 0)
+                    {
+                        var top = _summary.TopMessages[0];
+                        var share = _summary.TotalRows == 0 ? 0 : top.Count * 100 / _summary.TotalRows;
+                        <div class="text-truncate" title="@top.Message">@top.Message</div>
+                        <div class="small @(share >= 50 ? "text-warning" : "text-secondary")">
+                            @top.Count.ToString("N0") rows — @share% of the log
+                            @if (share >= 50)
+                            {
+                                <text>. One message this dominant hides everything else.</text>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-secondary">—</div>
+                    }
+                </div></div>
+            </div>
+        </div>
+    }
+
+    @* ── Filter bar ─────────────────────────────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-4">
+                    <label class="form-label small mb-1" for="errlog-search">Message or exception contains</label>
+                    <input id="errlog-search" type="text" class="form-control form-control-sm"
+                           @bind="@_filterSearch" @bind:event="oninput" placeholder="e.g. authentication failed" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small mb-1">Source</label>
+                    <BenSelect Data="@_sourceOptions" @bind-Value="@_filterSource" DefaultText="All sources" Width="100%" />
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label small mb-1">From</label>
+                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateFrom" Width="100%" />
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label small mb-1">To</label>
+                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateTo" Width="100%" />
+                </div>
+            </div>
+            <div class="row g-2 mt-1">
+                <div class="col-12 d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-primary" @onclick="ApplyFiltersAsync" disabled="@_loading">
+                        @(_loading ? "Loading…" : "Search")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ClearFiltersAsync">Clear</button>
+                    <span class="text-secondary small ms-2">
+                        Dates are your local calendar days (@UserState.BrowserTimeZone.Id).
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+
+    @* Server-driven via OnRead, and deliberately neither Sortable nor filterable in the
+       header: either would reorder only the rows of the current page while appearing to
+       act on the whole log. Order is fixed newest-first, which is what anyone opening an
+       error log wants. *@
+    <TelerikGrid @ref="@_grid"
+                 TItem="ErrorLogRecord"
+                 OnRead="@OnGridReadAsync"
+                 Pageable="true"
+                 PageSize="@_pageSize"
+                 Height="620px">
+
+        <GridToolBarTemplate>
+            <span class="text-secondary small">@_totalCount.ToString("N0") matching entries</span>
+        </GridToolBarTemplate>
+
+        @* The exception is the reason anyone opens this page, and it is far too long for a
+           column. It lives here, expanded per row. *@
+        <DetailTemplate>
+            @{ var row = (ErrorLogRecord)context; }
+            <div class="p-3 bg-body-tertiary border rounded ms-3">
+                <div class="row g-2 mb-2">
+                    <div class="col-sm-2 text-secondary small">When</div>
+                    <div class="col-sm-10 small">@row.TimeStamp.ToDisplayDateTime() UTC</div>
+                    <div class="col-sm-2 text-secondary small">Application</div>
+                    <div class="col-sm-10 small">@(row.Application ?? "—")</div>
+                    <div class="col-sm-2 text-secondary small">Request path</div>
+                    <div class="col-sm-10 small font-monospace">@(row.RequestPath ?? "—")</div>
+                </div>
+                <div class="text-secondary small mb-1">Message</div>
+                <pre class="bg-body border rounded p-2 small mb-2"
+                     style="white-space:pre-wrap; word-break:break-word;">@row.Message</pre>
+                @if (!string.IsNullOrWhiteSpace(row.Exception))
+                {
+                    <div class="text-secondary small mb-1">Exception</div>
+                    <pre class="bg-body border rounded p-2 small mb-0"
+                         style="max-height:320px; overflow:auto; white-space:pre-wrap; word-break:break-word;">@row.Exception</pre>
+                }
+            </div>
+        </DetailTemplate>
+
+        <GridColumns>
+            <GridColumn Field="@nameof(ErrorLogRecord.TimeStamp)" Title="When" Width="165px">
+                <Template>
+                    @{ var r = (ErrorLogRecord)context; }
+                    <span class="small">@r.TimeStamp.ToDisplayDateTime()</span>
+                </Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(ErrorLogRecord.Level)" Title="Level" Width="90px">
+                <Template>
+                    @{ var r = (ErrorLogRecord)context; }
+                    <span class="badge @(r.Level == "Fatal" ? "bg-danger" : "bg-warning text-dark")">@r.Level</span>
+                </Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(ErrorLogRecord.Source)" Title="Source" Width="120px" />
+            <GridColumn Field="@nameof(ErrorLogRecord.RequestPath)" Title="Path" Width="240px">
+                <Template>
+                    @{ var r = (ErrorLogRecord)context; }
+                    <span class="small font-monospace text-truncate d-inline-block"
+                          style="max-width:230px;" title="@r.RequestPath">@r.RequestPath</span>
+                </Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(ErrorLogRecord.Message)" Title="Message">
+                <Template>
+                    @{ var r = (ErrorLogRecord)context; }
+                    <span class="small" title="@r.Message">@Truncate(r.Message, 160)</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </TelerikGrid>
+</div>
+
+@code {
+    private TelerikGrid<ErrorLogRecord>? _grid;
+
+    private IReadOnlyList<ErrorLogRecord> _items = [];
+    private ErrorLogSummary? _summary;
+    private List<string> _sourceOptions = [];
+
+    private int  _totalCount;
+    private const int _pageSize = 25;
+    private bool _loading;
+    private string? _errorMessage;
+
+    private string?   _filterSearch;
+    private string?   _filterSource;
+    private DateTime? _filterDateFrom;
+    private DateTime? _filterDateTo;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadHeaderAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadHeaderAsync()
+    {
+        try
+        {
+            _summary = await AdminClient.GetErrorLogSummaryAsync();
+            var sources = await AdminClient.GetErrorLogSourcesAsync();
+            _sourceOptions = sources.Items.ToList();
+        }
+        catch
+        {
+            // The summary is context, not the point of the page. If it fails the grid can still
+            // load, and saying so twice would only crowd out the grid's own message.
+        }
+    }
+
+    private async Task OnGridReadAsync(GridReadEventArgs args)
+    {
+        // A read can fire before the bearer token is attached; without this the request goes out
+        // unauthenticated and the grid renders a silently empty page.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive))
+        {
+            args.Data = Array.Empty<ErrorLogRecord>();
+            args.Total = 0;
+            return;
+        }
+
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            var page = args.Request.Page > 0 ? args.Request.Page : 1;
+            var size = args.Request.PageSize > 0 ? args.Request.PageSize : _pageSize;
+
+            var result = await AdminClient.GetErrorLogsAsync(
+                page:     page,
+                pageSize: size,
+                search:   string.IsNullOrWhiteSpace(_filterSearch) ? null : _filterSearch,
+                source:   _filterSource,
+                dateFrom: ToUtcBoundary(_filterDateFrom, endOfDay: false),
+                dateTo:   ToUtcBoundary(_filterDateTo,   endOfDay: true));
+
+            _items      = result?.Items ?? [];
+            _totalCount = result?.TotalCount ?? 0;
+
+            args.Data  = _items;
+            args.Total = _totalCount;
+        }
+        catch
+        {
+            _errorMessage = "Could not load the error log.";
+            args.Data  = Array.Empty<ErrorLogRecord>();
+            args.Total = 0;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Re-reads from page 1 rather than calling Rebind().
+    /// </summary>
+    /// <remarks>
+    /// Under OnRead the grid owns the page number, so a bare Rebind() would re-read whatever page
+    /// you were on: narrowing a filter while on page 3 could land past the end of the new result
+    /// set and show nothing, which reads as "no errors" — the most misleading thing this page
+    /// could say. Same reasoning as AdminAuditLog.
+    /// </remarks>
+    private async Task ApplyFiltersAsync()
+    {
+        if (_grid is null) return;
+
+        var state = _grid.GetState();
+        state.Page = 1;
+        await _grid.SetStateAsync(state);
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _filterSearch   = null;
+        _filterSource   = null;
+        _filterDateFrom = null;
+        _filterDateTo   = null;
+        await ApplyFiltersAsync();
+    }
+
+    /// <summary>
+    /// Turns a local calendar day into the UTC instant the server stores against.
+    /// </summary>
+    /// <remarks>
+    /// The picker gives a date with no time; the log stores UTC timestamps. Without this, "to
+    /// today" would mean midnight and silently exclude everything that happened today - the rows
+    /// most likely to be the reason somebody opened the page.
+    /// </remarks>
+    private DateTime? ToUtcBoundary(DateTime? local, bool endOfDay)
+    {
+        if (local is null) return null;
+        var day = endOfDay ? local.Value.Date.AddDays(1).AddTicks(-1) : local.Value.Date;
+        return TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(day, DateTimeKind.Unspecified), UserState.BrowserTimeZone);
+    }
+
+    private static string Truncate(string? value, int max)
+        => string.IsNullOrEmpty(value) ? string.Empty
+         : value.Length <= max ? value
+         : value[..max] + "…";
+}

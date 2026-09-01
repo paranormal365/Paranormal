@@ -977,6 +977,13 @@ public sealed class HelpMediaCapture : BenTestBase
         await GoAsync("/admin/audit-log");
         await ShootAsync("site-administration", "audit-log.png", gated: true);
 
+        // Beside the audit log, and worth its own shot: the two are easily confused, and the
+        // summary cards are the quickest way to see that this one answers "what broke" rather
+        // than "who did what". Dark, like every capture here - the run sets ColorScheme.Dark and
+        // the init script above, so nothing extra is needed for it.
+        await GoAsync("/admin/error-log");
+        await ShootAsync("site-administration", "error-log.png", gated: true);
+
         await GoAsync("/admin/equipment-taxonomy");
         await ShootAsync("site-administration", "equipment-taxonomy.png", gated: true);
     }
