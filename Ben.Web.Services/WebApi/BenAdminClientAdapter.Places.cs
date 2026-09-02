@@ -225,10 +225,9 @@ public sealed partial class BenAdminClientAdapter
 
     /// <inheritdoc />
     public Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
-        int expectedCount, CancellationToken token = default)
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, OrphanedFieldSessionPurgeResult>(
-            HttpMethod.Delete, $"/api/admin/orphaned-field-sessions?expectedCount={expectedCount}",
-            new { }, token);
+            HttpMethod.Delete, "/api/admin/orphaned-field-sessions", new { Ids = ids }, token);
 
     /// <inheritdoc />
     public Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(

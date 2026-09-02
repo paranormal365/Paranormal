@@ -20,6 +20,23 @@ namespace Ben.Web.Playwright.Tests;
 public class OrphanedSessionsTests : BenTestBase
 {
     [Test]
+    public async Task One_row_can_be_chosen_on_its_own()
+    {
+        if (Environment.GetEnvironmentVariable("BEN_ORPHAN_PURGE") != "1")
+            Assert.Ignore("Set BEN_ORPHAN_PURGE=1 — needs a database with orphans in it.");
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/orphaned-sessions");
+        await Page.WaitForSelectorAsync("[data-testid='orphan-row']", new() { Timeout = 30_000 });
+
+        var rows = await Page.Locator("[data-testid='orphan-row']").CountAsync();
+        if (rows < 2) Assert.Ignore("needs at least two orphans to prove a choice was made");
+
+        await Page.Locator("[data-testid='orphan-check']").First.CheckAsync();
+        await Expect(Page.Locator("[data-testid='delete-orphans']")).ToContainTextAsync("1 selected");
+    }
+
+    [Test]
     public async Task An_ordinary_member_is_sent_away()
     {
         await LoginAsync(MemberEmail, MemberPassword);
@@ -69,6 +86,14 @@ public class OrphanedSessionsTests : BenTestBase
 
         var before = await Page.Locator("[data-testid='orphan-row']").CountAsync();
         Assert.That(before, Is.GreaterThan(0), "this test needs an orphan to delete");
+
+        // Nothing is chosen yet, so the button must refuse to be pressed. A delete that defaults
+        // to "everything" is the version of this screen that deletes something Ben wanted to keep.
+        await Expect(Page.Locator("[data-testid='delete-orphans']")).ToBeDisabledAsync();
+
+        await Page.Locator("[data-testid='check-all']").CheckAsync();
+        await Expect(Page.Locator("[data-testid='delete-orphans']")).ToBeEnabledAsync();
+        await Expect(Page.Locator("[data-testid='delete-orphans']")).ToContainTextAsync($"{before}");
 
         await Page.Locator("[data-testid='delete-orphans']").ClickAsync();
 
