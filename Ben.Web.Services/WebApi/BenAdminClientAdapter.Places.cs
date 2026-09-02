@@ -219,6 +219,18 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
     /// <inheritdoc />
+    public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);
+
+    /// <inheritdoc />
+    public Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
+        int expectedCount, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrphanedFieldSessionPurgeResult>(
+            HttpMethod.Delete, $"/api/admin/orphaned-field-sessions?expectedCount={expectedCount}",
+            new { }, token);
+
+    /// <inheritdoc />
     public Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
         Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<MergePlaceRequest, PlaceMergeResult>(

@@ -222,7 +222,19 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
 
         if (response.IsSuccessStatusCode)
+        {
+            // A 204 carries no body, and ReadFromJsonAsync THROWS on an empty stream. Because
+            // nothing between here and the button catches it, that exception escaped the page's
+            // click handler and left the busy flag set — the Change-password panel sat on
+            // "Saving…" for ever while the password had in fact been changed. Every void endpoint
+            // (`return NoContent()`) reaches this line, so the guard belongs here and not in the
+            // dozen call sites. SendItemAsync already learned this; see the note there.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null);
+
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+        }
 
         var body = await response.Content.ReadAsStringAsync(token);
 
@@ -246,7 +258,14 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
 
         if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync above.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, default);
+
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), default);
+        }
 
         if (response.StatusCode != System.Net.HttpStatusCode.Conflict)
             return (default, default);
@@ -455,7 +474,15 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
 
         if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync: an upload endpoint that answers
+            // NoContent would otherwise throw here, inside whatever handler started the upload.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null);
+
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+        }
 
         var body = await response.Content.ReadAsStringAsync(token);
         var looksLikeProse = !string.IsNullOrWhiteSpace(body)

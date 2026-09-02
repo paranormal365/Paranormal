@@ -25,8 +25,20 @@ struct LiveFeedWriteTests {
     private static var memberEmail: String {
         ProcessInfo.processInfo.environment["BEN_MEMBER_EMAIL"] ?? "james.thornton@benco.dev"
     }
+    /// A password read from the environment, with no fallback. These used to be literals here;
+    /// because the development database is the one ishaunted.com uses, that put working
+    /// production credentials in a public repository. An unset variable now stops the test with
+    /// its name rather than signing in as somebody real.
+    private static func requiredSecret(_ variable: String) -> String {
+        guard let value = ProcessInfo.processInfo.environment[variable], !value.isEmpty else {
+            Issue.record("\(variable) is not set — export it before running the live write tests.")
+            return ""
+        }
+        return value
+    }
+
     private static var memberPassword: String {
-        ProcessInfo.processInfo.environment["BEN_MEMBER_PASSWORD"] ?? "J@mes!Thornton26"
+        Self.requiredSecret("BEN_MEMBER_PASSWORD")
     }
 
     /// A signed-in client pointed at the dev API, or nil when the environment isn't there.
@@ -189,7 +201,7 @@ struct LiveFeedWriteTests {
         let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
         guard case .success(let login) = await auth.login(LoginRequest(
             email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
-            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+            password: Self.requiredSecret("BEN_CLIENT_PASSWORD")))
         else { Issue.record("client sign-in failed"); return }
         await tokens.adopt(login)
         let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
@@ -241,7 +253,7 @@ struct LiveFeedWriteTests {
         let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
         guard case .success(let login) = await auth.login(LoginRequest(
             email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
-            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+            password: Self.requiredSecret("BEN_CLIENT_PASSWORD")))
         else { Issue.record("client sign-in failed"); return }
         await tokens.adopt(login)
         let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
@@ -277,7 +289,7 @@ struct LiveFeedWriteTests {
         let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
         guard case .success(let login) = await auth.login(LoginRequest(
             email: ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com",
-            password: ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"))
+            password: Self.requiredSecret("BEN_CLIENT_PASSWORD")))
         else { Issue.record("client sign-in failed"); return }
         await tokens.adopt(login)
         let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)

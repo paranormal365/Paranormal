@@ -21,7 +21,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         app = XCUIApplication()
 
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "daniel.park@benco.dev"
-        let password = ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "D@niel!Park2026"
+        let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
         app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
         app.launch()
     }

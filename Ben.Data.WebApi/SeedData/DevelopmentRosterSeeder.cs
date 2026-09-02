@@ -37,6 +37,22 @@ internal static class DevelopmentRosterSeeder
     {
         if (!config.GetValue<bool>("SeedData:DevData:Enabled")) return;
 
+        // The roster's password comes from configuration and has no default. It used to be a
+        // literal per person in this file, which put working credentials for every seeded account
+        // — including accounts that exist on the live site — into a public repository. Set
+        // `SeedData:DevData:Password` in appsettings.Development.json (gitignored) or as the
+        // environment variable `SeedData__DevData__Password`. Seeding refuses rather than
+        // inventing a password, because a guessable default is the same bug wearing a hat.
+        var seedPassword = config["SeedData:DevData:Password"];
+        if (string.IsNullOrWhiteSpace(seedPassword))
+        {
+            Console.WriteLine(
+                "[RosterSeeder] SeedData:DevData:Enabled is true but SeedData:DevData:Password is "
+                + "not set — skipping the roster. Set it in appsettings.Development.json or as "
+                + "SeedData__DevData__Password.");
+            return;
+        }
+
         using var scope = services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var dbFactory   = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BenDataContext>>();
@@ -46,18 +62,18 @@ internal static class DevelopmentRosterSeeder
         // ── People ────────────────────────────────────────────────────────────
         // Investigators sign up with the group's domain; clients arrive from anywhere, which is
         // what their addresses should look like too.
-        var marcus = await UserAsync(userManager, "marcus.webb@benco.dev",     "Marcus Webb",    "M@rcus!Webb2026");
-        var olivia = await UserAsync(userManager, "olivia.chen@benco.dev",     "Olivia Chen",    "0l!via!Chen2026");
-        var tyler  = await UserAsync(userManager, "tyler.brooks@benco.dev",    "Tyler Brooks",   "Tyl3r!Brooks26");
-        var rachel = await UserAsync(userManager, "rachel.kim@benco.dev",      "Rachel Kim",     "R@chel!Kim2026");
-        var david  = await UserAsync(userManager, "david.okafor@benco.dev",    "David Okafor",   "D@vid!Okafor26");
-        var priya  = await UserAsync(userManager, "priya.sharma@benco.dev",    "Priya Sharma",   "Pr!ya!Sharma26");
-        var nathan = await UserAsync(userManager, "nathan.cole@benco.dev",     "Nathan Cole",    "N@than!Cole2026");
-        var grace  = await UserAsync(userManager, "grace.delgado@benco.dev",   "Grace Delgado",  "Gr@ce!Delgado26");
+        var marcus = await UserAsync(userManager, "marcus.webb@benco.dev",     "Marcus Webb", seedPassword);
+        var olivia = await UserAsync(userManager, "olivia.chen@benco.dev",     "Olivia Chen", seedPassword);
+        var tyler  = await UserAsync(userManager, "tyler.brooks@benco.dev",    "Tyler Brooks", seedPassword);
+        var rachel = await UserAsync(userManager, "rachel.kim@benco.dev",      "Rachel Kim", seedPassword);
+        var david  = await UserAsync(userManager, "david.okafor@benco.dev",    "David Okafor", seedPassword);
+        var priya  = await UserAsync(userManager, "priya.sharma@benco.dev",    "Priya Sharma", seedPassword);
+        var nathan = await UserAsync(userManager, "nathan.cole@benco.dev",     "Nathan Cole", seedPassword);
+        var grace  = await UserAsync(userManager, "grace.delgado@benco.dev",   "Grace Delgado", seedPassword);
         // Victor exists so the Viewer membership tier has a seat that is ALWAYS there — before
         // him, every four-seat verification pass had to mutate a real member into a Viewer and
         // remember to put them back. The seat nobody can sit in is the seat nobody tests.
-        var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes",   "V!ctor!Reyes26");
+        var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes", seedPassword);
 
         // IH-08, Ben's 2026-08-26 sweep: Site Roles reported Admin 0 users and Moderator 0, so
         // neither role's behaviour had ever run — including whatever gates the 26 /admin/* routes
@@ -67,14 +83,14 @@ internal static class DevelopmentRosterSeeder
         // Deliberately NOT given to an existing person: promoting Rachel or Marcus would change
         // what an existing seat means and quietly invalidate every check that treats them as an
         // ordinary org administrator or member.
-        var alice  = await UserAsync(userManager, "alice.nguyen@benco.dev",    "Alice Nguyen",   "@lice!Nguyen26");
-        var miguel = await UserAsync(userManager, "miguel.santos@benco.dev",   "Miguel Santos",  "M!guel!Santos26");
+        var alice  = await UserAsync(userManager, "alice.nguyen@benco.dev",    "Alice Nguyen", seedPassword);
+        var miguel = await UserAsync(userManager, "miguel.santos@benco.dev",   "Miguel Santos", seedPassword);
         await EnsureSiteRoleAsync(userManager, alice,  Ben.Data.Common.Constants.RoleNames.Admin);
         await EnsureSiteRoleAsync(userManager, miguel, Ben.Data.Common.Constants.RoleNames.Moderator);
 
-        var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell",  "L!nda!Maxwell26");
-        var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes",   "R0bert!Hayes26");
-        var karen  = await UserAsync(userManager, "karen.foster@example.com",  "Karen Foster",   "K@ren!Foster26");
+        var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell", seedPassword);
+        var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes", seedPassword);
+        var karen  = await UserAsync(userManager, "karen.foster@example.com",  "Karen Foster", seedPassword);
 
         var emma = await userManager.FindByEmailAsync("emma.rodriguez@benco.dev");
         if (emma is null)
