@@ -1416,7 +1416,11 @@ public sealed record OrphanedFieldSessionRecord(
     bool LinkedToInvestigation, bool PublishedToArchive, int MediaCount);
 
 /// <summary>What the delete did. <c>Refusal</c> is set when it deliberately did nothing.</summary>
-public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal);
+public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal)
+{
+    /// <summary>Something worth saying that is not a refusal — e.g. file rows left in place.</summary>
+    public string? Note { get; init; }
+}
 
 /// <param name="PublishedSessions">The count that decides which record should survive: an archive
 /// people can already read is the one with something to lose.</param>

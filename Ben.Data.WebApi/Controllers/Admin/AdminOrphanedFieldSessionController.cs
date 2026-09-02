@@ -63,26 +63,37 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
     /// what they were shown — if the answer has changed since, nothing is deleted and the new
     /// count comes back, because a screen that has gone stale should not act on the old number.
     /// </remarks>
+    /// <summary>
+    /// Deletes the sessions named in the request.
+    /// </summary>
+    /// <remarks>
+    /// The caller chooses which rows, but the server still decides what is deletable: the orphan
+    /// set is recomputed here and the request is intersected with it. An id that is no longer
+    /// orphaned — because its bytes came back, or somebody else deleted it — is refused by name
+    /// rather than quietly skipped, because a screen that has gone stale should say so instead of
+    /// doing three quarters of what was asked.
+    /// </remarks>
     [HttpDelete]
     public async Task<ActionResult<OrphanedFieldSessionPurgeResult>> Purge(
-        [FromQuery] int expectedCount, CancellationToken ct)
+        [FromBody] PurgeOrphanedSessionsRequest request, CancellationToken ct)
     {
+        if (request?.Ids is null || request.Ids.Count == 0)
+            return BadRequest("Choose at least one session to delete.");
+
         var orphans = await FindAsync(ct);
-        if (orphans.Count != expectedCount)
+        var orphanIds = orphans.Select(o => o.Id).ToHashSet();
+
+        var notOrphaned = request.Ids.Where(id => !orphanIds.Contains(id)).ToList();
+        if (notOrphaned.Count > 0)
             return Conflict(new OrphanedFieldSessionPurgeResult(0, orphans.Count,
-                $"The list changed since you looked: {orphans.Count} now, not {expectedCount}. "
-                + "Nothing was deleted — look again."));
+                $"{notOrphaned.Count} of the {request.Ids.Count} you chose "
+                + (notOrphaned.Count == 1 ? "is" : "are") + " no longer orphaned — the list has "
+                + "changed since you looked. Nothing was deleted; look again."));
 
-        if (orphans.Count == 0)
-            return Ok(new OrphanedFieldSessionPurgeResult(0, 0, "There was nothing to delete."));
-
-        var ids = orphans.Select(o => o.Id).ToList();
+        var ids = request.Ids.Distinct().ToList();
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        // The file rows first: FieldSessionUploadFile cascades from the session, but the document's
-        // own UploadFile row is referenced BY the session and would be left behind.
         var documentFileIds = await db.FieldSessionUploads.AsNoTracking()
             .Where(s => ids.Contains(s.Id))
             .Select(s => s.DocumentUploadFileId)
@@ -93,20 +104,63 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
             .Select(f => f.UploadFileId)
             .ToListAsync(ct);
 
-        await db.FieldSessionUploadFiles.Where(f => ids.Contains(f.FieldSessionUploadId))
-            .ExecuteDeleteAsync(ct);
-        await db.FieldSessionUploads.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(ct);
+        int citations;
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            // A case report can cite a field session, and that foreign key is NoAction — so a
+            // cited session refuses to delete and takes the whole batch down with it. The first
+            // version of this endpoint missed that and did nothing at all on a database where any
+            // session had been cited, which is every database a report test has ever run against.
+            //
+            // Removing the citation is right rather than merely expedient: it points at a session
+            // whose readings are not on this server, so the report already renders it as an
+            // absence. A citation of nothing is not evidence somebody would miss.
+            citations = await db.CaseReportSectionFieldSessions
+                .Where(c => ids.Contains(c.FieldSessionUploadId))
+                .ExecuteDeleteAsync(ct);
 
+            await db.FieldSessionUploadFiles.Where(f => ids.Contains(f.FieldSessionUploadId))
+                .ExecuteDeleteAsync(ct);
+            await db.FieldSessionUploads.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(ct);
+
+            await transaction.CommitAsync(ct);
+        }
+
+        // The UploadFile rows go afterwards and on their own, deliberately. Two dozen tables point
+        // at UploadFiles and several do so with NoAction, so one file another feature still
+        // references would abort a combined transaction and put the sessions back — undoing work
+        // that had already succeeded for the sake of tidying. The sessions are the point; a file
+        // row that will not go is reported, not fatal.
         var fileIds = documentFileIds.Concat(mediaFileIds).Distinct().ToList();
-        await db.UploadFiles.Where(f => fileIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
-
-        await transaction.CommitAsync(ct);
+        var filesRemoved = 0;
+        var filesKept    = 0;
+        foreach (var fileId in fileIds)
+        {
+            try
+            {
+                filesRemoved += await db.UploadFiles.Where(f => f.Id == fileId).ExecuteDeleteAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                filesKept++;   // something else still points at it
+            }
+            catch (Microsoft.Data.SqlClient.SqlException)
+            {
+                filesKept++;
+            }
+        }
 
         _log.LogWarning(
-            "Deleted {SessionCount} orphaned field sessions and {FileCount} upload rows, by {UserId}.",
-            ids.Count, fileIds.Count, GetCurrentUserId());
+            "Deleted {SessionCount} orphaned field sessions, {Citations} report citations and "
+            + "{FilesRemoved} upload rows ({FilesKept} kept, still referenced), by {UserId}.",
+            ids.Count, citations, filesRemoved, filesKept, GetCurrentUserId());
 
-        return Ok(new OrphanedFieldSessionPurgeResult(ids.Count, 0, null));
+        var note = filesKept > 0
+            ? $"{filesKept} file record{(filesKept == 1 ? " was" : "s were")} left in place because "
+              + "something else still references them."
+            : null;
+
+        return Ok(new OrphanedFieldSessionPurgeResult(ids.Count, orphans.Count - ids.Count, null) { Note = note });
     }
 
     /// <summary>
@@ -176,10 +230,17 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
 }
 
 /// <summary>One session that cannot be opened, described well enough to recognise.</summary>
+/// <summary>Which sessions to delete. Named explicitly so the screen can offer a choice.</summary>
+public sealed record PurgeOrphanedSessionsRequest(IReadOnlyList<Guid> Ids);
+
 public sealed record OrphanedFieldSessionRecord(
     Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
     int ReadingCount, int MarkerCount, string? RecordedByName,
     bool LinkedToInvestigation, bool PublishedToArchive, int MediaCount);
 
 /// <summary>What the button did. <paramref name="Refusal"/> is set when it did nothing.</summary>
-public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal);
+public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal)
+{
+    /// <summary>Something worth saying that is not a refusal — e.g. file rows left in place.</summary>
+    public string? Note { get; init; }
+}

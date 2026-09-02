@@ -209,11 +209,11 @@ public interface IBenPlacesClient
         CancellationToken token = default);
 
     /// <summary>
-    /// Deletes every session the preview listed. <paramref name="expectedCount"/> is what the
-    /// screen was showing; the server refuses if the answer has changed since.
+    /// Deletes the chosen sessions. The server intersects the ids with its own orphan set, so a
+    /// stale screen is refused rather than half-obeyed.
     /// </summary>
     Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
-        int expectedCount, CancellationToken token = default);
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
 
     Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
 
