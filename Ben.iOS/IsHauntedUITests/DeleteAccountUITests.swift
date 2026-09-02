@@ -18,7 +18,7 @@ final class DeleteAccountUITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com"
-        let password = ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"
+        let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
         app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
         // Point the app at an API built from the working tree when one is supplied. Without it
         // the app uses whatever host the Dev environment names, which is fine for screens that

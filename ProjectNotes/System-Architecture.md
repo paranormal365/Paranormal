@@ -76,11 +76,16 @@ This script:
 4. Runs `exec dotnet run` for the WebApp (foreground)
 
 ### Default credentials
-| Email | Password | Role |
-|---|---|---|
-| `haveben@msn.com` | `Y@ung615` | SuperAdmin + BenCo Owner |
-| `sarah.mitchell@benco.dev` | `S@rah!Mitchell26` | BenCo Org Admin |
-| `james.thornton@benco.dev` | `J@mes!Thornton26` | BenCo Member |
+| Email | Role |
+|---|---|
+| `haveben@msn.com` | SuperAdmin + BenCo Owner |
+| `sarah.mitchell@benco.dev` | BenCo Org Admin |
+| `james.thornton@benco.dev` | BenCo Member |
+
+Every seeded account shares one password, set as `SeedData:DevData:Password` in
+`appsettings.Development.json` (gitignored) or `SeedData__DevData__Password` in the environment.
+It is not recorded here: the development database is the one ishaunted.com uses, so a password in
+this file is a working production credential in a public repository.
 
 ---
 

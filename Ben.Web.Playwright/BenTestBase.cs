@@ -176,9 +176,30 @@ public abstract class BenTestBase : PageTest
     //
     // See item 109. Any new fixture should ask which of these four it means, and say so.
 
+    /// <summary>
+    /// A password read from the environment, with no fallback.
+    /// </summary>
+    /// <remarks>
+    /// These used to default to the seeded literals. Because the development database is also the
+    /// one ishaunted.com uses, those defaults were working production credentials sitting in a
+    /// public repository — so the defaults are gone and a run without them stops with a message
+    /// naming the variable rather than silently testing as somebody real.
+    /// <para>Set them from your own shell, or source them from the API's
+    /// <c>appsettings.Development.json</c>, which is gitignored:
+    /// <c>BEN_SUPERADMIN_PASSWORD</c>, <c>BEN_USER_PASSWORD</c>, <c>BEN_MEMBER_PASSWORD</c>,
+    /// <c>BEN_VIEWER_PASSWORD</c>, <c>BEN_CLIENT_PASSWORD</c>.</para>
+    /// </remarks>
+    protected static string RequiredSecret(string variable)
+        => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
+            ? value
+            : throw new InvalidOperationException(
+                $"{variable} is not set. The seeded passwords are no longer compiled into this "
+                + "file; export the variable (see appsettings.Development.json, which is "
+                + "gitignored) before running the suite.");
+
     /// <summary>Runs the site. Passes every permission check by role, everywhere.</summary>
     protected static string SuperAdminEmail    => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_EMAIL")    ?? "haveben@msn.com";
-    protected static string SuperAdminPassword => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_PASSWORD") ?? "Y@ung615";
+    protected static string SuperAdminPassword => RequiredSecret("BEN_SUPERADMIN_PASSWORD");
 
     /// <summary>
     /// Sarah — Administrator of Paranormal365 and owner of BenCo. The default seat, and
@@ -186,7 +207,7 @@ public abstract class BenTestBase : PageTest
     /// role, so a surface broken for everyone else looks perfect from here.
     /// </summary>
     protected static string UserEmail          => Environment.GetEnvironmentVariable("BEN_USER_EMAIL")          ?? "sarah.mitchell@benco.dev";
-    protected static string UserPassword       => Environment.GetEnvironmentVariable("BEN_USER_PASSWORD")       ?? "S@rah!Mitchell26";
+    protected static string UserPassword       => RequiredSecret("BEN_USER_PASSWORD");
 
     /// <summary>
     /// James — a plain <c>Member</c> of Paranormal365, and the most useful seat in the
@@ -199,7 +220,7 @@ public abstract class BenTestBase : PageTest
     /// else. Use this seat for any surface a member is shown.
     /// </remarks>
     protected static string MemberEmail        => Environment.GetEnvironmentVariable("BEN_MEMBER_EMAIL")        ?? "james.thornton@benco.dev";
-    protected static string MemberPassword     => Environment.GetEnvironmentVariable("BEN_MEMBER_PASSWORD")     ?? "J@mes!Thornton26";
+    protected static string MemberPassword     => RequiredSecret("BEN_MEMBER_PASSWORD");
 
     /// <summary>
     /// Victor — a <c>Viewer</c> of Paranormal365: belongs to the group, may look,
@@ -207,14 +228,14 @@ public abstract class BenTestBase : PageTest
     /// viewer); seeded permanently so using it never requires mutating a real member's tier.
     /// </summary>
     protected static string ViewerEmail        => Environment.GetEnvironmentVariable("BEN_VIEWER_EMAIL")        ?? "victor.reyes@benco.dev";
-    protected static string ViewerPassword     => Environment.GetEnvironmentVariable("BEN_VIEWER_PASSWORD")     ?? "V!ctor!Reyes26";
+    protected static string ViewerPassword     => RequiredSecret("BEN_VIEWER_PASSWORD");
 
     /// <summary>
     /// Daniel — has an account and belongs to no group. The client seat: cases of his own, and no
     /// membership anywhere.
     /// </summary>
     protected static string ClientEmail        => Environment.GetEnvironmentVariable("BEN_CLIENT_EMAIL")        ?? "daniel.park@benco.dev";
-    protected static string ClientPassword     => Environment.GetEnvironmentVariable("BEN_CLIENT_PASSWORD")     ?? "D@niel!Park2026";
+    protected static string ClientPassword     => RequiredSecret("BEN_CLIENT_PASSWORD");
 
     /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.

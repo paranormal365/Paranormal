@@ -50,3 +50,24 @@ enum AppNavigator {
         }
     }
 }
+
+/// Credentials for the seeded test accounts, read from the environment with no fallback.
+///
+/// These used to be literals in each fixture. The development database is also the one
+/// ishaunted.com uses, so those literals were working production credentials in a public
+/// repository. They are gone; a run without the variables stops with a message naming the one it
+/// wanted instead of signing in as somebody real or failing on an empty password.
+///
+/// Plain environment variables never reach an XCUITest — use the `TEST_RUNNER_` prefix:
+/// `TEST_RUNNER_BEN_CLIENT_PASSWORD=… xcodebuild test …`
+enum TestSecrets {
+    static func required(_ variable: String, file: StaticString = #filePath, line: UInt = #line) -> String {
+        guard let value = ProcessInfo.processInfo.environment[variable], !value.isEmpty else {
+            XCTFail("\(variable) is not set. Export it (with the TEST_RUNNER_ prefix for UI tests) "
+                    + "— the seeded passwords are no longer compiled into this target.",
+                    file: file, line: line)
+            return ""
+        }
+        return value
+    }
+}

@@ -184,7 +184,7 @@ echo "── Turning on the features the walks audit ─────────
 # exactly what an isolated database buys — a configuration can be set for the run without
 # touching anything Ben ships.
 SA_EMAIL="${BEN_E2E_ADMIN_EMAIL:-haveben@msn.com}"
-SA_PASSWORD="${BEN_E2E_ADMIN_PASSWORD:-Y@ung615}"
+SA_PASSWORD="${BEN_E2E_ADMIN_PASSWORD:?set BEN_E2E_ADMIN_PASSWORD — the seeded password is no longer in this repo}"
 SA_TOKEN=$(curl -fsS -X POST "$API_URL/login" -H "Content-Type: application/json" \
   -d "{\"email\":\"$SA_EMAIL\",\"password\":\"$SA_PASSWORD\"}" 2>/dev/null \
   | python3 -c "import sys,json;print(json.load(sys.stdin).get('accessToken',''))" 2>/dev/null || true)

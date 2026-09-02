@@ -50,8 +50,9 @@ in-session simulator panel and input automation don't work (builds still do).
 
 5. In the app: **Profile tab → API environment** should say **Dev**
    (localhost:5252). Sign in with a seed account, e.g.
-   `james.thornton@benco.dev` / `J@mes!Thornton26` (ordinary member — the
-   right seat for testing, per the repo's own rule).
+   `james.thornton@benco.dev` (ordinary member — the right seat for testing,
+   per the repo's own rule). The password is the one you set as
+   `SeedData:DevData:Password`; it is deliberately not written down here.
 
 No Xcode? Terminal only:
 
