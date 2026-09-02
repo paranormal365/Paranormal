@@ -20,7 +20,7 @@ final class EverySurfaceUITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com"
-        let password = ProcessInfo.processInfo.environment["BEN_CLIENT_PASSWORD"] ?? "Y@ung615"
+        let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
         app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
         app.launch()
     }

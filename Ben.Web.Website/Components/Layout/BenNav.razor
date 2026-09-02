@@ -349,6 +349,9 @@
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
+            // Sessions whose readings are not on this server — a Playwright run against a shared
+            // database leaves the row here and the bytes on the machine that ran it.
+            new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
             // Last in the group, and named for what it does rather than something softer:
             // it destroys a group and everything belonging to it, and a menu entry that
             // read "Tidy up" would be the first half of an accident.

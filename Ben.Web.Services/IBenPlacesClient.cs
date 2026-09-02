@@ -204,6 +204,17 @@ public interface IBenPlacesClient
     /// A finder rather than a list: the pairs worth showing are exactly the ones the automatic
     /// matcher could not settle, and they are few.
     /// </remarks>
+    /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
+    Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes every session the preview listed. <paramref name="expectedCount"/> is what the
+    /// screen was showing; the server refuses if the answer has changed since.
+    /// </summary>
+    Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
+        int expectedCount, CancellationToken token = default);
+
     Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
 
     /// <summary>

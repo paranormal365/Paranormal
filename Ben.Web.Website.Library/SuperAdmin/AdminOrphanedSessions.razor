@@ -1,0 +1,217 @@
+@page "/admin/orphaned-sessions"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Field sessions whose readings are not on this server.
+
+    Made by a Playwright run against a shared database: the suite uploads a session, SQL keeps the
+    row — which the live site reads — and the document's bytes land in the uploads directory of
+    whichever machine ran the suite. The row then exists everywhere and can be opened nowhere.
+
+    The rule is a fact about the data, not a guess about intent: the document cannot be read back.
+    Matching on a label like "Playback check" would eventually delete somebody's real session that
+    happened to be named that way. A session whose bytes are gone carries nothing at all — no
+    readings, no chart, no replay — so removing it takes nothing away.
+
+    The list comes first and the button second, on purpose. A screen that said "delete 32 orphaned
+    sessions" would be asking somebody to trust a number they cannot check; every row here names
+    what it is, so the decision is made on the evidence rather than on the count.
+*@
+
+<PageTitle>Orphaned sessions — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <h3 class="mb-1">Orphaned field sessions</h3>
+    <p class="text-muted">
+        Sessions whose readings are not on this server. Every one of them answers
+        <em>“This session's readings are no longer on the server”</em> when anybody opens it, so
+        there is nothing in them to lose.
+    </p>
+
+    @* Outside every branch on purpose: deleting the last orphan empties the list, and a banner
+       that lived inside the has-rows branch would vanish in the same render that made it true —
+       the screen would go quiet at exactly the moment it had something to report. *@
+    @if (_result is not null)
+    {
+        <div class="alert alert-success py-2" data-testid="purge-result">@_result</div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" />
+    }
+    else if (_refusal is not null)
+    {
+        <div class="alert alert-warning">@_refusal</div>
+    }
+    else if (_rows is null || _rows.Count == 0)
+    {
+        <div class="alert alert-success" data-testid="no-orphans">
+            Nothing orphaned. Every field session on this server can be opened.
+        </div>
+    }
+    else
+    {
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+            <button type="button" class="btn btn-danger btn-sm text-nowrap"
+                    data-testid="delete-orphans"
+                    disabled="@_working" @onclick="ConfirmAsync">
+                <BenIcon Name="trash-2" Class="me-1" />
+                @(_working ? "Deleting…" : $"Delete {_rows.Count} orphaned session{(_rows.Count == 1 ? "" : "s")}")
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    disabled="@_working" @onclick="LoadAsync">
+                <BenIcon Name="refresh-cw" Class="me-1" />Look again
+            </button>
+            @if (_anyWorthASecondLook)
+            {
+                <span class="badge text-bg-warning" data-testid="attached-warning">
+                    Some are attached to an investigation or published — read the list first
+                </span>
+            }
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Recorded</th>
+                        <th>Where they stood</th>
+                        <th>Who</th>
+                        <th class="text-end">Readings</th>
+                        <th class="text-end">Flagged</th>
+                        <th class="text-end">Files</th>
+                        <th>Device</th>
+                        <th>Attached to</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr data-testid="orphan-row">
+                            <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.RecordedByName) ? "—" : row.RecordedByName)</td>
+                            <td class="text-end font-monospace">@row.ReadingCount</td>
+                            <td class="text-end font-monospace">@row.MarkerCount</td>
+                            <td class="text-end font-monospace">@row.MediaCount</td>
+                            <td class="text-secondary small">@row.DeviceModel</td>
+                            <td>
+                                @if (row.PublishedToArchive)
+                                {
+                                    <span class="badge text-bg-warning">published to a place</span>
+                                }
+                                else if (row.LinkedToInvestigation)
+                                {
+                                    <span class="badge text-bg-secondary">an investigation</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<BenConfirmDialog @bind-Visible="@_confirming"
+                  Title="Delete orphaned sessions?"
+                  Busy="@_working"
+                  BusyText="Deleting…"
+                  ConfirmText="Delete them"
+                  OnConfirm="PurgeAsync">
+    @if (_rows is not null)
+    {
+        <p>
+            This removes <strong>@_rows.Count</strong> field
+            session@(_rows.Count == 1 ? "" : "s") and their file rows. Every one of them already
+            fails to open, so nothing readable is lost.
+        </p>
+        @if (_anyWorthASecondLook)
+        {
+            <p class="text-warning mb-0">
+                @_rows.Count(r => r.PublishedToArchive || r.LinkedToInvestigation) of them are
+                attached to an investigation or published to a place. They cannot be opened either.
+            </p>
+        }
+        <p class="text-muted small mb-0">This cannot be undone.</p>
+    }
+</BenConfirmDialog>
+
+@code {
+    private IReadOnlyList<OrphanedFieldSessionRecord>? _rows;
+    private bool _confirming;
+    private bool    _loading = true;
+    private bool    _working;
+    private string? _refusal;
+    private string? _result;
+
+    /// <summary>
+    /// A published or investigation-linked session is still unreadable, so it is still safe to
+    /// delete — but it is the case where somebody should look before clicking, so the page says so
+    /// rather than quietly folding it in with the rest.
+    /// </summary>
+    private bool _anyWorthASecondLook =>
+        _rows?.Any(r => r.PublishedToArchive || r.LinkedToInvestigation) == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _refusal = null; _result = null;
+        StateHasChanged();
+
+        var result = await AdminClient.GetOrphanedFieldSessionsAsync();
+        // A refused load and an empty one are different sentences: "nothing is orphaned" is good
+        // news, "we could not ask" is not, and showing the first when the second happened is the
+        // exact lie this codebase keeps hunting.
+        if (result.Failed)
+            _refusal = result.Reason ?? "Couldn't check for orphaned sessions just now.";
+        else
+            _rows = result.Items;
+
+        _loading = false;
+    }
+
+    private void ConfirmAsync() => _confirming = true;
+
+    private async Task PurgeAsync()
+    {
+        if (_rows is null) return;
+
+        _working = true; _refusal = null; _result = null;
+        StateHasChanged();
+
+        var (outcome, error) = await AdminClient.PurgeOrphanedFieldSessionsAsync(_rows.Count);
+
+        _working = false;
+        _confirming = false;
+
+        if (error is not null) { _refusal = error; return; }
+        if (outcome?.Refusal is not null) { _refusal = outcome.Refusal; await LoadAsync(); return; }
+
+        // Reload first — LoadAsync clears the banner, so setting it before would show the count
+        // for a moment and then lose it. The list is re-read because a delete that worked should
+        // leave the screen agreeing with the database, not with what it remembered.
+        var deleted = outcome?.Deleted ?? 0;
+        await LoadAsync();
+        _result = $"Deleted {deleted} orphaned session{(deleted == 1 ? "." : "s.")}";
+    }
+}

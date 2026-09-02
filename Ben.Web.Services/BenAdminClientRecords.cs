@@ -1402,6 +1402,22 @@ public sealed record FieldSessionDetailRecord(
 /// <summary>Places close enough to each other to be one place typed twice.</summary>
 public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places);
 
+/// <summary>
+/// A field session whose readings are not on this server — the row exists, the bytes do not.
+/// </summary>
+/// <remarks>
+/// Made by a Playwright run against a shared database: SQL keeps the row, the uploads directory
+/// that holds its document belongs to whichever machine ran the suite. Nothing in the product can
+/// open one, which is what makes them safe to delete.
+/// </remarks>
+public sealed record OrphanedFieldSessionRecord(
+    Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
+    int ReadingCount, int MarkerCount, string? RecordedByName,
+    bool LinkedToInvestigation, bool PublishedToArchive, int MediaCount);
+
+/// <summary>What the delete did. <c>Refusal</c> is set when it deliberately did nothing.</summary>
+public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal);
+
 /// <param name="PublishedSessions">The count that decides which record should survive: an archive
 /// people can already read is the one with something to lose.</param>
 public sealed record DuplicatePlaceRow(

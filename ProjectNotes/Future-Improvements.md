@@ -6172,7 +6172,7 @@ A new seeder (`SeedData/DevelopmentRosterSeeder.cs`, running after DevelopmentDa
 **Eleven new accounts.** Investigators Marcus Webb, Olivia Chen, Tyler Brooks, Rachel Kim, David
 Okafor, Priya Sharma, Nathan Cole, Grace Delgado (@benco.dev); clients Linda Maxwell, Robert
 Hayes, Karen Foster (@example.com — clients arrive from anywhere, so their addresses look like
-it). Passwords follow the existing seed pattern (e.g. `M@rcus!Webb2026`); handles arrive via the
+it). Passwords come from `SeedData:DevData:Password`, never from this file; handles arrive via the
 normal backfill service.
 
 **The rosters.** TGH grows to eight (Rachel is a second Administrator, so "the admin" stops being
