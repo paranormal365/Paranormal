@@ -215,7 +215,8 @@ public interface IBenPlacesClient
     /// Where this account's sessions were recorded. Separate from the list because the coordinate
     /// lives inside each session document, so it costs a file read apiece.
     /// </summary>
-    Task<LoadResult<FieldSessionMapPoint>> GetMyFieldSessionMapAsync(CancellationToken token = default);
+    Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default);
 
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(

@@ -320,8 +320,8 @@
                                        Its radius circle IS the accuracy of the fix: indoors that
                                        is routinely the width of the building, and a bare pin
                                        invites the belief that it means the room. *@
-                                    <AddressMapPlayer Latitude="@(CurrentPoint?.Latitude ?? _track[0].Latitude)"
-                                                      Longitude="@(CurrentPoint?.Longitude ?? _track[0].Longitude)"
+                                    <AddressMapPlayer Latitude="@(MapPoint?.Latitude ?? _track[0].Latitude)"
+                                                      Longitude="@(MapPoint?.Longitude ?? _track[0].Longitude)"
                                                       Title="@PositionTitle"
                                                       Config="@_mapConfig"
                                                       ReadOnly="true"
@@ -716,6 +716,7 @@
         if (!double.TryParse(args.Value?.ToString(), out var value)) return;
         Pause();
         _playhead = _start.AddSeconds((_end - _start).TotalSeconds * value / 1000);
+        AdvanceMap(force: true);
     }
 
     private void JumpTo(DateTime moment)
@@ -754,6 +755,7 @@
                 _playhead = _end;
                 Pause();
             }
+            AdvanceMap();
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -767,6 +769,55 @@
     /// Held rather than interpolated: instruments keep their last value, and smoothing between
     /// samples would draw a reading nobody took.
     /// </remarks>
+    /// <summary>The coordinate the map is centred on: the current fix, throttled.</summary>
+    private GeoPoint? MapPoint => _mapPoint ?? CurrentPoint;
+
+    private GeoPoint? _mapPoint;
+    private DateTime  _mapAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Moves the map to the current fix — at most once per second of playback, and only when
+    /// the person actually went somewhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>The readout can update four times a second; the map should not. The tick loop
+    /// re-rendered the map component on every quarter-second with whatever the latest fix was,
+    /// and a GPS fix drifts by a metre or two between readings even when nobody moves — so the
+    /// map re-centred and rebuilt its marker constantly for a person standing still.</para>
+    ///
+    /// <para>A field session is one visit to one building, walked room to room. The map is loaded
+    /// once for that building and then follows the person only when they have gone at least a
+    /// few metres, checked no more than once per second of playback. The room badge above the map
+    /// carries the finer answer — which room — and it costs nothing to update.</para>
+    ///
+    /// <para><paramref name="force"/> is for the scrubber: a seek is the person's own gesture and
+    /// should be answered at once.</para>
+    /// </remarks>
+    private void AdvanceMap(bool force = false)
+    {
+        var point = CurrentPoint;
+        if (point is null) return;
+
+        if (!force)
+        {
+            if ((_playhead - _mapAt).TotalSeconds < 1.0) return;
+            if (_mapPoint is not null && MetresBetween(_mapPoint, point) < 5.0) return;
+        }
+
+        _mapPoint = point;
+        _mapAt    = _playhead;
+    }
+
+    /// <summary>Equirectangular distance — plenty for "did they leave the spot".</summary>
+    private static double MetresBetween(GeoPoint a, GeoPoint b)
+    {
+        const double earth = 6_371_000;
+        var dLat = (b.Latitude - a.Latitude) * Math.PI / 180;
+        var dLon = (b.Longitude - a.Longitude) * Math.PI / 180
+                   * Math.Cos((a.Latitude + b.Latitude) / 2 * Math.PI / 180);
+        return earth * Math.Sqrt(dLat * dLat + dLon * dLon);
+    }
+
     private Reading? Current => _readings.LastOrDefault(r => r.At <= _playhead);
 
     private GeoPoint? CurrentPoint

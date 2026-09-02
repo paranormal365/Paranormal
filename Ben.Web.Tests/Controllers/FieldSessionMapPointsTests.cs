@@ -131,9 +131,9 @@ public class FieldSessionMapPointsTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, storage, me).GetMyMapPoints(default);
-        var points = Assert.IsAssignableFrom<IEnumerable<FieldSessionMapPoint>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+        var result = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var points = Assert.IsType<FieldSessionMapPage>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).Points.ToList();
 
         var pin = Assert.Single(points);
         Assert.Equal("the cellar", pin.Title);
@@ -155,9 +155,9 @@ public class FieldSessionMapPointsTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, storage, me).GetMyMapPoints(default);
-        var points = Assert.IsAssignableFrom<IEnumerable<FieldSessionMapPoint>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var result = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var points = Assert.IsType<FieldSessionMapPage>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).Points;
 
         Assert.Empty(points);
     }
@@ -181,9 +181,9 @@ public class FieldSessionMapPointsTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, storage, me).GetMyMapPoints(default);
-        var points = Assert.IsAssignableFrom<IEnumerable<FieldSessionMapPoint>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+        var result = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var points = Assert.IsType<FieldSessionMapPage>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).Points.ToList();
 
         var pin = Assert.Single(points);
         Assert.Equal("mine", pin.Title);
@@ -203,9 +203,9 @@ public class FieldSessionMapPointsTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, storage, me).GetMyMapPoints(default);
-        var points = Assert.IsAssignableFrom<IEnumerable<FieldSessionMapPoint>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var result = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var points = Assert.IsType<FieldSessionMapPage>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).Points;
 
         Assert.Empty(points);
     }
@@ -213,7 +213,109 @@ public class FieldSessionMapPointsTests
     [Fact]
     public async Task A_signed_out_caller_gets_nothing()
     {
-        var result = await Build(CreateFactory(), [], Guid.Empty).GetMyMapPoints(default);
+        var result = await Build(CreateFactory(), [], Guid.Empty).GetMyMapPoints(null, null, null, null, default);
         Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The viewport is the whole point of the change: a session outside it is not returned, so
+    /// panning asks for a slice rather than the world every time.
+    /// </summary>
+    [Fact]
+    public async Task Only_sessions_inside_the_viewport_come_back()
+    {
+        var factory = CreateFactory();
+        var storage = new Dictionary<string, string>();
+        var me = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            SeedSession(db, storage, me, "in Adams",     Document(36.58, -87.06));
+            SeedSession(db, storage, me, "in New York",  Document(40.71, -74.00));
+            await db.SaveChangesAsync();
+        }
+
+        // Tennessee only.
+        var result = await Build(factory, storage, me)
+            .GetMyMapPoints(north: 37.0, south: 36.0, east: -86.0, west: -88.0, default);
+        var page = Assert.IsType<FieldSessionMapPage>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        var pin = Assert.Single(page.Points);
+        Assert.Equal("in Adams", pin.Title);
+        Assert.Equal(1, page.Total);
+    }
+
+    [Fact]
+    public async Task Half_a_set_of_bounds_is_refused()
+    {
+        var result = await Build(CreateFactory(), [], Guid.NewGuid())
+            .GetMyMapPoints(north: 37.0, south: null, east: null, west: null, default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A row from before the column existed is opened once, the fix copied onto it, and marked
+    /// resolved — so the next request never opens it again. This is the whole backfill.
+    /// </summary>
+    [Fact]
+    public async Task An_old_row_is_resolved_on_first_sight_and_written_back()
+    {
+        var factory = CreateFactory();
+        var storage = new Dictionary<string, string>();
+        var me = Guid.NewGuid();
+        Guid id;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            id = SeedSession(db, storage, me, "old row", Document(36.58, -87.06));
+            await db.SaveChangesAsync();
+        }
+        // SeedSession leaves PositionResolved false and no coordinate: exactly a pre-migration row.
+
+        var first = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var page = Assert.IsType<FieldSessionMapPage>(Assert.IsType<OkObjectResult>(first.Result).Value);
+        Assert.Single(page.Points);
+        Assert.Equal(0, page.Unresolved);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.FieldSessionUploads.SingleAsync(s => s.Id == id);
+            Assert.True(row.PositionResolved);
+            Assert.Equal(36.58m, row.Latitude);
+            Assert.Equal(-87.06m, row.Longitude);
+        }
+
+        // Second request: the document is gone from storage, and it must not matter.
+        storage.Clear();
+        var second = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        Assert.Single(Assert.IsType<FieldSessionMapPage>(Assert.IsType<OkObjectResult>(second.Result).Value).Points);
+    }
+
+    /// <summary>
+    /// A row whose document this server cannot open stays unresolved rather than being recorded
+    /// as "no fix" — that would be a claim about a file nobody read, and the file may yet appear.
+    /// </summary>
+    [Fact]
+    public async Task A_row_whose_document_cannot_be_read_stays_unresolved()
+    {
+        var factory = CreateFactory();
+        var storage = new Dictionary<string, string>();
+        var me = Guid.NewGuid();
+        Guid id;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            id = SeedSession(db, storage, me, "orphan", Document(36.58, -87.06));
+            storage.Clear();
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, storage, me).GetMyMapPoints(null, null, null, null, default);
+        var page = Assert.IsType<FieldSessionMapPage>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Empty(page.Points);
+        Assert.Equal(1, page.Unresolved);
+
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.False((await db.FieldSessionUploads.SingleAsync(s => s.Id == id)).PositionResolved);
     }
 }

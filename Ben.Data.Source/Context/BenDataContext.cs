@@ -2695,6 +2695,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.PlaceId, e.PublishedAtUtc });
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.MediaReviewNote).HasMaxLength(500);
+            // The same declaration every other coordinate column carries; CoordinatePrecisionTests
+            // refuses anything narrower, and matching the rest means one index shape across tables.
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.Longitude).HasPrecision(18, 10);
+            // The map's whole query: this person's resolved sessions, bounded by the viewport.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.SubmittedByAppUserId, e.PositionResolved, e.Latitude, e.Longitude });
             // The moderator's queue: what is waiting, oldest first.
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.MediaReviewState, e.PublishedAtUtc });

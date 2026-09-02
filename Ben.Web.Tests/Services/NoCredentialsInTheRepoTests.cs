@@ -77,6 +77,12 @@ public sealed class NoCredentialsInTheRepoTests
              && !relative.EndsWith(".json") && !relative.EndsWith(".ps1") && !relative.EndsWith(".razor"))
                 continue;
 
+            // This file carries, on purpose, one line in the exact shape the scan hunts — the
+            // self-check below — and a scanner that flags its own fixture proves nothing except
+            // that it works. Nothing else is excused; see the remarks for what to do instead.
+            if (relative.Trim().EndsWith("NoCredentialsInTheRepoTests.cs", StringComparison.Ordinal))
+                continue;
+
             var full = Path.Combine(root, relative.Trim());
             if (File.Exists(full)) yield return relative.Trim();
         }

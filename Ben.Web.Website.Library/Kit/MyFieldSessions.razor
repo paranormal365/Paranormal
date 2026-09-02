@@ -3,6 +3,7 @@
 @using Ben.Web.Services
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Shared
+@implements IDisposable
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -56,20 +57,46 @@
            "where have I been". Same treatment as the groups on the home page, and the same
            honesty — a session only appears when it actually got a fix, and indoors most never
            do, so the count of what is missing is stated rather than left as a shorter list. *@
-        @if (_pins.Count > 0)
+        @if (_mapShown)
         {
             <div class="card mb-3">
                 <div class="card-header py-2">Where these were recorded</div>
                 <div class="card-body p-2">
-                    <InvestigationsMap Pins="@_pins" Height="320px" OnPinClicked="@OpenSession" />
+                    <InvestigationsMap Pins="@_pins" Height="320px"
+                                       OnPinClicked="@OpenSession"
+                                       OnViewportChanged="@OnViewportChanged" />
                 </div>
-                @if (_withoutFix > 0)
-                {
-                    <div class="card-footer py-2 text-muted small" data-testid="unmapped-note">
-                        @_withoutFix of your @_rows.Count sessions had no position to plot —
-                        a phone indoors often never gets a fix.
-                    </div>
-                }
+                <span hidden data-testid="map-bounded-loads">@_boundedLoads</span>
+                <span hidden data-testid="map-last-bounds">@_lastBounds</span>
+                <div class="card-footer py-2 text-muted small d-flex flex-wrap gap-3" data-testid="map-footer">
+                    @if (_pins.Count == 0)
+                    {
+                        @* The map stays up when a pan finds nothing: taking it away would read as
+                           the page breaking, when the person has simply looked somewhere they
+                           never recorded. *@
+                        <span data-testid="map-empty-view">Nothing recorded in this view.</span>
+                    }
+                    @if (_capped)
+                    {
+                        <span data-testid="map-capped">
+                            Showing the newest @_pins.Count of @_mapTotal in view — zoom in to see the rest.
+                        </span>
+                    }
+                    @if (_withoutFix > 0)
+                    {
+                        <span data-testid="unmapped-note">
+                            @_withoutFix of your @_rows.Count sessions had no position to plot —
+                            a phone indoors often never gets a fix.
+                        </span>
+                    }
+                    @if (_unresolved > 0)
+                    {
+                        <span data-testid="map-unresolved">
+                            @_unresolved older session@(_unresolved == 1 ? "" : "s") still being
+                            placed; move the map to bring more in.
+                        </span>
+                    }
+                </div>
             </div>
         }
 
@@ -122,6 +149,17 @@
     private IReadOnlyList<FieldSessionSummaryRecord>? _rows;
     private List<InvestigationMapPin> _pins = [];
     private int     _withoutFix;
+    private int     _mapTotal;
+    private int     _unresolved;
+    private bool    _capped;
+    private CancellationTokenSource? _viewportLoad;
+    /// <summary>How many bounded loads have run — rendered hidden so a browser test can see the
+    /// debounce work, since Blazor Server makes the API call where the browser cannot watch it.</summary>
+    private int _boundedLoads;
+    private string _lastBounds = "";
+    /// <summary>Once the map has had something to show it stays on the page; a pan that finds
+    /// nothing says so in the footer rather than unmounting the map under the person's hands.</summary>
+    private bool _mapShown;
     private bool    _loading = true;
     private string? _refusal;
 
@@ -151,19 +189,63 @@
     /// The pins, best-effort. A map that cannot load is not a reason to withhold the list, so a
     /// failure here leaves the map out rather than turning the whole page into a refusal.
     /// </summary>
-    private async Task LoadMapAsync()
-    {
-        var map = await AdminClient.GetMyFieldSessionMapAsync();
-        if (map.Failed) { _pins = []; _withoutFix = 0; return; }
+    private Task LoadMapAsync() => LoadMapAsync(bounds: null, CancellationToken.None);
 
-        _pins = [.. map.Items.Select(p => new InvestigationMapPin(
+    private async Task LoadMapAsync(MapBounds? bounds, CancellationToken ct)
+    {
+        if (bounds is not null) { _boundedLoads++; _lastBounds = $"{bounds.North:0.####},{bounds.South:0.####},{bounds.East:0.####},{bounds.West:0.####}"; }
+        var page = await AdminClient.GetMyFieldSessionMapAsync(bounds, ct);
+        if (ct.IsCancellationRequested) return;
+        if (page.Failed || page.Item is null) { if (bounds is null) { _pins = []; _withoutFix = 0; } return; }
+
+        _pins = [.. page.Item.Points.Select(p => new InvestigationMapPin(
             p.Id,
             p.MarkerCount > 0 ? $"{p.Title} — {p.MarkerCount} flagged" : p.Title,
             p.Latitude, p.Longitude,
             IsPast: true))];
 
-        _withoutFix = Math.Max(0, (_rows?.Count ?? 0) - _pins.Count);
+        if (_pins.Count > 0) _mapShown = true;
+        _mapTotal   = page.Item.Total;
+        _unresolved = page.Item.Unresolved;
+        _capped     = page.Item.Total > page.Item.Points.Count;
+        // Only meaningful for the whole-world answer: inside a viewport, "not in view" and
+        // "never had a fix" are different reasons for a session to be missing from the map.
+        if (bounds is null) _withoutFix = Math.Max(0, (_rows?.Count ?? 0) - page.Item.Total);
+    }
+
+    /// <summary>
+    /// A pan or zoom finished. Ask the server for what is now in view — after a short pause, and
+    /// only for the most recent gesture.
+    /// </summary>
+    /// <remarks>
+    /// <para>The map raises one event per gesture, but a person exploring pans five times in three
+    /// seconds, and five requests for five viewports they have already left is the overload this
+    /// was written to avoid. So: wait 350 ms; if another gesture arrives first, the earlier one is
+    /// cancelled and never sent. Cancellation also covers a request already in flight — its answer
+    /// would describe somewhere the map no longer is, and drawing it would move pins under the
+    /// person's cursor.</para>
+    ///
+    /// <para>The server bounds every answer to 500 pins and says how many it left out, so even an
+    /// honest request for the whole world cannot come back heavier than that.</para>
+    /// </remarks>
+    private async Task OnViewportChanged(MapViewport viewport)
+    {
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            await LoadMapAsync(new MapBounds(viewport.North, viewport.South, viewport.East, viewport.West), cts.Token);
+            if (!cts.IsCancellationRequested) StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a later gesture — nothing to draw
+        }
     }
 
     private void OpenSession(Guid sessionId) => NavManager.NavigateTo($"/field-sessions/{sessionId}");
+
+    public void Dispose() => _viewportLoad?.Cancel();
 }

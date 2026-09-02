@@ -100,3 +100,51 @@ and a visitor sees none of them.
 B showing "Room: Cellar" above "No position was recorded" (the fix), A and E rendering their
 photos, the chart card reading "Magnetic field and sound over the session", and the new page
 drawing three pins over Adams with "6 of your 9 sessions had no position to plot" beneath.
+
+## Scale: loading pins as the map moves
+
+Ben asked whether the sessions map could load more as it moves, staggered so the server is not
+overloaded. The honest answer was that the first cut could not: the coordinate lived only inside
+the session document, so every pin was a file read, the answer was hard-capped at 200, and the
+shared map raised no movement event at all. Panning on top of that would have re-read every file.
+So this was built in the order that makes each step cheaper than the last:
+
+1. **The fix lives on the row.** `FieldSessionUpload.Latitude`/`Longitude`/`PositionResolved`
+   (migration `20260902202426_AddFieldSessionFirstFix`, precision 18,10 like every other
+   coordinate column — `CoordinatePrecisionTests` refuses less). Set at upload from the first
+   positioned reading. Rows from before the column are resolved lazily, 25 per map request,
+   opened once and never again; a document this server cannot read stays unresolved rather than
+   being recorded as "no fix", because that would be a claim about a file nobody opened.
+2. **The query is SQL.** `api/field-sessions/mine/map` takes optional `north/south/east/west`
+   (all four or none), is capped at 500 pins, and says how many matched and how many old rows are
+   still to be inspected — so a client can tell "500 of 500" from "500 of 4,000".
+3. **The shared map reports movement.** `InvestigationsMap` raises `OnViewportChanged` from
+   Telerik's `OnPanEnd`/`OnZoomEnd`, converting the `[nwLat, nwLng, seLat, seLng]` extent into a
+   named `MapViewport` once so no caller has to remember which index is which. One event per
+   gesture; debouncing beyond that is the caller's business.
+4. **The page paces itself.** 350 ms after the last gesture, one bounded request; a newer gesture
+   cancels the earlier timer and any request still in flight, so five pans in three seconds cost
+   one request, not five, and a late answer for a viewport the map has left is never drawn.
+
+Verified on the side database: the first map call resolved nine old rows (3 with a fix, 6 indoors
+without, 1 unreadable left alone), Tennessee bounds returned 3, New York 0, half a set of bounds
+was refused with a sentence.
+
+**Production prerequisite:** the migration must be applied to the live database before this
+branch is deployed — `dotnet ef database update` against it, which is Ben's call on a shared
+database. The API tolerates the column being absent until then only in the sense that it will
+fail loudly, not quietly.
+
+## Playback map cadence
+
+Ben's observation: during playback the map does not need to follow every reading. A session is one
+visit to one building, walked room to room, so the map is loaded once and the person barely moves
+on it. The tick loop was re-rendering the map component every 250 ms with whatever the latest fix
+was, and a fix drifts a metre or two between readings even for somebody standing still — so the map
+re-centred and rebuilt its marker constantly for nobody going anywhere.
+
+Now the map follows a throttled point: at most once per second of playback, and only when the
+person has actually moved at least five metres. The readout and the room badge still update every
+tick, because they are cheap and the room is the finer answer anyway. A scrub is the person's own
+gesture and moves the map at once.
+

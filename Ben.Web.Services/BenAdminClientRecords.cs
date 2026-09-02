@@ -1385,6 +1385,16 @@ public sealed record FieldSessionMapPoint(
     Guid Id, string Title, decimal Latitude, decimal Longitude,
     DateTime StartedAt, int MarkerCount);
 
+/// <summary>
+/// A map answer: the pins, how many matched in total (so "500 of 500" can be told from "500 of
+/// 4,000"), and how many older rows the server has still to inspect for a fix.
+/// </summary>
+public sealed record FieldSessionMapPage(
+    IReadOnlyList<FieldSessionMapPoint> Points, int Total, int Unresolved);
+
+/// <summary>Four edges of a map viewport, for asking only about what is in view.</summary>
+public sealed record MapBounds(double North, double South, double East, double West);
+
 public sealed record FieldSessionFileSummary(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
     DateTime DateCreated);

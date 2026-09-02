@@ -224,9 +224,16 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
 
     /// <inheritdoc />
-    public Task<LoadResult<FieldSessionMapPoint>> GetMyFieldSessionMapAsync(
-        CancellationToken token = default)
-        => _api.GetListAsync<FieldSessionMapPoint>("/api/field-sessions/mine/map", token);
+    public Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? "/api/field-sessions/mine/map"
+            : $"/api/field-sessions/mine/map?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<FieldSessionMapPage>(url, token);
+    }
 
     /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
