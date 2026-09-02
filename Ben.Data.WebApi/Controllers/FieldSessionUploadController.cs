@@ -83,6 +83,120 @@ public sealed class FieldSessionUploadController : BenControllerBase
     /// mid-upload is a limit that reads as a fault — the refusal explains itself, but by then
     /// they have already recorded the night and carried the phone home.
     /// </remarks>
+    /// <summary>
+    /// Where this account's sessions were recorded, for plotting them on a map.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own endpoint rather than more fields on <c>mine</c>, because the coordinate is not
+    /// on the row: it lives inside the session document, so producing it means opening a file per
+    /// session. The phone calls <c>mine</c> on every Field Kit visit and must not pay for a map it
+    /// is not drawing.</para>
+    ///
+    /// <para>The first fix in the session is the whole answer. A session is one visit to one
+    /// building, and a track's own extent is smaller than the accuracy circle around any point in
+    /// it — averaging would move the pin without making it truer.</para>
+    /// </remarks>
+    [HttpGet("mine/map")]
+    public async Task<ActionResult<IEnumerable<FieldSessionMapPoint>>> GetMyMapPoints(
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Whose sessions may be pinned is a permission question, and the answer here is "the
+        // caller's own" — this endpoint returns nothing else, and a person is entitled to see
+        // where their own work happened. That is why there is no public-only filter: a solo
+        // investigator whose sessions are all at private addresses would otherwise open their own
+        // map and find it empty.
+        //
+        // The rule that DOES bite is for any future map covering more than one person. Sessions
+        // belonging to somebody else are readable only through MayReadAsync — attendee, org
+        // member, public investigation or public case — and a shared map must go through it
+        // rather than reusing this query, because a coordinate is the most sensitive thing a
+        // session carries. The public archive already publishes its own places; nothing here
+        // widens that.
+        var sessions = await db.FieldSessionUploads.AsNoTracking()
+            .Include(s => s.DocumentUploadFile)
+            .Where(s => s.SubmittedByAppUserId == userId)
+            .OrderByDescending(s => s.StartedAt)
+            .Take(200)
+            .Select(s => new
+            {
+                s.Id, s.LocationLabel, s.StartedAt, s.MarkerCount,
+                s.DocumentUploadFile.StoragePath,
+                s.DocumentUploadFile.FileData,
+            })
+            .ToListAsync(ct);
+
+        var points = new List<FieldSessionMapPoint>();
+        foreach (var session in sessions)
+        {
+            var document = await ReadDocumentAsync(session.StoragePath, session.FileData, ct);
+            if (document is null) continue;          // its readings are not on this server
+
+            var fix = FirstFix(document);
+            if (fix is null) continue;               // indoors, most of the time
+
+            points.Add(new FieldSessionMapPoint(
+                session.Id,
+                string.IsNullOrWhiteSpace(session.LocationLabel) ? "Field session" : session.LocationLabel,
+                fix.Value.Latitude, fix.Value.Longitude,
+                session.StartedAt, session.MarkerCount));
+        }
+
+        return Ok(points);
+    }
+
+    /// <summary>The document's bytes, or null when this server cannot produce them.</summary>
+    private async Task<string?> ReadDocumentAsync(string? storagePath, byte[]? inline, CancellationToken ct)
+    {
+        if (inline is { Length: > 0 }) return System.Text.Encoding.UTF8.GetString(inline);
+        if (string.IsNullOrEmpty(storagePath)) return null;
+
+        try
+        {
+            await using var stream = await _fileStorage.OpenReadAsync(storagePath, ct);
+            using var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync(ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                     or FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The first reading that carries a position, if any did.</summary>
+    private static (decimal Latitude, decimal Longitude)? FirstFix(string document)
+    {
+        try
+        {
+            using var parsed = JsonDocument.Parse(document);
+            if (!parsed.RootElement.TryGetProperty("readings", out var readings)
+                || readings.ValueKind != JsonValueKind.Array) return null;
+
+            foreach (var reading in readings.EnumerateArray())
+            {
+                if (!reading.TryGetProperty("position", out var position)
+                    || position.ValueKind != JsonValueKind.Object) continue;
+
+                if (position.TryGetProperty("latitude", out var lat) && lat.ValueKind == JsonValueKind.Number
+                 && position.TryGetProperty("longitude", out var lon) && lon.ValueKind == JsonValueKind.Number)
+                {
+                    return ((decimal)lat.GetDouble(), (decimal)lon.GetDouble());
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // A document we cannot parse has no coordinate to give. It is already reported
+            // everywhere else that reads it; the map simply leaves it out.
+        }
+        return null;
+    }
+
     [HttpGet("my-storage")]
     public async Task<ActionResult<AccountStorageRecord>> GetMyStorage(CancellationToken ct)
     {
@@ -626,6 +740,11 @@ public sealed record FieldSessionRecord(
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);
+
+/// <summary>One session reduced to a pin: where it was, and enough to label it.</summary>
+public sealed record FieldSessionMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude,
+    DateTime StartedAt, int MarkerCount);
 
 public sealed record FieldSessionFileRecord(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,

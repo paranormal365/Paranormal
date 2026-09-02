@@ -225,25 +225,67 @@
                 <div class="row g-3">
                     <div class="col-12 col-lg-7">
                         <div class="card h-100">
-                            <div class="card-header py-2">Magnetic field over the session</div>
+                            <div class="card-header py-2">@ChartHeading</div>
                             <div class="card-body">
-                                <TelerikChart Height="240px">
-                                    <ChartSeriesItems>
-                                        <ChartSeries Type="ChartSeriesType.Line"
-                                                     Data="@_chartPoints"
-                                                     Field="@nameof(TracePoint.Milligauss)"
-                                                     CategoryField="@nameof(TracePoint.Label)"
-                                                     Name="mG from base">
-                                            <ChartSeriesMarkers Visible="false" />
-                                        </ChartSeries>
-                                    </ChartSeriesItems>
-                                    <ChartValueAxes>
-                                        <ChartValueAxis>
-                                            <ChartValueAxisTitle Text="mG from base" />
-                                        </ChartValueAxis>
-                                    </ChartValueAxes>
-                                    <ChartLegend Visible="false" />
-                                </TelerikChart>
+                                @* One chart per channel the session actually holds. A single
+                                   hard-wired magnetic series drew an empty grid with axes and no
+                                   line whenever the magnetometer was switched off — which the app
+                                   allows mid-session — while the sound trace, the only channel
+                                   with data, was never plotted at all. An empty grid reads as
+                                   broken; a sentence reads as absent, and absent is the truth. *@
+                                @if (_chartPoints.Count == 0 && _soundPoints.Count == 0)
+                                {
+                                    <div class="text-muted small p-3" data-testid="no-channels">
+                                        This session recorded no magnetic or sound readings.
+                                    </div>
+                                }
+                                @if (_chartPoints.Count > 0)
+                                {
+                                    <TelerikChart Height="@(_soundPoints.Count > 0 ? "150px" : "240px")">
+                                        <ChartSeriesItems>
+                                            <ChartSeries Type="ChartSeriesType.Line"
+                                                         Data="@_chartPoints"
+                                                         Field="@nameof(TracePoint.Milligauss)"
+                                                         CategoryField="@nameof(TracePoint.Label)"
+                                                         Name="@MagneticAxisTitle">
+                                                <ChartSeriesMarkers Visible="false" />
+                                            </ChartSeries>
+                                        </ChartSeriesItems>
+                                        <ChartValueAxes>
+                                            <ChartValueAxis>
+                                                @* Derived, not literal: with no base level taken
+                                                   the readout says "abs" and the header drops its
+                                                   suffix, and the axis was the last thing still
+                                                   claiming a baseline that was never measured. *@
+                                                <ChartValueAxisTitle Text="@MagneticAxisTitle" />
+                                            </ChartValueAxis>
+                                        </ChartValueAxes>
+                                        <ChartLegend Visible="false" />
+                                    </TelerikChart>
+                                }
+                                @if (_soundPoints.Count > 0)
+                                {
+                                    @* Its own chart rather than a second series: decibels and
+                                       milligauss share no scale, and one axis for both would make
+                                       whichever number is larger the only one anybody can read. *@
+                                    <TelerikChart Height="@(_chartPoints.Count > 0 ? "150px" : "240px")">
+                                        <ChartSeriesItems>
+                                            <ChartSeries Type="ChartSeriesType.Line"
+                                                         Data="@_soundPoints"
+                                                         Field="@nameof(TracePoint.Milligauss)"
+                                                         CategoryField="@nameof(TracePoint.Label)"
+                                                         Name="dBFS">
+                                                <ChartSeriesMarkers Visible="false" />
+                                            </ChartSeries>
+                                        </ChartSeriesItems>
+                                        <ChartValueAxes>
+                                            <ChartValueAxis>
+                                                <ChartValueAxisTitle Text="dBFS" />
+                                            </ChartValueAxis>
+                                        </ChartValueAxes>
+                                        <ChartLegend Visible="false" />
+                                    </TelerikChart>
+                                }
                             </div>
                         </div>
                     </div>
@@ -252,6 +294,18 @@
                         <div class="card h-100">
                             <div class="card-header py-2">Where they were</div>
                             <div class="card-body p-2">
+                                @* The room is the session's, not the map's. It used to live inside
+                                   the has-a-track branch, so indoors — where a phone routinely
+                                   never gets a fix — the card said "no position" and threw away
+                                   the one thing the investigator had actually typed. *@
+                                @if (!string.IsNullOrWhiteSpace(CurrentRoom))
+                                {
+                                    <div class="mb-2">
+                                        <span class="badge text-bg-secondary" data-testid="current-room">
+                                            Room: @CurrentRoom
+                                        </span>
+                                    </div>
+                                }
                                 @if (_track.Count == 0)
                                 {
                                     @* Indoors a phone often never gets a fix. Saying so beats an
@@ -266,17 +320,6 @@
                                        Its radius circle IS the accuracy of the fix: indoors that
                                        is routinely the width of the building, and a bare pin
                                        invites the belief that it means the room. *@
-                                    @if (!string.IsNullOrWhiteSpace(CurrentRoom))
-                                    {
-                                        @* The one fact the map cannot supply: which part of the
-                                           building this is. It comes from the person who was
-                                           standing in it. *@
-                                        <div class="mb-2">
-                                            <span class="badge text-bg-secondary" data-testid="current-room">
-                                                Room: @CurrentRoom
-                                            </span>
-                                        </div>
-                                    }
                                     <AddressMapPlayer Latitude="@(CurrentPoint?.Latitude ?? _track[0].Latitude)"
                                                       Longitude="@(CurrentPoint?.Longitude ?? _track[0].Longitude)"
                                                       Title="@PositionTitle"
@@ -313,6 +356,19 @@
                                     {
                                         <video controls preload="none" width="320"
                                                class="ms-auto" src="@FileUrl(file.Id)"></video>
+                                    }
+                                    else if (IsImage(file.RelativePath))
+                                    {
+                                        @* A photo used to show as its filename and nothing else,
+                                           so the member who took it was the one person who could
+                                           not see it — the public place page has always rendered
+                                           the same file as a thumbnail. *@
+                                        <a href="@FileUrl(file.Id)" target="_blank" rel="noopener"
+                                           class="ms-auto" data-testid="session-photo">
+                                            <img src="@FileUrl(file.Id)" alt="@file.RelativePath"
+                                                 loading="lazy"
+                                                 style="max-height:120px;width:auto;border-radius:.25rem;" />
+                                        </a>
                                     }
                                 </li>
                             }
@@ -382,6 +438,7 @@
 
     private List<Reading> _readings = new();
     private List<TracePoint> _chartPoints = new();
+    private List<TracePoint> _soundPoints = new();
     private List<GeoPoint> _track = new();
     private List<GeoPoint> _markerPoints = new();
     private List<MarkerRow> _markers = new();
@@ -539,6 +596,7 @@
         // nothing to depart from, and an absolute figure would be meaningless on its own.
         _baseline = baseline;
         _chartPoints = Downsample(_readings, _baseline);
+        _soundPoints = DownsampleSound(_readings);
 
         _track = _readings
             .Where(r => r.Latitude is not null && r.Longitude is not null)
@@ -573,6 +631,12 @@
                 baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
             .ToList();
 
+        return Thin(points);
+    }
+
+    /// <summary>Keeps the extremes of each bucket. Shared by both channels.</summary>
+    private static List<TracePoint> Thin(List<TracePoint> points)
+    {
         const int maxPoints = 400;
         if (points.Count <= maxPoints) return points;
 
@@ -588,6 +652,38 @@
             if (!ReferenceEquals(low, high)) kept.Add(high);
         }
         return kept;
+    }
+
+    /// <summary>What the chart card is actually showing, named for the channels present.</summary>
+    private string ChartHeading => (_chartPoints.Count > 0, _soundPoints.Count > 0) switch
+    {
+        (true,  true)  => "Magnetic field and sound over the session",
+        (true,  false) => "Magnetic field over the session",
+        (false, true)  => "Sound over the session",
+        _              => "Readings over the session",
+    };
+
+    /// <summary>
+    /// The same distinction the readout and the card header already make: a reading is "from base"
+    /// only when a base level was taken.
+    /// </summary>
+    private string MagneticAxisTitle => _baseline is null ? "mG abs" : "mG from base";
+
+    /// <summary>
+    /// The sound trace, thinned the same way and for the same reason as the magnetic one.
+    /// </summary>
+    /// <remarks>
+    /// It reuses <see cref="TracePoint"/> rather than introducing a near-identical shape: the
+    /// field is a number against a time label either way, and the axis title says which unit.
+    /// </remarks>
+    private static List<TracePoint> DownsampleSound(List<Reading> readings)
+    {
+        var points = readings
+            .Where(r => r.SoundDbfs is not null)
+            .Select(r => new TracePoint(r.At.ToString("HH:mm:ss"), r.SoundDbfs!.Value))
+            .ToList();
+
+        return Thin(points);
     }
 
     private static double? Number(JsonElement element, string name)
@@ -759,6 +855,12 @@
     private static bool IsVideo(string path) =>
         path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsImage(string path) =>
+        path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".heic", StringComparison.OrdinalIgnoreCase);
 
     public void Dispose() => Pause();
 

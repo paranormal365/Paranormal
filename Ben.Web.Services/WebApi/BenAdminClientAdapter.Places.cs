@@ -219,6 +219,16 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
     /// <inheritdoc />
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<FieldSessionMapPoint>> GetMyFieldSessionMapAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionMapPoint>("/api/field-sessions/mine/map", token);
+
+    /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);

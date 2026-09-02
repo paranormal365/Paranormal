@@ -1380,6 +1380,11 @@ public sealed record FieldSessionSummaryRecord(
     Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
     IReadOnlyList<FieldSessionFileSummary> Files);
 
+/// <summary>One session reduced to a pin, for the map on My Field Sessions.</summary>
+public sealed record FieldSessionMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude,
+    DateTime StartedAt, int MarkerCount);
+
 public sealed record FieldSessionFileSummary(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
     DateTime DateCreated);

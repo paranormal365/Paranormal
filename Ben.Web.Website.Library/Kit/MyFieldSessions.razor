@@ -1,0 +1,169 @@
+@page "/my-field-sessions"
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    What this account has sent up from the phone.
+
+    Until now nothing on the website listed these. `GetFieldSessionsAsync` had no Razor consumer at
+    all, so the only routes to /field-sessions/{id} were Report Builder's "Play back" button and a
+    URL somebody already held — which meant a member who recorded a session on the app, uploaded it,
+    and then opened the website had no way to find it. The upload appeared to have gone nowhere.
+
+    A table rather than cards: these are compared, not browsed. What matters is when, where, how
+    much was recorded and whether anything was flagged, and those read as columns.
+
+    Every row's readings live in a file, and that file can be missing — a session uploaded from one
+    machine's storage is a row this server cannot open. Rather than let "Play back" lead somewhere
+    that refuses, a session whose document is gone says so on the row.
+*@
+
+<PageTitle>My field sessions — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <h3 class="mb-1">My field sessions</h3>
+    <p class="text-muted">
+        Everything you have sent up from the app, newest first. Recording never needs an account;
+        uploading does, so this is the list of the ones you chose to send.
+    </p>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" />
+    }
+    else if (_refusal is not null)
+    {
+        @* "Couldn't ask" and "you have none" are different sentences, and showing the second when
+           the first happened is the lie this codebase keeps hunting. *@
+        <div class="alert alert-warning" data-testid="sessions-refusal">@_refusal</div>
+    }
+    else if (_rows is null || _rows.Count == 0)
+    {
+        <div class="alert alert-secondary" data-testid="no-sessions">
+            You haven't uploaded a field session yet. Record one in the app's Field Kit, then use
+            <strong>Send to the server</strong> when you stop it.
+        </div>
+    }
+    else
+    {
+        @* The map answers a different question from the table: not "what did I record" but
+           "where have I been". Same treatment as the groups on the home page, and the same
+           honesty — a session only appears when it actually got a fix, and indoors most never
+           do, so the count of what is missing is stated rather than left as a shorter list. *@
+        @if (_pins.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header py-2">Where these were recorded</div>
+                <div class="card-body p-2">
+                    <InvestigationsMap Pins="@_pins" Height="320px" OnPinClicked="@OpenSession" />
+                </div>
+                @if (_withoutFix > 0)
+                {
+                    <div class="card-footer py-2 text-muted small" data-testid="unmapped-note">
+                        @_withoutFix of your @_rows.Count sessions had no position to plot —
+                        a phone indoors often never gets a fix.
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Recorded</th>
+                        <th>Where they stood</th>
+                        <th class="text-end">Readings</th>
+                        <th class="text-end">Flagged</th>
+                        <th class="text-end">Files</th>
+                        <th>Device</th>
+                        <th class="text-end">&nbsp;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr data-testid="session-row">
+                            <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToDisplayDate()</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
+                            <td class="text-end font-monospace">@row.ReadingCount.ToString("N0")</td>
+                            <td class="text-end">
+                                @if (row.MarkerCount > 0)
+                                {
+                                    <span class="badge bg-warning text-dark">@row.MarkerCount</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="text-end font-monospace">@row.Files.Count</td>
+                            <td class="text-secondary small">@row.DeviceModel</td>
+                            <td class="text-end">
+                                <a class="btn btn-secondary btn-sm text-nowrap"
+                                   data-testid="play-back"
+                                   href="@($"/field-sessions/{row.Id}")">Play back</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<FieldSessionSummaryRecord>? _rows;
+    private List<InvestigationMapPin> _pins = [];
+    private int     _withoutFix;
+    private bool    _loading = true;
+    private string? _refusal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The page renders long before the circuit is live; asking who is signed in before that
+        // answers "nobody" and bounces a legitimate member to the front page.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        var result = await AdminClient.GetMyFieldSessionsAsync();
+
+        if (result.SessionExpired)
+            _refusal = "You have been signed out. Sign in again to see your sessions.";
+        else if (result.Failed)
+            _refusal = result.Reason ?? "Couldn't load your field sessions just now.";
+        else
+        {
+            _rows = result.Items;
+            await LoadMapAsync();
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// The pins, best-effort. A map that cannot load is not a reason to withhold the list, so a
+    /// failure here leaves the map out rather than turning the whole page into a refusal.
+    /// </summary>
+    private async Task LoadMapAsync()
+    {
+        var map = await AdminClient.GetMyFieldSessionMapAsync();
+        if (map.Failed) { _pins = []; _withoutFix = 0; return; }
+
+        _pins = [.. map.Items.Select(p => new InvestigationMapPin(
+            p.Id,
+            p.MarkerCount > 0 ? $"{p.Title} — {p.MarkerCount} flagged" : p.Title,
+            p.Latitude, p.Longitude,
+            IsPast: true))];
+
+        _withoutFix = Math.Max(0, (_rows?.Count ?? 0) - _pins.Count);
+    }
+
+    private void OpenSession(Guid sessionId) => NavManager.NavigateTo($"/field-sessions/{sessionId}");
+}
