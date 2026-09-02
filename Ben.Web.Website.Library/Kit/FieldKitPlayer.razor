@@ -802,8 +802,26 @@
 
     private string SoundText => Current?.SoundDbfs is double sound ? $"{sound:0} dB" : "—";
 
+    /// <summary>
+    /// The heading as a compass point and a bearing.
+    /// </summary>
+    /// <remarks>
+    /// "NE 043°" is a direction somebody can hold a phone and check against; a bare "43°" is a
+    /// number they have to convert first. During playback the direction they were facing is often
+    /// more use than the coordinate they were standing on — it is what makes a spike in the
+    /// recording line up with a doorway.
+    /// </remarks>
     private string HeadingText =>
-        Current?.HeadingDegrees is double heading ? $"{heading:0}°" : "—";
+        Current?.HeadingDegrees is double heading
+            ? $"{Compass(heading)} {heading:000}°"
+            : "—";
+
+    private static string Compass(double degrees)
+    {
+        string[] points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        var index = (int)Math.Round(((degrees % 360) + 360) % 360 / 45.0) % 8;
+        return points[index];
+    }
 
     /// <summary>What the pin is called, accuracy included, so the circle is never a mystery.</summary>
     private string PositionTitle
@@ -826,9 +844,16 @@
             var accuracy = CurrentAccuracyMeters;
             // The accuracy travels with it, always: indoors a fix is routinely the width of the
             // whole building, and a bare coordinate invites the belief that it means the room.
+            //
+            // Three decimals, not five. Five is about a metre — a doorway — and a field session
+            // happens at somebody's home as often as at a landmark; the rest of this product
+            // publishes locations only to within a few miles for exactly that reason. Three is
+            // roughly a hundred metres: enough to say which building, not which room. The room
+            // itself is named separately by the person who was standing in it, which is a better
+            // answer than any coordinate and the one worth reading first.
             return accuracy is double metres
-                ? $"{point.Latitude:0.00000}, {point.Longitude:0.00000} ±{metres:0} m"
-                : $"{point.Latitude:0.00000}, {point.Longitude:0.00000}";
+                ? $"~{point.Latitude:0.000}, {point.Longitude:0.000} ±{metres:0} m"
+                : $"~{point.Latitude:0.000}, {point.Longitude:0.000}";
         }
     }
 
