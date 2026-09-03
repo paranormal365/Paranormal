@@ -129,4 +129,27 @@ public sealed class AdminErrorLogControllerTests
                 AdminErrorLogController.IsPlainIdentifier(candidate));
         }
     }
+
+    // ── What the reader assumes about the table ───────────────────────────────
+
+    [Fact]
+    public void The_reader_never_assumes_a_column_width_Serilog_does_not_create()
+    {
+        // Serilog's autoCreateSqlTable makes Id an INT identity, and SqlClient's typed getters do
+        // not widen: GetInt64 on an int column throws InvalidCastException. The live table is int,
+        // so the grid had never loaded — found 2026-09-03 by the browser suite on a fresh database,
+        // where the same exception surfaced as "Could not load the error log." Nothing here can
+        // open SQL Server, so this reads the source instead: the reader must go through
+        // Convert/GetValue for Id, never a width-specific getter.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+
+        var source = File.ReadAllText(Path.Combine(dir!.FullName,
+            "Ben.Data.WebApi", "Controllers", "Admin", "AdminErrorLogController.cs"));
+
+        Assert.DoesNotContain("GetInt64(", source);
+        Assert.Contains("Convert.ToInt64(reader.GetValue(0))", source);
+    }
 }

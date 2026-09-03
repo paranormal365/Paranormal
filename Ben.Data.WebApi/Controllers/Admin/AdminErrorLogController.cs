@@ -157,7 +157,11 @@ public sealed class AdminErrorLogController : BenControllerBase
             while (await reader.ReadAsync(ct))
             {
                 items.Add(new ErrorLogRecord(
-                    Id:          reader.GetInt64(0),
+                    // Serilog's autoCreateSqlTable makes Id an INT identity, and SqlClient's
+                    // GetInt64 on an int column throws InvalidCastException rather than widening.
+                    // Found 2026-09-03 by the Playwright suite on a fresh database - and the live
+                    // table is int too, so the grid had never loaded. Convert widens either way.
+                    Id:          Convert.ToInt64(reader.GetValue(0)),
                     TimeStamp:   reader.GetDateTime(1),
                     Level:       reader.IsDBNull(2) ? null : reader.GetString(2),
                     Message:     reader.IsDBNull(3) ? null : reader.GetString(3),
