@@ -152,6 +152,14 @@ public sealed class FieldSessionUploadControllerTests
             Headers = new HeaderDictionary { ["Content-Type"] = contentType },
         };
 
+    /// <summary>
+    /// Bytes that begin like an M4A — the door checks the first bytes now — followed by a few of
+    /// whatever, so a test about serving is not refused for not being a recording.
+    /// </summary>
+    private static byte[] M4a(int trailing)
+        => new byte[] { 0, 0, 0, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'M', (byte)'4', (byte)'A', (byte)' ', 0, 0, 0, 0 }
+           .Concat(Enumerable.Range(1, trailing).Select(i => (byte)i)).ToArray();
+
     private static IFormFile Document(string json)
     {
         return Upload(Encoding.UTF8.GetBytes(json), "data.json", "application/json");
@@ -322,7 +330,7 @@ public sealed class FieldSessionUploadControllerTests
             Assert.IsType<OkObjectResult>(submitted.Result).Value);
 
         var result = await Build(factory, AttendeeId).SubmitFile(
-            session.Id, Upload([1, 2, 3, 4], "clip.m4a", "audio/mp4"), path, null, default);
+            session.Id, Upload(M4a(4), "clip.m4a", "audio/mp4"), path, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -501,7 +509,7 @@ public sealed class FieldSessionUploadControllerTests
             Assert.IsType<OkObjectResult>(submitted.Result).Value);
 
         var attached = await Build(factory, AttendeeId).SubmitFile(
-            session.Id, Upload([1, 2, 3, 4, 5], "clip.m4a", "audio/mp4"),
+            session.Id, Upload(M4a(5), "clip.m4a", "audio/mp4"),
             "media/audio-001.m4a", null, default);
         var file = Assert.IsType<FieldSessionFileRecord>(
             Assert.IsType<OkObjectResult>(attached.Result).Value);
@@ -529,7 +537,7 @@ public sealed class FieldSessionUploadControllerTests
             Assert.IsType<OkObjectResult>(submitted.Result).Value);
 
         var attached = await Build(factory, AttendeeId).SubmitFile(
-            session.Id, Upload([1, 2, 3], "clip.m4a", "audio/mp4"),
+            session.Id, Upload(M4a(3), "clip.m4a", "audio/mp4"),
             "media/audio-002.m4a", null, default);
         var file = Assert.IsType<FieldSessionFileRecord>(
             Assert.IsType<OkObjectResult>(attached.Result).Value);
@@ -664,5 +672,26 @@ public sealed class FieldSessionUploadControllerTests
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.Null((await db.FieldSessionUploads.SingleAsync()).RecordedByAppUserId);
+    }
+
+    /// <summary>
+    /// The list said every recording was 0 bytes while the detail said 2,048: the list loaded the
+    /// file rows without the upload rows their sizes live on. Found by the guard work, when the
+    /// app's placeholder "shrank" to nothing in the list and not in the detail.
+    /// </summary>
+    [Fact]
+    public async Task The_list_reports_each_recordings_real_size()
+    {
+        var factory = await SeedAsync();
+        var ctrl = Build(factory, AttendeeId);
+        var created = await ctrl.SubmitDocument(Document(ValidDocument()), Guid.NewGuid(), InvestigationId, AttendeeId, null, default);
+        var session = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(created.Result).Value);
+        var bytes = M4a(5);
+        Assert.IsType<OkObjectResult>((await ctrl.SubmitFile(session.Id, Upload(bytes, "clip.m4a", "audio/mp4"), "media/clip.m4a", null, default)).Result);
+
+        var listed = await Build(factory, AttendeeId).GetMine(default);
+        var rows = Assert.IsAssignableFrom<IEnumerable<FieldSessionRecord>>(Assert.IsType<OkObjectResult>(listed.Result).Value);
+        var file = Assert.Single(rows.Single(r => r.Id == session.Id).Files);
+        Assert.Equal(bytes.Length, file.FileSize);
     }
 }
