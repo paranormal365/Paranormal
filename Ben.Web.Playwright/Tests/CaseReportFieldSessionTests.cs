@@ -116,6 +116,13 @@ public class CaseReportFieldSessionTests : BenTestBase
         var cited = Page.Locator("[data-testid='report-field-session']")
                         .Filter(new() { HasTextString = label }).First;
         await Expect(cited).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // The citation carries its readout: what the night held, in one paragraph, so the PDF
+        // stands on its own. The uploaded document has magnetic readings, so it names the peak.
+        var readout = cited.Locator("[data-testid='session-readout']");
+        await Expect(readout).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(readout).ToContainTextAsync("peaked at");
+        TestContext.Out.WriteLine("readout: " + (await readout.InnerTextAsync()).Trim());
         // Cited means reachable: the manager can open the recording it points at.
         await Expect(cited.GetByRole(AriaRole.Link, new() { Name = "Play back" }))
             .ToBeVisibleAsync();

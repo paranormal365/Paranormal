@@ -1175,7 +1175,8 @@ public sealed record CaseReportSectionFieldSessionDto(
     int       MarkerCount,
     int       FileCount,
     string?   Caption,
-    int       SortOrder);
+    int       SortOrder,
+    string?   Readout);
 
 /// <summary>A field session a report section could cite, as the picker lists it.</summary>
 public sealed record AvailableFieldSessionDto(

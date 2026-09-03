@@ -8,7 +8,10 @@ namespace Ben.Data.WebApi.Services;
 /// <summary>Shared PDF generation helper for CaseReport — used by both org and client controllers.</summary>
 public static class CaseReportPdfGenerator
 {
-    public static byte[] Generate(CaseReport report)
+    /// <summary>Without readouts: every cited session prints the "not on this server" sentence.</summary>
+    public static byte[] Generate(CaseReport report) => Generate(report, new Dictionary<Guid, string?>());
+
+    public static byte[] Generate(CaseReport report, IReadOnlyDictionary<Guid, string?> readouts)
     {
         var doc    = new RadFixedDocument();
         var editor = new RadFixedDocumentEditor(doc);
@@ -59,6 +62,13 @@ public static class CaseReportPdfGenerator
                     ? "not attributed" : session.RecordedByName;
                 editor.InsertRun($"    Recorded by {by} on {session.DeviceModel} · "
                                + $"{session.ReadingCount:N0} readings · {session.MarkerCount:N0} marks");
+                editor.InsertLineBreak();
+                // What the night held, in one paragraph — peak field, when, in which room, what was
+                // recording at that moment — so the PDF stands on its own. Read from the session's
+                // own document; when this server cannot open it, the PDF says that instead.
+                var readout = readouts.GetValueOrDefault(session.Id)
+                              ?? "The session's readings are not on this server, so no readout can be given.";
+                editor.InsertRun("    " + readout);
                 editor.InsertLineBreak();
 
                 foreach (var file in session.Files.OrderBy(x => x.RelativePath))
