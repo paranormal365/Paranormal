@@ -1,0 +1,43 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@*
+    BenInteractiveOnly — a form that is never rendered before the circuit exists.
+
+    Why. Every page is prerendered as static HTML and then taken over by the Blazor circuit a
+    moment later. A form in that static HTML looks ready and is not: when the interactive render
+    arrives it sets every input from component state — which is empty — and whatever the person
+    typed in the meantime is gone. On a fast machine the window is a few hundred milliseconds and
+    nobody notices. On a slow connection, or a loaded box, it is seconds: on 2026-09-03 the browser
+    suite typed a group name, pressed Next and was told "Give your group a name first."; signed in
+    and was told the email was required; asked for a reset link and nothing happened. Three pages,
+    one cause.
+
+    What it does. During prerender it renders the placeholder — a quiet "Loading…" line by default —
+    and nothing a person can type into. Once the circuit is up the child content renders fresh, so
+    there is no earlier value to lose. The cost is the form appearing a beat later than the page
+    around it, which is honest: it was not usable a beat earlier either.
+
+    Wrap the FORM, not the page: headings, help links and explanatory text still prerender, so the
+    page reads immediately and only the inputs wait.
+*@
+
+@if (RendererInfo.IsInteractive)
+{
+    @ChildContent
+}
+else if (Placeholder is not null)
+{
+    @Placeholder
+}
+else
+{
+    <div class="text-secondary small py-3 ben-interactive-placeholder" role="status" aria-busy="true">Loading…</div>
+}
+
+@code {
+    /// <summary>The form, or anything else that must never be shown before it can be used.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>What to show during prerender instead. Optional; a "Loading…" line otherwise.</summary>
+    [Parameter] public RenderFragment? Placeholder { get; set; }
+}

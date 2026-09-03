@@ -1,4 +1,4 @@
-@page "/organizations/new"
+﻿@page "/organizations/new"
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -39,6 +39,7 @@
                     changed later from your group's own page.
                 </p>
 
+                <BenInteractiveOnly>
                 <BenWizard @ref="_wizardRef" Model="@_wizard" DraftKey="start-group"
                            CaptureDraft="@CaptureDraft" RestoreDraft="@RestoreDraft"
                            OnFinish="@CreateAsync" OnStepChanged="@StateHasChanged"
@@ -198,6 +199,7 @@
                             break;
                     }
                 </BenWizard>
+                </BenInteractiveOnly>
 
                 @if (_error is not null)
                 {
