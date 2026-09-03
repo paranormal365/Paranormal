@@ -22,8 +22,20 @@ public sealed class CaseReportController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
 
     public CaseReportController(IDbContextFactory<BenDataContext> db,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Ben.Data.Common.Interfaces.IFileStorageService fileStorage)
+    { _db = db; _security = security; _fileStorage = fileStorage; }
+
+    private readonly Ben.Data.Common.Interfaces.IFileStorageService _fileStorage;
+
+    private Task<IReadOnlyDictionary<Guid, string?>> ReadoutsAsync(CaseReport report, CancellationToken ct)
+        => Ben.Data.WebApi.Services.CaseReportReadouts.ForAsync(report.Sections.SelectMany(x => x.FieldSessions), _fileStorage, ct);
+
+    private Task<IReadOnlyDictionary<Guid, string?>> ReadoutsAsync(IEnumerable<CaseReportSectionFieldSession> citations, CancellationToken ct)
+        => Ben.Data.WebApi.Services.CaseReportReadouts.ForAsync(citations, _fileStorage, ct);
+
+    private Task<string?> ReadoutAsync(FieldSessionUpload session, CancellationToken ct)
+        => Ben.Data.WebApi.Services.CaseReportReadouts.ForAsync(session, _fileStorage, ct);
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -60,8 +72,9 @@ public sealed class CaseReportController : BenControllerBase
             .Include(r => r.Sections)
                 .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
-        return report is null ? NotFound() : Ok(ToDetail(report));
+        return report is null ? NotFound() : Ok(ToDetail(report, await ReadoutsAsync(report, ct)));
     }
 
     [HttpPost]
@@ -82,7 +95,7 @@ public sealed class CaseReportController : BenControllerBase
         };
         db.CaseReports.Add(report);
         await db.SaveChangesAsync(ct);
-        return Ok(ToDetail(report));
+        return Ok(ToDetail(report, await ReadoutsAsync(report, ct)));
     }
 
     [HttpPut("{id:guid}")]
@@ -101,6 +114,10 @@ public sealed class CaseReportController : BenControllerBase
                 .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.FieldSessionUpload)
                         .ThenInclude(u => u.Files)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions)
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
@@ -111,7 +128,7 @@ public sealed class CaseReportController : BenControllerBase
         report.DateUpdated          = DateTime.UtcNow;
         report.UpdatedByAppUserId   = userId;
         await db.SaveChangesAsync(ct);
-        return Ok(ToDetail(report));
+        return Ok(ToDetail(report, await ReadoutsAsync(report, ct)));
     }
 
     [HttpPost("{id:guid}/publish")]
@@ -130,6 +147,10 @@ public sealed class CaseReportController : BenControllerBase
                 .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.FieldSessionUpload)
                         .ThenInclude(u => u.Files)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions)
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
@@ -164,7 +185,7 @@ public sealed class CaseReportController : BenControllerBase
         await db.SaveChangesAsync(ct);
         if (transaction is not null)
             await transaction.CommitAsync(ct);
-        return Ok(ToDetail(report));
+        return Ok(ToDetail(report, await ReadoutsAsync(report, ct)));
     }
 
     [HttpDelete("{id:guid}")]
@@ -217,13 +238,13 @@ public sealed class CaseReportController : BenControllerBase
 
         var section = await db.CaseReportSections
             .Include(s => s.Files).ThenInclude(f => f.UploadFile)
-            .Include(s => s.FieldSessions).ThenInclude(f => f.FieldSessionUpload)
+            .Include(s => s.FieldSessions).ThenInclude(f => f.FieldSessionUpload).ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.CaseReportId == id, ct);
         if (section is null) return NotFound();
 
         section.Title = request.Title.Trim(); section.Body = request.Body?.Trim(); section.SectionType = request.SectionType;
         await db.SaveChangesAsync(ct);
-        return Ok(ToSectionDto(section));
+        return Ok(ToSectionDto(section, await ReadoutsAsync(section.FieldSessions, ct)));
     }
 
     [HttpDelete("{id:guid}/sections/{sectionId:guid}")]
@@ -327,6 +348,7 @@ public sealed class CaseReportController : BenControllerBase
         // present it as this case's evidence.
         var session = await db.FieldSessionUploads.AsNoTracking()
             .Include(f => f.Files)
+            .Include(f => f.DocumentUploadFile)
             .FirstOrDefaultAsync(f => f.Id == request.FieldSessionUploadId
                                    && f.InvestigationId != null
                                    && f.Investigation!.CaseId == caseId
@@ -343,7 +365,7 @@ public sealed class CaseReportController : BenControllerBase
             return Ok(new CaseReportSectionFieldSessionDto(
                 existing.Id, session.Id, session.LocationLabel, session.RecordedByName,
                 session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
-                session.Files.Count, existing.Caption, existing.SortOrder));
+                session.Files.Count, existing.Caption, existing.SortOrder, await ReadoutAsync(session, ct)));
         }
 
         var maxOrder = await db.CaseReportSectionFieldSessions
@@ -361,7 +383,7 @@ public sealed class CaseReportController : BenControllerBase
         return Ok(new CaseReportSectionFieldSessionDto(
             link.Id, session.Id, session.LocationLabel, session.RecordedByName,
             session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
-            session.Files.Count, link.Caption, link.SortOrder));
+            session.Files.Count, link.Caption, link.SortOrder, await ReadoutAsync(session, ct)));
     }
 
     [HttpDelete("{id:guid}/sections/{sectionId:guid}/field-sessions/{linkId:guid}")]
@@ -401,10 +423,14 @@ public sealed class CaseReportController : BenControllerBase
                 .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.FieldSessionUpload)
                         .ThenInclude(u => u.Files)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions)
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
-        var pdfBytes = GeneratePdf(report);
+        var pdfBytes = GeneratePdf(report, await ReadoutsAsync(report, ct));
         var fileName = $"report-{report.Title.Replace(' ', '-')}.pdf";
         return File(pdfBytes, "application/pdf", fileName);
     }
@@ -448,31 +474,31 @@ public sealed class CaseReportController : BenControllerBase
             ? Task.FromResult(true)
             : _security.MayAsync(GetCurrentUserId(), orgId, OrganizationPermissionArea.Cases, action, ct);
 
-    private static CaseReportDetail ToDetail(CaseReport r) => new(
+    private static CaseReportDetail ToDetail(CaseReport r, IReadOnlyDictionary<Guid, string?> readouts) => new(
         r.Id, r.CaseId, r.Title, r.Summary, r.Conclusion, r.Status,
         r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated,
-        r.Sections.OrderBy(s => s.SortOrder).Select(ToSectionDto).ToList());
+        r.Sections.OrderBy(s => s.SortOrder).Select(s => ToSectionDto(s, readouts)).ToList());
 
-    private static CaseReportSectionDto ToSectionDto(CaseReportSection s) => new(
+    private static CaseReportSectionDto ToSectionDto(CaseReportSection s, IReadOnlyDictionary<Guid, string?> readouts) => new(
         s.Id, s.CaseReportId, s.SortOrder, s.Title, s.Body, s.SectionType,
         s.Files.OrderBy(f => f.SortOrder)
                .Select(f => new CaseReportSectionFileDto(f.Id, f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize, f.Caption, f.SortOrder))
                .ToList(),
         s.FieldSessions.OrderBy(f => f.SortOrder)
-               .Select(ToSectionFieldSessionDto)
+               .Select(f => ToSectionFieldSessionDto(f, readouts.GetValueOrDefault(f.FieldSessionUploadId)))
                .ToList());
 
-    private static CaseReportSectionFieldSessionDto ToSectionFieldSessionDto(CaseReportSectionFieldSession f) => new(
+    private static CaseReportSectionFieldSessionDto ToSectionFieldSessionDto(CaseReportSectionFieldSession f, string? readout) => new(
         f.Id, f.FieldSessionUploadId,
         f.FieldSessionUpload.LocationLabel,
         f.FieldSessionUpload.RecordedByName,
         f.FieldSessionUpload.StartedAt, f.FieldSessionUpload.EndedAt,
         f.FieldSessionUpload.ReadingCount, f.FieldSessionUpload.MarkerCount,
         f.FieldSessionUpload.Files.Count,
-        f.Caption, f.SortOrder);
+        f.Caption, f.SortOrder, readout);
 
-    private static byte[] GeneratePdf(CaseReport report)
-        => Ben.Data.WebApi.Services.CaseReportPdfGenerator.Generate(report);
+    private static byte[] GeneratePdf(CaseReport report, IReadOnlyDictionary<Guid, string?> readouts)
+        => Ben.Data.WebApi.Services.CaseReportPdfGenerator.Generate(report, readouts);
 
     private static string StripHtml(string html)
         => System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ").Trim();
@@ -521,7 +547,8 @@ public sealed record CaseReportSectionFieldSessionDto(
     int       MarkerCount,
     int       FileCount,
     string?   Caption,
-    int       SortOrder);
+    int       SortOrder,
+    string?   Readout);
 
 public sealed record CaseReportSummary(
     Guid                                  Id,

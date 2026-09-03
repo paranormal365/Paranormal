@@ -168,6 +168,12 @@ else
                                                 ? "Nobody was signed in on the device"
                                                 : $"Recorded by {fs.RecordedByName}")
                                         </div>
+                                        @* The paragraph the PDF prints: what the night held. *@
+                                        <div class="small mt-1" data-testid="session-readout">
+                                            @(string.IsNullOrWhiteSpace(fs.Readout)
+                                                ? "The session's readings are not on this server, so no readout can be given."
+                                                : fs.Readout)
+                                        </div>
                                         @if (!string.IsNullOrWhiteSpace(fs.Caption))
                                         {
                                             <div class="small">@fs.Caption</div>

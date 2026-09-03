@@ -421,12 +421,17 @@ public sealed class MyCaseController : BenControllerBase
                 .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.FieldSessionUpload)
                         .ThenInclude(u => u.Files)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions)
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == reportId && r.CaseId == caseId
                 && r.Status == Ben.Data.Common.Enums.CaseReportStatus.Published, ct);
         if (report is null) return NotFound();
 
         // Reuse the static PDF generator from CaseReportController via shared helper
-        var pdfBytes = CaseReportPdfGenerator.Generate(report);
+        var readouts = await CaseReportReadouts.ForAsync(report.Sections.SelectMany(x => x.FieldSessions), _fileStorage, ct);
+        var pdfBytes = CaseReportPdfGenerator.Generate(report, readouts);
         return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
     }
 
