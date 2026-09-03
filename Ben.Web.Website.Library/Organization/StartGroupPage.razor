@@ -53,31 +53,31 @@
                                operator never has to undo privacy they never asked for. *@
                             <div class="mb-3">
                                 <label class="form-label d-block">What are you starting?</label>
-                                <div class="btn-group w-100" role="group" aria-label="Kind of group">
-                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-investigation"
+                                <div class="row g-2" role="group" aria-label="Kind of group">
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-investigation"
                                            checked="@(_kind == OrganizationKind.InvestigationGroup)"
                                            @onchange="@(() => SetKind(OrganizationKind.InvestigationGroup))" />
-                                    <label class="btn btn-outline-primary" for="newgroup-kind-investigation">
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-investigation">
                                         <BenIcon Name="search" Class="me-1" />Investigation group
-                                    </label>
-                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
+                                    </label></div>
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
                                            checked="@(_kind == OrganizationKind.GhostWalkingTour)"
                                            @onchange="@(() => SetKind(OrganizationKind.GhostWalkingTour))" />
-                                    <label class="btn btn-outline-primary" for="newgroup-kind-tour">
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-tour">
                                         <BenIcon Name="map" Class="me-1" />Ghost walking tour
-                                    </label>
-                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-events"
+                                    </label></div>
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-events"
                                            checked="@(_kind == OrganizationKind.PublicEventProvider)"
                                            @onchange="@(() => SetKind(OrganizationKind.PublicEventProvider))" />
-                                    <label class="btn btn-outline-primary" for="newgroup-kind-events">
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-events">
                                         <BenIcon Name="calendar" Class="me-1" />Paranormal events
-                                    </label>
-                                    <input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-property"
+                                    </label></div>
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-property"
                                            checked="@(_kind == OrganizationKind.HauntedProperty)"
                                            @onchange="@(() => SetKind(OrganizationKind.HauntedProperty))" />
-                                    <label class="btn btn-outline-primary" for="newgroup-kind-property">
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-property">
                                         <BenIcon Name="home" Class="me-1" />Haunted property
-                                    </label>
+                                    </label></div>
                                 </div>
                                 <div class="form-text">
                                     @* One sentence per kind, saying what it STARTS as. None of it is a
@@ -142,9 +142,10 @@
                             else
                             {
                                 <p class="small text-secondary">
-                                    Where does your group operate? This feeds the "near you" search so
-                                    clients can find you. <strong>Optional</strong> — leave it empty to
-                                    add an address later, and it starts private either way.
+                                    Where is your group based — your home, or an office? This is the point
+                                    the "near you" search measures distance from, so a client sees how far
+                                    away you are. <strong>Optional</strong> — leave it empty to add it
+                                    later, and it stays private either way.
                                 </p>
                             }
                             <div class="mb-2">
@@ -189,7 +190,7 @@
                                 <dd class="col-sm-8 fw-semibold">@_name</dd>
                                 <dt class="col-sm-4 text-secondary">Web address</dt>
                                 <dd class="col-sm-8"><code>/o/@_urlName</code></dd>
-                                <dt class="col-sm-4 text-secondary">Where you work</dt>
+                                <dt class="col-sm-4 text-secondary">Your base</dt>
                                 <dd class="col-sm-8">@(HasAddress ? $"{_street}, {_city}, {_state} {_zip} (kept private)" : "Not given — add it later")</dd>
                                 <dt class="col-sm-4 text-secondary">Applications</dt>
                                 <dd class="col-sm-8">@(_acceptingApplications ? "Open" : "Closed")</dd>
@@ -235,7 +236,7 @@
         _wizard = new WizardModel(
         [
             new WizardModel.WizardStep("Identity", IdentityGateAsync),
-            new WizardModel.WizardStep("Where you work", AddressGateAsync),
+            new WizardModel.WizardStep("Your base", AddressGateAsync),
             new WizardModel.WizardStep("First settings", SettingsGateAsync),
             new WizardModel.WizardStep("Review"),
         ]);
