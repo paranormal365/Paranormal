@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -94,6 +94,9 @@ public sealed class LogRetentionJob : IScheduledJob
         return days < MinimumDays ? MinimumDays : days;
     }
 
+    /// <summary>Whether the missing-table warning has been given since the table was last seen.</summary>
+    private bool _missingTableReported;
+
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<LogRetentionJob> _logger;
@@ -149,6 +152,23 @@ public sealed class LogRetentionJob : IScheduledJob
         var cutoff = DateTime.Now.AddDays(-days.Value);
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // A development instance whose Serilog sink points at one database and whose EF context
+        // points at another has no Logs table to sweep - and used to say so as an ERROR, once an
+        // hour, into the production Logs table (18 rows by 2026-09-03). Nothing to sweep is not a
+        // fault; say so once, quietly, and leave.
+        var tableExists = await db.Database.SqlQueryRaw<int>($"SELECT CASE WHEN OBJECT_ID(N'[{table}]', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
+            .FirstOrDefaultAsync(ct) == 1;
+        if (!tableExists)
+        {
+            if (!_missingTableReported)
+            {
+                _missingTableReported = true;
+                _logger.LogWarning("Log retention has nothing to sweep: this database has no [{Table}] table.", table);
+            }
+            return;
+        }
+        _missingTableReported = false;
 
         var removed = 0;
         while (removed < MaximumPerPass && !ct.IsCancellationRequested)

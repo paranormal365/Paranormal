@@ -529,6 +529,9 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // An API answer has no business inside anybody's frame - least of all a served upload.
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
     await next();
 });
 
