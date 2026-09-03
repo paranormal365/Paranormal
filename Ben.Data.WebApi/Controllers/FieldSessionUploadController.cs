@@ -69,6 +69,7 @@ public sealed class FieldSessionUploadController : BenControllerBase
         var sessions = await db.FieldSessionUploads.AsNoTracking()
             .Where(s => s.SubmittedByAppUserId == userId)
             .Include(s => s.Files)
+            .ThenInclude(f => f.UploadFile)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync(ct);
 
@@ -265,6 +266,7 @@ public sealed class FieldSessionUploadController : BenControllerBase
         var sessions = await db.FieldSessionUploads.AsNoTracking()
             .Where(s => s.InvestigationId == investigationId)
             .Include(s => s.Files)
+            .ThenInclude(f => f.UploadFile)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync(ct);
 
@@ -422,6 +424,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
         if (summary.ReadingCount == 0)
             return BadRequest("This session has no readings. Nothing was recorded, so there is nothing to upload.");
 
+        // Could a Field Kit have written these numbers? Readings outside the session's own
+        // window, fields no phone can measure, positions off the Earth — refused with the first
+        // offending reading named, before anything is stored.
+        if (FieldSessionDocumentGuard.Refusal(documentText) is { } implausible)
+            return BadRequest("That doesn't look like a session a Field Kit recorded: " + implausible);
+
         var storedName = $"{Guid.NewGuid()}.json";
         // A personal session lives under the person, not under a group they may not belong to.
         var storagePath = organizationId == Guid.Empty
@@ -566,6 +574,20 @@ public sealed class FieldSessionUploadController : BenControllerBase
             ? await MayContributeAsync(db, linked, userId, ct)
             : session.SubmittedByAppUserId == userId;
         if (!allowed) return NotFound();
+
+        // The name and the declared type are the client's word; the first bytes are not. A file
+        // that is not the kind it claims is refused here rather than stored as a row every player
+        // will fail on — and a session cannot grow without bound.
+        var header = new byte[FieldSessionFileGuard.HeaderBytes];
+        int headerRead;
+        await using (var peek = file.OpenReadStream())
+        {
+            headerRead = await peek.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct);
+        }
+        var filesAlready = await db.FieldSessionUploadFiles.CountAsync(f => f.FieldSessionUploadId == sessionId, ct);
+        if (FieldSessionFileGuard.Refusal(relativePath, file.ContentType, file.Length,
+                                          header.AsSpan(0, headerRead), filesAlready) is { } notARecording)
+            return BadRequest("That file can't be part of a session: " + notARecording);
 
         // A session belonging to no investigation is stored against the person, so it is the
         // person's own allowance that has to cover it. Group work is not checked here: those

@@ -59,9 +59,18 @@ private final class SilentRecorder: AudioRecording, @unchecked Sendable {
     }
 
     func beginRecording(to url: URL) async throws {
-        // ~2 KB of nothing: past the "did this produce anything" floor, so the capture is
-        // treated as real, which is the point of exercising it.
-        try Data(count: 2_048).write(to: url)
+        // ~2 KB that BEGINS like an M4A: an ISO base-media `ftyp` box, then nothing. Past the
+        // "did this produce anything" floor, so the capture is treated as real — and past the
+        // server's first-bytes check, which refuses a file whose header is not the kind its name
+        // claims. Two kilobytes of zeros used to be refused there as "not an M4A file", which was
+        // the server being right about a placeholder. No browser can decode this either; the web
+        // player says "won't play" for it, which is the honest answer for a simulator.
+        var bytes = Data([0x00, 0x00, 0x00, 0x20])              // box size 32
+        bytes.append(contentsOf: Array("ftypM4A ".utf8))         // type + major brand
+        bytes.append(contentsOf: [0x00, 0x00, 0x00, 0x00])       // minor version
+        bytes.append(contentsOf: Array("M4A mp42isom".utf8))     // compatible brands
+        bytes.append(Data(count: 2_048 - bytes.count))
+        try bytes.write(to: url)
         begin(url)
     }
 

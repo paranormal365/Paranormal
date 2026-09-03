@@ -73,7 +73,10 @@ public class FieldSessionHardeningTests : BenTestBase
 
         // Bytes that are not audio at all, with the digest of exactly those bytes: the transport
         // is fine, the content is not. Before this the row showed a silent, dead <audio>.
-        var garbage = Encoding.UTF8.GetBytes("this is not an m4a file, however hard the browser tries\n");
+        // Begins like an M4A — the door checks the first bytes now — and then is nothing at all.
+        var garbage = new byte[] { 0, 0, 0, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'M', (byte)'4', (byte)'A', (byte)' ', 0, 0, 0, 0 }
+            .Concat(Encoding.UTF8.GetBytes("M4A mp42isom — and no recording after the header, however hard the browser tries\n"))
+            .ToArray();
         var digest = Convert.ToHexString(SHA256.HashData(garbage)).ToLowerInvariant();
         var files = Context.APIRequest.CreateFormData();
         files.Append("file", new FilePayload { Name = "audio-001.m4a", MimeType = "audio/mp4", Buffer = garbage });
@@ -121,5 +124,57 @@ public class FieldSessionHardeningTests : BenTestBase
         // And the link brings them back here once signed in.
         var href = await Page.Locator("[data-testid='sign-in-to-see']").GetAttributeAsync("href");
         Assert.That(href, Does.Contain("returnUrl=").And.Contain(sessionId!));
+    }
+
+    /// <summary>
+    /// The name says .m4a and the request says audio/mp4; the bytes are two kilobytes of zeros.
+    /// Refused at the door with the file named, instead of stored as a row every player fails on.
+    /// </summary>
+    [Test]
+    public async Task A_file_whose_bytes_are_not_the_kind_its_name_claims_is_refused()
+    {
+        var (api, token) = await SignedInApiAsync();
+        var upload = await UploadDocumentAsync(api, token, Document);
+        Assert.That(upload.Ok, Is.True, await upload.TextAsync());
+        var sessionId = (await upload.JsonAsync())!.Value.GetProperty("id").GetString();
+
+        var zeros = new byte[2048];
+        var files = Context.APIRequest.CreateFormData();
+        files.Append("file", new FilePayload { Name = "audio-001.m4a", MimeType = "audio/mp4", Buffer = zeros });
+        files.Append("relativePath", "media/audio-001.m4a");
+        files.Append("sha256", Convert.ToHexString(SHA256.HashData(zeros)).ToLowerInvariant());
+        var attach = await api.PostAsync($"/api/field-sessions/{sessionId}/files", new()
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+            Multipart = files,
+        });
+
+        Assert.That(attach.Status, Is.EqualTo(400), await attach.TextAsync());
+        Assert.That(await attach.TextAsync(), Does.Contain("not a M4A file"));
+
+        // And the kinds the Field Kit never makes are refused by name, whatever their bytes.
+        var html = Context.APIRequest.CreateFormData();
+        html.Append("file", new FilePayload { Name = "notes.html", MimeType = "text/html", Buffer = Encoding.UTF8.GetBytes("<script>alert(1)</script>") });
+        html.Append("relativePath", "media/notes.html");
+        var refused = await api.PostAsync($"/api/field-sessions/{sessionId}/files", new()
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+            Multipart = html,
+        });
+        Assert.That(refused.Status, Is.EqualTo(400));
+        Assert.That(await refused.TextAsync(), Does.Contain("only the recordings and photos"));
+    }
+
+    /// <summary>A reading stamped a day before the session started names itself in the refusal.</summary>
+    [Test]
+    public async Task A_document_whose_readings_could_not_have_come_from_a_field_kit_is_refused()
+    {
+        var (api, token) = await SignedInApiAsync();
+        var lying = Document.Replace("\"at\":\"2026-08-25T02:06:07.000Z\"", "\"at\":\"2026-08-24T02:06:07.000Z\"");
+
+        var upload = await UploadDocumentAsync(api, token, lying);
+
+        Assert.That(upload.Status, Is.EqualTo(400), await upload.TextAsync());
+        Assert.That(await upload.TextAsync(), Does.Contain("reading 2").And.Contain("outside the session's own window"));
     }
 }
