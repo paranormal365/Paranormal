@@ -54,6 +54,9 @@ telerik-license.txt
 **/appsettings.Development.json
 **/appsettings.*.json
 !**/appsettings.json
+# UAT settings carry no secret: integrated security to the UAT copy of the database, and the
+# log sink pointed at the same place. Tracked so the UAT environment is reproducible.
+!**/appsettings.UAT.json
 
 # .NET user secrets
 **/secrets.json
