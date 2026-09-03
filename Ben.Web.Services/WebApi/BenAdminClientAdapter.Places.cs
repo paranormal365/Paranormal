@@ -218,6 +218,36 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
+    public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
+        => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/hide", new { Ids = ids }, token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? "/api/field-sessions/mine/map"
+            : $"/api/field-sessions/mine/map?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<FieldSessionMapPage>(url, token);
+    }
+
     /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
@@ -225,10 +255,9 @@ public sealed partial class BenAdminClientAdapter
 
     /// <inheritdoc />
     public Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
-        int expectedCount, CancellationToken token = default)
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, OrphanedFieldSessionPurgeResult>(
-            HttpMethod.Delete, $"/api/admin/orphaned-field-sessions?expectedCount={expectedCount}",
-            new { }, token);
+            HttpMethod.Delete, "/api/admin/orphaned-field-sessions", new { Ids = ids }, token);
 
     /// <inheritdoc />
     public Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(

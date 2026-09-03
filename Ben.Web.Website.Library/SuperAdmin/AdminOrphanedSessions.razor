@@ -62,9 +62,13 @@
         <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
             <button type="button" class="btn btn-danger btn-sm text-nowrap"
                     data-testid="delete-orphans"
-                    disabled="@_working" @onclick="ConfirmAsync">
+                    disabled="@(_working || _selected.Count == 0)" @onclick="ConfirmAsync">
                 <BenIcon Name="trash-2" Class="me-1" />
-                @(_working ? "Deleting…" : $"Delete {_rows.Count} orphaned session{(_rows.Count == 1 ? "" : "s")}")
+                @(_working
+                    ? "Deleting…"
+                    : _selected.Count == 0
+                        ? "Delete selected"
+                        : $"Delete {_selected.Count} selected session{(_selected.Count == 1 ? "" : "s")}")
             </button>
             <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
                     disabled="@_working" @onclick="LoadAsync">
@@ -82,6 +86,14 @@
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
+                        <th style="width:2.5rem;">
+                            @* Indeterminate is set from code: a half-selected list that shows an
+                               empty box invites "select all" twice to mean "clear". *@
+                            <input type="checkbox" class="form-check-input" id="orphan-check-all"
+                                   data-testid="check-all"
+                                   checked="@AllSelected" @onchange="ToggleAll"
+                                   aria-label="Select every orphaned session" />
+                        </th>
                         <th>Recorded</th>
                         <th>Where they stood</th>
                         <th>Who</th>
@@ -96,6 +108,13 @@
                     @foreach (var row in _rows)
                     {
                         <tr data-testid="orphan-row">
+                            <td>
+                                <input type="checkbox" class="form-check-input"
+                                       data-testid="orphan-check"
+                                       checked="@_selected.Contains(row.Id)"
+                                       @onchange="@(e => Toggle(row.Id, e.Value is true))"
+                                       aria-label="@($"Select the session recorded {row.StartedAt.ToLocalTime():MM/dd/yyyy}")" />
+                            </td>
                             <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToString("MM/dd/yyyy")</td>
                             <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
                             <td>@(string.IsNullOrWhiteSpace(row.RecordedByName) ? "—" : row.RecordedByName)</td>
@@ -134,15 +153,16 @@
     @if (_rows is not null)
     {
         <p>
-            This removes <strong>@_rows.Count</strong> field
-            session@(_rows.Count == 1 ? "" : "s") and their file rows. Every one of them already
+            This removes <strong>@_selected.Count</strong> field
+            session@(_selected.Count == 1 ? "" : "s") and their file rows. Every one of them already
             fails to open, so nothing readable is lost.
         </p>
-        @if (_anyWorthASecondLook)
+        @if (SelectedAttached > 0)
         {
             <p class="text-warning mb-0">
-                @_rows.Count(r => r.PublishedToArchive || r.LinkedToInvestigation) of them are
-                attached to an investigation or published to a place. They cannot be opened either.
+                @SelectedAttached of them are attached to an investigation or published to a place,
+                and any case report citing one will lose that citation. They cannot be opened
+                either, so the citation already points at nothing.
             </p>
         }
         <p class="text-muted small mb-0">This cannot be undone.</p>
@@ -151,6 +171,7 @@
 
 @code {
     private IReadOnlyList<OrphanedFieldSessionRecord>? _rows;
+    private readonly HashSet<Guid> _selected = [];
     private bool _confirming;
     private bool    _loading = true;
     private bool    _working;
@@ -164,6 +185,25 @@
     /// </summary>
     private bool _anyWorthASecondLook =>
         _rows?.Any(r => r.PublishedToArchive || r.LinkedToInvestigation) == true;
+
+    /// <summary>How many of the CHOSEN rows are attached to something.</summary>
+    private int SelectedAttached =>
+        _rows?.Count(r => _selected.Contains(r.Id)
+                       && (r.PublishedToArchive || r.LinkedToInvestigation)) ?? 0;
+
+    private bool AllSelected => _rows is { Count: > 0 } && _selected.Count == _rows.Count;
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) _selected.Add(id); else _selected.Remove(id);
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        _selected.Clear();
+        if (e.Value is true && _rows is not null)
+            foreach (var row in _rows) _selected.Add(row.Id);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,7 +225,12 @@
         if (result.Failed)
             _refusal = result.Reason ?? "Couldn't check for orphaned sessions just now.";
         else
+        {
             _rows = result.Items;
+            // Drop anything that is no longer on the list. Carrying a stale id forward would send
+            // the server an id it will refuse, and the refusal would name a row nobody can see.
+            _selected.IntersectWith(_rows.Select(r => r.Id));
+        }
 
         _loading = false;
     }
@@ -194,24 +239,36 @@
 
     private async Task PurgeAsync()
     {
-        if (_rows is null) return;
+        if (_rows is null || _selected.Count == 0) return;
 
         _working = true; _refusal = null; _result = null;
         StateHasChanged();
 
-        var (outcome, error) = await AdminClient.PurgeOrphanedFieldSessionsAsync(_rows.Count);
+        var chosen = _selected.ToList();
+        var (outcome, error) = await AdminClient.PurgeOrphanedFieldSessionsAsync(chosen);
 
         _working = false;
         _confirming = false;
 
-        if (error is not null) { _refusal = error; return; }
-        if (outcome?.Refusal is not null) { _refusal = outcome.Refusal; await LoadAsync(); return; }
+        if (error is not null) { _refusal = error; await LoadAsync(); return; }
 
-        // Reload first — LoadAsync clears the banner, so setting it before would show the count
-        // for a moment and then lose it. The list is re-read because a delete that worked should
-        // leave the screen agreeing with the database, not with what it remembered.
-        var deleted = outcome?.Deleted ?? 0;
+        // A null outcome with no sentence means the call failed in a way the server did not put
+        // into words — a 500, most likely. Saying "Deleted 0" there would be the worst possible
+        // answer: it reads as success and reports the truth as a number nobody questions.
+        if (outcome is null)
+        {
+            _refusal = "The delete did not go through, and the server did not say why. "
+                     + "Nothing was removed — check the error log.";
+            await LoadAsync();
+            return;
+        }
+
+        if (outcome.Refusal is not null) { _refusal = outcome.Refusal; await LoadAsync(); return; }
+
+        var deleted = outcome.Deleted;
+        var note    = outcome.Note;
         await LoadAsync();
-        _result = $"Deleted {deleted} orphaned session{(deleted == 1 ? "." : "s.")}";
+        _result = $"Deleted {deleted} orphaned session{(deleted == 1 ? "" : "s")}."
+                + (note is null ? "" : " " + note);
     }
 }

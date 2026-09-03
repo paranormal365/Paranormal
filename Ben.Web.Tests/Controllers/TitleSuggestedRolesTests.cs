@@ -333,6 +333,10 @@ public class TitleSuggestedRolesTests
             "OrganizationMemberLevelController.cs",   // assigns titles, and offers the copy
             "BenDataContext.cs",                      // declares the table
             "TitleSuggestedRolesTests.cs",            // this file
+            // Deletes the rows with the group that owned them; never reads one. Without this a
+            // group with a title ladder cannot be deleted at all — the roles table references the
+            // group's roles with NoAction, and the database refuses the purge.
+            "OrganizationPurge.cs",
         ];
 
         var offenders = new List<string>();

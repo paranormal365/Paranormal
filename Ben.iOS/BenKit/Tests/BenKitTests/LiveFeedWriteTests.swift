@@ -29,6 +29,15 @@ struct LiveFeedWriteTests {
     /// because the development database is the one ishaunted.com uses, that put working
     /// production credentials in a public repository. An unset variable now stops the test with
     /// its name rather than signing in as somebody real.
+    /// A password for an account this test tries to create. Generated, never written down: the
+    /// registration here is expected to FAIL, but on a shared database a literal would still be a
+    /// working credential in a public repository if it ever succeeded.
+    private static func throwawayPassword() -> String {
+        let alphabet = Array("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+        let body = String((0..<20).map { _ in alphabet.randomElement()! })
+        return "T!\(body)9"
+    }
+
     private static func requiredSecret(_ variable: String) -> String {
         guard let value = ProcessInfo.processInfo.environment[variable], !value.isEmpty else {
             Issue.record("\(variable) is not set — export it before running the live write tests.")
@@ -180,7 +189,7 @@ struct LiveFeedWriteTests {
         // A handle that certainly exists: the seeded member's.
         let result = await actions.register(RegisterRequest(
             email: "collision-\(UUID().uuidString.prefix(8))@example.test",
-            password: "N3wUser!Test26",
+            password: Self.throwawayPassword(),
             displayName: "Collision Test",
             handle: "jamesthornton"))
 

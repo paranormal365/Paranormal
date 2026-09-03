@@ -63,6 +63,21 @@ public sealed class LocalFileStorageService : IFileStorageService
         return Task.CompletedTask;
     }
 
+    public Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default)
+    {
+        var trimmed = relativeDirectory.Trim().Trim('/', '\\');
+        if (trimmed.Length == 0)
+            throw new ArgumentException("A directory to delete must be named; the root is never it.", nameof(relativeDirectory));
+
+        var fullDir = Path.GetFullPath(FullPath(trimmed));
+        // The full path must sit strictly inside the root: "orgs/../.." resolves outside it.
+        if (!fullDir.StartsWith(_rootPath + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new ArgumentException("The directory is outside the storage root.", nameof(relativeDirectory));
+
+        if (Directory.Exists(fullDir)) Directory.Delete(fullDir, recursive: true);
+        return Task.CompletedTask;
+    }
+
     public bool Exists(string relativePath) => File.Exists(FullPath(relativePath));
 
     public IReadOnlyList<string> ListFiles(string relativeDirectory)

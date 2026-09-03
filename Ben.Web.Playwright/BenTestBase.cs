@@ -189,6 +189,22 @@ public abstract class BenTestBase : PageTest
     /// <c>BEN_SUPERADMIN_PASSWORD</c>, <c>BEN_USER_PASSWORD</c>, <c>BEN_MEMBER_PASSWORD</c>,
     /// <c>BEN_VIEWER_PASSWORD</c>, <c>BEN_CLIENT_PASSWORD</c>.</para>
     /// </remarks>
+    /// <summary>
+    /// A strong password for an account this run is about to create.
+    /// </summary>
+    /// <remarks>
+    /// Generated rather than written down. A fixture that registers an account needs *a* password,
+    /// not a particular one — and three of them used to be inline constants in a public repository,
+    /// which on a shared database meant live accounts anybody could sign into. Nothing outside the
+    /// run needs to know this value, so nothing outside the run is told it.
+    /// </remarks>
+    protected static string NewTestPassword()
+    {
+        const string alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var random = System.Security.Cryptography.RandomNumberGenerator.GetString(alphabet, 20);
+        return $"T!{random}9";   // satisfies Identity's upper/lower/digit/symbol rules
+    }
+
     protected static string RequiredSecret(string variable)
         => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
             ? value

@@ -1380,6 +1380,21 @@ public sealed record FieldSessionSummaryRecord(
     Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
     IReadOnlyList<FieldSessionFileSummary> Files);
 
+/// <summary>One session reduced to a pin, for the map on My Field Sessions.</summary>
+public sealed record FieldSessionMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude,
+    DateTime StartedAt, int MarkerCount);
+
+/// <summary>
+/// A map answer: the pins, how many matched in total (so "500 of 500" can be told from "500 of
+/// 4,000"), and how many older rows the server has still to inspect for a fix.
+/// </summary>
+public sealed record FieldSessionMapPage(
+    IReadOnlyList<FieldSessionMapPoint> Points, int Total, int Unresolved);
+
+/// <summary>Four edges of a map viewport, for asking only about what is in view.</summary>
+public sealed record MapBounds(double North, double South, double East, double West);
+
 public sealed record FieldSessionFileSummary(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
     DateTime DateCreated);
@@ -1415,8 +1430,21 @@ public sealed record OrphanedFieldSessionRecord(
     int ReadingCount, int MarkerCount, string? RecordedByName,
     bool LinkedToInvestigation, bool PublishedToArchive, int MediaCount);
 
+/// <summary>A public-feed post by a seeded account, as listed on /admin/test-posts.</summary>
+public sealed record TestFeedPostRecord(
+    Guid Id, string AuthorName, string AuthorEmail, DateTime DateCreated, string Body,
+    bool IsReply, bool Hidden, int VisibleReplies);
+
+/// <param name="Changed">Posts whose state actually flipped; an already-hidden post is not counted.</param>
+/// <param name="RepliesAlso">Replies hidden alongside their parent, beyond the ids given.</param>
+public sealed record TestFeedPostHideResult(int Changed, int RepliesAlso, string? Refusal);
+
 /// <summary>What the delete did. <c>Refusal</c> is set when it deliberately did nothing.</summary>
-public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal);
+public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal)
+{
+    /// <summary>Something worth saying that is not a refusal — e.g. file rows left in place.</summary>
+    public string? Note { get; init; }
+}
 
 /// <param name="PublishedSessions">The count that decides which record should survive: an archive
 /// people can already read is the one with something to lose.</param>
