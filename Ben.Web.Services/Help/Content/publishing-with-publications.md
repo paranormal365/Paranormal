@@ -3,6 +3,7 @@ title: Publishing with Publications
 summary: Setting up a publication, writing posts, and deciding when the public sees them.
 section: Group Administration
 audience: OrganizationAdministrator
+feature: features.publications
 order: 62
 ---
 

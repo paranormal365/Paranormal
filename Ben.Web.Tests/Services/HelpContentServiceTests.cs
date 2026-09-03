@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Web.Services;
 using Ben.Web.Services.Help;
 using Markdig;
 using Xunit;
@@ -15,6 +16,52 @@ public sealed class HelpContentServiceTests
     private static readonly HelpContentService Service = new();
 
     private static HelpViewer Viewer(HelpAudience a) => new(a);
+
+    // ── Feature gating ────────────────────────────────────────────────────────
+    //
+    // 2026-09-03: "Reading Publications" sat on the public Help index while Publications was
+    // switched off, so the topic advertised a page that answered "not found". A document may now
+    // name the feature it belongs to; the two Help pages pass the site's switch.
+
+    [Fact]
+    public void The_publication_topics_belong_to_the_publications_feature()
+    {
+        var all = Service.SectionsFor(Viewer(HelpAudience.AppAdministrator)).SelectMany(s => s.Documents).ToList();
+        foreach (var slug in new[] { "reading-publications", "publishing-with-publications" })
+        {
+            var doc = Assert.Single(all, d => d.Slug == slug);
+            Assert.Equal(SiteFeatures.Publications, doc.Feature);
+        }
+    }
+
+    [Fact]
+    public void A_gated_topic_is_absent_while_its_feature_is_off_and_present_when_on()
+    {
+        var reader = Viewer(HelpAudience.AppAdministrator);
+
+        var off = Service.SectionsFor(reader, _ => false).SelectMany(s => s.Documents).Select(d => d.Slug).ToList();
+        var on  = Service.SectionsFor(reader, _ => true).SelectMany(s => s.Documents).Select(d => d.Slug).ToList();
+
+        Assert.DoesNotContain("reading-publications", off);
+        Assert.Contains("reading-publications", on);
+        Assert.Null(Service.Find("reading-publications", reader, _ => false));
+        Assert.NotNull(Service.Find("reading-publications", reader, _ => true));
+
+        // Ungated topics are untouched by the switch.
+        Assert.Contains("getting-started", off);
+    }
+
+    [Fact]
+    public void The_gate_only_ever_hides_topics_that_name_a_feature()
+    {
+        // With every feature off, exactly the gated topics disappear — nothing else.
+        var reader = Viewer(HelpAudience.AppAdministrator);
+        var everything = Service.SectionsFor(reader).SelectMany(s => s.Documents).ToList();
+        var allOff     = Service.SectionsFor(reader, _ => false).SelectMany(s => s.Documents).Select(d => d.Slug).ToHashSet();
+
+        foreach (var doc in everything)
+            Assert.Equal(doc.Feature is null, allOff.Contains(doc.Slug));
+    }
 
     // ── Audience gating ───────────────────────────────────────────────────────
 
