@@ -615,4 +615,54 @@ public sealed class FieldSessionUploadControllerTests
             StrangerId, "A Stranger", default);
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    /// <summary>
+    /// A session that recorded nothing is refused at the door rather than stored as a row, a
+    /// file and a "Play back" button for a page with nothing on it.
+    /// </summary>
+    [Fact]
+    public async Task A_document_with_no_readings_is_refused_with_a_sentence()
+    {
+        var factory = await SeedAsync();
+        var empty = ValidDocument().Replace("\"readings\": [", "\"readings\": [ ] , \"_was\": [");
+
+        var result = await Build(factory, AttendeeId)
+            .SubmitDocument(Document(empty), Guid.NewGuid(), InvestigationId, AttendeeId, "An Attendee", default);
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("no readings", refusal.Value?.ToString());
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(0, await db.FieldSessionUploads.CountAsync());
+    }
+
+    /// <summary>
+    /// Not saying who recorded it means the signed-in sender did — which is what the app sends
+    /// anyway. Before this a hand-built upload played back as "nobody signed in when recorded".
+    /// </summary>
+    [Fact]
+    public async Task Leaving_out_who_recorded_it_attributes_it_to_the_sender()
+    {
+        var factory = await SeedAsync();
+        var result = await Build(factory, AttendeeId)
+            .SubmitDocument(Document(ValidDocument()), Guid.NewGuid(), InvestigationId, null, null, default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var row = await db.FieldSessionUploads.SingleAsync();
+        Assert.Equal(AttendeeId, row.RecordedByAppUserId);
+    }
+
+    /// <summary>The empty id is the client's deliberate "nobody", and is kept as such.</summary>
+    [Fact]
+    public async Task Saying_nobody_recorded_it_is_respected()
+    {
+        var factory = await SeedAsync();
+        var result = await Build(factory, AttendeeId)
+            .SubmitDocument(Document(ValidDocument()), Guid.NewGuid(), InvestigationId, Guid.Empty, null, default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.FieldSessionUploads.SingleAsync()).RecordedByAppUserId);
+    }
 }

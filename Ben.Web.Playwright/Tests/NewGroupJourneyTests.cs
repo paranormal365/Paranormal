@@ -76,7 +76,7 @@ public class NewGroupJourneyTests : BenTestBase
     private async Task<(string Email, string Password)> NewConfirmedUserAsync(string tag)
     {
         var email = $"journey{tag}@example.com";
-        const string password = "J0urney!Pass";
+        var password = NewTestPassword();
         await SignUpAsync(tag, email, password);
         await ConfirmFromLogAsync();
         return (email, password);

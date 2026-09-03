@@ -19,3 +19,6 @@ public sealed record InvestigationMapPin(
     decimal? Latitude,
     decimal? Longitude,
     bool IsPast);
+
+/// <summary>The part of the world a map is showing, as its four edges and the zoom level.</summary>
+public sealed record MapViewport(double North, double South, double East, double West, double Zoom);

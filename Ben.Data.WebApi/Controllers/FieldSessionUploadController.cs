@@ -83,6 +83,151 @@ public sealed class FieldSessionUploadController : BenControllerBase
     /// mid-upload is a limit that reads as a fault — the refusal explains itself, but by then
     /// they have already recorded the night and carried the phone home.
     /// </remarks>
+    /// <summary>
+    /// Where this account's sessions were recorded, for plotting them on a map — optionally only
+    /// those inside a viewport.
+    /// </summary>
+    /// <remarks>
+    /// <para>An ordinary indexed select, because the fix lives on the row now. It used to live only
+    /// inside the document, which made every pin a file read and put a hard ceiling on how many
+    /// sessions a person could ever see on a map; a viewport filter on top of that would have made
+    /// panning re-read every file.</para>
+    ///
+    /// <para><b>Rows from before the column existed</b> are resolved here, lazily, a bounded number
+    /// per request: opened once, the fix copied onto the row, and never opened again. So the cost
+    /// of the backfill is spread across the first few map views rather than paid all at once by a
+    /// migration reading every document on the server.</para>
+    ///
+    /// <para>Whose sessions may be pinned is a permission question, and the answer here is "the
+    /// caller's own" — this endpoint returns nothing else, and a person is entitled to see where
+    /// their own work happened. Any shared map must go through <c>MayReadAsync</c> instead; a
+    /// coordinate is the most sensitive thing a session carries.</para>
+    /// </remarks>
+    /// <param name="north">Viewport bounds. All four or none; none means everything.</param>
+    [HttpGet("mine/map")]
+    public async Task<ActionResult<FieldSessionMapPage>> GetMyMapPoints(
+        [FromQuery] double? north, [FromQuery] double? south,
+        [FromQuery] double? east,  [FromQuery] double? west,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var bounded = north is not null || south is not null || east is not null || west is not null;
+        if (bounded && (north is null || south is null || east is null || west is null))
+            return BadRequest("Give all four bounds, or none.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Old rows first: resolve a handful so the column fills in over a few requests. This is
+        // the only place a document is opened for a map, and each row is opened at most once.
+        var unresolved = await db.FieldSessionUploads
+            .Include(s => s.DocumentUploadFile)
+            .Where(s => s.SubmittedByAppUserId == userId && !s.PositionResolved)
+            .OrderByDescending(s => s.StartedAt)
+            .Take(ResolvePerRequest)
+            .ToListAsync(ct);
+
+        foreach (var row in unresolved)
+        {
+            var document = await ReadDocumentAsync(row.DocumentUploadFile.StoragePath, row.DocumentUploadFile.FileData, ct);
+            var fix = document is null ? null : FirstFix(document);
+            row.Latitude  = fix?.Latitude;
+            row.Longitude = fix?.Longitude;
+            // A document this server cannot read is left unresolved on purpose: it may appear
+            // later (a storage move), and "no fix" would be a lie about a file nobody opened.
+            row.PositionResolved = document is not null;
+        }
+        if (unresolved.Count > 0) await db.SaveChangesAsync(ct);
+
+        var query = db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.SubmittedByAppUserId == userId
+                     && s.PositionResolved && s.Latitude != null && s.Longitude != null);
+
+        if (bounded)
+        {
+            // Normalised, so a caller that hands the corners over in the other order — and map
+            // libraries disagree about which corner is which — still gets the box they meant
+            // rather than an empty one that looks like "nothing here".
+            var n  = (decimal)Math.Max(north!.Value, south!.Value);
+            var so = (decimal)Math.Min(north!.Value, south!.Value);
+            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
+            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            query = query.Where(s => s.Latitude <= n && s.Latitude >= so
+                                  && s.Longitude <= e && s.Longitude >= w);
+        }
+
+        var total = await query.CountAsync(ct);
+        var points = await query
+            .OrderByDescending(s => s.StartedAt)
+            .Take(MapPointCap)
+            .Select(s => new FieldSessionMapPoint(
+                s.Id,
+                string.IsNullOrWhiteSpace(s.LocationLabel) ? "Field session" : s.LocationLabel!,
+                s.Latitude!.Value, s.Longitude!.Value, s.StartedAt, s.MarkerCount))
+            .ToListAsync(ct);
+
+        var stillUnresolved = await db.FieldSessionUploads.AsNoTracking()
+            .CountAsync(s => s.SubmittedByAppUserId == userId && !s.PositionResolved, ct);
+
+        return Ok(new FieldSessionMapPage(points, total, stillUnresolved));
+    }
+
+    /// <summary>How many not-yet-inspected rows one map request will open. Enough that a backlog
+    /// clears in a few views; few enough that no single request turns into a disk scan.</summary>
+    private const int ResolvePerRequest = 25;
+
+    /// <summary>The most pins one answer carries. Past this the map should be asked for less.</summary>
+    private const int MapPointCap = 500;
+
+    /// <summary>The document's bytes, or null when this server cannot produce them.</summary>
+    private async Task<string?> ReadDocumentAsync(string? storagePath, byte[]? inline, CancellationToken ct)
+    {
+        if (inline is { Length: > 0 }) return System.Text.Encoding.UTF8.GetString(inline);
+        if (string.IsNullOrEmpty(storagePath)) return null;
+
+        try
+        {
+            await using var stream = await _fileStorage.OpenReadAsync(storagePath, ct);
+            using var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync(ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                     or FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The first reading that carries a position, if any did.</summary>
+    private static (decimal Latitude, decimal Longitude)? FirstFix(string document)
+    {
+        try
+        {
+            using var parsed = JsonDocument.Parse(document);
+            if (!parsed.RootElement.TryGetProperty("readings", out var readings)
+                || readings.ValueKind != JsonValueKind.Array) return null;
+
+            foreach (var reading in readings.EnumerateArray())
+            {
+                if (!reading.TryGetProperty("position", out var position)
+                    || position.ValueKind != JsonValueKind.Object) continue;
+
+                if (position.TryGetProperty("latitude", out var lat) && lat.ValueKind == JsonValueKind.Number
+                 && position.TryGetProperty("longitude", out var lon) && lon.ValueKind == JsonValueKind.Number)
+                {
+                    return ((decimal)lat.GetDouble(), (decimal)lon.GetDouble());
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // A document we cannot parse has no coordinate to give. It is already reported
+            // everywhere else that reads it; the map simply leaves it out.
+        }
+        return null;
+    }
+
     [HttpGet("my-storage")]
     public async Task<ActionResult<AccountStorageRecord>> GetMyStorage(CancellationToken ct)
     {
@@ -271,6 +416,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
             return BadRequest("That doesn't look like a session document: " + ex.Message);
         }
 
+        // A document with no readings is a session that recorded nothing. Storing it would make
+        // a row, a file and a "Play back" button for a page with nothing to play; better to say so
+        // at the door, where the app can tell the person before they walk away from the building.
+        if (summary.ReadingCount == 0)
+            return BadRequest("This session has no readings. Nothing was recorded, so there is nothing to upload.");
+
         var storedName = $"{Guid.NewGuid()}.json";
         // A personal session lives under the person, not under a group they may not belong to.
         var storagePath = organizationId == Guid.Empty
@@ -329,8 +480,23 @@ public sealed class FieldSessionUploadController : BenControllerBase
                 ? account?.DisplayName
                 : recordedByName.Trim();
         }
+        else if (recordedByAppUserId is null)
+        {
+            // Not sent at all: the person signed in and sending it is the person who recorded
+            // it, which is what the app itself sends in the ordinary case. Before this fallback a
+            // hand-built upload from an authenticated account played back as "nobody signed in
+            // when recorded" — a claim about the recording that the request contradicted.
+            var me = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Id, u.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            session.RecordedByAppUserId = me?.Id;
+            session.RecordedByName = string.IsNullOrWhiteSpace(recordedByName) ? me?.DisplayName : recordedByName.Trim();
+        }
         else
         {
+            // Sent as the empty id: the client's deliberate statement that nobody was signed in
+            // when this was recorded — a handed-over device, a session from before sign-in.
             session.RecordedByAppUserId = null;
             session.RecordedByName = null;
         }
@@ -343,6 +509,13 @@ public sealed class FieldSessionUploadController : BenControllerBase
         session.StartedAt = summary.StartedAt;
         session.EndedAt = summary.EndedAt;
         session.ReadingCount = summary.ReadingCount;
+        // The first fix, copied onto the row so a map never has to open this document again.
+        // PositionResolved is set either way: "looked and found nothing" must be remembered, or
+        // every indoor session would be re-read on every map request for ever.
+        var fix = FirstFix(documentText);
+        session.Latitude  = fix?.Latitude;
+        session.Longitude = fix?.Longitude;
+        session.PositionResolved = true;
         session.MarkerCount = summary.MarkerCount;
 
         await db.SaveChangesAsync(ct);
@@ -626,6 +799,19 @@ public sealed record FieldSessionRecord(
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);
+
+/// <summary>One session reduced to a pin: where it was, and enough to label it.</summary>
+public sealed record FieldSessionMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude,
+    DateTime StartedAt, int MarkerCount);
+
+/// <summary>
+/// A map answer. <paramref name="Total"/> is how many matched, so the client can tell "500 of
+/// 500" from "500 of 4,000" and say so; <paramref name="Unresolved"/> is how many older rows are
+/// still to be inspected, so it knows another request may bring more.
+/// </summary>
+public sealed record FieldSessionMapPage(
+    IReadOnlyList<FieldSessionMapPoint> Points, int Total, int Unresolved);
 
 public sealed record FieldSessionFileRecord(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,

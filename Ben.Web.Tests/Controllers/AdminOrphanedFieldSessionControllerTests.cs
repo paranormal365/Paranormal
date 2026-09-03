@@ -43,6 +43,8 @@ public class AdminOrphanedFieldSessionControllerTests
 
         public Task DeleteAsync(string relativePath, CancellationToken ct = default) => Task.CompletedTask;
 
+        public Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default) => Task.CompletedTask;
+
         public bool Exists(string relativePath) => false;
         public IReadOnlyList<string> ListFiles(string relativeDirectory) => [];
         public string UserFilePath(Guid userId, string storedFileName) => $"users/{userId}/{storedFileName}";

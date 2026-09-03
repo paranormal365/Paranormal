@@ -198,12 +198,40 @@ public interface IBenPlacesClient
         string orgUrlName, string investigationSlug, CancellationToken token = default);
 
     /// <summary>
+    /// Feed posts by the seeded accounts — the fixture people the e2e suite writes as — hidden or
+    /// not, newest first. SuperAdmin only.
+    /// </summary>
+    Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default);
+
+    /// <summary>Hide the chosen test posts; a top-level post takes its visible replies with it.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>Put the chosen test posts back on the feed.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>
     /// Places close enough to one another to be one place typed twice. SuperAdmin.
     /// </summary>
     /// <remarks>
     /// A finder rather than a list: the pairs worth showing are exactly the ones the automatic
     /// matcher could not settle, and they are few.
     /// </remarks>
+    /// <summary>
+    /// Every field session this account uploaded, newest first. The phone's side of the archive,
+    /// which until now the website had no page for.
+    /// </summary>
+    Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Where this account's sessions were recorded. Separate from the list because the coordinate
+    /// lives inside each session document, so it costs a file read apiece.
+    /// </summary>
+    Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default);
+
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default);

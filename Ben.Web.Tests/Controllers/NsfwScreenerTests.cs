@@ -127,6 +127,7 @@ public sealed class NsfwScreenerTests
             => throw new NotSupportedException();
         public Task DeleteAsync(string relativePath, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default) => Task.CompletedTask;
         public IReadOnlyList<string> ListFiles(string relativeDirectory)
             => throw new NotSupportedException();
         public string UserFilePath(Guid userId, string storedFileName) => $"users/{userId}/{storedFileName}";
