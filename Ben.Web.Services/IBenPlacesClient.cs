@@ -198,6 +198,20 @@ public interface IBenPlacesClient
         string orgUrlName, string investigationSlug, CancellationToken token = default);
 
     /// <summary>
+    /// Feed posts by the seeded accounts — the fixture people the e2e suite writes as — hidden or
+    /// not, newest first. SuperAdmin only.
+    /// </summary>
+    Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default);
+
+    /// <summary>Hide the chosen test posts; a top-level post takes its visible replies with it.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>Put the chosen test posts back on the feed.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>
     /// Places close enough to one another to be one place typed twice. SuperAdmin.
     /// </summary>
     /// <remarks>

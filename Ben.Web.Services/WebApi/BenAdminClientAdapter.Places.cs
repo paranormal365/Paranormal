@@ -218,6 +218,19 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
+    public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
+        => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/hide", new { Ids = ids }, token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
+
     /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
