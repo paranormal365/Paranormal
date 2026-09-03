@@ -1,4 +1,4 @@
-@page "/login"
+﻿@page "/login"
 
 @inject IWebApiAuthService AuthService
 @inject IBenAdminClient AccountClient
@@ -31,6 +31,7 @@
                 <h2 class="h4 mt-3 mb-0">Sign In</h2>
             </div>
 
+            <BenInteractiveOnly>
             <EditForm Model="@_model" OnValidSubmit="HandleLogin" FormName="LoginForm">
                 <DataAnnotationsValidator />
 
@@ -124,6 +125,7 @@
                     @(_isLoading ? "Signing in..." : _needsTwoFactor ? "Verify" : "Sign In")
                 </button>
             </EditForm>
+            </BenInteractiveOnly>
 
             <p class="text-center text-secondary small mt-3 mb-0">
                 New here? <a href="/signup">Create an account</a>.
