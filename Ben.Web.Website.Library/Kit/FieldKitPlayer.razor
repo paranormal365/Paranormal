@@ -1,4 +1,5 @@
 @namespace Ben.Web.Website.Library.Kit
+@using Microsoft.JSInterop
 @using System.Text.Json
 @using Ben.Web.Website.Library.Manage.Maps
 @using Ben.Web.Services
@@ -6,7 +7,9 @@
 @inject IBenUserState UserState
 @inject IMediaUrlBuilder MediaUrls
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@inject IJSRuntime JS
 @implements IDisposable
+@implements IAsyncDisposable
 
 @*
     FieldKitPlayer — playing back a session somebody recorded on their phone.
@@ -187,12 +190,18 @@
                                 @foreach (var rate in new[] { 1, 2, 4, 8, 16 })
                                 {
                                     <button class="btn @(_rate == rate ? "btn-secondary" : "btn-outline-secondary")"
-                                            @onclick="() => _rate = rate">@rate×</button>
+                                            @onclick="() => SetRateAsync(rate)">@rate×</button>
                                 }
                             </div>
 
-                            <span class="font-monospace">@Elapsed(_playhead)</span>
+                            <span class="font-monospace" data-testid="elapsed">@Elapsed(_playhead)</span>
                             <span class="text-muted small">of @Elapsed(_end)</span>
+                            @if (_clockKey is not null)
+                            {
+                                @* The recording is driving: readings, room and map follow its
+                                   own time, so what is heard and what is shown are one moment. *@
+                                <span class="badge text-bg-info" data-testid="media-clock">following the recording</span>
+                            }
                         </div>
 
                         <input type="range" class="form-range" min="0" max="1000" step="1"
@@ -339,23 +348,46 @@
                         <ul class="list-group list-group-flush">
                             @foreach (var file in _session.Files)
                             {
-                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap" @key="file.Id">
                                     <span class="font-monospace small">@file.RelativePath</span>
+                                    @if (MediaStart(file) is { } startsAt && startsAt > _start)
+                                    {
+                                        <span class="text-muted small" data-testid="media-starts-at">from @Elapsed(startsAt)</span>
+                                    }
                                     @if (!file.DigestMatched)
                                     {
                                         @* Surfaced, never swallowed: a file that arrived damaged
                                            should not be listened to as though it were intact. *@
                                         <span class="badge text-bg-warning">arrived damaged</span>
                                     }
-                                    @if (IsAudio(file.RelativePath))
+                                    @if (_undecodable.Contains(file.Id))
                                     {
-                                        <audio controls preload="none" class="ms-auto"
-                                               src="@FileUrl(file.Id)"></audio>
+                                        @* The digest matched — the bytes are the bytes the phone
+                                           sent — but the browser cannot decode them. A silent,
+                                           dead control looks like a player that is broken; this
+                                           says which file it is and keeps the bytes reachable.
+                                           (The same change as feature/upload-and-player-hardening,
+                                           carried here so the two branches merge cleanly.) *@
+                                        <span class="badge text-bg-warning" data-testid="undecodable">won't play in this browser</span>
+                                        <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
+                                           href="@FileUrl(file.Id)" download>Download the file</a>
+                                    }
+                                    else if (IsAudio(file.RelativePath))
+                                    {
+                                        @* metadata, not none: the browser reads the header now and
+                                           reports a file it cannot decode before anybody presses
+                                           play, and the clock can seek before it starts. *@
+                                        <audio controls preload="metadata" class="ms-auto"
+                                               src="@FileUrl(file.Id)"
+                                               @ref="_mediaRefs[file.Id]"
+                                               @onerror="@(() => MarkUndecodable(file.Id))"></audio>
                                     }
                                     else if (IsVideo(file.RelativePath))
                                     {
-                                        <video controls preload="none" width="320"
-                                               class="ms-auto" src="@FileUrl(file.Id)"></video>
+                                        <video controls preload="metadata" width="320"
+                                               class="ms-auto" src="@FileUrl(file.Id)"
+                                               @ref="_mediaRefs[file.Id]"
+                                               @onerror="@(() => MarkUndecodable(file.Id))"></video>
                                     }
                                     else if (IsImage(file.RelativePath))
                                     {
@@ -581,6 +613,28 @@
                                && note.ValueKind == JsonValueKind.String
                     ? note.GetString() : null;
 
+                // Where each recording sits in session time. The app stamps `audio_ref` on the
+                // reading it was taken at, with that reading's offset INTO the file, so the
+                // file began at (reading time − offset). Video and photos arrive as typed notes
+                // — "video: media/…" — on the reading they were taken at, which is their start.
+                if (element.TryGetProperty("audio_ref", out var audioRef))
+                {
+                    string? filename = null; double offset = 0;
+                    if (audioRef.ValueKind == JsonValueKind.String) filename = audioRef.GetString();
+                    else if (audioRef.ValueKind == JsonValueKind.Object)
+                    {
+                        filename = audioRef.TryGetProperty("filename", out var fn) && fn.ValueKind == JsonValueKind.String ? fn.GetString() : null;
+                        offset   = Number(audioRef, "start_offset_seconds") ?? 0;
+                    }
+                    if (filename is not null) _mediaStarts.TryAdd(NormalisePath(filename), reading.At.AddSeconds(-offset));
+                }
+                if (reading.Note is { } typed)
+                {
+                    foreach (var prefix in new[] { "video: ", "audio: ", "photo: " })
+                        if (typed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            _mediaStarts.TryAdd(NormalisePath(typed[prefix.Length..].Trim()), reading.At);
+                }
+
                 _readings.Add(reading);
             }
         }
@@ -711,12 +765,16 @@
         ? (int)((_playhead - _start).TotalSeconds / (_end - _start).TotalSeconds * 1000)
         : 0;
 
-    private void OnScrub(ChangeEventArgs args)
+    private async Task OnScrub(ChangeEventArgs args)
     {
         if (!double.TryParse(args.Value?.ToString(), out var value)) return;
-        Pause();
+        var wasFollowing = _clockKey;
+        await PauseAsync();
         _playhead = _start.AddSeconds((_end - _start).TotalSeconds * value / 1000);
         AdvanceMap(force: true);
+        // Dragging the slider moves the recording too, so pressing Play resumes from here.
+        if (wasFollowing is { } key && MediaStartOf(key) is { } startsAt)
+            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
     }
 
     private void JumpTo(DateTime moment)
@@ -726,10 +784,21 @@
         _playhead = moment.AddSeconds(-3) < _start ? _start : moment.AddSeconds(-3);
     }
 
-    private void TogglePlay()
+    private async Task TogglePlay()
     {
-        if (_playing) { Pause(); return; }
+        if (_playing) { await PauseAsync(); return; }
         if (_playhead >= _end) _playhead = _start;
+
+        // A recording that covers this moment is the clock: readings, room and map follow what
+        // is heard. Seek it to the playhead and press play on it; only if the browser refuses —
+        // or there is no recording here — does the page keep time itself.
+        if (RecordingCovering(_playhead) is { } key && MediaStartOf(key) is { } startsAt)
+        {
+            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
+            if (await PlayMediaAsync(key)) return;   // OnMediaPlay sets the state
+        }
+
+        _clockKey = null;
         _playing = true;
         _ticker = new CancellationTokenSource();
         _ = Tick(_ticker.Token);
@@ -740,6 +809,159 @@
         _playing = false;
         _ticker?.Cancel();
         _ticker = null;
+    }
+
+    private async Task PauseAsync()
+    {
+        if (_clockKey is { } key) await PauseMediaAsync(key);
+        Pause();
+    }
+
+    // ── The recording as the clock ────────────────────────────────────────────
+
+    /// <summary>When each recording began, in session time, keyed by its normalised path.</summary>
+    private readonly Dictionary<string, DateTime> _mediaStarts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Guid, ElementReference> _mediaRefs = new();
+    private readonly HashSet<Guid> _attached = [];
+    /// <summary>The file currently driving the playhead, or null while the page keeps time.</summary>
+    private Guid? _clockKey;
+    private IJSObjectReference? _media;
+    private DotNetObjectReference<FieldKitPlayer>? _self;
+
+    private static string NormalisePath(string path) => path.Replace('\\', '/').TrimStart('/');
+
+    /// <summary>A recording's start in session time: from its reference, else the session's start.</summary>
+    private DateTime? MediaStart(FieldSessionFileSummary file)
+        => _mediaStarts.TryGetValue(NormalisePath(file.RelativePath), out var at) ? at
+         : IsAudio(file.RelativePath) || IsVideo(file.RelativePath) ? _start
+         : null;
+
+    private DateTime? MediaStartOf(Guid fileId)
+        => _session?.Files.FirstOrDefault(f => f.Id == fileId) is { } file ? MediaStart(file) : null;
+
+    /// <summary>The audio or video whose span contains the moment — the latest to have begun.</summary>
+    private Guid? RecordingCovering(DateTime moment)
+        => _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (f.Id, StartsAt: MediaStart(f)))
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment)
+            .OrderByDescending(x => x.StartsAt)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefault()
+         ?? _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (Guid?)f.Id).FirstOrDefault();
+
+    /// <summary>Files the browser reported it cannot decode; never chosen as the clock.</summary>
+    private readonly HashSet<Guid> _undecodable = [];
+
+    private void MarkUndecodable(Guid fileId)
+    {
+        _undecodable.Add(fileId);
+        if (_clockKey == fileId) { _clockKey = null; Pause(); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_session is null) return;
+        // Attach once per element. The row is keyed on the file id, so the element survives
+        // re-renders and the listener with it.
+        foreach (var file in _session.Files)
+        {
+            if (!(IsAudio(file.RelativePath) || IsVideo(file.RelativePath))) continue;
+            if (_attached.Contains(file.Id) || !_mediaRefs.TryGetValue(file.Id, out var el) || el.Id is null) continue;
+            try
+            {
+                _media ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/fieldKitMedia.js");
+                _self ??= DotNetObjectReference.Create(this);
+                await _media.InvokeVoidAsync("attach", el, _self, file.Id);
+                _attached.Add(file.Id);
+            }
+            catch (JSException) { /* the element went away between render and attach */ }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private async Task<bool> PlayMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return false;
+        try
+        {
+            await _media.InvokeVoidAsync("rate", el, (double)_rate);
+            var refusal = await _media.InvokeAsync<string?>("play", el);
+            return refusal is null;
+        }
+        catch (JSException) { return false; }
+    }
+
+    private async Task PauseMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
+    }
+
+    private async Task SeekMediaAsync(Guid key, double seconds)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("seek", el, seconds); } catch (JSException) { }
+    }
+
+    private async Task SetRateAsync(int rate)
+    {
+        _rate = rate;
+        if (_clockKey is { } key && _media is not null && _mediaRefs.TryGetValue(key, out var el))
+        {
+            try { await _media.InvokeVoidAsync("rate", el, (double)rate); } catch (JSException) { }
+        }
+    }
+
+    [JSInvokable]
+    public void OnMediaPlay(Guid key, double seconds)
+    {
+        // Pressing play on the element itself, or the page's button: either way the recording
+        // is now the clock, and the page's own ticker must not also advance the playhead.
+        _ticker?.Cancel(); _ticker = null;
+        _clockKey = key;
+        _playing = true;
+        OnMediaTime(key, seconds);
+    }
+
+    [JSInvokable]
+    public void OnMediaTime(Guid key, double seconds)
+    {
+        if (_clockKey != key) return;
+        if (MediaStartOf(key) is not { } startsAt) return;
+        var moment = startsAt.AddSeconds(seconds);
+        _playhead = moment < _start ? _start : moment > _end ? _end : moment;
+        AdvanceMap();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnMediaPause(Guid key)
+    {
+        if (_clockKey != key) return;
+        _playing = false;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnMediaEnded(Guid key)
+    {
+        if (_clockKey != key) return;
+        _playing = false;
+        _clockKey = null;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Pause();
+        _self?.Dispose();
+        if (_media is not null)
+        {
+            try { await _media.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
     }
 
     private async Task Tick(CancellationToken token)
@@ -926,7 +1148,8 @@
 
     private static bool IsAudio(string path) =>
         path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
-        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase);
+        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsVideo(string path) =>
         path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)

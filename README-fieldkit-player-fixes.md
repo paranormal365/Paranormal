@@ -148,3 +148,37 @@ person has actually moved at least five metres. The readout and the room badge s
 tick, because they are cheap and the room is the finer answer anyway. A scrub is the person's own
 gesture and moves the map at once.
 
+
+## One timeline: the recording is the clock
+
+Ben's rule, stated 2026-09-03: whatever the session recorded plays along the same timeline. While
+audio or video plays, the EMF readout and chart cursor, the room badge, the note and the map
+position advance with it — what is heard and what is shown are one moment.
+
+Before this the audio element and the page's playhead were two unrelated clocks: press Play on the
+page and the readings advanced while the audio sat silent; press play on the audio and the readings
+sat still.
+
+**Where a recording sits in time.** The app stamps `audio_ref` on the reading it was taken at,
+with `start_offset_seconds` — that reading's offset *into* the file — so the file began at
+(reading time − offset). Video and photos arrive as typed notes (`video: media/…`) on the reading
+they were taken at, which is their start. A recording with no reference is taken to start with
+the session. The Recordings card says "from 0:04" beside a file that began after the session did.
+
+**Who keeps time.** Pressing Play on the page finds the recording covering the playhead, seeks it
+there and plays it; from then on the element's `timeupdate` (about four a second, the cadence the
+tick loop already rendered at) sets the playhead, through a small JS module that reports back via
+a `DotNetObjectReference` — Blazor's own `@ontimeupdate` carries no value. Pressing play on the
+element itself has the same effect. Pause, ended and the page's Pause button all agree; a scrub
+seeks the recording; the rate buttons set its `playbackRate`. Only when there is no recording at
+this moment, or the browser refuses to play, does the page keep time with its own ticker. A
+"following the recording" badge says which is happening.
+
+**Proof.** `FieldSessionMediaClockTests`: a real 16-second WAV attached to a 20-second session with
+the reference at +6 s / offset 2 s; pressing Play on the page starts the audio, the badge shows,
+and after three seconds the page's elapsed time equals four seconds plus the audio's own
+`currentTime` within a second and a half; pausing the audio element pauses the page. Verified on
+the side database alongside the existing playback and sessions tests (all green).
+
+**Merge note.** The undecodable-recording badge from `feature/upload-and-player-hardening` is
+carried on this branch too, so the two resolve to this branch's Recordings card.
