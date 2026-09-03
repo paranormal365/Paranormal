@@ -107,7 +107,7 @@
                                 @row.AuthorName
                                 <div class="small text-secondary">@row.AuthorEmail</div>
                             </td>
-                            <td data-testid="test-post-body" style="white-space:pre-wrap; max-width:36rem;">@Trim(row.Body)@(row.IsReply ? " " : "")@if (row.IsReply) { <span class="badge text-bg-light">reply</span> }</td>
+                            <td data-testid="test-post-body" style="white-space:pre-wrap; max-width:36rem;">@Trim(row.Body)@(row.IsReply ? " " : "")@if (row.IsReply) { <span class="badge bg-body-secondary text-body-emphasis">reply</span> }</td>
                             <td class="text-nowrap">
                                 @if (row.Hidden)
                                 {
