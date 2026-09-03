@@ -31,12 +31,13 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
     }
 
     [HttpGet]
-    public virtual async Task<ActionResult<IEnumerable<TRecord>>> GetAll(CancellationToken cancellationToken)
+    public virtual async Task<ActionResult<IEnumerable<TRecord>>> GetAll(
+        CancellationToken cancellationToken, [FromQuery] int? page = null, [FromQuery] int? pageSize = null)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entities = await dbContext.Set<TEntity>().AsNoTracking().ToListAsync(cancellationToken);
-        var records = _mapper.Map<IEnumerable<TRecord>>(entities);
-        return Ok(records);
+        var records = _mapper.Map<IEnumerable<TRecord>>(entities).ToList();
+        return Ok(ListPaging.Apply(records, page, pageSize, Response));
     }
 
     [HttpGet("{id:guid}")]

@@ -271,6 +271,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
             return BadRequest("That doesn't look like a session document: " + ex.Message);
         }
 
+        // A document with no readings is a session that recorded nothing. Storing it would make
+        // a row, a file and a "Play back" button for a page with nothing to play; better to say so
+        // at the door, where the app can tell the person before they walk away from the building.
+        if (summary.ReadingCount == 0)
+            return BadRequest("This session has no readings. Nothing was recorded, so there is nothing to upload.");
+
         var storedName = $"{Guid.NewGuid()}.json";
         // A personal session lives under the person, not under a group they may not belong to.
         var storagePath = organizationId == Guid.Empty
@@ -329,8 +335,23 @@ public sealed class FieldSessionUploadController : BenControllerBase
                 ? account?.DisplayName
                 : recordedByName.Trim();
         }
+        else if (recordedByAppUserId is null)
+        {
+            // Not sent at all: the person signed in and sending it is the person who recorded
+            // it, which is what the app itself sends in the ordinary case. Before this fallback a
+            // hand-built upload from an authenticated account played back as "nobody signed in
+            // when recorded" — a claim about the recording that the request contradicted.
+            var me = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Id, u.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            session.RecordedByAppUserId = me?.Id;
+            session.RecordedByName = string.IsNullOrWhiteSpace(recordedByName) ? me?.DisplayName : recordedByName.Trim();
+        }
         else
         {
+            // Sent as the empty id: the client's deliberate statement that nobody was signed in
+            // when this was recorded — a handed-over device, a session from before sign-in.
             session.RecordedByAppUserId = null;
             session.RecordedByName = null;
         }
