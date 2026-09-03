@@ -10530,3 +10530,81 @@ trap**, and nothing about the column names warns you.
 
 **Not covered, and correct:** `AuditLogs` and `SignInEvents`. The first is item 191's business;
 the second feeds the sign-in insights dashboard and is 0.7 MB.
+
+## 204. A member's Home that is a desk, not a poster (open, Ben 2026-09-03)
+
+Next investigation, open cases, unread messages, gear checked out — the "has work waiting"
+banners already know all of this; the page below them repeats the visitor hero. Build the
+signed-in Home from the same queries the banners run, and keep the hero for visitors.
+
+**Size:** small–medium (a day). **Depends on:** nothing; every number is already served.
+**Order:** first — it is the most-seen page for every member and all the data is there.
+
+## 205. A default group page (open, Ben 2026-09-03)
+
+"This organization has not published a home page yet" is what every public group shows today.
+Build one from data the group already has: kind, area served, accepting cases, next public event,
+verified badge. The CMS page, when one exists, still wins.
+
+**Size:** small–medium (a day). **Depends on:** nothing. **Order:** second — it changes what
+every visitor to every group sees, and reuses the profile's own records.
+
+## 206. Client status mail (open, Ben 2026-09-03)
+
+When a case changes state or a visit is scheduled, the client gets the same sentence the site
+shows. The mail rail now works and is observable (item 187), so this is templates and triggers.
+
+**Size:** medium (a day or two: the state-change and scheduling seams, the templates, the
+per-client opt-out, the observability row). **Depends on:** nothing.
+
+## 207. Share a session or a piece of evidence by link (open, Ben 2026-09-03)
+
+Time-limited, for a client or a TV producer who has no account. A signed link that opens the
+player or the evidence read-only until it expires, revocable from the case, with the view logged.
+
+**Size:** medium (two days). **Depends on:** item 208 is a natural companion; and note item 201's
+rule — nothing token-sized goes in a URL, so this is a short signed id resolved server-side.
+
+## 208. Session summary in the report (open, Ben 2026-09-03)
+
+The Field Sessions report section cites a session; a one-paragraph readout — peak field, when, in
+which room, what was recorded at that moment — would make the PDF stand on its own.
+
+**Size:** small (half a day; the summary is a pure function of the document, already parsed by
+the player). **Depends on:** nothing. **Order:** early — cheapest item on the list.
+
+## 209. Universal links + a PWA manifest (open, Ben 2026-09-03)
+
+A link to a case opens the app on a phone that has it and installs cleanly on one that doesn't.
+An `apple-app-site-association` file served at the root, the associated-domains entitlement in
+the app, and a web manifest with icons and a start URL.
+
+**Size:** medium (a day; the AASA file must be served with the right type at the root, and the
+entitlement needs a signed build). **Depends on:** the App Store listing existing (it does) and a
+build after 1.0 review for the entitlement.
+
+## 210. Trim a field session to the evidence (open, Ben 2026-09-03)
+
+An hour-long recording usually matters for ten seconds. After upload, let the investigator
+choose the window to keep — the readings, marks and media inside it — and store only that on the
+server, with a plain sentence that the full original stays on their phone (and only there,
+unless they have deleted it). Cheaper storage for the group, faster playback, and the citation in
+the report points at exactly the moment that mattered.
+
+**Size:** large (three days: the window UI on the player, a server "trim" that rewrites the
+document and cuts the media through ffmpeg where the host has it, the replaced-file bookkeeping,
+the sentence about the original, and the report citation carrying the window). **Depends on:**
+the media clock (shipped 2026-09-03) — the window is chosen on that timeline.
+
+## 211. App Attest for the Field Kit upload door (open, planned 2026-09-03)
+
+The "never trust what it sent" half shipped 2026-09-03 (`FieldSessionDocumentGuard`,
+`FieldSessionFileGuard`). This is the other half: proving the *app* sent it. A key from the
+Secure Enclave, Apple's attestation verified once and stored, an assertion on each upload,
+a simulator bypass. **After 1.0 clears review** — it touches the app.
+
+**Size:** medium (a day). **Depends on:** App Store review of 1.0.
+
+### Recommended order for 204–211
+
+208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
