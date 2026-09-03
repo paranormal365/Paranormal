@@ -39,6 +39,20 @@
     {
         <BenLoaderOverlay Visible="true" Text="Reading the session…" />
     }
+    else if (_signedOut)
+    {
+        <div class="card border-warning mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Sign in to see this session</h5>
+                <p class="card-text">
+                    Field sessions are private to the person who recorded them and the
+                    investigation they were sent to. Sign in and this page will open.
+                </p>
+                <a class="btn btn-primary btn-sm" data-testid="sign-in-to-see"
+                   href="@($"/login?returnUrl={Uri.EscapeDataString($"/field-sessions/{SessionId}")}")">Sign in</a>
+            </div>
+        </div>
+    }
     else if (_refusal is not null)
     {
         @* A refusal is not an empty session. Saying "nothing here" for a load that FAILED is
@@ -467,6 +481,8 @@
     }
     private bool _loading = true;
     private string? _refusal;
+    /// <summary>Nobody is signed in and the server declined — the answer is a sign-in link, not "removed".</summary>
+    private bool _signedOut;
 
     private List<Reading> _readings = new();
     private List<TracePoint> _chartPoints = new();
@@ -513,6 +529,7 @@
     {
         _loading = true;
         _refusal = null;
+        _signedOut = false;
         StateHasChanged();
 
         // The circuit is not signed in during the static prerender, so a load that ran now would
@@ -525,6 +542,15 @@
 
         if (detail is null)
         {
+            // A visitor gets the same "not found" a stranger would — a personal session is not
+            // a thing to confirm exists to somebody signed out. But telling THEM it "may have
+            // been removed" is a wrong sentence about a right refusal: the fix on their side is
+            // to sign in, so that is what the page says, with a way back here afterwards.
+            if (!UserState.IsAuthenticated)
+            {
+                _signedOut = true;
+                return;
+            }
             _refusal = "The server didn't return this session. It may have been removed, or you "
                      + "may no longer have access to the investigation it belongs to.";
             return;
