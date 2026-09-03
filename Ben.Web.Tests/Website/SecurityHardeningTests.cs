@@ -63,6 +63,9 @@ public sealed class SecurityHardeningTests
         // script sets the attribute there. Both paths have to hold.
         Assert.Contains("<requestFiltering removeServerHeader=\"true\">", RepoFile("Ben.Web.Website/web.config"));
         Assert.Contains("SetAttribute('removeServerHeader', 'true')", RepoFile("scripts/deploy-ishaunted.ps1"));
+        // The video editor is a child application with its own web.config, and it was still
+        // announcing IIS after the other two stopped (2026-09-03).
+        Assert.Contains("<requestFiltering removeServerHeader=\"true\" />", RepoFile("Ben.Wasm.Video/wwwroot/web.config"));
     }
 
     [Fact]
