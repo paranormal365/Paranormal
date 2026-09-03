@@ -1415,6 +1415,15 @@ public sealed record OrphanedFieldSessionRecord(
     int ReadingCount, int MarkerCount, string? RecordedByName,
     bool LinkedToInvestigation, bool PublishedToArchive, int MediaCount);
 
+/// <summary>A public-feed post by a seeded account, as listed on /admin/test-posts.</summary>
+public sealed record TestFeedPostRecord(
+    Guid Id, string AuthorName, string AuthorEmail, DateTime DateCreated, string Body,
+    bool IsReply, bool Hidden, int VisibleReplies);
+
+/// <param name="Changed">Posts whose state actually flipped; an already-hidden post is not counted.</param>
+/// <param name="RepliesAlso">Replies hidden alongside their parent, beyond the ids given.</param>
+public sealed record TestFeedPostHideResult(int Changed, int RepliesAlso, string? Refusal);
+
 /// <summary>What the delete did. <c>Refusal</c> is set when it deliberately did nothing.</summary>
 public sealed record OrphanedFieldSessionPurgeResult(int Deleted, int Remaining, string? Refusal)
 {
