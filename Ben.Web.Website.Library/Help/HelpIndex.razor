@@ -1,7 +1,8 @@
-@page "/help"
+﻿@page "/help"
 @using Ben.Web.Services.Help
 @inject HelpContentService Content
 @inject HelpViewerResolver Viewers
+@inject SiteFeaturesProvider Features
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 <PageTitle>Help</PageTitle>
@@ -59,6 +60,6 @@
         if (!RendererInfo.IsInteractive) return;
 
         var viewer = await Viewers.ResolveAsync();
-        _sections = Content.SectionsFor(viewer);
+        _sections = Content.SectionsFor(viewer, Features.IsOn);
     }
 }
