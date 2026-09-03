@@ -300,6 +300,9 @@ on the server, so date and user filters apply to the whole history rather than t
 
 ## Error log
 
+![The error log with its summary cards, filters and grid](help-media:site-administration/error-log.png)
+*The error log: how many rows, the oldest kept, the most repeated message — then the rows themselves, newest first.*
+
 **Administration → Error Log** is the other half of the pair, and the two are easily confused. The
 audit log records what people did on purpose and is kept for years. This one records what broke,
 and is pruned on a retention window — thirty days unless configured otherwise.
