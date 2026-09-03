@@ -1,4 +1,5 @@
 @namespace Ben.Web.Website.Library.Kit
+@using Microsoft.JSInterop
 @using System.Text.Json
 @using Ben.Web.Website.Library.Manage.Maps
 @using Ben.Web.Services
@@ -6,7 +7,9 @@
 @inject IBenUserState UserState
 @inject IMediaUrlBuilder MediaUrls
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@inject IJSRuntime JS
 @implements IDisposable
+@implements IAsyncDisposable
 
 @*
     FieldKitPlayer — playing back a session somebody recorded on their phone.
@@ -187,12 +190,18 @@
                                 @foreach (var rate in new[] { 1, 2, 4, 8, 16 })
                                 {
                                     <button class="btn @(_rate == rate ? "btn-secondary" : "btn-outline-secondary")"
-                                            @onclick="() => _rate = rate">@rate×</button>
+                                            @onclick="() => SetRateAsync(rate)">@rate×</button>
                                 }
                             </div>
 
-                            <span class="font-monospace">@Elapsed(_playhead)</span>
+                            <span class="font-monospace" data-testid="elapsed">@Elapsed(_playhead)</span>
                             <span class="text-muted small">of @Elapsed(_end)</span>
+                            @if (_clockKey is not null)
+                            {
+                                @* The recording is driving: readings, room and map follow its
+                                   own time, so what is heard and what is shown are one moment. *@
+                                <span class="badge text-bg-info" data-testid="media-clock">following the recording</span>
+                            }
                         </div>
 
                         <input type="range" class="form-range" min="0" max="1000" step="1"
@@ -225,25 +234,67 @@
                 <div class="row g-3">
                     <div class="col-12 col-lg-7">
                         <div class="card h-100">
-                            <div class="card-header py-2">Magnetic field over the session</div>
+                            <div class="card-header py-2">@ChartHeading</div>
                             <div class="card-body">
-                                <TelerikChart Height="240px">
-                                    <ChartSeriesItems>
-                                        <ChartSeries Type="ChartSeriesType.Line"
-                                                     Data="@_chartPoints"
-                                                     Field="@nameof(TracePoint.Milligauss)"
-                                                     CategoryField="@nameof(TracePoint.Label)"
-                                                     Name="mG from base">
-                                            <ChartSeriesMarkers Visible="false" />
-                                        </ChartSeries>
-                                    </ChartSeriesItems>
-                                    <ChartValueAxes>
-                                        <ChartValueAxis>
-                                            <ChartValueAxisTitle Text="mG from base" />
-                                        </ChartValueAxis>
-                                    </ChartValueAxes>
-                                    <ChartLegend Visible="false" />
-                                </TelerikChart>
+                                @* One chart per channel the session actually holds. A single
+                                   hard-wired magnetic series drew an empty grid with axes and no
+                                   line whenever the magnetometer was switched off — which the app
+                                   allows mid-session — while the sound trace, the only channel
+                                   with data, was never plotted at all. An empty grid reads as
+                                   broken; a sentence reads as absent, and absent is the truth. *@
+                                @if (_chartPoints.Count == 0 && _soundPoints.Count == 0)
+                                {
+                                    <div class="text-muted small p-3" data-testid="no-channels">
+                                        This session recorded no magnetic or sound readings.
+                                    </div>
+                                }
+                                @if (_chartPoints.Count > 0)
+                                {
+                                    <TelerikChart Height="@(_soundPoints.Count > 0 ? "150px" : "240px")">
+                                        <ChartSeriesItems>
+                                            <ChartSeries Type="ChartSeriesType.Line"
+                                                         Data="@_chartPoints"
+                                                         Field="@nameof(TracePoint.Milligauss)"
+                                                         CategoryField="@nameof(TracePoint.Label)"
+                                                         Name="@MagneticAxisTitle">
+                                                <ChartSeriesMarkers Visible="false" />
+                                            </ChartSeries>
+                                        </ChartSeriesItems>
+                                        <ChartValueAxes>
+                                            <ChartValueAxis>
+                                                @* Derived, not literal: with no base level taken
+                                                   the readout says "abs" and the header drops its
+                                                   suffix, and the axis was the last thing still
+                                                   claiming a baseline that was never measured. *@
+                                                <ChartValueAxisTitle Text="@MagneticAxisTitle" />
+                                            </ChartValueAxis>
+                                        </ChartValueAxes>
+                                        <ChartLegend Visible="false" />
+                                    </TelerikChart>
+                                }
+                                @if (_soundPoints.Count > 0)
+                                {
+                                    @* Its own chart rather than a second series: decibels and
+                                       milligauss share no scale, and one axis for both would make
+                                       whichever number is larger the only one anybody can read. *@
+                                    <TelerikChart Height="@(_chartPoints.Count > 0 ? "150px" : "240px")">
+                                        <ChartSeriesItems>
+                                            <ChartSeries Type="ChartSeriesType.Line"
+                                                         Data="@_soundPoints"
+                                                         Field="@nameof(TracePoint.Milligauss)"
+                                                         CategoryField="@nameof(TracePoint.Label)"
+                                                         Name="dBFS">
+                                                <ChartSeriesMarkers Visible="false" />
+                                            </ChartSeries>
+                                        </ChartSeriesItems>
+                                        <ChartValueAxes>
+                                            <ChartValueAxis>
+                                                <ChartValueAxisTitle Text="dBFS" />
+                                            </ChartValueAxis>
+                                        </ChartValueAxes>
+                                        <ChartLegend Visible="false" />
+                                    </TelerikChart>
+                                }
                             </div>
                         </div>
                     </div>
@@ -252,6 +303,18 @@
                         <div class="card h-100">
                             <div class="card-header py-2">Where they were</div>
                             <div class="card-body p-2">
+                                @* The room is the session's, not the map's. It used to live inside
+                                   the has-a-track branch, so indoors — where a phone routinely
+                                   never gets a fix — the card said "no position" and threw away
+                                   the one thing the investigator had actually typed. *@
+                                @if (!string.IsNullOrWhiteSpace(CurrentRoom))
+                                {
+                                    <div class="mb-2">
+                                        <span class="badge text-bg-secondary" data-testid="current-room">
+                                            Room: @CurrentRoom
+                                        </span>
+                                    </div>
+                                }
                                 @if (_track.Count == 0)
                                 {
                                     @* Indoors a phone often never gets a fix. Saying so beats an
@@ -266,19 +329,8 @@
                                        Its radius circle IS the accuracy of the fix: indoors that
                                        is routinely the width of the building, and a bare pin
                                        invites the belief that it means the room. *@
-                                    @if (!string.IsNullOrWhiteSpace(CurrentRoom))
-                                    {
-                                        @* The one fact the map cannot supply: which part of the
-                                           building this is. It comes from the person who was
-                                           standing in it. *@
-                                        <div class="mb-2">
-                                            <span class="badge text-bg-secondary" data-testid="current-room">
-                                                Room: @CurrentRoom
-                                            </span>
-                                        </div>
-                                    }
-                                    <AddressMapPlayer Latitude="@(CurrentPoint?.Latitude ?? _track[0].Latitude)"
-                                                      Longitude="@(CurrentPoint?.Longitude ?? _track[0].Longitude)"
+                                    <AddressMapPlayer Latitude="@(MapPoint?.Latitude ?? _track[0].Latitude)"
+                                                      Longitude="@(MapPoint?.Longitude ?? _track[0].Longitude)"
                                                       Title="@PositionTitle"
                                                       Config="@_mapConfig"
                                                       ReadOnly="true"
@@ -296,8 +348,12 @@
                         <ul class="list-group list-group-flush">
                             @foreach (var file in _session.Files)
                             {
-                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap" @key="file.Id">
                                     <span class="font-monospace small">@file.RelativePath</span>
+                                    @if (MediaStart(file) is { } startsAt && startsAt > _start)
+                                    {
+                                        <span class="text-muted small" data-testid="media-starts-at">from @Elapsed(startsAt)</span>
+                                    }
                                     @if (!file.DigestMatched)
                                     {
                                         @* Surfaced, never swallowed: a file that arrived damaged
@@ -309,7 +365,9 @@
                                         @* The digest matched — the bytes are the bytes the phone
                                            sent — but the browser cannot decode them. A silent,
                                            dead control looks like a player that is broken; this
-                                           says which file it is and keeps the bytes reachable. *@
+                                           says which file it is and keeps the bytes reachable.
+                                           (The same change as feature/upload-and-player-hardening,
+                                           carried here so the two branches merge cleanly.) *@
                                         <span class="badge text-bg-warning" data-testid="undecodable">won't play in this browser</span>
                                         <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
                                            href="@FileUrl(file.Id)" download>Download the file</a>
@@ -318,17 +376,31 @@
                                     {
                                         @* metadata, not none: the browser reads the header now and
                                            reports a file it cannot decode before anybody presses
-                                           play, instead of after — at the cost of a small ranged
-                                           request per recording. *@
+                                           play, and the clock can seek before it starts. *@
                                         <audio controls preload="metadata" class="ms-auto"
                                                src="@FileUrl(file.Id)"
+                                               @ref="_mediaRefs[file.Id]"
                                                @onerror="@(() => MarkUndecodable(file.Id))"></audio>
                                     }
                                     else if (IsVideo(file.RelativePath))
                                     {
                                         <video controls preload="metadata" width="320"
                                                class="ms-auto" src="@FileUrl(file.Id)"
+                                               @ref="_mediaRefs[file.Id]"
                                                @onerror="@(() => MarkUndecodable(file.Id))"></video>
+                                    }
+                                    else if (IsImage(file.RelativePath))
+                                    {
+                                        @* A photo used to show as its filename and nothing else,
+                                           so the member who took it was the one person who could
+                                           not see it — the public place page has always rendered
+                                           the same file as a thumbnail. *@
+                                        <a href="@FileUrl(file.Id)" target="_blank" rel="noopener"
+                                           class="ms-auto" data-testid="session-photo">
+                                            <img src="@FileUrl(file.Id)" alt="@file.RelativePath"
+                                                 loading="lazy"
+                                                 style="max-height:120px;width:auto;border-radius:.25rem;" />
+                                        </a>
                                     }
                                 </li>
                             }
@@ -398,6 +470,7 @@
 
     private List<Reading> _readings = new();
     private List<TracePoint> _chartPoints = new();
+    private List<TracePoint> _soundPoints = new();
     private List<GeoPoint> _track = new();
     private List<GeoPoint> _markerPoints = new();
     private List<MarkerRow> _markers = new();
@@ -540,6 +613,28 @@
                                && note.ValueKind == JsonValueKind.String
                     ? note.GetString() : null;
 
+                // Where each recording sits in session time. The app stamps `audio_ref` on the
+                // reading it was taken at, with that reading's offset INTO the file, so the
+                // file began at (reading time − offset). Video and photos arrive as typed notes
+                // — "video: media/…" — on the reading they were taken at, which is their start.
+                if (element.TryGetProperty("audio_ref", out var audioRef))
+                {
+                    string? filename = null; double offset = 0;
+                    if (audioRef.ValueKind == JsonValueKind.String) filename = audioRef.GetString();
+                    else if (audioRef.ValueKind == JsonValueKind.Object)
+                    {
+                        filename = audioRef.TryGetProperty("filename", out var fn) && fn.ValueKind == JsonValueKind.String ? fn.GetString() : null;
+                        offset   = Number(audioRef, "start_offset_seconds") ?? 0;
+                    }
+                    if (filename is not null) _mediaStarts.TryAdd(NormalisePath(filename), reading.At.AddSeconds(-offset));
+                }
+                if (reading.Note is { } typed)
+                {
+                    foreach (var prefix in new[] { "video: ", "audio: ", "photo: " })
+                        if (typed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            _mediaStarts.TryAdd(NormalisePath(typed[prefix.Length..].Trim()), reading.At);
+                }
+
                 _readings.Add(reading);
             }
         }
@@ -555,6 +650,7 @@
         // nothing to depart from, and an absolute figure would be meaningless on its own.
         _baseline = baseline;
         _chartPoints = Downsample(_readings, _baseline);
+        _soundPoints = DownsampleSound(_readings);
 
         _track = _readings
             .Where(r => r.Latitude is not null && r.Longitude is not null)
@@ -589,6 +685,12 @@
                 baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
             .ToList();
 
+        return Thin(points);
+    }
+
+    /// <summary>Keeps the extremes of each bucket. Shared by both channels.</summary>
+    private static List<TracePoint> Thin(List<TracePoint> points)
+    {
         const int maxPoints = 400;
         if (points.Count <= maxPoints) return points;
 
@@ -604,6 +706,38 @@
             if (!ReferenceEquals(low, high)) kept.Add(high);
         }
         return kept;
+    }
+
+    /// <summary>What the chart card is actually showing, named for the channels present.</summary>
+    private string ChartHeading => (_chartPoints.Count > 0, _soundPoints.Count > 0) switch
+    {
+        (true,  true)  => "Magnetic field and sound over the session",
+        (true,  false) => "Magnetic field over the session",
+        (false, true)  => "Sound over the session",
+        _              => "Readings over the session",
+    };
+
+    /// <summary>
+    /// The same distinction the readout and the card header already make: a reading is "from base"
+    /// only when a base level was taken.
+    /// </summary>
+    private string MagneticAxisTitle => _baseline is null ? "mG abs" : "mG from base";
+
+    /// <summary>
+    /// The sound trace, thinned the same way and for the same reason as the magnetic one.
+    /// </summary>
+    /// <remarks>
+    /// It reuses <see cref="TracePoint"/> rather than introducing a near-identical shape: the
+    /// field is a number against a time label either way, and the axis title says which unit.
+    /// </remarks>
+    private static List<TracePoint> DownsampleSound(List<Reading> readings)
+    {
+        var points = readings
+            .Where(r => r.SoundDbfs is not null)
+            .Select(r => new TracePoint(r.At.ToString("HH:mm:ss"), r.SoundDbfs!.Value))
+            .ToList();
+
+        return Thin(points);
     }
 
     private static double? Number(JsonElement element, string name)
@@ -631,11 +765,16 @@
         ? (int)((_playhead - _start).TotalSeconds / (_end - _start).TotalSeconds * 1000)
         : 0;
 
-    private void OnScrub(ChangeEventArgs args)
+    private async Task OnScrub(ChangeEventArgs args)
     {
         if (!double.TryParse(args.Value?.ToString(), out var value)) return;
-        Pause();
+        var wasFollowing = _clockKey;
+        await PauseAsync();
         _playhead = _start.AddSeconds((_end - _start).TotalSeconds * value / 1000);
+        AdvanceMap(force: true);
+        // Dragging the slider moves the recording too, so pressing Play resumes from here.
+        if (wasFollowing is { } key && MediaStartOf(key) is { } startsAt)
+            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
     }
 
     private void JumpTo(DateTime moment)
@@ -645,10 +784,21 @@
         _playhead = moment.AddSeconds(-3) < _start ? _start : moment.AddSeconds(-3);
     }
 
-    private void TogglePlay()
+    private async Task TogglePlay()
     {
-        if (_playing) { Pause(); return; }
+        if (_playing) { await PauseAsync(); return; }
         if (_playhead >= _end) _playhead = _start;
+
+        // A recording that covers this moment is the clock: readings, room and map follow what
+        // is heard. Seek it to the playhead and press play on it; only if the browser refuses —
+        // or there is no recording here — does the page keep time itself.
+        if (RecordingCovering(_playhead) is { } key && MediaStartOf(key) is { } startsAt)
+        {
+            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
+            if (await PlayMediaAsync(key)) return;   // OnMediaPlay sets the state
+        }
+
+        _clockKey = null;
         _playing = true;
         _ticker = new CancellationTokenSource();
         _ = Tick(_ticker.Token);
@@ -659,6 +809,159 @@
         _playing = false;
         _ticker?.Cancel();
         _ticker = null;
+    }
+
+    private async Task PauseAsync()
+    {
+        if (_clockKey is { } key) await PauseMediaAsync(key);
+        Pause();
+    }
+
+    // ── The recording as the clock ────────────────────────────────────────────
+
+    /// <summary>When each recording began, in session time, keyed by its normalised path.</summary>
+    private readonly Dictionary<string, DateTime> _mediaStarts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Guid, ElementReference> _mediaRefs = new();
+    private readonly HashSet<Guid> _attached = [];
+    /// <summary>The file currently driving the playhead, or null while the page keeps time.</summary>
+    private Guid? _clockKey;
+    private IJSObjectReference? _media;
+    private DotNetObjectReference<FieldKitPlayer>? _self;
+
+    private static string NormalisePath(string path) => path.Replace('\\', '/').TrimStart('/');
+
+    /// <summary>A recording's start in session time: from its reference, else the session's start.</summary>
+    private DateTime? MediaStart(FieldSessionFileSummary file)
+        => _mediaStarts.TryGetValue(NormalisePath(file.RelativePath), out var at) ? at
+         : IsAudio(file.RelativePath) || IsVideo(file.RelativePath) ? _start
+         : null;
+
+    private DateTime? MediaStartOf(Guid fileId)
+        => _session?.Files.FirstOrDefault(f => f.Id == fileId) is { } file ? MediaStart(file) : null;
+
+    /// <summary>The audio or video whose span contains the moment — the latest to have begun.</summary>
+    private Guid? RecordingCovering(DateTime moment)
+        => _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (f.Id, StartsAt: MediaStart(f)))
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment)
+            .OrderByDescending(x => x.StartsAt)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefault()
+         ?? _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (Guid?)f.Id).FirstOrDefault();
+
+    /// <summary>Files the browser reported it cannot decode; never chosen as the clock.</summary>
+    private readonly HashSet<Guid> _undecodable = [];
+
+    private void MarkUndecodable(Guid fileId)
+    {
+        _undecodable.Add(fileId);
+        if (_clockKey == fileId) { _clockKey = null; Pause(); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_session is null) return;
+        // Attach once per element. The row is keyed on the file id, so the element survives
+        // re-renders and the listener with it.
+        foreach (var file in _session.Files)
+        {
+            if (!(IsAudio(file.RelativePath) || IsVideo(file.RelativePath))) continue;
+            if (_attached.Contains(file.Id) || !_mediaRefs.TryGetValue(file.Id, out var el) || el.Id is null) continue;
+            try
+            {
+                _media ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/fieldKitMedia.js");
+                _self ??= DotNetObjectReference.Create(this);
+                await _media.InvokeVoidAsync("attach", el, _self, file.Id);
+                _attached.Add(file.Id);
+            }
+            catch (JSException) { /* the element went away between render and attach */ }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private async Task<bool> PlayMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return false;
+        try
+        {
+            await _media.InvokeVoidAsync("rate", el, (double)_rate);
+            var refusal = await _media.InvokeAsync<string?>("play", el);
+            return refusal is null;
+        }
+        catch (JSException) { return false; }
+    }
+
+    private async Task PauseMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
+    }
+
+    private async Task SeekMediaAsync(Guid key, double seconds)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("seek", el, seconds); } catch (JSException) { }
+    }
+
+    private async Task SetRateAsync(int rate)
+    {
+        _rate = rate;
+        if (_clockKey is { } key && _media is not null && _mediaRefs.TryGetValue(key, out var el))
+        {
+            try { await _media.InvokeVoidAsync("rate", el, (double)rate); } catch (JSException) { }
+        }
+    }
+
+    [JSInvokable]
+    public void OnMediaPlay(Guid key, double seconds)
+    {
+        // Pressing play on the element itself, or the page's button: either way the recording
+        // is now the clock, and the page's own ticker must not also advance the playhead.
+        _ticker?.Cancel(); _ticker = null;
+        _clockKey = key;
+        _playing = true;
+        OnMediaTime(key, seconds);
+    }
+
+    [JSInvokable]
+    public void OnMediaTime(Guid key, double seconds)
+    {
+        if (_clockKey != key) return;
+        if (MediaStartOf(key) is not { } startsAt) return;
+        var moment = startsAt.AddSeconds(seconds);
+        _playhead = moment < _start ? _start : moment > _end ? _end : moment;
+        AdvanceMap();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnMediaPause(Guid key)
+    {
+        if (_clockKey != key) return;
+        _playing = false;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnMediaEnded(Guid key)
+    {
+        if (_clockKey != key) return;
+        _playing = false;
+        _clockKey = null;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Pause();
+        _self?.Dispose();
+        if (_media is not null)
+        {
+            try { await _media.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
     }
 
     private async Task Tick(CancellationToken token)
@@ -674,6 +977,7 @@
                 _playhead = _end;
                 Pause();
             }
+            AdvanceMap();
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -687,6 +991,55 @@
     /// Held rather than interpolated: instruments keep their last value, and smoothing between
     /// samples would draw a reading nobody took.
     /// </remarks>
+    /// <summary>The coordinate the map is centred on: the current fix, throttled.</summary>
+    private GeoPoint? MapPoint => _mapPoint ?? CurrentPoint;
+
+    private GeoPoint? _mapPoint;
+    private DateTime  _mapAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Moves the map to the current fix — at most once per second of playback, and only when
+    /// the person actually went somewhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>The readout can update four times a second; the map should not. The tick loop
+    /// re-rendered the map component on every quarter-second with whatever the latest fix was,
+    /// and a GPS fix drifts by a metre or two between readings even when nobody moves — so the
+    /// map re-centred and rebuilt its marker constantly for a person standing still.</para>
+    ///
+    /// <para>A field session is one visit to one building, walked room to room. The map is loaded
+    /// once for that building and then follows the person only when they have gone at least a
+    /// few metres, checked no more than once per second of playback. The room badge above the map
+    /// carries the finer answer — which room — and it costs nothing to update.</para>
+    ///
+    /// <para><paramref name="force"/> is for the scrubber: a seek is the person's own gesture and
+    /// should be answered at once.</para>
+    /// </remarks>
+    private void AdvanceMap(bool force = false)
+    {
+        var point = CurrentPoint;
+        if (point is null) return;
+
+        if (!force)
+        {
+            if ((_playhead - _mapAt).TotalSeconds < 1.0) return;
+            if (_mapPoint is not null && MetresBetween(_mapPoint, point) < 5.0) return;
+        }
+
+        _mapPoint = point;
+        _mapAt    = _playhead;
+    }
+
+    /// <summary>Equirectangular distance — plenty for "did they leave the spot".</summary>
+    private static double MetresBetween(GeoPoint a, GeoPoint b)
+    {
+        const double earth = 6_371_000;
+        var dLat = (b.Latitude - a.Latitude) * Math.PI / 180;
+        var dLon = (b.Longitude - a.Longitude) * Math.PI / 180
+                   * Math.Cos((a.Latitude + b.Latitude) / 2 * Math.PI / 180);
+        return earth * Math.Sqrt(dLat * dLat + dLon * dLon);
+    }
+
     private Reading? Current => _readings.LastOrDefault(r => r.At <= _playhead);
 
     private GeoPoint? CurrentPoint
@@ -722,8 +1075,26 @@
 
     private string SoundText => Current?.SoundDbfs is double sound ? $"{sound:0} dB" : "—";
 
+    /// <summary>
+    /// The heading as a compass point and a bearing.
+    /// </summary>
+    /// <remarks>
+    /// "NE 043°" is a direction somebody can hold a phone and check against; a bare "43°" is a
+    /// number they have to convert first. During playback the direction they were facing is often
+    /// more use than the coordinate they were standing on — it is what makes a spike in the
+    /// recording line up with a doorway.
+    /// </remarks>
     private string HeadingText =>
-        Current?.HeadingDegrees is double heading ? $"{heading:0}°" : "—";
+        Current?.HeadingDegrees is double heading
+            ? $"{Compass(heading)} {heading:000}°"
+            : "—";
+
+    private static string Compass(double degrees)
+    {
+        string[] points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        var index = (int)Math.Round(((degrees % 360) + 360) % 360 / 45.0) % 8;
+        return points[index];
+    }
 
     /// <summary>What the pin is called, accuracy included, so the circle is never a mystery.</summary>
     private string PositionTitle
@@ -746,9 +1117,16 @@
             var accuracy = CurrentAccuracyMeters;
             // The accuracy travels with it, always: indoors a fix is routinely the width of the
             // whole building, and a bare coordinate invites the belief that it means the room.
+            //
+            // Three decimals, not five. Five is about a metre — a doorway — and a field session
+            // happens at somebody's home as often as at a landmark; the rest of this product
+            // publishes locations only to within a few miles for exactly that reason. Three is
+            // roughly a hundred metres: enough to say which building, not which room. The room
+            // itself is named separately by the person who was standing in it, which is a better
+            // answer than any coordinate and the one worth reading first.
             return accuracy is double metres
-                ? $"{point.Latitude:0.00000}, {point.Longitude:0.00000} ±{metres:0} m"
-                : $"{point.Latitude:0.00000}, {point.Longitude:0.00000}";
+                ? $"~{point.Latitude:0.000}, {point.Longitude:0.000} ±{metres:0} m"
+                : $"~{point.Latitude:0.000}, {point.Longitude:0.000}";
         }
     }
 
@@ -768,18 +1146,20 @@
     /// </remarks>
     private string FileUrl(Guid fileId) => MediaUrls.FieldSessionFile(SessionId, fileId);
 
-    /// <summary>Files the browser reported it cannot decode, by id; see the Recordings card.</summary>
-    private readonly HashSet<Guid> _undecodable = [];
-
-    private void MarkUndecodable(Guid fileId) => _undecodable.Add(fileId);
-
     private static bool IsAudio(string path) =>
         path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
-        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase);
+        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsVideo(string path) =>
         path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsImage(string path) =>
+        path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".heic", StringComparison.OrdinalIgnoreCase);
 
     public void Dispose() => Pause();
 

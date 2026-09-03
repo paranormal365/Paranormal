@@ -232,6 +232,23 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
 
     /// <inheritdoc />
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? "/api/field-sessions/mine/map"
+            : $"/api/field-sessions/mine/map?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<FieldSessionMapPage>(url, token);
+    }
+
+    /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);

@@ -252,6 +252,9 @@
 
                 // ── Media ─────────────────────────────────────────────────────
                 var media = new List<NavItem> { new NavItem("Upload Files", "upload", "/upload-files") };
+                // What the phone sent up. Without this the website listed field sessions nowhere,
+                // so an upload from the app appeared to go into a hole.
+                media.Add(new NavItem("My Field Sessions", "activity", "/my-field-sessions"));
                 if (Features.IsOn(SiteFeatures.MediaLibrary))
                     media.Add(new NavItem("Media Library", "image", "/media-library"));
                 if (Features.IsOn(SiteFeatures.VideoEditor))

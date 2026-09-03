@@ -218,6 +218,20 @@ public interface IBenPlacesClient
     /// A finder rather than a list: the pairs worth showing are exactly the ones the automatic
     /// matcher could not settle, and they are few.
     /// </remarks>
+    /// <summary>
+    /// Every field session this account uploaded, newest first. The phone's side of the archive,
+    /// which until now the website had no page for.
+    /// </summary>
+    Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Where this account's sessions were recorded. Separate from the list because the coordinate
+    /// lives inside each session document, so it costs a file read apiece.
+    /// </summary>
+    Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default);
+
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default);

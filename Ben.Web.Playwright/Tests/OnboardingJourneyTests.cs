@@ -24,7 +24,7 @@ public class OnboardingJourneyTests : BenTestBase
 
         var tag = Guid.NewGuid().ToString("N")[..8];
         var email = $"onboard{tag}@example.com";
-        const string password = "0nboard!Pass";
+        var password = NewTestPassword();
 
         // ── sign up + confirm, the way the journey fixture does ───────────────
         await Page.GotoAsync($"{BaseUrl}/signup");

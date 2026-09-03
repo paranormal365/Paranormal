@@ -280,7 +280,7 @@ public class AccountTests : BenTestBase
     [Description("A password alone is refused, and the code completes the sign-in.")]
     public async Task SigningInWithTwoStepAsksForTheCodeAndAcceptsIt()
     {
-        const string password = "Str0ngPass!";
+        var password = NewTestPassword();
         var email = $"twostep{Unique}@example.com";
 
         var admin = await AdminApiAsync();

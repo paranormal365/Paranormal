@@ -115,6 +115,40 @@ namespace Ben.Data.Source.Entities
         public DateTime? PublishedAtUtc { get; set; }
 
         /// <summary>
+        /// The first GPS fix in the session, copied out of the document so a map can be drawn
+        /// from SQL alone.
+        /// </summary>
+        /// <remarks>
+        /// <para>The coordinate lives inside the session document, and until this column existed
+        /// the only way to plot sessions was to open every document — one file read per pin, on
+        /// every request, with no way to ask for "just the ones in view". That is a ceiling of a
+        /// few hundred sessions per person and no path past it. With the fix on the row, a
+        /// bounding-box query is an ordinary indexed select.</para>
+        ///
+        /// <para>Null means one of two things, and <see cref="PositionResolved"/> says which:
+        /// the document has not been looked at yet, or it was looked at and holds no fix — which
+        /// indoors is most sessions. Without that distinction a session with no fix would be
+        /// re-read on every map request for ever.</para>
+        ///
+        /// <para>The first fix, not an average: a session is one visit to one building, and the
+        /// track's own extent is smaller than the accuracy circle round any point in it.</para>
+        /// </remarks>
+        public decimal? Latitude { get; set; }
+
+        /// <inheritdoc cref="Latitude"/>
+        public decimal? Longitude { get; set; }
+
+        /// <summary>
+        /// True once the document has been inspected for a fix, whether or not it had one.
+        /// </summary>
+        /// <remarks>
+        /// Set at upload for everything new. Existing rows are resolved lazily the first time a
+        /// map asks, then never again — so the migration needs no backfill step that reads every
+        /// document on the server at once.
+        /// </remarks>
+        public bool PositionResolved { get; set; }
+
+        /// <summary>
         /// Whether this session's photos, video and audio may be shown to the public.
         /// </summary>
         /// <remarks>

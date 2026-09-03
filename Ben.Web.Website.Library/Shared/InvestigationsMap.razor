@@ -18,7 +18,8 @@
        to wait for it rather than the other way round. *@
     @if (_ready)
     {
-        <TelerikMap @ref="_mapRef" Center="@_center" Zoom="@_zoom" Height="@Height">
+        <TelerikMap @ref="_mapRef" Center="@_center" Zoom="@_zoom" Height="@Height"
+                    OnPanEnd="@OnPanEnd" OnZoomEnd="@OnZoomEnd">
             <MapLayers>
                 <MapLayer Type="@MapLayersType.Tile"
                           Attribution="© OpenStreetMap contributors"
@@ -47,6 +48,34 @@
     /// map kept whatever width it measured when it mounted.
     /// </summary>
     private TelerikMap? _mapRef;
+
+    /// <summary>
+    /// Raised when the person finishes a pan or a zoom, with the bounds now in view.
+    /// </summary>
+    /// <remarks>
+    /// This is the seam that lets a page load pins for the part of the world somebody is looking
+    /// at rather than everything at once. It fires on <i>end</i>, not on every frame of a drag, so
+    /// a caller sees one event per gesture; debouncing beyond that is the caller's business,
+    /// because only the caller knows what a request costs. Not raised for the map's own initial
+    /// centring — that is not something the person did.
+    /// </remarks>
+    [Parameter] public EventCallback<MapViewport> OnViewportChanged { get; set; }
+
+    // A pan does not change the zoom, and its event args do not carry one; the component's own
+    // tracked value is the right answer there. A zoom does, and says so.
+    private Task OnPanEnd(MapPanEndEventArgs args)  => RaiseViewportAsync(args.Extent, _zoom);
+    private Task OnZoomEnd(MapZoomEndEventArgs args) { _zoom = args.Zoom; return RaiseViewportAsync(args.Extent, args.Zoom); }
+
+    /// <summary>
+    /// Telerik hands the extent over as [north-west lat, north-west lng, south-east lat,
+    /// south-east lng]. Named here once so no caller has to remember which index is which.
+    /// </summary>
+    private Task RaiseViewportAsync(double[]? extent, double zoom)
+    {
+        if (!OnViewportChanged.HasDelegate || extent is not { Length: 4 }) return Task.CompletedTask;
+        return OnViewportChanged.InvokeAsync(new MapViewport(
+            North: extent[0], West: extent[1], South: extent[2], East: extent[3], Zoom: zoom));
+    }
 
     /// <summary>Re-measures the map after its container changes size.</summary>
     [JSInvokable]
