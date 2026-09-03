@@ -109,6 +109,19 @@ public sealed class AzureBlobFileStorageService : IFileStorageService
     /// See the class remarks: acceptable on the housekeeping paths that call it, and the first
     /// thing to revisit if this is ever switched on.
     /// </remarks>
+    public async Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default)
+    {
+        var prefix = Normalise(relativeDirectory).Trim('/');
+        if (prefix.Length == 0)
+            throw new ArgumentException("A directory to delete must be named; the container is never it.", nameof(relativeDirectory));
+
+        // Blob storage has no folders, only names with slashes in them: a "directory" is every
+        // blob whose name starts with the prefix. The trailing slash keeps "orgs/ab" from
+        // matching "orgs/abc…".
+        await foreach (var blob in _container.GetBlobsAsync(BlobTraits.None, BlobStates.None, prefix + "/", ct))
+            await _container.GetBlobClient(blob.Name).DeleteIfExistsAsync(cancellationToken: ct);
+    }
+
     public bool Exists(string relativePath)
         => _container.GetBlobClient(Normalise(relativePath)).Exists().Value;
 

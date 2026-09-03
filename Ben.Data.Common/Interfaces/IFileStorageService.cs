@@ -19,6 +19,14 @@ public interface IFileStorageService
     /// <summary>Deletes the file at <paramref name="relativePath"/>. No-op if the file does not exist.</summary>
     Task DeleteAsync(string relativePath, CancellationToken ct = default);
 
+    /// <summary>
+    /// Remove a whole directory and everything under it — a group's <c>orgs/{id}</c> or a case's
+    /// <c>cases/{id}</c> once the rows that pointed into it are gone. Deleting file by file from the
+    /// rows leaves behind whatever the rows never knew about, and an empty folder named for a
+    /// group that no longer exists. Removing nothing is not an error; removing the root is refused.
+    /// </summary>
+    Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default);
+
     /// <summary>Returns <c>true</c> if a file exists at <paramref name="relativePath"/>.</summary>
     bool Exists(string relativePath);
 

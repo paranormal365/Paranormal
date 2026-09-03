@@ -53,8 +53,11 @@ public class ChunkedUploadControllerTests
         public Task DeleteAsync(string relativePath, CancellationToken ct = default)
         {
             Files.TryRemove(relativePath, out _);
+
             return Task.CompletedTask;
         }
+
+        public Task DeleteDirectoryAsync(string relativeDirectory, CancellationToken ct = default) => Task.CompletedTask;
 
         public bool Exists(string relativePath) => Files.ContainsKey(relativePath);
 
