@@ -186,8 +186,12 @@ function Set-WebConfigRequestLimit ([string]$path, [int64]$bytes) {
     # ever sees it. The app sets no size limit of its own, so this is the only thing standing
     # between a user and a failed video upload.
     $node.SetAttribute('maxAllowedContentLength', "$bytes")
+    # $node is <requestLimits>; its parent is <requestFiltering>. removeServerHeader stops IIS
+    # announcing "Server: Microsoft-IIS/10.0" on every response (the website's source web.config
+    # carries the same attribute; the API's web.config only exists after publish, so it is set here).
+    $node.ParentNode.SetAttribute('removeServerHeader', 'true')
     $xml.Save($path)
-    Write-Detail "maxAllowedContentLength = $bytes"
+    Write-Detail "maxAllowedContentLength = $bytes; removeServerHeader = true"
 }
 
 function Set-WebConfigEnvironment ([string]$path, [string]$name, [string]$value) {

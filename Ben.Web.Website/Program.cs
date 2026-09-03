@@ -139,6 +139,15 @@ builder.Services.AddScoped<HelpViewerResolver>();
 // so that the access token is available to components after the circuit is up.
 builder.Services.AddScoped<EntraTokenHolder>();
 
+// A year, not the 30-day default, and every subdomain: www serves the same site over TLS and
+// nothing else answers under ishaunted.com. Not preloaded - that is a one-way door into the
+// browser lists and a decision to take on its own, once the www redirect is settled.
+builder.Services.AddHsts(hsts =>
+{
+    hsts.MaxAge            = TimeSpan.FromDays(365);
+    hsts.IncludeSubDomains = true;
+});
+
 var azureAd = builder.Configuration.GetSection("AzureAd");
 // One rule, shared with Ben.Data.WebApi, so the two hosts cannot disagree about whether Entra is
 // configured - see EntraConfig for what went wrong when they each had their own.
@@ -250,6 +259,12 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // Nothing on this site is meant to live inside another site's frame, and nothing here frames
+    // itself (no <iframe> anywhere in the Razor). Both headers, because older browsers read only
+    // the first and everything current reads the second. This is the whole of the site's CSP on
+    // purpose - see the note above about why a full policy is a separate piece of work.
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
     await next();
 });
 
