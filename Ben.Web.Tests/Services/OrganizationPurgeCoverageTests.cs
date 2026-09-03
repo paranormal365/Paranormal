@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -36,6 +36,17 @@ public sealed class OrganizationPurgeCoverageTests
         var source = File.ReadAllText(RepoFile("Ben.Data.WebApi/Services/Admin/OrganizationPurge.cs"));
         source = Regex.Replace(source, @"//[^\n]*", "");            // comments do not delete rows
         return Regex.Replace(source, @"\s+", " ");                   // a chained call may span lines
+    }
+
+    /// <summary>
+    /// Whether any purge statement on <paramref name="set"/> mentions every one of these
+    /// properties - the difference between sweeping a table and sweeping the right column of it.
+    /// </summary>
+    private static bool Names(string set, IEnumerable<string> properties)
+    {
+        var statements = Regex.Matches(PurgeSource(), @"db\." + set + @"\s*\.Where\([^;]*;")
+            .Select(m => m.Value).ToList();
+        return statements.Any(s => properties.All(p => Regex.IsMatch(s, @"\b" + p + @"\b")));
     }
 
     /// <summary>The DbSets the purge issues a delete against, read from the source.</summary>
@@ -84,9 +95,18 @@ public sealed class OrganizationPurgeCoverageTests
                 // Cascade: SQL removes the dependent itself. SetNull: SQL clears the reference.
                 // Anything else leaves the row standing, and the database refuses the delete.
                 if (fk.DeleteBehavior is DeleteBehavior.Cascade or DeleteBehavior.SetNull) continue;
-                if (purged.Contains(dependentSet)) continue;
-                if (cleared.Contains(dependentSet) && fk.Properties.All(p => p.IsNullable)) continue;
                 if (principalSet == dependentSet) continue;   // a self-reference dies with its table
+
+                // A table the purge sweeps by its owner column can still block on an OPTIONAL
+                // reference it carries to somebody else's row: a public feed post (no
+                // OrganizationId) citing one of the group's cases, a post the group claimed, a
+                // checkout keyed on the borrowing group. 2026-09-03: BenCo's deletion was refused
+                // on OrgMessages.CaseId while OrgMessages was "purged" - by OrganizationId. So a
+                // purged or cleared set counts as handled for THIS reference only when a statement
+                // on that set names the reference's property.
+                var optional = fk.Properties.All(p => p.IsNullable);
+                if (purged.Contains(dependentSet) && (!optional || Names(dependentSet, fk.Properties.Select(p => p.Name)))) continue;
+                if (cleared.Contains(dependentSet) && optional && Names(dependentSet, fk.Properties.Select(p => p.Name))) continue;
 
                 blockers.Add($"{dependentSet}.{string.Join("+", fk.Properties.Select(p => p.Name))} -> {principalSet} ({fk.DeleteBehavior})");
             }

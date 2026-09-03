@@ -1,4 +1,4 @@
-using Microsoft.Playwright;
+﻿using Microsoft.Playwright;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Tests;
@@ -44,8 +44,12 @@ public class PublicSurfaceTests : BenTestBase
         // screen before the toggle is touched, so a click-until-"save" returns instantly and reads
         // the monthly figure back as though nothing happened. Not.ToHaveTextAsync retries, which
         // is what makes this wait for the render rather than sample once.
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false })
-            .First.ClickAsync();
+        // One click, once, is lost if it lands before the circuit has attached - which on a loaded
+        // machine it did, twice, on 2026-09-03, while the toggle itself worked fine on the live
+        // site. ClickUntilAsync presses again until the Yearly button is the selected one.
+        await ClickUntilAsync(
+            Page.GetByRole(AriaRole.Button, new() { Name = "Yearly", Exact = false }).First,
+            Page.Locator("button.btn-primary", new() { HasText = "Yearly" }).First);
 
         await Expect(anyMonthlyPrice.First)
             .Not.ToHaveTextAsync(monthly, new() { Timeout = 10_000 });
