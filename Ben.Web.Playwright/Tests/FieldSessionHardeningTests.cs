@@ -100,4 +100,26 @@ public class FieldSessionHardeningTests : BenTestBase
         // The digest matched, so this is NOT reported as damage in transit.
         await Expect(Page.GetByText("arrived damaged")).ToHaveCountAsync(0);
     }
+
+    /// <summary>
+    /// A visitor opening a session link is told to sign in — not that the session "may have been
+    /// removed", which is a wrong sentence about a right refusal. Ben hit this opening a player
+    /// URL in a signed-out browser.
+    /// </summary>
+    [Test]
+    public async Task A_visitor_is_told_to_sign_in_not_that_the_session_was_removed()
+    {
+        var (api, token) = await SignedInApiAsync();
+        var upload = await UploadDocumentAsync(api, token, Document);
+        Assert.That(upload.Ok, Is.True, await upload.TextAsync());
+        var sessionId = (await upload.JsonAsync())!.Value.GetProperty("id").GetString();
+
+        await Page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
+        await Expect(Page.Locator("[data-testid='sign-in-to-see']")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(Page.GetByText("may have been removed")).ToHaveCountAsync(0);
+
+        // And the link brings them back here once signed in.
+        var href = await Page.Locator("[data-testid='sign-in-to-see']").GetAttributeAsync("href");
+        Assert.That(href, Does.Contain("returnUrl=").And.Contain(sessionId!));
+    }
 }
