@@ -16,9 +16,13 @@ public sealed class ScheduleProposalController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
+    private readonly Services.ClientStatusMailer _clientMail;
+
     public ScheduleProposalController(IDbContextFactory<BenDataContext> db,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ClientStatusMailer clientMail)
+    {
+        _clientMail = clientMail; _db = db; _security = security; }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -133,6 +137,8 @@ public sealed class ScheduleProposalController : BenControllerBase
         proposal.DateUpdated = DateTime.UtcNow;
         proposal.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitScheduledAsync(db, caseForMail, investigation, ct);   // item 206
         return Ok(ToDto(proposal));
     }
 

@@ -28,7 +28,7 @@ public class ScheduleProposalControllerTests
     private static ScheduleProposalController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId,
         bool isSuperAdmin = false)
     {
-        var ctrl = new ScheduleProposalController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new ScheduleProposalController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), Ben.Web.Tests.TestMailer.Quiet());
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext

@@ -69,3 +69,11 @@ Anything you don't share stays with the original case — visible to you, never 
 and nothing is deleted either way. The findings belong to the original group *and* to you, which
 is why this is your choice alone; the original group is not asked. The new group answers your
 request, and you hear their answer either way. Until they do, you can withdraw the request.
+
+## You'll hear by email
+
+When your case changes status — accepted, active, being written up, closed — or when the group
+schedules, moves or cancels a visit, an email goes to your confirmed address saying the same thing
+your case page says, with a button that opens the case. Times in the email are given in UTC; the
+page shows them in your own time zone. If your address isn't confirmed yet, no mail is sent until
+it is.

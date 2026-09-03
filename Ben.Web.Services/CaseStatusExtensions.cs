@@ -9,19 +9,11 @@ namespace Ben.Web.Services;
 /// </summary>
 public static class CaseStatusExtensions
 {
-    public static string Label(this CaseStatus status) => status switch
-    {
-        CaseStatus.Proposed    => "Proposed",
-        CaseStatus.Accepted    => "Accepted",
-        CaseStatus.Active      => "Active",
-        CaseStatus.Summarized  => "Summarizing",
-        CaseStatus.Closed      => "Closed",
-        CaseStatus.Public      => "Public",
-        CaseStatus.Haunted     => "Haunted",
-        CaseStatus.Transferred => "Transferred",
-        CaseStatus.Paused      => "Paused",
-        _                      => status.ToString(),
-    };
+    /// <summary>The badge — the same words the API puts in a client's mail (item 206).</summary>
+    public static string Label(this CaseStatus status) => CaseStatusWording.Label(status);
+
+    /// <summary>The line under the badge, written to the client — and the line in their mail.</summary>
+    public static string ClientSentence(this CaseStatus status) => CaseStatusWording.ClientSentence(status);
 
     public static string BadgeClass(this CaseStatus status) => status switch
     {
