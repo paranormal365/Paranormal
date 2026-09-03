@@ -88,8 +88,25 @@ public sealed class SmtpEmailService : IEmailService
             : SecureSocketOptions.None;
         await client.ConnectAsync(_options.Host!, _options.Port, secureSocketOptions, ct); // non-null: IsConfigured already checked above
         if (!string.IsNullOrEmpty(_options.User))
+        {
+            // Pin the SASL mechanism. The relay advertises PLAIN and LOGIN; left to itself MailKit
+            // picks the strongest thing on offer, and on 2026-08-31 that choice was refused with
+            // "5.7.8 authentication failed" for hours while a hand-written client pinned to PLAIN
+            // went straight through. Nothing this service talks to needs anything else.
+            KeepOnlyPlainAndLogin(client.AuthenticationMechanisms);
             await client.AuthenticateAsync(_options.User, _options.Password ?? string.Empty, ct);
+        }
         await client.SendAsync(message, ct);
         await client.DisconnectAsync(true, ct);
+    }
+
+    /// <summary>
+    /// Leaves only PLAIN and LOGIN in the set of mechanisms MailKit may try. The set is the one
+    /// the server advertised, so removing an entry is the only lever — there is no "prefer".
+    /// </summary>
+    public static void KeepOnlyPlainAndLogin(ISet<string> advertised)
+    {
+        foreach (var mechanism in advertised.Where(m => m is not ("PLAIN" or "LOGIN")).ToList())
+            advertised.Remove(mechanism);
     }
 }
