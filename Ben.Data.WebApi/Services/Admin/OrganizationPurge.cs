@@ -1,4 +1,4 @@
-using Ben.Data.Common.Interfaces;
+﻿using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -284,7 +284,18 @@ public sealed class OrganizationPurge
             await db.InvestigationScheduleProposals
                 .Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
 
+            // A public feed post can cite one of this group's cases while living outside the
+            // group (OrganizationId is null), so the OrganizationId sweep below never sees it —
+            // and the database refused BenCo's deletion on exactly that on 2026-09-03. The post is
+            // somebody's writing, not the group's; it loses its case link and stays.
+            await db.OrgMessages.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.CaseId, (Guid?)null), ct);
             // ── depth 1: everything hanging directly off the group ───────────
+            // A case's timeline can point at the investigation an entry came from; the entries
+            // themselves cascade with the case, but the case goes AFTER the investigation, so the
+            // reference has to be cleared first.
+            await db.CaseTimelineEntries.Where(x => x.InvestigationId != null && investigationIds.Contains(x.InvestigationId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvestigationId, (Guid?)null), ct);
             await db.Investigations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgCalendarEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
@@ -298,8 +309,27 @@ public sealed class OrganizationPurge
             await db.OrgCalendarEventTypes.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgMemberGroups.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgMessages.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Posts the group CLAIMED (the "Group verified" attribution) point at it from anywhere
+            // on the feed. Same rule as the case link: the post stays, the claim goes.
+            await db.OrgMessages.Where(x => x.AttributedOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.AttributedOrganizationId, (Guid?)null)
+                    .SetProperty(x => x.AttributionState, Ben.Data.Common.Enums.OrgAttributionState.Unclaimed)
+                    .SetProperty(x => x.AttributionDecidedByAppUserId, (Guid?)null)
+                    .SetProperty(x => x.AttributionDecidedUtc, (DateTime?)null), ct);
+            // Gear another group lent to THIS group is a checkout keyed on the borrower, not on an
+            // investigation, so the investigation sweep above leaves it standing.
+            await db.EquipmentCheckouts.Where(x => x.BorrowedForOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // A vote cast in the group's name on evidence anywhere: the vote stands, the name goes.
+            await db.EvidenceVotes.Where(x => x.VoterOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.VoterOrganizationId, (Guid?)null), ct);
             await db.OrganizationAccessGrants.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationAds.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // An event held at one of this group's addresses keeps its row and loses the address.
+            var addressIds = await db.OrganizationAddresses.Where(a => a.OrganizationId == organizationId)
+                .Select(a => a.Id).ToListAsync(ct);
+            await db.OrgCalendarEvents.Where(x => x.OrganizationAddressId != null && addressIds.Contains(x.OrganizationAddressId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.OrganizationAddressId, (Guid?)null), ct);
             await db.OrganizationAddresses.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationAreaOfOperations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationBillingContacts.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
