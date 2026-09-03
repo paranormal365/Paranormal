@@ -286,7 +286,8 @@ public sealed record AttendedInvestigationItem(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    bool WasLead);
+    bool WasLead,
+    string? Location = null);
 
 // ── Place records (Area 9) ────────────────────────────────────────────────────
 // Mirrors of the WebApi records in PlaceController.cs / Public/PublicPlaceController.cs.

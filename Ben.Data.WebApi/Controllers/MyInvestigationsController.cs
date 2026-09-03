@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -103,7 +103,8 @@ public sealed class MyInvestigationsController : BenControllerBase
                 a.Investigation.Latitude,
                 a.Investigation.Longitude,
                 a.Investigation.GeocodeNote,
-                a.IsLead))
+                a.IsLead,
+                a.Investigation.Location))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -180,4 +181,5 @@ public sealed record AttendedInvestigationItem(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    bool WasLead);
+    bool WasLead,
+    string? Location = null);
