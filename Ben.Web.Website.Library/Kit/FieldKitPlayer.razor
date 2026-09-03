@@ -274,6 +274,15 @@
                                                 <ChartSeriesMarkers Visible="false" />
                                             </ChartSeries>
                                         </ChartSeriesItems>
+                                        <ChartCategoryAxes>
+                                            <ChartCategoryAxis>
+                                                @* One label per reading drew seventy-four labels
+                                                   on top of each other for a two-minute session.
+                                                   A handful, evenly spaced, is what a time axis is
+                                                   for; the readings themselves are all still drawn. *@
+                                                <ChartCategoryAxisLabels Step="@LabelStep(_chartPoints.Count)" />
+                                            </ChartCategoryAxis>
+                                        </ChartCategoryAxes>
                                         <ChartValueAxes>
                                             <ChartValueAxis>
                                                 @* Derived, not literal: with no base level taken
@@ -301,6 +310,15 @@
                                                 <ChartSeriesMarkers Visible="false" />
                                             </ChartSeries>
                                         </ChartSeriesItems>
+                                        <ChartCategoryAxes>
+                                            <ChartCategoryAxis>
+                                                @* One label per reading drew seventy-four labels
+                                                   on top of each other for a two-minute session.
+                                                   A handful, evenly spaced, is what a time axis is
+                                                   for; the readings themselves are all still drawn. *@
+                                                <ChartCategoryAxisLabels Step="@LabelStep(_soundPoints.Count)" />
+                                            </ChartCategoryAxis>
+                                        </ChartCategoryAxes>
                                         <ChartValueAxes>
                                             <ChartValueAxis>
                                                 <ChartValueAxisTitle Text="dBFS" />
@@ -702,12 +720,12 @@
     /// around it. A chart cannot show more points than the screen has pixels, so the choice is
     /// which points to lose — and the answer is never the peaks.
     /// </remarks>
-    private static List<TracePoint> Downsample(List<Reading> readings, double? baseline)
+    private List<TracePoint> Downsample(List<Reading> readings, double? baseline)
     {
         var points = readings
             .Where(r => r.Microtesla is not null)
             .Select(r => new TracePoint(
-                r.At.ToString("HH:mm:ss"),
+                r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"),
                 baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
             .ToList();
 
@@ -756,11 +774,11 @@
     /// It reuses <see cref="TracePoint"/> rather than introducing a near-identical shape: the
     /// field is a number against a time label either way, and the axis title says which unit.
     /// </remarks>
-    private static List<TracePoint> DownsampleSound(List<Reading> readings)
+    private List<TracePoint> DownsampleSound(List<Reading> readings)
     {
         var points = readings
             .Where(r => r.SoundDbfs is not null)
-            .Select(r => new TracePoint(r.At.ToString("HH:mm:ss"), r.SoundDbfs!.Value))
+            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value))
             .ToList();
 
         return Thin(points);
@@ -1171,6 +1189,9 @@
     /// API is a different origin and <c>/webapi</c> exists only under IIS.
     /// </remarks>
     private string FileUrl(Guid fileId) => MediaUrls.FieldSessionFile(SessionId, fileId);
+
+    /// <summary>About six labels across the axis, whatever the session's length.</summary>
+    private static int LabelStep(int points) => Math.Max(1, (int)Math.Ceiling(points / 6.0));
 
     private static bool IsAudio(string path) =>
         path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
