@@ -1,4 +1,4 @@
-@page "/my-cases"
+﻿@page "/my-cases"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
 @using Ben.Web.Services.WebApi
@@ -53,7 +53,7 @@
                         {
                             <div class="small mt-1 text-primary fw-semibold">
                                 <BenIcon Name="calendar" />
-                                Next visit: @c.NextInvestigationDate.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                Next visit: @c.NextInvestigationDate.Value.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
                             </div>
                         }
                     </div>

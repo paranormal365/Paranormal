@@ -1,9 +1,10 @@
-@page "/pricing"
+﻿@page "/pricing"
 
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject SiteFeaturesProvider Features
 @using Microsoft.JSInterop
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models
@@ -40,7 +41,7 @@
         <p class="text-secondary">
             Free for public investigations, whatever your size. Paid plans add work at private
             homes, and are priced by active members. Every plan includes the whole platform — cases,
-            investigations, equipment, the video editor.
+            investigations, equipment@(Features.IsOn(SiteFeatures.VideoEditor) ? ", the video editor" : "").
         </p>
 
         @if (_intervals.Count > 1)

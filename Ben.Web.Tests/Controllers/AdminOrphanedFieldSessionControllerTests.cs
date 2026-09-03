@@ -1,5 +1,7 @@
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Ben.Service.RepositoryService.GenericInterfaces;
+using Moq;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Admin;
 using Microsoft.AspNetCore.Http;
@@ -68,7 +70,8 @@ public class AdminOrphanedFieldSessionControllerTests
     {
         var ctrl = new AdminOrphanedFieldSessionController(
             factory, new EmptyStorage(),
-            NullLogger<AdminOrphanedFieldSessionController>.Instance);
+            NullLogger<AdminOrphanedFieldSessionController>.Instance,
+            new Mock<IAuditLogService>().Object);
 
         ctrl.ControllerContext = new ControllerContext
         {
@@ -154,5 +157,27 @@ public class AdminOrphanedFieldSessionControllerTests
     {
         var result = await Build(CreateFactory()).Purge(new PurgeOrphanedSessionsRequest([]), default);
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A door that deletes rows says who opened it. Ben deleted 33 sessions on 2026-09-03 and the
+    /// audit log recorded nothing. The purge itself cannot run here (see the class remarks), so
+    /// this reads the source: one <c>LogDeleteAsync</c> per session, after the deletes.
+    /// </summary>
+    [Fact]
+    public void The_purge_writes_an_audit_row_for_every_session_it_deletes()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var source = File.ReadAllText(Path.Combine(dir!.FullName,
+            "Ben.Data.WebApi", "Controllers", "Admin", "AdminOrphanedFieldSessionController.cs"));
+
+        var lastDelete = source.LastIndexOf("ExecuteDeleteAsync(", StringComparison.Ordinal);
+        var audit      = source.IndexOf("_auditLog.LogDeleteAsync(nameof(FieldSessionUpload)", StringComparison.Ordinal);
+
+        Assert.True(audit >= 0, "The orphan purge no longer writes an audit row per deleted session.");
+        Assert.True(audit > lastDelete, "The audit row must be written after the deletes, not before a delete that may still fail.");
+        Assert.Contains("foreach (var orphan in orphans.Where(o => ids.Contains(o.Id)))", source);
     }
 }

@@ -1,4 +1,4 @@
-using Microsoft.Playwright;
+﻿using Microsoft.Playwright;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Tests;
@@ -116,7 +116,7 @@ public class FieldSessionPlaybackTests : BenTestBase
         Assert.That(tracePaths, Is.GreaterThan(0),
             "the magnetic trace should actually be drawn, not just its axes");
 
-        await Page.ScreenshotAsync(new() { Path = "/tmp/fieldkit-player.png", FullPage = true });
+        await Page.ScreenshotAsync(new() { Path = Path.Combine(Path.GetTempPath(), "fieldkit-player.png"), FullPage = true });
         // And it is attributed — the account that sent it is on the page.
         var attributed = await Page.Locator("text=/recorded by|nobody signed in/i").CountAsync();
         Assert.That(attributed, Is.GreaterThan(0),
