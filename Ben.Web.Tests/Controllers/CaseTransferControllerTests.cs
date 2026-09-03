@@ -54,7 +54,8 @@ public class CaseTransferControllerTests
     private static CaseTransferController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId, bool isAdmin = true)
     {
         var ctrl = new CaseTransferController(factory, CreateMapper(),
-            new Ben.Data.WebApi.Services.PlatformMessageService(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+            new Ben.Data.WebApi.Services.PlatformMessageService(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            Ben.Web.Tests.TestMailer.Quiet());
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         ctrl.ControllerContext = new ControllerContext
         {

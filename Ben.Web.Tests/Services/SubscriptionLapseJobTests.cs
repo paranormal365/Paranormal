@@ -32,7 +32,7 @@ public sealed class SubscriptionLapseJobTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     private static SubscriptionLapseJob Job(IDbContextFactory<BenDataContext> f) =>
-        new(f, new PlatformMessageService(f), NullLogger<SubscriptionLapseJob>.Instance);
+        new(f, new PlatformMessageService(f), NullLogger<SubscriptionLapseJob>.Instance, Ben.Web.Tests.TestMailer.Quiet());
 
     private sealed record World(IDbContextFactory<BenDataContext> F, Guid OrgId, Guid OwnerId, Guid ClientId, Guid ActiveCaseId, Guid ClosedCaseId);
 

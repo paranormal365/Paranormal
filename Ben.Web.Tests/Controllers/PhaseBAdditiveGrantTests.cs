@@ -101,7 +101,8 @@ public sealed class PhaseBAdditiveGrantTests
         return WithUser(new CaseController(w.Factory, mapper.Object,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.Factory),
             new OrganizationSecurityService(w.Factory),
-            new Ben.Data.WebApi.Services.RequestReviewNotifier(w.Factory, new Ben.Data.WebApi.Services.PlatformMessageService(w.Factory))), userId);
+            new Ben.Data.WebApi.Services.RequestReviewNotifier(w.Factory, new Ben.Data.WebApi.Services.PlatformMessageService(w.Factory)),
+            Ben.Web.Tests.TestMailer.Quiet()), userId);
     }
 
     private static OrgCalendarEventTypeController EventTypes(World w, Guid userId)

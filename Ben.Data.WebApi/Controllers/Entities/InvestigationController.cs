@@ -24,11 +24,15 @@ public sealed class InvestigationController : BenControllerBase
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
+    private readonly Services.ClientStatusMailer _clientMail;
+
     public InvestigationController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Services.Billing.SubscriptionLimitGuard limits,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _mapper = mapper; _limits = limits; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ClientStatusMailer clientMail)
+    {
+        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security; }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -164,6 +168,9 @@ public sealed class InvestigationController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        // Item 206: a visit on the calendar is news the client gets by mail.
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitScheduledAsync(db, caseForMail, entity, ct);
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
@@ -193,6 +200,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.Title               = request.Title.Trim();
         entity.Description         = request.Description?.Trim();
         entity.Location            = request.Location?.Trim();
+        var previouslyAt = entity.ScheduledDateTime;
         entity.ScheduledDateTime   = request.ScheduledDateTime;
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
@@ -217,6 +225,9 @@ public sealed class InvestigationController : BenControllerBase
             return BadRequest(slugRefusal);
 
         await db.SaveChangesAsync(ct);
+        if (previouslyAt != entity.ScheduledDateTime
+            && await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitRescheduledAsync(db, caseForMail, entity, previouslyAt, ct);   // item 206
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
@@ -300,6 +311,8 @@ public sealed class InvestigationController : BenControllerBase
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync(ct);
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitCancelledAsync(db, caseForMail, investigation, ct);   // item 206
         return NoContent();
     }
 

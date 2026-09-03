@@ -10549,7 +10549,7 @@ verified badge. The CMS page, when one exists, still wins.
 **Size:** small–medium (a day). **Depends on:** nothing. **Order:** second — it changes what
 every visitor to every group sees, and reuses the profile's own records.
 
-## 206. Client status mail (open, Ben 2026-09-03)
+## 206. Client status mail (CLOSED 2026-09-03 — ClientStatusMailer, CaseStatusWording)
 
 When a case changes state or a visit is scheduled, the client gets the same sentence the site
 shows. The mail rail now works and is observable (item 187), so this is templates and triggers.
