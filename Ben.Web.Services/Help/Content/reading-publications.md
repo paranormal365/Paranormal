@@ -3,6 +3,7 @@ title: Reading Publications
 summary: Long-form writing from investigation groups, and how to follow the ones you like.
 section: Getting Started
 audience: Everyone
+feature: features.publications
 order: 46
 ---
 

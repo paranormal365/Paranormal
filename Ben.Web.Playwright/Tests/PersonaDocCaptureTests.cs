@@ -1,4 +1,4 @@
-using Microsoft.Playwright;
+﻿using Microsoft.Playwright;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Tests;
@@ -157,7 +157,9 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("53-my-investigations", "/my-investigations");
         await VisitAsync("54-my-equipment", "/my-equipment");
         await VisitAsync("55-events", "/events");
-        await VisitAsync("56-org-subscriptions", "/admin/org-subscriptions");
+        // The owner's OWN billing page. This used to visit /admin/org-subscriptions - an app-admin
+        // route - and photographed the redirect to Home as "subscriptions" (found 2026-09-03).
+        await VisitAsync("56-org-subscriptions", $"/organizations/{await OrgIdBySlugAsync("benco")}/billing");
         await VisitAsync("57-profile", "/profile");
     }
 
