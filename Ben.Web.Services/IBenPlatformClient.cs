@@ -25,6 +25,9 @@ public interface IBenPlatformClient
     /// </summary>
     Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
 
+    /// <summary>The member's desk — next investigation, open cases, unread, gear out — in one call (item 204).</summary>
+    Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default);
+
     /// <summary>Platform messages addressed to the current user, newest first.</summary>
     /// <param name="unreadOnly">Restrict to messages never opened.</param>
     Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);

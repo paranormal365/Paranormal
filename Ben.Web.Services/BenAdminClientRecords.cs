@@ -130,7 +130,24 @@ public sealed record OrgPublicHomeResponse(
     /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
-    bool RunsPublicTours = false);
+    bool RunsPublicTours = false,
+    // Facts for the default page, shown when the group has published no home page (item 205).
+    OrgPublicFacts? Facts = null);
+/// <summary>
+/// What a group's public page can say before the group has written one (item 205): built from
+/// records the group already keeps, so every line is checkable and none is invented.
+/// </summary>
+public sealed record OrgPublicFacts(
+    string? AreaServed,
+    bool IsAcceptingClients,
+    bool IsAcceptingApplications,
+    int MemberCount,
+    int OnSinceYear,
+    int PublicCaseCount,
+    OrgPublicNextEvent? NextPublicEvent);
+
+public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,

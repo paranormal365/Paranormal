@@ -1,0 +1,184 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    A member's Home that is a desk, not a poster (item 204).
+
+    The "has work waiting" banners above already knew most of this; the page beneath them repeated
+    the visitor hero. Every number here is the same query another screen already runs — the
+    banners, the bell, My Equipment, My Investigations — so nothing on the desk can contradict the
+    screen it links to. Each tile opens exactly what it counts.
+*@
+
+@if (_loading)
+{
+    <div class="container-fluid px-3 py-3" style="max-width:1100px;"><BenLoaderOverlay Visible="true" /></div>
+}
+else if (_refusal is not null)
+{
+    <div class="container-fluid px-3 py-3" style="max-width:1100px;">
+        <div class="alert alert-warning" data-testid="desk-refusal">@_refusal</div>
+    </div>
+}
+else if (_desk is not null)
+{
+    <div class="container-fluid px-3 py-3" style="max-width:1100px;" data-testid="member-desk">
+        <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-3">
+            <h3 class="mb-0">Your desk</h3>
+            <span class="text-muted small">@DateTime.Now.ToString("dddd, MMMM d")</span>
+        </div>
+
+        <div class="row g-3">
+            @* ── Next investigation ─────────────────────────────────────────── *@
+            <div class="col-12 col-lg-6">
+                <div class="card h-100" data-testid="desk-next-investigation">
+                    <div class="card-header py-2 d-flex justify-content-between">
+                        <span>Next investigation</span>
+                        <a href="/my-investigations" class="small">All @_desk.UpcomingInvestigationCount upcoming</a>
+                    </div>
+                    <div class="card-body">
+                        @if (_desk.NextInvestigation is { } inv)
+                        {
+                            <a class="h5 d-block text-decoration-none" href="@InvestigationUrl(inv)">@inv.Title</a>
+                            <div class="text-secondary">
+                                @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                @if (!string.IsNullOrWhiteSpace(inv.LocationLabel)) { <text> · @inv.LocationLabel</text> }
+                            </div>
+                            <div class="small text-muted mt-1">
+                                @inv.OrganizationName · @inv.AttendeeCount attending
+                                @if (inv.IsLead) { <span class="badge text-bg-primary ms-1">you lead</span> }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0" data-testid="desk-no-investigation">Nothing scheduled. When a group puts you on an investigation, it appears here.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @* ── Open cases ─────────────────────────────────────────────────── *@
+            <div class="col-12 col-lg-6">
+                <div class="card h-100" data-testid="desk-open-cases">
+                    <div class="card-header py-2 d-flex justify-content-between">
+                        <span>Open cases</span>
+                        <span class="badge text-bg-secondary">@_desk.OpenCaseCount</span>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_desk.OpenCases.Count == 0)
+                        {
+                            <p class="text-muted m-3 mb-3">No open cases in your groups.</p>
+                        }
+                        else
+                        {
+                            <ul class="list-group list-group-flush">
+                                @foreach (var c in _desk.OpenCases)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <a class="text-decoration-none" href="@CaseUrl(c)">@c.Title</a>
+                                            <div class="small text-muted">@c.OrganizationName · #@c.CaseYear-@c.OrgCaseNumber.ToString("000") · @c.Status</div>
+                                        </div>
+                                        @if (c.IsContact) { <span class="badge text-bg-info text-nowrap">your case</span> }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @* ── Messages + requests ────────────────────────────────────────── *@
+            <div class="col-12 col-md-6 col-lg-3">
+                <a class="card h-100 text-decoration-none" href="/notifications" data-testid="desk-unread">
+                    <div class="card-body text-center">
+                        <div class="display-6">@_desk.UnreadMessageCount</div>
+                        <div class="text-muted">unread message@(_desk.UnreadMessageCount == 1 ? "" : "s")</div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+                <a class="card h-100 text-decoration-none" href="/notifications" data-testid="desk-requests">
+                    <div class="card-body text-center">
+                        <div class="display-6">@_desk.PendingRequestCount</div>
+                        <div class="text-muted">request@(_desk.PendingRequestCount == 1 ? "" : "s") waiting on you</div>
+                    </div>
+                </a>
+            </div>
+
+            @* ── Gear checked out ───────────────────────────────────────────── *@
+            <div class="col-12 col-lg-6">
+                <div class="card h-100" data-testid="desk-gear">
+                    <div class="card-header py-2 d-flex justify-content-between">
+                        <span>Gear checked out to you</span>
+                        <a href="/my-equipment" class="small">@_desk.GearCheckedOutCount item@(_desk.GearCheckedOutCount == 1 ? "" : "s")</a>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_desk.GearCheckedOut.Count == 0)
+                        {
+                            <p class="text-muted m-3 mb-3">Nothing in your hands right now.</p>
+                        }
+                        else
+                        {
+                            <ul class="list-group list-group-flush">
+                                @foreach (var g in _desk.GearCheckedOut)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <a class="text-decoration-none" href="/equipment/@g.EquipmentItemId">@g.DisplayName</a>
+                                            <div class="small text-muted">
+                                                @(g.OrganizationName ?? "your own")
+                                                @if (g.DateDue is { } due) { <text> · due @due.ToViewerLocalTime(UserState).ToDisplayDate()</text> }
+                                            </div>
+                                        </div>
+                                        @if (g.IsOverdue) { <span class="badge text-bg-danger text-nowrap" data-testid="desk-overdue">overdue</span> }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MemberDeskResponse? _desk;
+    private bool _loading = true;
+    private string? _refusal;
+
+    /// <summary>True once loaded when this person belongs to no group: the page shows the visitor hero instead.</summary>
+    [Parameter] public EventCallback<bool> OnHasGroups { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { _loading = false; return; }
+
+        var result = await AdminClient.GetMyDeskAsync();
+        if (result.Failed || result.Item is null)
+        {
+            // A refusal is a sentence, never an empty desk that reads as "no work".
+            _refusal = result.SessionExpired ? "You have been signed out. Sign in again to see your desk."
+                     : result.Reason ?? "Couldn't load your desk just now.";
+        }
+        else
+        {
+            _desk = result.Item;
+            await OnHasGroups.InvokeAsync(_desk.GroupCount > 0);
+        }
+        _loading = false;
+    }
+
+    private static string InvestigationUrl(DeskInvestigation i)
+        => string.IsNullOrWhiteSpace(i.UrlName) ? "/my-investigations" : $"/o/{i.OrganizationUrlName}/investigations/{i.UrlName}";
+
+    private static string CaseUrl(DeskCase c)
+        => string.IsNullOrWhiteSpace(c.UrlName) ? $"/o/{c.OrganizationUrlName}/cases" : $"/o/{c.OrganizationUrlName}/cases/{c.UrlName}";
+}

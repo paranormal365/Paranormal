@@ -10531,7 +10531,7 @@ trap**, and nothing about the column names warns you.
 **Not covered, and correct:** `AuditLogs` and `SignInEvents`. The first is item 191's business;
 the second feeds the sign-in insights dashboard and is 0.7 MB.
 
-## 204. A member's Home that is a desk, not a poster (open, Ben 2026-09-03)
+## 204. A member's Home that is a desk, not a poster (CLOSED 2026-09-03 — MyDeskController, MemberDesk.razor)
 
 Next investigation, open cases, unread messages, gear checked out — the "has work waiting"
 banners already know all of this; the page below them repeats the visitor hero. Build the
@@ -10540,7 +10540,7 @@ signed-in Home from the same queries the banners run, and keep the hero for visi
 **Size:** small–medium (a day). **Depends on:** nothing; every number is already served.
 **Order:** first — it is the most-seen page for every member and all the data is there.
 
-## 205. A default group page (open, Ben 2026-09-03)
+## 205. A default group page (CLOSED 2026-09-03 — OrgPublicFacts on the public home response)
 
 "This organization has not published a home page yet" is what every public group shows today.
 Build one from data the group already has: kind, area served, accepting cases, next public event,
@@ -10565,7 +10565,7 @@ player or the evidence read-only until it expires, revocable from the case, with
 **Size:** medium (two days). **Depends on:** item 208 is a natural companion; and note item 201's
 rule — nothing token-sized goes in a URL, so this is a short signed id resolved server-side.
 
-## 208. Session summary in the report (open, Ben 2026-09-03)
+## 208. Session summary in the report (CLOSED 2026-09-03 — FieldSessionReadout)
 
 The Field Sessions report section cites a session; a one-paragraph readout — peak field, when, in
 which room, what was recorded at that moment — would make the PDF stand on its own.
