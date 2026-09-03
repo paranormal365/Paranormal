@@ -189,11 +189,62 @@ public sealed class OrganizationPurge
 
         // Paths first: after the rows go, nothing remembers where the bytes were.
         var storedPaths = await StoredPathsAsync(db, organizationId, caseIds, investigationIds, eventIds, ct);
+        var membershipIds = await db.OrganizationUserMemberships.Where(m => m.OrganizationId == organizationId)
+            .Select(m => m.Id).ToListAsync(ct);
+        var attendeeIds = await db.InvestigationAttendees.Where(a => investigationIds.Contains(a.InvestigationId))
+            .Select(a => a.Id).ToListAsync(ct);
+        var dutyIds = await db.InvestigationDuties.Where(d => d.OrganizationId == organizationId)
+            .Select(d => d.Id).ToListAsync(ct);
+        var memberGroupIds = await db.OrgMemberGroups.Where(g => g.OrganizationId == organizationId)
+            .Select(g => g.Id).ToListAsync(ct);
+        var questionIds = await db.OrganizationMembershipQuestions.Where(q => q.OrganizationId == organizationId)
+            .Select(q => q.Id).ToListAsync(ct);
+        var equipmentIds = await db.EquipmentItems.Where(e => e.OwningOrganizationId == organizationId)
+            .Select(e => e.Id).ToListAsync(ct);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
             // ── depth 3: children of reports and sessions ────────────────────
+            // What hangs off an attendee, a duty, a membership, a role, a question, a member group
+            // or an equipment item. Each of these is a NoAction reference the database would
+            // refuse on; OrganizationPurgeCoverageTests derives the list from the model, so the
+            // next table anyone hangs off one of these fails that test rather than a delete.
+            await db.InvestigationDutyAssignments
+                .Where(x => attendeeIds.Contains(x.InvestigationAttendeeId) || dutyIds.Contains(x.InvestigationDutyId))
+                .ExecuteDeleteAsync(ct);
+            await db.OrganizationAddressMemberAccesses
+                .Where(x => membershipIds.Contains(x.OrganizationUserMembershipId)).ExecuteDeleteAsync(ct);
+            await db.OrgMemberGroupMemberships
+                .Where(x => membershipIds.Contains(x.OrganizationUserMembershipId)).ExecuteDeleteAsync(ct);
+            await db.CmsPagePermissions
+                .Where(x => x.OrgMemberGroupId != null && memberGroupIds.Contains(x.OrgMemberGroupId.Value)).ExecuteDeleteAsync(ct);
+            await db.OrganizationMembershipAnswers
+                .Where(x => questionIds.Contains(x.OrganizationMembershipQuestionId)).ExecuteDeleteAsync(ct);
+            await db.UploadFileShares
+                .Where(x => x.TargetOrganizationId == organizationId
+                         || (x.TargetInvestigationId != null && investigationIds.Contains(x.TargetInvestigationId.Value)))
+                .ExecuteDeleteAsync(ct);
+            await db.EquipmentLoanFeedbacks.Where(x => x.SubjectOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // The group's own equipment and everything recorded against it.
+            await db.EquipmentItemPhotos.Where(x => equipmentIds.Contains(x.EquipmentItemId)).ExecuteDeleteAsync(ct);
+            await db.EquipmentItemShares.Where(x => equipmentIds.Contains(x.EquipmentItemId)).ExecuteDeleteAsync(ct);
+            await db.EquipmentServiceLogs.Where(x => equipmentIds.Contains(x.EquipmentItemId)).ExecuteDeleteAsync(ct);
+            await db.EquipmentItemFaqs.Where(x => equipmentIds.Contains(x.EquipmentItemId)).ExecuteDeleteAsync(ct);
+            await db.EquipmentQuestions.Where(x => equipmentIds.Contains(x.EquipmentItemId)).ExecuteDeleteAsync(ct);
+            await db.EquipmentItems.Where(x => x.OwningOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // A proposal to the shared equipment or experience catalogue outlives the group that
+            // made it — other groups may be using the brand, model or type by now — so the
+            // reference is cleared rather than the row removed.
+            await db.EquipmentBrands.Where(x => x.ProposedByOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ProposedByOrganizationId, (Guid?)null), ct);
+            await db.EquipmentModels.Where(x => x.ProposedByOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ProposedByOrganizationId, (Guid?)null), ct);
+            await db.ExperienceCategories.Where(x => x.ProposedByOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ProposedByOrganizationId, (Guid?)null), ct);
+            await db.ExperienceTypes.Where(x => x.ProposedByOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ProposedByOrganizationId, (Guid?)null), ct);
+
             var sectionIds = await db.CaseReportSections
                 .Where(x => reportIds.Contains(x.CaseReportId)).Select(x => x.Id).ToListAsync(ct);
             await db.CaseReportSectionFieldSessions
@@ -275,6 +326,7 @@ public sealed class OrganizationPurge
             // Roles, leaf-first, then the memberships, then the group itself.
             var roleIds = await db.OrganizationRoles.Where(r => r.OrganizationId == organizationId)
                 .Select(r => r.Id).ToListAsync(ct);
+            await db.OrganizationMemberLevelRoles.Where(x => roleIds.Contains(x.OrganizationRoleId)).ExecuteDeleteAsync(ct);
             await db.OrganizationRoleMemberships.Where(x => roleIds.Contains(x.OrganizationRoleId)).ExecuteDeleteAsync(ct);
             await db.OrganizationRolePermissions.Where(x => roleIds.Contains(x.OrganizationRoleId)).ExecuteDeleteAsync(ct);
             await db.OrganizationRoles.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
@@ -305,6 +357,21 @@ public sealed class OrganizationPurge
                 // group still exists. Logged so somebody can sweep it later.
                 _log.LogWarning(ex, "Purged organization {OrganizationId}: could not delete {Path}.",
                     organizationId, path);
+            }
+        }
+
+        // Then the folders themselves. File-by-file from the rows leaves behind whatever the rows
+        // never knew about — a half-finished upload, a thumbnail written beside its original —
+        // and an empty directory named for a group that no longer exists.
+        var directories = new List<string> { $"orgs/{organizationId}" };
+        directories.AddRange(caseIds.Select(id => $"cases/{id}"));
+        foreach (var directory in directories)
+        {
+            try { await _fileStorage.DeleteDirectoryAsync(directory, ct); }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Purged organization {OrganizationId}: could not remove {Directory}.",
+                    organizationId, directory);
             }
         }
 
