@@ -100,7 +100,8 @@ public sealed class ClientReassignmentTests
     private static CaseTransferController Controller(IDbContextFactory<BenDataContext> f, Guid userId)
     {
         var ctrl = new CaseTransferController(f, MapperStub.Create(),
-            new Ben.Data.WebApi.Services.PlatformMessageService(f), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
+            new Ben.Data.WebApi.Services.PlatformMessageService(f), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f),
+            Ben.Web.Tests.TestMailer.Quiet())
         {
             ControllerContext = new ControllerContext
             {

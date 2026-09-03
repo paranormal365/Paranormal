@@ -26,12 +26,16 @@ public sealed class CaseController : BenControllerBase
 
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
+    private readonly Services.ClientStatusMailer _clientMail;
+
     public CaseController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Services.RequestReviewNotifier reviewNotifier)
+        Services.RequestReviewNotifier reviewNotifier,
+        Services.ClientStatusMailer clientMail)
     {
+        _clientMail = clientMail;
         _db = db;
         _mapper = mapper;
         _limits = limits;
@@ -582,6 +586,7 @@ public sealed class CaseController : BenControllerBase
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
         entity.Description          = request.Description?.Trim();
+        var previousStatus = entity.Status;
         entity.Status               = request.Status;
         entity.PublicPseudonym      = request.PublicPseudonym?.Trim();
         // Republishing consumes the lapse memory: the banner offered the click, this is it.
@@ -597,6 +602,8 @@ public sealed class CaseController : BenControllerBase
             return BadRequest(refusal);
 
         await db.SaveChangesAsync(ct);
+        // Item 206: the client hears the same sentence the site now shows.
+        await _clientMail.CaseStatusChangedAsync(db, entity, previousStatus, ct);
         return Ok(_mapper.Map<CaseRecord>(entity));
     }
 

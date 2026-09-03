@@ -115,7 +115,8 @@ public class RequestReviewFlowTests
         return WithUser(new CaseController(w.F, mapper.Object,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.F),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(w.F),
-            new RequestReviewNotifier(w.F, new PlatformMessageService(w.F))), userId);
+            new RequestReviewNotifier(w.F, new PlatformMessageService(w.F)),
+            Ben.Web.Tests.TestMailer.Quiet()), userId);
     }
 
     private static async Task<List<string>> SubjectsToAsync(World w, Guid userId)

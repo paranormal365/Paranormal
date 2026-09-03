@@ -453,7 +453,8 @@ public class InvestigationDeleteWithCitedSessionTests
         var ctrl = new Ben.Data.WebApi.Controllers.Entities.InvestigationController(
             factory, mapper,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
-            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            Ben.Web.Tests.TestMailer.Quiet());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

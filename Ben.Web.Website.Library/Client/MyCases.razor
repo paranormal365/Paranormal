@@ -27,7 +27,7 @@
         <div class="d-flex flex-column gap-3">
             @foreach (var c in _result.Items)
             {
-                <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-cases/{c.CaseId}"))">
+                <div class="card" style="cursor:pointer;" data-testid="my-case-card" @onclick="@(() => NavManager.NavigateTo($"/my-cases/{c.CaseId}"))">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between">
                             <div>

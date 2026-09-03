@@ -22,10 +22,14 @@ public sealed class CaseTransferController : BenControllerBase
 
     private readonly Services.PlatformMessageService _messages;
 
+    private readonly Services.ClientStatusMailer _clientMail;
+
     public CaseTransferController(
         IDbContextFactory<BenDataContext> db, IMapper mapper, Services.PlatformMessageService messages,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _mapper = mapper; _messages = messages; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ClientStatusMailer clientMail)
+    {
+        _clientMail = clientMail; _db = db; _mapper = mapper; _messages = messages; _security = security; }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -126,8 +130,10 @@ public sealed class CaseTransferController : BenControllerBase
             DateProposed         = DateTime.UtcNow,
         };
         db.CaseTransferLogs.Add(log);
+        var previousStatus1 = c.Status;
         c.Status = CaseStatus.Transferred;
         await db.SaveChangesAsync(ct);
+        await _clientMail.CaseStatusChangedAsync(db, c, previousStatus1, ct);   // item 206
 
         var loaded = await db.CaseTransferLogs.AsNoTracking()
             .Include(l => l.FromOrganization).Include(l => l.ToOrganization).Include(l => l.ProposedByAppUser)
@@ -180,6 +186,9 @@ public sealed class CaseTransferController : BenControllerBase
         log.RejectionReason      = request.Accept ? null : request.Reason?.Trim();
         log.DateResponded        = DateTime.UtcNow;
 
+        // Item 206: remembered here, mailed after the save below — the client hears "Accepted"
+        // only once it is true in the database.
+        CaseStatus? previousStatus2 = null; Case? mailedCase = null;
         if (request.Accept)
         {
             var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
@@ -193,6 +202,7 @@ public sealed class CaseTransferController : BenControllerBase
                 c.OrganizationId  = orgId;
                 c.CaseYear        = year;
                 c.OrgCaseNumber   = max + 1;
+                previousStatus2 = c.Status; mailedCase = c;
                 c.Status          = CaseStatus.Accepted;
                 c.StatusBeforePause = null;   // a fresh start, not a suspended old one
                 c.DateUpdated     = DateTime.UtcNow;
@@ -234,6 +244,8 @@ public sealed class CaseTransferController : BenControllerBase
             }
         }
         await db.SaveChangesAsync(ct);
+        if (mailedCase is not null && previousStatus2 is { } wasBefore2)
+            await _clientMail.CaseStatusChangedAsync(db, mailedCase, wasBefore2, ct);   // item 206
 
         // A client-proposed move ends with the client hearing the answer — from the platform,
         // immediately, whichever way it went.
@@ -278,10 +290,13 @@ public sealed class CaseTransferController : BenControllerBase
 
         // Restore case status to Accepted (it was set to Transferred on proposal)
         var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
+        var previousStatus3 = c?.Status;
         if (c?.Status == CaseStatus.Transferred)
             c.Status = CaseStatus.Accepted;
 
         await db.SaveChangesAsync(ct);
+        if (c is not null && previousStatus3 is { } wasBefore)
+            await _clientMail.CaseStatusChangedAsync(db, c, wasBefore, ct);   // item 206
         return Ok(_mapper.Map<CaseTransferLogRecord>(log));
     }
 
