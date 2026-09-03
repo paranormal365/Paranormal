@@ -304,15 +304,31 @@
                                            should not be listened to as though it were intact. *@
                                         <span class="badge text-bg-warning">arrived damaged</span>
                                     }
-                                    @if (IsAudio(file.RelativePath))
+                                    @if (_undecodable.Contains(file.Id))
                                     {
-                                        <audio controls preload="none" class="ms-auto"
-                                               src="@FileUrl(file.Id)"></audio>
+                                        @* The digest matched — the bytes are the bytes the phone
+                                           sent — but the browser cannot decode them. A silent,
+                                           dead control looks like a player that is broken; this
+                                           says which file it is and keeps the bytes reachable. *@
+                                        <span class="badge text-bg-warning" data-testid="undecodable">won't play in this browser</span>
+                                        <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
+                                           href="@FileUrl(file.Id)" download>Download the file</a>
+                                    }
+                                    else if (IsAudio(file.RelativePath))
+                                    {
+                                        @* metadata, not none: the browser reads the header now and
+                                           reports a file it cannot decode before anybody presses
+                                           play, instead of after — at the cost of a small ranged
+                                           request per recording. *@
+                                        <audio controls preload="metadata" class="ms-auto"
+                                               src="@FileUrl(file.Id)"
+                                               @onerror="@(() => MarkUndecodable(file.Id))"></audio>
                                     }
                                     else if (IsVideo(file.RelativePath))
                                     {
-                                        <video controls preload="none" width="320"
-                                               class="ms-auto" src="@FileUrl(file.Id)"></video>
+                                        <video controls preload="metadata" width="320"
+                                               class="ms-auto" src="@FileUrl(file.Id)"
+                                               @onerror="@(() => MarkUndecodable(file.Id))"></video>
                                     }
                                 </li>
                             }
@@ -751,6 +767,11 @@
     /// API is a different origin and <c>/webapi</c> exists only under IIS.
     /// </remarks>
     private string FileUrl(Guid fileId) => MediaUrls.FieldSessionFile(SessionId, fileId);
+
+    /// <summary>Files the browser reported it cannot decode, by id; see the Recordings card.</summary>
+    private readonly HashSet<Guid> _undecodable = [];
+
+    private void MarkUndecodable(Guid fileId) => _undecodable.Add(fileId);
 
     private static bool IsAudio(string path) =>
         path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
