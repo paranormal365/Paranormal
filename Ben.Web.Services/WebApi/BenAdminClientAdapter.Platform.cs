@@ -22,6 +22,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
 
+    public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
+        => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
+
     public Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
         => _api.GetListAsync<MyMessageRecord>($"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token);
 

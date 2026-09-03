@@ -4,12 +4,21 @@
 <PageTitle>@SiteOptions.Value.Name — @SiteOptions.Value.Tagline</PageTitle>
 
 @*
-    The landing page is three library components, same as the original host: the hero with its
-    location search, then what is near the visitor, then the public case map. All three are
-    anonymous-safe — they degrade to a browse or a prompt rather than requiring a sign-in.
+    The landing page. For a visitor, and for a signed-in person who belongs to no group yet, it is
+    the hero with its location search, then what is near them, then the public case map — all
+    anonymous-safe, degrading to a browse or a prompt rather than requiring a sign-in.
+
+    For a member it is a desk, not a poster (item 204): the next investigation, open cases, unread
+    messages, gear checked out — the work the banners above already knew was waiting. The desk
+    renders nothing for a visitor and says so through OnHasGroups, so the hero is the default and
+    is only swapped out once the desk knows it has something to stand on.
 *@
 
-<HomeHero />
+<MemberDesk OnHasGroups="@(v => { _hasGroups = v; StateHasChanged(); })" />
+@if (!_hasGroups)
+{
+    <HomeHero />
+}
 <NearbyDiscovery />
 @* Item 186 F9: the feed's front door on the front page. Renders nothing while the feed is dark. *@
 <Ben.Web.Website.Library.Feed.FeedTeaser />
@@ -18,3 +27,7 @@
     <PromotedGroupsCard />
 </div>
 <PublicCaseDiscovery />
+
+@code {
+    private bool _hasGroups;
+}
