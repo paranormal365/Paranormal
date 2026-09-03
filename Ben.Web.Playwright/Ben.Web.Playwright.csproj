@@ -10,7 +10,8 @@
       IsTestProject=false keeps this project in the solution (for IDE + build)
       but prevents 'dotnet test Ben.slnx' from auto-discovering it.
       Run Playwright tests explicitly:
-        dotnet test Ben.Web.Playwright -e BEN_BASE_URL=http://localhost:5078
+        dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll
+      (dotnet test on this project prints nothing and exits 0 because of the flag above)
     -->
     <IsTestProject>false</IsTestProject>
     <!-- PowerShell is not available on macOS — use bash to install browsers -->

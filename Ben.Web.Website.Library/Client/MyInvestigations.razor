@@ -1,4 +1,4 @@
-@page "/my-investigations"
+﻿@page "/my-investigations"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Shared
@@ -261,7 +261,10 @@
         if (!string.IsNullOrWhiteSpace(row.PlaceName)) return row.PlaceName!;
         var cityState = string.Join(", ",
             new[] { row.PlaceCity, row.PlaceState }.Where(v => !string.IsNullOrWhiteSpace(v)));
-        return string.IsNullOrWhiteSpace(cityState) ? "—" : cityState;
+        if (!string.IsNullOrWhiteSpace(cityState)) return cityState;
+        // No place on file: the investigation's own location text, which is what the card above
+        // already shows. A dash under a card that names the barn read as a bug (2026-09-03).
+        return string.IsNullOrWhiteSpace(row.Location) ? "—" : row.Location!;
     }
 
     private async Task SetRsvp(MyInvestigationItem inv, RsvpStatus rsvp)

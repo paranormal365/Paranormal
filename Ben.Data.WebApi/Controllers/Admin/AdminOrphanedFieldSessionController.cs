@@ -1,3 +1,5 @@
+﻿using Ben.Data.Source.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -36,15 +38,18 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<AdminOrphanedFieldSessionController> _log;
+    private readonly IAuditLogService _auditLog;
 
     public AdminOrphanedFieldSessionController(
         IDbContextFactory<BenDataContext> dbFactory,
         IFileStorageService fileStorage,
-        ILogger<AdminOrphanedFieldSessionController> log)
+        ILogger<AdminOrphanedFieldSessionController> log,
+        IAuditLogService auditLog)
     {
         _dbFactory   = dbFactory;
         _fileStorage = fileStorage;
         _log         = log;
+        _auditLog    = auditLog;
     }
 
     /// <summary>Every session whose document cannot be read back. Changes nothing.</summary>
@@ -154,6 +159,17 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
             "Deleted {SessionCount} orphaned field sessions, {Citations} report citations and "
             + "{FilesRemoved} upload rows ({FilesKept} kept, still referenced), by {UserId}.",
             ids.Count, citations, filesRemoved, filesKept, GetCurrentUserId());
+
+        // A door that deletes rows says who opened it. Ben deleted 33 sessions on 2026-09-03 and the
+        // audit log recorded nothing; the log line above is Warning level, which the database sink
+        // does not keep. One audit row per session, with what the row said about itself.
+        var actingUserId = GetCurrentUserId();
+        foreach (var orphan in orphans.Where(o => ids.Contains(o.Id)))
+        {
+            await _auditLog.LogDeleteAsync(nameof(FieldSessionUpload), orphan.Id,
+                new { orphan.LocationLabel, orphan.DeviceModel, orphan.RecordedByName, orphan.StartedAt, orphan.ReadingCount, orphan.MarkerCount, Reason = "orphaned: document not on this server" },
+                actingUserId, AppSources.WebApi);
+        }
 
         var note = filesKept > 0
             ? $"{filesKept} file record{(filesKept == 1 ? " was" : "s were")} left in place because "

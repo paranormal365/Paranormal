@@ -1,4 +1,4 @@
-# Playwright Configuration for Ben.Web.Playwright
+﻿# Playwright Configuration for Ben.Web.Playwright
 #
 # QUICKSTART
 # ----------
@@ -11,7 +11,13 @@
 #      ~/.nuget/packages/microsoft.playwright/1.52.0/runtimes/unix/native/playwright.sh install chromium
 # 3. Run the tests:
 #      cd /Users/ben/Source/Ben
-#      dotnet test Ben.Web.Playwright --no-build -e BEN_BASE_URL=http://localhost:5078
+#      dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll
+#
+#    NOT `dotnet test Ben.Web.Playwright`: the project sets IsTestProject=false so the solution-wide
+#    run skips it, and that makes `dotnet test` on the project itself print nothing and exit 0 —
+#    which reads as a pass. vstest on the built DLL runs everything (2026-09-03).
+#    Filter one fixture with --Tests:StartGroupWizardTests, or a category with
+#    --TestCaseFilter:TestCategory=Smoke.
 #
 # ENVIRONMENT VARIABLES
 # ---------------------
@@ -24,23 +30,23 @@
 # CATEGORIES
 # ----------
 # Run a single category:
-#   dotnet test Ben.Web.Playwright --filter TestCategory=Smoke
-#   dotnet test Ben.Web.Playwright --filter TestCategory=Auth
-#   dotnet test Ben.Web.Playwright --filter TestCategory=Home
-#   dotnet test Ben.Web.Playwright --filter TestCategory=HomeMap
-#   dotnet test Ben.Web.Playwright --filter TestCategory=PublicCase
-#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseManagement
-#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseMessages
-#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseReports
-#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseTransfer
-#   dotnet test Ben.Web.Playwright --filter TestCategory=InvestigationPanel
-#   dotnet test Ben.Web.Playwright --filter TestCategory=MyCases
-#   dotnet test Ben.Web.Playwright --filter TestCategory=Navigation
-#   dotnet test Ben.Web.Playwright --filter TestCategory=OrgDiscovery
-#   dotnet test Ben.Web.Playwright --filter TestCategory=ErrorHandling
-#   dotnet test Ben.Web.Playwright --filter TestCategory=Voting
-#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseNotes
-#   dotnet test Ben.Web.Playwright --filter TestCategory=OrgPublic
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=Smoke
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=Auth
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=Home
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=HomeMap
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=PublicCase
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=CaseManagement
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=CaseMessages
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=CaseReports
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=CaseTransfer
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=InvestigationPanel
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=MyCases
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=Navigation
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=OrgDiscovery
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=ErrorHandling
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=Voting
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=CaseNotes
+#   dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll --TestCaseFilter:TestCategory=OrgPublic
 #
 # HEADFUL MODE (see the browser window)
 # -----------
