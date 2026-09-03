@@ -487,6 +487,10 @@ if ($Apps -contains 'webapi') {
         'SeedData:SuperAdmin:DisplayName' = (Get-JsonValue $secrets 'SeedSuperAdmin:DisplayName')
         'SeedData:SuperAdmin:Password'    = (Get-JsonValue $secrets 'SeedSuperAdmin:Password')
         'RateLimits:AuthPerMinute'        = (Get-JsonValue $secrets 'RateLimitAuthPerMinute')
+        # Absolute path to ffmpeg.exe on the server. Without it video posts wait for a moderator
+        # instead of being screened, and audio/video keeps its metadata - the app reports the
+        # feature as unavailable rather than failing an upload (item 181, 186 F5b).
+        'MediaTools:FfmpegPath'           = (Get-JsonValue $secrets 'FfmpegPath')
     }
     foreach ($key in $carry.Keys) {
         if ($null -ne $carry[$key] -and "$($carry[$key])" -ne '') {
