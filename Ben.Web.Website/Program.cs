@@ -405,6 +405,20 @@ app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 });
 
+// A recording reached through a share link (item 207). No ticket and no bearer token: the share
+// token IS the authority, and the API re-checks its expiry, its revocation and which file it
+// covers on every request. This endpoint asserts nothing — it forwards a path and streams the
+// answer — which is what keeps the rule in one place instead of two that can drift apart.
+app.MapGet("/media/shared/{token}/files/{fileId:guid}", async (
+    string token, Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/shared-sessions/{Uri.EscapeDataString(token)}/files/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/{fileId:guid}/{kind}", async (
     Guid fileId, string kind, string? t,
     Ben.Web.Website.Services.MediaTicketService tickets,

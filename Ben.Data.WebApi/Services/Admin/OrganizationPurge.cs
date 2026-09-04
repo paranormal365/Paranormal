@@ -250,6 +250,25 @@ public sealed class OrganizationPurge
             await db.CaseReportSectionFieldSessions
                 .Where(x => sectionIds.Contains(x.CaseReportSectionId)).ExecuteDeleteAsync(ct);
             await db.CaseReportSections.Where(x => reportIds.Contains(x.CaseReportId)).ExecuteDeleteAsync(ct);
+            // Before the file rows, not after: a share link may name ONE recording, and that
+            // foreign key is NoAction — because the alternatives are worse. Cascade would give SQL
+            // Server two cascade paths into the same table and be refused outright; SetNull would
+            // silently turn a link that reached one recording into a link that reaches the whole
+            // night, which is a privacy escalation performed by a delete. So the links go first.
+            // Their view rows follow by cascade.
+            //
+            // Swept by BOTH columns. Today every link's file belongs to the link's own session, so
+            // the first clause alone would do — but nothing in the schema says so, and this purge
+            // has already been refused once (BenCo, 2026-09-03) by exactly that reasoning applied
+            // to OrgMessages.CaseId. An invariant no constraint enforces is not one to delete on.
+            var sessionFileIds = await db.FieldSessionUploadFiles.AsNoTracking()
+                .Where(f => sessionIds.Contains(f.FieldSessionUploadId))
+                .Select(f => f.Id).ToListAsync(ct);
+            await db.FieldSessionShareLinks
+                .Where(x => sessionIds.Contains(x.FieldSessionUploadId)
+                         || (x.FieldSessionUploadFileId != null
+                             && sessionFileIds.Contains(x.FieldSessionUploadFileId.Value)))
+                .ExecuteDeleteAsync(ct);
             await db.FieldSessionUploadFiles
                 .Where(x => sessionIds.Contains(x.FieldSessionUploadId)).ExecuteDeleteAsync(ct);
 

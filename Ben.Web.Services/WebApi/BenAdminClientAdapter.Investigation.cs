@@ -142,4 +142,35 @@ public sealed partial class BenAdminClientAdapter
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}", token);
 
+    // ── Sharing a session by link (item 207) ──────────────────────────────────
+
+    public Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionShareRecord>(
+            $"/api/field-sessions/{sessionId}/shares", token);
+
+    public Task<FieldSessionShareRecord?> CreateFieldSessionShareAsync(
+        Guid sessionId, CreateFieldSessionShareRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateFieldSessionShareRequest, FieldSessionShareRecord>(
+            $"/api/field-sessions/{sessionId}/shares", request, token);
+
+    public Task<bool> RevokeFieldSessionShareAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/field-sessions/{sessionId}/shares/{shareId}", token);
+
+    public Task<LoadResult<FieldSessionShareViewRecord>> GetFieldSessionShareViewsAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionShareViewRecord>(
+            $"/api/field-sessions/{sessionId}/shares/{shareId}/views", token);
+
+    /// <summary>
+    /// Anonymous, and it must stay that way: the recipient has no account, and sending a bearer
+    /// token that happens to be lying around would make the page behave differently for a signed-in
+    /// visitor than for the person the link was actually for.
+    /// </summary>
+    public Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default)
+        => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
+            $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
+
 }

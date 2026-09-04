@@ -89,6 +89,46 @@ If the picker is empty, no sessions have been uploaded for this case's investiga
 recorded without picking an investigation belong to the account that recorded them and are not
 anybody's case material until somebody attaches them.
 
+## Sending a session to somebody with no account
+
+A client wants to see what was recorded in their house. A producer wants to decide whether a night
+is worth a crew. Neither is going to make an account to look at one thing once, and emailing the
+files means the group has no expiry, no way to take it back, and no idea whether anyone opened it.
+
+So open the session with **Play back** and use **Share this session** on that page.
+
+You choose four things:
+
+- **The whole session, or one recording.** A link to a single recording reaches that recording and
+  nothing else — the rest of the night is not even listed.
+- **How long it lasts**, from one day to thirty. There is no "forever": a link with no end date is
+  a public web address with extra steps.
+- **Who it's for** — a note only you see, so five links are five decisions rather than five
+  identical rows.
+- **Whether to include where the readings were taken.** This is **off** unless you turn it on. A
+  location recorded indoors is the building's street address, and there is rarely a reason a
+  producer needs it. With it off, the recipient's page says plainly that the locations were not
+  shared, so nobody mistakes an empty map for a night with no signal.
+
+Copy the link and send it however you like. Whoever opens it sees the readings, the trace and the
+recordings, and nothing else — no case, no group, no other session, and no way further into the
+site.
+
+### Withdrawing one, and seeing who looked
+
+The same panel lists every link you have made. **Withdraw** kills one immediately, in every inbox
+it was ever pasted into — the next click gets nothing. Each row shows how many times it was opened
+and when it was last opened, which is usually the question you actually have.
+
+Withdrawn and expired links stay in the list rather than disappearing. *Was this ever shared, and
+when did that stop* is worth being able to answer later, most of all if something turns up
+somewhere it should not have.
+
+**Who may make one:** the person who uploaded the session, or an active member of the group running
+its investigation. Being able to *read* a session is not the same as being able to hand it to
+strangers, so somebody who only attended a public investigation cannot share other people's
+recordings.
+
 ## Entries at the same time
 
 Two people often record the same moment, and unrelated things sometimes coincide. Entries sharing

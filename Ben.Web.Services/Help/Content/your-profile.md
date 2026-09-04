@@ -122,3 +122,23 @@ same link is how a Microsoft-only account sets its first password.
 with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
 Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
 in when your phone is not to hand, and each one works once.
+
+## Deleting your account
+
+In the iPhone and iPad app, **Profile → Delete account**.
+
+**What goes:** you. Your name, email address, password, phone number, addresses, photos and any
+sign-in methods you connected — Microsoft, Apple — are destroyed, and the account can never sign
+in again by any route. There is no undo, no grace period and no reactivation, and your email
+address is freed for somebody to register with again.
+
+**What stays:** anything you wrote for a group. A case note, a report, a timeline entry or a
+message on a group's board belongs to that group and often to a client who paid for the work, and
+several of those records a group may be obliged to keep. Those stay, attributed to a former
+member rather than to you. Your own field sessions, recorded on your own rather than for an
+investigation, go with you.
+
+**If you own a group** you will be asked to hand it over first, and told which groups. Exactly one
+owner exists per group, so leaving would strand it with nobody able to administer it or reach its
+billing. Make somebody else the owner, or close the group, and then your account will delete.
+

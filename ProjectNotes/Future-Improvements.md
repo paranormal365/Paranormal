@@ -10557,13 +10557,49 @@ shows. The mail rail now works and is observable (item 187), so this is template
 **Size:** medium (a day or two: the state-change and scheduling seams, the templates, the
 per-client opt-out, the observability row). **Depends on:** nothing.
 
-## 207. Share a session or a piece of evidence by link (open, Ben 2026-09-03)
+## 207. Share a session or a piece of evidence by link (CLOSED 2026-09-04 — FieldSessionShareController, /s/{token})
 
 Time-limited, for a client or a TV producer who has no account. A signed link that opens the
 player or the evidence read-only until it expires, revocable from the case, with the view logged.
 
 **Size:** medium (two days). **Depends on:** item 208 is a natural companion; and note item 201's
 rule — nothing token-sized goes in a URL, so this is a short signed id resolved server-side.
+
+### Built 2026-09-04
+
+`FieldSessionShareLink` + `FieldSessionShareLinkView`, `FieldSessionShareController` (four
+authenticated routes, two anonymous), `SharedSessionDocument`, `FieldSessionSharePanel`, and a
+`ShareToken` mode on `FieldKitPlayer` behind the route `/s/{token}`. Made and withdrawn from the
+session's playback page, which is what the case's Report Builder already opens with **Play back**.
+
+Four decisions worth keeping:
+
+- **Coordinates do not travel by default.** A fix taken indoors is the building's street address.
+  The redaction sweeps the whole document **by property name** rather than down the one path the
+  format documents, because `position` declares `additionalProperties: true` and a device may write
+  a fix somewhere no code has seen. A document that cannot be parsed cannot be redacted, so it is
+  refused rather than forwarded.
+- **The token is random, not derived** — the opposite of the website's browser tickets. A derived
+  token comes back the moment its inputs recur, which is exactly what revocation must prevent.
+  22 characters, meaningless outside the table.
+- **Sharing is narrower than reading.** `MayContributeAsync` lets anybody read a *public*
+  investigation's sessions; minting a link that outlives their visit is a different act. Uploader
+  or active group member only.
+- **Unknown, expired and revoked all answer 404**, so a probe cannot tell a real token from a
+  guess.
+
+Two purges had to learn about the table — the NoAction foreign key to `FieldSessionUploadFiles`
+would have refused a group deletion. `OrganizationPurgeCoverageTests` and
+`OrphanedSessionPurgeCoverageTests` both caught it the moment the entity existed, which is exactly
+what they were written for after BenCo's deletion was refused on 2026-09-03.
+
+34 new tests; every guard proven against deliberately broken code first. Playwright coverage is in
+`FieldSessionShareLinkTests` (`TestCategory=ShareLink`) and has **not been run** — the seeded
+persona passwords live only in Ben's environment, and the dev SQL Server at 192.168.1.71 went off
+the network partway through verification.
+
+**Still worth doing:** a link that opens straight at a cited moment rather than at 00:00, once
+item 210's trim window exists.
 
 ## 208. Session summary in the report (CLOSED 2026-09-03 — FieldSessionReadout)
 
@@ -10608,3 +10644,50 @@ a simulator bypass. **After 1.0 clears review** — it touches the app.
 ### Recommended order for 204–211
 
 208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
+All of 204–208 are closed. **Next: 209**, then 210; 211 stays gated on App Store review of 1.0.
+
+## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
+
+Ben, 2026-09-04: the users list had no delete at all, and he wanted one that shows a count per
+section before committing, the way deleting a group already does.
+
+### The constraint that shaped it
+
+`AppUsers` is the principal of **335 foreign keys**, **124** of them a required
+`CreatedByAppUserId` on tables like case notes, timeline entries and group messages. A true row
+delete means deleting all of those — a group's record of its own work, written by somebody who has
+left. Ben chose (from three options offered) to destroy what is only the person's and anonymise the
+rest, so an account holding nothing disappears completely and a real member's row survives emptied.
+The screen says **which of the two** before the button.
+
+### Built 2026-09-04
+
+`AppUserPurge` + `AdminAppUserPurgeController` (`api/admin/users/{id}/purge`) +
+`AdminDeleteUser.razor` (`/admin/delete-user`), mirroring the group-delete screen. Trash icon on
+each users-grid row opens it preselected; nav entry for arriving deliberately.
+`AccountClosureService.AnonymiseAsync` extracted and shared, so the anonymisation rules exist once.
+
+- **One refusal only** (Ben): the last SuperAdmin.
+- **Two notices, not bars** (Ben): owning a group, and holding an active paid seat — the second
+  added on his follow-up, and it says plainly that nothing here cancels the subscription.
+- Deliberate asymmetry with self-service closure, which still refuses an owner. Different acts by
+  different people.
+
+`RowWillSurvive` is computed by asking the **EF model** for every foreign key into `AppUsers`,
+not from a hand-kept list — the lesson the organization purge learned twice. Written first as raw
+`COUNT` queries, which could not run on the in-memory provider and killed every unit test of the
+preview inside the census; now `EF.Property` over `db.Set<T>()`.
+
+19 new tests, each guard proven against broken code. The reachability guard is worth remembering:
+**it passed twice while the grid button was missing** — once matching the delete page's own
+`@page` directive, once matching the nav entry — before being pinned to the two files that must
+link in.
+
+**Not verified here:** the SuperAdmin-authenticated path. `AdminDeleteUserTests`
+(`TestCategory=DeleteUser`) is written and unrun; the SuperAdmin password is only in Ben's
+environment. Live checks confirmed 401 anonymous, 403 for an ordinary account, and the page
+bouncing a non-SuperAdmin.
+
+Documented in `site-administration.md`; **self-service account closure was documented for the
+first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
+
