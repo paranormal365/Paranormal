@@ -6,5 +6,22 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Universal links (item 209). The other half is the association file the site serves at
+	     /.well-known/apple-app-site-association, which names this app and lists the paths it may
+	     open; see AppleAppSiteAssociation.cs for why that list is short.
+
+	     Both domains are listed because the app is built against both: ishaunted.com is where a
+	     shared link actually points, and www is what a person's mail client may rewrite it to.
+	     A domain the app claims but the site does not answer for is harmless — iOS fetches the
+	     association file, finds nothing, and leaves the link to Safari.
+
+	     This entitlement changes the provisioning profile, so it needs a fresh signed build.
+	     Nothing about it can be verified in the simulator: iOS only performs the association
+	     check on a real device with a real profile. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:ishaunted.com</string>
+		<string>applinks:www.ishaunted.com</string>
+	</array>
 </dict>
 </plist>

@@ -370,3 +370,28 @@ it is on a phone.
 
 The iPhone and iPad app has been submitted to the App Store and is awaiting Apple's review. When
 it is approved, this page will link to it.
+
+## Links that open the app
+
+Once the app is installed, tapping a link to this site from your mail or messages opens it in the
+app rather than in the browser, on the pages where the app has a matching screen: the feed and
+anything in it, your cases, your investigations, notifications, your profile, the events list, and
+an email confirmation link.
+
+Everything else stays in the browser on purpose. Some pages have no app screen at all — a group's
+public page, a shared session link, an individual event — and sending you to the app for one of
+those would take you away from the page that actually works. If a link does not open the app, that
+is the intended answer rather than a fault.
+
+Nothing changes on a phone or computer without the app: every link opens the website as it always
+has.
+
+## Installing the site itself
+
+On Android, Windows or a Mac there is no native app, but the website can be installed to your home
+screen or dock and will then open in its own window with no address bar. The browser offers this
+itself — **Install** in Chrome's address bar, or **Add to Home screen** in its menu.
+
+It is the same site, so everything you can do on the web you can do there. What it does not have is
+the Field Kit, which needs the sensors on an iPhone.
+

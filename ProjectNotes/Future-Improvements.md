@@ -10609,7 +10609,7 @@ which room, what was recorded at that moment — would make the PDF stand on its
 **Size:** small (half a day; the summary is a pure function of the document, already parsed by
 the player). **Depends on:** nothing. **Order:** early — cheapest item on the list.
 
-## 209. Universal links + a PWA manifest (open, Ben 2026-09-03)
+## 209. Universal links + a PWA manifest (CLOSED 2026-09-04 — AASA endpoint, manifest, entitlement)
 
 A link to a case opens the app on a phone that has it and installs cleanly on one that doesn't.
 An `apple-app-site-association` file served at the root, the associated-domains entitlement in
@@ -10618,6 +10618,44 @@ the app, and a web manifest with icons and a start URL.
 **Size:** medium (a day; the AASA file must be served with the right type at the root, and the
 entitlement needs a signed build). **Depends on:** the App Store listing existing (it does) and a
 build after 1.0 review for the entitlement.
+
+### Built 2026-09-04
+
+The app already had a `DeepLinkParser` reading website URLs, so the work was deciding **which
+paths the association file may claim** — narrower than the parser's grammar, because claiming a
+path the app cannot render is worse than claiming nothing: the link leaves Safari, where the real
+page is, and opens an app that shows a placeholder.
+
+Three paths parse and were deliberately **left out**:
+
+- `/events/{id}` and `/organizations/{org}/cases/{case}` — both parse, and both fall through to
+  `RootShell`'s `default:` arm, which renders "Coming soon".
+- `/attending/{token}` — the router reads the token and throws it away; its own comment says the
+  flow stays on the website until an association file exists. Claiming it would lose an RSVP.
+
+Nine patterns are claimed. **No `exclude` entries at all**: Apple's component ordering is easy to
+get subtly wrong and fails silently on a stranger's phone, so `/events` is claimed exactly rather
+than claiming `/events/*` and carving the detail route back out.
+
+Both documents are endpoints, not files — the association file has no extension so static
+middleware has no content type for it, and the app id and site name come from configuration.
+`UnclaimedPaths` carries the reason for each omission **as data**, so a test asserts each is absent
+and a later author finds the reasoning instead of tidying up the gap.
+
+24 C# tests, 5 Swift, 4 Playwright — the Playwright ones need no credentials and **were run**.
+Guards proven by breaking them. The manifest's short-name rule was caught by its own test: capping
+a domain suffix at four characters would keep `.paranormal` while stripping `.com`.
+
+**Still to do, and none of it is code.** Deploy so the association file is live (iOS caches the
+result, so it must be reachable before the app is installed); enable Associated Domains for the App
+ID in the developer portal; ship a build after 1.0 review, since the entitlement changes the
+provisioning profile. Until then the entitlement is inert and nothing regresses. **Nothing about
+it can be verified in the simulator** — iOS only performs the check on a real device.
+
+**Deliberately not done:** `webcredentials` for password autofill; it needs its own entitlement.
+
+**Worth doing when the screens exist:** claim `/events/*` and `/organizations/*/cases/*` once
+`RootShell` renders them, and `/attending/*` once the RSVP screen exists.
 
 ## 210. Trim a field session to the evidence (open, Ben 2026-09-03)
 
@@ -10644,7 +10682,7 @@ a simulator bypass. **After 1.0 clears review** — it touches the app.
 ### Recommended order for 204–211
 
 208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
-All of 204–208 are closed. **Next: 209**, then 210; 211 stays gated on App Store review of 1.0.
+204–209 are closed. **Next: 210** (trim a session); 211 stays gated on App Store review of 1.0.
 
 ## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
 
