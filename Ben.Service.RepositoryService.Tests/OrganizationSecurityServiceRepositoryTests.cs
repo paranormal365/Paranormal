@@ -564,7 +564,7 @@ public class OrganizationSecurityServiceRepositoryTests
             .ToListAsync();
 
         Assert.Equal(
-            ["Probationary", "Junior Investigator", "Investigator", "Senior Investigator", "Lead Investigator"],
+            ["Associate", "Junior Investigator", "Investigator", "Senior Investigator", "Lead Investigator"],
             ladder);
 
         // …and the duty list (item 158) — same reasoning again.
@@ -574,7 +574,7 @@ public class OrganizationSecurityServiceRepositoryTests
             .Select(d => d.Name)
             .ToListAsync();
 
-        Assert.Equal(["Lead Investigator", "Equipment", "Evidence Collection", "Documentation"], duties);
+        Assert.Equal(["Lead Investigator", "Equipment", "Equipment Assist", "Evidence Collection", "Documentation"], duties);
 
         // …and the eight default permission roles (item 156 Phase C; the Investigator Role
         // joined the defaults in 564f332d), every name carrying the "… Role" suffix that keeps
