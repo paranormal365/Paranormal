@@ -8184,7 +8184,7 @@ navigation keeps the banner and Return; returning restores everything including 
 Help updated (getting-started nav, site-administration impersonation section). e2e coverage
 deferred until Ben lifts the test hold.
 
-## 160. Title-to-duty eligibility matrix, owner-configured per org (OPEN — Ben, 2026-08-23)
+## 160. Title-to-duty eligibility matrix, owner-configured per org (BUILT 2026-09-04)
 
 Ben's spec, given while item 158 was being built, in substance: a new organization tab where the
 owner decides which investigation-level duties each TITLE is eligible for — a matrix, not just a
@@ -8211,8 +8211,46 @@ single-threshold case of this matrix — the schema hook is already there. What 
 - interaction with item 156's permission areas (scheduling is also a CRUD permission — the
   matrix and the role system must not give two different answers to "may Sarah schedule this").
 
-Not started. Needs a design pass with Ben before building — the capability list per duty is
-product surface, not plumbing.
+**Built 2026-09-04.** Ben asked for it directly and added: every new group should start with a
+real ladder — "Associate, Junior Investigator, Investigator, Senior Investigator, etc." — already
+assigned rather than an empty page.
+
+*Schema:* `InvestigationDutyEligibility` (one row per duty × title cell; Cascade from the duty,
+NoAction to the rung) and `InvestigationDuty.Capabilities`. Migration
+`AddInvestigationDutyEligibilityMatrix`.
+
+*The two rules, in one place.* `DutyEligibility.CheckAsync`: a duty whose matrix has rows is
+answered by the matrix; a duty with none falls back to `MinimumMemberLevelId`. So every group that
+was using a minimum keeps it and nothing was backfilled. Eligibility stays soft — the override is
+still offered and still recorded.
+
+*Defaults, per Ben.* Bottom rung renamed **Associate** (a rung named after a probation period
+reads as a warning rather than a welcome). Equipment split into **Equipment** and **Equipment
+Assist**, because the worked example distinguishes assisting from running and one duty cannot say
+that. The matrix ships filled in: Associate documents and assists, Junior adds evidence
+collection, Investigator runs equipment, and the Lead Investigator duty is open to the top two
+rungs. `NewOrganizationDefaults.AddAll` now seeds all three together, and
+`OrganizationSecurityService` was switched to that one call — it had already drifted from the
+other creation doors once, and the matrix would have been the second thing it silently lacked.
+
+*The three questions the item reserved, answered:*
+1. **Matrix versus item 156's roles.** A capability only ever widens, for one investigation, and
+   is asked alongside `CanManageAsync` rather than instead of it. Either says yes and the answer is
+   yes. A duty can open a door the roles left shut for one night; it can never close one.
+2. **Only capabilities with a door.** `PointOfContact` (shown on the roster) and `MayAssignDuties`
+   (enforced at assign/unassign) ship. Invite and reschedule are in Ben's example but have no
+   control anywhere in the product, and shipping switches that change nothing is the write-only
+   pattern this backlog keeps having to close. They go in with their doors.
+3. **No new Case Lead position.** The investigation-administrator bundle is capabilities on the
+   existing Lead Investigator duty; the case manager stays the case-level lead the client sees.
+   **This is the call worth Ben's review** — a distinct Case Lead is a seeded duty and a capability
+   away if he wants one.
+
+*Tests:* `DutyEligibilityMatrixTests` (15, including the worked example as a theory and the
+capability-scope test that stops a capability becoming standing rank); the group-purge behaviour
+test gained a matrix cell so the sweep order is proven against real foreign keys; two
+discrimination runs confirmed. Playwright renders the grid without saving. Suite 4,132/0. Help:
+`organization-administration.md` § Who may hold which duty.
 
 ## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)
 

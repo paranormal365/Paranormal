@@ -152,6 +152,9 @@ else
     <OrgMemberLevelsManager OrgId="@OrgId" />
 
     <OrgInvestigationDutiesManager OrgId="@OrgId" />
+
+    @* Directly under the ladder and the duties, because it is about both (item 160). *@
+    <OrgDutyEligibilityMatrixManager OrgId="@OrgId" />
 }
 
 @code {

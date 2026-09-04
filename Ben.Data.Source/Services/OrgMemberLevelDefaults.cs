@@ -19,10 +19,18 @@ namespace Ben.Data.Source.Services;
 /// </remarks>
 public static class OrgMemberLevelDefaults
 {
-    /// <summary>Lowest first: SortOrder is what eligibility comparisons (item 158) will read.</summary>
+    /// <summary>
+    /// Lowest first: SortOrder is what eligibility comparisons (item 158) read, and what the
+    /// title-by-duty matrix (item 160) is ordered by.
+    /// </summary>
+    /// <remarks>
+    /// "Associate" rather than "Probationary" (Ben, 2026-09-04). The bottom rung is where somebody
+    /// new stands, and naming it after a probation period reads as a warning rather than a
+    /// welcome. Groups created before this keep the name they have; renaming a rung is theirs to do.
+    /// </remarks>
     private static readonly string[] _ladder =
     [
-        "Probationary",
+        "Associate",
         "Junior Investigator",
         "Investigator",
         "Senior Investigator",
@@ -30,15 +38,19 @@ public static class OrgMemberLevelDefaults
     ];
 
     /// <summary>
-    /// Stages the default ladder for <paramref name="organizationId"/> on the given context.
-    /// Does not save — the caller's SaveChangesAsync commits it with the organization itself.
+    /// Stages the default ladder for <paramref name="organizationId"/> and hands the rungs back,
+    /// so the duty matrix (item 160) can be seeded against them. Does not save — the caller's
+    /// SaveChangesAsync commits it with the organization itself.
     /// </summary>
-    public static void AddDefaultLevels(BenDataContext db, Guid organizationId, Guid createdByAppUserId)
+    public static List<OrganizationMemberLevel> AddDefaultLevels(
+        BenDataContext db, Guid organizationId, Guid createdByAppUserId)
     {
         var now = DateTime.UtcNow;
+        var added = new List<OrganizationMemberLevel>(_ladder.Length);
+
         for (var i = 0; i < _ladder.Length; i++)
         {
-            db.OrganizationMemberLevels.Add(new OrganizationMemberLevel
+            var level = new OrganizationMemberLevel
             {
                 OrganizationId = organizationId,
                 Name = _ladder[i],
@@ -46,7 +58,11 @@ public static class OrgMemberLevelDefaults
                 IsActive = true,
                 DateCreated = now,
                 CreatedByAppUserId = createdByAppUserId,
-            });
+            };
+            db.OrganizationMemberLevels.Add(level);
+            added.Add(level);
         }
+
+        return added;
     }
 }

@@ -53,7 +53,49 @@ public record InvestigationDutyRecord
     public bool IsSingleHolder { get; init; }
     public Guid? MinimumMemberLevelId { get; init; }
     public string? MinimumMemberLevelName { get; init; }
+
+    /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
+    public Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities { get; init; }
 }
+
+/// <summary>
+/// The whole title-by-duty eligibility matrix for one group (item 160): the rungs across the top,
+/// the duties down the side, and which cells are ticked.
+/// </summary>
+/// <remarks>
+/// Sent as one object because it is edited as one grid. A duty whose <c>OpenToTitleIds</c> is
+/// empty has never been set and is still answered by its minimum title — the screen says so rather
+/// than showing an empty row that looks like "nobody may hold this".
+/// </remarks>
+public sealed record DutyEligibilityMatrix(
+    IReadOnlyList<DutyMatrixTitle> Titles,
+    IReadOnlyList<DutyMatrixRow> Duties);
+
+/// <summary>One rung of the ladder, lowest first.</summary>
+public sealed record DutyMatrixTitle(Guid Id, string Name, int SortOrder);
+
+/// <summary>One duty and the titles it is open to.</summary>
+public sealed record DutyMatrixRow(
+    Guid Id,
+    string Name,
+    int SortOrder,
+    bool IsSingleHolder,
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities,
+    IReadOnlyList<Guid> OpenToTitleIds,
+    Guid? MinimumMemberLevelId,
+    string? MinimumMemberLevelName);
+
+/// <summary>
+/// Sets one duty's row of the matrix: the whole set of titles it is open to, and what it confers.
+/// </summary>
+/// <remarks>
+/// A set rather than a delta, for the reason the site roles screen gives: what is ticked when the
+/// grid is saved is what the group ends up with, and a delta would need the screen and the server
+/// to agree about a starting point they cannot both see.
+/// </remarks>
+public sealed record SetDutyEligibilityRequest(
+    IReadOnlyList<Guid> TitleIds,
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities);
 
 /// <summary>Create/update body for an investigation duty.</summary>
 public sealed record UpsertInvestigationDutyRequest(

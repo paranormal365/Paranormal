@@ -106,6 +106,21 @@ public interface IBenPlacesClient
     Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility, CancellationToken token = default);
     Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default);
     Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The whole title-by-duty matrix for this group (item 160). Any member may read it — knowing
+    /// what a title opens up is how somebody knows what to work towards.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Sets one duty's row: the whole set of titles it is open to, and what it confers. Group
+    /// administrators only. Returns the matrix as it now stands.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
     Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default);

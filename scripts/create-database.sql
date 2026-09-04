@@ -13125,3 +13125,77 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    ALTER TABLE [InvestigationDuties] ADD [Capabilities] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    CREATE TABLE [InvestigationDutyEligibilities] (
+        [Id] uniqueidentifier NOT NULL,
+        [InvestigationDutyId] uniqueidentifier NOT NULL,
+        [OrganizationMemberLevelId] uniqueidentifier NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_InvestigationDutyEligibilities] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_InvestigationDutyEligibilities_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_InvestigationDutyEligibilities_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_InvestigationDutyEligibilities_InvestigationDuties_InvestigationDutyId] FOREIGN KEY ([InvestigationDutyId]) REFERENCES [InvestigationDuties] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_InvestigationDutyEligibilities_OrganizationMemberLevels_OrganizationMemberLevelId] FOREIGN KEY ([OrganizationMemberLevelId]) REFERENCES [OrganizationMemberLevels] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    CREATE INDEX [IX_InvestigationDutyEligibilities_CreatedByAppUserId] ON [InvestigationDutyEligibilities] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_InvestigationDutyEligibilities_InvestigationDutyId_OrganizationMemberLevelId] ON [InvestigationDutyEligibilities] ([InvestigationDutyId], [OrganizationMemberLevelId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    CREATE INDEX [IX_InvestigationDutyEligibilities_OrganizationMemberLevelId] ON [InvestigationDutyEligibilities] ([OrganizationMemberLevelId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    CREATE INDEX [IX_InvestigationDutyEligibilities_UpdatedByAppUserId] ON [InvestigationDutyEligibilities] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904175404_AddInvestigationDutyEligibilityMatrix'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260904175404_AddInvestigationDutyEligibilityMatrix', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

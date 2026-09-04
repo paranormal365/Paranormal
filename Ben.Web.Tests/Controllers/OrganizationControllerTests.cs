@@ -767,7 +767,16 @@ public class OrganizationControllerTests
         Assert.Equal(5, ladderCount);
 
         var dutyCount = await db.InvestigationDuties.CountAsync(d => d.OrganizationId == created.Id);
-        Assert.Equal(4, dutyCount);
+        Assert.Equal(5, dutyCount);
+
+        // Item 160: a new group starts with a filled-in matrix, not an empty grid. Asserted here
+        // rather than only in its own tests because this is the door that has to remember to seed
+        // it — the ladder and the duties are useless to each other without it.
+        var dutyIds = await db.InvestigationDuties
+            .Where(d => d.OrganizationId == created.Id).Select(d => d.Id).ToListAsync();
+        var cells = await db.InvestigationDutyEligibilities
+            .CountAsync(e => dutyIds.Contains(e.InvestigationDutyId));
+        Assert.True(cells > 0, "A new group should start with a title-by-duty matrix.");
 
         var roleCount = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == created.Id);
         Assert.Equal(Ben.Data.Source.Services.OrgRoleDefaults.Defaults.Count, roleCount);

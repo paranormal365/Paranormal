@@ -33,6 +33,20 @@ namespace Ben.Data.Source.Entities
         /// assignment below it needs an explicit override, never silently blocks.</summary>
         public Guid? MinimumMemberLevelId { get; set; }
 
+        /// <summary>
+        /// What holding this duty lets somebody do on the visit it was assigned for (item 160).
+        /// Scoped to that visit and gone when the assignment is — duties still grant nothing
+        /// standing.
+        /// </summary>
+        public Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities { get; set; }
+
+        /// <summary>
+        /// Which titles may hold this duty (item 160). Empty means the matrix was never set for
+        /// this duty, and <see cref="MinimumMemberLevelId"/> answers instead.
+        /// </summary>
+        public virtual ICollection<InvestigationDutyEligibility> Eligibility { get; set; }
+            = new List<InvestigationDutyEligibility>();
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

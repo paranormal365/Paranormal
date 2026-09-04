@@ -114,4 +114,36 @@ public class InvestigationDutyAndContactTests : BenTestBase
                 panel.GetByText("case manager", new() { Exact = true }));
         }
     }
+
+    /// <summary>
+    /// Item 160: the title-by-duty matrix on the group's settings, under the ladder and the duty
+    /// list. Read-only here — this suite runs against a shared database and saving a row would
+    /// change what a real group's duties ask for. The saving itself is covered by
+    /// <c>DutyEligibilityMatrixTests</c>.
+    /// </summary>
+    [Test]
+    public async Task The_duty_matrix_renders_under_the_duties_with_a_column_per_title()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        Assert.That(await OpenOrganizationAsync("Paranormal365"), Is.True);
+        var orgUrl = System.Text.RegularExpressions.Regex.Match(Page.Url, @"/organizations/[0-9a-f-]{36}").Value;
+
+        await Page.GotoAsync($"{BaseUrl}{orgUrl}?tab=settings");
+        await WaitUntilLoadedAsync();
+
+        await Expect(Main.GetByText("Who may hold which duty")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var matrix = Main.Locator("[data-testid='duty-matrix']");
+        var empty  = Main.Locator("[data-testid='matrix-empty']");
+        // A group with no ladder or no duties says so rather than drawing an empty grid; both are
+        // real states of this screen and neither is a failure.
+        await Expect(matrix.Or(empty).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        if (await matrix.CountAsync() == 0) Assert.Ignore("This group has no ladder or no duties yet.");
+
+        // A row per duty, and the capability columns that say what holding one does on the night.
+        Assert.That(await Main.Locator("[data-testid='matrix-row']").CountAsync(), Is.GreaterThan(0));
+        await Expect(Main.GetByText("point of contact").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Main.GetByText("hands out duties").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
 }
