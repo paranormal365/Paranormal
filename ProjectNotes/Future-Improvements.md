@@ -10859,3 +10859,29 @@ sweep. Help: `site-administration.md` § Site roles.
 **Left as is:** the New User form's SuperAdmin checkbox — still creation-only, still one role;
 the tab covers the rest and a second path to the same rows is a second thing to keep right.
 
+## 217. Refused uploads go to a person — unless the person is spamming (BUILT 2026-09-04)
+
+Ben, 2026-09-04, after asking whether the NSFW screener only checks for nudity ("the site is
+about ghost hunting... it should allow scary stuff"): *"Before it denies it, can it just submit it
+to admin, superadmin or moderator for approval instead of outright denial? ... Unless the person
+is spamming it."*
+
+**Already true, and worth writing down:** nothing was ever denied outright. Both of the
+screener's upper bands set `Held`, the Held pile on Feed Media, where Approve publishes; the post
+is always created and the author only told it is being checked. The model is
+`Falconsai/nsfw_image_detection`, two classes, trained on pornography — violence, gore and horror
+are not things it knows. Under automatic screening the page's default "Waiting" pile is nearly
+empty and the Held pile is where the work is; the help now says so.
+
+**Built — the spam exception.** `OrgMessage.MediaScreenerScore` stores the classifier's number
+(migration `AddOrgMessageScreenerScore`; `FeedMediaVerdict.Score`; set on create and by the
+pending sweep). `FeedMediaAbuse`: three posts by one author in 24 hours scored ≥ 0.85 *and still
+Held* pause that author's media uploads, checked before ingest so a paused account cannot fill
+the disk; text still posts; the message names no check. A moderator approving one of the three
+lifts it (the rule reads the decided state), borderline never counts, and nothing is written to
+the account — the window ends on its own. The queue shows "Uploads paused — N refusals today".
+
+Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Playwright — the
+e2e stack has no model and no fixture the classifier would refuse. Help:
+`moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
+

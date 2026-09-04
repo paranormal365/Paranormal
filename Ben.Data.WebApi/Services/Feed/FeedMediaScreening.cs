@@ -10,7 +10,12 @@ namespace Ben.Data.WebApi.Services.Feed;
 /// Shown to moderators, never to the poster — a person told exactly which classifier tripped is a
 /// person told exactly how to dress the next upload.
 /// </param>
-public readonly record struct FeedMediaVerdict(FeedMediaReviewState State, string? Reason);
+/// <param name="Score">
+/// The classifier's NSFW probability, 0–1, when a classifier decided; null when a person will,
+/// or when the screener has no number to give. Stored on the post so the spam rule (item 217)
+/// can count confident refusals per author without parsing the note.
+/// </param>
+public readonly record struct FeedMediaVerdict(FeedMediaReviewState State, string? Reason, double? Score = null);
 
 /// <summary>
 /// Decides whether a photo or video posted to the feed may be shown (item 186 F5).
