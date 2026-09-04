@@ -4,10 +4,9 @@ Everything needed to build, upload and submit **1.0.2**, and every answer App Re
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
 
-**State on 2026-09-04:** ready, not sent. Ben: *"I am going to wait until we finish everything to
-try to get the submission done."* Items 214 (recaptured screenshots) and 215 (delayed session
-start) land first. Nothing below needs redoing when they do, except replacing the screenshot
-files in place and re-reading §5.
+**State on 2026-09-04 (end of day):** ready, not sent. Ben: *"I am going to wait until we finish
+everything to try to get the submission done."* Items 214 (screenshots and previews) and 215
+(delayed session start) have both landed; §5 describes the final set.
 
 Bundle id `com.ishaunted.ios` · `MARKETING_VERSION` **1.0.2** · `CURRENT_PROJECT_VERSION` **2** ·
 iPhone and iPad · iOS 18.0 minimum. Both numbers are set in `IsHaunted.xcodeproj` and were proven
@@ -145,17 +144,23 @@ therefore a new build number.
 
 ## 5. Screenshots and previews
 
-`Ben.iOS/screenshots-1.0.2/` — see its README. **Today it holds byte-identical copies of the 1.0.0
-set**, all dark mode, at the required sizes. `04-field-kit` no longer matches the current screen
-(trimmer, archive verdict) and the tab bar is now adaptive. **Item 214 recaptures the set**; replace
-the files in place and keep the names. Do not upload the 1.0.0 copies as final if 214 has run.
+`Ben.iOS/screenshots-1.0.2/` — see its README. Captured 2026-09-04 (item 214), **dark mode**, at the
+required sizes. Ten screenshots per device: five new Field Kit frames driven through a real
+scripted night (base level set, the needle swung to ~+60 mG, sentry armed, marks, the review, the
+trimmer), the Field Kit home with sessions in it, and the four unchanged 1.0.0 frames for the feed,
+cases, investigations and events. Two new 28 s previews, from Start onward, video only.
 
-| Slot in App Store Connect | File |
+Upload order suggestion — lead with the Field Kit, since it is the reason the app exists:
+
+| Slot in App Store Connect | Files, in order |
 |---|---|
-| iPhone 6.7"/6.5" display | `iphone-6.5-dark/01…05.png` (1242×2688) |
-| iPad Pro 13" display | `ipad-13-dark/01…05.png` (2064×2752) |
-| App Preview, iPhone | `app-preview/fieldkit-preview-886x1920.mp4` |
-| App Preview, iPad | `app-preview/fieldkit-preview-ipad-1200x1600.mp4` |
+| iPhone 6.7"/6.5" display | `iphone-6.5-dark/` 11, 13, 14, 12, 10, 04, 01, 03, 02, 05 (1242×2688) |
+| iPad Pro 13" display | `ipad-13-dark/` same order (2064×2752) |
+| App Preview, iPhone | `app-preview/fieldkit-preview-886x1920.mp4` (28 s) |
+| App Preview, iPad | `app-preview/fieldkit-preview-ipad-1200x1600.mp4` (28 s) |
+
+The previews have no audio track. App Store Connect accepts silent previews; if it objects at
+upload, the README says how a silent track would be added.
 
 ---
 
@@ -237,9 +242,9 @@ they are the complaint), the demo account, the association file, the App ID capa
 - [x] `ITSAppUsesNonExemptEncryption = false`
 - [x] Usage strings for every permission the app asks for (eight)
 - [x] Associated-domains entitlement in `Support/IsHaunted.entitlements`
-- [x] `screenshots-1.0.2/` exists at the right sizes, dark mode
-- [ ] **Item 214** — recapture the screenshots with real demo records (replaces the 1.0.0 copies)
-- [ ] **Item 215** — delayed session start, if Ben wants it in this version
+- [x] `screenshots-1.0.2/` — ten per device, dark, right sizes, driven through a real night (item 214)
+- [x] Two new 28 s previews at Apple's sizes, from Start onward (item 214)
+- [x] **Item 215** — delayed session start, in this build
 - [ ] Ben's decision on the two paid-plan sentences (§4)
 - [ ] Associated Domains capability enabled on the App ID (§6 step 2)
 - [ ] Association file live on ishaunted.com (§6 step 3)

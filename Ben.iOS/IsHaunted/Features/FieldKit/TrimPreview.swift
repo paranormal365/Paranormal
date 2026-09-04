@@ -41,7 +41,12 @@ struct TrimPreview: View {
                     replay.pause()
                     replay.seek(to: moment)
                 }
-                .frame(height: 90)
+                // Tall enough for its own axis titles, and clipped: at 90 pt the chart drew its
+                // "mG from base" title over the readouts above it and its time axis under the
+                // Play button below — the App Store capture on 2026-09-04 is what showed it.
+                .frame(height: 170)
+                .padding(.vertical, 6)
+                .clipped()
             }
 
             HStack(spacing: 16) {

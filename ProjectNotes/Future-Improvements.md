@@ -10779,7 +10779,7 @@ Guideline 3.1.1 risk in the build and is flagged for Ben's decision.
 Ben, 2026-09-04: *"I am going to wait until we finish everything to try to get the submission
 done."* So this is ready, not sent.
 
-## 214. Demo records for the simulator, so the screenshots have something to show (Ben, 2026-09-04)
+## 214. Demo records for the simulator, so the screenshots have something to show (BUILT 2026-09-04)
 
 Screenshots taken against an empty simulator show empty screens. Seed records that exercise the
 **whole** Field Kit: **dark mode**, a **base level actually set**, and a gauge that visibly
@@ -10787,6 +10787,23 @@ Screenshots taken against an empty simulator show empty screens. Seed records th
 missing is a session worth photographing and the app being in the state a real night looks like.
 
 **Size:** medium. **Blocks:** item 213's screenshots.
+
+### Built 2026-09-04
+
+`FieldKitScreenshotTests` drives a real scripted night — room named, **base level set while
+pending**, Start, sentry armed, the needle at ~+60 mG *over report level*, a mark, the review, the
+trimmer — and attaches five Field Kit frames plus the home list; captured **dark** on the iPhone 17
+Pro Max (scaled to 1242×2688) and iPad Pro 13-inch (2064×2752 native). The feed/cases/
+investigations/events frames are carried from 1.0.0 unchanged: recapturing them needs a seeded
+persona's password, which lives only in Ben's environment. Two new 28 s previews from Start onward,
+recorded with `simctl io recordVideo` and cut with a small AVFoundation tool
+(`screenshots-1.0.2/tools/preview.swift`) because the Mac has no ffmpeg.
+
+The capture exposed two real layout bugs, both fixed and re-verified: the trimmer preview's chart
+drew over its readouts and Play button at 90 pt; and the iPad's live-session clock wrapped
+"10:03:01 A / M". Harness lessons: query containers by any element type, and relaunch after
+`-autoSignIn` lands or the Send screen photographs "Your session ended".
+
 
 ## 215. A session should not start recording the moment it is created (BUILT 2026-09-04)
 
