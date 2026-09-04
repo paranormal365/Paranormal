@@ -169,11 +169,53 @@
                             break;
 
                         case 2:
+                            @* Client work first, because it is the switch that decides whether the
+                               group exists as far as a client is concerned. Before this step asked
+                               about it, a group finished the wizard invisible to every client and
+                               nothing said so — the setting lived on a page the group's own hub
+                               did not link to. *@
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="newgroup-clients"
+                                       checked="@_takesClients"
+                                       @onchange="@(e => { _takesClients = e.Value is true; _clientsChosen = true; })" />
+                                <label class="form-check-label" for="newgroup-clients">
+                                    Take cases from clients
+                                    <div class="form-text">
+                                        People asking for an investigation can find you and send you their request.
+                                        Leave it off if you only work your own cases.
+                                    </div>
+                                </label>
+                            </div>
+
+                            @if (_takesClients)
+                            {
+                                <div class="ms-4 mb-3">
+                                    <label class="form-label" for="newgroup-area">Where you work</label>
+                                    <div class="input-group" style="max-width:420px;">
+                                        <input id="newgroup-area" type="text" class="form-control" maxlength="120"
+                                               placeholder="Nashville, TN" @bind="_serviceArea" />
+                                        <span class="input-group-text">within</span>
+                                        <input id="newgroup-radius" type="number" class="form-control" style="max-width:6rem;"
+                                               min="1" max="500" @bind="_radiusMiles" />
+                                        <span class="input-group-text">miles</span>
+                                    </div>
+                                    <div class="form-text">
+                                        A town or city, not your street — this is how far out a client
+                                        will see you, and clients are never shown the centre point.
+                                        You can change it whenever you like.
+                                    </div>
+                                </div>
+                            }
+
                             <div class="form-check mb-3">
                                 <input class="form-check-input" type="checkbox" id="newgroup-applications" @bind="_acceptingApplications" />
                                 <label class="form-check-label" for="newgroup-applications">
                                     Accept membership applications
-                                    <div class="form-text">People can apply to join from your public page. You review every application.</div>
+                                    <div class="form-text">
+                                        People can apply to join from your public page. You review every
+                                        application. A brand-new group is on the free lane, where the group
+                                        is just you — so this takes effect once you have a plan with members.
+                                    </div>
                                 </label>
                             </div>
                             <div class="mb-2">
@@ -192,8 +234,26 @@
                                 <dd class="col-sm-8"><code>/o/@_urlName</code></dd>
                                 <dt class="col-sm-4 text-secondary">Your base</dt>
                                 <dd class="col-sm-8">@(HasAddress ? $"{_street}, {_city}, {_state} {_zip} (kept private)" : "Not given — add it later")</dd>
+                                <dt class="col-sm-4 text-secondary">Client cases</dt>
+                                <dd class="col-sm-8">
+                                    @if (!_takesClients)
+                                    {
+                                        <text>Not taking them yet</text>
+                                    }
+                                    else if (string.IsNullOrWhiteSpace(_serviceArea))
+                                    {
+                                        <text>Taking them — add where you work so clients can find you</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Taking them, within @_radiusMiles miles of @_serviceArea</text>
+                                    }
+                                </dd>
                                 <dt class="col-sm-4 text-secondary">Applications</dt>
-                                <dd class="col-sm-8">@(_acceptingApplications ? "Open" : "Closed")</dd>
+                                @* Every new group starts on the free lane, and the server refuses to open
+                                   applications there — so "Open" was a promise this screen could never
+                                   keep. Says what will actually happen instead. *@
+                                <dd class="col-sm-8">@(_acceptingApplications ? "Open once your plan includes members" : "Closed")</dd>
                                 <dt class="col-sm-4 text-secondary">Contact email</dt>
                                 <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(_publicEmail) ? "None" : _publicEmail)</dd>
                             </dl>
@@ -224,6 +284,14 @@
     private string _zip = "";
     private bool   _acceptingApplications = true;
     private string _publicEmail = "";
+
+    // Client work (item: the client funnel). On by default for an investigation group, because
+    // taking cases is what one is for; off for a tour or an events provider, whose clients are
+    // ticket buyers rather than households.
+    private bool   _takesClients = true;
+    private bool   _clientsChosen;
+    private string _serviceArea = "";
+    private int    _radiusMiles = 30;
 
     private bool _busy;
     private string? _error;
@@ -273,12 +341,23 @@
         // Optional as a whole, but a half-address helps nobody: all-or-nothing.
         var parts = new[] { _street, _city, _state, _zip };
         var filled = parts.Count(p => !string.IsNullOrWhiteSpace(p));
+
+        // Their base is almost always where they work from, so the next step arrives pre-answered
+        // rather than asking the same town twice. Still theirs to change.
+        if (string.IsNullOrWhiteSpace(_serviceArea) && !string.IsNullOrWhiteSpace(_city))
+            _serviceArea = string.IsNullOrWhiteSpace(_state) ? _city.Trim() : $"{_city.Trim()}, {_state.Trim()}";
+
         if (filled is 0 or 4) return Task.FromResult<string?>(null);
         return Task.FromResult<string?>("Either fill in the whole address, or leave all four fields empty to add it later.");
     }
 
     private Task<string?> SettingsGateAsync()
     {
+        if (_takesClients && string.IsNullOrWhiteSpace(_serviceArea))
+            return Task.FromResult<string?>(
+                "Say where you work, so a client can find you — a town or city is enough. "
+              + "Or untick taking client cases for now.");
+
         if (!string.IsNullOrWhiteSpace(_publicEmail) && !_publicEmail.Contains('@'))
             return Task.FromResult<string?>("That contact email doesn't look like an email address.");
         return Task.FromResult<string?>(null);
@@ -321,7 +400,16 @@
     /// <summary>What the founder says they are starting. Drives every default below.</summary>
     private OrganizationKind _kind = OrganizationKind.InvestigationGroup;
 
-    private void SetKind(OrganizationKind kind) => _kind = kind;
+    /// <summary>
+    /// The kind decides whether client work starts on — an investigation group is for taking
+    /// cases, a tour's customers buy tickets. Only until the founder touches the switch: after
+    /// that their answer stands, whatever they pick afterwards.
+    /// </summary>
+    private void SetKind(OrganizationKind kind)
+    {
+        _kind = kind;
+        if (!_clientsChosen) _takesClients = kind == OrganizationKind.InvestigationGroup;
+    }
 
     private async Task CreateAsync()
     {
@@ -352,12 +440,16 @@
             // editable from the hub, so a failed extra must not strand the founder on an error.
             try
             {
-                if (_acceptingApplications || !string.IsNullOrWhiteSpace(_publicEmail))
+                // Two writes, not one, and deliberately in this order. Opening applications on a
+                // brand-new group is REFUSED — the free lane is one person, so the paid gate turns
+                // the whole save away — and when both settings travelled together that refusal
+                // silently took the founder's contact email with it.
+                if (!string.IsNullOrWhiteSpace(_publicEmail))
                 {
                     await AdminClient.UpdateOrganizationAsync(created.OrganizationId,
                         new AdminUpdateOrganizationRequest(name, slug,
-                            IsAcceptingApplications: _acceptingApplications,
-                            PublicEmail: string.IsNullOrWhiteSpace(_publicEmail) ? null : _publicEmail.Trim()));
+                            IsAcceptingApplications: false,
+                            PublicEmail: _publicEmail.Trim()));
                 }
 
                 if (HasAddress)
@@ -377,6 +469,47 @@
                                 IsSearchable: defaults.IsSearchable,
                                 SearchVisibility: defaults.SearchVisibility));
                     }
+                }
+
+                // ── client work ──────────────────────────────────────────────
+                // The whole point of asking on the wizard: a group that says it takes cases is
+                // findable the moment it exists. Acceptance is set first and on its own, so a
+                // town that will not geocode leaves the group accepting rather than silently
+                // invisible — the hub then asks for the missing area.
+                if (_takesClients)
+                {
+                    await AdminClient.UpdateClientAcceptanceAsync(
+                        created.OrganizationId, isAcceptingClients: true, acceptsClientsOutsideRange: false);
+
+                    var where = _serviceArea.Trim();
+                    if (where.Length > 0)
+                    {
+                        var point = await AdminClient.SearchGeocodingAsync(where);
+                        if (point?.Latitude is { } lat && point.Longitude is { } lon)
+                        {
+                            await AdminClient.UpsertOrgAreaOfOperationAsync(created.OrganizationId,
+                                new UpsertAreaOfOperationRequest(
+                                    RadiusMiles: _radiusMiles,
+                                    CenterLatitude: lat,
+                                    CenterLongitude: lon,
+                                    DisplayLabel: $"Within {_radiusMiles} miles of {where}",
+                                    IsAcceptingClients: true,
+                                    AcceptsClientsOutsideRange: false));
+                        }
+                    }
+                }
+
+                // Last, because it is the one write the server is expected to refuse: a brand-new
+                // group is on the free lane, where the paid gate turns away any attempt to open
+                // membership applications. Everything above must already have happened when it
+                // does. Kept rather than dropped so the answer is honoured the day a group can
+                // start life with a plan.
+                if (_acceptingApplications)
+                {
+                    await AdminClient.UpdateOrganizationAsync(created.OrganizationId,
+                        new AdminUpdateOrganizationRequest(name, slug,
+                            IsAcceptingApplications: true,
+                            PublicEmail: string.IsNullOrWhiteSpace(_publicEmail) ? null : _publicEmail.Trim()));
                 }
             }
             catch { /* hub-editable extras; the group is already theirs */ }
