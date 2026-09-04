@@ -251,6 +251,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGua
 // The most destructive operation in the product, and SuperAdmin-only at its controller.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.CasePurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 

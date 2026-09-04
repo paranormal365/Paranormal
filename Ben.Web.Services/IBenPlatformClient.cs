@@ -169,6 +169,22 @@ public interface IBenPlatformClient
         Guid userId, string confirmName, CancellationToken token = default);
 
     /// <summary>
+    /// What deleting a case would destroy, and what it would leave. SuperAdmin; changes nothing.
+    /// </summary>
+    Task<CasePurgePreview?> GetCasePurgePreviewAsync(
+        Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a case and everything that exists only because of it (item 183). Irreversible, and
+    /// the only route to deleting a case anywhere in the product.
+    /// </summary>
+    /// <param name="caseId">The case to delete.</param>
+    /// <param name="confirmTitle">The case's exact title, typed back.</param>
+    /// <param name="token">Cancellation.</param>
+    Task<(CasePurgeResult? Result, string? Error)> PurgeCaseAsync(
+        Guid caseId, string confirmTitle, CancellationToken token = default);
+
+    /// <summary>
     /// What the place's archive says about one of your own field sessions.
     /// </summary>
     /// <remarks>Null when the session is not yours, has no place, or the place is not public.</remarks>

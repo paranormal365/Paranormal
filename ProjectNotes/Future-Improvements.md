@@ -9479,7 +9479,7 @@ PDF regenerated. 3,097 unit tests green.
    this must use data it owns — and while dev and UAT share one database, "owns" is a promise a
    test cannot keep for a case it cannot delete.
 
-## 183. A case can be created but never deleted (found 2026-08-24)
+## 183. A case can be created but never deleted (CLOSED 2026-09-04 — SuperAdmin delete, and the rule stated)
 
 No `DELETE` endpoint for a case exists anywhere: not on `CaseController`, not on
 `AdminCaseController`, not for SuperAdmin. Timeline entries, files, notes and transfers can all be
@@ -9492,6 +9492,46 @@ current state is not a considered rule either; it is an absence. The likely shap
 hard delete for mistakes, an org-level archive/withdraw that hides without destroying, or an
 explicit "this cannot be deleted, close it instead" refusal so the absence is a stated rule rather
 than a missing verb. Ben's call.
+
+**Built 2026-09-04 — the first and third together**, because each alone is half an answer. Closing
+already existed (`CaseStatus.Closed`, reachable in Edit Case) and nothing said it was the answer;
+the SuperAdmin delete did not exist at all.
+
+*The stated rule.* The Edit Case dialog now says, under the status field, that a case is never
+deleted — set it to Closed and it stays as the record of the work — and links to `/contact` for
+the one thing closing cannot fix, a duplicate or a mistake. A rule with no path is worse than no
+rule.
+
+*The delete.* `CasePurge` + `AdminCasePurgeController` (`GET`/`DELETE api/admin/cases/{id}/purge`,
+SuperAdmin) and `/admin/delete-case`, linked from the trash button on All Cases. Preview first,
+in two blocks. **Destroyed:** everything existing only because the case does — timeline (with its
+files and tags), files, notes, messages, research, reports and sections, contacts, votes,
+transfer logs, client access and invites, feed consents, scheduling proposals, and the case's
+investigations with attendees, findings and duty assignments. Files only where they are the
+case's own copy-on-attach copies, one row at a time through `UploadFileRows`. **Kept, unlinked:**
+feed posts, calendar events, video projects, evidence votes, public pages, equipment checkouts.
+**Kept, whole: field sessions** — `InvestigationId` set to null, which is exactly what a personal
+session is, so a recording goes back to the person who made it rather than dying with somebody
+else's case. Notices, not refusals: the client's name, and a public case. No refusal exists —
+deleting a case cannot lock the platform out of anything, unlike the other two purges — so the
+typed title is the guard, checked on the server too.
+
+*Tests.* `CasePurgeCoverageTests` derives the delete order from the model (the test the group
+purge lacked when production refused it twice) and names eleven sets the purge must never touch;
+`AdminCasePurgeControllerTests` covers the preview and the confirmation; Playwright
+`AdminDeleteCaseTests` drives everything up to the button. Three discrimination runs confirmed.
+Suite 4,089/0.
+
+*Known gap, recorded rather than hidden.* The delete path itself has no in-process behaviour test:
+it is built from `ExecuteDeleteAsync`/`ExecuteUpdateAsync` and the InMemory provider implements
+neither (probed). Adding `Microsoft.EntityFrameworkCore.Sqlite` to `Ben.Web.Tests` would fix it
+for all three purges; the restore fails on this machine because the configured local NuGet source
+`/Users/ben/telerik-blazor` does not exist. Worth doing when that source is back.
+
+*Deliberately not built:* a group-level delete for an empty case. It is defensible — a case
+created five minutes ago with nothing in it has no history to destroy — but it is a second
+destructive door on the surface groups use every day, and the `/contact` route covers the same
+need at this scale. Ask for it if the support requests become routine.
 
 ## 184. Private engagements: designation, display-time redaction, plan gates, lapse (Ben, 2026-08-24 — BUILT, Phases A–D shipped)
 
