@@ -50,6 +50,26 @@ Investigator, Investigator, Senior Investigator — already assigned, not an emp
    case-level lead the client sees. **This is the one call worth Ben's review** — if he wants a
    distinct Case Lead, it is a seeded duty and a capability away.
 
+## Advice or rule (Ben, 2026-09-04)
+
+Ben asked whether the matrix should be suggestions or hard limits. It stays **advice with a
+recorded override**, because a hard limit does not stop the junior running the camera when the
+senior calls in sick — it stops the roster from saying so, and the group goes back to organising
+by text message. A permissive record that is true beats a strict one that is quietly false, and
+the override is itself the evidence that somebody is already working above their title.
+
+Two adjustments went in with that answer, both because item 160 changed what an override can cost:
+
+- **An override into a duty that confers a capability takes standing authority** over the group's
+  investigations, not merely the right to manage tonight. Before this, an override handed out a
+  label. Now it can hand out point of contact and the right to hand out the other duties, and the
+  person given that could override somebody else in turn. Whoever runs the visit can still assign
+  such a duty to anybody it is already open to.
+- **`InvestigationDuty.IsEnforced`** — per duty, off by default, ticked as *no exceptions* in the
+  grid. For the minority where the title really is a qualification. Then there is no per-visit
+  exception for anybody, including an owner: the way past is to change the grid, which is
+  deliberate and visible.
+
 ## Tests
 
 `DutyEligibilityMatrixTests` — 15: what a new group starts with; the seeded matrix as a theory
@@ -62,8 +82,14 @@ refused, which is the test that keeps capabilities from becoming standing rank.
 proven against real foreign keys: the cell's key to the ladder is NoAction, and sweeping rungs
 before cells is refused outright.
 
-Discrimination, both confirmed against broken code: making the capability check ignore which
-investigation it is on, and making the resolver ignore the matrix.
+`InvestigationDutyTests` gained five: a duty marked a rule cannot be assigned past even by an
+administrator, one that is only advice still can, an override into a capability-carrying duty is
+refused to the visit's own lead and allowed to an administrator, and the visit lead keeps the
+override for duties that confer nothing.
+
+Discrimination, all four confirmed against broken code: making the capability check ignore which
+investigation it is on, making the resolver ignore the matrix, ignoring the rule flag, and
+dropping the authority check.
 
 Playwright renders the grid and its capability columns without saving a row — shared database.
 
@@ -75,5 +101,5 @@ what "on the night" means.
 
 ## Deployment
 
-Migration `AddInvestigationDutyEligibilityMatrix` must be applied. `scripts/create-database.sql`
-regenerated.
+Migrations `AddInvestigationDutyEligibilityMatrix` and `AddInvestigationDutyIsEnforced` must be
+applied. `scripts/create-database.sql` regenerated.

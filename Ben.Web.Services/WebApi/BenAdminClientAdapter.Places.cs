@@ -177,10 +177,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
         Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
         Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
         CancellationToken token = default)
         => _api.PutAsync<object, Ben.Service.Models.Entities.DutyEligibilityMatrix>(
             $"/api/organizations/{orgId}/investigation-duties/{dutyId}/eligibility",
-            new { TitleIds = titleIds, Capabilities = capabilities }, token);
+            new { TitleIds = titleIds, Capabilities = capabilities, IsEnforced = isEnforced }, token);
 
     // ── Case contacts (item 158) ─────────────────────────────────────────────
 

@@ -463,7 +463,36 @@ public sealed class OrgInvestigationsController : BenControllerBase
         // The matrix if this duty has one, the single minimum if it does not — see DutyEligibility
         // for why both rules live there rather than here.
         var verdict = await DutyEligibility.CheckAsync(db, duty, orgId, attendee.AppUserId, ct);
-        if (!verdict.Eligible && !request.Override) return Conflict(verdict.Refusal);
+        if (!verdict.Eligible)
+        {
+            // A duty the group marked as a RULE has no per-visit exception, for anybody. The way
+            // past it is to change the rule on the settings grid — deliberate and visible — rather
+            // than to wave one night through it (Ben, 2026-09-04).
+            if (duty.IsEnforced)
+            {
+                return Conflict(
+                    $"“{duty.Name}” is a requirement rather than a guide in this group, so it "
+                  + "cannot be assigned past. Change who it is open to under Settings, or pick "
+                  + "somebody who already qualifies.");
+            }
+
+            if (!request.Override) return Conflict(verdict.Refusal);
+
+            // An override into a duty that CONFERS something is a different act from one into a
+            // duty that is only a label: it hands out point-of-contact or the right to hand out
+            // the other duties, and the person given it could then override somebody else. So that
+            // one takes standing authority over the group's investigations, not merely the right
+            // to manage tonight.
+            if (duty.Capabilities != InvestigationDutyCapabilities.None
+                && !User.IsInRole(RoleNames.SuperAdmin)
+                && !await InvestigationAccess.HasOrgAuthorityAsync(db, orgId, userId, ct))
+            {
+                return Conflict(
+                    $"“{duty.Name}” carries authority on the night, so assigning it past the "
+                  + "eligibility rules is an administrator's call. Ask an owner or administrator, "
+                  + "or pick somebody the duty is already open to.");
+            }
+        }
         var overridden = !verdict.Eligible;
 
         if (duty.IsSingleHolder)
