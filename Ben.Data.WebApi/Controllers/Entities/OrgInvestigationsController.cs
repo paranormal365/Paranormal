@@ -442,8 +442,12 @@ public sealed class OrgInvestigationsController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Whoever may manage the visit, or whoever holds a duty on it that confers handing the
+        // others out (item 160). The second is additive: a duty opens a door, never closes one.
         if (!await InvestigationAccess.CanManageAsync(
-                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
             return Forbid();
 
         var attendee = await db.InvestigationAttendees
@@ -456,24 +460,11 @@ public sealed class OrgInvestigationsController : BenControllerBase
             .FirstOrDefaultAsync(d => d.Id == dutyId && d.OrganizationId == orgId && d.IsActive, ct);
         if (duty is null) return NotFound();
 
-        var overridden = false;
-        if (duty.MinimumMemberLevel is { } minimum)
-        {
-            var holderLevel = await db.OrganizationUserMemberships.AsNoTracking()
-                .Where(m => m.OrganizationId == orgId && m.AppUserId == attendee.AppUserId && m.IsActive)
-                .Select(m => m.MemberLevel)
-                .FirstOrDefaultAsync(ct);
-
-            var belowMinimum = holderLevel is null || holderLevel.SortOrder < minimum.SortOrder;
-            if (belowMinimum && !request.Override)
-            {
-                return Conflict(
-                    $"This duty asks for {minimum.Name} or above; "
-                    + $"{(holderLevel is null ? "this member has no title yet" : $"this member is {holderLevel.Name}")}. "
-                    + "Assign anyway to confirm the exception.");
-            }
-            overridden = belowMinimum;
-        }
+        // The matrix if this duty has one, the single minimum if it does not — see DutyEligibility
+        // for why both rules live there rather than here.
+        var verdict = await DutyEligibility.CheckAsync(db, duty, orgId, attendee.AppUserId, ct);
+        if (!verdict.Eligible && !request.Override) return Conflict(verdict.Refusal);
+        var overridden = !verdict.Eligible;
 
         if (duty.IsSingleHolder)
         {
@@ -520,8 +511,11 @@ public sealed class OrgInvestigationsController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Same gate as handing one out: taking one back is the other half of the same job.
         if (!await InvestigationAccess.CanManageAsync(
-                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
             return Forbid();
 
         var assignment = await db.InvestigationDutyAssignments

@@ -95,6 +95,19 @@ public sealed class OrganizationPurgeBehaviourTests
             Id = dutyId, OrganizationId = OrgId, Name = "Camera",
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
         });
+        // A title, and a cell of the duty matrix pointing at it (item 160). The cell's key to the
+        // ladder is NoAction, so a purge that removes rungs before cells is refused outright.
+        var levelId = Guid.NewGuid();
+        db.OrganizationMemberLevels.Add(new OrganizationMemberLevel
+        {
+            Id = levelId, OrganizationId = OrgId, Name = "Investigator", SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+        });
+        db.InvestigationDutyEligibilities.Add(new InvestigationDutyEligibility
+        {
+            Id = Guid.NewGuid(), InvestigationDutyId = dutyId, OrganizationMemberLevelId = levelId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+        });
         // The exact row production was refused on.
         db.InvestigationDutyAssignments.Add(new InvestigationDutyAssignment
         {
@@ -125,6 +138,8 @@ public sealed class OrganizationPurgeBehaviourTests
         Assert.Empty(await db.Investigations.ToListAsync());
         Assert.Empty(await db.InvestigationAttendees.ToListAsync());
         Assert.Empty(await db.InvestigationDutyAssignments.ToListAsync());
+        Assert.Empty(await db.InvestigationDutyEligibilities.ToListAsync());
+        Assert.Empty(await db.OrganizationMemberLevels.ToListAsync());
         Assert.Empty(await db.OrganizationUserMemberships.ToListAsync());
 
         // The people are not the group's property and stay.

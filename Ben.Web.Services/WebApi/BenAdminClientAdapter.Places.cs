@@ -170,6 +170,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/investigation-duties/{dutyId}", token);
 
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.Entities.DutyEligibilityMatrix>($"/api/organizations/{orgId}/investigation-duties/matrix", token);
+
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        CancellationToken token = default)
+        => _api.PutAsync<object, Ben.Service.Models.Entities.DutyEligibilityMatrix>(
+            $"/api/organizations/{orgId}/investigation-duties/{dutyId}/eligibility",
+            new { TitleIds = titleIds, Capabilities = capabilities }, token);
+
     // ── Case contacts (item 158) ─────────────────────────────────────────────
 
     public Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(

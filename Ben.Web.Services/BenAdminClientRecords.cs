@@ -1112,7 +1112,15 @@ public sealed record InvestigationDutyAssignmentInfo(
 /// <summary>One of a group's investigation duties, as managed in Settings.</summary>
 public sealed record OrgInvestigationDutyItem(
     Guid Id, string Name, int SortOrder, bool IsActive, bool IsSingleHolder,
-    Guid? MinimumMemberLevelId, string? MinimumMemberLevelName);
+    Guid? MinimumMemberLevelId, string? MinimumMemberLevelName,
+    /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities
+        = Ben.Data.Common.Enums.InvestigationDutyCapabilities.None);
+
+// The matrix records themselves are NOT restated here: this project already takes
+// InvestigationDutyBoard and its friends straight from Ben.Service.Models.Entities, and a second
+// DutyEligibilityMatrix in this namespace made every Razor file that sees both an ambiguous
+// reference. Shared shapes live there; only the ones this project owns live here.
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,

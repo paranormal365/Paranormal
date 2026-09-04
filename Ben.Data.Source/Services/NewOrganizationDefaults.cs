@@ -35,8 +35,14 @@ public static class NewOrganizationDefaults
     public static void AddAll(BenDataContext db, Guid organizationId, Guid createdByAppUserId)
     {
         OrgCalendarDefaults.AddDefaultEventTypes(db, organizationId, createdByAppUserId);
-        OrgMemberLevelDefaults.AddDefaultLevels(db, organizationId, createdByAppUserId);
-        OrgInvestigationDutyDefaults.AddDefaultDuties(db, organizationId, createdByAppUserId);
+
+        // The ladder and the duties are seeded together because the third thing — which title may
+        // hold which duty (item 160) — is about both. A group that starts with an empty matrix is
+        // a group whose matrix nobody ever fills in.
+        var levels = OrgMemberLevelDefaults.AddDefaultLevels(db, organizationId, createdByAppUserId);
+        var duties = OrgInvestigationDutyDefaults.AddDefaultDuties(db, organizationId, createdByAppUserId);
+        OrgInvestigationDutyDefaults.AddDefaultEligibility(db, duties, levels, createdByAppUserId);
+
         OrgRoleDefaults.AddDefaultRoles(db, organizationId, createdByAppUserId);
     }
 }
