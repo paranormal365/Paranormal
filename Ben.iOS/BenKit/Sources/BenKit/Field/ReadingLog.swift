@@ -104,6 +104,32 @@ public actor ReadingLog {
         return data.split(separator: UInt8(0x0A), omittingEmptySubsequences: true).map { Data($0) }
     }
 
+    /// The raw lines whose reading falls inside `window`, still verbatim.
+    ///
+    /// **Only the timestamp is decoded.** The whole point of the raw-line format is that export
+    /// splices the bytes the device wrote, without a decode/re-encode round trip that could
+    /// change a number's spelling — and the digest stamping downstream matches on the raw text.
+    /// So each line is probed for its `at` alone and then kept or dropped intact.
+    ///
+    /// A line whose timestamp will not decode is KEPT, not dropped. One unreadable record must
+    /// not cost a reviewer the reading it sat next to, and the failure direction for a trim is
+    /// always to send more rather than less.
+    public func rawLines(within window: SessionWindow?) throws -> [Data] {
+        let lines = try rawLines()
+        guard let window else { return lines }
+
+        return lines.filter { line in
+            guard let stamp = try? DeviceDataJSON.decoder.decode(ReadingTimestamp.self, from: line)
+            else { return true }
+            return window.contains(stamp.at)
+        }
+    }
+
+    /// Just enough of a reading to place it in time.
+    private struct ReadingTimestamp: Decodable {
+        let at: Date
+    }
+
     public func lineCount() throws -> Int {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return 0 }
         let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)

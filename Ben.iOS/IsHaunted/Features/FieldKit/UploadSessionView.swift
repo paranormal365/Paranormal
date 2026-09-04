@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import BenKit
 
 /// Sending a session to the group, once there is signal to do it with.
@@ -24,6 +25,14 @@ struct UploadSessionView: View {
     @State private var offeringCleanup = false
     @State private var offeringArchive = false
 
+    /// The in and out points (item 210). Nil until the session's span is known.
+    @State private var trim: SessionTrimRange?
+    /// How long each recording runs, read once with AVFoundation. A recording whose length is
+    /// unknown is sent whole rather than guessed at — see SessionTrimPlan.
+    @State private var durations: [String: TimeInterval] = [:]
+    @State private var readingTimes: [Date] = []
+    @State private var markerTimes: [Date] = []
+
     private enum FileState: Equatable {
         case waiting, sending, sent, failed(String)
     }
@@ -43,6 +52,7 @@ struct UploadSessionView: View {
                     }
                 } else {
                     destinationSection
+                    trimSection
                     filesSection
                     sendSection
                     archiveSection
@@ -87,6 +97,89 @@ struct UploadSessionView: View {
             Text(chosenInvestigationId == nil
                  ? "Kept against your account only. You can send it to an investigation later."
                  : "The group working this investigation will be able to see it.")
+        }
+    }
+
+    /// Choosing the stretch worth sending (item 210).
+    ///
+    /// **Before the upload, never after.** Ben chose this on 2026-09-04 over trimming on the
+    /// server, and the sentence at the bottom of the section is the reason: the full recording
+    /// stays on this phone as a matter of fact, because the rest of it is simply never sent.
+    /// Nothing on the server is ever destroyed and there is nothing to undo.
+    @ViewBuilder
+    private var trimSection: some View {
+        if let plan = currentPlan {
+            Section {
+                SessionTrimSlider(range: Binding(
+                    get: { trim ?? SessionTrimRange(startedAt: summary?.startedAt ?? .now,
+                                                    endedAt: summary?.endedAt,
+                                                    lastReadingAt: readingTimes.last) },
+                    set: { trim = $0 }))
+                .disabled(busy)
+
+                if !plan.isWholeSession {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("\(plan.readingCount) reading\(plan.readingCount == 1 ? "" : "s")"
+                            + " · \(plan.markerCount) mark\(plan.markerCount == 1 ? "" : "s")",
+                              systemImage: "waveform.path.ecg")
+                            .font(.caption)
+
+                        // Said file by file, because "3 recordings" hides the one that is about to
+                        // be left behind. Somebody deciding needs to see which.
+                        ForEach(plan.media, id: \.media.relativePath) { decision in
+                            Label(Self.describe(decision), systemImage: Self.icon(decision))
+                                .font(.caption2)
+                                .foregroundStyle(decision.outcome == .leftOut ? Theme.fog : Theme.bone)
+                        }
+                    }
+                    .accessibilityIdentifier("trim-summary")
+
+                    Button("Send the whole session") { trim?.reset() }
+                        .font(.caption)
+                        .disabled(busy)
+                        .accessibilityIdentifier("trim-reset")
+                }
+            } header: {
+                Text("What to send")
+            } footer: {
+                Text(plan.isWholeSession
+                     ? "Drag the green and red dots to send only part of the night. An hour of recording usually matters for ten seconds, and only what you choose is uploaded."
+                     : "The full recording stays on this phone — nothing outside the window is sent, and nothing already sent is changed. Clearing the phone afterwards is a separate choice, and it is the only thing that removes the original.")
+            }
+        }
+    }
+
+    /// What the current in and out points would actually send.
+    private var currentPlan: SessionTrimPlan? {
+        guard let summary, let trim else { return nil }
+        return SessionTrimPlan.plan(
+            window: trim.window,
+            startedAt: summary.startedAt,
+            endedAt: summary.endedAt,
+            readingTimes: readingTimes,
+            markerTimes: markerTimes,
+            media: captures
+                .filter { chosen.contains($0.id) }
+                .map { TrimmableMedia(relativePath: $0.relativePath, kind: $0.kind,
+                                      startedAt: $0.at,
+                                      duration: durations[$0.relativePath]) })
+    }
+
+    private static func describe(_ decision: SessionTrimPlan.MediaDecision) -> String {
+        let name = decision.media.relativePath.replacingOccurrences(of: "media/", with: "")
+        switch decision.outcome {
+        case .sentWhole: return "\(name) — sent whole"
+        case .leftOut:   return "\(name) — not sent"
+        case .cut(_, let duration):
+            return "\(name) — cut to \(SessionTrimSlider.duration(duration))"
+        }
+    }
+
+    private static func icon(_ decision: SessionTrimPlan.MediaDecision) -> String {
+        switch decision.outcome {
+        case .sentWhole: "checkmark.circle"
+        case .cut:       "scissors"
+        case .leftOut:   "minus.circle"
         }
     }
 
@@ -200,10 +293,46 @@ struct UploadSessionView: View {
                         .map(\.id))
         chosenInvestigationId = summary?.investigationId
 
+        // The trimmer's track, and the numbers it reports (item 210). Read once: a five-hour
+        // session's readings are tens of thousands of lines and re-reading them on every drag
+        // would make the handle stutter.
+        await loadTrimData()
+
         guard dependencies.session.me != nil else { return }
         let roster = InvestigationsStore(api: dependencies.api)
         await roster.load()
         investigations = roster.investigations
+    }
+
+    /// The session's span, its reading times, and how long each recording runs.
+    ///
+    /// Durations come from AVFoundation rather than from the capture row, which has never stored
+    /// one. A file whose length will not load stays absent from the map, and the plan then sends
+    /// it whole rather than guessing at what it overlaps.
+    private func loadTrimData() async {
+        guard let summary else { return }
+
+        let log = ReadingLog(fileURL: store.files.readingLogURL(for: sessionId))
+        let readings = (try? await log.readings()) ?? []
+        readingTimes = readings.map(\.at)
+        markerTimes = readings
+            .filter { $0.measurements?.keys.contains("marker") == true }
+            .map(\.at)
+
+        var measured: [String: TimeInterval] = [:]
+        for capture in captures where capture.kind != .photo {
+            let url = store.files.fileURL(for: sessionId, relativePath: capture.relativePath)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            if let duration = try? await AVURLAsset(url: url).load(.duration),
+               duration.seconds.isFinite, duration.seconds > 0 {
+                measured[capture.relativePath] = duration.seconds
+            }
+        }
+        durations = measured
+
+        trim = SessionTrimRange(startedAt: summary.startedAt,
+                                endedAt: summary.endedAt,
+                                lastReadingAt: readingTimes.last)
     }
 
     private func send() async {
@@ -211,9 +340,30 @@ struct UploadSessionView: View {
         errorMessage = nil
         defer { busy = false }
 
+        // The scratch directory every cut copy is written into, and cleared afterwards. Never
+        // the session's own media directory — a cut written beside the original is one rename
+        // away from replacing the thing this feature promises to leave alone.
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trim-\(sessionId.uuidString.lowercased())", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
         do {
+            let plan = currentPlan
+            let window = (plan?.isWholeSession == false) ? plan?.window : nil
+
             // The document first: it creates the record everything else attaches to.
-            let document = try await buildDocument()
+            var document = try await buildDocument(window: window)
+
+            // Each cut recording's readings still count their offsets from a beginning that will
+            // not be in the uploaded file. Left alone, the player would place the audio as far
+            // from its readings as the amount cut off the front.
+            for decision in plan?.cut ?? [] {
+                if case .cut(let from, _) = decision.outcome {
+                    document = DeviceDataExporter.rebaseAudioOffsets(
+                        forFilename: decision.media.relativePath, by: from, in: document)
+                }
+            }
+
             let me = dependencies.session.me
 
             let result = await dependencies.fieldUpload.submitDocument(
@@ -235,9 +385,31 @@ struct UploadSessionView: View {
             // the rest carry on — losing the night because file three dropped would be absurd.
             for capture in captures where chosen.contains(capture.id) {
                 guard store.hasLocalFile(capture.relativePath, in: sessionId) else { continue }
+
+                // A file the window excludes is not sent at all, and is not reported as a
+                // failure either — it was left out on purpose.
+                let decision = plan?.media.first { $0.media.relativePath == capture.relativePath }
+                if decision?.outcome == .leftOut {
+                    progress[capture.id] = nil
+                    continue
+                }
+
                 progress[capture.id] = .sending
 
-                let url = store.files.fileURL(for: sessionId, relativePath: capture.relativePath)
+                let original = store.files.fileURL(for: sessionId, relativePath: capture.relativePath)
+                var url = original
+
+                // Cut into scratch, never over the original. Every failure inside the trimmer
+                // sends the whole file rather than nothing — losing a recording to a failed cut
+                // would be far worse than uploading more than was asked for.
+                if case .cut(let from, let duration) = decision?.outcome {
+                    let result = await SessionMediaTrimmer().cut(
+                        original, from: from, duration: duration, into: scratch)
+                    if case .cut(let trimmed) = result { url = trimmed }
+                }
+
+                // The digest is of what is actually SENT. Sending the original's digest with a
+                // cut file would make the server report every trimmed recording as damaged.
                 let digest = try? DeviceDataExporter.sha256(of: url)
                 let outcome = await dependencies.fieldUpload.submitFile(
                     sessionId: server.id, fileURL: url,
@@ -271,7 +443,7 @@ struct UploadSessionView: View {
         }
     }
 
-    private func buildDocument() async throws -> Data {
+    private func buildDocument(window: SessionWindow? = nil) async throws -> Data {
         guard let summary else { throw FieldSessionError.unavailable }
         let request = DeviceDataExporter.Request(
             sessionId: sessionId,
@@ -282,7 +454,8 @@ struct UploadSessionView: View {
             timezone: TimeZone.current.identifier,
             batteryPercentAtStart: nil,
             trigger: SamplingPolicy.default.trigger(),
-            includedMedia: captures.filter { chosen.contains($0.id) }.map(\.relativePath))
+            includedMedia: captures.filter { chosen.contains($0.id) }.map(\.relativePath),
+            window: window)
 
         return try await DeviceDataExporter(files: store.files).buildDocument(
             request, log: ReadingLog(fileURL: store.files.readingLogURL(for: sessionId)))
