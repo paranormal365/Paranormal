@@ -65,12 +65,15 @@ guard, checked on the server as well as in the UI.
   and the group-facing "closed, not deleted" line. Nothing presses the button, for the reason the
   delete-user suite gives.
 
-**Not tested in-process: the delete itself.** The purge is built from `ExecuteDeleteAsync` and
-`ExecuteUpdateAsync`, and the InMemory provider implements neither — probed, not assumed. Adding
-a SQLite provider to `Ben.Web.Tests` would fix that and was attempted; the restore fails on this
-machine because the configured local NuGet source `/Users/ben/telerik-blazor` does not exist. Left
-as a note rather than a silent gap: with that source available, a SQLite-backed purge test would
-cover all three purges, which today rely on the model-derived coverage tests instead.
+- `CasePurgeBehaviourTests` — the purge actually running, against a real relational database with
+  foreign keys enforced (`SqliteTestDb`). The case and its children gone, the recording detached to
+  its owner, the feed post surviving unlinked, only the case's own copy destroyed, the storage
+  directory removed, a mistyped title touching nothing, and an empty case deleting cleanly.
+
+The delete path was briefly untestable: it is built from `ExecuteDeleteAsync` and
+`ExecuteUpdateAsync`, which the InMemory provider does not implement (probed, not assumed), and
+the SQLite package could not be restored while the local NuGet source was missing. That source is
+back, so the harness exists and the delete is covered — see `README-purge-behaviour-tests.md`.
 
 ## Docs
 
