@@ -493,3 +493,41 @@ struct SessionTrimRangeTests {
         #expect(r.window.duration == 600)
     }
 }
+
+/// Naming a clip (item 210).
+@Suite("What a trimmed session is called")
+struct ClipLabelTests {
+    private let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func aClipCarriesItsInAndOutTimes() {
+        let window = SessionWindow(start: start.addingTimeInterval(20 * 60),
+                                   end: start.addingTimeInterval(30 * 60))
+        let label = SessionTrimPlan.clipLabel(base: "back bedroom", window: window,
+                                              sessionStart: start, isWholeSession: false)
+        // The times say what the clip is; a counter would only say it is the third of something.
+        #expect(label == "back bedroom (20:00–30:00)")
+    }
+
+    @Test func aWholeSessionKeepsItsNameUntouched() {
+        let window = SessionWindow(start: start, end: start.addingTimeInterval(3600))
+        #expect(SessionTrimPlan.clipLabel(base: "back bedroom", window: window,
+                                          sessionStart: start, isWholeSession: true) == "back bedroom")
+        #expect(SessionTrimPlan.clipLabel(base: nil, window: window,
+                                          sessionStart: start, isWholeSession: true) == nil)
+    }
+
+    @Test func aClipOfAnUnnamedSessionStillSaysWhatItIs() {
+        let window = SessionWindow(start: start.addingTimeInterval(5),
+                                   end: start.addingTimeInterval(65))
+        #expect(SessionTrimPlan.clipLabel(base: nil, window: window,
+                                          sessionStart: start, isWholeSession: false) == "Clip (0:05–1:05)")
+        #expect(SessionTrimPlan.clipLabel(base: "   ", window: window,
+                                          sessionStart: start, isWholeSession: false) == "Clip (0:05–1:05)")
+    }
+
+    @Test func hoursAppearOnlyWhenNeeded() {
+        #expect(SessionTrimPlan.clock(59) == "0:59")
+        #expect(SessionTrimPlan.clock(600) == "10:00")
+        #expect(SessionTrimPlan.clock(3661) == "1:01:01")
+    }
+}

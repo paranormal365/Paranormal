@@ -27,8 +27,12 @@ struct UploadSessionView: View {
 
     /// The in and out points (item 210). Nil until the session's span is known.
     @State private var trim: SessionTrimRange?
-    /// How long each recording runs, read once with AVFoundation. A recording whose length is
-    /// unknown is sent whole rather than guessed at — see SessionTrimPlan.
+    /// The same replay the review screen uses, here so a dragged handle shows what is under it
+    /// and Play runs exactly the stretch that will be sent.
+    @State private var replay = SessionReplay()
+    @State private var source: ReplaySource?
+    /// How long each recording runs, from the capture rows. A recording whose length was never
+    /// stored is sent whole rather than guessed at — see SessionTrimPlan.
     @State private var durations: [String: TimeInterval] = [:]
     @State private var readingTimes: [Date] = []
     @State private var markerTimes: [Date] = []
@@ -116,6 +120,16 @@ struct UploadSessionView: View {
                                                     lastReadingAt: readingTimes.last) },
                     set: { trim = $0 }))
                 .disabled(busy)
+                // Dragging either handle parks the preview there.
+                .onChange(of: trim?.inPoint) { _, moment in if let moment { replay.pause(); replay.seek(to: moment) } }
+                .onChange(of: trim?.outPoint) { _, moment in if let moment { replay.pause(); replay.seek(to: moment) } }
+
+                if let source, let trimBinding = Binding($trim) {
+                    TrimPreview(replay: replay, source: source, range: trimBinding) { path in
+                        store.files.fileURL(for: sessionId, relativePath: path)
+                    }
+                    .disabled(busy)
+                }
 
                 if !plan.isWholeSession {
                     VStack(alignment: .leading, spacing: 4) {
@@ -132,6 +146,9 @@ struct UploadSessionView: View {
                                 .foregroundStyle(decision.outcome == .leftOut ? Theme.fog : Theme.bone)
                         }
                     }
+                    // A container, for the same reason the track is one: a bare identifier on a
+                    // stack is inherited by every label inside it and names no element itself.
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("trim-summary")
 
                     Button("Send the whole session") { trim?.reset() }
@@ -312,23 +329,22 @@ struct UploadSessionView: View {
     private func loadTrimData() async {
         guard let summary else { return }
 
-        let log = ReadingLog(fileURL: store.files.readingLogURL(for: sessionId))
-        let readings = (try? await log.readings()) ?? []
-        readingTimes = readings.map(\.at)
-        markerTimes = readings
-            .filter { $0.measurements?.keys.contains("marker") == true }
-            .map(\.at)
+        // One source for everything the trimmer needs: the capture rows already hold each
+        // recording's length, the markers already carry their times, and the replay is the
+        // preview. Probing every file with AVFoundation, which the first version did, was slower
+        // and answered a question the store had already answered.
+        store.load()
+        guard let source = store.replayData(for: sessionId) else { return }
+        self.source = source
 
-        var measured: [String: TimeInterval] = [:]
-        for capture in captures where capture.kind != .photo {
-            let url = store.files.fileURL(for: sessionId, relativePath: capture.relativePath)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            if let duration = try? await AVURLAsset(url: url).load(.duration),
-               duration.seconds.isFinite, duration.seconds > 0 {
-                measured[capture.relativePath] = duration.seconds
-            }
-        }
-        durations = measured
+        await replay.load(readingLog: source.log, markers: source.markers,
+                          media: source.media, baselines: source.baselines,
+                          startedAt: source.startedAt, endedAt: source.endedAt)
+
+        readingTimes = replay.timeline.readings.map(\.at)
+        markerTimes = source.markers.map(\.at)
+        durations = Dictionary(source.media.map { ($0.relativePath, $0.duration) },
+                               uniquingKeysWith: { first, _ in first })
 
         trim = SessionTrimRange(startedAt: summary.startedAt,
                                 endedAt: summary.endedAt,
@@ -445,11 +461,17 @@ struct UploadSessionView: View {
 
     private func buildDocument(window: SessionWindow? = nil) async throws -> Data {
         guard let summary else { throw FieldSessionError.unavailable }
+        // A clip is named for what it is — "back bedroom (20:00–30:00)" — on the server's list,
+        // in the player's title and in the report. A whole session keeps its name.
+        let label = window.map {
+            SessionTrimPlan.clipLabel(base: summary.locationLabel, window: $0,
+                                      sessionStart: summary.startedAt, isWholeSession: false)
+        } ?? summary.locationLabel
         let request = DeviceDataExporter.Request(
             sessionId: sessionId,
             startedAt: summary.startedAt,
             endedAt: summary.endedAt,
-            locationLabel: summary.locationLabel,
+            locationLabel: label,
             deviceModel: DeviceModel.identifier(),
             timezone: TimeZone.current.identifier,
             batteryPercentAtStart: nil,

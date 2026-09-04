@@ -102,9 +102,16 @@ struct SessionTrimSlider: View {
             }
             .frame(height: dotSize, alignment: .center)
             .frame(maxHeight: .infinity)
+            // Every drag reports its position in THIS space — see handle(at:).
+            .coordinateSpace(name: "trim-track")
+            // A real container, not a bare identifier on a GeometryReader. Without this the
+            // identifier is INHERITED by both handle buttons — they surfaced as 'trim-track' and
+            // lost their own names — and no element called trim-track existed at all. The UI test
+            // hierarchy dump on 2026-09-04 is what showed it.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("trim-track")
         }
         .frame(height: 44)
-        .accessibilityIdentifier("trim-track")
     }
 
     private func handle(at x: CGFloat, colour: Color, which: Handle, usable: CGFloat) -> some View {
@@ -125,11 +132,20 @@ struct SessionTrimSlider: View {
             .accessibilityValue(Self.duration(
                 (which == .start ? range.inPoint : range.outPoint)
                     .timeIntervalSince(range.sessionStart)))
-            .gesture(
-                DragGesture(minimumDistance: 0)
+            // highPriorityGesture, not gesture: this sits in a Form row, and a List claims a
+            // horizontal drag for itself — leftward from the trailing edge is exactly a row's
+            // swipe. The out point lives at that edge and never moved until this outranked it.
+            .highPriorityGesture(
+                // The location is asked for in the TRACK's space, not the handle's. A dragged
+                // view reports its gesture relative to where it sat before the offset, so
+                // adding the handle's own position back in double-counted it: the in point ran
+                // away to the far end of the track and the out point could not move at all.
+                // The UI test's hierarchy dump on 2026-09-04 (In 0:08 of 0:09 for a drag to the
+                // middle) is what exposed it; a screenshot of the resting slider never could.
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("trim-track"))
                     .onChanged { value in
                         dragging = which
-                        let fraction = (value.location.x + x - dotSize / 2) / usable
+                        let fraction = (value.location.x - dotSize / 2) / usable
                         switch which {
                         case .start: range.moveIn(toFraction: fraction)
                         case .end:   range.moveOut(toFraction: fraction)

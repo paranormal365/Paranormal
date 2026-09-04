@@ -111,10 +111,27 @@ final class SessionTrimUITests: XCTestCase {
         let after = app.staticTexts["trim-kept-duration"].firstMatch.label
         XCTAssertNotEqual(before, after, "dragging the in point should shorten what is sent")
 
+        // And it must have landed near where the finger went — the middle of the track. The
+        // first version of the slider double-counted the handle's own offset, so a drag to the
+        // middle of a 9 s session put the in point at 0:08 and a drag of the out point could not
+        // move it at all. "It changed" passed that; "it is roughly halfway" would not have.
+        let inLabel = app.staticTexts.matching(identifier: "trim-in-point").allElementsBoundByIndex
+            .map { $0.label }.first { $0.contains(":") } ?? ""
+        let seconds = Self.seconds(inLabel)
+        XCTAssertTrue((2...7).contains(seconds),
+                      "a drag to the middle of the track should land the in point mid-session, "
+                    + "not at \(inLabel)")
+
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "session-trimmer-dragged"
         shot.lifetime = .keepAlways
         add(shot)
+    }
+
+    /// "m:ss" or "h:mm:ss" to seconds.
+    private static func seconds(_ clock: String) -> Int {
+        let parts = clock.split(separator: ":").compactMap { Int($0) }
+        return parts.reversed().enumerated().reduce(0) { $0 + $1.element * Int(pow(60.0, Double($1.offset))) }
     }
 
     func testTheWholeSessionCanBePutBack() throws {

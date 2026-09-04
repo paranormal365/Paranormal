@@ -229,3 +229,35 @@ public struct SessionTrimRange: Sendable, Equatable {
         outPoint = sessionEnd
     }
 }
+
+extension SessionTrimPlan {
+    /// What a trimmed session is called once it is sent (item 210).
+    ///
+    /// Ben offered two shapes — `name-Clip001` or `name (in–out)` — and left the choice. The times
+    /// win: "back bedroom (20:00–30:00)" says what the clip IS, on the server's list, in the
+    /// player's title and in the report, where a counter would only say that it is the third of
+    /// something. Elapsed times rather than clock times, because the session's own start is what
+    /// the readout beside the trimmer shows and what a person dragged against.
+    ///
+    /// A whole session keeps its name untouched: it is not a clip of anything.
+    public static func clipLabel(base: String?, window: SessionWindow, sessionStart: Date,
+                                 isWholeSession: Bool) -> String? {
+        guard !isWholeSession else { return base }
+        let from = clock(window.start.timeIntervalSince(sessionStart))
+        let to = clock(window.end.timeIntervalSince(sessionStart))
+        let span = "(\(from)–\(to))"
+        guard let base, !base.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "Clip \(span)"
+        }
+        return "\(base) \(span)"
+    }
+
+    /// h:mm:ss, or m:ss under an hour — the same spelling as the trimmer's readouts.
+    public static func clock(_ seconds: TimeInterval) -> String {
+        let total = Int(max(0, seconds.rounded()))
+        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
+        return h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%d:%02d", m, s)
+    }
+}
