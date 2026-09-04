@@ -1,0 +1,255 @@
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+
+@*
+    Who may do what on a visit (item 160): the title-by-duty matrix.
+
+    It sits directly under the ladder and the duties rather than in a tab of its own, because it is
+    about both and separating them would mean editing a duty in one place and who may hold it in
+    another. Read the three together and they tell one story: the rungs, the jobs, and which rung
+    each job is open to.
+
+    Ben's worked example is what the defaults encode: a junior may ASSIST with equipment long
+    before they RUN it, and the lead of a visit is the point of contact but does not move the date.
+*@
+
+<div class="mt-4">
+    <h6 class="mb-1 fw-semibold">
+        Who may hold which duty<HelpLink Slug="organization-administration" Anchor="who-may-hold-which-duty" />
+    </h6>
+    <p class="text-secondary small mb-2">
+        Tick the titles each duty is open to. Eligibility is advice, not a wall — an organizer can
+        still assign past it deliberately, and it is recorded when they do.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2 small" data-testid="matrix-error">@_error</div>
+    }
+    @if (_saved is not null)
+    {
+        <div class="alert alert-success py-2 small" data-testid="matrix-saved">@_saved</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary small">Loading…</p>
+    }
+    else if (_matrix is null)
+    {
+        <p class="text-secondary small">Couldn't load the matrix just now.</p>
+    }
+    else if (_matrix.Titles.Count == 0 || _matrix.Duties.Count == 0)
+    {
+        <div class="alert alert-secondary py-2 small" data-testid="matrix-empty">
+            This needs both a title ladder and some duties. Add them above and they will appear here.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle" data-testid="duty-matrix">
+                <thead>
+                    <tr>
+                        <th>Duty</th>
+                        @foreach (var title in _matrix.Titles)
+                        {
+                            <th class="text-center small">@title.Name</th>
+                        }
+                        <th class="small">On the night</th>
+                        <th class="small">Rule?</th>
+                        <th class="text-end">&nbsp;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var duty in _matrix.Duties)
+                    {
+                        var row = _edit[duty.Id];
+                        <tr data-testid="matrix-row">
+                            <td class="text-nowrap">
+                                @duty.Name
+                                @if (duty.IsSingleHolder)
+                                {
+                                    <span class="badge text-bg-secondary ms-1" title="One person holds this per visit">one</span>
+                                }
+                                @* A duty nobody has ticked still answers to its old minimum title,
+                                   which is not the same as "nobody may hold it" — say which. *@
+                                @if (row.TitleIds.Count == 0)
+                                {
+                                    <div class="text-secondary small" data-testid="falls-back">
+                                        @(duty.MinimumMemberLevelName is { } m
+                                            ? $"Not set — asks for {m} or above"
+                                            : "Not set — open to anyone")
+                                    </div>
+                                }
+                            </td>
+
+                            @foreach (var title in _matrix.Titles)
+                            {
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input"
+                                           checked="@row.TitleIds.Contains(title.Id)"
+                                           @onchange="@(e => Toggle(duty.Id, title.Id, e.Value is true))" />
+                                </td>
+                            }
+
+                            <td class="small">
+                                <label class="d-block">
+                                    <input type="checkbox" class="form-check-input me-1"
+                                           checked="@row.Has(InvestigationDutyCapabilities.PointOfContact)"
+                                           @onchange="@(e => ToggleCapability(duty.Id, InvestigationDutyCapabilities.PointOfContact, e.Value is true))" />
+                                    point of contact
+                                </label>
+                                <label class="d-block">
+                                    <input type="checkbox" class="form-check-input me-1"
+                                           checked="@row.Has(InvestigationDutyCapabilities.MayAssignDuties)"
+                                           @onchange="@(e => ToggleCapability(duty.Id, InvestigationDutyCapabilities.MayAssignDuties, e.Value is true))" />
+                                    hands out duties
+                                </label>
+                            </td>
+
+                            <td class="small">
+                                @* Off by default and meant to stay that way for most duties: see
+                                   the note under the grid. *@
+                                <label class="d-block">
+                                    <input type="checkbox" class="form-check-input me-1"
+                                           data-testid="enforced-toggle"
+                                           checked="@row.IsEnforced"
+                                           @onchange="@(e => ToggleEnforced(duty.Id, e.Value is true))" />
+                                    no exceptions
+                                </label>
+                            </td>
+
+                            <td class="text-end">
+                                <button type="button" class="btn btn-primary btn-sm"
+                                        data-testid="save-matrix-row"
+                                        disabled="@(_saving == duty.Id)"
+                                        @onclick="() => SaveRowAsync(duty.Id)">
+                                    @(_saving == duty.Id ? "Saving…" : "Save")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-secondary small mb-1">
+            <strong>On the night</strong> is what holding the duty lets somebody do for that one
+            visit, and it ends with the visit. Point of contact is shown on the roster so everyone
+            knows who to call; hands out duties lets them do that without being able to change
+            anything else about the visit.
+        </p>
+        <p class="text-secondary small mb-0">
+            <strong>Ticking these normally only advises.</strong> Whoever organises a visit can
+            still assign past them, and the exception is marked on the roster — the senior calls in
+            sick and the capable junior steps up. Assigning past a duty that carries something
+            under <em>On the night</em> is an owner or administrator's call, because it hands out
+            authority. Tick <strong>no exceptions</strong> for the few duties where the title is a
+            real qualification rather than a preference: then nobody can assign past it on the
+            night, and changing it means changing this grid.
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private Ben.Service.Models.Entities.DutyEligibilityMatrix? _matrix;
+    private readonly Dictionary<Guid, RowEdit> _edit = [];
+    private bool _loading = true;
+    private Guid? _saving;
+    private string? _error;
+    private string? _saved;
+
+    /// <summary>What the grid is holding for one duty before it is saved.</summary>
+    private sealed class RowEdit
+    {
+        public HashSet<Guid> TitleIds { get; init; } = [];
+        public InvestigationDutyCapabilities Capabilities { get; set; }
+        public bool IsEnforced { get; set; }
+        public bool Has(InvestigationDutyCapabilities c) => (Capabilities & c) == c;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _matrix = await AdminClient.GetDutyEligibilityMatrixAsync(OrgId);
+        _loading = false;
+
+        _edit.Clear();
+        if (_matrix is null) return;
+        foreach (var duty in _matrix.Duties)
+        {
+            _edit[duty.Id] = new RowEdit
+            {
+                TitleIds = [.. duty.OpenToTitleIds],
+                Capabilities = duty.Capabilities,
+                IsEnforced = duty.IsEnforced,
+            };
+        }
+    }
+
+    private void Toggle(Guid dutyId, Guid titleId, bool on)
+    {
+        if (!_edit.TryGetValue(dutyId, out var row)) return;
+        if (on) row.TitleIds.Add(titleId); else row.TitleIds.Remove(titleId);
+        _saved = null;
+    }
+
+    private void ToggleCapability(Guid dutyId, InvestigationDutyCapabilities capability, bool on)
+    {
+        if (!_edit.TryGetValue(dutyId, out var row)) return;
+        row.Capabilities = on ? row.Capabilities | capability : row.Capabilities & ~capability;
+        _saved = null;
+    }
+
+    private void ToggleEnforced(Guid dutyId, bool on)
+    {
+        if (!_edit.TryGetValue(dutyId, out var row)) return;
+        row.IsEnforced = on;
+        _saved = null;
+    }
+
+    private async Task SaveRowAsync(Guid dutyId)
+    {
+        if (!_edit.TryGetValue(dutyId, out var row)) return;
+
+        _saving = dutyId; _error = null; _saved = null;
+        var updated = await AdminClient.SetDutyEligibilityAsync(
+            OrgId, dutyId, [.. row.TitleIds], row.Capabilities, row.IsEnforced);
+        _saving = null;
+
+        if (updated is null)
+        {
+            _error = "That row could not be saved.";
+            return;
+        }
+
+        _matrix = updated;
+        // Re-read from the server's answer rather than trusting the grid: the row that came back
+        // is what the group actually has.
+        _edit.Clear();
+        foreach (var duty in _matrix.Duties)
+        {
+            _edit[duty.Id] = new RowEdit
+            {
+                TitleIds = [.. duty.OpenToTitleIds],
+                Capabilities = duty.Capabilities,
+                IsEnforced = duty.IsEnforced,
+            };
+        }
+        _saved = "Saved.";
+    }
+}

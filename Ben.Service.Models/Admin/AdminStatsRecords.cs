@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 namespace Ben.Service.Models.Admin;
 
 /// <summary>One labelled number, for a bar or a donut.</summary>
@@ -215,6 +216,56 @@ public sealed record AppUserPurgePreview(
     IReadOnlyList<string> OwnedOrganizations,
     IReadOnlyList<string> PaidSubscriptions,
     string? Refusal);
+
+/// <summary>
+/// What deleting one case would destroy, and what it would leave standing (item 183).
+/// </summary>
+/// <remarks>
+/// <para>Mirror of <c>CasePurge</c>'s record — this library cannot reference the WebApi project,
+/// so the shape is restated and married by property name.</para>
+///
+/// <para><b>Two blocks, and the difference is the point.</b> The first exist only because the
+/// case does. The second belong to somebody else and merely mention it — a person's field
+/// session, a feed post, a calendar event — and are unlinked rather than destroyed.</para>
+///
+/// <para>There is no refusal field: deleting a case cannot lock the platform out of anything, so
+/// the only guard is the typed title. <c>ClientName</c> is a notice, in the spirit of item 212's.</para>
+/// </remarks>
+public sealed record CasePurgePreview(
+    Guid CaseId,
+    string Title,
+    string CaseReference,
+    string OrganizationName,
+    CaseStatus Status,
+    bool IsPublic,
+
+    int TimelineEntries,
+    int Files,
+    int Notes,
+    int Messages,
+    int ResearchEntries,
+    int Reports,
+    int Investigations,
+    int Contacts,
+    int Votes,
+    int TransferLogs,
+    int ClientAccessRows,
+    int StoredFiles,
+
+    int FieldSessionsDetached,
+    int FeedPostsUnlinked,
+    int CalendarEventsUnlinked,
+    int VideoProjectsUnlinked,
+    int EvidenceVotesUnlinked,
+    int PublicPagesUnlinked,
+
+    string? ClientName);
+
+/// <summary>What deleting a case actually did.</summary>
+public sealed record CasePurgeResult(
+    Guid CaseId, string Title, string CaseReference,
+    int TimelineEntries, int Files, int Investigations,
+    int FieldSessionsDetached, int StoredFiles);
 
 /// <summary>What deleting a person actually did.</summary>
 /// <remarks>

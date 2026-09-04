@@ -330,6 +330,10 @@ public sealed class OrganizationPurge
             await db.ClientRequestOrganizations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.CouponRedemptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.EquipmentItemShares.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // The title-by-duty matrix (item 160): cascades from the duty, but its key to the
+            // ladder is NoAction, so the cells have to go before the rungs do.
+            await db.InvestigationDutyEligibilities
+                .Where(x => dutyIds.Contains(x.InvestigationDutyId)).ExecuteDeleteAsync(ct);
             await db.InvestigationDuties.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.MemberSeatSubscriptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgCalendarEventTypes.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

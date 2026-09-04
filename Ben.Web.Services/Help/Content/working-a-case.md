@@ -457,6 +457,23 @@ the people reading it — it is not a second password, and it does not hide the 
 who could otherwise open it.
 
 
+## Closing a case, and why you cannot delete one
+
+Set the status to **Closed** in **Edit Case** when the work is finished. The case stays exactly
+where it is, in your case list and in your history, and can be reopened by changing the status
+again. Closing is the end of the work, not the end of the record.
+
+There is no Delete, and that is deliberate rather than an oversight. A case is the record of real
+work, usually done for a client who asked for it and sometimes paid for it, and a record that can
+be erased by whoever is looking at it is not much of a record. Timeline entries, files and notes
+can each be removed on their own; the case they belong to cannot.
+
+**Opened one by mistake, or opened the same one twice?** That is the case closing cannot fix, so
+[ask us to remove it](/contact). A site administrator can delete a case outright, and will see
+exactly what that would destroy before doing it — including a warning if the case has a client.
+Anything anyone recorded on their phone survives regardless: a field session belongs to the
+person who made it and goes back to them.
+
 ## Incoming cases
 
 When another group — or a client moving their own paused case — asks your group to take a case

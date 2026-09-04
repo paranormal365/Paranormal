@@ -128,15 +128,56 @@ earned per group.
 ## Investigation duties
 
 Under **Settings → Investigation duties** lives the list of jobs your group hands out per visit
-— every group starts with Lead Investigator, Equipment, Evidence Collection, and Documentation,
-and the list is yours: rename, add, retire. A duty marked **one holder** (like the lead) can
-only be held by a single person per visit; assigning it to someone takes it from the previous
-holder.
+— every group starts with Lead Investigator, Equipment, Equipment Assist, Evidence Collection and
+Documentation, and the list is yours: rename, add, retire. A duty marked **one holder** (like the
+lead) can only be held by a single person per visit; assigning it to someone takes it from the
+previous holder.
 
-A duty can ask for a **minimum title** from the member ladder — "Evidence Collection wants
-Investigator or above." The ask is deliberately soft: whoever manages a visit can assign past it
-with an explicit *Assign anyway*, and the exception is marked on the assignment. Duties never
-grant standing permissions; they exist so the visit's roster says who is doing what.
+Equipment comes as two jobs on purpose. Assisting with the gear is something a newer member can
+do long before they are the one running it, and one combined duty cannot say that.
+
+## Who may hold which duty
+
+Under the duty list sits the grid: your titles across the top, your duties down the side. Tick the
+titles each duty is open to. A new group starts with this filled in — an Associate can document
+and assist with equipment, a Junior Investigator adds evidence collection, an Investigator runs
+the equipment, and the Lead Investigator duty is open to your two most senior rungs.
+
+The ask stays deliberately soft. Whoever manages a visit can assign past it with an explicit
+*Assign anyway*, and the exception is marked on the assignment — the senior calls in sick and the
+capable junior steps up, and a hard wall would just send the group back to organising by text
+message.
+
+Two exceptions to that.
+
+**A duty that carries something under *On the night* takes an owner or administrator to assign
+past.** Handing somebody point of contact, or the right to hand out the other duties, is a
+different act from handing them a label, and the person given it could then make exceptions of
+their own. Whoever is running the visit can still assign it to anybody the duty is already open
+to; it is only the exception that needs the extra pair of hands.
+
+**Tick *no exceptions* on the few duties where the title is a real qualification** rather than a
+preference — certified equipment, or being the client's point of contact inside their home. Then
+nobody can assign past it on the night, not even an owner. The way to change it is to change this
+grid, which is a deliberate and visible act rather than a decision taken at nine o'clock at a site.
+
+A duty whose row is untouched says so, and falls back to the older **minimum title** setting on
+the duty itself — "asks for Investigator or above". That is the single-threshold version of the
+same idea, and nothing changed for groups that were already using it.
+
+### On the night
+
+Two of the columns are not about who may hold the duty but about what holding it lets somebody do,
+**for that one visit only**:
+
+- **Point of contact** — the person to call about this visit. It shows on the roster so the group,
+  and the client, can see who is answerable that night.
+- **Hands out duties** — may give and take back the other duties on this visit, without being able
+  to change anything else about it.
+
+Both end when the visit does. Duties still grant no standing permissions: what somebody may do in
+the group as a whole is decided by roles, under **Roles & permissions**, and a duty can only ever
+open a door that the roles left shut for this one night. It can never close one.
 
 ## The Investigations tab
 

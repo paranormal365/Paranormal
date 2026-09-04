@@ -1112,7 +1112,17 @@ public sealed record InvestigationDutyAssignmentInfo(
 /// <summary>One of a group's investigation duties, as managed in Settings.</summary>
 public sealed record OrgInvestigationDutyItem(
     Guid Id, string Name, int SortOrder, bool IsActive, bool IsSingleHolder,
-    Guid? MinimumMemberLevelId, string? MinimumMemberLevelName);
+    Guid? MinimumMemberLevelId, string? MinimumMemberLevelName,
+    /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities
+        = Ben.Data.Common.Enums.InvestigationDutyCapabilities.None,
+    /// <summary>Whether eligibility is a rule rather than advice for this duty (item 160).</summary>
+    bool IsEnforced = false);
+
+// The matrix records themselves are NOT restated here: this project already takes
+// InvestigationDutyBoard and its friends straight from Ben.Service.Models.Entities, and a second
+// DutyEligibilityMatrix in this namespace made every Razor file that sees both an ambiguous
+// reference. Shared shapes live there; only the ones this project owns live here.
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1397,7 +1407,10 @@ public sealed record FieldSessionSummaryRecord(
     string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
     int ReadingCount, int MarkerCount, Guid DocumentUploadFileId,
     Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
-    IReadOnlyList<FieldSessionFileSummary> Files);
+    IReadOnlyList<FieldSessionFileSummary> Files,
+    /// <summary>Set once this session has been published to a place's archive (item 218): the
+    /// screen needs it to know whether deleting is retraction, which is part of a paid plan.</summary>
+    DateTime? PublishedAtUtc = null);
 
 /// <summary>One session reduced to a pin, for the map on My Field Sessions.</summary>
 public sealed record FieldSessionMapPoint(

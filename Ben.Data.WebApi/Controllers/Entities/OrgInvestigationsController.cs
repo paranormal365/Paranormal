@@ -442,8 +442,12 @@ public sealed class OrgInvestigationsController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Whoever may manage the visit, or whoever holds a duty on it that confers handing the
+        // others out (item 160). The second is additive: a duty opens a door, never closes one.
         if (!await InvestigationAccess.CanManageAsync(
-                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
             return Forbid();
 
         var attendee = await db.InvestigationAttendees
@@ -456,24 +460,40 @@ public sealed class OrgInvestigationsController : BenControllerBase
             .FirstOrDefaultAsync(d => d.Id == dutyId && d.OrganizationId == orgId && d.IsActive, ct);
         if (duty is null) return NotFound();
 
-        var overridden = false;
-        if (duty.MinimumMemberLevel is { } minimum)
+        // The matrix if this duty has one, the single minimum if it does not — see DutyEligibility
+        // for why both rules live there rather than here.
+        var verdict = await DutyEligibility.CheckAsync(db, duty, orgId, attendee.AppUserId, ct);
+        if (!verdict.Eligible)
         {
-            var holderLevel = await db.OrganizationUserMemberships.AsNoTracking()
-                .Where(m => m.OrganizationId == orgId && m.AppUserId == attendee.AppUserId && m.IsActive)
-                .Select(m => m.MemberLevel)
-                .FirstOrDefaultAsync(ct);
-
-            var belowMinimum = holderLevel is null || holderLevel.SortOrder < minimum.SortOrder;
-            if (belowMinimum && !request.Override)
+            // A duty the group marked as a RULE has no per-visit exception, for anybody. The way
+            // past it is to change the rule on the settings grid — deliberate and visible — rather
+            // than to wave one night through it (Ben, 2026-09-04).
+            if (duty.IsEnforced)
             {
                 return Conflict(
-                    $"This duty asks for {minimum.Name} or above; "
-                    + $"{(holderLevel is null ? "this member has no title yet" : $"this member is {holderLevel.Name}")}. "
-                    + "Assign anyway to confirm the exception.");
+                    $"“{duty.Name}” is a requirement rather than a guide in this group, so it "
+                  + "cannot be assigned past. Change who it is open to under Settings, or pick "
+                  + "somebody who already qualifies.");
             }
-            overridden = belowMinimum;
+
+            if (!request.Override) return Conflict(verdict.Refusal);
+
+            // An override into a duty that CONFERS something is a different act from one into a
+            // duty that is only a label: it hands out point-of-contact or the right to hand out
+            // the other duties, and the person given it could then override somebody else. So that
+            // one takes standing authority over the group's investigations, not merely the right
+            // to manage tonight.
+            if (duty.Capabilities != InvestigationDutyCapabilities.None
+                && !User.IsInRole(RoleNames.SuperAdmin)
+                && !await InvestigationAccess.HasOrgAuthorityAsync(db, orgId, userId, ct))
+            {
+                return Conflict(
+                    $"“{duty.Name}” carries authority on the night, so assigning it past the "
+                  + "eligibility rules is an administrator's call. Ask an owner or administrator, "
+                  + "or pick somebody the duty is already open to.");
+            }
         }
+        var overridden = !verdict.Eligible;
 
         if (duty.IsSingleHolder)
         {
@@ -520,8 +540,11 @@ public sealed class OrgInvestigationsController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Same gate as handing one out: taking one back is the other half of the same job.
         if (!await InvestigationAccess.CanManageAsync(
-                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
             return Forbid();
 
         var assignment = await db.InvestigationDutyAssignments

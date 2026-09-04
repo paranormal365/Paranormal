@@ -457,6 +457,36 @@ What the merge does, in one pass that either completes or leaves both groups unt
 The name after the merge is yours to choose — either group's name or a new one. Confirmation
 requires typing the merged group's name, because there is no undo.
 
+## Deleting a case
+
+**Administration → Groups → Delete a Case**, or the trash button on any row of
+**Administration → Cases & Investigations → All Cases**, which opens the same screen with that
+case already chosen.
+
+This is the only place a case can be deleted anywhere on the site. Groups cannot do it — they
+close a case and keep it — so this page exists for the mistakes closing cannot cover: a duplicate,
+a test row, a case opened against the wrong group.
+
+Read the preview first. It has two halves, and they are two different things happening.
+
+**Destroyed.** Everything that exists only because the case does: its timeline, files, notes,
+messages, research, reports, investigations, contacts, votes, transfer records and any client
+access rows. Files the case took its own copy of are destroyed with it.
+
+**Kept, with the case reference removed.** Anything that belongs to somebody else and merely
+mentions the case. In particular, **field sessions survive** — a recording belongs to the person
+who made it, so each one goes back to them as a personal session, with its files, readings and
+share links untouched. Feed posts, calendar events, video projects, evidence votes and public
+pages all stay and simply stop pointing at a case that is gone. The client's original request is
+kept too.
+
+Two things you are warned about but not stopped by: the case has a **client**, whose record of
+work they asked for goes with it; and the case is **public**, so its page and any link to it stop
+working. Neither blocks the delete — being told is what matters.
+
+Then type the case title exactly. The button does nothing until it matches, on the screen and on
+the server both.
+
 ## Deleting a person
 
 **Administration → Groups → Delete a Person**, or the trash button on any row of
@@ -481,7 +511,8 @@ The screen tells you which of the two it will be, before you press anything.
 
 - **Removed completely** when nothing else in the database refers to the account. A signup that
   never did anything vanishes entirely.
-- **Kept, emptied** when records written for a group still point at it. The person is gone from it
+- **Kept, emptied** when anything still points at it: records written for a group, a session
+  recorded for an investigation, or a file something else still uses. The person is gone from it
   — name, email, password, sign-in methods — and it can never sign in again, but the row survives
   so those records still resolve.
 

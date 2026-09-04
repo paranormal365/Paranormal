@@ -106,6 +106,22 @@ public interface IBenPlacesClient
     Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility, CancellationToken token = default);
     Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default);
     Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The whole title-by-duty matrix for this group (item 160). Any member may read it — knowing
+    /// what a title opens up is how somebody knows what to work towards.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Sets one duty's row: the whole set of titles it is open to, and what it confers. Group
+    /// administrators only. Returns the matrix as it now stands.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
+        CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
     Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default);
@@ -222,6 +238,18 @@ public interface IBenPlacesClient
     /// Every field session this account uploaded, newest first. The phone's side of the archive,
     /// which until now the website had no page for.
     /// </summary>
+    /// <summary>
+    /// Deletes one of your own field sessions: its recordings, its document, its share links and
+    /// the row (item 218).
+    /// </summary>
+    /// <remarks>
+    /// The error sentence is the server's own, because the three refusals are three different
+    /// problems with three different answers — it belongs to a group's investigation, a case
+    /// report cites it, or it is published and retracting is part of a paid plan.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default);
+
     Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
         CancellationToken token = default);
 

@@ -105,6 +105,134 @@ public sealed class FieldSessionUploadController : BenControllerBase
     /// coordinate is the most sensitive thing a session carries.</para>
     /// </remarks>
     /// <param name="north">Viewport bounds. All four or none; none means everything.</param>
+    /// <summary>
+    /// Deletes one of your own sessions — the recordings, the document, the share links and the
+    /// row (item 218).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this did not exist.</b> A session's recordings are ordinary files the person
+    /// owns, so they show in Upload Files — but the session holds them with a Restrict key, and
+    /// the only doors that ever removed a session were the SuperAdmin orphan purge and
+    /// <i>retract</i>, which unpublishes without deleting. Deleting the file was refused with
+    /// "part of a field session" and there was nowhere to go next.</para>
+    ///
+    /// <para><b>Three refusals, each an existing rule rather than a new one.</b></para>
+    /// <list type="bullet">
+    /// <item><description>A session recorded <b>for an investigation</b> is the group's evidence
+    /// and outlives whoever carried the phone. That is the rule the account purge already keeps
+    /// (it destroys personal sessions and spares the group's) and the one the case purge keeps
+    /// from the other side (it detaches sessions rather than destroy them). One person must not
+    /// be able to erase a night's work from a case by deleting from their phone's history.</description></item>
+    /// <item><description>A session <b>cited by a case report</b> stays for the same reason, and
+    /// the citation names it — removing the session under a finished report would leave the
+    /// report pointing at nothing.</description></item>
+    /// <item><description>A session <b>published to a place's archive</b> follows the retraction
+    /// rule, because deleting it is retraction by another door. Publish-then-remove is the exploit
+    /// that rule exists for: take the credit for a contribution, then take it back. Choosing never
+    /// to publish is not gaming anything, so an unpublished session deletes freely on any plan.</description></item>
+    /// </list>
+    ///
+    /// <para>The place is left alone, exactly as retract leaves it: where a session happened is a
+    /// fact about the recording, not a consequence of having shared it.</para>
+    /// </remarks>
+    [HttpDelete("{sessionId:guid}")]
+    public async Task<IActionResult> DeleteSession(Guid sessionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // NotFound rather than Forbid for somebody else's session, the same as Retract: whether a
+        // session exists is not a fact a stranger gets to learn from a status code.
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null || session.SubmittedByAppUserId != userId) return NotFound();
+
+        if (session.InvestigationId is not null)
+        {
+            return Conflict(
+                "This session was recorded for an investigation, so it belongs to the group's "
+              + "record of that night rather than to your phone's history. Ask the group if it "
+              + "should be removed.");
+        }
+
+        if (await db.CaseReportSectionFieldSessions.AsNoTracking()
+                .AnyAsync(c => c.FieldSessionUploadId == sessionId, ct))
+        {
+            return Conflict(
+                "A case report cites this session, so deleting it would leave the report pointing "
+              + "at nothing. Ask the group to remove the citation first.");
+        }
+
+        if (session.PublishedAtUtc is not null
+            && await Services.Billing.PaidPlan.WhyCannotKeepPrivateAsync(db, userId, ct) is { } paidOnly)
+        {
+            // The retraction rule, word for word — deleting a published session is retraction by
+            // another door and must not be the way around it.
+            return StatusCode(StatusCodes.Status402PaymentRequired, paidOnly);
+        }
+
+        // Read before the rows go: afterwards nothing remembers which files this session was made
+        // of, and bytes nobody can name again are the one part of this nobody can clean up later.
+        var fileIds = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.FieldSessionUploadId == sessionId)
+            .Select(f => f.UploadFileId)
+            .ToListAsync(ct);
+        fileIds.Add(session.DocumentUploadFileId);
+        fileIds = fileIds.Distinct().ToList();
+
+        var paths = await db.UploadFiles.AsNoTracking()
+            .Where(f => fileIds.Contains(f.Id) && f.StoragePath != null && f.StoragePath != "")
+            .Select(f => new { f.Id, Path = f.StoragePath! })
+            .ToListAsync(ct);
+
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            // Share links first, by BOTH columns: a link may name one recording rather than the
+            // session, and that key is NoAction. The orphan purge sweeps them the same way and for
+            // the same reason.
+            var linkedFileRowIds = await db.FieldSessionUploadFiles.AsNoTracking()
+                .Where(f => f.FieldSessionUploadId == sessionId).Select(f => f.Id).ToListAsync(ct);
+            await db.FieldSessionShareLinks
+                .Where(l => l.FieldSessionUploadId == sessionId
+                         || (l.FieldSessionUploadFileId != null
+                             && linkedFileRowIds.Contains(l.FieldSessionUploadFileId.Value)))
+                .ExecuteDeleteAsync(ct);
+
+            await db.FieldSessionUploadFiles.Where(f => f.FieldSessionUploadId == sessionId)
+                .ExecuteDeleteAsync(ct);
+            await db.FieldSessionUploads.Where(s => s.Id == sessionId).ExecuteDeleteAsync(ct);
+
+            await tx.CommitAsync(ct);
+        }
+
+        // The file rows afterwards and one at a time. A recording another feature still holds — a
+        // clip cut from it, a marker, a case copy — is left standing rather than taking the whole
+        // delete down with it; the session is the point.
+        var filesRemoved = 0;
+        foreach (var file in fileIds)
+        {
+            if (!await Services.Admin.UploadFileRows.TryDeleteAsync(db, file, ct)) continue;
+            filesRemoved++;
+
+            // Only a row that actually went gets its bytes removed; a file with no stored path
+            // (an older row holding its content inline) has nothing on disk to sweep.
+            if (paths.FirstOrDefault(p => p.Id == file)?.Path is not { } path) continue;
+            try { await _fileStorage.DeleteAsync(path, ct); }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Deleted session {SessionId} but could not remove {Path}.", sessionId, path);
+            }
+        }
+
+        _log.LogInformation(
+            "{UserId} deleted their field session {SessionId} ({FilesRemoved} of {FileCount} files removed).",
+            userId, sessionId, filesRemoved, fileIds.Count);
+
+        return NoContent();
+    }
+
     [HttpGet("mine/map")]
     public async Task<ActionResult<FieldSessionMapPage>> GetMyMapPoints(
         [FromQuery] double? north, [FromQuery] double? south,

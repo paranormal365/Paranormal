@@ -8184,7 +8184,7 @@ navigation keeps the banner and Return; returning restores everything including 
 Help updated (getting-started nav, site-administration impersonation section). e2e coverage
 deferred until Ben lifts the test hold.
 
-## 160. Title-to-duty eligibility matrix, owner-configured per org (OPEN — Ben, 2026-08-23)
+## 160. Title-to-duty eligibility matrix, owner-configured per org (BUILT 2026-09-04)
 
 Ben's spec, given while item 158 was being built, in substance: a new organization tab where the
 owner decides which investigation-level duties each TITLE is eligible for — a matrix, not just a
@@ -8211,8 +8211,63 @@ single-threshold case of this matrix — the schema hook is already there. What 
 - interaction with item 156's permission areas (scheduling is also a CRUD permission — the
   matrix and the role system must not give two different answers to "may Sarah schedule this").
 
-Not started. Needs a design pass with Ben before building — the capability list per duty is
-product surface, not plumbing.
+**Built 2026-09-04.** Ben asked for it directly and added: every new group should start with a
+real ladder — "Associate, Junior Investigator, Investigator, Senior Investigator, etc." — already
+assigned rather than an empty page.
+
+*Schema:* `InvestigationDutyEligibility` (one row per duty × title cell; Cascade from the duty,
+NoAction to the rung) and `InvestigationDuty.Capabilities`. Migration
+`AddInvestigationDutyEligibilityMatrix`.
+
+*The two rules, in one place.* `DutyEligibility.CheckAsync`: a duty whose matrix has rows is
+answered by the matrix; a duty with none falls back to `MinimumMemberLevelId`. So every group that
+was using a minimum keeps it and nothing was backfilled. Eligibility stays soft — the override is
+still offered and still recorded.
+
+*Defaults, per Ben.* Bottom rung renamed **Associate** (a rung named after a probation period
+reads as a warning rather than a welcome). Equipment split into **Equipment** and **Equipment
+Assist**, because the worked example distinguishes assisting from running and one duty cannot say
+that. The matrix ships filled in: Associate documents and assists, Junior adds evidence
+collection, Investigator runs equipment, and the Lead Investigator duty is open to the top two
+rungs. `NewOrganizationDefaults.AddAll` now seeds all three together, and
+`OrganizationSecurityService` was switched to that one call — it had already drifted from the
+other creation doors once, and the matrix would have been the second thing it silently lacked.
+
+*The three questions the item reserved, answered:*
+1. **Matrix versus item 156's roles.** A capability only ever widens, for one investigation, and
+   is asked alongside `CanManageAsync` rather than instead of it. Either says yes and the answer is
+   yes. A duty can open a door the roles left shut for one night; it can never close one.
+2. **Only capabilities with a door.** `PointOfContact` (shown on the roster) and `MayAssignDuties`
+   (enforced at assign/unassign) ship. Invite and reschedule are in Ben's example but have no
+   control anywhere in the product, and shipping switches that change nothing is the write-only
+   pattern this backlog keeps having to close. They go in with their doors.
+3. **No new Case Lead position.** The investigation-administrator bundle is capabilities on the
+   existing Lead Investigator duty; the case manager stays the case-level lead the client sees.
+   **This is the call worth Ben's review** — a distinct Case Lead is a seeded duty and a capability
+   away if he wants one.
+
+*Advice or hard limit — Ben asked, same day.* It stays **advice with a recorded override**: a hard
+limit does not stop the junior running the camera when the senior calls in sick, it stops the
+roster from saying so, and the group goes back to organising by text message. A permissive record
+that is true beats a strict one that is quietly false, and the override is itself the evidence that
+somebody is already working above their title.
+
+Two adjustments went in with that answer, because item 160 changed what an override can cost.
+Before it, an override handed out a label; now it can hand out point-of-contact and the right to
+hand out the other duties, and the person given that could override somebody else in turn. So:
+**an override into a capability-carrying duty needs standing authority** over the group's
+investigations rather than merely the right to manage tonight; and **`InvestigationDuty.IsEnforced`**
+(migration `AddInvestigationDutyIsEnforced`) — per duty, off by default, ticked as *no exceptions*
+in the grid, for the minority where the title really is a qualification. Then there is no per-visit
+exception for anybody, owner included: the way past is to change the grid, which is deliberate and
+visible rather than a decision taken at nine o'clock at a site.
+
+*Tests:* `DutyEligibilityMatrixTests` (15, including the worked example as a theory and the
+capability-scope test that stops a capability becoming standing rank) and five more in
+`InvestigationDutyTests` for the rule flag and the authority override; the group-purge behaviour
+test gained a matrix cell so the sweep order is proven against real foreign keys; four
+discrimination runs confirmed. Playwright renders the grid without saving. Suite 4,137/0. Help:
+`organization-administration.md` § Who may hold which duty.
 
 ## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)
 
@@ -9479,7 +9534,7 @@ PDF regenerated. 3,097 unit tests green.
    this must use data it owns — and while dev and UAT share one database, "owns" is a promise a
    test cannot keep for a case it cannot delete.
 
-## 183. A case can be created but never deleted (found 2026-08-24)
+## 183. A case can be created but never deleted (CLOSED 2026-09-04 — SuperAdmin delete, and the rule stated)
 
 No `DELETE` endpoint for a case exists anywhere: not on `CaseController`, not on
 `AdminCaseController`, not for SuperAdmin. Timeline entries, files, notes and transfers can all be
@@ -9492,6 +9547,47 @@ current state is not a considered rule either; it is an absence. The likely shap
 hard delete for mistakes, an org-level archive/withdraw that hides without destroying, or an
 explicit "this cannot be deleted, close it instead" refusal so the absence is a stated rule rather
 than a missing verb. Ben's call.
+
+**Built 2026-09-04 — the first and third together**, because each alone is half an answer. Closing
+already existed (`CaseStatus.Closed`, reachable in Edit Case) and nothing said it was the answer;
+the SuperAdmin delete did not exist at all.
+
+*The stated rule.* The Edit Case dialog now says, under the status field, that a case is never
+deleted — set it to Closed and it stays as the record of the work — and links to `/contact` for
+the one thing closing cannot fix, a duplicate or a mistake. A rule with no path is worse than no
+rule.
+
+*The delete.* `CasePurge` + `AdminCasePurgeController` (`GET`/`DELETE api/admin/cases/{id}/purge`,
+SuperAdmin) and `/admin/delete-case`, linked from the trash button on All Cases. Preview first,
+in two blocks. **Destroyed:** everything existing only because the case does — timeline (with its
+files and tags), files, notes, messages, research, reports and sections, contacts, votes,
+transfer logs, client access and invites, feed consents, scheduling proposals, and the case's
+investigations with attendees, findings and duty assignments. Files only where they are the
+case's own copy-on-attach copies, one row at a time through `UploadFileRows`. **Kept, unlinked:**
+feed posts, calendar events, video projects, evidence votes, public pages, equipment checkouts.
+**Kept, whole: field sessions** — `InvestigationId` set to null, which is exactly what a personal
+session is, so a recording goes back to the person who made it rather than dying with somebody
+else's case. Notices, not refusals: the client's name, and a public case. No refusal exists —
+deleting a case cannot lock the platform out of anything, unlike the other two purges — so the
+typed title is the guard, checked on the server too.
+
+*Tests.* `CasePurgeCoverageTests` derives the delete order from the model (the test the group
+purge lacked when production refused it twice) and names eleven sets the purge must never touch;
+`AdminCasePurgeControllerTests` covers the preview and the confirmation; Playwright
+`AdminDeleteCaseTests` drives everything up to the button. Three discrimination runs confirmed.
+Suite 4,089/0.
+
+*The gap that was recorded, then closed the same day.* The delete path had no in-process behaviour
+test: it is built from `ExecuteDeleteAsync`/`ExecuteUpdateAsync` and the InMemory provider
+implements neither (probed). The fix needed `Microsoft.EntityFrameworkCore.Sqlite`, whose restore
+failed while the local NuGet source `/Users/ben/telerik-blazor` was missing; Ben restored it and
+the harness went in — `SqliteTestDb` plus `CasePurgeBehaviourTests`, and
+`OrganizationPurgeBehaviourTests` for the group purge that production refused twice. See item 219.
+
+*Deliberately not built:* a group-level delete for an empty case. It is defensible — a case
+created five minutes ago with nothing in it has no history to destroy — but it is a second
+destructive door on the surface groups use every day, and the `/contact` route covers the same
+need at this scale. Ask for it if the support requests become routine.
 
 ## 184. Private engagements: designation, display-time redaction, plan gates, lapse (Ben, 2026-08-24 — BUILT, Phases A–D shipped)
 
@@ -10926,7 +11022,7 @@ Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Pl
 e2e stack has no model and no fixture the classifier would refuse. Help:
 `moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
 
-## 218. A person cannot delete their own field session (open, found 2026-09-04)
+## 218. A person cannot delete their own field session (CLOSED 2026-09-04)
 
 Found while closing item 180 Phase B, on Ben's question *"This will include FieldKit uploads?"*
 A session's recordings and document are ordinary files the person owns, listed in Upload Files
@@ -10936,9 +11032,88 @@ session are the SuperAdmin orphan purge and, for the archive, *retract*, which u
 without deleting. So the file delete refuses with "part of a field session" and there is nowhere
 for the person to go next.
 
-**To decide before building:** retraction from the public archive is paid-only on purpose — the
-publish-then-hide exploit. A whole-session delete for a free account would be the same exploit by
-another door, so the rule is probably: delete freely while unpublished; once published, delete
-follows the retraction rule. The door itself is small (rows, files, share links, the session's
-place left alone as retract does) once that is settled.
+**Decided as proposed, and built.** Retraction from the public archive is paid-only on purpose —
+the publish-then-hide exploit — so a whole-session delete follows the same rule: free while
+unpublished, retraction's rule once published. `DELETE api/field-sessions/{id}` (the submitter
+only; NotFound for anyone else, as retract does) sweeps share links by both columns, then the file
+rows, then the session; the upload rows and bytes go afterwards one at a time through
+`UploadFileRows.TryDeleteAsync`, so a recording something else still holds is left standing. The
+place is left alone, exactly as retract leaves it.
+
+**Three refusals, each an existing rule rather than a new one:** recorded for an investigation (the
+group's evidence — the same rule the account purge keeps by sparing group sessions, and the case
+purge keeps by detaching them); cited by a case report (the citation would point at nothing);
+published and on a free plan (402, the retraction sentence verbatim).
+
+**UI:** `MyFieldSessions.razor` gains a delete beside Play back with a confirmation naming what
+goes, and shows *the group's* where the button would be on an investigation session.
+
+**Tests:** `FieldSessionDeleteTests` on the SQLite harness (item 219) — 8, including the paid half
+of the published pair so a blanket refusal could not pass. Two discrimination runs confirmed:
+dropping the share-link sweep makes the database refuse (that key is NoAction), dropping the
+investigation guard destroys a group's session. Playwright drives the dialog and presses nothing.
+Suite 4,117/0.
+
+**Docs:** `the-mobile-apps.md` § Deleting a session; `your-files.md` corrected — it said deleting a
+whole session was not yet possible.
+
+## 219. The purges can be run in a test at last (BUILT 2026-09-04)
+
+Discovered closing item 183 and fixed the same day. **No purge in this repo had a behaviour test
+of its delete path** — not the case purge, not the person purge, and not the group purge that
+production refused twice. The reason was mechanical: every purge is built from
+`ExecuteDeleteAsync` and `ExecuteUpdateAsync`, and the EF **InMemory provider implements neither**
+("not supported by the current database provider" on the first statement — probed, not assumed).
+Model-derived coverage tests were the workaround.
+
+**`SqliteTestDb`** is the answer: a real relational database, in memory, with foreign keys
+enforced. The model carries SQL Server column types (`nvarchar(max)`, `varbinary(max)`) SQLite
+cannot parse, so a model customizer drops every explicit column type and server-specific default
+or computed SQL — nothing about relationships, keys or delete behaviour is touched, which is the
+half the tests are about. The connection is held by the handle, so every context the factory hands
+out shares one database.
+
+**What it caught immediately.** An invalid foreign key in a fixture the InMemory tests had happily
+accepted (`CaseNote.AuthorAppUserId` left empty). And, on purpose: removing the
+`InvestigationDutyAssignments` sweep from `OrganizationPurge` reproduces the exact production
+refusal of 2026-09-03 as a test failure.
+
+**Also worth writing down:** most of a case's children are `Cascade`, so breaking their order
+proves nothing — a delete-order test has to break a **NoAction** table (`CaseNote`,
+`CaseMessage`, `CaseVote`, `InvestigationDutyAssignment`) to mean anything. The first
+discrimination attempt used `InvestigationAttendee`, which is Cascade, and passed against
+deliberately broken code.
+
+**Followed up the same day:** `AppUserPurge` got its behaviour tests too, and they found a real
+defect — see item 220.
+`Microsoft.EntityFrameworkCore.Sqlite` is a test-only package reference; nothing ships against it.
+
+## 220. Deleting a person promised a row removal the database then refused (FIXED 2026-09-04)
+
+Found by writing the behaviour tests item 219's harness made possible, at Ben's ask. Not
+hypothetical: it would fire on the live site for any account whose only remaining tie was a
+session recorded for an investigation, or an upload file something else still holds.
+
+**The defect.** `AppUserPurge` promises, on the screen and in advance, which of two endings a
+delete will have: the row goes, or the row stays emptied. The promise comes from a census of every
+foreign key into `AppUsers`, which skipped a list of tables the purge "empties". Four of those it
+empties only **partly** — a field session recorded for an investigation is the group's and stays,
+and so does a file something else still references. The census therefore reported nothing pointing
+at the account, the preview promised a complete removal, the row delete was attempted, and the
+database refused it **after the anonymise had already been committed**.
+
+**And the refusal escaped.** `ExecuteDelete` goes straight to the provider, so a foreign-key
+violation arrives as `SqlException`, never `DbUpdateException` — which is what both catches in the
+purge were written for. The narrow catch was in `UploadFileRows.TryDeleteAsync` too, which the
+case and group purges both call, so one still-referenced file could have failed a whole purge.
+
+**Fixed:** `sweptEntities` keeps only the tables emptied entirely; `GoingRowsAsync` names the exact
+rows about to go so the partly-emptied tables are still counted for everything that survives; both
+catches widened so a census gap degrades to the warning the code already intended.
+
+**Tested:** `AppUserPurgeBehaviourTests` (7, on the SQLite harness) including the preview promise
+matching the outcome in both directions; `AppUserPurgeCoverageTests` gains two structural guards —
+a table is emptied entirely or excluded row by row, never both, and the partly-emptied ones are
+named so they cannot be skipped wholesale again. Reintroducing the old list fails four tests.
+Suite 4,109/0. Help: the "kept, emptied" bullet now names the two cases it was missing.
 

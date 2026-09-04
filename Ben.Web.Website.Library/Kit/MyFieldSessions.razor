@@ -3,6 +3,7 @@
 @using Ben.Web.Services
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Shared
+@using Ben.Web.Website.Library.Kit
 @implements IDisposable
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -33,6 +34,14 @@
         Everything you have sent up from the app, newest first. Recording never needs an account;
         uploading does, so this is the list of the ones you chose to send.
     </p>
+
+    @if (_deleteError is not null)
+    {
+        @* The server's own sentence: "a case report cites this" and "retracting is part of a paid
+           plan" are different problems with different answers, and a guard whose reason the screen
+           throws away is barely better than no guard. *@
+        <div class="alert alert-danger" data-testid="delete-session-error">@_deleteError</div>
+    }
 
     @if (_loading)
     {
@@ -132,10 +141,28 @@
                             </td>
                             <td class="text-end font-monospace">@row.Files.Count</td>
                             <td class="text-secondary small">@row.DeviceModel</td>
-                            <td class="text-end">
+                            <td class="text-end text-nowrap">
                                 <a class="btn btn-secondary btn-sm text-nowrap"
                                    data-testid="play-back"
                                    href="@($"/field-sessions/{row.Id}")">Play back</a>
+                                @* Item 218. A session recorded for an investigation is the group's
+                                   record of that night, so it has no delete here — and the reason
+                                   is shown rather than left as a missing button. *@
+                                @if (row.InvestigationId is null)
+                                {
+                                    <button type="button" class="btn btn-outline-danger btn-sm ms-1"
+                                            title="Delete this session" data-testid="delete-session"
+                                            @onclick="() => AskToDelete(row)">
+                                        <BenIcon Name="trash-2" />
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary small ms-2" data-testid="belongs-to-group"
+                                          title="Recorded for an investigation, so it belongs to the group's record of that night.">
+                                        the group's
+                                    </span>
+                                }
                             </td>
                         </tr>
                     }
@@ -144,6 +171,31 @@
         </div>
     }
 </div>
+
+@* ── Delete a session (item 218) ─────────────────────────────────────────── *@
+<BenConfirmDialog @bind-Visible="@_showDelete" Title="Delete this session" Width="440px"
+                  Busy="@_deleting" BusyText="Deleting…" ConfirmText="Delete"
+                  OnConfirm="ConfirmDeleteAsync" OnCancel="@(() => _pendingDelete = null)">
+    @if (_pendingDelete is { } pending)
+    {
+        <p class="mb-2">
+            Delete the session recorded on
+            <strong>@pending.StartedAt.ToLocalTime().ToDisplayDate()</strong>@(string.IsNullOrWhiteSpace(pending.LocationLabel) ? "" : $" at {pending.LocationLabel}")?
+        </p>
+        <p class="text-secondary small mb-0">
+            Its @pending.ReadingCount.ToString("N0") reading@(pending.ReadingCount == 1 ? "" : "s"),
+            @pending.Files.Count recording@(pending.Files.Count == 1 ? "" : "s") and any link you
+            shared of it go with it. <strong>There is no undo.</strong>
+        </p>
+        @if (pending.PublishedAtUtc is not null)
+        {
+            <div class="alert alert-warning py-2 small mt-2 mb-0" data-testid="published-warning">
+                This session is published to a place's archive. Deleting it takes it back out of
+                the archive, which is part of a paid plan.
+            </div>
+        }
+    }
+</BenConfirmDialog>
 
 @code {
     private IReadOnlyList<FieldSessionSummaryRecord>? _rows;
@@ -162,6 +214,12 @@
     private bool _mapShown;
     private bool    _loading = true;
     private string? _refusal;
+
+    // Delete a session (item 218)
+    private bool _showDelete;
+    private bool _deleting;
+    private FieldSessionSummaryRecord? _pendingDelete;
+    private string? _deleteError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -248,4 +306,34 @@
     private void OpenSession(Guid sessionId) => NavManager.NavigateTo($"/field-sessions/{sessionId}");
 
     public void Dispose() => _viewportLoad?.Cancel();
+
+    // ── Delete a session (item 218) ──────────────────────────────────────────
+
+    private void AskToDelete(FieldSessionSummaryRecord row)
+    {
+        _pendingDelete = row;
+        _deleteError   = null;
+        _showDelete    = true;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDelete is not { } row) return;
+
+        _deleting = true;
+        var (deleted, error) = await AdminClient.DeleteMyFieldSessionAsync(row.Id);
+        _deleting = false;
+        _showDelete = false;
+        _pendingDelete = null;
+
+        if (!deleted)
+        {
+            _deleteError = error ?? "That session could not be deleted.";
+            return;
+        }
+
+        _rows = _rows is null ? null : [.. _rows.Where(r => r.Id != row.Id)];
+        // The map is drawn from the sessions, so a pin has to go with the row.
+        await LoadMapAsync();
+    }
 }

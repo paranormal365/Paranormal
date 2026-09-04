@@ -353,6 +353,25 @@ normally stay on the phone that made them.
   the first place. So it is worth a moment's thought before the first publish: what people have
   already read cannot be unread either way.
 
+## Deleting a session
+
+**My Field Sessions** on the website lists everything the app has sent up, and a session that is
+yours alone has a delete beside **Play back**. It asks first, and it takes the readings, the
+recordings and any share link you made of it. There is no undo.
+
+Three sessions cannot be deleted there, and the page says which:
+
+- **Recorded for an investigation.** It is the group's record of that night, not your phone's
+  history, so the row says *the group's* instead of offering a button. Ask the group.
+- **Cited by a case report.** Removing it would leave a finished report pointing at nothing. The
+  citation has to go first.
+- **Published to a place's archive.** Deleting it takes it back out of the archive, which is the
+  same thing as retracting it — and retracting is part of a paid plan, for the reason given above.
+  An unpublished session deletes freely on any plan.
+
+The place itself is never touched. Where a session happened is a fact about the recording, not a
+consequence of having shared it.
+
 ## What you photographed on somebody else's event
 
 If you go on a ghost walk or a paid event, you can offer what you caught to the group running it

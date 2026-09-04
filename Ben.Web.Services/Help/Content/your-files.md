@@ -54,4 +54,5 @@ happens on its own.
 A recording that is part of a field session is held by that session — the session's document
 names the file and the readings point into it. Such a recording can be handed to a group, and
 "remove everywhere" still ends its shares and copies, but the file itself is not destroyed while
-the session exists; the page says so. Deleting a whole session is not yet possible from the site.
+the session exists; the page says so. To remove the recording, delete the whole session from
+**My Field Sessions** — see *The iPhone and iPad Apps* for when that is and is not allowed.

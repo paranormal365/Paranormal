@@ -170,6 +170,19 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/investigation-duties/{dutyId}", token);
 
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.Entities.DutyEligibilityMatrix>($"/api/organizations/{orgId}/investigation-duties/matrix", token);
+
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
+        CancellationToken token = default)
+        => _api.PutAsync<object, Ben.Service.Models.Entities.DutyEligibilityMatrix>(
+            $"/api/organizations/{orgId}/investigation-duties/{dutyId}/eligibility",
+            new { TitleIds = titleIds, Capabilities = capabilities, IsEnforced = isEnforced }, token);
+
     // ── Case contacts (item 158) ─────────────────────────────────────────────
 
     public Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(
@@ -232,6 +245,10 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
 
     /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/field-sessions/{sessionId}", token);
+
     public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
