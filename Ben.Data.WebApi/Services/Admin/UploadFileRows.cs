@@ -23,7 +23,10 @@ public static class UploadFileRows
         {
             return await db.UploadFiles.Where(f => f.Id == fileId).ExecuteDeleteAsync(ct) > 0;
         }
-        catch (DbUpdateException)
+        // Not DbUpdateException: ExecuteDelete goes straight to the provider, so a foreign key
+        // violation arrives as the provider's own exception type. Catching the narrower one let a
+        // single still-referenced file fail a whole purge.
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return false;
         }
