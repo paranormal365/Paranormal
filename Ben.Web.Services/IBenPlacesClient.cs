@@ -222,6 +222,18 @@ public interface IBenPlacesClient
     /// Every field session this account uploaded, newest first. The phone's side of the archive,
     /// which until now the website had no page for.
     /// </summary>
+    /// <summary>
+    /// Deletes one of your own field sessions: its recordings, its document, its share links and
+    /// the row (item 218).
+    /// </summary>
+    /// <remarks>
+    /// The error sentence is the server's own, because the three refusals are three different
+    /// problems with three different answers — it belongs to a group's investigation, a case
+    /// report cites it, or it is published and retracting is part of a paid plan.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default);
+
     Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
         CancellationToken token = default);
 

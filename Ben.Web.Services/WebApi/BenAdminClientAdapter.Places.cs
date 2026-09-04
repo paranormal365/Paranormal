@@ -232,6 +232,10 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
 
     /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/field-sessions/{sessionId}", token);
+
     public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);

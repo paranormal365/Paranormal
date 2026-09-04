@@ -10967,7 +10967,7 @@ Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Pl
 e2e stack has no model and no fixture the classifier would refuse. Help:
 `moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
 
-## 218. A person cannot delete their own field session (open, found 2026-09-04)
+## 218. A person cannot delete their own field session (CLOSED 2026-09-04)
 
 Found while closing item 180 Phase B, on Ben's question *"This will include FieldKit uploads?"*
 A session's recordings and document are ordinary files the person owns, listed in Upload Files
@@ -10977,11 +10977,30 @@ session are the SuperAdmin orphan purge and, for the archive, *retract*, which u
 without deleting. So the file delete refuses with "part of a field session" and there is nowhere
 for the person to go next.
 
-**To decide before building:** retraction from the public archive is paid-only on purpose — the
-publish-then-hide exploit. A whole-session delete for a free account would be the same exploit by
-another door, so the rule is probably: delete freely while unpublished; once published, delete
-follows the retraction rule. The door itself is small (rows, files, share links, the session's
-place left alone as retract does) once that is settled.
+**Decided as proposed, and built.** Retraction from the public archive is paid-only on purpose —
+the publish-then-hide exploit — so a whole-session delete follows the same rule: free while
+unpublished, retraction's rule once published. `DELETE api/field-sessions/{id}` (the submitter
+only; NotFound for anyone else, as retract does) sweeps share links by both columns, then the file
+rows, then the session; the upload rows and bytes go afterwards one at a time through
+`UploadFileRows.TryDeleteAsync`, so a recording something else still holds is left standing. The
+place is left alone, exactly as retract leaves it.
+
+**Three refusals, each an existing rule rather than a new one:** recorded for an investigation (the
+group's evidence — the same rule the account purge keeps by sparing group sessions, and the case
+purge keeps by detaching them); cited by a case report (the citation would point at nothing);
+published and on a free plan (402, the retraction sentence verbatim).
+
+**UI:** `MyFieldSessions.razor` gains a delete beside Play back with a confirmation naming what
+goes, and shows *the group's* where the button would be on an investigation session.
+
+**Tests:** `FieldSessionDeleteTests` on the SQLite harness (item 219) — 8, including the paid half
+of the published pair so a blanket refusal could not pass. Two discrimination runs confirmed:
+dropping the share-link sweep makes the database refuse (that key is NoAction), dropping the
+investigation guard destroys a group's session. Playwright drives the dialog and presses nothing.
+Suite 4,117/0.
+
+**Docs:** `the-mobile-apps.md` § Deleting a session; `your-files.md` corrected — it said deleting a
+whole session was not yet possible.
 
 ## 219. The purges can be run in a test at last (BUILT 2026-09-04)
 

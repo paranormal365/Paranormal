@@ -1397,7 +1397,10 @@ public sealed record FieldSessionSummaryRecord(
     string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
     int ReadingCount, int MarkerCount, Guid DocumentUploadFileId,
     Guid? RecordedByAppUserId, string? RecordedByName, DateTime DateCreated,
-    IReadOnlyList<FieldSessionFileSummary> Files);
+    IReadOnlyList<FieldSessionFileSummary> Files,
+    /// <summary>Set once this session has been published to a place's archive (item 218): the
+    /// screen needs it to know whether deleting is retraction, which is part of a paid plan.</summary>
+    DateTime? PublishedAtUtc = null);
 
 /// <summary>One session reduced to a pin, for the map on My Field Sessions.</summary>
 public sealed record FieldSessionMapPoint(
