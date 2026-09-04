@@ -115,4 +115,46 @@ public class MyFieldSessionsTests : BenTestBase
         // Nobody's sessions are shown to nobody.
         await Expect(Page.Locator("[data-testid='session-row']")).ToHaveCountAsync(0);
     }
+
+    /// <summary>
+    /// Deleting your own session (item 218). <b>Nothing here presses the button</b> — the suite
+    /// has more than once been pointed at a database somebody cares about, and a test that
+    /// actually deleted a night's recording would be indistinguishable from the accident the
+    /// confirmation exists to prevent. What is driven is the row's control and the dialog it
+    /// opens; the delete itself is covered by FieldSessionDeleteTests against a real database.
+    /// </summary>
+    [Test]
+    public async Task A_session_of_your_own_offers_a_delete_that_asks_first()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await Page.GotoAsync($"{BaseUrl}/my-field-sessions");
+        await Page.WaitForSelectorAsync(
+            "[data-testid='session-row'], [data-testid='no-sessions'], [data-testid='sessions-refusal']",
+            new() { Timeout = 30_000 });
+
+        var deleteButton = Page.Locator("[data-testid='delete-session']").First;
+        if (await deleteButton.CountAsync() == 0)
+        {
+            // Every session this account has belongs to a group, or it has none. Both are valid
+            // states of the page, and the row then has to say so rather than show a dead button.
+            var rows = await Page.Locator("[data-testid='session-row']").CountAsync();
+            if (rows > 0)
+            {
+                await Expect(Page.Locator("[data-testid='belongs-to-group']").First)
+                    .ToBeVisibleAsync(new() { Timeout = 10_000 });
+            }
+            Assert.Ignore("No personal sessions in this database to offer a delete for.");
+            return;
+        }
+
+        await deleteButton.ClickAsync();
+
+        // The confirmation names what goes, and cancelling leaves the row alone.
+        var dialog = Page.GetByText("There is no undo", new() { Exact = false }).First;
+        await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).First.ClickAsync();
+        await Expect(Page.Locator("[data-testid='delete-session']").First)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
 }
