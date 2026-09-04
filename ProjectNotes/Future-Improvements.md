@@ -9319,7 +9319,8 @@ noticing it extracted nothing.
 JPEG with `.clean.jpg` and `.thumb.jpg` written beside the untouched original, and a metadata row
 carrying dimensions and the raw dump. Probe rows and files removed afterwards (shared DB).
 
-**Phase B, still to build — Ben's delete-and-reassign flow** (spec given 2026-08-24, unchanged):
+**Phase B — BUILT 2026-09-04** (see the closing note at the end of this item). Ben's
+delete-and-reassign flow as specified 2026-08-24:
 when a user deletes a file that is shared and in use, ask whether they want it removed everywhere
 it is shared. If yes, honour it. If no, ask whether they still wish to delete it; if they do, the
 file and its EXIF record are **reassigned to the organization using it** rather than destroyed —
@@ -9330,6 +9331,46 @@ org-ownership, and personal-file listings that exclude reassigned files.
 
 ---
 
+
+**Phase B closing note (2026-09-04).** Ben's clarification the same day: *"Ownership remains
+with user who uploaded the file until they delete it and only if they choose not to delete
+usages beyond their account?"* — yes, and that is what shipped. Ownership never moves on its own;
+it moves only on the second answer of the delete dialog.
+
+*Schema:* `UploadFile.AppUserId` is now nullable and `OwnerOrganizationId` added (migration
+`AddUploadFileOwnerOrganization`). Nullable rather than re-pointed: every "is this mine" check
+reads `AppUserId == userId`, and null fails all of them at once — the personal listing, the owner
+gates, the account purge — with no second column each would have to remember. Who uploaded it is
+still `CreatedByAppUserId`.
+
+*Doors:* `GET api/upload-files/{id}/usage` (one row per group: shares, case copies, group
+copies, direct links — counts, not the group's case titles); plain `DELETE` now refuses with the
+usage (409) while a group is using it, where before it deleted without looking and left the
+group's copies pointing at nothing; `POST …/delete-everywhere` ends both share tables' rows,
+removes case copies with their comments and votes, the group's own copies, and every direct link
+(case, timeline, report, logo, ad, event evidence, equipment photo, client request), then
+destroys the file — refusing up front if a Field Kit session holds it; `POST …/reassign`
+requires the group to be *using* the file (or anyone could plant one), clears `AppUserId`, sets
+`OwnerOrganizationId`, keeps the id (so shares, copies and the metadata row keyed on it come
+along untouched), and gives the group a copy in its own Files the way copy-from-user does.
+
+*Gates:* `FileAudienceAccess.CanManageFileAsync` — owner, or the owning group's Owner /
+Administrator, or SuperAdmin; the former owner is deliberately out. `CanViewFileAsync` lets any
+active member of the owning group see it. The group purge releases the claim in its transaction
+and removes each file afterwards through `UploadFileRows`, never in bulk (the coverage guard's
+`UploadFiles` rule now says so).
+
+*UI:* `UploadFiles.razor` — usage first; a plain confirm when nobody else uses it; otherwise the
+two questions in a small dialog with a group picker when more than one group is using it.
+
+*Verified:* 47 controller tests (13 new) in a 4,064/0 suite; three guards proven to
+discriminate (the in-use refusal, the former-owner refusal, the session hold). Playwright
+`UploadFilesTests.Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt` written, not run here (the
+runner needs the two secrets). Help: new `your-files.md`. **Deploy note:** the migration must
+reach the site's database.
+
+*Found on the way:* Field Kit recordings are ordinary owned files and show in Upload Files, but a
+session holds them and there is no door for a person to delete a session — item 218.
 ## 181. A/V metadata stripping as an org setting, gated by plan (Ben, 2026-08-24 — BUILT)
 
 Ben: *"Make stripping the EXIF-like data from audio and video files a setting at the org level. It
@@ -10884,4 +10925,20 @@ the account — the window ends on its own. The queue shows "Uploads paused — 
 Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Playwright — the
 e2e stack has no model and no fixture the classifier would refuse. Help:
 `moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
+
+## 218. A person cannot delete their own field session (open, found 2026-09-04)
+
+Found while closing item 180 Phase B, on Ben's question *"This will include FieldKit uploads?"*
+A session's recordings and document are ordinary files the person owns, listed in Upload Files
+and covered by the delete dialog — but `FieldSessionUploadFile` and
+`FieldSessionUpload.DocumentUploadFileId` hold them (Restrict), and the only doors that remove a
+session are the SuperAdmin orphan purge and, for the archive, *retract*, which unpublishes
+without deleting. So the file delete refuses with "part of a field session" and there is nowhere
+for the person to go next.
+
+**To decide before building:** retraction from the public archive is paid-only on purpose — the
+publish-then-hide exploit. A whole-session delete for a free account would be the same exploit by
+another door, so the rule is probably: delete freely while unpublished; once published, delete
+follows the retraction rule. The door itself is small (rows, files, share links, the session's
+place left alone as retract does) once that is settled.
 

@@ -5,7 +5,10 @@ public record UploadFileRecord
 {
     public Guid Id { get; init; }
     public Guid UploadFileTypeId { get; init; }
-    public Guid AppUserId { get; init; }
+    /// <summary>The owning person, or null once the file has been handed to a group (item 180 Phase B).</summary>
+    public Guid? AppUserId { get; init; }
+    /// <summary>The owning group, when a person handed the file over rather than destroy it.</summary>
+    public Guid? OwnerOrganizationId { get; init; }
     public required string FileName { get; init; }
     public required string StoredFileName { get; init; }
     public required string ContentType { get; init; }

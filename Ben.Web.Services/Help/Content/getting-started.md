@@ -85,7 +85,7 @@ about eight rows however much you can reach:
   they should not be behind anything.
 - **My Work** — your cases, your investigations, your requests.
 - **Equipment** — the public catalogue, your own gear, what you have out on loan, and gear questions.
-- **Media** — uploaded files, the media library, your videos.
+- **Media** — uploaded files (see *Your Files* for what deleting one means), the media library, your videos.
 - **Community** — the feed, publications, finding a group, and requesting an investigation.
 - **Administration**, for site administrators, holding the site-wide tools grouped by what they
   are for.
