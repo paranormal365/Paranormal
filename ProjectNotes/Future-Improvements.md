@@ -11010,6 +11010,36 @@ proves nothing — a delete-order test has to break a **NoAction** table (`CaseN
 discrimination attempt used `InvestigationAttendee`, which is Cascade, and passed against
 deliberately broken code.
 
-**Left for later:** `AppUserPurge` has no behaviour test yet. The harness now makes one cheap.
+**Followed up the same day:** `AppUserPurge` got its behaviour tests too, and they found a real
+defect — see item 220.
 `Microsoft.EntityFrameworkCore.Sqlite` is a test-only package reference; nothing ships against it.
+
+## 220. Deleting a person promised a row removal the database then refused (FIXED 2026-09-04)
+
+Found by writing the behaviour tests item 219's harness made possible, at Ben's ask. Not
+hypothetical: it would fire on the live site for any account whose only remaining tie was a
+session recorded for an investigation, or an upload file something else still holds.
+
+**The defect.** `AppUserPurge` promises, on the screen and in advance, which of two endings a
+delete will have: the row goes, or the row stays emptied. The promise comes from a census of every
+foreign key into `AppUsers`, which skipped a list of tables the purge "empties". Four of those it
+empties only **partly** — a field session recorded for an investigation is the group's and stays,
+and so does a file something else still references. The census therefore reported nothing pointing
+at the account, the preview promised a complete removal, the row delete was attempted, and the
+database refused it **after the anonymise had already been committed**.
+
+**And the refusal escaped.** `ExecuteDelete` goes straight to the provider, so a foreign-key
+violation arrives as `SqlException`, never `DbUpdateException` — which is what both catches in the
+purge were written for. The narrow catch was in `UploadFileRows.TryDeleteAsync` too, which the
+case and group purges both call, so one still-referenced file could have failed a whole purge.
+
+**Fixed:** `sweptEntities` keeps only the tables emptied entirely; `GoingRowsAsync` names the exact
+rows about to go so the partly-emptied tables are still counted for everything that survives; both
+catches widened so a census gap degrades to the warning the code already intended.
+
+**Tested:** `AppUserPurgeBehaviourTests` (7, on the SQLite harness) including the preview promise
+matching the outcome in both directions; `AppUserPurgeCoverageTests` gains two structural guards —
+a table is emptied entirely or excluded row by row, never both, and the partly-emptied ones are
+named so they cannot be skipped wholesale again. Reintroducing the old list fails four tests.
+Suite 4,109/0. Help: the "kept, emptied" bullet now names the two cases it was missing.
 

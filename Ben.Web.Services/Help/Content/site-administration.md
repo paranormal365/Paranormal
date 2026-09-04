@@ -511,7 +511,8 @@ The screen tells you which of the two it will be, before you press anything.
 
 - **Removed completely** when nothing else in the database refers to the account. A signup that
   never did anything vanishes entirely.
-- **Kept, emptied** when records written for a group still point at it. The person is gone from it
+- **Kept, emptied** when anything still points at it: records written for a group, a session
+  recorded for an investigation, or a file something else still uses. The person is gone from it
   — name, email, password, sign-in methods — and it can never sign in again, but the row survives
   so those records still resolve.
 
