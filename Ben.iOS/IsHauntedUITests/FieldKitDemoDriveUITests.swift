@@ -36,7 +36,7 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the new-session sheet should appear")
         field.tap()
         field.typeText("Cellar stairs")
-        let begin = app.buttons["Start recording"].firstMatch
+        let begin = app.buttons["Open the session"].firstMatch
         XCTAssertTrue(begin.waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 1)
         begin.tap()
@@ -49,8 +49,16 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 4)
         let base = app.buttons["set-base-level"].firstMatch
         XCTAssertTrue(base.waitForExistence(timeout: 10), "the live session should offer Set base")
+        // Item 215: the base level is set while pending — that is the point of the pause — and
+        // Start is pressed afterwards, so the footage shows the gauge before the clock begins.
         if !base.isHittable { app.swipeUp() }
         base.tap()
+        Thread.sleep(forTimeInterval: 2)
+
+        // Now the clock begins. Everything the camera sees after this is the recording.
+        let startRecording = app.buttons["start-recording"]
+        XCTAssertTrue(startRecording.waitForExistence(timeout: 10), "a pending session should offer Start")
+        startRecording.tap()
 
         // The swipe that reached the button left the gauge above the fold, and the first cut
         // with a baseline was 26 seconds of the controls it swung out of frame. Come back up:

@@ -23,7 +23,7 @@ struct FieldSessionEngineTests {
         policy: SamplingPolicy = .default,
         channels: CaptureChannels = .default,
         clock: ManualClock
-    ) -> (FieldSessionEngine, ReadingLog, URL) {
+    ) async -> (FieldSessionEngine, ReadingLog, URL) {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("engine-\(UUID().uuidString)")
             .appendingPathComponent("readings.jsonl")
@@ -34,6 +34,9 @@ struct FieldSessionEngineTests {
         let engine = FieldSessionEngine(sessionId: UUID(), log: log, sensors: sensors,
                                         policy: policy, channels: channels,
                                         now: clock.nowProvider)
+        // Item 215: nothing reaches the log until Start. These tests are about a session that
+        // has begun, so the log is opened here rather than in every test.
+        await engine.beginLogging()
         return (engine, log, url.deletingLastPathComponent())
     }
 
@@ -43,7 +46,7 @@ struct FieldSessionEngineTests {
         // 10 Hz to the gauge, one reading every 2 s to the log. Logging every sample would put
         // 180,000 records in a five-hour session and buy nothing.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(gaugeHz: 10, heartbeatSeconds: 2), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -62,7 +65,7 @@ struct FieldSessionEngineTests {
 
     @Test func aReadingCarriesTheFieldItsBaselineAndItsAccuracy() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(battery: 82, clock: clock)
+        let (engine, log, directory) = await makeEngine(battery: 82, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -85,7 +88,7 @@ struct FieldSessionEngineTests {
 
     @Test func aReadingWithNoFixHasNoPositionAtAll() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 50, y: 0, z: 0))
@@ -98,7 +101,7 @@ struct FieldSessionEngineTests {
 
     @Test func aFixTravelsWithItsAccuracyBecauseIndoorsItIsTerrible() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(position: PositionSample(
@@ -126,7 +129,7 @@ struct FieldSessionEngineTests {
         let clock = ManualClock(start)
         let policy = SamplingPolicy(gaugeHz: 10, heartbeatSeconds: 60,
                                     reportAtMilligauss: 20, debounceSeconds: 3)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -153,7 +156,7 @@ struct FieldSessionEngineTests {
         let clock = ManualClock(start)
         let policy = SamplingPolicy(gaugeHz: 10, heartbeatSeconds: 60,
                                     reportAtMilligauss: 20, debounceSeconds: 3)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -174,7 +177,7 @@ struct FieldSessionEngineTests {
     @Test func noiseBelowTheReportLevelIsNeverAnEvent() async throws {
         let clock = ManualClock(start)
         let policy = SamplingPolicy(gaugeHz: 10, heartbeatSeconds: 60, reportAtMilligauss: 20)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -199,7 +202,7 @@ struct FieldSessionEngineTests {
         // Absolute field means nothing: the Earth alone is around 500 mG and every building
         // moves it. Until somebody says "this room is normal", there is nothing to depart from.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60, reportAtMilligauss: 20), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -222,7 +225,7 @@ struct FieldSessionEngineTests {
         // log — hiding it would be its own dishonesty — but it does not ring a bell.
         let clock = ManualClock(start)
         let policy = SamplingPolicy(gaugeHz: 10, heartbeatSeconds: 2, reportAtMilligauss: 20)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -244,7 +247,7 @@ struct FieldSessionEngineTests {
     @Test func soundRisingAboveBaseIsItsOwnKindOfEvent() async throws {
         let clock = ManualClock(start)
         let policy = SamplingPolicy(heartbeatSeconds: 60, reportAtDecibels: 12, debounceSeconds: 3)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(audio: AudioLevelSample(at: start, averageDbfs: -54, peakDbfs: -50))
@@ -265,7 +268,7 @@ struct FieldSessionEngineTests {
         let clock = ManualClock(start)
         let policy = SamplingPolicy(heartbeatSeconds: 60, reportAtMilligauss: 20,
                                     debounceSeconds: 30)
-        let (engine, log, directory) = makeEngine(policy: policy, clock: clock)
+        let (engine, log, directory) = await makeEngine(policy: policy, clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0,
@@ -292,7 +295,7 @@ struct FieldSessionEngineTests {
 
     @Test func aManualMarkerRecordsWhatTheInstrumentsSaidAtThatMoment() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(magnetic: MagneticFieldSample(at: start, x: 48, y: 0, z: 0))
@@ -316,7 +319,7 @@ struct FieldSessionEngineTests {
         // This is what lets somebody tap a marker in review and hear that moment — and it is
         // the same shape the server's audio markers use, so it can travel later.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.setRecording(filename: "media/audio-001.m4a", startedAt: start)
@@ -341,7 +344,7 @@ struct FieldSessionEngineTests {
         let clock = ManualClock(start)
         let magnetometer = ScriptedMagnetometer.steady(50, from: start, count: 5)
         let audio = ScriptedAudio.steady(-50, from: start, count: 5)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             magnetometer: magnetometer, audio: audio,
             policy: SamplingPolicy(heartbeatSeconds: 0), channels: [.magnetic], clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -373,7 +376,7 @@ struct FieldSessionEngineTests {
 
     @Test func aCaptureNamesItsFileByARelativePathTheBundleCanCarry() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.ingest(position: PositionSample(at: start, latitude: 36.1, longitude: -86.7,
@@ -394,7 +397,7 @@ struct FieldSessionEngineTests {
 
     @Test func anAudioCaptureCarriesItsDurationInTheFileReference() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.noteCapture(kind: .audio, relativePath: "media/audio-001.m4a",
@@ -414,7 +417,7 @@ struct FieldSessionEngineTests {
         // "Armed" has to be a real state, not a label. A phone in somebody's hand should not be
         // filling the log with events every time they walk past a fridge.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60, reportAtMilligauss: 20), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -437,7 +440,7 @@ struct FieldSessionEngineTests {
         // Different question from "did anything in view move": this is whether the tripod got
         // knocked, or somebody picked the phone up.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 3), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -463,7 +466,7 @@ struct FieldSessionEngineTests {
 
     @Test func aDeviceMovementSwitchedOffIsNotWatchedAtAll() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -476,7 +479,7 @@ struct FieldSessionEngineTests {
 
     @Test func movementSeenThroughTheCameraIsRecordedWithHowMuchChanged() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 3), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -498,7 +501,7 @@ struct FieldSessionEngineTests {
 
     @Test func armingAgainForgetsWhatTheLastRoomWasDoing() async throws {
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(
+        let (engine, log, directory) = await makeEngine(
             policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 60), clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -533,7 +536,7 @@ struct FieldSessionEngineTests {
         // What a reviewer needs is the SILENCE bracketed, not just the moment somebody spoke —
         // the answer, if there is one, is in the gap.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.setRecording(filename: "media/audio-001.m4a", startedAt: start)
@@ -564,7 +567,7 @@ struct FieldSessionEngineTests {
     @Test func endingAWaitThatNeverStartedDoesNothing() async throws {
         // A mark with nothing on the other end of it is worse than no mark.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         #expect(await engine.endWait() == nil)
@@ -576,7 +579,7 @@ struct FieldSessionEngineTests {
         // Moving straight to the next question ends the last silence by speaking. Leaving it
         // open forever would describe a wait that never finished.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.askQuestion("First")
@@ -597,7 +600,7 @@ struct FieldSessionEngineTests {
         // Somebody may be recording on a separate device entirely. The mark is still the useful
         // thing; it simply has no file to point into.
         let clock = ManualClock(start)
-        let (engine, log, directory) = makeEngine(clock: clock)
+        let (engine, log, directory) = await makeEngine(clock: clock)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let marker = await engine.askQuestion("Anyone?")
@@ -616,7 +619,7 @@ struct FieldSessionEngineTests {
 @Suite("Room labels")
 struct RoomLabelTests {
 
-    private func makeEngine() -> (FieldSessionEngine, ReadingLog, URL) {
+    private func makeEngine() async -> (FieldSessionEngine, ReadingLog, URL) {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("room-\(UUID().uuidString)")
             .appendingPathComponent("readings.jsonl")
@@ -624,11 +627,12 @@ struct RoomLabelTests {
         let engine = FieldSessionEngine(sessionId: UUID(), log: log,
                                         sensors: SensorSuite(batteryPercent: { nil }),
                                         policy: .default)
+        await engine.beginLogging()   // item 215
         return (engine, log, url.deletingLastPathComponent())
     }
 
     @Test func readingsCarryTheRoomUntilItChanges() async throws {
-        let (engine, log, directory) = makeEngine()
+        let (engine, log, directory) = await makeEngine()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.setRoom("Cellar")
@@ -645,7 +649,7 @@ struct RoomLabelTests {
 
     /// Blank input must not become a room called " ".
     @Test func blankRoomsAreNotRooms() async throws {
-        let (engine, _, directory) = makeEngine()
+        let (engine, _, directory) = await makeEngine()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.setRoom("   ")
@@ -656,7 +660,7 @@ struct RoomLabelTests {
 
     /// A mark records where it was made, not where the reviewer happens to be looking later.
     @Test func markersRememberTheirRoom() async throws {
-        let (engine, _, directory) = makeEngine()
+        let (engine, _, directory) = await makeEngine()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.setRoom("Kitchen")
@@ -698,5 +702,35 @@ struct RoomLabelTests {
         #expect(replay.frame.room == "Attic")
         replay.seek(to: start.addingTimeInterval(25))
         #expect(replay.frame.room == nil)
+    }
+}
+
+/// The one rule item 215 adds to the engine: sensors run, the log waits for Start.
+@Suite("Nothing reaches the log before Start")
+struct EngineLogGateTests {
+    @Test func readingsBeforeStartAreNeverLoggedAndReadingsAfterStartAre() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gate-\(UUID().uuidString)")
+            .appendingPathComponent("readings.jsonl")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let log = ReadingLog(fileURL: url)
+        let clock = ManualClock()
+        let engine = FieldSessionEngine(sessionId: UUID(), log: log,
+                                        sensors: SensorSuite(batteryPercent: { nil }),
+                                        policy: .default, now: clock.nowProvider)
+
+        // Running, and the gauge would be moving — but a mark, the one thing that writes on
+        // demand, lands nowhere. Readings before Start were never anybody's evidence.
+        await engine.start()
+        _ = await engine.mark(kind: .manual, note: "before start")
+        #expect(try await log.readings().isEmpty, "the log must stay closed until Start")
+        #expect(await engine.isLogging == false)
+
+        await engine.beginLogging()
+        _ = await engine.mark(kind: .manual, note: "after start")
+        let readings = try await log.readings()
+        #expect(readings.count == 1, "the first thing after Start is the first thing logged")
+        #expect(readings.first?.note == "after start")
+        await engine.stop()
     }
 }

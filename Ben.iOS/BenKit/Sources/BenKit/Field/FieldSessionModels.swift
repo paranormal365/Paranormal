@@ -48,10 +48,16 @@ public enum CaptureKind: String, Codable, Sendable {
     public var mediaTypePrefix: String { self == .photo ? "image/" : "\(rawValue)/" }
 }
 
-/// Why a session stopped. `interrupted` is not a failure to hide — a session that ended because
+/// Where a session is. `interrupted` is not a failure to hide — a session that ended because
 /// the phone died is a fact a reviewer needs, and its `ended_at` is genuinely unknown.
+///
+/// `pending` (item 215, Ben 2026-09-04): created and open on the live screen, but nothing is
+/// being logged yet. The sensors run so the gauge moves and a base level can be set, and the
+/// person presses Start when the room is ready. It is a THIRD state on purpose: a pending
+/// session that the phone dies on lost nothing, so it must not be reported as interrupted, and
+/// it holds no readings, so it must not be listed as a recording.
 public enum FieldSessionOutcome: String, Codable, Sendable {
-    case recording, ended, interrupted
+    case pending, recording, ended, interrupted
 }
 
 /// One field session. SwiftData holds the low-volume, editable, relational rows; the readings
@@ -107,7 +113,8 @@ public final class FieldSession {
                 timezoneIdentifier: String = TimeZone.current.identifier) {
         self.id = id
         self.startedAt = startedAt
-        self.outcomeRaw = FieldSessionOutcome.recording.rawValue
+        // Pending until Start is pressed on the live screen — see FieldSessionOutcome.
+        self.outcomeRaw = FieldSessionOutcome.pending.rawValue
         self.locationLabel = locationLabel
         self.investigationId = investigationId
         self.investigationTitle = investigationTitle

@@ -41,7 +41,7 @@ struct FieldKitHomeView: View {
 
             if let active = store.activeSessionId,
                let summary = store.summary(for: active) {
-                Section("Recording now") {
+                Section(summary.isRecording ? "Recording now" : "Set up, not started") {
                     Button {
                         router.push(.fieldSession(active))
                     } label: {
@@ -52,7 +52,7 @@ struct FieldKitHomeView: View {
                 }
             }
 
-            let finished = store.sessions.filter { !$0.isRecording }
+            let finished = store.sessions.filter { !$0.isOpen }
             if finished.isEmpty {
                 Section {
                     Text("Nothing recorded yet. A session logs magnetic field, sound and where you were, and holds the photos and audio you capture along the way.")
@@ -119,6 +119,9 @@ private struct SessionRow: View {
                 Image(systemName: "record.circle")
                     .foregroundStyle(Theme.danger)
                     .symbolEffect(.pulse)
+            } else if summary.isPending {
+                Image(systemName: "circle.dotted")
+                    .foregroundStyle(Theme.fog)
             } else {
                 Image(systemName: summary.outcome == .interrupted
                       ? "exclamationmark.triangle" : "waveform")
@@ -146,6 +149,8 @@ private struct SessionRow: View {
         } else if summary.outcome == .interrupted {
             // Honest: nobody knows when it stopped, so it does not claim a length.
             parts.append("interrupted")
+        } else if summary.isPending {
+            parts.append("not started")
         }
         if summary.markerCount > 0 {
             parts.append("\(summary.markerCount) marked")
@@ -216,7 +221,8 @@ private struct StartSessionSheet: View {
                         }
                     } label: {
                         if busy { ProgressView().frame(maxWidth: .infinity) }
-                        else { Text("Start recording").frame(maxWidth: .infinity) }
+                        // It opens the live screen; Start is pressed THERE, once the room is ready.
+                        else { Text("Open the session").frame(maxWidth: .infinity) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(busy)
