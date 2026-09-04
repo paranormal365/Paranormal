@@ -423,6 +423,55 @@ What the merge does, in one pass that either completes or leaves both groups unt
 The name after the merge is yours to choose — either group's name or a new one. Confirmation
 requires typing the merged group's name, because there is no undo.
 
+## Deleting a person
+
+**Administration → Groups → Delete a Person**, or the trash button on any row of
+**Administration → Users**, which opens the same screen with that account already chosen.
+
+Read the preview before you agree to anything. It has two halves, and they are two different
+things happening.
+
+**Destroyed.** Everything that is only ever theirs and that nobody else has a claim on: field
+sessions they recorded on their own rather than for an investigation, the files under those
+sessions, their memberships, sign-in history, messages received, follows, blocks, contact details
+and any external sign-in methods.
+
+**Kept, with their name removed.** Anything they wrote for a group — case notes, timeline
+entries, group messages, evidence, and sessions recorded for an investigation. Those belong to the
+group and often to a paying client. One person leaving must not erase a group's record of its own
+work, so the records stay and are re-attributed to a former member.
+
+### Whether the account itself disappears
+
+The screen tells you which of the two it will be, before you press anything.
+
+- **Removed completely** when nothing else in the database refers to the account. A signup that
+  never did anything vanishes entirely.
+- **Kept, emptied** when records written for a group still point at it. The person is gone from it
+  — name, email, password, sign-in methods — and it can never sign in again, but the row survives
+  so those records still resolve.
+
+That distinction is not a technicality. If you are clearing out a test signup you want the first,
+and the screen will say so; if you are removing a real member of a real group you will get the
+second, and being told in advance is the point.
+
+### Two warnings, and one refusal
+
+The screen warns you, without stopping you, when:
+
+- **They own a group.** Exactly one owner exists per group, so it will be left with nobody able to
+  administer it. Appoint a new owner first, or be ready to do it straight afterwards.
+- **They are paying for a seat.** Nothing here cancels a subscription, so the card on file keeps
+  being charged for an account that no longer exists. Cancel it first.
+
+It refuses outright in one case only: **the last SuperAdmin account**. There is no way back from a
+platform nobody can administer.
+
+Confirmation is the person's display name, typed exactly — the same as deleting a group, and for
+the same reason. There is no undo.
+
+You cannot delete your own account from here; that is on your own profile.
+
 ## The money trail
 
 Three more screens under **Administration → Billing** carry the actual money.
