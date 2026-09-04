@@ -212,4 +212,135 @@ public sealed class InvestigationDutyTests
 
         Assert.IsType<ForbidResult>(result.Result);
     }
+
+    // ── Rules versus advice (item 160, Ben 2026-09-04) ───────────────────────
+    //
+    // Eligibility is advice with a recorded override, because a hard limit does not stop the
+    // junior running the camera when the senior calls in sick — it stops the roster from saying
+    // so. Two exceptions to that, and these are them.
+
+    /// <summary>Gives a duty a capability, or marks it a rule, or both.</summary>
+    private static async Task ShapeDutyAsync(
+        World w, Guid dutyId, InvestigationDutyCapabilities capabilities = InvestigationDutyCapabilities.None,
+        bool enforced = false)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var duty = await db.InvestigationDuties.FirstAsync(d => d.Id == dutyId);
+        duty.Capabilities = capabilities;
+        duty.IsEnforced = enforced;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Makes somebody the lead of the visit: may manage tonight, no standing authority.</summary>
+    private static async Task MakeVisitLeadAsync(World w, Guid attendeeId)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var attendee = await db.InvestigationAttendees.FirstAsync(a => a.Id == attendeeId);
+        attendee.IsLead = true;
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task A_duty_marked_a_rule_cannot_be_assigned_past_even_by_an_administrator()
+    {
+        // The escape hatch for a rule is changing the rule on the settings grid, which is
+        // deliberate and visible — not waving one night through it.
+        var w = await SeedAsync();
+        await ShapeDutyAsync(w, w.LeadDutyId, enforced: true);
+        var ctrl = Build(w.Factory, w.AdminId);
+
+        var result = await ctrl.AssignDuty(w.OrgId, w.InvestigationId, w.AttendeeJuniorId, w.LeadDutyId,
+            new AssignDutyRequest(Override: true), default);
+
+        var refused = Assert.IsType<ConflictObjectResult>(result.Result);
+        Assert.Contains("requirement rather than a guide", refused.Value!.ToString());
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        Assert.Empty(await db.InvestigationDutyAssignments.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_duty_that_is_only_advice_can_still_be_assigned_past()
+    {
+        // The half that keeps the default honest: a rule flag that was effectively always on
+        // would pass the test above and quietly make every duty strict.
+        var w = await SeedAsync();
+        await ShapeDutyAsync(w, w.LeadDutyId, enforced: false);
+        var ctrl = Build(w.Factory, w.AdminId);
+
+        var result = await ctrl.AssignDuty(w.OrgId, w.InvestigationId, w.AttendeeJuniorId, w.LeadDutyId,
+            new AssignDutyRequest(Override: true), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Assigning_past_a_duty_that_confers_authority_takes_more_than_running_the_visit()
+    {
+        // An override into a duty that hands out point-of-contact, or the right to hand out the
+        // other duties, is a different act from one into a duty that is only a label — the person
+        // given it could then override somebody else. So it takes standing authority.
+        var w = await SeedAsync();
+        await ShapeDutyAsync(w, w.LeadDutyId, InvestigationDutyCapabilities.MayAssignDuties);
+        await MakeVisitLeadAsync(w, w.AttendeeSeniorId);
+
+        // The senior attendee leads tonight, so they may manage the visit — but they are an
+        // ordinary member of the group.
+        var seniorUserId = await SeniorUserIdAsync(w);
+        var ctrl = Build(w.Factory, seniorUserId);
+
+        var result = await ctrl.AssignDuty(w.OrgId, w.InvestigationId, w.AttendeeJuniorId, w.LeadDutyId,
+            new AssignDutyRequest(Override: true), default);
+
+        var refused = Assert.IsType<ConflictObjectResult>(result.Result);
+        Assert.Contains("administrator", refused.Value!.ToString());
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        Assert.Empty(await db.InvestigationDutyAssignments.ToListAsync());
+    }
+
+    [Fact]
+    public async Task An_administrator_may_still_assign_past_a_duty_that_confers_authority()
+    {
+        var w = await SeedAsync();
+        await ShapeDutyAsync(w, w.LeadDutyId, InvestigationDutyCapabilities.MayAssignDuties);
+        var ctrl = Build(w.Factory, w.AdminId);
+
+        var result = await ctrl.AssignDuty(w.OrgId, w.InvestigationId, w.AttendeeJuniorId, w.LeadDutyId,
+            new AssignDutyRequest(Override: true), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task The_visit_lead_may_still_assign_past_a_duty_that_confers_nothing()
+    {
+        // The pair to the refusal above: the new rule is about authority being handed out, not
+        // about overrides in general, and it must not quietly take the override away from the
+        // person actually running the night.
+        var w = await SeedAsync();
+        await ShapeDutyAsync(w, w.EvidenceDutyId, InvestigationDutyCapabilities.None);
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            // Give the plain duty a minimum the junior does not meet, so there IS something to
+            // assign past.
+            var duty = await db.InvestigationDuties.FirstAsync(d => d.Id == w.EvidenceDutyId);
+            duty.MinimumMemberLevelId = w.SeniorLevelId;
+            await db.SaveChangesAsync();
+        }
+        await MakeVisitLeadAsync(w, w.AttendeeSeniorId);
+        var ctrl = Build(w.Factory, await SeniorUserIdAsync(w));
+
+        var result = await ctrl.AssignDuty(w.OrgId, w.InvestigationId, w.AttendeeJuniorId, w.EvidenceDutyId,
+            new AssignDutyRequest(Override: true), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    private static async Task<Guid> SeniorUserIdAsync(World w)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        return await db.InvestigationAttendees.Where(a => a.Id == w.AttendeeSeniorId)
+            .Select(a => a.AppUserId).FirstAsync();
+    }
 }

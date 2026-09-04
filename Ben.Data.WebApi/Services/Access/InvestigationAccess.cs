@@ -150,7 +150,12 @@ public static class InvestigationAccess
     /// Owner/Administrator of the group, or an explicit grant of <c>Update</c> on the
     /// <see cref="OrganizationSecurityTable.Investigation"/> table — by direct grant or by role.
     /// </summary>
-    private static async Task<bool> HasOrgAuthorityAsync(
+    /// <summary>
+    /// Authority over the group's investigations as a standing thing: owner, administrator, or a
+    /// role granting Investigation/Update. Distinct from managing one visit, which a lead also
+    /// has — see the override rule in <c>AssignDuty</c> for why the two had to be told apart.
+    /// </summary>
+    public static async Task<bool> HasOrgAuthorityAsync(
         BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
     {
         var membership = await db.OrganizationUserMemberships.AsNoTracking()

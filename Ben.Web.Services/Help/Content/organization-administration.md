@@ -148,6 +148,19 @@ The ask stays deliberately soft. Whoever manages a visit can assign past it with
 capable junior steps up, and a hard wall would just send the group back to organising by text
 message.
 
+Two exceptions to that.
+
+**A duty that carries something under *On the night* takes an owner or administrator to assign
+past.** Handing somebody point of contact, or the right to hand out the other duties, is a
+different act from handing them a label, and the person given it could then make exceptions of
+their own. Whoever is running the visit can still assign it to anybody the duty is already open
+to; it is only the exception that needs the extra pair of hands.
+
+**Tick *no exceptions* on the few duties where the title is a real qualification** rather than a
+preference — certified equipment, or being the client's point of contact inside their home. Then
+nobody can assign past it on the night, not even an owner. The way to change it is to change this
+grid, which is a deliberate and visible act rather than a decision taken at nine o'clock at a site.
+
 A duty whose row is untouched says so, and falls back to the older **minimum title** setting on
 the duty itself — "asks for Investigator or above". That is the single-threshold version of the
 same idea, and nothing changed for groups that were already using it.

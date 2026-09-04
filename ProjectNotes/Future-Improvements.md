@@ -8246,10 +8246,27 @@ other creation doors once, and the matrix would have been the second thing it si
    **This is the call worth Ben's review** — a distinct Case Lead is a seeded duty and a capability
    away if he wants one.
 
+*Advice or hard limit — Ben asked, same day.* It stays **advice with a recorded override**: a hard
+limit does not stop the junior running the camera when the senior calls in sick, it stops the
+roster from saying so, and the group goes back to organising by text message. A permissive record
+that is true beats a strict one that is quietly false, and the override is itself the evidence that
+somebody is already working above their title.
+
+Two adjustments went in with that answer, because item 160 changed what an override can cost.
+Before it, an override handed out a label; now it can hand out point-of-contact and the right to
+hand out the other duties, and the person given that could override somebody else in turn. So:
+**an override into a capability-carrying duty needs standing authority** over the group's
+investigations rather than merely the right to manage tonight; and **`InvestigationDuty.IsEnforced`**
+(migration `AddInvestigationDutyIsEnforced`) — per duty, off by default, ticked as *no exceptions*
+in the grid, for the minority where the title really is a qualification. Then there is no per-visit
+exception for anybody, owner included: the way past is to change the grid, which is deliberate and
+visible rather than a decision taken at nine o'clock at a site.
+
 *Tests:* `DutyEligibilityMatrixTests` (15, including the worked example as a theory and the
-capability-scope test that stops a capability becoming standing rank); the group-purge behaviour
-test gained a matrix cell so the sweep order is proven against real foreign keys; two
-discrimination runs confirmed. Playwright renders the grid without saving. Suite 4,132/0. Help:
+capability-scope test that stops a capability becoming standing rank) and five more in
+`InvestigationDutyTests` for the rule flag and the authority override; the group-purge behaviour
+test gained a matrix cell so the sweep order is proven against real foreign keys; four
+discrimination runs confirmed. Playwright renders the grid without saving. Suite 4,137/0. Help:
 `organization-administration.md` § Who may hold which duty.
 
 ## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)

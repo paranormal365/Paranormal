@@ -34,6 +34,23 @@ namespace Ben.Data.Source.Entities
         public Guid? MinimumMemberLevelId { get; set; }
 
         /// <summary>
+        /// Whether the eligibility matrix is a rule rather than advice for this duty (item 160,
+        /// Ben 2026-09-04).
+        /// </summary>
+        /// <remarks>
+        /// <para>Off by default, and that default is the important one. Eligibility is normally
+        /// advice with a recorded override, because a hard limit does not stop the junior running
+        /// the camera when the senior calls in sick — it stops the roster from saying so, and the
+        /// group goes back to organising by text message.</para>
+        ///
+        /// <para>On, for the minority where the title really is a qualification: certified
+        /// equipment, or being the client's point of contact inside their home. Then there is no
+        /// per-visit exception at all, for anybody. The way out is to change the rule on the
+        /// settings grid, which is deliberate and visible, rather than to wave one night past it.</para>
+        /// </remarks>
+        public bool IsEnforced { get; set; }
+
+        /// <summary>
         /// What holding this duty lets somebody do on the visit it was assigned for (item 160).
         /// Scoped to that visit and gone when the assignment is — duties still grant nothing
         /// standing.
