@@ -9522,11 +9522,12 @@ purge lacked when production refused it twice) and names eleven sets the purge m
 `AdminDeleteCaseTests` drives everything up to the button. Three discrimination runs confirmed.
 Suite 4,089/0.
 
-*Known gap, recorded rather than hidden.* The delete path itself has no in-process behaviour test:
-it is built from `ExecuteDeleteAsync`/`ExecuteUpdateAsync` and the InMemory provider implements
-neither (probed). Adding `Microsoft.EntityFrameworkCore.Sqlite` to `Ben.Web.Tests` would fix it
-for all three purges; the restore fails on this machine because the configured local NuGet source
-`/Users/ben/telerik-blazor` does not exist. Worth doing when that source is back.
+*The gap that was recorded, then closed the same day.* The delete path had no in-process behaviour
+test: it is built from `ExecuteDeleteAsync`/`ExecuteUpdateAsync` and the InMemory provider
+implements neither (probed). The fix needed `Microsoft.EntityFrameworkCore.Sqlite`, whose restore
+failed while the local NuGet source `/Users/ben/telerik-blazor` was missing; Ben restored it and
+the harness went in — `SqliteTestDb` plus `CasePurgeBehaviourTests`, and
+`OrganizationPurgeBehaviourTests` for the group purge that production refused twice. See item 219.
 
 *Deliberately not built:* a group-level delete for an empty case. It is defensible — a case
 created five minutes ago with nothing in it has no history to destroy — but it is a second
@@ -10981,4 +10982,34 @@ publish-then-hide exploit. A whole-session delete for a free account would be th
 another door, so the rule is probably: delete freely while unpublished; once published, delete
 follows the retraction rule. The door itself is small (rows, files, share links, the session's
 place left alone as retract does) once that is settled.
+
+## 219. The purges can be run in a test at last (BUILT 2026-09-04)
+
+Discovered closing item 183 and fixed the same day. **No purge in this repo had a behaviour test
+of its delete path** — not the case purge, not the person purge, and not the group purge that
+production refused twice. The reason was mechanical: every purge is built from
+`ExecuteDeleteAsync` and `ExecuteUpdateAsync`, and the EF **InMemory provider implements neither**
+("not supported by the current database provider" on the first statement — probed, not assumed).
+Model-derived coverage tests were the workaround.
+
+**`SqliteTestDb`** is the answer: a real relational database, in memory, with foreign keys
+enforced. The model carries SQL Server column types (`nvarchar(max)`, `varbinary(max)`) SQLite
+cannot parse, so a model customizer drops every explicit column type and server-specific default
+or computed SQL — nothing about relationships, keys or delete behaviour is touched, which is the
+half the tests are about. The connection is held by the handle, so every context the factory hands
+out shares one database.
+
+**What it caught immediately.** An invalid foreign key in a fixture the InMemory tests had happily
+accepted (`CaseNote.AuthorAppUserId` left empty). And, on purpose: removing the
+`InvestigationDutyAssignments` sweep from `OrganizationPurge` reproduces the exact production
+refusal of 2026-09-03 as a test failure.
+
+**Also worth writing down:** most of a case's children are `Cascade`, so breaking their order
+proves nothing — a delete-order test has to break a **NoAction** table (`CaseNote`,
+`CaseMessage`, `CaseVote`, `InvestigationDutyAssignment`) to mean anything. The first
+discrimination attempt used `InvestigationAttendee`, which is Cascade, and passed against
+deliberately broken code.
+
+**Left for later:** `AppUserPurge` has no behaviour test yet. The harness now makes one cheap.
+`Microsoft.EntityFrameworkCore.Sqlite` is a test-only package reference; nothing ships against it.
 

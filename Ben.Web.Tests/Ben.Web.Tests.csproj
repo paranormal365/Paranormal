@@ -16,6 +16,11 @@
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
+    <!-- SQLite, for the tests that have to watch a DELETE actually happen. The InMemory provider
+         implements neither ExecuteDelete nor ExecuteUpdate, which is what all three purges are
+         built from, so before this the most destructive code in the product had no behaviour
+         test at all (item 183). Test-only; nothing ships against SQLite. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
   <ItemGroup>
