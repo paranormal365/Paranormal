@@ -207,7 +207,10 @@ public sealed record FeedMediaReviewItem(
     string? ExperienceTypeName = null,
     /// <summary>How well the measured features fit that claim, 0–1. Context for the moderator,
     /// not a verdict.</summary>
-    double? CategoryMatchScore = null);
+    double? CategoryMatchScore = null,
+    /// <summary>How many of this author's uploads the screener confidently refused in the last
+    /// day, this one included (item 217). At three their uploads are paused; the badge says so.</summary>
+    int AuthorRefusalsLast24h = 0);
 
 /// <summary>A moderator's decision about one post's media.</summary>
 /// <param name="Approve">True to publish it, false to hold it.</param>

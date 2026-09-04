@@ -13053,3 +13053,24 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904154444_AddOrgMessageScreenerScore'
+)
+BEGIN
+    ALTER TABLE [OrgMessages] ADD [MediaScreenerScore] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904154444_AddOrgMessageScreenerScore'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260904154444_AddOrgMessageScreenerScore', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

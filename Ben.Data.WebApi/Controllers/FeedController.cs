@@ -351,6 +351,13 @@ public sealed class FeedController : BenControllerBase
             if (!IsAllowedMedia(media.ContentType))
                 return BadRequest("A post can carry a photo or a video. That file is neither.");
 
+            // Item 217: the one outright refusal. Everything the screener holds goes to a person
+            // — except from an account that has had three confident refusals in a day, which is
+            // no longer somebody whose photo needs a second look. Checked BEFORE ingest, so a
+            // paused account cannot even fill the disk. See FeedMediaAbuse for the rule.
+            if (await FeedMediaAbuse.IsPausedAsync(db, userId, DateTime.UtcNow, ct))
+                return BadRequest(FeedMediaAbuse.PausedMessage);
+
             var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(media.FileName)}";
             var storagePath = _fileStorage.UserFilePath(userId, storedName);
             var uploadFileId = Guid.NewGuid();
@@ -395,6 +402,7 @@ public sealed class FeedController : BenControllerBase
                 var verdict = await _screener.ScreenAsync(storagePath, media.ContentType, ct);
                 post.MediaReviewState = verdict.State;
                 post.MediaReviewNote = verdict.Reason;
+                post.MediaScreenerScore = verdict.Score;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

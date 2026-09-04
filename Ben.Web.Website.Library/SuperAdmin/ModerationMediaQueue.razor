@@ -97,6 +97,20 @@
                         {
                             <span class="badge bg-danger">Held</span>
                         }
+                        @* Item 217: the spam exception, made visible. Approving one of the
+                           three lifts the pause, so the badge is also the way out of it. *@
+                        @if (item.AuthorRefusalsLast24h >= 3)
+                        {
+                            <span class="badge bg-warning text-dark" title="Three confident refusals in a day pause this account's uploads until the oldest is a day old. Approving one lifts it.">
+                                Uploads paused — @item.AuthorRefusalsLast24h refusals today
+                            </span>
+                        }
+                        else if (item.AuthorRefusalsLast24h >= 2)
+                        {
+                            <span class="badge bg-secondary" title="One more confident refusal today pauses this account's uploads.">
+                                @item.AuthorRefusalsLast24h refusals today
+                            </span>
+                        }
                     </div>
 
                     <p class="mb-2">@item.Body</p>
