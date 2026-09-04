@@ -27,4 +27,15 @@ public interface IMediaUrlBuilder
     /// access against the investigation rather than the file's own audience.
     /// </remarks>
     string FieldSessionFile(Guid sessionId, Guid fileId);
+
+    /// <summary>
+    /// A recording reached through a share link, for a viewer with no account (item 207).
+    /// </summary>
+    /// <remarks>
+    /// No ticket, because there is no token to put in one: the share token IS the authority, and
+    /// the API re-checks its expiry, its revocation and which file it covers on every request. The
+    /// session id is deliberately absent from the URL — a recipient's browser should hold a string
+    /// that names a share row, never one that names a session.
+    /// </remarks>
+    string SharedFieldSessionFile(string shareToken, Guid fileId);
 }

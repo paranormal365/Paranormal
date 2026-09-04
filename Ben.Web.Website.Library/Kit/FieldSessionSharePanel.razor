@@ -1,0 +1,296 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@using Microsoft.JSInterop
+
+@*
+    Sharing this session with somebody who has no account (item 207).
+
+    A SECTION on the player, not a modal. Making a link is a decision with four parts and a list
+    of consequences to review afterwards, which is exactly the shape the standing rule says
+    belongs in the page body.
+
+    The panel renders only when the server would let this viewer make a link. It does not decide
+    that for itself: it asks for the list, and a refusal means no panel. Deciding here would be a
+    second copy of a permission rule, and the second copy is always the one that goes stale.
+*@
+
+@if (_mayShare)
+{
+    <div class="card mt-3" data-testid="share-panel">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+            <BenIcon Name="link" />
+            <span>Share this session</span>
+            <button type="button" class="btn btn-link btn-sm ms-auto p-0"
+                    data-testid="share-toggle" @onclick="@(() => _open = !_open)">
+                @(_open ? "Hide" : (_links.Count > 0 ? $"{LiveCount} active" : "Make a link"))
+            </button>
+        </div>
+
+        @if (_open)
+        {
+            <div class="card-body">
+                <p class="small text-secondary">
+                    A link lets somebody read this session without an account — a client, or a
+                    producer deciding whether to come and film. It stops working on the date you
+                    choose, you can withdraw it at any time, and you can see whether it was opened.
+                </p>
+
+                @* ── Making one ─────────────────────────────────────────── *@
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small mb-1" for="share-what">What to share</label>
+                        <select id="share-what" class="form-select form-select-sm"
+                                data-testid="share-what"
+                                value="@(_fileId?.ToString() ?? "")"
+                                @onchange="OnWhatChanged">
+                            <option value="">The whole session</option>
+                            @foreach (var file in Files)
+                            {
+                                <option value="@file.Id">@file.RelativePath</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1" for="share-days">Lasts</label>
+                        @* A plain input, not a Telerik one: these commit on blur, and a person who
+                           types a number and presses the button straight away would send the value
+                           it had before they typed. *@
+                        <input id="share-days" type="number" min="1" max="30"
+                               class="form-control form-control-sm" data-testid="share-days"
+                               value="@_days"
+                               @oninput="@(e => _days = int.TryParse(e.Value?.ToString(), out var d) ? d : _days)" />
+                        <div class="form-text">days</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small mb-1" for="share-note">Who it's for</label>
+                        <input id="share-note" class="form-control form-control-sm" maxlength="200"
+                               data-testid="share-note"
+                               placeholder="the producer at Channel 4"
+                               value="@_note"
+                               @oninput="@(e => _note = e.Value?.ToString() ?? string.Empty)" />
+                    </div>
+                </div>
+
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="share-positions"
+                           data-testid="share-positions"
+                           checked="@_includePositions"
+                           @onchange="@(e => _includePositions = e.Value is true)" />
+                    <label class="form-check-label small" for="share-positions">
+                        Include where the readings were taken
+                        <span class="text-secondary">
+                            — off by default. A fix recorded indoors is the building's street
+                            address, so it travels only if you say so.
+                        </span>
+                    </label>
+                </div>
+
+                <button type="button" class="btn btn-primary btn-sm mt-3" data-testid="share-create"
+                        disabled="@(_working || _days is < 1 or > 30)" @onclick="Create">
+                    Make the link
+                </button>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-warning py-2 mt-2 mb-0 small" data-testid="share-error">@_error</div>
+                }
+
+                @* ── What already exists ────────────────────────────────── *@
+                @if (_loadFailed)
+                {
+                    <div class="alert alert-warning py-2 mt-3 mb-0 small">
+                        The existing links couldn't be listed, so this may not be all of them.
+                    </div>
+                }
+                else if (_links.Count > 0)
+                {
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm align-middle mb-0" data-testid="share-list">
+                            <thead>
+                                <tr>
+                                    <th>Link</th>
+                                    <th>For</th>
+                                    <th>Until</th>
+                                    <th>Opened</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var link in _links)
+                                {
+                                    <tr @key="link.Id" data-testid="share-row">
+                                        <td style="max-width:280px;">
+                                            @if (link.IsLive)
+                                            {
+                                                <div class="font-monospace small text-truncate">@LinkFor(link)</div>
+                                            }
+                                            else
+                                            {
+                                                @* The dead link's URL is not printed. Nothing can be
+                                                   done with it, and showing it invites somebody to
+                                                   paste it into a mail believing it still works. *@
+                                                <span class="badge text-bg-secondary">
+                                                    @(link.RevokedUtc is not null ? "withdrawn" : "expired")
+                                                </span>
+                                            }
+                                            @if (link.FileId is not null)
+                                            {
+                                                <div class="small text-secondary">one recording only</div>
+                                            }
+                                            @if (link.IncludePositions)
+                                            {
+                                                <div class="small text-warning">locations included</div>
+                                            }
+                                        </td>
+                                        <td class="small">@(string.IsNullOrWhiteSpace(link.Note) ? "—" : link.Note)</td>
+                                        <td class="small">@link.ExpiresUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                                        <td class="small">
+                                            @if (link.ViewCount == 0)
+                                            {
+                                                <span class="text-secondary">not yet</span>
+                                            }
+                                            else
+                                            {
+                                                <text>@link.ViewCount time@(link.ViewCount == 1 ? "" : "s")</text>
+                                                @if (link.LastViewedUtc is { } last)
+                                                {
+                                                    <div class="text-secondary">last @last.ToLocalTime().ToString("MM/dd/yyyy")</div>
+                                                }
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-flex gap-1 justify-content-end">
+                                                @if (link.IsLive)
+                                                {
+                                                    <button type="button" class="btn btn-secondary btn-sm text-nowrap"
+                                                            data-testid="share-copy"
+                                                            @onclick="@(() => Copy(link))">Copy</button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm text-nowrap"
+                                                            data-testid="share-revoke"
+                                                            @onclick="@(() => Revoke(link))">Withdraw</button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="small text-secondary mt-2 mb-0">
+                        Withdrawn and expired links stay listed. What was shared, and when that
+                        stopped, is a question worth being able to answer later.
+                    </p>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SessionId { get; set; }
+
+    /// <summary>The session's recordings, so one of them can be shared on its own.</summary>
+    [Parameter] public IReadOnlyList<FieldSessionFileSummary> Files { get; set; } = [];
+
+    /// <summary>
+    /// Whether this viewer may make links, as decided by the server.
+    /// </summary>
+    /// <remarks>
+    /// Set from whether the list loaded, not from anything this component knows about roles. The
+    /// API refuses the list to anybody who may not share, so asking it is the same question with
+    /// only one answer in the codebase.
+    /// </remarks>
+    private bool _mayShare;
+    private bool _open;
+    private bool _working;
+    private bool _loadFailed;
+    private string? _error;
+
+    private List<FieldSessionShareRecord> _links = [];
+
+    private Guid? _fileId;
+    private int _days = 14;
+    private string _note = string.Empty;
+    private bool _includePositions;
+
+    private int LiveCount => _links.Count(l => l.IsLive);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var result = await AdminClient.GetFieldSessionSharesAsync(SessionId);
+        if (result.Failed)
+        {
+            // A refusal and a broken server look identical from here, and they mean different
+            // things. Before the first successful load, the safe reading is "this viewer may not
+            // share" and the panel simply is not there. Afterwards it is known that they may, so a
+            // failed refresh is a fault to report rather than a permission to silently withdraw —
+            // making the panel vanish mid-session would read as the link list having been deleted.
+            _loadFailed = _mayShare;
+            return;
+        }
+
+        _mayShare = true;
+        _loadFailed = false;
+        _links = result.Items.ToList();
+    }
+
+    private void OnWhatChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        _fileId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private async Task Create()
+    {
+        _working = true;
+        _error = null;
+
+        var created = await AdminClient.CreateFieldSessionShareAsync(SessionId,
+            new CreateFieldSessionShareRequest(_fileId, _days,
+                string.IsNullOrWhiteSpace(_note) ? null : _note.Trim(), _includePositions));
+
+        _working = false;
+
+        if (created is null)
+        {
+            _error = "The link couldn't be made. Try again, and if it keeps failing the session "
+                   + "may no longer be one you can share.";
+            return;
+        }
+
+        _links.Insert(0, created);
+        _note = string.Empty;
+        _fileId = null;
+        _includePositions = false;
+
+        // Copied straight away, because the next thing anybody does with a new link is paste it.
+        await Copy(created);
+    }
+
+    private async Task Revoke(FieldSessionShareRecord link)
+    {
+        _error = null;
+        var done = await AdminClient.RevokeFieldSessionShareAsync(SessionId, link.Id);
+        if (!done)
+        {
+            _error = "That link couldn't be withdrawn. Reload the page and try again.";
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private string LinkFor(FieldSessionShareRecord link) =>
+        $"{NavManager.BaseUri.TrimEnd('/')}/s/{link.Token}";
+
+    private async Task Copy(FieldSessionShareRecord link)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", LinkFor(link)); }
+        catch { /* the browser can refuse clipboard access — the link is on screen and selectable */ }
+    }
+}

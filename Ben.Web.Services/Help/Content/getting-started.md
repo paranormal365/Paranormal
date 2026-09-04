@@ -58,6 +58,13 @@ you could attend. If your browser allows it, this uses your current location aut
 type a city, address, or zip code instead. Either way, choose how far to look with the distance
 dropdown.
 
+Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
+open cases in your groups (yours first), how many messages and requests are waiting, and any gear
+checked out to you with its due date. Each tile opens exactly what it counts. A group that has not
+written its own public page yet gets one built from what it has already told us — what kind of
+group it is, the area it serves, how many members, its public cases, whether it is taking new
+cases, and its next public event.
+
 Groups and events are shown differently on purpose. A group that has opted in to being found is
 shown exactly where it is — that is the whole point of being listed. An event's location is only
 ever approximate, because it is an invitation rather than a business address, and the exact place is

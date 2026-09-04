@@ -109,4 +109,33 @@ public interface IBenInvestigationClient
     Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
         Guid sessionId, CancellationToken token = default);
 
+    // ── Sharing a session by link (item 207) ──────────────────────────────────
+
+    /// <summary>Every link ever made for this session, live and dead, newest first.</summary>
+    Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    /// <summary>Makes a link. Null when the server refused — the session, the file, or the caller.</summary>
+    Task<FieldSessionShareRecord?> CreateFieldSessionShareAsync(
+        Guid sessionId, CreateFieldSessionShareRequest request, CancellationToken token = default);
+
+    /// <summary>Pulls a link back. Takes effect on the next click, everywhere it was pasted.</summary>
+    Task<bool> RevokeFieldSessionShareAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default);
+
+    /// <summary>Who opened one link, newest first.</summary>
+    Task<LoadResult<FieldSessionShareViewRecord>> GetFieldSessionShareViewsAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default);
+
+    /// <summary>
+    /// The session behind a share link, for somebody with no account.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous on purpose: the recipient has no token and the whole feature is pointless if they
+    /// need one. Null covers unknown, expired and revoked alike, because the server answers all
+    /// three the same way and the page must not invent a distinction the server refused to make.
+    /// </remarks>
+    Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default);
+
 }

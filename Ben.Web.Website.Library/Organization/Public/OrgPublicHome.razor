@@ -6,6 +6,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IBenUserState UserState
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.CmsPages">
@@ -95,6 +97,58 @@ else
             {
                 <OrgPublicSection Section="section" FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")" PublicMediaBaseUrl="@AdminClient.GetPublicCaseMediaBaseUrl()" />
             }
+        }
+        else if (_org.Facts is { } facts)
+        {
+            @* A default page built from what the group already keeps (item 205). Every line here
+               is a record the group can check; nothing is written on their behalf. The moment
+               they publish a page of their own, this one steps aside. *@
+            <div class="card mt-4" data-testid="default-group-page">
+                <div class="card-body">
+                    <p class="lead mb-3">
+                        @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
+                        @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@facts.AreaServed</strong></text> }
+                        @if (facts.OnSinceYear > 0) { <text>, on @SiteOptions.Value.Name since @facts.OnSinceYear</text> }.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <div class="display-6">@facts.MemberCount</div>
+                            <div class="text-muted">member@(facts.MemberCount == 1 ? "" : "s")</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="display-6">@facts.PublicCaseCount</div>
+                            <div class="text-muted"><a href="/o/@_org.OrgUrlName/cases" class="text-decoration-none">public case@(facts.PublicCaseCount == 1 ? "" : "s")</a></div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            @if (facts.IsAcceptingClients)
+                            {
+                                <span class="badge text-bg-success fs-6" data-testid="default-accepting">Taking new cases</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-body-secondary text-body-emphasis fs-6" data-testid="default-not-accepting">Not taking new cases right now</span>
+                            }
+                            @if (facts.IsAcceptingApplications)
+                            {
+                                <span class="badge text-bg-info fs-6 ms-1">Open to new members</span>
+                            }
+                        </div>
+                    </div>
+                    @if (facts.NextPublicEvent is { } ev)
+                    {
+                        <hr />
+                        <div data-testid="default-next-event">
+                            <div class="text-muted small">Next public event</div>
+                            <a class="h5 text-decoration-none" href="@(string.IsNullOrWhiteSpace(ev.UrlName) ? $"/o/{_org.OrgUrlName}/events" : $"/o/{_org.OrgUrlName}/events/{ev.UrlName}")">@ev.Title</a>
+                            <div class="text-secondary">
+                                @(ev.IsAllDay ? ev.StartDateTime.ToDisplayDate() : ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime())
+                                @if (!string.IsNullOrWhiteSpace(ev.City)) { <text> · @ev.City</text> }
+                                @if (ev.AttendeeCapacity is { } cap) { <text> · @Math.Max(0, cap - ev.AttendingCount) of @cap spaces left</text> }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
         }
         else
         {

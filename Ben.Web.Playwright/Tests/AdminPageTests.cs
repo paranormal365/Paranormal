@@ -48,6 +48,9 @@ public class AdminPageTests : BenTestBase
         ("/admin/place-duplicates",    "Duplicate places"),
         ("/admin/member-seats",        "Member Seats"),
         ("/admin/org-ads",             "Group ads"),
+        // Deleting a person (2026-09-04). It belongs in this list for exactly the reason the list
+        // exists: only a SuperAdmin can open it, so nobody else would ever find it broken.
+        ("/admin/delete-user",         "Delete a person"),
     };
 
     [Test]

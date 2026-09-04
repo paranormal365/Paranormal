@@ -225,6 +225,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
+// Item 206: mails a case's clients when the case changes state or a visit is scheduled.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.ClientStatusMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.OrganizationMergeService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.CasePrivacyRetrofit>();
 // Deleting your own account — required by App Review 5.1.1(v). See AccountClosureService
@@ -248,6 +250,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // The most destructive operation in the product, and SuperAdmin-only at its controller.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 

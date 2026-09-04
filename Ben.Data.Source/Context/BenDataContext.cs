@@ -152,6 +152,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EventEvidenceSubmission> EventEvidenceSubmissions { get; set; }
         public virtual DbSet<FieldSessionUpload> FieldSessionUploads { get; set; }
         public virtual DbSet<FieldSessionUploadFile> FieldSessionUploadFiles { get; set; }
+        public virtual DbSet<FieldSessionShareLink> FieldSessionShareLinks { get; set; }
+        public virtual DbSet<FieldSessionShareLinkView> FieldSessionShareLinkViews { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
@@ -2747,6 +2749,49 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Sharing a session by link (item 207) ─────────────────────────────────────
+            // The token is the whole lookup: every anonymous request arrives with nothing else, so
+            // this index is on the hot path of the feature and unique because two rows answering
+            // to one token would make revocation a coin toss.
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasIndex(e => e.Token).IsUnique();
+            modelBuilder.Entity<FieldSessionShareLink>().Property(e => e.Token)
+                .HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<FieldSessionShareLink>().Property(e => e.Note).HasMaxLength(200);
+            // The owner's list: this session's links, newest first.
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasIndex(e => new { e.FieldSessionUploadId, e.DateCreated });
+            // Cascade from the session: a session that is gone cannot be shared, and a link left
+            // pointing at nothing is a 404 nobody can explain or revoke.
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasOne(e => e.FieldSessionUpload).WithMany()
+                .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction, not Cascade: two cascade paths into FieldSessionUploadFile would give SQL
+            // Server multiple cascade paths, and the session cascade above already covers the
+            // real case. A file deleted on its own leaves the link resolving to the session.
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasOne(e => e.FieldSessionUploadFile).WithMany()
+                .HasForeignKey(e => e.FieldSessionUploadFileId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasOne(e => e.RevokedByAppUser).WithMany()
+                .HasForeignKey(e => e.RevokedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionShareLink>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // "Who opened this link, newest first" is the only question asked of the log.
+            modelBuilder.Entity<FieldSessionShareLinkView>()
+                .HasIndex(e => new { e.FieldSessionShareLinkId, e.ViewedUtc });
+            modelBuilder.Entity<FieldSessionShareLinkView>().Property(e => e.ViewerHash).HasMaxLength(64);
+            modelBuilder.Entity<FieldSessionShareLinkView>().Property(e => e.UserAgent).HasMaxLength(300);
+            modelBuilder.Entity<FieldSessionShareLinkView>()
+                .HasOne(e => e.FieldSessionShareLink).WithMany(e => e.Views)
+                .HasForeignKey(e => e.FieldSessionShareLinkId).OnDelete(DeleteBehavior.Cascade);
 
             // The delivery job's work queue is "due and undelivered", so that is the index.
             modelBuilder.Entity<TierChangeNotice>()

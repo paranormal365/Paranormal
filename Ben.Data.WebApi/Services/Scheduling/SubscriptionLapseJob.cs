@@ -37,14 +37,18 @@ public sealed class SubscriptionLapseJob : IScheduledJob
     private readonly PlatformMessageService _messages;
     private readonly ILogger<SubscriptionLapseJob> _logger;
 
+    private readonly ClientStatusMailer _clientMail;
+
     public SubscriptionLapseJob(
         IDbContextFactory<BenDataContext> dbFactory,
         PlatformMessageService messages,
-        ILogger<SubscriptionLapseJob> logger)
+        ILogger<SubscriptionLapseJob> logger,
+        ClientStatusMailer clientMail)
     {
         _dbFactory = dbFactory;
         _messages  = messages;
         _logger    = logger;
+        _clientMail = clientMail;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -253,8 +257,10 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                 .Where(c => c.OrganizationId == sub.OrganizationId && OpenStatuses.Contains(c.Status))
                 .ToListAsync(ct);
 
+            var pausedForMail = new List<(Case Case, CaseStatus Before)>();
             foreach (var c in openCases)
             {
+                pausedForMail.Add((c, c.Status));
                 c.StatusBeforePause = c.Status;
                 c.Status            = CaseStatus.Paused;
                 c.DateUpdated       = now;
@@ -276,6 +282,9 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             }
 
             await db.SaveChangesAsync(ct);
+            // Item 206: each client hears their case is paused, in the site's own words.
+            foreach (var (pausedCase, before) in pausedForMail)
+                await _clientMail.CaseStatusChangedAsync(db, pausedCase, before, ct);
 
             // Clients are told per case, after the pause is real — a message about a pause that
             // then failed to commit would be worse than a late one.

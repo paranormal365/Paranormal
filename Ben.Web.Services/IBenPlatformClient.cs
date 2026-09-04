@@ -25,6 +25,9 @@ public interface IBenPlatformClient
     /// </summary>
     Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
 
+    /// <summary>The member's desk — next investigation, open cases, unread, gear out — in one call (item 204).</summary>
+    Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default);
+
     /// <summary>Platform messages addressed to the current user, newest first.</summary>
     /// <param name="unreadOnly">Restrict to messages never opened.</param>
     Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
@@ -144,6 +147,26 @@ public interface IBenPlatformClient
     /// <param name="confirmName">The group's exact name, typed back by the administrator.</param>
     Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
         Guid organizationId, string confirmName, CancellationToken token = default);
+
+    /// <summary>
+    /// What deleting a person would destroy, and what it would leave. SuperAdmin; changes nothing.
+    /// </summary>
+    Task<AppUserPurgePreview?> GetAppUserPurgePreviewAsync(
+        Guid userId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a person: destroys what is only theirs, strips them out of what stays.
+    /// </summary>
+    /// <param name="userId">The account to delete.</param>
+    /// <param name="confirmName">The person's exact display name, typed back.</param>
+    /// <param name="token">Cancellation.</param>
+    /// <remarks>
+    /// The error sentence is the server's own. "You are deleting the last SuperAdmin", "type the
+    /// name exactly" and "delete your own account from your profile" are three different problems,
+    /// and one status code cannot tell them apart.
+    /// </remarks>
+    Task<(AppUserPurgeResult? Result, string? Error)> PurgeAppUserAsync(
+        Guid userId, string confirmName, CancellationToken token = default);
 
     /// <summary>
     /// What the place's archive says about one of your own field sessions.

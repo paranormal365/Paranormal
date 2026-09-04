@@ -143,7 +143,7 @@ else</i> — an owner or administrator would never see it.</p>
 account for exactly this reason.</p>
 """,
         "notes": {
-            "30-home": "The member's landing page.",
+            "30-home": "The member's landing page — their desk: next investigation, open cases, unread, gear out.",
             "31-organizations": "The groups they belong to.",
             "32-my-investigations": "Investigations they are part of.",
             "33-media-library": "Shared media for their group.",

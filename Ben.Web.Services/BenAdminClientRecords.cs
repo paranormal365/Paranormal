@@ -130,7 +130,24 @@ public sealed record OrgPublicHomeResponse(
     /// <summary>What this group is (2026-08-24) — shown as a badge on its public page.</summary>
     Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     /// <summary>It runs public walking tours — worth saying even on an investigation group.</summary>
-    bool RunsPublicTours = false);
+    bool RunsPublicTours = false,
+    // Facts for the default page, shown when the group has published no home page (item 205).
+    OrgPublicFacts? Facts = null);
+/// <summary>
+/// What a group's public page can say before the group has written one (item 205): built from
+/// records the group already keeps, so every line is checkable and none is invented.
+/// </summary>
+public sealed record OrgPublicFacts(
+    string? AreaServed,
+    bool IsAcceptingClients,
+    bool IsAcceptingApplications,
+    int MemberCount,
+    int OnSinceYear,
+    int PublicCaseCount,
+    OrgPublicNextEvent? NextPublicEvent);
+
+public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
@@ -1175,7 +1192,8 @@ public sealed record CaseReportSectionFieldSessionDto(
     int       MarkerCount,
     int       FileCount,
     string?   Caption,
-    int       SortOrder);
+    int       SortOrder,
+    string?   Readout);
 
 /// <summary>A field session a report section could cite, as the picker lists it.</summary>
 public sealed record AvailableFieldSessionDto(
@@ -1410,6 +1428,58 @@ public sealed record FieldSessionFileSummary(
 /// </remarks>
 public sealed record FieldSessionDetailRecord(
     FieldSessionSummaryRecord Session, string Document);
+
+// ── Sharing a session by link (item 207) ─────────────────────────────────────
+// Mirrors of FieldSessionShareController's records — this library cannot reference the WebApi
+// project, so the shapes are restated here and married by property name.
+
+/// <summary>
+/// One share link, as its owner sees it.
+/// </summary>
+/// <remarks>
+/// <see cref="Token"/> is present, unlike every other secret the site holds. The entire purpose of
+/// the row is to give somebody a string to paste into an email, and a link its owner cannot read
+/// is no link at all. <see cref="IsLive"/> is computed on the server so the page never has to
+/// decide expiry against a clock that may differ from the one enforcing it.
+/// </remarks>
+public sealed record FieldSessionShareRecord(
+    Guid Id, string Token, Guid? FileId, string? Note,
+    DateTime ExpiresUtc, DateTime? RevokedUtc, bool IncludePositions,
+    int ViewCount, DateTime? LastViewedUtc, DateTime DateCreated, bool IsLive);
+
+/// <summary>
+/// One opening of a share link.
+/// </summary>
+/// <remarks>
+/// <see cref="ViewerHash"/> is eight characters of a salted digest — enough to see that three
+/// different people opened a link, never enough to name one of them.
+/// </remarks>
+public sealed record FieldSessionShareViewRecord(
+    DateTime ViewedUtc, string? ViewerHash, string? UserAgent, Guid? FileId);
+
+/// <summary>
+/// What somebody holding a share link is shown.
+/// </summary>
+/// <remarks>
+/// Deliberately not <see cref="FieldSessionDetailRecord"/>: that carries the investigation, the
+/// place, the uploader and the publication state, none of which is a recipient's business. This
+/// shape has no field for any of them.
+/// </remarks>
+public sealed record SharedFieldSessionDetailRecord(
+    string Document, bool PositionsWithheld,
+    string DeviceModel, string? LocationLabel,
+    DateTime StartedAt, DateTime? EndedAt,
+    int ReadingCount, int MarkerCount,
+    bool SingleFileOnly, DateTime ExpiresUtc, string? Note,
+    IReadOnlyList<SharedFieldSessionFileRecord> Files);
+
+/// <summary>One recording a share link reaches. No digest, no upload-file id, no uploader.</summary>
+public sealed record SharedFieldSessionFileRecord(
+    Guid Id, string RelativePath, long FileSize, string? ContentType);
+
+/// <summary>What to make a link out of. Days rather than a date: the server owns the clock.</summary>
+public sealed record CreateFieldSessionShareRequest(
+    Guid? FileId, int ExpiresInDays, string? Note, bool IncludePositions);
 
 // ── Place duplicates and merging (SuperAdmin) ────────────────────────────────
 // Mirrors of AdminPlaceMergeController's records — this library cannot reference the WebApi

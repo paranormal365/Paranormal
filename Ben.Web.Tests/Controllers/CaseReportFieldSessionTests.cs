@@ -36,7 +36,8 @@ public class CaseReportFieldSessionTests
     private static CaseReportController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
         var ctrl = new CaseReportController(
-            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -325,6 +326,83 @@ public class CaseReportFieldSessionTests
         }
         return builder.ToString();
     }
+
+    // ── The readout: what the night held, in one paragraph ────────────────────
+
+    private const string SessionDocument = """
+        {"format_version":"1.0.0","device":{"model":"iPhone17,1"},
+         "session":{"started_at":"2026-08-25T02:05:07.000Z","ended_at":"2026-08-25T02:07:31.000Z"},
+         "readings":[
+           {"at":"2026-08-25T02:05:07.000Z","measurements":{"emf":{"value":48.0,"baseline":48.0},"room":{"value":"Cellar"}}},
+           {"at":"2026-08-25T02:06:19.000Z","measurements":{"emf":{"value":54.0},"room":{"value":"Cellar"},"marker":{"value":"manual_marker"}},"note":"needle swung twice"},
+           {"at":"2026-08-25T02:07:31.000Z","measurements":{"emf":{"value":48.1}}}]}
+        """;
+
+    /// <summary>A controller whose storage hands back the session document for any path.</summary>
+    private static CaseReportController BuildWithDocument(IDbContextFactory<BenDataContext> factory, Guid userId, string document)
+    {
+        var storage = new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(x => x.OpenReadAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<CancellationToken>()))
+               .Returns<string, CancellationToken>((_, _) => Task.FromResult<Stream>(
+                   new MemoryStream(System.Text.Encoding.UTF8.GetBytes(document))));
+        var ctrl = new CaseReportController(
+            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), storage.Object);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())],
+                    "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role)),
+            }
+        };
+        return ctrl;
+    }
+
+    [Fact]
+    public async Task CitingASession_CarriesItsReadout()
+    {
+        var world = await SeedAsync();
+        var ctrl = BuildWithDocument(world.Factory, world.UserId, SessionDocument);
+        var (reportId, sectionId) = await MakeReportWithSectionAsync(world, ctrl);
+
+        var result = await ctrl.AddSectionFieldSession(world.OrgId, world.CaseId, reportId, sectionId,
+            new AddSectionFieldSessionRequest(world.SessionId, null), default);
+        var dto = Assert.IsType<CaseReportSectionFieldSessionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.NotNull(dto.Readout);
+        Assert.Contains("peaked at 540 mG against a base of 480 mG 1 min 12 s in", dto.Readout);
+        Assert.Contains("needle swung twice", dto.Readout);
+    }
+
+    [Fact]
+    public async Task ThePdf_CarriesTheReadout()
+    {
+        var world = await SeedAsync();
+        var ctrl = BuildWithDocument(world.Factory, world.UserId, SessionDocument);
+        var (reportId, sectionId) = await MakeReportWithSectionAsync(world, ctrl);
+        await ctrl.AddSectionFieldSession(world.OrgId, world.CaseId, reportId, sectionId,
+            new AddSectionFieldSessionRequest(world.SessionId, null), default);
+
+        var pdf = Assert.IsType<FileContentResult>(await ctrl.ExportPdf(world.OrgId, world.CaseId, reportId, default));
+        var text = ExtractText(pdf.FileContents);
+        Assert.Contains("peaked at 540 mG", text);
+        Assert.Contains("needle swung twice", text);
+    }
+
+    /// <summary>A document this server cannot open gives a sentence, never an invented paragraph.</summary>
+    [Fact]
+    public async Task AnUnreadableDocument_SaysSoInTheReport()
+    {
+        var world = await SeedAsync();
+        var ctrl = Build(world.Factory, world.UserId);   // storage returns nothing
+        var (reportId, sectionId) = await MakeReportWithSectionAsync(world, ctrl);
+        await ctrl.AddSectionFieldSession(world.OrgId, world.CaseId, reportId, sectionId,
+            new AddSectionFieldSessionRequest(world.SessionId, null), default);
+
+        var pdf = Assert.IsType<FileContentResult>(await ctrl.ExportPdf(world.OrgId, world.CaseId, reportId, default));
+        Assert.Contains("not on this server", ExtractText(pdf.FileContents));
+    }
 }
 
 /// <summary>
@@ -375,7 +453,8 @@ public class InvestigationDeleteWithCitedSessionTests
         var ctrl = new Ben.Data.WebApi.Controllers.Entities.InvestigationController(
             factory, mapper,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
-            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            Ben.Web.Tests.TestMailer.Quiet());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

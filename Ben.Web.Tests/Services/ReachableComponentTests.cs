@@ -214,6 +214,86 @@ public sealed class ReachableComponentTests
             + "server-only again — the same shape item #88 found and fixed once.");
     }
 
+    /// <summary>
+    /// Every half of sharing a session by link reaches a screen (item 207).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three separate calls, because three separate omissions are each individually
+    /// plausible and each individually ruins the feature. A make with no withdraw is a link that
+    /// cannot be pulled back. A withdraw with no anonymous read is a page the recipient cannot
+    /// open. This codebase has shipped a write-only feature seven times; a share link that can be
+    /// created and never revoked would be the eighth, and worse than the others because the thing
+    /// that cannot be undone is a stranger's access to somebody's recordings.</para>
+    ///
+    /// <para>Matched on the client method names rather than the URLs: a route can be rewritten,
+    /// but a component that does not call the method is not calling the endpoint under any
+    /// spelling of it.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("CreateFieldSessionShareAsync", "nothing on any screen can make a share link")]
+    [InlineData("RevokeFieldSessionShareAsync", "a link can be made and never withdrawn")]
+    [InlineData("GetSharedFieldSessionAsync", "no page opens a share link, so every link 404s for its recipient")]
+    public void Both_halves_of_sharing_a_session_reach_a_screen(string method, string consequence)
+    {
+        var callers = RazorSources()
+            .Where(f => File.ReadAllText(f).Contains(method, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(callers.Count > 0,
+            $"Nothing calls {method}, so {consequence} (item 207).");
+    }
+
+    /// <summary>
+    /// Deleting a person reaches a screen, and so does the preview it is read against.
+    /// </summary>
+    /// <remarks>
+    /// The preview is the whole safety of this feature: it is the only place a SuperAdmin learns
+    /// what will be destroyed, what will merely be emptied, and whether the account row survives
+    /// at all. A delete wired up without it would be a button that does something irreversible
+    /// and says nothing first — which is the same shape as the seven write-only features this
+    /// codebase has already shipped, with worse consequences.
+    /// </remarks>
+    [Theory]
+    [InlineData("GetAppUserPurgePreviewAsync", "nothing shows a SuperAdmin what deleting a person would destroy")]
+    [InlineData("PurgeAppUserAsync", "no screen can actually delete a person")]
+    public void Deleting_a_person_reaches_a_screen(string token, string consequence)
+    {
+        var callers = RazorSources()
+            .Where(f => File.ReadAllText(f).Contains(token, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(callers.Count > 0, $"Nothing references {token}, so {consequence}.");
+    }
+
+    /// <summary>
+    /// The users list is one of the ways into the delete screen.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Named files, not "something somewhere".</b> The first two versions of this guard
+    /// both passed while the grid button was gone: the first matched the delete page's own
+    /// <c>@page</c> directive, the second matched the SuperAdmin nav entry. Each was a true
+    /// statement about the route and told nothing about the thing Ben actually asked for — a
+    /// delete button on the users list. A source scan that can be satisfied by the file it is
+    /// checking, or by an unrelated one, is not a guard.</para>
+    ///
+    /// <para>The nav entry is asserted separately for the same reason: the two are different ways
+    /// in and losing either is a different regression.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("AdminUsers.razor", "the SuperAdmin users list has no delete button")]
+    [InlineData("BenNav.razor", "the SuperAdmin menu has no way to the delete screen")]
+    public void The_delete_screen_is_linked_from(string fileName, string consequence)
+    {
+        var file = RazorSources()
+            .FirstOrDefault(f => Path.GetFileName(f).Equals(fileName, StringComparison.Ordinal));
+
+        Assert.True(file is not null, $"{fileName} has moved or been renamed; update this guard.");
+        Assert.True(File.ReadAllText(file!).Contains("/admin/delete-user", StringComparison.Ordinal),
+            $"{fileName} no longer links to /admin/delete-user, so {consequence}.");
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

@@ -22,6 +22,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
 
+    public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
+        => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
+
     public Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
         => _api.GetListAsync<MyMessageRecord>($"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token);
 
@@ -126,6 +129,19 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Delete, $"/api/admin/organizations/{organizationId}/purge",
             new { ConfirmName = confirmName }, token);
         return (removed, error);
+    }
+
+    public Task<AppUserPurgePreview?> GetAppUserPurgePreviewAsync(
+        Guid userId, CancellationToken token = default)
+        => _api.GetAsync<AppUserPurgePreview>($"/api/admin/users/{userId}/purge", token);
+
+    public async Task<(AppUserPurgeResult? Result, string? Error)> PurgeAppUserAsync(
+        Guid userId, string confirmName, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, AppUserPurgeResult>(
+            HttpMethod.Delete, $"/api/admin/users/{userId}/purge",
+            new { ConfirmName = confirmName }, token);
+        return (result, error);
     }
 
     public Task<SessionInsightsRecord?> GetSessionInsightsAsync(

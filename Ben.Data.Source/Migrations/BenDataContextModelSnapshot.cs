@@ -3005,6 +3005,105 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("FeedTypeWeightSets");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("FieldSessionUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IncludePositions")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastViewedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("RevokedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RevokedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("FieldSessionUploadFileId");
+
+                    b.HasIndex("RevokedByAppUserId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("FieldSessionUploadId", "DateCreated");
+
+                    b.ToTable("FieldSessionShareLinks");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLinkView", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FieldSessionShareLinkId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("FieldSessionUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("ViewedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ViewerHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FieldSessionShareLinkId", "ViewedUtc");
+
+                    b.ToTable("FieldSessionShareLinkViews");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionUpload", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10345,6 +10444,57 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("ExperienceType");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLink", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.FieldSessionUploadFile", "FieldSessionUploadFile")
+                        .WithMany()
+                        .HasForeignKey("FieldSessionUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.FieldSessionUpload", "FieldSessionUpload")
+                        .WithMany()
+                        .HasForeignKey("FieldSessionUploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RevokedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("RevokedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("FieldSessionUpload");
+
+                    b.Navigation("FieldSessionUploadFile");
+
+                    b.Navigation("RevokedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLinkView", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.FieldSessionShareLink", "FieldSessionShareLink")
+                        .WithMany("Views")
+                        .HasForeignKey("FieldSessionShareLinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FieldSessionShareLink");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionUpload", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -13359,6 +13509,11 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
                 {
                     b.Navigation("ExperienceTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLink", b =>
+                {
+                    b.Navigation("Views");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionUpload", b =>
