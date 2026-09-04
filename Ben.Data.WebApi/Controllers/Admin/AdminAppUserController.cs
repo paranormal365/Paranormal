@@ -50,6 +50,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         var messages    = await db.UserMessages.AsNoTracking().Where(x => x.CreatedByAppUserId == id).ToListAsync(ct);
         var memberships = await db.OrganizationUserMemberships.AsNoTracking().Where(x => x.AppUserId == id).ToListAsync(ct);
         var files       = await db.UploadFiles.AsNoTracking().Where(x => x.AppUserId == id).ToListAsync(ct);
+        var roles       = (await _userManager.GetRolesAsync(user) ?? []).OrderBy(r => r).ToList();
 
         return Ok(new AppUserDetailAdminRecord
         {
@@ -61,8 +62,100 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
             Notes       = _mapper.Map<IReadOnlyList<UserNoteAdminRecord>>(notes),
             Messages    = _mapper.Map<IReadOnlyList<UserMessageAdminRecord>>(messages),
             Memberships = _mapper.Map<IReadOnlyList<OrganizationUserMembershipAdminRecord>>(memberships),
-            UploadFiles = _mapper.Map<IReadOnlyList<UploadFileAdminRecord>>(files)
+            UploadFiles = _mapper.Map<IReadOnlyList<UploadFileAdminRecord>>(files),
+            Roles       = roles
         });
+    }
+
+    /// <summary>
+    /// Sets the site roles a person holds — the whole set, not a delta (item 216).
+    /// </summary>
+    /// <remarks>
+    /// <para>Until this existed, the only way into Admin or Moderator was a row typed into
+    /// <c>AspNetUserRoles</c> by hand: the Site Roles page could create a role and count its
+    /// members but never add one, and the New User form offered SuperAdmin alone, at creation
+    /// only. The roles were seeded "so a SuperAdmin can assign them" and nothing let one.</para>
+    ///
+    /// <para><b>Two refusals, both about SuperAdmin.</b> A SuperAdmin may not remove that role
+    /// from themselves, and nobody may remove it from the last person holding it. Either one
+    /// leaves the site with nobody able to reach this screen, and the fix for that is a database
+    /// edit — the very thing this endpoint exists to make unnecessary.</para>
+    ///
+    /// <para><b>Why the security stamp moves.</b> The bearer tokens the Identity API issues carry
+    /// the role claims minted at sign-in and are not re-read on each request, so a change here
+    /// would otherwise sit unnoticed until the token expired. Refreshing a token checks the
+    /// stamp, so bumping it makes every existing session of theirs fall back to sign-in at its
+    /// next refresh — for a removed role that is the revocation, and for an added one it is how
+    /// they get it without waiting an hour. A token that never refreshes still runs to its
+    /// expiry; that is the honest limit, and the help says so.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/roles")]
+    public async Task<ActionResult<AppUserRolesAdminRecord>> SetRoles(
+        Guid id, [FromBody] AdminSetUserRolesRequest request, CancellationToken ct)
+    {
+        var user = await _userManager.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+
+        // Names are checked against the roles that exist and canonicalised to the stored
+        // spelling, so "moderator" lands in Moderator rather than failing or, worse, creating
+        // a second role that nothing checks for.
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var known = await db.Roles.AsNoTracking()
+            .Where(r => r.Name != null)
+            .Select(r => r.Name!)
+            .ToListAsync(ct);
+
+        var wanted = new List<string>();
+        foreach (var name in (request.Roles ?? []).Where(n => !string.IsNullOrWhiteSpace(n)))
+        {
+            var match = known.FirstOrDefault(k => string.Equals(k, name.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+                return BadRequest($"'{name.Trim()}' is not a site role. Create it under Site Roles first.");
+            if (!wanted.Contains(match, StringComparer.OrdinalIgnoreCase))
+                wanted.Add(match);
+        }
+
+        var before   = (await _userManager.GetRolesAsync(user) ?? []).OrderBy(r => r).ToList();
+        var toAdd    = wanted.Except(before, StringComparer.OrdinalIgnoreCase).ToList();
+        var toRemove = before.Except(wanted, StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (toRemove.Contains(RoleNames.SuperAdmin, StringComparer.OrdinalIgnoreCase))
+        {
+            if (id == GetCurrentUserId())
+                return Conflict("You cannot remove your own SuperAdmin role. Ask another SuperAdmin to do it.");
+
+            var superAdmins = await _userManager.GetUsersInRoleAsync(RoleNames.SuperAdmin);
+            if (superAdmins.Count <= 1)
+                return Conflict("This is the only SuperAdmin. Make somebody else a SuperAdmin before removing this one.");
+        }
+
+        if (toAdd.Count == 0 && toRemove.Count == 0)
+            return Ok(new AppUserRolesAdminRecord(id, before));
+
+        if (toRemove.Count > 0)
+        {
+            var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
+            if (!removed.Succeeded)
+                return BadRequest(removed.Errors.Select(e => e.Description));
+        }
+        if (toAdd.Count > 0)
+        {
+            var added = await _userManager.AddToRolesAsync(user, toAdd);
+            if (!added.Succeeded)
+                return BadRequest(added.Errors.Select(e => e.Description));
+        }
+
+        await _userManager.UpdateSecurityStampAsync(user);
+
+        var after = before.Except(toRemove, StringComparer.OrdinalIgnoreCase)
+            .Concat(toAdd)
+            .OrderBy(r => r)
+            .ToList();
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync("AppUserRoles", id,
+            new { Roles = before }, new { Roles = after }, GetCurrentUserId(), AppSources.WebApi));
+
+        return Ok(new AppUserRolesAdminRecord(id, after));
     }
 
     /// <summary>Creates a new application user with an initial password.</summary>
