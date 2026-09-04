@@ -86,6 +86,7 @@ public sealed class PendingMediaScreeningJob : IScheduledJob
 
                 post.MediaReviewState = verdict.State;
                 post.MediaReviewNote = verdict.Reason;
+                post.MediaScreenerScore = verdict.Score;
                 await db.SaveChangesAsync(ct);
                 if (verdict.State == FeedMediaReviewState.Approved) approved++; else held++;
             }

@@ -234,11 +234,11 @@ public static class NsfwDecision
     public static FeedMediaVerdict Decide(double nsfwProbability) => nsfwProbability switch
     {
         >= BlockThreshold => new FeedMediaVerdict(FeedMediaReviewState.Held,
-            $"screener: nsfw {nsfwProbability:0.00} — blocked"),
+            $"screener: nsfw {nsfwProbability:0.00} — blocked", nsfwProbability),
         >= ReviewThreshold => new FeedMediaVerdict(FeedMediaReviewState.Held,
-            $"screener: nsfw {nsfwProbability:0.00} — borderline, needs a person"),
+            $"screener: nsfw {nsfwProbability:0.00} — borderline, needs a person", nsfwProbability),
         _ => new FeedMediaVerdict(FeedMediaReviewState.Approved,
-            $"screener: nsfw {nsfwProbability:0.00}"),
+            $"screener: nsfw {nsfwProbability:0.00}", nsfwProbability),
     };
 
     /// <summary>Softmax over the model's two logits, ordered [normal, nsfw] per its config.</summary>

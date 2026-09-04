@@ -47,6 +47,16 @@ public sealed class NsfwScreenerTests
             Assert.NotEqual(FeedMediaReviewState.Pending, NsfwDecision.Decide(p).State);
     }
 
+    [Theory]
+    [InlineData(0.05)]
+    [InlineData(0.50)]
+    [InlineData(0.99)]
+    public void The_verdict_carries_the_score_so_the_spam_rule_need_not_parse_the_note(double p)
+    {
+        // Item 217 counts confident refusals per author from the stored number.
+        Assert.Equal(p, NsfwDecision.Decide(p).Score);
+    }
+
     [Fact]
     public void Blocked_and_borderline_reasons_are_distinguishable_for_the_queue()
     {
