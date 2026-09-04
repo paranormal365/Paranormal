@@ -64,4 +64,41 @@ public class UploadFilesTests : BenTestBase
                              .First;
         await Expect(fileTypeEl).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
+
+    // ── Delete (item 180 Phase B) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// A file nobody else is using gets the plain confirm and goes. The two-question dialog for
+    /// a file a group is using needs a share and a group, which this account's fixture does not
+    /// carry; that path is covered by the controller tests, and this one proves the page's
+    /// delete button still reaches the server through the new flow.
+    /// </summary>
+    [Test]
+    public async Task Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt()
+    {
+        await Page.GotoAsync($"{BaseUrl}/upload-files");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var openPanel = Page.GetByRole(AriaRole.Button, new() { Name = "Upload New File" });
+        await ClickUntilAsync(openPanel, Main.GetByText("New Upload", new() { Exact = false }));
+
+        var name = $"e2e-delete-{Guid.NewGuid():N}.txt";
+        await Page.Locator("input[type='file']").First.SetInputFilesAsync(new FilePayload
+        {
+            Name = name, MimeType = "text/plain", Buffer = System.Text.Encoding.UTF8.GetBytes("delete me"),
+        });
+        var uploadButton = Main.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true })
+                               .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Upload Files" })).First;
+        await uploadButton.ClickAsync();
+        await Expect(Main.GetByText(name)).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // The row's Delete is a Telerik command button; click until the confirm shows.
+        var row = Page.Locator("tr", new() { HasTextString = name }).First;
+        var deleteButton = row.GetByRole(AriaRole.Button, new() { Name = "Delete" })
+                              .Or(row.Locator("button[title='Delete'], button:has(.k-i-trash), button:has(.k-svg-i-trash)")).First;
+        await ClickUntilAsync(deleteButton, Page.GetByText("Delete File", new() { Exact = false }));
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).Last.ClickAsync();
+        await Expect(Main.GetByText(name)).Not.ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
 }

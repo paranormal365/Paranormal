@@ -157,7 +157,7 @@ public sealed class OrganizationPurgeCoverageTests
     [InlineData("EquipmentModels", "the equipment catalogue is site-wide reference data")]
     [InlineData("EquipmentBrands", "the equipment catalogue is site-wide reference data")]
     [InlineData("ExperienceTypes", "the experience taxonomy is site-wide reference data")]
-    [InlineData("UploadFiles", "a file belongs to the person who uploaded it; the purge removes shares into the group, not the file")]
+    [InlineData("UploadFiles", "a file belongs to the person who uploaded it, or to the group they handed it to (item 180 Phase B) — and even then the purge releases the group's claim in the transaction and removes each file afterwards through UploadFileRows, never in bulk, because a file something else still holds must stay")]
     public void The_purge_never_deletes_what_a_group_does_not_own(string forbidden, string why)
     {
         Assert.False(PurgedSets().Contains(forbidden), $"The purge deletes from {forbidden}, but {why}.");

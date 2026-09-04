@@ -94,6 +94,24 @@ public static class FileAudienceAccess
     }
 
     /// <summary>
+    /// Whether <paramref name="userId"/> may change or delete <paramref name="file"/>: its owning
+    /// person, or — once it has been handed to a group (item 180 Phase B) — an Owner or
+    /// Administrator of that group, or SuperAdmin. The former owner is deliberately NOT in this
+    /// list: "the person stops being the owner" means exactly that.
+    /// </summary>
+    public static async Task<bool> CanManageFileAsync(
+        BenDataContext db, UploadFile file, Guid userId, bool isSuperAdmin, CancellationToken ct)
+    {
+        if (isSuperAdmin) return true;
+        if (file.AppUserId is { } owner) return owner == userId;
+        if (file.OwnerOrganizationId is { } org)
+            return await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == org && m.AppUserId == userId && m.IsActive
+                            && m.Role <= OrganizationMemberRole.Administrator, ct);
+        return false;
+    }
+
+    /// <summary>
     /// True if <paramref name="userId"/> can see <paramref name="uploadFileId"/> at all — the same
     /// visibility union <see cref="Ben.Data.WebApi.Controllers.Entities.MediaLibraryController.GetFiles"/> computes across the whole
     /// library, scoped down to one file. Broader than <see cref="GetMembershipAsync"/>: also covers
@@ -109,6 +127,12 @@ public static class FileAudienceAccess
 
         if (file.AppUserId == userId) return true;
         if (file.IsPublic) return true;
+
+        // A file handed to a group (item 180 Phase B) is the group's: any active member sees it,
+        // the same rule as the group's Files tab.
+        if (file.OwnerOrganizationId is { } ownerOrg && await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == ownerOrg && m.AppUserId == userId && m.IsActive, ct))
+            return true;
 
         if (await db.UploadFileShares.AsNoTracking().AnyAsync(s =>
                 s.UploadFileId == uploadFileId && s.IsActive &&

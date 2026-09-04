@@ -891,7 +891,15 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileTypeId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFile>()
                 .HasOne(e => e.AppUser).WithMany()
-                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
+            // A file handed to a group (item 180 Phase B). NoAction: the group purge removes
+            // its files explicitly, and a cascade here would be a second path into UploadFiles
+            // beside the person's, which SQL Server refuses.
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.OwnerOrganization).WithMany()
+                .HasForeignKey(e => e.OwnerOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFile>()
+                .HasIndex(e => e.OwnerOrganizationId);
             modelBuilder.Entity<UploadFile>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

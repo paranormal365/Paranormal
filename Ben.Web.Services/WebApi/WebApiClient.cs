@@ -499,6 +499,16 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Upload File — delete-and-reassign (item 180 Phase B) ────────────────────
+    public Task<FileUsageRecord?> GetUploadFileUsageAsync(Guid id, CancellationToken token = default)
+        => GetAsync<FileUsageRecord>($"/api/upload-files/{id}/usage", token);
+
+    public Task<DeleteEverywhereResult?> DeleteUploadFileEverywhereAsync(Guid id, CancellationToken token = default)
+        => PostAsync<object, DeleteEverywhereResult>($"/api/upload-files/{id}/delete-everywhere", new { }, token);
+
+    public Task<UploadFileRecord?> ReassignUploadFileAsync(Guid id, Guid organizationId, CancellationToken token = default)
+        => PostAsync<ReassignUploadFileRequest, UploadFileRecord>($"/api/upload-files/{id}/reassign", new ReassignUploadFileRequest(organizationId), token);
+
     // ── Upload File — Replace (item #6 phase 3) ─────────────────────────────────
     public Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default)
         => PostMultipartAsync<UploadFileRecord>($"/api/upload-files/{id}/replace", content, token);
