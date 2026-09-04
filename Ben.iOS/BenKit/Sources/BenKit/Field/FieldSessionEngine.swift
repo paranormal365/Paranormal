@@ -102,6 +102,16 @@ public actor FieldSessionEngine {
     /// rest in the same way one flat on a table is.
     private var movementFloorG: Double = 0
     private var running = false
+    /// Whether readings reach the log. Sensors run from `start()` so the gauge moves and a base
+    /// level can be set; nothing is WRITTEN until `beginLogging()` — Start on the live screen
+    /// (item 215). Every path to the log goes through `append`, so this is the one gate.
+    private var logging = false
+    public var isLogging: Bool { logging }
+
+    /// Opens the log. Readings before this moment were never anybody's evidence.
+    public func beginLogging() {
+        logging = true
+    }
     private var tasks: [Task<Void, Never>] = []
 
     /// Set while a recording is running, so a marker can say where in the file it landed.
@@ -423,6 +433,7 @@ public actor FieldSessionEngine {
     }
 
     private func append(_ reading: FieldReading) async {
+        guard logging else { return }
         do {
             try await log.append(reading)
             emit(.logged(count: sequence))
@@ -441,6 +452,8 @@ public actor FieldSessionEngine {
 
     @discardableResult
     private func record(kind: MarkerKind, at moment: Date, note: String?) async -> FieldMarkerRecord {
+        // A mark before Start has no session time to belong to. The screen hides the control
+        // until then; this is the guarantee behind it, so a stale button cannot log a phantom.
         var audioRef: FieldReading.FileRef?
         if let recording {
             audioRef = .relative(recording.filename,

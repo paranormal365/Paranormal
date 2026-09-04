@@ -62,5 +62,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     }
 
     public var isRecording: Bool { outcome == .recording }
+    /// Open on the live screen with nothing logged yet — Start has not been pressed.
+    public var isPending: Bool { outcome == .pending }
+    /// Either of the two states the live screen resumes into.
+    public var isOpen: Bool { isPending || isRecording }
     public var isUploaded: Bool { uploadedAt != nil }
 }

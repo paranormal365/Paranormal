@@ -10788,7 +10788,7 @@ missing is a session worth photographing and the app being in the state a real n
 
 **Size:** medium. **Blocks:** item 213's screenshots.
 
-## 215. A session should not start recording the moment it is created (Ben, 2026-09-04)
+## 215. A session should not start recording the moment it is created (BUILT 2026-09-04)
 
 Ben: *"They may want to set everything up first and then start."* So the button that currently
 says **Stop** becomes **Start**, and only then becomes **Stop** to end the session. A session that
@@ -10799,4 +10799,17 @@ never started is a third state that must not be reported as either a recording o
 Field Kit UI tests drive start/stop directly and will all need revisiting.
 
 **Size:** medium.
+
+### Built 2026-09-04
+
+A fourth state, `pending`: the live screen opens with the gauge running and nothing logged; the bar
+reads *not started* with **Discard** and a green **Start**; Start begins the clock, opens the log
+and brings the Mark/Note/EVP/capture controls; Stop ends it as before. Recovery at launch leaves a
+pending session alone — nothing was lost, so it is not "interrupted". `startedAt` is rewritten at
+Start so the trimmer, export, media clock and readout all measure from the real beginning; audio
+starts at Start for the same reason. The engine has one log gate (`beginLogging`), proven to
+discriminate. 317 BenKit / 25 UI tests green, the demo-video script updated and run. The first
+screenshot exposed the clock saying "stopped" for a pending session — fixed to *not started*.
+See README-delayed-session-start.md. Ben's untracked upload probe will need the new Start tap.
+
 

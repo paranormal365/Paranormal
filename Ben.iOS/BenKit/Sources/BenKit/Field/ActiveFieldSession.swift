@@ -10,7 +10,10 @@ import Foundation
 public final class ActiveFieldSession {
 
     public let sessionId: UUID
-    public let startedAt: Date
+    /// The session's clock. Creation time until Start is pressed, then the moment it was.
+    public private(set) var startedAt: Date
+    /// False while pending — the gauge runs, nothing is logged, no marks, no captures.
+    public private(set) var isRecording = false
 
     /// The gauges. Updated at the sampling rate; nothing here is written to the log by itself.
     public private(set) var sample = LiveSample(at: .distantPast)
@@ -102,7 +105,8 @@ public final class ActiveFieldSession {
         if channels.contains(.location), let location = sensors.location {
             locationAuthorization = await location.authorizationState()
         }
-        if channels.contains(.audio) { await startRecording() }
+        // Audio does NOT start here any more: a recording that began before Start would begin
+        // before the session's own clock, and the media clock would place it in the past.
         let stream = await engine.events()
         await engine.start()
         pump = Task { [weak self] in
@@ -120,6 +124,16 @@ public final class ActiveFieldSession {
                 }
             }
         }
+    }
+
+    /// Start, on the live screen. The clock begins, the log opens, and the audio recording —
+    /// if the channel is on — starts now, so its first second is the session's first second.
+    public func startSession(at moment: Date) async {
+        guard !isRecording else { return }
+        startedAt = moment
+        isRecording = true
+        await engine.beginLogging()
+        if channels.contains(.audio) { await startRecording() }
     }
 
     public func end() async {
@@ -155,7 +169,7 @@ public final class ActiveFieldSession {
         // The audio switch means "record sound", not "show me a meter" — so it starts and stops
         // the recording itself. Switching it off mid-session closes the file cleanly; anything
         // marked so far keeps pointing at it.
-        if channels.contains(.audio), !wasRecordingAudio, recording == nil {
+        if channels.contains(.audio), !wasRecordingAudio, recording == nil, isRecording {
             await startRecording()
         } else if !channels.contains(.audio), wasRecordingAudio {
             await stopRecording()
