@@ -1,0 +1,336 @@
+@page "/admin/delete-user"
+@page "/admin/delete-user/{UserId:guid}"
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Deleting a person, and being honest about what that can and cannot mean.
+
+    Its own page rather than a dialog on the users grid, for the same reason the group delete has
+    one: nobody should arrive here by clicking a row. The grid links in with the account already
+    chosen, so the trip is deliberate without being tedious.
+
+    The preview is the whole screen. What gets destroyed and what gets kept-but-anonymised are
+    shown as two separate blocks, because they are two different things happening and a single
+    total would describe neither.
+*@
+
+<PageTitle>SuperAdmin — Delete a person</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:900px; margin:auto;">
+
+    <h3 class="mb-1">Delete a person</h3>
+    <p class="text-secondary small">
+        Destroys everything that is only ever theirs, and strips their name out of anything they
+        wrote for a group. <strong>This cannot be undone.</strong>
+    </p>
+
+    <div class="alert alert-info py-2 small">
+        <strong>Why some things survive.</strong> A case note, a timeline entry or a group message
+        belongs to the group and often to a paying client. One person leaving must not erase a
+        group's record of its own work, so those records stay and are re-attributed to a former
+        member. An account that wrote none of them disappears completely.
+    </div>
+
+    @if (_loadError is not null)
+    {
+        <div class="alert alert-danger">@_loadError</div>
+    }
+
+    <div class="card mb-3"><div class="card-body">
+        <label class="form-label" for="user-picker">Person</label>
+        <select id="user-picker" class="form-select" @bind="_selectedId" @bind:after="LoadPreviewAsync">
+            <option value="@Guid.Empty">— choose a person —</option>
+            @foreach (var user in _people)
+            {
+                <option value="@user.Id">@Label(user)</option>
+            }
+        </select>
+    </div></div>
+
+    @if (_busy)
+    {
+        <BenLoaderOverlay Visible="true" Text="Working…" />
+    }
+
+    @if (_preview is not null)
+    {
+        <div class="card border-danger mb-3" data-testid="purge-preview">
+            <div class="card-header bg-danger text-white">
+                Deleting “@_preview.DisplayName” would destroy
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    @foreach (var line in Destroyed(_preview))
+                    {
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded p-2 text-center">
+                                <div class="fs-4 fw-semibold">@line.Count.ToString("N0")</div>
+                                <div class="text-secondary small">@line.Label</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (KeptTotal(_preview) > 0)
+                {
+                    <h6 class="mt-4 mb-2">and keep, with their name removed</h6>
+                    <div class="row g-2">
+                        @foreach (var line in Kept(_preview))
+                        {
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded p-2 text-center">
+                                    <div class="fs-4 fw-semibold">@line.Count.ToString("N0")</div>
+                                    <div class="text-secondary small">@line.Label</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @* ── what will actually be left ─────────────────────────────
+                   Said before the button, not discovered after it. "Delete" that leaves a row
+                   behind is a promise this screen has to stop making in advance. *@
+                <div class="alert @(_preview.RowWillSurvive ? "alert-warning" : "alert-success") py-2 small mt-3"
+                     data-testid="row-outcome">
+                    @if (_preview.RowWillSurvive)
+                    {
+                        <text>
+                            <strong>The account row will remain, emptied.</strong>
+                            Records written for a group still refer to it, so it cannot be removed
+                            without taking those with it. The person will be gone from it — name,
+                            email, password, sign-in methods — and the account can never sign in
+                            again.
+                        </text>
+                    }
+                    else
+                    {
+                        <text>
+                            <strong>The account will be removed completely.</strong>
+                            Nothing else in the database refers to it, so the row itself goes.
+                        </text>
+                    }
+                </div>
+
+                @if (_preview.AlreadyClosed)
+                {
+                    <div class="alert alert-secondary py-2 small mb-0" data-testid="already-closed">
+                        This account has already been closed by its owner. Deleting it now removes
+                        what closing it left behind.
+                    </div>
+                }
+
+                @* ── notices, deliberately not refusals ─────────────────── *@
+                @if (_preview.OwnedOrganizations.Count > 0)
+                {
+                    <div class="alert alert-warning py-2 small mb-0 mt-2" data-testid="owns-groups">
+                        <strong>They own @Plural(_preview.OwnedOrganizations.Count, "group"):</strong>
+                        @string.Join(", ", _preview.OwnedOrganizations).
+                        Exactly one owner exists per group, so
+                        @(_preview.OwnedOrganizations.Count == 1 ? "it" : "they")
+                        will be left with nobody able to administer
+                        @(_preview.OwnedOrganizations.Count == 1 ? "it" : "them").
+                        Appoint a new owner first, or be ready to do it afterwards.
+                    </div>
+                }
+
+                @if (_preview.PaidSubscriptions.Count > 0)
+                {
+                    <div class="alert alert-warning py-2 small mb-0 mt-2" data-testid="paid-subscription">
+                        <strong>They are paying for a seat</strong> at
+                        @string.Join(", ", _preview.PaidSubscriptions).
+                        Nothing here cancels it, so the card on file keeps being charged for an
+                        account that no longer exists. Cancel the subscription first.
+                    </div>
+                }
+
+                @if (_preview.Refusal is not null)
+                {
+                    <div class="alert alert-danger py-2 small mb-0 mt-2" data-testid="refusal">
+                        @_preview.Refusal
+                    </div>
+                }
+                else
+                {
+                    <hr />
+
+                    <label class="form-label" for="confirm-name">
+                        Type <strong>@_preview.DisplayName</strong> to confirm
+                    </label>
+                    <input id="confirm-name" class="form-control" style="max-width:420px;"
+                           @bind="_confirmName" @bind:event="oninput"
+                           placeholder="@_preview.DisplayName" />
+
+                    <div class="mt-3">
+                        @* Dead until the name matches exactly. A dialog somebody can click
+                           through out of habit is not a confirmation. *@
+                        <button type="button" class="btn btn-danger" id="confirm-delete"
+                                disabled="@(_busy || !NameMatches)" @onclick="PurgeAsync">
+                            <BenIcon Name="trash-2" Class="me-1" />Delete this person permanently
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="Clear">
+                            Cancel
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_result is not null)
+    {
+        <div class="alert alert-success" data-testid="purge-result">
+            <strong>“@_result.DisplayName” is gone.</strong>
+            @(_result.RowRemoved
+                ? "The account was removed completely."
+                : "The account row remains, emptied — records written for a group still refer to it.")
+            Destroyed @_result.PersonalFieldSessions personal field session(s),
+            @_result.StoredFiles file(s), @_result.Memberships membership(s),
+            @_result.SignInEvents sign-in record(s) and
+            @_result.FollowsAndBlocks follow/block row(s).
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        @* The server's own sentence. A mistyped name, the last-SuperAdmin refusal and a database
+           constraint are three different problems; "something went wrong" would leave a
+           SuperAdmin with nowhere to go. *@
+        <div class="alert alert-danger" data-testid="purge-error">@_error</div>
+    }
+</div>
+
+@code {
+    /// <summary>Preselected when the users grid links in, so the trip here is one click.</summary>
+    [Parameter] public Guid? UserId { get; set; }
+
+    private List<AppUserRecord> _people = [];
+    private Guid _selectedId = Guid.Empty;
+    private AppUserPurgePreview? _preview;
+    private AppUserPurgeResult? _result;
+    private string _confirmName = "";
+    private bool _busy;
+    private string? _error;
+    private string? _loadError;
+
+    private bool NameMatches =>
+        _preview is not null
+        && string.Equals(_confirmName.Trim(), _preview.DisplayName, StringComparison.Ordinal);
+
+    private static string Label(AppUserRecord u) =>
+        string.IsNullOrWhiteSpace(u.Email) ? (u.DisplayName ?? u.Id.ToString())
+                                           : $"{u.DisplayName} — {u.Email}";
+
+    private static string Plural(int n, string word) => n == 1 ? word : word + "s";
+
+    private static IEnumerable<(string Label, int Count)> Destroyed(AppUserPurgePreview p) =>
+    [
+        ("personal field sessions", p.PersonalFieldSessions),
+        ("stored files", p.StoredFiles),
+        ("memberships", p.Memberships),
+        ("sign-in records", p.SignInEvents),
+        ("messages received", p.MessagesReceived),
+        ("follows and blocks", p.FollowsAndBlocks),
+        ("contact rows", p.ContactRows),
+        ("external sign-ins", p.ExternalLogins),
+    ];
+
+    private static IEnumerable<(string Label, int Count)> Kept(AppUserPurgePreview p) =>
+    [
+        ("case notes", p.CaseNotes),
+        ("timeline entries", p.TimelineEntries),
+        ("group messages", p.GroupMessages),
+        ("group field sessions", p.GroupFieldSessions),
+        ("event evidence", p.EventEvidence),
+        ("other records", p.OtherAuthoredRecords),
+    ];
+
+    private static int KeptTotal(AppUserPurgePreview p) => Kept(p).Sum(l => l.Count);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        var result = await AdminClient.GetAllUsersAsync();
+        _people = result.Items.OrderBy(u => u.DisplayName ?? u.Email).ToList();
+        _loadError = result.Failed ? "Couldn't load the list of people." : null;
+
+        // Arrived from the grid with somebody already chosen.
+        if (UserId is Guid preselected && _people.Any(u => u.Id == preselected))
+        {
+            _selectedId = preselected;
+            await LoadPreviewAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        _preview = null;
+        _result = null;
+        _error = null;
+        _confirmName = "";
+
+        if (_selectedId == Guid.Empty) { StateHasChanged(); return; }
+
+        _busy = true;
+        StateHasChanged();
+
+        _preview = await AdminClient.GetAppUserPurgePreviewAsync(_selectedId);
+        if (_preview is null) _error = "Couldn't read what that account holds, so nothing is offered.";
+
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task PurgeAsync()
+    {
+        if (_preview is null || !NameMatches) return;
+
+        _busy = true;
+        _error = null;
+        StateHasChanged();
+
+        var (result, error) = await AdminClient.PurgeAppUserAsync(_selectedId, _confirmName.Trim());
+
+        _busy = false;
+
+        if (error is not null)
+        {
+            _error = error;
+        }
+        else
+        {
+            _result = result;
+            _preview = null;
+            _confirmName = "";
+            _selectedId = Guid.Empty;
+
+            // Refetched rather than filtered in place: an account that survived as an anonymised
+            // row is still in the list and must show its new name, and one that was removed must
+            // not be pickable again.
+            var refreshed = await AdminClient.GetAllUsersAsync();
+            _people = refreshed.Items.OrderBy(u => u.DisplayName ?? u.Email).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void Clear()
+    {
+        _preview = null;
+        _confirmName = "";
+        _selectedId = Guid.Empty;
+        _error = null;
+    }
+}

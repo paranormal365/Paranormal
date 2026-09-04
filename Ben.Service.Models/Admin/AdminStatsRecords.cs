@@ -169,3 +169,59 @@ public sealed record OrganizationPurgePreview(
     int StoredFiles,
     int CmsPages,
     int BillingRows);
+
+/// <summary>
+/// What deleting one person would destroy, and what it would leave standing.
+/// </summary>
+/// <remarks>
+/// <para>Mirror of <c>AppUserPurge</c>'s record — this library cannot reference the WebApi
+/// project, so the shape is restated and married by property name.</para>
+///
+/// <para><b>Two groups of counts, and the difference is the point.</b> The first are records the
+/// delete destroys. The second are records it keeps and strips the name out of, because they were
+/// authored for a group and a group's history is not one member's to erase. A screen that showed
+/// a single total would be describing something the delete does not do.</para>
+///
+/// <para><c>RowWillSurvive</c> says, before the button is pressed, whether the account row itself
+/// will actually disappear. An account holding nothing else does vanish; one that wrote a case
+/// note two years ago cannot, because that note still refers to it.</para>
+///
+/// <para><c>OwnedOrganizations</c> and <c>PaidSubscriptions</c> are notices, never bars (Ben,
+/// 2026-09-04). <c>Refusal</c> is the only thing that disables the button.</para>
+/// </remarks>
+public sealed record AppUserPurgePreview(
+    Guid AppUserId,
+    string DisplayName,
+    string? Email,
+    bool AlreadyClosed,
+
+    int PersonalFieldSessions,
+    int StoredFiles,
+    int Memberships,
+    int SignInEvents,
+    int MessagesReceived,
+    int FollowsAndBlocks,
+    int ContactRows,
+    int ExternalLogins,
+
+    int CaseNotes,
+    int TimelineEntries,
+    int GroupMessages,
+    int GroupFieldSessions,
+    int EventEvidence,
+    int OtherAuthoredRecords,
+
+    bool RowWillSurvive,
+    IReadOnlyList<string> OwnedOrganizations,
+    IReadOnlyList<string> PaidSubscriptions,
+    string? Refusal);
+
+/// <summary>What deleting a person actually did.</summary>
+/// <remarks>
+/// <c>RowRemoved</c> is reported rather than assumed: the screen promised one of two outcomes and
+/// has to be able to say which one happened.
+/// </remarks>
+public sealed record AppUserPurgeResult(
+    Guid AppUserId, string DisplayName, bool RowRemoved,
+    int PersonalFieldSessions, int StoredFiles, int Memberships, int SignInEvents,
+    int MessagesReceived, int FollowsAndBlocks);

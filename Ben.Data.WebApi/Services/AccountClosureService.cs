@@ -119,6 +119,35 @@ public sealed class AccountClosureService
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+        await AnonymiseAsync(db, user, ct);
+
+        await transaction.CommitAsync(ct);
+
+        // No email address is left to write, and nothing here names the person: the point of the
+        // log line is that a closure happened and when, for a support question later.
+        _log.LogInformation("Account {UserId} was closed by its owner at {ClosedAt:u}.",
+            userId, user.DateClosed);
+
+        return new ClosureResult(true, null);
+    }
+
+    /// <summary>
+    /// Strips the person out of an account row and destroys everything that is only theirs.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Shared with the SuperAdmin purge</b> (item: delete a user). Two copies of these
+    /// rules would drift, and the copy that drifts is always the one that leaves a credential
+    /// behind — so the caller decides who may do this and what else goes, and this decides what
+    /// "the person is gone" means.</para>
+    ///
+    /// <para>Assumes an open transaction and does not commit: the caller may have more to do in
+    /// the same one, and a half-closed account — contact rows gone, credentials intact — is worse
+    /// than either outcome.</para>
+    /// </remarks>
+    internal static async Task AnonymiseAsync(BenDataContext db, AppUser user, CancellationToken ct)
+    {
+        var userId = user.Id;
+
         // ── the person ────────────────────────────────────────────────────────
         user.DateClosed = DateTime.UtcNow;
         user.DisplayName = AccountClosure.FormerMemberName;
@@ -184,13 +213,5 @@ public sealed class AccountClosureService
         db.UserTokens.RemoveRange(db.UserTokens.Where(t => t.UserId == userId));
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-
-        // No email address is left to write, and nothing here names the person: the point of the
-        // log line is that a closure happened and when, for a support question later.
-        _log.LogInformation("Account {UserId} was closed by its owner at {ClosedAt:u}.",
-            userId, user.DateClosed);
-
-        return new ClosureResult(true, null);
     }
 }

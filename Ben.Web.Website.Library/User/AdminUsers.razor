@@ -95,7 +95,7 @@
                     }
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="130px">
+            <GridCommandColumn Width="150px">
                 <GridCommandButton Command="View"
                                    Icon="@SvgIcon.Eye"
                                    OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
@@ -111,6 +111,15 @@
                                    ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
                                    Title="Impersonate this user"
                                    OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))" />
+                @* Goes to a page, not a dialog. Deleting somebody has consequences worth reading
+                   before agreeing to, and the counts do not fit in a confirm box — the same
+                   reasoning that gave the group delete its own screen. The account is preselected
+                   there, so the deliberate trip is still one click. *@
+                <GridCommandButton Command="Delete"
+                                   Icon="@SvgIcon.Trash"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Title="Delete this user"
+                                   OnClick="@((GridCommandEventArgs e) => DeleteUser((AppUserRecord)e.Items.First()))" />
             </GridCommandColumn>
         </GridColumns>
     </TelerikGrid>
@@ -173,6 +182,26 @@
 
     private void ViewUser(AppUserRecord user)
         => NavManager.NavigateTo($"/admin/users/{user.Id}");
+
+    /// <summary>
+    /// Opens the delete screen with this account already chosen.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a navigation rather than a confirm dialog. What deleting somebody destroys and
+    /// what it leaves behind is several paragraphs and a dozen counts, and none of it fits in a
+    /// box people click through. Deleting your own account from here is refused by the server too;
+    /// saying so at the click saves the trip.
+    /// </remarks>
+    private void DeleteUser(AppUserRecord user)
+    {
+        if (user.Id == UserState.UserId)
+        {
+            _errorMessage = "Delete your own account from your profile, not from here.";
+            return;
+        }
+        _errorMessage = null;
+        NavManager.NavigateTo($"/admin/delete-user/{user.Id}");
+    }
 
     private async Task Impersonate(AppUserRecord user)
     {

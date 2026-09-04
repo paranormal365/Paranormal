@@ -362,6 +362,9 @@
             // it destroys a group and everything belonging to it, and a menu entry that
             // read "Tidy up" would be the first half of an accident.
             new NavItem("Delete a Group",       "trash-2", "/admin/delete-group"),
+            // Same reasoning, same bluntness. The users grid links straight into this page with
+            // an account chosen; the menu entry is for arriving at it deliberately.
+            new NavItem("Delete a Person",      "user-x",  "/admin/delete-user"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
         {

@@ -10645,3 +10645,49 @@ a simulator bypass. **After 1.0 clears review** — it touches the app.
 
 208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
 All of 204–208 are closed. **Next: 209**, then 210; 211 stays gated on App Store review of 1.0.
+
+## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
+
+Ben, 2026-09-04: the users list had no delete at all, and he wanted one that shows a count per
+section before committing, the way deleting a group already does.
+
+### The constraint that shaped it
+
+`AppUsers` is the principal of **335 foreign keys**, **124** of them a required
+`CreatedByAppUserId` on tables like case notes, timeline entries and group messages. A true row
+delete means deleting all of those — a group's record of its own work, written by somebody who has
+left. Ben chose (from three options offered) to destroy what is only the person's and anonymise the
+rest, so an account holding nothing disappears completely and a real member's row survives emptied.
+The screen says **which of the two** before the button.
+
+### Built 2026-09-04
+
+`AppUserPurge` + `AdminAppUserPurgeController` (`api/admin/users/{id}/purge`) +
+`AdminDeleteUser.razor` (`/admin/delete-user`), mirroring the group-delete screen. Trash icon on
+each users-grid row opens it preselected; nav entry for arriving deliberately.
+`AccountClosureService.AnonymiseAsync` extracted and shared, so the anonymisation rules exist once.
+
+- **One refusal only** (Ben): the last SuperAdmin.
+- **Two notices, not bars** (Ben): owning a group, and holding an active paid seat — the second
+  added on his follow-up, and it says plainly that nothing here cancels the subscription.
+- Deliberate asymmetry with self-service closure, which still refuses an owner. Different acts by
+  different people.
+
+`RowWillSurvive` is computed by asking the **EF model** for every foreign key into `AppUsers`,
+not from a hand-kept list — the lesson the organization purge learned twice. Written first as raw
+`COUNT` queries, which could not run on the in-memory provider and killed every unit test of the
+preview inside the census; now `EF.Property` over `db.Set<T>()`.
+
+19 new tests, each guard proven against broken code. The reachability guard is worth remembering:
+**it passed twice while the grid button was missing** — once matching the delete page's own
+`@page` directive, once matching the nav entry — before being pinned to the two files that must
+link in.
+
+**Not verified here:** the SuperAdmin-authenticated path. `AdminDeleteUserTests`
+(`TestCategory=DeleteUser`) is written and unrun; the SuperAdmin password is only in Ben's
+environment. Live checks confirmed 401 anonymous, 403 for an ordinary account, and the page
+bouncing a non-SuperAdmin.
+
+Documented in `site-administration.md`; **self-service account closure was documented for the
+first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
+
