@@ -41,6 +41,9 @@ final class SessionTrimUITests: XCTestCase {
         app.buttons["start-field-session"].tap()
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(app.buttons["start-recording"].waitForExistence(timeout: 15))
+        app.buttons["start-recording"].tap()
 
         // Long enough that the track has a span worth dragging across. A two-second session
         // would pass every assertion below and prove nothing about a trimmer.

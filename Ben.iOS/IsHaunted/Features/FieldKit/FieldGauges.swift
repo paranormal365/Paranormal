@@ -92,6 +92,11 @@ struct AudioLevelMeter: View {
 struct SessionClock: View {
     var startedAt: Date
     var isRecording: Bool
+    /// Open on the live screen but not yet started (item 215). The elapsed counter holds at
+    /// zero — `startedAt` is still the creation time and would otherwise count set-up time as
+    /// if it were the session — and the caption says "not started" rather than "stopped",
+    /// which would claim something ran and ended.
+    var isPending: Bool = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -115,19 +120,19 @@ struct SessionClock: View {
                             Circle().fill(Theme.danger).frame(width: 8, height: 8)
                                 .accessibilityHidden(true)
                         }
-                        Text(Self.elapsed(from: startedAt, to: context.date))
+                        Text(isPending ? "00:00:00" : Self.elapsed(from: startedAt, to: context.date))
                             .font(.system(size: 26, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(isRecording ? Theme.danger : Theme.bone)
                     }
-                    Text(isRecording ? "recording" : "stopped")
+                    Text(isRecording ? "recording" : isPending ? "not started" : "stopped")
                         .font(.caption2)
                         .foregroundStyle(Theme.fog)
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(isRecording ? "Recording" : "Stopped")
-            .accessibilityValue(Self.elapsed(from: startedAt, to: context.date))
+            .accessibilityLabel(isRecording ? "Recording" : isPending ? "Not started" : "Stopped")
+            .accessibilityValue(isPending ? "00:00:00" : Self.elapsed(from: startedAt, to: context.date))
         }
     }
 

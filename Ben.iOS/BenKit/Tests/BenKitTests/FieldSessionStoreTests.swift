@@ -35,7 +35,48 @@ struct FieldSessionStoreTests {
 
         let session = try #require(store.summary(for: id))
         #expect(session.locationLabel == "Back bedroom")   // trimmed
+        // Item 215: created is not recording. It is open — the live screen resumes into it —
+        // but nothing is logged until Start.
+        #expect(session.isPending)
+        #expect(!session.isRecording)
+        #expect(store.activeSessionId == id)
+    }
+
+    @Test func startMovesTheClockAndOpensTheRecording() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let id = try store.startSession(locationLabel: "Cellar")
+        let created = try #require(store.summary(for: id)).startedAt
+
+        try await Task.sleep(for: .milliseconds(20))
+        try await store.beginRecording(id)
+
+        let session = try #require(store.summary(for: id))
         #expect(session.isRecording)
+        // The session's clock is the moment Start was pressed, not the moment the row was made.
+        // Everything downstream — the trimmer, the export, the media clock — measures from it.
+        #expect(session.startedAt > created)
+
+        // Pressing Start twice is one start.
+        let first = session.startedAt
+        try await store.beginRecording(id)
+        #expect(try #require(store.summary(for: id)).startedAt == first)
+    }
+
+    @Test func aSessionNeverStartedSurvivesARelaunchAsPendingNotInterrupted() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let id = try store.startSession(locationLabel: "Landing")
+
+        // The app dies while the person is still setting up.
+        await store.recoverInterruptedSessions()
+
+        // Nothing was logged, so nothing was lost — and "interrupted" would be a lie about a
+        // night that never began. It stays open, to be started or discarded.
+        let session = try #require(store.summary(for: id))
+        #expect(session.outcome == .pending)
         #expect(store.activeSessionId == id)
     }
 
@@ -74,6 +115,7 @@ struct FieldSessionStoreTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let id = try store.startSession(locationLabel: "Attic")
+        try await store.beginRecording(id)   // item 215: only a STARTED session can be interrupted
         // Five readings landed before the phone died.
         let log = ReadingLog(fileURL: store.files.readingLogURL(for: id))
         for index in 0..<5 {

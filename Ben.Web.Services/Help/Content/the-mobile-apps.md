@@ -70,10 +70,21 @@ is still identified in that cellar.
    recognise it by next week, so a room beats a timestamp.
 3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
    attach the session to an investigation later.
-4. Let the room settle for a few seconds, then tap **Set base**. Everything from here is measured
-   against what this room reads when nothing is happening.
-5. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
-6. Tap **Stop** when you are done. The session opens for review straight away.
+4. Tap **Open the session**. The live screen opens but **nothing is being recorded yet** — the
+   gauge runs so you can see the room, and the bar says *not started*. Take your time here.
+5. Set up. Name the room, switch channels on or off, and once the room has settled for a few
+   seconds tap **Set base**. Everything you record is measured against what this room reads
+   when nothing is happening, and it is far better set before the clock starts than after.
+6. Tap **Start**. The clock begins, readings start landing, and Mark, Note, EVP and the capture
+   buttons appear — none of them exist before Start, because a mark before the clock began
+   would belong to no moment.
+7. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
+8. Tap **Stop** when you are done. The session opens for review straight away.
+
+If the night turns out to be nothing before you ever press Start, tap **Discard** next to the
+Start button. The session is removed and the space comes back at once. A session that was
+set up but never started also survives the app being closed: it comes back exactly as it was,
+ready to start or discard — it is not reported as interrupted, because nothing was lost.
 
 Nothing you record needs a signal, and nothing leaves the phone until you send it.
 

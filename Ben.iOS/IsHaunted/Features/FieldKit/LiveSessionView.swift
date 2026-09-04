@@ -9,6 +9,7 @@ import BenKit
 struct LiveSessionView: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(Router.self) private var router
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     let sessionId: UUID
@@ -210,8 +211,22 @@ struct LiveSessionView: View {
     private func stopBar(_ active: ActiveFieldSession) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(active.readingCount) readings")
-                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.fog)
+                if active.isRecording {
+                    Text("\(active.readingCount) readings")
+                        .font(.caption.monospacedDigit()).foregroundStyle(Theme.fog)
+                } else {
+                    Text("not started")
+                        .font(.caption).foregroundStyle(Theme.fog)
+                    // Nothing has happened yet, so nothing is lost by throwing it away. Ben:
+                    // "They can delete the session if nothing happens and they want to free up
+                    // space immediately." Only offered while pending — a recording is ended,
+                    // never discarded, from this bar.
+                    Button("Discard") {
+                        Task { await discard() }
+                    }
+                    .font(.caption).foregroundStyle(Theme.danger)
+                    .accessibilityIdentifier("discard-session")
+                }
                 if active.isReportingNow {
                     Text("over report level")
                         .font(.caption2.bold()).foregroundStyle(Theme.warning)
@@ -229,16 +244,33 @@ struct LiveSessionView: View {
             .accessibilityLabel("Blackout the screen")
             .accessibilityIdentifier("blackout")
 
-            Button(role: .destructive) {
-                stop()
-            } label: {
-                Label("Stop", systemImage: "stop.circle")
-                    .font(.headline)
-                    .padding(.horizontal, 8)
+            if active.isRecording {
+                Button(role: .destructive) {
+                    stop()
+                } label: {
+                    Label("Stop", systemImage: "stop.circle")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.danger)
+                .accessibilityIdentifier("stop-field-session")
+            } else {
+                // Pending (item 215): set the room, the base level and the channels first, then
+                // Start. Ben: "They may want to set everything up first and then start."
+                Button {
+                    Task {
+                        try? await store.beginRecording(sessionId)
+                    }
+                } label: {
+                    Label("Start", systemImage: "record.circle")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.success)
+                .accessibilityIdentifier("start-recording")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.danger)
-            .accessibilityIdentifier("stop-field-session")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -259,7 +291,8 @@ struct LiveSessionView: View {
     @ViewBuilder
     private func instruments(_ active: ActiveFieldSession) -> some View {
         VStack(spacing: 16) {
-            SessionClock(startedAt: active.startedAt, isRecording: true)
+            SessionClock(startedAt: active.startedAt, isRecording: active.isRecording,
+                         isPending: !active.isRecording)
                 .padding(.top, 8)
 
             RoomBar(room: active.room) { choosingRoom = true }
@@ -330,37 +363,48 @@ struct LiveSessionView: View {
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("set-base-level")
 
-                Button {
-                    Task { await active.mark(kind: .manual) }
-                } label: {
-                    Label("Mark", systemImage: "flag")
+                if active.isRecording {
+                    Button {
+                        Task { await active.mark(kind: .manual) }
+                    } label: {
+                        Label("Mark", systemImage: "flag")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("mark-now")
+                } else {
+                    // Set-up time. The mark, EVP and capture controls arrive with Start — a
+                    // mark before the clock began would belong to no moment (item 215).
+                    Text("Set the room, base level and channels, then press Start.")
+                        .font(.caption).foregroundStyle(Theme.fog)
                         .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("pending-hint")
                 }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("mark-now")
             }
+            if active.isRecording {
 
-            HStack(spacing: 12) {
-                Button {
-                    askingForNote = true
-                } label: {
-                    Label("Note", systemImage: "square.and.pencil")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("open-note")
+                HStack(spacing: 12) {
+                    Button {
+                        askingForNote = true
+                    } label: {
+                        Label("Note", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("open-note")
 
-                Button {
-                    showingEVP = true
-                } label: {
-                    Label("EVP", systemImage: "questionmark.bubble")
-                        .frame(maxWidth: .infinity)
+                    Button {
+                        showingEVP = true
+                    } label: {
+                        Label("EVP", systemImage: "questionmark.bubble")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("open-evp")
                 }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("open-evp")
+
+                FieldCaptureBar(session: active)
             }
-
-            FieldCaptureBar(session: active)
 
             SentryPanel(session: active, camera: camera)
 
@@ -444,6 +488,18 @@ struct LiveSessionView: View {
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// Throws away a session that never started. Nothing was logged, so nothing is lost; the
+    /// directory goes with it and the space comes back at once.
+    private func discard() async {
+        await store.deactivate()
+        do {
+            try store.delete(sessionId)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

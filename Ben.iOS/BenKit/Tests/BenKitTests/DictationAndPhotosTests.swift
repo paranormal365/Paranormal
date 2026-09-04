@@ -84,6 +84,7 @@ struct DictationAndPhotosTests {
 
         let id = try store.startSession(locationLabel: "Landing")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         let session = try #require(store.active)
 
         await session.mark(kind: .manual, note: "there is someone here")
@@ -108,6 +109,7 @@ struct DictationAndPhotosTests {
 
         let id = try store.startSession(locationLabel: "The Old Mill")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         let session = try #require(store.active)
 
         for index in 1...2 {
@@ -142,6 +144,7 @@ struct DictationAndPhotosTests {
 
         let id = try store.startSession(locationLabel: "Cellar")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         let session = try #require(store.active)
 
         let photo = try store.files.nextMediaPath(for: id, kind: .photo, fileExtension: "jpg")
