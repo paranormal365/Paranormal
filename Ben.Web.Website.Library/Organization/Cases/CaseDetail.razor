@@ -366,6 +366,16 @@
             <div class="col-12">
                 <label class="form-label fw-semibold">Status</label>
                 <BenSelect Data="@_statusOptions" @bind-Value="@_editStatus" TextField="@nameof(StatusOption.Label)" ValueField="@nameof(StatusOption.Value)" Width="100%" />
+                @* Item 183. There is no Delete on this dialog and there never was; until now
+                   nothing said so, which reads as an oversight rather than a rule. A case is a
+                   record of real work, usually for a client, so it is closed and kept. The one
+                   route out for a genuine mistake is named, because a rule with no path is
+                   worse than no rule. *@
+                <p class="text-secondary small mt-2 mb-0" data-testid="cases-are-closed-not-deleted">
+                    A case is never deleted — set it to <strong>Closed</strong> and it stays as a
+                    record of the work. Opened one by mistake, or twice?
+                    <a href="/contact">Ask us to remove it</a>.
+                </p>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description (optional HTML summary)</label>

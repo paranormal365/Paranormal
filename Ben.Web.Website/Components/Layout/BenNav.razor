@@ -365,6 +365,9 @@
             // Same reasoning, same bluntness. The users grid links straight into this page with
             // an account chosen; the menu entry is for arriving at it deliberately.
             new NavItem("Delete a Person",      "user-x",  "/admin/delete-user"),
+            // Item 183. A group closes a case; only this page deletes one, and the all-cases
+            // grid links in with the case already chosen.
+            new NavItem("Delete a Case",        "folder-minus", "/admin/delete-case"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
         {
