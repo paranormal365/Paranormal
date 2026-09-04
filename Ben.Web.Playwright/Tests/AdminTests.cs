@@ -88,6 +88,31 @@ public class AdminTests : BenTestBase
         await Expect(profileTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
+    [Test]
+    public async Task AdminUserDetail_HasSiteRolesTab_WithACheckboxPerRole()
+    {
+        // Item 216: the tab that finally lets a SuperAdmin put somebody into Admin or Moderator.
+        await Page.GotoAsync($"{BaseUrl}/admin/users");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
+                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
+                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
+                           .First;
+        await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
+
+        var rolesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Site Roles", Exact = true })
+                           .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Site Roles" }))
+                           .First;
+        await Expect(rolesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await rolesTab.ClickAsync();
+
+        // The three seeded roles each get a checkbox; SuperAdmin is the one guaranteed to exist.
+        var superAdminBox = Page.Locator("[data-testid='site-roles-panel'] #site-role-superadmin");
+        await Expect(superAdminBox).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Save Roles" }))
+            .ToBeVisibleAsync(new() { Timeout = 8_000 });
+    }
+
     // ── Create user ───────────────────────────────────────────────────────────
 
     [Test]

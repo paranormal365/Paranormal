@@ -245,4 +245,190 @@ public class AdminAppUserControllerTests
         var saved = await db.AppUsers.FindAsync(user.Id);
         Assert.True(saved!.EmailConfirmed);
     }
+
+    // ── Site roles (item 216) ─────────────────────────────────────────────────
+    //
+    // Until this endpoint existed the only way into Admin or Moderator was a row typed into
+    // AspNetUserRoles by hand. The guards below are the ones a database edit would never have
+    // enforced: nobody strips their own SuperAdmin role, and nobody strips the last one.
+
+    private sealed record RolesRig(
+        AdminAppUserController Ctrl,
+        IDbContextFactory<BenDataContext> Factory,
+        Mock<UserManager<AppUser>> UserMgr,
+        Mock<IAuditLogService> Audit);
+
+    /// <summary>
+    /// A controller whose UserManager answers role questions from <paramref name="held"/>,
+    /// whose database knows the three seeded roles, and whose caller is <paramref name="callerId"/>.
+    /// </summary>
+    private static async Task<(RolesRig Rig, AppUser User)> BuildForRolesAsync(
+        IEnumerable<string> held, Guid? callerId = null, int superAdminCount = 2)
+    {
+        var factory = CreateFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var name in new[] { "SuperAdmin", "Admin", "Moderator" })
+                db.Roles.Add(new IdentityRole<Guid>(name) { Id = Guid.NewGuid(), NormalizedName = name.ToUpperInvariant() });
+            await db.SaveChangesAsync();
+        }
+
+        var user = new AppUser { Id = Guid.NewGuid(), Email = "target@example.com", UserName = "target@example.com", DisplayName = "Target" };
+
+        var store   = new Mock<IUserStore<AppUser>>();
+        var userMgr = new Mock<UserManager<AppUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        userMgr.Setup(x => x.FindByIdAsync(user.Id.ToString())).ReturnsAsync(user);
+        userMgr.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(held.ToList());
+        userMgr.Setup(x => x.GetUsersInRoleAsync("SuperAdmin"))
+               .ReturnsAsync(Enumerable.Range(0, superAdminCount).Select(_ => new AppUser { Id = Guid.NewGuid() }).ToList());
+        userMgr.Setup(x => x.AddToRolesAsync(user, It.IsAny<IEnumerable<string>>())).ReturnsAsync(IdentityResult.Success);
+        userMgr.Setup(x => x.RemoveFromRolesAsync(user, It.IsAny<IEnumerable<string>>())).ReturnsAsync(IdentityResult.Success);
+        userMgr.Setup(x => x.UpdateSecurityStampAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        var audit = new Mock<IAuditLogService>();
+        audit.Setup(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object>(),
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        if (callerId is { } caller)
+        {
+            http.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, caller.ToString())], "test"));
+        }
+        ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = http };
+
+        return (new RolesRig(ctrl, factory, userMgr, audit), user);
+    }
+
+    [Fact]
+    public async Task SetRoles_ReturnsNotFound_WhenUserDoesNotExist()
+    {
+        var (rig, _) = await BuildForRolesAsync([]);
+
+        var result = await rig.Ctrl.SetRoles(Guid.NewGuid(), new AdminSetUserRolesRequest(["Admin"]), default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task SetRoles_ReturnsBadRequest_ForARoleTheSiteDoesNotDefine()
+    {
+        var (rig, user) = await BuildForRolesAsync([]);
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Wizard"]), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        rig.UserMgr.Verify(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetRoles_AddsTheMissing_RemovesTheUnwanted_BumpsTheStamp_AndAudits()
+    {
+        var (rig, user) = await BuildForRolesAsync(["Admin"], callerId: Guid.NewGuid());
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Moderator"]), default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var roles = Assert.IsType<AppUserRolesAdminRecord>(ok.Value);
+        Assert.Equal(["Moderator"], roles.Roles);
+
+        rig.UserMgr.Verify(x => x.AddToRolesAsync(user, It.Is<IEnumerable<string>>(r => r.SequenceEqual(new[] { "Moderator" }))), Times.Once);
+        rig.UserMgr.Verify(x => x.RemoveFromRolesAsync(user, It.Is<IEnumerable<string>>(r => r.SequenceEqual(new[] { "Admin" }))), Times.Once);
+        // The bearer token carries the claims minted at sign-in; the stamp is what makes an
+        // existing session notice the change at its next refresh.
+        rig.UserMgr.Verify(x => x.UpdateSecurityStampAsync(user), Times.Once);
+        rig.Audit.Verify(x => x.LogUpdateAsync("AppUserRoles", user.Id, It.IsAny<object>(), It.IsAny<object>(),
+            It.IsAny<Guid>(), It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SetRoles_CanonicalisesCase_ToTheStoredRoleName()
+    {
+        var (rig, user) = await BuildForRolesAsync([]);
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["moderator", "MODERATOR"]), default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var roles = Assert.IsType<AppUserRolesAdminRecord>(ok.Value);
+        Assert.Equal(["Moderator"], roles.Roles);
+        rig.UserMgr.Verify(x => x.AddToRolesAsync(user, It.Is<IEnumerable<string>>(r => r.SequenceEqual(new[] { "Moderator" }))), Times.Once);
+    }
+
+    [Fact]
+    public async Task SetRoles_IsANoOp_WhenNothingChanges()
+    {
+        var (rig, user) = await BuildForRolesAsync(["Admin", "Moderator"]);
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Moderator", "Admin"]), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        rig.UserMgr.Verify(x => x.UpdateSecurityStampAsync(It.IsAny<AppUser>()), Times.Never);
+        rig.Audit.Verify(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object>(),
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetRoles_RefusesToRemoveYourOwnSuperAdminRole()
+    {
+        var (rig, user) = await BuildForRolesAsync(["SuperAdmin"], superAdminCount: 5);
+        // The caller IS the target.
+        rig.Ctrl.ControllerContext.HttpContext.User = new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity(
+                [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString())], "test"));
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest([]), default);
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+        rig.UserMgr.Verify(x => x.RemoveFromRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetRoles_RefusesToRemoveTheLastSuperAdmin()
+    {
+        var (rig, user) = await BuildForRolesAsync(["SuperAdmin"], callerId: Guid.NewGuid(), superAdminCount: 1);
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Admin"]), default);
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+        rig.UserMgr.Verify(x => x.RemoveFromRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
+        rig.UserMgr.Verify(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetRoles_LetsAnotherSuperAdminRemoveIt_WhenTheyAreNotTheLast()
+    {
+        var (rig, user) = await BuildForRolesAsync(["SuperAdmin"], callerId: Guid.NewGuid(), superAdminCount: 2);
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest([]), default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var roles = Assert.IsType<AppUserRolesAdminRecord>(ok.Value);
+        Assert.Empty(roles.Roles);
+        rig.UserMgr.Verify(x => x.RemoveFromRolesAsync(user, It.Is<IEnumerable<string>>(r => r.SequenceEqual(new[] { "SuperAdmin" }))), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetDetail_IncludesTheSiteRolesHeld()
+    {
+        var factory = CreateFactory();
+        var user    = await SeedUserAsync(factory, "Rolly", "rolly@example.com");
+
+        var store   = new Mock<IUserStore<AppUser>>();
+        var userMgr = new Mock<UserManager<AppUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        userMgr.Setup(x => x.GetRolesAsync(It.Is<AppUser>(u => u.Id == user.Id))).ReturnsAsync(["Moderator", "Admin"]);
+        var audit = new Mock<IAuditLogService>();
+
+        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+        };
+
+        var result = await ctrl.GetDetail(user.Id, default);
+
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var detail = Assert.IsType<AppUserDetailAdminRecord>(ok.Value);
+        Assert.Equal(["Admin", "Moderator"], detail.Roles);
+    }
 }
