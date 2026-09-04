@@ -60,6 +60,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationMemberLevelRole> OrganizationMemberLevelRoles { get; set; }
         public virtual DbSet<InvestigationDuty> InvestigationDuties { get; set; }
         public virtual DbSet<InvestigationDutyAssignment> InvestigationDutyAssignments { get; set; }
+        public virtual DbSet<InvestigationDutyEligibility> InvestigationDutyEligibilities { get; set; }
         public virtual DbSet<CaseContact> CaseContacts { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationUrlNameAlias> OrganizationUrlNameAliases { get; set; }
@@ -1952,6 +1953,27 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Name).HasMaxLength(128);
             modelBuilder.Entity<InvestigationDuty>()
                 .HasIndex(e => new { e.OrganizationId, e.SortOrder });
+
+            // ── InvestigationDutyEligibility (item 160) ──────────────────────
+            // Cascade from the duty: a cell is meaningless without it. NoAction from the title,
+            // so removing a rung somebody is still eligible under is refused rather than silently
+            // widening or narrowing the matrix — the org purge sweeps these with the duties.
+            modelBuilder.Entity<InvestigationDutyEligibility>()
+                .HasOne(e => e.InvestigationDuty).WithMany(d => d.Eligibility)
+                .HasForeignKey(e => e.InvestigationDutyId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<InvestigationDutyEligibility>()
+                .HasOne(e => e.OrganizationMemberLevel).WithMany()
+                .HasForeignKey(e => e.OrganizationMemberLevelId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDutyEligibility>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationDutyEligibility>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One cell per pair; the editor sends a whole row and the database keeps it honest.
+            modelBuilder.Entity<InvestigationDutyEligibility>()
+                .HasIndex(e => new { e.InvestigationDutyId, e.OrganizationMemberLevelId })
+                .IsUnique();
 
             modelBuilder.Entity<InvestigationDutyAssignment>()
                 .HasOne(e => e.InvestigationAttendee).WithMany()

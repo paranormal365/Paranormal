@@ -319,10 +319,9 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             CreatedByAppUserId = appUserId
         });
 
-        Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(dbContext, organization.Id, appUserId);
-        Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(dbContext, organization.Id, appUserId);
-        Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(dbContext, organization.Id, appUserId);
-        Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(dbContext, organization.Id, appUserId);
+        // One call rather than four: this path had drifted from the others once already, and the
+        // duty matrix (item 160) would have been the second thing it silently lacked.
+        Ben.Data.Source.Services.NewOrganizationDefaults.AddAll(dbContext, organization.Id, appUserId);
 
 
         await dbContext.SaveChangesAsync(token);

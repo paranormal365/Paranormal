@@ -42,6 +42,97 @@ public sealed class InvestigationDutyController : BenControllerBase
         return Ok(duties.Select(ToRecord));
     }
 
+    /// <summary>
+    /// The whole title-by-duty matrix for this group (item 160): which titles may hold which
+    /// duties, and what each duty confers.
+    /// </summary>
+    /// <remarks>
+    /// Readable by any member, like the duty list itself — knowing what a title opens up is how
+    /// somebody knows what to work towards. Editing stays with the group's administrators.
+    /// </remarks>
+    [HttpGet("matrix")]
+    public async Task<ActionResult<DutyEligibilityMatrix>> GetMatrix(Guid orgId, CancellationToken ct)
+    {
+        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var titles = await db.OrganizationMemberLevels.AsNoTracking()
+            .Where(l => l.OrganizationId == orgId && l.IsActive)
+            .OrderBy(l => l.SortOrder)
+            .Select(l => new DutyMatrixTitle(l.Id, l.Name, l.SortOrder))
+            .ToListAsync(ct);
+
+        var duties = await db.InvestigationDuties.AsNoTracking()
+            .Include(d => d.MinimumMemberLevel)
+            .Where(d => d.OrganizationId == orgId && d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .ToListAsync(ct);
+
+        var dutyIds = duties.Select(d => d.Id).ToList();
+        var cells = await db.InvestigationDutyEligibilities.AsNoTracking()
+            .Where(e => dutyIds.Contains(e.InvestigationDutyId))
+            .Select(e => new { e.InvestigationDutyId, e.OrganizationMemberLevelId })
+            .ToListAsync(ct);
+
+        var rows = duties.Select(d => new DutyMatrixRow(
+            d.Id, d.Name, d.SortOrder, d.IsSingleHolder, d.Capabilities,
+            [.. cells.Where(c => c.InvestigationDutyId == d.Id).Select(c => c.OrganizationMemberLevelId)],
+            d.MinimumMemberLevelId, d.MinimumMemberLevel?.Name)).ToList();
+
+        return Ok(new DutyEligibilityMatrix(titles, rows));
+    }
+
+    /// <summary>Sets one duty's row of the matrix — the whole set of titles, and what it confers.</summary>
+    [HttpPut("{id:guid}/eligibility")]
+    public async Task<ActionResult<DutyEligibilityMatrix>> SetEligibility(
+        Guid orgId, Guid id, [FromBody] SetDutyEligibilityRequest request, CancellationToken ct)
+    {
+        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var duty = await db.InvestigationDuties
+            .FirstOrDefaultAsync(d => d.Id == id && d.OrganizationId == orgId, ct);
+        if (duty is null) return NotFound();
+
+        // Titles are checked against this group's own ladder. A rung from somebody else's group
+        // would be a cell nobody could ever satisfy, and the matrix would quietly stop matching
+        // anybody rather than say why.
+        var wanted = (request.TitleIds ?? []).Distinct().ToList();
+        if (wanted.Count > 0)
+        {
+            var mine = await db.OrganizationMemberLevels.AsNoTracking()
+                .Where(l => l.OrganizationId == orgId && wanted.Contains(l.Id))
+                .Select(l => l.Id).ToListAsync(ct);
+            if (mine.Count != wanted.Count)
+                return BadRequest("One of those titles does not belong to this group.");
+        }
+
+        var existing = await db.InvestigationDutyEligibilities
+            .Where(e => e.InvestigationDutyId == id).ToListAsync(ct);
+
+        db.InvestigationDutyEligibilities.RemoveRange(
+            existing.Where(e => !wanted.Contains(e.OrganizationMemberLevelId)));
+
+        var userId = GetCurrentUserId();
+        foreach (var titleId in wanted.Where(t => existing.All(e => e.OrganizationMemberLevelId != t)))
+        {
+            db.InvestigationDutyEligibilities.Add(new InvestigationDutyEligibility
+            {
+                InvestigationDutyId = id,
+                OrganizationMemberLevelId = titleId,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+        }
+
+        duty.Capabilities = request.Capabilities;
+        duty.DateUpdated = DateTime.UtcNow;
+        duty.UpdatedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+        return await GetMatrix(orgId, ct);
+    }
+
     [HttpPost]
     public async Task<ActionResult<InvestigationDutyRecord>> Create(
         Guid orgId, [FromBody] UpsertInvestigationDutyRequest request, CancellationToken ct)
@@ -124,6 +215,7 @@ public sealed class InvestigationDutyController : BenControllerBase
         Id = d.Id, OrganizationId = d.OrganizationId, Name = d.Name,
         SortOrder = d.SortOrder, IsActive = d.IsActive, IsSingleHolder = d.IsSingleHolder,
         MinimumMemberLevelId = d.MinimumMemberLevelId,
+        Capabilities = d.Capabilities,
         MinimumMemberLevelName = d.MinimumMemberLevel?.Name,
     };
 
