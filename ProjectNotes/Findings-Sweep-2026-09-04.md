@@ -129,8 +129,11 @@ bypass — but the gate is meant to be about the group, not about which door was
 - **35 distinct compiler warnings only appear on `-t:Rebuild`.** An ordinary `dotnet build` prints
   0 because nothing recompiles. Mostly XML-comment defects, two xUnit analyzer rules, and a real
   `CS8604` possible-null on `IFeedMediaScreener.ScreenAsync`'s `storagePath`.
-- **Equipment make list is not filtered by category** — picking Audio Recorder still offers
-  Manfrotto tripods and BaoFeng radios. The model list *is* filtered.
+- **Equipment make list is not narrowed by category** — picking Audio Recorder still offers
+  Manfrotto tripods and BaoFeng radios, though the model list that follows *is* filtered. A
+  category lives on the model rather than the brand, so the narrowing is derivable: the makes that
+  have a model in the chosen category. A branch named `feature/equipment-make-category-filter`
+  already exists and is contained in develop, so this may be a decision rather than an omission.
 - **After sharing gear with a group, nothing on the card says so.** The state is only visible by
   reopening the dialog.
 - **The equipment lending rules held up.** An item shared with a group but with all three borrow
