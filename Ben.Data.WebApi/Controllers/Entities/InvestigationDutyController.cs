@@ -75,7 +75,7 @@ public sealed class InvestigationDutyController : BenControllerBase
             .ToListAsync(ct);
 
         var rows = duties.Select(d => new DutyMatrixRow(
-            d.Id, d.Name, d.SortOrder, d.IsSingleHolder, d.Capabilities,
+            d.Id, d.Name, d.SortOrder, d.IsSingleHolder, d.Capabilities, d.IsEnforced,
             [.. cells.Where(c => c.InvestigationDutyId == d.Id).Select(c => c.OrganizationMemberLevelId)],
             d.MinimumMemberLevelId, d.MinimumMemberLevel?.Name)).ToList();
 
@@ -126,6 +126,7 @@ public sealed class InvestigationDutyController : BenControllerBase
         }
 
         duty.Capabilities = request.Capabilities;
+        duty.IsEnforced = request.IsEnforced;
         duty.DateUpdated = DateTime.UtcNow;
         duty.UpdatedByAppUserId = userId;
 
@@ -216,6 +217,7 @@ public sealed class InvestigationDutyController : BenControllerBase
         SortOrder = d.SortOrder, IsActive = d.IsActive, IsSingleHolder = d.IsSingleHolder,
         MinimumMemberLevelId = d.MinimumMemberLevelId,
         Capabilities = d.Capabilities,
+        IsEnforced = d.IsEnforced,
         MinimumMemberLevelName = d.MinimumMemberLevel?.Name,
     };
 

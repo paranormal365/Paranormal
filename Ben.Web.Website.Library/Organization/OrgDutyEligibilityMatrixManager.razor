@@ -61,6 +61,7 @@
                             <th class="text-center small">@title.Name</th>
                         }
                         <th class="small">On the night</th>
+                        <th class="small">Rule?</th>
                         <th class="text-end">&nbsp;</th>
                     </tr>
                 </thead>
@@ -111,6 +112,18 @@
                                 </label>
                             </td>
 
+                            <td class="small">
+                                @* Off by default and meant to stay that way for most duties: see
+                                   the note under the grid. *@
+                                <label class="d-block">
+                                    <input type="checkbox" class="form-check-input me-1"
+                                           data-testid="enforced-toggle"
+                                           checked="@row.IsEnforced"
+                                           @onchange="@(e => ToggleEnforced(duty.Id, e.Value is true))" />
+                                    no exceptions
+                                </label>
+                            </td>
+
                             <td class="text-end">
                                 <button type="button" class="btn btn-primary btn-sm"
                                         data-testid="save-matrix-row"
@@ -125,11 +138,20 @@
             </table>
         </div>
 
-        <p class="text-secondary small mb-0">
+        <p class="text-secondary small mb-1">
             <strong>On the night</strong> is what holding the duty lets somebody do for that one
             visit, and it ends with the visit. Point of contact is shown on the roster so everyone
             knows who to call; hands out duties lets them do that without being able to change
             anything else about the visit.
+        </p>
+        <p class="text-secondary small mb-0">
+            <strong>Ticking these normally only advises.</strong> Whoever organises a visit can
+            still assign past them, and the exception is marked on the roster — the senior calls in
+            sick and the capable junior steps up. Assigning past a duty that carries something
+            under <em>On the night</em> is an owner or administrator's call, because it hands out
+            authority. Tick <strong>no exceptions</strong> for the few duties where the title is a
+            real qualification rather than a preference: then nobody can assign past it on the
+            night, and changing it means changing this grid.
         </p>
     }
 </div>
@@ -149,6 +171,7 @@
     {
         public HashSet<Guid> TitleIds { get; init; } = [];
         public InvestigationDutyCapabilities Capabilities { get; set; }
+        public bool IsEnforced { get; set; }
         public bool Has(InvestigationDutyCapabilities c) => (Capabilities & c) == c;
     }
 
@@ -173,6 +196,7 @@
             {
                 TitleIds = [.. duty.OpenToTitleIds],
                 Capabilities = duty.Capabilities,
+                IsEnforced = duty.IsEnforced,
             };
         }
     }
@@ -191,13 +215,20 @@
         _saved = null;
     }
 
+    private void ToggleEnforced(Guid dutyId, bool on)
+    {
+        if (!_edit.TryGetValue(dutyId, out var row)) return;
+        row.IsEnforced = on;
+        _saved = null;
+    }
+
     private async Task SaveRowAsync(Guid dutyId)
     {
         if (!_edit.TryGetValue(dutyId, out var row)) return;
 
         _saving = dutyId; _error = null; _saved = null;
         var updated = await AdminClient.SetDutyEligibilityAsync(
-            OrgId, dutyId, [.. row.TitleIds], row.Capabilities);
+            OrgId, dutyId, [.. row.TitleIds], row.Capabilities, row.IsEnforced);
         _saving = null;
 
         if (updated is null)
@@ -216,6 +247,7 @@
             {
                 TitleIds = [.. duty.OpenToTitleIds],
                 Capabilities = duty.Capabilities,
+                IsEnforced = duty.IsEnforced,
             };
         }
         _saved = "Saved.";

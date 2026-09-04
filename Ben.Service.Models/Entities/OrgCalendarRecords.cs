@@ -56,6 +56,9 @@ public record InvestigationDutyRecord
 
     /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
     public Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities { get; init; }
+
+    /// <summary>Whether eligibility is a rule rather than advice for this duty (item 160).</summary>
+    public bool IsEnforced { get; init; }
 }
 
 /// <summary>
@@ -81,6 +84,7 @@ public sealed record DutyMatrixRow(
     int SortOrder,
     bool IsSingleHolder,
     Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities,
+    bool IsEnforced,
     IReadOnlyList<Guid> OpenToTitleIds,
     Guid? MinimumMemberLevelId,
     string? MinimumMemberLevelName);
@@ -95,7 +99,8 @@ public sealed record DutyMatrixRow(
 /// </remarks>
 public sealed record SetDutyEligibilityRequest(
     IReadOnlyList<Guid> TitleIds,
-    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities);
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities,
+    bool IsEnforced = false);
 
 /// <summary>Create/update body for an investigation duty.</summary>
 public sealed record UpsertInvestigationDutyRequest(

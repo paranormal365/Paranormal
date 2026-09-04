@@ -120,6 +120,7 @@ public interface IBenPlacesClient
     Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
         Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
         Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
         CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
     Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);

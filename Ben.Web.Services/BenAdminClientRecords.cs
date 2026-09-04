@@ -1115,7 +1115,9 @@ public sealed record OrgInvestigationDutyItem(
     Guid? MinimumMemberLevelId, string? MinimumMemberLevelName,
     /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
     Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities
-        = Ben.Data.Common.Enums.InvestigationDutyCapabilities.None);
+        = Ben.Data.Common.Enums.InvestigationDutyCapabilities.None,
+    /// <summary>Whether eligibility is a rule rather than advice for this duty (item 160).</summary>
+    bool IsEnforced = false);
 
 // The matrix records themselves are NOT restated here: this project already takes
 // InvestigationDutyBoard and its friends straight from Ben.Service.Models.Entities, and a second
