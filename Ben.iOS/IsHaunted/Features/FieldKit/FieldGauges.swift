@@ -105,6 +105,11 @@ struct SessionClock: View {
                     Text(context.date, format: .dateTime.hour().minute().second())
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .monospacedDigit()
+                        // One line, shrinking before it wraps. In the iPad's two-column layout
+                        // the left column is narrow enough that "10:03:01 AM" broke as
+                        // "10:03:01 A / M" — the App Store capture on 2026-09-04 showed it.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                         .foregroundStyle(Theme.bone)
                     Text(context.date, format: .dateTime.weekday(.abbreviated)
                             .month(.abbreviated).day())
