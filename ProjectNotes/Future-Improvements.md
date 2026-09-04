@@ -10754,7 +10754,7 @@ bouncing a non-SuperAdmin.
 Documented in `site-administration.md`; **self-service account closure was documented for the
 first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
 
-## 213. The App Store package for 1.0.2 (Ben, 2026-09-04)
+## 213. The App Store package for 1.0.2 (BUILT 2026-09-04 — submission waits, Ben's call)
 
 A second upload folder alongside the 1.0.0 one, with `1.0.2` in its name so the two cannot be
 confused, carrying the same iPhone and iPad video and screenshots. Plus a single document named
@@ -10762,6 +10762,22 @@ with `1.0.2` before the `.md` holding everything App Review needs and every inst
 building and submitting the build.
 
 **Size:** medium. **Depends on:** the screenshots being recapturable, which needs item 214.
+
+### Built 2026-09-04
+
+`Ben.iOS/screenshots-1.0.2/` (byte-identical copies of the 1.0.0 set, dark, with a README saying
+which screens are now stale and that 214 recaptures them) and `Ben.iOS/APP-STORE-1.0.2.md` — the
+listing, privacy answers, review notes, the seven Guideline 2.1 answers, and the full build-and-
+submit procedure. `MARKETING_VERSION` 1.0.2 / build 2 set in the project and proven in the built
+bundle.
+
+Two findings while writing it: the "§3c" rejection answers the notes said were in APP-STORE.md
+were **never committed** — the file has no such section, so 1.0.2's document carries them; and
+the current tree holds two "paid plan" sentences with no purchase path, which is the one
+Guideline 3.1.1 risk in the build and is flagged for Ben's decision.
+
+Ben, 2026-09-04: *"I am going to wait until we finish everything to try to get the submission
+done."* So this is ready, not sent.
 
 ## 214. Demo records for the simulator, so the screenshots have something to show (Ben, 2026-09-04)
 
