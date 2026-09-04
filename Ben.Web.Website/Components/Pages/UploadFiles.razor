@@ -175,6 +175,94 @@
     </ChildContent>
 </BenModal>
 
+@* Delete: the two questions (item 180 Phase B). A small, single-purpose dialog — Ben's rule
+   keeps large surfaces on pages, and this is one file and two yes/no questions. *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete File" Width="420px"
+                  Busy="@_isDeleting" BusyText="Deleting…" ConfirmText="Delete"
+                  OnConfirm="ConfirmPlainDelete" OnCancel="@(() => _deleteTarget = null)">
+    @if (_deleteTarget is not null)
+    {
+        <p class="mb-1">Delete <strong>@_deleteTarget.FileName</strong>?</p>
+        @if (_deleteUsage is { PersonShares: > 0 } or { IsPublic: true })
+        {
+            <p class="text-secondary small mb-0">
+                It is @(_deleteUsage!.IsPublic ? "public" : "")@(_deleteUsage.IsPublic && _deleteUsage.PersonShares > 0 ? " and " : "")@(_deleteUsage.PersonShares > 0 ? $"shared with {_deleteUsage.PersonShares} {(_deleteUsage.PersonShares == 1 ? "person" : "people")}" : ""). Those shares end with it.
+            </p>
+        }
+    }
+</BenConfirmDialog>
+
+<BenModal @bind-Visible="@_showInUseDialog" Title="This file is in use">
+    <ChildContent>
+        @if (_deleteTarget is not null && _deleteUsage is not null)
+        {
+            <p class="mb-2"><strong>@_deleteTarget.FileName</strong> is being used by:</p>
+            <ul class="small mb-3" data-testid="file-usage-list">
+                @foreach (var o in _deleteUsage.Organizations)
+                {
+                    <li>
+                        <strong>@o.OrganizationName</strong>
+                        <span class="text-secondary">
+                            — @UsageSentence(o)
+                        </span>
+                    </li>
+                }
+            </ul>
+
+            @if (_deleteStep == DeleteStep.AskEverywhere)
+            {
+                <p class="mb-1 fw-semibold">Do you want it removed everywhere it is shared?</p>
+                <p class="text-secondary small">
+                    Yes ends every share, removes the copies those groups took — including any
+                    comments and votes on them — and then deletes the file. There is no undo.
+                </p>
+            }
+            else
+            {
+                <p class="mb-1 fw-semibold">Do you still want it out of your files?</p>
+                <p class="text-secondary small">
+                    If so, the file and its details are handed to the group using it. It leaves
+                    your files, the group keeps everything that points at it, and only people in
+                    that group with the right permission will see it. You will not be able to get
+                    it back.
+                </p>
+                @if (_deleteUsage.Organizations.Count > 1)
+                {
+                    <label class="form-label small fw-semibold" for="reassign-org">Hand it to</label>
+                    <select id="reassign-org" class="form-select form-select-sm mb-2" style="max-width:320px" @bind="@_reassignOrgId">
+                        @foreach (var o in _deleteUsage.Organizations)
+                        {
+                            <option value="@o.OrganizationId">@o.OrganizationName</option>
+                        }
+                    </select>
+                }
+            }
+
+            @if (_deleteError is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0">@_deleteError</div>
+            }
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            @if (_deleteStep == DeleteStep.AskEverywhere)
+            {
+                <button type="button" class="btn btn-danger" data-testid="delete-everywhere" @onclick="ConfirmDeleteEverywhere" disabled="@_isDeleting">
+                    @(_isDeleting ? "Removing…" : "Yes, remove it everywhere")
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-testid="delete-not-everywhere" @onclick="@(() => _deleteStep = DeleteStep.AskReassign)" disabled="@_isDeleting">No</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary" data-testid="reassign-file" @onclick="ConfirmReassign" disabled="@_isDeleting">
+                    @(_isDeleting ? "Handing over…" : $"Hand it to {ReassignOrgName()}")
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-testid="keep-file" @onclick="CloseDeleteDialogs" disabled="@_isDeleting">Keep it</button>
+            }
+        </div>
+    </ChildContent>
+</BenModal>
+
 @* Replace File Dialog (item #6 phase 3) *@
 <BenModal @bind-Visible="@_showReplaceDialog" Title="Replace File">
     <ChildContent>
@@ -307,6 +395,17 @@
     // Same-filename-on-upload prompt (item #6 phase 3)
     private bool _showSameNameDialog;
     private UploadFileRecord? _sameNameMatch;
+
+    // Delete: the two questions (item 180 Phase B)
+    private enum DeleteStep { AskEverywhere, AskReassign }
+    private bool _showDeleteConfirm;
+    private bool _showInUseDialog;
+    private UploadFileRecord? _deleteTarget;
+    private FileUsageRecord? _deleteUsage;
+    private DeleteStep _deleteStep = DeleteStep.AskEverywhere;
+    private Guid _reassignOrgId;
+    private bool _isDeleting;
+    private string? _deleteError;
 
     // Replace dialog (item #6 phase 3)
     private bool _showReplaceDialog;
@@ -534,12 +633,108 @@
         await JS.InvokeVoidAsync("downloadFileFromBase64", base64, contentType, fileName);
     }
 
-    // ── Delete ───────────────────────────────────────────────────────────────
+    // ── Delete (item 180 Phase B) ─────────────────────────────────────────────
+    //
+    // The usage comes first, and decides which dialog opens. A file nobody else is using gets
+    // a plain confirm. A file a group is using gets the two questions Ben specified: remove it
+    // everywhere? and if not, still delete it — by handing it to the group?
     private async Task DeleteFile(UploadFileRecord file)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete '{file.FileName}'?")) return;
-        if (await Api.DeleteUploadFileAsync(file.Id))
-            _files = [.._files.Where(f => f.Id != file.Id)];
+        _deleteTarget = file;
+        _deleteError  = null;
+        _deleteStep   = DeleteStep.AskEverywhere;
+        _deleteUsage  = await Api.GetUploadFileUsageAsync(file.Id);
+
+        if (_deleteUsage is { InUseByAnOrganization: true })
+        {
+            _reassignOrgId = _deleteUsage.Organizations[0].OrganizationId;
+            _showInUseDialog = true;
+        }
+        else
+        {
+            _showDeleteConfirm = true;
+        }
+    }
+
+    private async Task ConfirmPlainDelete()
+    {
+        if (_deleteTarget is null) return;
+        _isDeleting = true;
+        var ok = await Api.DeleteUploadFileAsync(_deleteTarget.Id);
+        _isDeleting = false;
+        if (ok)
+        {
+            _files = [.._files.Where(f => f.Id != _deleteTarget.Id)];
+            CloseDeleteDialogs();
+        }
+        else
+        {
+            // The server refuses a plain delete once a group is using it — re-ask with the usage.
+            _deleteUsage = await Api.GetUploadFileUsageAsync(_deleteTarget.Id);
+            _showDeleteConfirm = false;
+            if (_deleteUsage is { InUseByAnOrganization: true })
+            {
+                _reassignOrgId = _deleteUsage.Organizations[0].OrganizationId;
+                _showInUseDialog = true;
+            }
+            else
+            {
+                _deleteError = "The file could not be deleted.";
+            }
+        }
+    }
+
+    private async Task ConfirmDeleteEverywhere()
+    {
+        if (_deleteTarget is null) return;
+        _isDeleting = true; _deleteError = null;
+        var result = await Api.DeleteUploadFileEverywhereAsync(_deleteTarget.Id);
+        _isDeleting = false;
+        if (result is null)
+        {
+            _deleteError = "Everything shared was removed, but something else still holds this file, so it stays.";
+            return;
+        }
+        _files = [.._files.Where(f => f.Id != _deleteTarget.Id)];
+        CloseDeleteDialogs();
+    }
+
+    private async Task ConfirmReassign()
+    {
+        if (_deleteTarget is null) return;
+        _isDeleting = true; _deleteError = null;
+        var moved = await Api.ReassignUploadFileAsync(_deleteTarget.Id, _reassignOrgId);
+        _isDeleting = false;
+        if (moved is null)
+        {
+            _deleteError = "The file could not be handed over.";
+            return;
+        }
+        // It has left this person's files, which is what they asked for.
+        _files = [.._files.Where(f => f.Id != _deleteTarget.Id)];
+        CloseDeleteDialogs();
+    }
+
+    private void CloseDeleteDialogs()
+    {
+        _showDeleteConfirm = false;
+        _showInUseDialog = false;
+        _deleteTarget = null;
+        _deleteUsage = null;
+        _deleteError = null;
+    }
+
+    private string ReassignOrgName()
+        => _deleteUsage?.Organizations.FirstOrDefault(o => o.OrganizationId == _reassignOrgId)?.OrganizationName ?? "the group";
+
+    private static string UsageSentence(FileUsageOrganizationRecord o)
+    {
+        var parts = new List<string>();
+        if (o.Shares > 0)      parts.Add(o.Shares == 1 ? "a share" : $"{o.Shares} shares");
+        if (o.CaseCopies > 0)  parts.Add(o.CaseCopies == 1 ? "a copy on a case" : $"copies on {o.CaseCopies} cases");
+        if (o.GroupCopies > 0) parts.Add(o.GroupCopies == 1 ? "a copy in its files" : $"{o.GroupCopies} copies in its files");
+        if (o.DirectLinks > 0) parts.Add(o.DirectLinks == 1 ? "one direct link" : $"{o.DirectLinks} direct links");
+        return string.Join(", ", parts);
     }
 
     // ── Replace (item #6 phase 3) ───────────────────────────────────────────────

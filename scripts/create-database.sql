@@ -13074,3 +13074,54 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904155733_AddUploadFileOwnerOrganization'
+)
+BEGIN
+    DECLARE @var26 nvarchar(max);
+    SELECT @var26 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[UploadFiles]') AND [c].[name] = N'AppUserId');
+    IF @var26 IS NOT NULL EXEC(N'ALTER TABLE [UploadFiles] DROP CONSTRAINT ' + @var26 + ';');
+    ALTER TABLE [UploadFiles] ALTER COLUMN [AppUserId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904155733_AddUploadFileOwnerOrganization'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [OwnerOrganizationId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904155733_AddUploadFileOwnerOrganization'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFiles_OwnerOrganizationId] ON [UploadFiles] ([OwnerOrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904155733_AddUploadFileOwnerOrganization'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD CONSTRAINT [FK_UploadFiles_Organizations_OwnerOrganizationId] FOREIGN KEY ([OwnerOrganizationId]) REFERENCES [Organizations] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260904155733_AddUploadFileOwnerOrganization'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260904155733_AddUploadFileOwnerOrganization', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

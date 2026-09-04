@@ -109,7 +109,8 @@ public sealed class FileMigrationService : IHostedService
             {
                 try
                 {
-                    var relativePath = _fileStorage.UserFilePath(file.AppUserId, file.StoredFileName);
+                    // A file handed to a group has no person; its bytes live under whoever uploaded it.
+                    var relativePath = _fileStorage.UserFilePath(file.AppUserId ?? file.CreatedByAppUserId, file.StoredFileName);
 
                     if (!_fileStorage.Exists(relativePath))
                     {

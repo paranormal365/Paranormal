@@ -162,6 +162,14 @@ public interface IWebApiClient
     Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default);
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
 
+    // Upload File — delete-and-reassign (item 180 Phase B)
+    /// <summary>Where the file is in use beyond the owner's library — what the delete questions are about.</summary>
+    Task<FileUsageRecord?> GetUploadFileUsageAsync(Guid id, CancellationToken token = default);
+    /// <summary>First answer: remove it everywhere it is shared, then delete it.</summary>
+    Task<DeleteEverywhereResult?> DeleteUploadFileEverywhereAsync(Guid id, CancellationToken token = default);
+    /// <summary>Second answer: hand the file to the group using it instead of destroying it.</summary>
+    Task<UploadFileRecord?> ReassignUploadFileAsync(Guid id, Guid organizationId, CancellationToken token = default);
+
     // Upload File — Replace (item #6 phase 3)
     Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default);
     Task<ReplaceImpactRecord?> GetReplaceImpactAsync(Guid id, CancellationToken token = default);
