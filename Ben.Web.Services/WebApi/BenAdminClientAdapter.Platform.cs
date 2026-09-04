@@ -144,6 +144,19 @@ public sealed partial class BenAdminClientAdapter
         return (result, error);
     }
 
+    public Task<CasePurgePreview?> GetCasePurgePreviewAsync(
+        Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<CasePurgePreview>($"/api/admin/cases/{caseId}/purge", token);
+
+    public async Task<(CasePurgeResult? Result, string? Error)> PurgeCaseAsync(
+        Guid caseId, string confirmTitle, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, CasePurgeResult>(
+            HttpMethod.Delete, $"/api/admin/cases/{caseId}/purge",
+            new { ConfirmTitle = confirmTitle }, token);
+        return (result, error);
+    }
+
     public Task<SessionInsightsRecord?> GetSessionInsightsAsync(
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<SessionInsightsRecord>($"/api/field-sessions/{sessionId}/insights", token);

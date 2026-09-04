@@ -42,10 +42,20 @@
                         @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="90px">
+                <GridCommandColumn Width="150px">
                     <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))">
                         Open
                     </GridCommandButton>
+                    @* Item 183: goes to the delete page with this case chosen, never deletes from
+                       here. A destructive verb on a grid row is the first half of an accident. *@
+                    @* Icon only, with Title for the tooltip and the accessible name. NO
+                       aria-label: Telerik throws on an unmatched attribute and takes the circuit
+                       with it (item 112). Title is a real GridCommandButton parameter. *@
+                    <GridCommandButton Command="Delete"
+                                       Icon="@SvgIcon.Trash"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       Title="Delete this case"
+                                       OnClick="@((GridCommandEventArgs e) => DeleteCase((AdminCaseSummaryRecord)e.Items.First()))" />
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
@@ -81,4 +91,7 @@
 
     private void OpenCase(AdminCaseSummaryRecord c)
         => NavManager.NavigateTo($"/organizations/{c.OrganizationId}/cases/{c.Id}");
+
+    private void DeleteCase(AdminCaseSummaryRecord c)
+        => NavManager.NavigateTo($"/admin/delete-case/{c.Id}");
 }
