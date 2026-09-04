@@ -214,6 +214,36 @@ public sealed class ReachableComponentTests
             + "server-only again — the same shape item #88 found and fixed once.");
     }
 
+    /// <summary>
+    /// Every half of sharing a session by link reaches a screen (item 207).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three separate calls, because three separate omissions are each individually
+    /// plausible and each individually ruins the feature. A make with no withdraw is a link that
+    /// cannot be pulled back. A withdraw with no anonymous read is a page the recipient cannot
+    /// open. This codebase has shipped a write-only feature seven times; a share link that can be
+    /// created and never revoked would be the eighth, and worse than the others because the thing
+    /// that cannot be undone is a stranger's access to somebody's recordings.</para>
+    ///
+    /// <para>Matched on the client method names rather than the URLs: a route can be rewritten,
+    /// but a component that does not call the method is not calling the endpoint under any
+    /// spelling of it.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("CreateFieldSessionShareAsync", "nothing on any screen can make a share link")]
+    [InlineData("RevokeFieldSessionShareAsync", "a link can be made and never withdrawn")]
+    [InlineData("GetSharedFieldSessionAsync", "no page opens a share link, so every link 404s for its recipient")]
+    public void Both_halves_of_sharing_a_session_reach_a_screen(string method, string consequence)
+    {
+        var callers = RazorSources()
+            .Where(f => File.ReadAllText(f).Contains(method, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(callers.Count > 0,
+            $"Nothing calls {method}, so {consequence} (item 207).");
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

@@ -124,6 +124,19 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
                 .Where(c => ids.Contains(c.FieldSessionUploadId))
                 .ExecuteDeleteAsync(ct);
 
+            // Before the file rows: a share link may name one recording, and that foreign key is
+            // NoAction — see the comment in OrganizationPurge for why the alternatives are worse.
+            // A link to a session whose readings are not on this server reaches nothing anyway.
+            // Swept by both columns for the reason given there: today a link's file always belongs
+            // to the link's own session, and nothing in the schema enforces it.
+            var linkedFileIds = await db.FieldSessionUploadFiles.AsNoTracking()
+                .Where(f => ids.Contains(f.FieldSessionUploadId)).Select(f => f.Id).ToListAsync(ct);
+            await db.FieldSessionShareLinks
+                .Where(l => ids.Contains(l.FieldSessionUploadId)
+                         || (l.FieldSessionUploadFileId != null
+                             && linkedFileIds.Contains(l.FieldSessionUploadFileId.Value)))
+                .ExecuteDeleteAsync(ct);
+
             await db.FieldSessionUploadFiles.Where(f => ids.Contains(f.FieldSessionUploadId))
                 .ExecuteDeleteAsync(ct);
             await db.FieldSessionUploads.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(ct);
