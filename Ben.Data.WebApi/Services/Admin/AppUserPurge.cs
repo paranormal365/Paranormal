@@ -108,6 +108,7 @@ public sealed class AppUserPurge
         if (user is null) return null;
 
         var personalSessionIds = await PersonalSessionIdsAsync(db, userId, ct);
+        var pendingFileIds     = await StoredFileIdsAsync(db, userId, personalSessionIds, ct);
 
         var owned = await db.OrganizationUserMemberships.AsNoTracking()
             .Where(m => m.AppUserId == userId && m.IsActive && m.Role == OrganizationMemberRole.Owner)
@@ -139,7 +140,7 @@ public sealed class AppUserPurge
             AlreadyClosed:        user.DateClosed is not null,
 
             PersonalFieldSessions: personalSessionIds.Count,
-            StoredFiles:           await StoredFileIdsAsync(db, userId, personalSessionIds, ct) is var files ? files.Count : 0,
+            StoredFiles:           pendingFileIds.Count,
             Memberships:           await db.OrganizationUserMemberships.AsNoTracking().CountAsync(m => m.AppUserId == userId, ct),
             SignInEvents:          await db.SignInEvents.AsNoTracking().CountAsync(e => e.AppUserId == userId, ct),
             MessagesReceived:      await db.UserMessageTos.AsNoTracking().CountAsync(m => m.ToAppUserId == userId, ct),
@@ -166,7 +167,8 @@ public sealed class AppUserPurge
         // Everything else that would still name them once the deletes above have run, counted from
         // the model rather than from this method's imagination — and it is also what decides
         // whether the row can go at all.
-        var (residual, itemised) = await ResidualReferencesAsync(db, userId, personalSessionIds, ct);
+        var (residual, itemised) = await ResidualReferencesAsync(
+            db, userId, await GoingRowsAsync(db, personalSessionIds, pendingFileIds, ct), ct);
         var named = caseNotes + timeline + groupMessages + groupSessions + evidence;
 
         return counted with
@@ -253,8 +255,12 @@ public sealed class AppUserPurge
         var filesRemoved = 0;
         foreach (var fileId in fileIds)
         {
+            // Not DbUpdateException: ExecuteDelete goes straight to the provider, so a foreign
+            // key violation arrives as SqlException (or SqliteException in tests), and a narrower
+            // catch here would turn "this one file is still in use" into a failed purge.
             try { filesRemoved += await db.UploadFiles.Where(f => f.Id == fileId).ExecuteDeleteAsync(ct); }
-            catch (DbUpdateException) { /* still referenced elsewhere; the row stays and so do its bytes */ }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { /* still referenced elsewhere; the row stays and so do its bytes */ }
         }
 
         foreach (var path in paths)
@@ -265,7 +271,7 @@ public sealed class AppUserPurge
 
         // ── and finally the row itself, if anything is left pointing at it ────
         var rowRemoved = false;
-        var (residual, itemised) = await ResidualReferencesAsync(db, userId, [], ct);
+        var (residual, itemised) = await ResidualReferencesAsync(db, userId, new(), ct);
         if (residual == 0)
         {
             try
@@ -273,8 +279,9 @@ public sealed class AppUserPurge
                 await db.AppUsers.Where(u => u.Id == userId).ExecuteDeleteAsync(ct);
                 rowRemoved = true;
             }
-            catch (DbUpdateException ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Same reason as the file loop: ExecuteDelete throws the provider's own exception.
                 // The census said nothing pointed at it and the database disagreed. The account is
                 // already anonymised, so this is a worse outcome than intended rather than a
                 // broken one — but it means the census has a gap, and that is worth a log line
@@ -384,18 +391,30 @@ public sealed class AppUserPurge
     /// the deletes have actually happened.</para>
     /// </remarks>
     private static async Task<(int Total, List<string> Itemised)> ResidualReferencesAsync(
-        BenDataContext db, Guid userId, List<Guid> pendingSessionIds, CancellationToken ct)
+        BenDataContext db, Guid userId, Dictionary<string, HashSet<Guid>> going, CancellationToken ct)
     {
         // Tables this purge empties of the user before the row delete is attempted. Counting them
         // would make every account look permanent. Kept in step with the deletes above by
         // AppUserPurgeCoverageTests, which fails in both directions.
+        // Tables this purge empties of the user ENTIRELY before the row delete is attempted.
+        // Counting them would make every account look permanent. Kept in step with the deletes
+        // above by AppUserPurgeCoverageTests, which fails in both directions.
+        //
+        // Field sessions and upload files are deliberately NOT here, though an earlier version
+        // listed them. The purge empties those only PARTLY: a session recorded for an
+        // investigation stays, and so does a file something else still holds. Skipping the whole
+        // table therefore reported "nothing points at this account" about an account two of its
+        // own tables still pointed at — the row delete was then attempted and refused by the
+        // database, after the anonymise had already been committed. Found by
+        // AppUserPurgeBehaviourTests the day a real provider became available. What is excluded
+        // instead is the exact set of rows that are about to go, passed in as
+        // <paramref name="going"/>.
         var sweptEntities = new HashSet<string>(StringComparer.Ordinal)
         {
             nameof(SignInEvent), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
-            nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto), nameof(FieldSessionUpload),
-            nameof(FieldSessionUploadFile), nameof(FieldSessionShareLink), nameof(UploadFile),
+            nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),
         };
 
         var total = 0;
@@ -416,7 +435,8 @@ public sealed class AppUserPurge
                 if (fk.Properties.Count != 1) continue;
 
                 var count = await CountReferencesAsync(
-                    db, entity.ClrType, fk.Properties[0].Name, userId, ct);
+                    db, entity.ClrType, fk.Properties[0].Name, userId,
+                    going.GetValueOrDefault(entity.ClrType.Name), ct);
                 if (count <= 0) continue;
 
                 total += count;
@@ -424,15 +444,38 @@ public sealed class AppUserPurge
             }
         }
 
-        // Sessions that are about to go do not count as reasons to keep the row.
-        if (pendingSessionIds.Count > 0)
+        return (total, itemised);
+    }
+
+    /// <summary>
+    /// The exact rows the purge is about to delete, by entity name — so the census counts what
+    /// will still be there afterwards rather than what is there now.
+    /// </summary>
+    /// <remarks>
+    /// Only the partly-emptied tables need this. A table the purge clears completely is named in
+    /// <c>sweptEntities</c> and skipped outright; a table it never touches must be counted in
+    /// full. These four are the ones in between.
+    /// </remarks>
+    private static async Task<Dictionary<string, HashSet<Guid>>> GoingRowsAsync(
+        BenDataContext db, List<Guid> personalSessionIds, List<Guid> pendingFileIds, CancellationToken ct)
+    {
+        var going = new Dictionary<string, HashSet<Guid>>(StringComparer.Ordinal)
         {
-            var pending = await db.FieldSessionUploads.AsNoTracking()
-                .CountAsync(s => pendingSessionIds.Contains(s.Id), ct);
-            total = Math.Max(0, total - pending);
+            [nameof(FieldSessionUpload)] = [.. personalSessionIds],
+            [nameof(UploadFile)]         = [.. pendingFileIds],
+        };
+
+        if (personalSessionIds.Count > 0)
+        {
+            going[nameof(FieldSessionUploadFile)] = [.. await db.FieldSessionUploadFiles.AsNoTracking()
+                .Where(f => personalSessionIds.Contains(f.FieldSessionUploadId))
+                .Select(f => f.Id).ToListAsync(ct)];
+            going[nameof(FieldSessionShareLink)] = [.. await db.FieldSessionShareLinks.AsNoTracking()
+                .Where(l => personalSessionIds.Contains(l.FieldSessionUploadId))
+                .Select(l => l.Id).ToListAsync(ct)];
         }
 
-        return (total, itemised);
+        return going;
     }
 
     /// <summary>
@@ -449,17 +492,27 @@ public sealed class AppUserPurge
     /// because the column is too. Both providers translate it.</para>
     /// </remarks>
     private static Task<int> CountReferencesAsync(
-        BenDataContext db, Type clrType, string property, Guid userId, CancellationToken ct)
+        BenDataContext db, Type clrType, string property, Guid userId,
+        HashSet<Guid>? excluded, CancellationToken ct)
         => (Task<int>)CountForMethod.MakeGenericMethod(clrType)
-            .Invoke(null, [db, property, userId, ct])!;
+            .Invoke(null, [db, property, userId, excluded, ct])!;
 
     private static readonly System.Reflection.MethodInfo CountForMethod =
         typeof(AppUserPurge).GetMethod(nameof(CountForAsync),
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 
     private static async Task<int> CountForAsync<TEntity>(
-        BenDataContext db, string property, Guid userId, CancellationToken ct)
+        BenDataContext db, string property, Guid userId, HashSet<Guid>? excluded, CancellationToken ct)
         where TEntity : class
-        => await db.Set<TEntity>().AsNoTracking()
-            .CountAsync(e => EF.Property<Guid?>(e, property) == userId, ct);
+    {
+        var query = db.Set<TEntity>().AsNoTracking()
+            .Where(e => EF.Property<Guid?>(e, property) == userId);
+
+        // Rows about to be deleted are not reasons to keep the account. Only the four
+        // partly-emptied entities are ever given a set, and each has a Guid Id.
+        if (excluded is { Count: > 0 })
+            query = query.Where(e => !excluded.Contains(EF.Property<Guid>(e, "Id")));
+
+        return await query.CountAsync(ct);
+    }
 }
