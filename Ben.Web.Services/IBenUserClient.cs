@@ -131,6 +131,16 @@ public interface IBenUserClient
     /// <returns>The updated admin record, or <c>null</c> if the update failed.</returns>
     Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Sets the site roles a person holds — the whole set (item 216). SuperAdmin only. The server
+    /// refuses to strip your own SuperAdmin role or the last one on the site.
+    /// </summary>
+    /// <param name="userId">The person whose roles change.</param>
+    /// <param name="roles">Every role they should hold afterwards; anything not listed is removed.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    /// <returns>The roles now held, or <c>null</c> when the server refused.</returns>
+    Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
+
     // ── Impersonation ─────────────────────────────────────────────────────────
 
     /// <summary>

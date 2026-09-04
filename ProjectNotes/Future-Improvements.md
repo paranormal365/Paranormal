@@ -10829,4 +10829,33 @@ discriminate. 317 BenKit / 25 UI tests green, the demo-video script updated and 
 screenshot exposed the clock saying "stopped" for a pending session — fixed to *not started*.
 See README-delayed-session-start.md. Ben's untracked upload probe will need the new Start tap.
 
+## 216. Nothing could put a person into a site role (BUILT 2026-09-04 — Site Roles tab on user detail)
+
+Ben, 2026-09-04: *"I don't see a way I can assign Site Roles to people. They obviously can be
+user and verified user by creating an account and verifying email. How do I, as SuperAdmin, add
+roles to users like Admin, Moderator or SuperAdmin?"*
+
+He could not, and the code knew it: `SuperAdminSeeder` creates Admin and Moderator with the
+comment "so a SuperAdmin can assign it", and nothing let one. **Site Roles** creates and deletes
+role names and counts holders; **New User** offers SuperAdmin at creation only; the user detail
+page had no roles section. The only writers were the two seeders. Admin and Moderator were
+reachable by a hand-typed `AspNetUserRoles` row and by nothing else — the eighth write-only
+feature found on this site, and the same shape as items 142, 151 and the others: a read surface
+and a seeded value with no door between them.
+
+**Built:** `PUT api/admin/app-users/{id}/roles` takes the whole set (checkboxes, not deltas),
+canonicalises names to the stored spelling, refuses to strip the caller's own SuperAdmin role or
+the last one on the site, bumps the security stamp so existing sessions re-sign-in at their next
+refresh, and audits as `AppUserRoles`. The user detail page shows role badges beside the name and
+a **Site Roles** tab: one checkbox per defined role with what it grants, the caller's own
+SuperAdmin box locked, and an honest note that it lands at the next sign-in with current sessions
+ending within the hour (bearer tokens are not re-read per request; refresh checks the stamp).
+
+Tests: eight controller tests, all green in a 4,040/0 suite; the own-SuperAdmin guard was shown
+to discriminate. A Playwright test of the tab is written but not yet run — the isolated runner
+needs `BEN_E2E_ADMIN_PASSWORD` and `BEN_SUPERADMIN_PASSWORD`, which left the repo in the secrets
+sweep. Help: `site-administration.md` § Site roles.
+
+**Left as is:** the New User form's SuperAdmin checkbox — still creation-only, still one role;
+the tab covers the rest and a second path to the same rows is a second thing to keep right.
 
