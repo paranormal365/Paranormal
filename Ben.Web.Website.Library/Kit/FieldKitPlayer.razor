@@ -80,14 +80,39 @@
                     {
                         <text> · recorded by @_session.RecordedByName</text>
                     }
-                    else
+                    else if (!Shared)
                     {
                         @* Said plainly rather than left blank: an unattributed recording is a
-                           fact a reviewer should weigh, not a gap they have to notice. *@
+                           fact a reviewer should weigh, not a gap they have to notice.
+                           Suppressed on a shared link, where the name was withheld rather than
+                           absent — printing it there would be a false claim about the night. *@
                         <text> · <span class="text-warning">nobody signed in when recorded</span></text>
                     }
                 </span>
             </div>
+
+            @* ── The shared-link banner (item 207) ──────────────────────────
+               A recipient should never have to wonder how long this will keep working, or read
+               an empty map as a fact about the night. Both are said here, above the readings,
+               rather than left to be discovered. *@
+            @if (Shared)
+            {
+                <div class="alert alert-secondary py-2 small" data-testid="share-banner">
+                    <BenIcon Name="link" Class="me-1" />
+                    You're viewing this through a shared link.
+                    @if (_shareExpires is { } expires)
+                    {
+                        <text> It stops working on @expires.ToViewerLocalTime(UserState).ToDisplayDateTime().</text>
+                    }
+                    @if (_positionsWithheld)
+                    {
+                        <text>
+                            The locations recorded with these readings were not shared, so no map
+                            is shown.
+                        </text>
+                    }
+                </div>
+            }
 
             @* ── What the place's archive says about this night ─────────────
                The one question a person recording alone cannot answer for themselves: was that
@@ -350,9 +375,25 @@
                                 @if (_track.Count == 0)
                                 {
                                     @* Indoors a phone often never gets a fix. Saying so beats an
-                                       empty map somebody reads as a broken one. *@
-                                    <div class="text-muted small p-3">
-                                        No position was recorded for this session.
+                                       empty map somebody reads as a broken one.
+
+                                       On a shared link the same empty map has a different cause,
+                                       and the honest sentence differs with it: the fixes exist and
+                                       were withheld. Saying "none was recorded" there would be a
+                                       false statement about the night, made by the page, to the
+                                       one viewer least able to check it. *@
+                                    <div class="text-muted small p-3" data-testid="no-position">
+                                        @if (_positionsWithheld)
+                                        {
+                                            <text>
+                                                The locations recorded during this session weren't
+                                                shared through this link.
+                                            </text>
+                                        }
+                                        else
+                                        {
+                                            <text>No position was recorded for this session.</text>
+                                        }
                                     </div>
                                 }
                                 else
@@ -466,6 +507,15 @@
                         </ul>
                     </div>
                 }
+
+                @* ── Handing this session to somebody without an account (item 207) ──
+                   Never on a shared view: a recipient must not be offered the machinery for
+                   passing it on again. The panel decides for itself whether this viewer may
+                   share, by asking the server. *@
+                @if (!Shared)
+                {
+                    <FieldSessionSharePanel SessionId="@SessionId" Files="@_session.Files" />
+                }
         }
     }
 </div>
@@ -475,6 +525,34 @@
 
     /// <summary>True when this is the whole page rather than a panel inside something else.</summary>
     [Parameter] public bool Standalone { get; set; } = true;
+
+    /// <summary>
+    /// The share link this is being played through, when it is one (item 207).
+    /// </summary>
+    /// <remarks>
+    /// <para>Set means the viewer has no account and no bearer token: the session comes from the
+    /// anonymous share endpoint, the recordings stream through the share media route, and
+    /// <see cref="SessionId"/> is never sent anywhere — it is not even known to this component in
+    /// that mode, which is the point. A recipient's browser holds a string that names a row and
+    /// nothing that names a session.</para>
+    /// </remarks>
+    [Parameter] public string? ShareToken { get; set; }
+
+    /// <summary>Whether this player is serving a share link rather than a signed-in viewer.</summary>
+    private bool Shared => !string.IsNullOrWhiteSpace(ShareToken);
+
+    /// <summary>When the link stops working, so the page can say so before it does.</summary>
+    private DateTime? _shareExpires;
+
+    /// <summary>
+    /// True when the document arrived with its coordinates removed.
+    /// </summary>
+    /// <remarks>
+    /// Rendered, not just held. A viewer who is not told the fixes were withheld reads an empty
+    /// map as a fact about the night — "they never got a signal" — rather than a decision about
+    /// them. Saying so is the difference between a redaction and a quiet misrepresentation.
+    /// </remarks>
+    private bool _positionsWithheld;
 
     /// The domain is not settled, so the name comes from configuration — a literal here is a
     /// rename waiting to be missed.
@@ -550,6 +628,12 @@
         _signedOut = false;
         StateHasChanged();
 
+        if (Shared)
+        {
+            await LoadSharedAsync();
+            return;
+        }
+
         // The circuit is not signed in during the static prerender, so a load that ran now would
         // ask the API as a stranger, be refused, and settle on a refusal that never retries. The
         // page would say "you may no longer have access" to somebody who is perfectly signed in.
@@ -589,6 +673,65 @@
         {
             // The document is the evidence; if it cannot be read, say so rather than drawing an
             // empty chart that looks like a quiet night.
+            _refusal = "This session's document couldn't be read.";
+        }
+    }
+
+    /// <summary>
+    /// The same page, for somebody holding a share link and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>Still gated on interactivity, for the same reason the signed-in path is: the player
+    /// is a chart, a map and an audio element driven by JavaScript, none of which exists during
+    /// the static prerender. It is NOT gated on auth-ready — waiting for a handshake that will
+    /// never be signalled would hang the one visitor this whole feature is for.</para>
+    ///
+    /// <para>The shared answer is mapped into the same summary record the rest of the component
+    /// reads, so every part of the player below this line is identical in both modes. The fields
+    /// the shared shape does not carry — the device session id, the document's upload-file id,
+    /// who recorded it — are left empty here because the server never sent them, not because this
+    /// method chose to drop them.</para>
+    /// </remarks>
+    private async Task LoadSharedAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+
+        var shared = await AdminClient.GetSharedFieldSessionAsync(ShareToken!);
+        _loading = false;
+
+        if (shared is null)
+        {
+            // One sentence for unknown, expired and revoked alike, because the server answers all
+            // three with 404 and the page must not invent a distinction it refused to make. The
+            // person holding a real expired link is told what happened by whoever sent it.
+            _refusal = "This link isn't working. It may have expired, or the person who sent it "
+                     + "may have withdrawn it. Ask them for a new one.";
+            return;
+        }
+
+        _shareExpires      = shared.ExpiresUtc;
+        _positionsWithheld = shared.PositionsWithheld;
+
+        _session = new FieldSessionSummaryRecord(
+            Id: Guid.Empty, InvestigationId: null, DeviceSessionId: Guid.Empty,
+            DeviceModel: shared.DeviceModel, LocationLabel: shared.LocationLabel,
+            StartedAt: shared.StartedAt, EndedAt: shared.EndedAt,
+            ReadingCount: shared.ReadingCount, MarkerCount: shared.MarkerCount,
+            DocumentUploadFileId: Guid.Empty,
+            RecordedByAppUserId: null, RecordedByName: null,
+            DateCreated: shared.StartedAt,
+            Files: shared.Files
+                .Select(f => new FieldSessionFileSummary(
+                    f.Id, f.RelativePath, f.FileSize, Sha256: null,
+                    DigestMatched: true, DateCreated: shared.StartedAt))
+                .ToList());
+
+        try
+        {
+            ReadDocument(shared.Document);
+        }
+        catch (JsonException)
+        {
             _refusal = "This session's document couldn't be read.";
         }
     }
@@ -1188,7 +1331,9 @@
     /// — and a session's recordings are private by default. It was also wrong locally, where the
     /// API is a different origin and <c>/webapi</c> exists only under IIS.
     /// </remarks>
-    private string FileUrl(Guid fileId) => MediaUrls.FieldSessionFile(SessionId, fileId);
+    private string FileUrl(Guid fileId) => Shared
+        ? MediaUrls.SharedFieldSessionFile(ShareToken!, fileId)
+        : MediaUrls.FieldSessionFile(SessionId, fileId);
 
     /// <summary>About six labels across the axis, whatever the session's length.</summary>
     private static int LabelStep(int points) => Math.Max(1, (int)Math.Ceiling(points / 6.0));

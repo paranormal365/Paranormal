@@ -267,6 +267,11 @@ the sessions recorded for that case, and the PDF the client receives says what e
 where it was, when it ran, who recorded it, and how many readings and marks it carries. Your work
 in the field ends up in the document, rather than only in the system.
 
+A session can also be sent to somebody with **no account at all** — a client, or a producer — as a
+link that expires, can be withdrawn, and tells you whether it was opened. That is done from the
+session's playback page on the website; see *Working a case* for what the link does and does not
+carry.
+
 ### Exporting a session
 
 A session can also be exported as a **.zip in the IsHaunted device data format** — the same
