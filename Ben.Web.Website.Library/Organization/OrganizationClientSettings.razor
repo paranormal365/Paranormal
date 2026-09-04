@@ -5,14 +5,32 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
-<PageTitle>Client Settings — @(_orgName ?? "Organization")</PageTitle>
+@if (!EmbeddedMode)
+{
+    <PageTitle>Client Settings — @(_orgName ?? "Organization")</PageTitle>
+}
 
-<div class="container-fluid py-3" style="max-width:860px;">
-    <h3 class="mb-4">Client Settings — @(_orgName ?? OrgId.ToString())</h3>
+@* Embedded, this is the group page's Clients tab and the page already carries the group's name
+   and its own width. Standalone, it is a page and supplies both itself. *@
+<div class="@(EmbeddedMode ? "" : "container-fluid py-3")" style="@(EmbeddedMode ? "" : "max-width:860px;")">
+    @if (!EmbeddedMode)
+    {
+        <h3 class="mb-4">Client Settings — @(_orgName ?? OrgId.ToString())</h3>
+    }
+
+    <p class="text-secondary">
+        A client looking for help finds you by these two answers: whether you are taking cases, and
+        where you work. Until both are set, no client search will return this
+        group.<HelpLink Slug="organization-administration" Anchor="being-found-by-clients" />
+    </p>
 
     @if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
+    }
+    @if (_savedMessage is not null)
+    {
+        <div class="alert alert-success">@_savedMessage</div>
     }
 
     @if (!_loaded)
@@ -119,9 +137,17 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>Rendered inside the group page's Clients tab rather than as its own page.</summary>
+    [Parameter] public bool EmbeddedMode { get; set; }
+
+    /// <summary>Raised after acceptance or the operating area changes, so a host page can drop the
+    /// "clients cannot find you" notice without a reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
     private string? _orgName;
     private bool _loaded;
     private string? _error;
+    private string? _savedMessage;
     private bool _isBusy;
 
     // Acceptance state
@@ -165,9 +191,15 @@
     private async Task SaveAcceptance()
     {
         _isBusy = true;
+        _error = null;
+        _savedMessage = null;
         try
         {
             await AdminClient.UpdateClientAcceptanceAsync(OrgId, _isAcceptingClients, _acceptsOutsideRange);
+            _savedMessage = _isAcceptingClients
+                ? "Saved. Clients can find this group once an operating area is set."
+                : "Saved. This group is hidden from client searches.";
+            await OnChanged.InvokeAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _isBusy = false; }
@@ -176,9 +208,12 @@
     // ── Area of Operation ─────────────────────────────────────────────────────
     private void OpenEditArea() => _showAreaDialog = true;
 
-    private void OnAreaSaved(OrganizationAreaOfOperationRecord result)
+    private async Task OnAreaSaved(OrganizationAreaOfOperationRecord result)
     {
         _area = result;
+        // The dialog saves the acceptance flags this component handed it, so local state already
+        // matches the server; only the host page's notice needs telling.
+        await OnChanged.InvokeAsync();
     }
 
     private void ConfirmDeleteArea() => _showDeleteConfirm = true;
@@ -191,6 +226,7 @@
             await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId);
             _area = null;
             _showDeleteConfirm = false;
+            await OnChanged.InvokeAsync();
         }
         catch { _error = "Failed to remove operating area."; }
         finally { _isBusy = false; }

@@ -135,6 +135,31 @@ available" until a group happens to find a page nothing links to from the group 
 3. Failing both, show the group page a standing notice — *"You are not accepting client cases, so
    clients cannot find you"* — with a link to the page that fixes it.
 
+**FIXED 2026-09-04** (branch `feature/client-funnel-visible`). All three were built, not just the
+first:
+
+- The wizard's First settings step now asks **Take cases from clients** — ticked by default for an
+  investigation group — with *where you work* and a radius beneath it, prefilled from the address
+  given a step earlier. It refuses to go on with the box ticked and no town. On create it writes
+  acceptance first and the geocoded area second, so a town that will not geocode leaves the group
+  accepting rather than silently invisible.
+- The group page has a **Clients** tab beside Requests, and its Details tab states client reach
+  where anyone managing the group will see it.
+- A group taking cases that no client search can return carries a standing warning naming the
+  reason. The rule behind it mirrors the public search query exactly — accepting, listed, and an
+  operating area — and three tests pin each condition so the notice cannot drift from the query.
+
+Verified end to end on a throwaway database: two groups created through the wizard alone, both
+returned by the public client search for Springfield TN, one of them after fixing a deliberately
+un-geocodable town from the new tab. The warning cleared the moment the area was saved.
+
+A second defect surfaced while verifying it. The wizard asked to accept membership applications and
+reported *"Applications: Open"* on its review, but the server refuses that for every brand-new
+group — the free lane is one person, so the paid gate turns the whole save away, taking the
+founder's public contact email with it. The email is now written separately and lands; the
+applications attempt goes last and is expected to be refused; and the review says *"Open once your
+plan includes members"* instead of promising something the site will not do.
+
 ---
 
 ## Visual and wording gaps

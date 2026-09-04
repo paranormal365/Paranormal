@@ -19,7 +19,8 @@ public class PublicOrganizationSearchControllerTests
         decimal centerLat,
         decimal centerLon,
         decimal radiusMiles,
-        string? displayLabel = null)
+        string? displayLabel = null,
+        bool isUnlisted = false)
     {
         await using var db = await factory.CreateDbContextAsync();
 
@@ -30,6 +31,7 @@ public class PublicOrganizationSearchControllerTests
             UrlName                 = $"org-{Guid.NewGuid():N}",
             IsAcceptingClients      = isAcceptingClients,
             AcceptsClientsOutsideRange = acceptsOutsideRange,
+            IsUnlisted              = isUnlisted,
             CreatedByAppUserId      = Guid.NewGuid(),
         };
         var area = new OrganizationAreaOfOperation
@@ -191,6 +193,83 @@ public class PublicOrganizationSearchControllerTests
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var list   = Assert.IsAssignableFrom<IEnumerable<OrgSearchResult>>(ok.Value).ToList();
         Assert.Equal(3, list.Count);
+    }
+
+    // ── The three conditions a client search demands ──────────────────────────
+    //
+    // A group that takes client cases reaches a client only when it is accepting, listed, and has
+    // an operating area. The group page renders a "clients cannot find you" notice from exactly
+    // these three, so each one is pinned here: the rule and the notice must not drift apart.
+    // Each test seeds a reachable twin at the same point, so removing the clause under test makes
+    // the assertion fail rather than quietly returning both.
+
+    /// <summary>Seeds a group that takes clients but never said where it works.</summary>
+    private static async Task<Organization> SeedOrgWithoutAreaAsync(
+        IDbContextFactory<BenDataContext> factory)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var org = new Organization
+        {
+            Id                 = Guid.NewGuid(),
+            Name               = "No area at all",
+            UrlName            = $"org-{Guid.NewGuid():N}",
+            IsAcceptingClients = true,
+            CreatedByAppUserId = Guid.NewGuid(),
+        };
+        db.Organizations.Add(org);
+        await db.SaveChangesAsync();
+        return org;
+    }
+
+    [Fact]
+    public async Task Search_UnlistedOrg_IsExcludedWhileItsListedTwinIsReturned()
+    {
+        var factory = TestDbFactory.Create();
+        await SeedOrgWithAreaAsync(factory, isAcceptingClients: true, acceptsOutsideRange: false,
+            centerLat: 41.88m, centerLon: -87.63m, radiusMiles: 50, displayLabel: "Listed");
+        await SeedOrgWithAreaAsync(factory, isAcceptingClients: true, acceptsOutsideRange: false,
+            centerLat: 41.88m, centerLon: -87.63m, radiusMiles: 50, displayLabel: "Unlisted",
+            isUnlisted: true);
+
+        var result = await Build(factory).Search(41.88, -87.63, ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var list   = Assert.IsAssignableFrom<IEnumerable<OrgSearchResult>>(ok.Value).ToList();
+
+        Assert.Single(list);
+        Assert.Equal("Listed", list[0].DisplayLabel);
+    }
+
+    [Fact]
+    public async Task Search_OrgWithNoOperatingArea_IsExcludedWhileOneWithAnAreaIsReturned()
+    {
+        var factory = TestDbFactory.Create();
+        await SeedOrgWithoutAreaAsync(factory);
+        await SeedOrgWithAreaAsync(factory, isAcceptingClients: true, acceptsOutsideRange: false,
+            centerLat: 41.88m, centerLon: -87.63m, radiusMiles: 50, displayLabel: "Has an area");
+
+        var result = await Build(factory).Search(41.88, -87.63, ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var list   = Assert.IsAssignableFrom<IEnumerable<OrgSearchResult>>(ok.Value).ToList();
+
+        Assert.Single(list);
+        Assert.Equal("Has an area", list[0].DisplayLabel);
+    }
+
+    [Fact]
+    public async Task Search_OrgNotAcceptingClients_IsExcludedWhileAnAcceptingOneIsReturned()
+    {
+        var factory = TestDbFactory.Create();
+        await SeedOrgWithAreaAsync(factory, isAcceptingClients: false, acceptsOutsideRange: false,
+            centerLat: 41.88m, centerLon: -87.63m, radiusMiles: 50, displayLabel: "Closed");
+        await SeedOrgWithAreaAsync(factory, isAcceptingClients: true, acceptsOutsideRange: false,
+            centerLat: 41.88m, centerLon: -87.63m, radiusMiles: 50, displayLabel: "Open");
+
+        var result = await Build(factory).Search(41.88, -87.63, ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var list   = Assert.IsAssignableFrom<IEnumerable<OrgSearchResult>>(ok.Value).ToList();
+
+        Assert.Single(list);
+        Assert.Equal("Open", list[0].DisplayLabel);
     }
 
     // ── Paid promotion (item 194 / Ben's "promote the paid groups") ───────────

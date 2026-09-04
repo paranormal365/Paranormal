@@ -146,6 +146,49 @@
     else
     {
         @* ── Read-only tabbed view ─────────────────────────────────────────── *@
+
+        @* The client funnel is two answers — taking cases, and where you work — and a group that
+           has given one but not the other is invisible to every client while believing it is
+           open for business. Only that contradiction is a warning here: a group that has simply
+           said no to client work made a choice, and the Details tab states it without nagging. *@
+        @if (_canManageRoles && _clientAreaChecked && ClientReachBlocked)
+        {
+            <div class="alert alert-warning d-flex align-items-start gap-2">
+                <BenIcon Name="alert-triangle" Class="mt-1" />
+                <div>
+                    <div class="fw-semibold">Clients cannot find this group yet.</div>
+                    <div class="small">
+                        You are taking client cases, but
+                        @if (!_hasClientArea && _org.IsUnlisted)
+                        {
+                            <text>this group is unlisted and has no operating area, so it is left out of every client search.</text>
+                        }
+                        else if (!_hasClientArea)
+                        {
+                            <text>you have not said where you work, so this group is left out of every client search.</text>
+                        }
+                        else
+                        {
+                            <text>this group is unlisted, which keeps it out of every client search.</text>
+                        }
+                        @if (!_hasClientArea)
+                        {
+                            <a href="#" @onclick="@(() => _activeTabId = "clients")" @onclick:preventDefault>
+                                Set your operating area
+                            </a>
+                            @(_org.IsUnlisted ? ", and " : ".")
+                        }
+                        @if (_org.IsUnlisted)
+                        {
+                            <a href="#" @onclick="BeginEdit" @onclick:preventDefault>
+                                @(_hasClientArea ? "Turn off unlisted" : "turn off unlisted")
+                            </a>@(".")
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
         <BenTabs @bind-ActiveId="_activeTabId">
 
             <BenTab Title="Details" Id="details">
@@ -171,6 +214,33 @@
                                 @(_org.IsAcceptingApplications ? "Yes" : "No")
                             </span>
                         </dd>
+
+                        @* Managers only: whether clients can reach this group is an administrative
+                           fact, and it is the one setting a new group most often never finds. *@
+                        @if (_canManageRoles)
+                        {
+                            <dt class="col-sm-3 text-secondary small">Client Cases</dt>
+                            <dd class="col-sm-9 mb-0">
+                                <span class="badge @(_org.IsAcceptingClients ? "bg-success" : "bg-secondary")">
+                                    @(_org.IsAcceptingClients ? "Accepting" : "Not accepting")
+                                </span>
+                                <span class="text-secondary small ms-2">
+                                    @if (!_org.IsAcceptingClients)
+                                    {
+                                        <text>Clients cannot find this group.</text>
+                                    }
+                                    else if (_clientAreaChecked && ClientReachBlocked)
+                                    {
+                                        <text>Clients cannot find this group.</text>
+                                    }
+                                    else if (_clientAreaLabel is not null)
+                                    {
+                                        @_clientAreaLabel
+                                    }
+                                </span>
+                                <a class="small ms-2" href="#" @onclick="@(() => _activeTabId = "clients")" @onclick:preventDefault>Change</a>
+                            </dd>
+                        }
 
                         @if (!string.IsNullOrWhiteSpace(_org.PublicPhone) || !string.IsNullOrWhiteSpace(_org.PublicEmail) || !string.IsNullOrWhiteSpace(_org.PublicWebsite))
                         {
@@ -270,6 +340,17 @@
                 </BenTab>
             }
 
+            @* Requests is where client work arrives; Clients is what makes it arrive. They belong
+               next to each other, because a group with an empty Requests tab is usually looking at
+               a funnel that was never switched on. *@
+            @if (_canManageRoles)
+            {
+                <BenTab Title="Clients" Id="clients">
+                    <OrganizationClientSettings OrgId="@OrgId" EmbeddedMode="true"
+                                                OnChanged="@ReloadClientReachAsync" />
+                </BenTab>
+            }
+
             @if (_canManageRoles && Features.IsOn(SiteFeatures.CmsPages))
             {
                 <BenTab Title="CMS" Id="cms">
@@ -354,6 +435,11 @@
     private bool   _isMember;
     private MyOrgPermissionsItem? _myPerms;
     private bool   _isOwnerOrSuperAdmin;
+
+    // Client reach: the two answers that decide whether a client search can return this group.
+    private bool    _clientAreaChecked;
+    private bool    _hasClientArea;
+    private string? _clientAreaLabel;
     private bool   _rosterUnavailable;
     private bool   _loading   = true;
     private bool   _editMode;
@@ -512,6 +598,9 @@
                 _isOwnerOrSuperAdmin = members.Items.Any(m =>
                     m.AppUserId == UserState.UserId.Value && m.Role == OrganizationMemberRole.Owner);
             }
+
+            if (_canManageRoles)
+                await ReloadClientReachAsync();
         }
         catch
         {
@@ -519,6 +608,43 @@
         }
 
         _loading = false;
+        StateHasChanged();
+    }
+
+    /// <summary>A group taking client cases that no client search can return. The three conditions
+    /// mirror the public search query exactly — accepting, listed, and an operating area — because
+    /// a notice that disagrees with the query is worse than none.</summary>
+    private bool ClientReachBlocked =>
+        _org is not null && _org.IsAcceptingClients && (!_hasClientArea || _org.IsUnlisted);
+
+    /// <summary>Re-reads the operating area behind the client-reach notice. The area endpoint is
+    /// manager-only and returns nothing when none is set, so a refusal and an absence look alike
+    /// here — both mean "a client search will not return this group", which is what is shown.</summary>
+    private async Task ReloadClientReachAsync()
+    {
+        try
+        {
+            var area = await AdminClient.GetOrgAreaOfOperationAsync(OrgId);
+            _hasClientArea   = area is not null;
+            _clientAreaLabel = area?.DisplayLabel;
+        }
+        catch
+        {
+            _hasClientArea   = false;
+            _clientAreaLabel = null;
+        }
+
+        _clientAreaChecked = true;
+
+        // The tab's own save updates the org's acceptance flag server-side; the copy this page
+        // renders its badge from is stale until it is re-read.
+        try
+        {
+            var fresh = await AdminClient.GetOrganizationAsync(OrgId);
+            if (fresh is not null) _org = fresh;
+        }
+        catch { /* the badge keeps the value it had */ }
+
         StateHasChanged();
     }
 

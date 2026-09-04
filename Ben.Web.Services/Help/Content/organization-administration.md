@@ -210,6 +210,25 @@ somebody leaves halfway through the night. Somebody senior enough to lead every 
 served by the permission above; somebody leading one Saturday is better served by the lead flag,
 which stops mattering on Sunday.
 
+## Being found by clients
+
+A client looking for help searches by where they are. Your group appears in that search only when
+all three of these are true, and the **Clients** tab beside Requests is where the first two live.
+
+- **You are taking client cases.** New groups set this when they are created. A group that is not
+  taking cases is left out of client search entirely, which is the right answer when you only work
+  your own investigations.
+- **You have an operating area.** A town or city and a radius. Without it the site has no way to
+  decide whether you are near anybody, so it cannot offer you to anyone.
+- **The group is listed.** Unlisted is on the **Edit** screen and keeps you out of search, browse
+  and nearby results — including client search.
+
+You can also choose whether to **accept clients outside your area**. Those clients still see you,
+below the groups whose area covers them.
+
+If you are taking cases but one of the other two is missing, the group page says so at the top.
+That notice is the usual reason a group waits a long time for a first request.
+
 ## Incoming requests
 
 Client requests arrive under the group's **Requests**. Mark one as under review while you decide.
