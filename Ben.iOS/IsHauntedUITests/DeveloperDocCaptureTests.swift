@@ -112,7 +112,9 @@ final class DeveloperDocCaptureTests: XCTestCase {
                 if label.waitForExistence(timeout: 8) { label.tap(); label.typeText("Cellar stairs") }
                 settle(1)
 
-                if tap("confirm-start-session") || tapLabel("Start recording") {
+                if tap("confirm-start-session") || tapLabel("Open the session") {
+                    // Item 215: the session opens pending; Start begins the log.
+                    _ = tap("start-recording", timeout: 15) || tapLabel("Start")
                     settle(4)
                     snap("42-live-session")               // gauges running on fake sensors
 

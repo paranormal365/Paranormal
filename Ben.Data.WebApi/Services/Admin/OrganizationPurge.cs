@@ -202,6 +202,13 @@ public sealed class OrganizationPurge
         var equipmentIds = await db.EquipmentItems.Where(e => e.OwningOrganizationId == organizationId)
             .Select(e => e.Id).ToListAsync(ct);
 
+        // The group's own files (item 180 Phase B), read now: the transaction below clears the
+        // column this list is keyed on.
+        var ownedFiles = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.OwnerOrganizationId == organizationId)
+            .Select(f => new { f.Id, f.StoragePath })
+            .ToListAsync(ct);
+
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
@@ -371,6 +378,12 @@ public sealed class OrganizationPurge
             await db.TierChangeNotices.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.UploadFileOrganizationShares.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.UploadFilePermissionRequests.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Files a person handed to this group (item 180 Phase B). The key is NoAction, so the
+            // group's claim is released here, inside the transaction; the rows themselves are
+            // removed afterwards one at a time, because a file a published video or a marker
+            // still holds must not take the whole purge down with it — see UploadFileRows.
+            await db.UploadFiles.Where(f => f.OwnerOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.OwnerOrganizationId, (Guid?)null), ct);
 
             // Roles, leaf-first, then the memberships, then the group itself.
             var roleIds = await db.OrganizationRoles.Where(r => r.OrganizationId == organizationId)
@@ -397,6 +410,21 @@ public sealed class OrganizationPurge
 
         // Bytes last, and only after the rows are certainly gone. The other order can delete
         // somebody's files and then roll the rows back, leaving records pointing at nothing.
+        // The group's own files: the row first, and the bytes only for a row that went. A row
+        // something else still holds keeps its bytes — an ownerless file a SuperAdmin can still
+        // reach is better than a live row pointing at nothing.
+        foreach (var owned in ownedFiles)
+        {
+            if (!await UploadFileRows.TryDeleteAsync(db, owned.Id, ct)) continue;
+            if (string.IsNullOrEmpty(owned.StoragePath)) continue;
+            try { await _fileStorage.DeleteAsync(owned.StoragePath, ct); }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Purged organization {OrganizationId}: could not delete {Path}.",
+                    organizationId, owned.StoragePath);
+            }
+        }
+
         foreach (var path in storedPaths)
         {
             try { await _fileStorage.DeleteAsync(path, ct); }

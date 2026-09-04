@@ -94,6 +94,17 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public string? MediaReviewNote { get; set; }
 
+        /// <summary>
+        /// The screener's NSFW probability for this media, 0–1, when a classifier looked; null
+        /// under manual screening or before anything has (item 217).
+        /// </summary>
+        /// <remarks>
+        /// Kept as a number rather than parsed out of <see cref="MediaReviewNote"/> because the
+        /// spam rule counts confident refusals per author, and a rule that greps note text is a
+        /// rule that silently stops working the day the wording changes.
+        /// </remarks>
+        public double? MediaScreenerScore { get; set; }
+
         /// <summary>Who decided, when a person did. Null when a screener decided, or nobody has.</summary>
         public Guid? MediaReviewedByAppUserId { get; set; }
 

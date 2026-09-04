@@ -139,6 +139,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<AdminUpdateUserProfileRequest, AppUserAdminRecord>($"/api/admin/app-users/{userId}/profile", request, token);
 
+    public Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default)
+        => _api.PutAsync<AdminSetUserRolesRequest, AppUserRolesAdminRecord>($"/api/admin/app-users/{userId}/roles", new AdminSetUserRolesRequest(roles), token);
+
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
 

@@ -93,6 +93,13 @@ public sealed class ModerationController : BenControllerBase
             })
             .ToListAsync(ct);
 
+        // Item 217: one count per author, so the queue can say "uploads paused" on the row a
+        // moderator is looking at rather than leaving them to notice the same name three times.
+        var now = DateTime.UtcNow;
+        var refusalsByAuthor = new Dictionary<Guid, int>();
+        foreach (var authorId in rows.Select(r => r.AuthorAppUserId).Distinct())
+            refusalsByAuthor[authorId] = await FeedMediaAbuse.RecentRefusalsAsync(db, authorId, now, ct);
+
         return Ok(rows.Select(r => new FeedMediaReviewItem(
             r.Id,
             r.AuthorAppUserId,
@@ -109,7 +116,8 @@ public sealed class ModerationController : BenControllerBase
             r.ReviewerName,
             r.FeedExperienceTypeId,
             r.ExperienceTypeName,
-            r.CategoryMatchScore)).ToList());
+            r.CategoryMatchScore,
+            refusalsByAuthor.GetValueOrDefault(r.AuthorAppUserId))).ToList());
     }
 
     /// <summary>

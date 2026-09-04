@@ -70,10 +70,21 @@ is still identified in that cellar.
    recognise it by next week, so a room beats a timestamp.
 3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
    attach the session to an investigation later.
-4. Let the room settle for a few seconds, then tap **Set base**. Everything from here is measured
-   against what this room reads when nothing is happening.
-5. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
-6. Tap **Stop** when you are done. The session opens for review straight away.
+4. Tap **Open the session**. The live screen opens but **nothing is being recorded yet** — the
+   gauge runs so you can see the room, and the bar says *not started*. Take your time here.
+5. Set up. Name the room, switch channels on or off, and once the room has settled for a few
+   seconds tap **Set base**. Everything you record is measured against what this room reads
+   when nothing is happening, and it is far better set before the clock starts than after.
+6. Tap **Start**. The clock begins, readings start landing, and Mark, Note, EVP and the capture
+   buttons appear — none of them exist before Start, because a mark before the clock began
+   would belong to no moment.
+7. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
+8. Tap **Stop** when you are done. The session opens for review straight away.
+
+If the night turns out to be nothing before you ever press Start, tap **Discard** next to the
+Start button. The session is removed and the space comes back at once. A session that was
+set up but never started also survives the app being closed: it comes back exactly as it was,
+ready to start or discard — it is not reported as interrupted, because nothing was lost.
 
 Nothing you record needs a signal, and nothing leaves the phone until you send it.
 
@@ -272,6 +283,30 @@ link that expires, can be withdrawn, and tells you whether it was opened. That i
 session's playback page on the website; see *Working a case* for what the link does and does not
 carry.
 
+### Sending only the part that mattered
+
+An hour of recording usually matters for ten seconds. On the **Send** screen, under **What to
+send**, the session sits on a track with a **green dot** at the start and a **red dot** at the
+end. Drag the green dot to move the in point and the red dot to move the out point; the time under
+each shows as you drag it, and the bolder green band between them is exactly what will be sent.
+
+Below the track you can see what is under the handle — the field and sound at that moment — and
+**Play what will be sent** runs from the in point to the out point with the recording following,
+so what you hear is what the group will get and nothing else. The list beneath says, file by file,
+what happens to each recording: sent whole, cut to a shorter stretch, or not sent because it falls
+outside the window. Readings and marks outside the window are not sent either.
+
+**The full recording stays on this phone.** Nothing outside the window leaves the device, and a cut
+recording is a copy — the original on the phone is never touched. Clearing the phone afterwards is
+a separate choice, offered only once everything has arrived, and it is the only thing that removes
+the original.
+
+A trimmed session is named for what it is: **back bedroom (20:00–30:00)**, with the in and out
+times after the session's own name, on the website's list, in the player and in any report that
+cites it. A session sent whole keeps its name.
+
+**Send the whole session** puts both dots back at the ends.
+
 ### Exporting a session
 
 A session can also be exported as a **.zip in the IsHaunted device data format** — the same
@@ -370,3 +405,28 @@ it is on a phone.
 
 The iPhone and iPad app has been submitted to the App Store and is awaiting Apple's review. When
 it is approved, this page will link to it.
+
+## Links that open the app
+
+Once the app is installed, tapping a link to this site from your mail or messages opens it in the
+app rather than in the browser, on the pages where the app has a matching screen: the feed and
+anything in it, your cases, your investigations, notifications, your profile, the events list, and
+an email confirmation link.
+
+Everything else stays in the browser on purpose. Some pages have no app screen at all — a group's
+public page, a shared session link, an individual event — and sending you to the app for one of
+those would take you away from the page that actually works. If a link does not open the app, that
+is the intended answer rather than a fault.
+
+Nothing changes on a phone or computer without the app: every link opens the website as it always
+has.
+
+## Installing the site itself
+
+On Android, Windows or a Mac there is no native app, but the website can be installed to your home
+screen or dock and will then open in its own window with no address bar. The browser offers this
+itself — **Install** in Chrome's address bar, or **Add to Home screen** in its menu.
+
+It is the same site, so everything you can do on the web you can do there. What it does not have is
+the Field Kit, which needs the sensors on an iPhone.
+

@@ -23,6 +23,7 @@ struct FieldUploadTests {
     private func sessionWithACapture(_ store: FieldSessionStore) async throws -> UUID {
         let id = try store.startSession(locationLabel: "Cellar")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         let path = try store.files.nextMediaPath(for: id, kind: .photo, fileExtension: "jpg")
         try Data(repeating: 0xAA, count: 2_048).write(to: path.url)
         await store.active?.noteCapture(kind: .photo, relativePath: path.relative,

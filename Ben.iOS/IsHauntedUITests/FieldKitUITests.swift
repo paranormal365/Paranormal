@@ -34,6 +34,9 @@ final class FieldKitUITests: XCTestCase {
         label.typeText(marker)
 
         app.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(app.buttons["start-recording"].waitForExistence(timeout: 15))
+        app.buttons["start-recording"].tap()
 
         // Straight into the live screen — starting a session and then hunting for it would be
         // wrong in the dark.
@@ -63,6 +66,9 @@ final class FieldKitUITests: XCTestCase {
         app.buttons["start-field-session"].tap()
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(app.buttons["start-recording"].waitForExistence(timeout: 15))
+        app.buttons["start-recording"].tap()
 
         let stop = app.buttons["stop-field-session"]
         XCTAssertTrue(stop.waitForExistence(timeout: 20))
@@ -88,6 +94,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 20))
         // Let the scripted field settle, then take the room as normal.
@@ -125,6 +134,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let roomBar = fresh.descendants(matching: .any).matching(identifier: "room-bar").firstMatch
         XCTAssertTrue(roomBar.waitForExistence(timeout: 20),
@@ -163,6 +175,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         XCTAssertTrue(fresh.buttons["set-base-level"].waitForExistence(timeout: 20))
         fresh.buttons["set-base-level"].tap()
@@ -184,6 +199,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let audioToggle = fresh.switches["channel-audio"]
         XCTAssertTrue(audioToggle.waitForExistence(timeout: 20), "channels should be switchable")
@@ -216,6 +234,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let toggle = fresh.buttons["toggle-audio-recording"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 20), "recording should be reachable")
@@ -245,6 +266,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let videoSwitch = fresh.switches["channel-video"]
         XCTAssertTrue(videoSwitch.waitForExistence(timeout: 20),
@@ -270,6 +294,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let arm = fresh.buttons["arm-sentry"]
         XCTAssertTrue(arm.waitForExistence(timeout: 20), "watching should be set up from here")
@@ -307,6 +334,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let videoSwitch = fresh.switches["channel-video"]
         XCTAssertTrue(videoSwitch.waitForExistence(timeout: 20))
@@ -338,6 +368,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let blackout = fresh.buttons["blackout"]
         // On the pinned bar, because a control you have to scroll to find is a control you
@@ -375,6 +408,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         // Give the scripted instruments a moment to log something worth replaying, and mark it
         // so the timeline has something to jump to.
@@ -421,6 +457,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let openEVP = fresh.buttons["open-evp"]
         XCTAssertTrue(openEVP.waitForExistence(timeout: 20))
@@ -470,6 +509,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         XCTAssertTrue(fresh.buttons["mark-now"].waitForExistence(timeout: 20))
         sleep(2)
@@ -511,6 +553,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 20))
         fresh.buttons["stop-field-session"].tap()
@@ -529,7 +574,11 @@ final class FieldKitUITests: XCTestCase {
         // this device signed in — asserting one state only would pass alone and fail in company.
         let explained = fresh.staticTexts.containing(
             NSPredicate(format: "label CONTAINS[c] 'Recording never needs an account'")).firstMatch
-        let picker = fresh.otherElements["upload-investigation"].firstMatch
+        // A Button, not an Other: the picker has always surfaced as a button, so the old
+        // otherElements query never matched and this test passed only through send-session.
+        // Once the trimmer (item 210) sat between the two, the Send button fell below the fold
+        // of a lazy Form and stopped being materialised — and the masked query showed itself.
+        let picker = fresh.buttons["upload-investigation"].firstMatch
         let sendButton = fresh.buttons["send-session"]
 
         let deadline = Date().addingTimeInterval(20)
@@ -560,6 +609,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         let note = fresh.buttons["open-note"]
         XCTAssertTrue(note.waitForExistence(timeout: 20), "a session should offer to take a note")
@@ -606,6 +658,9 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-field-session"].tap()
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
+        // Item 215: the live screen opens pending. Nothing is logged until Start.
+        XCTAssertTrue(fresh.buttons["start-recording"].waitForExistence(timeout: 15))
+        fresh.buttons["start-recording"].tap()
 
         XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 20))
         fresh.buttons["stop-field-session"].tap()

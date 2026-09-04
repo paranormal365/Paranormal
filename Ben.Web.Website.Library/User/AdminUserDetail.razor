@@ -31,6 +31,12 @@ else
             <div class="col">
                 <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => NavManager.NavigateTo("/admin/users"))"><BenIcon Name="arrow-left" Class="me-1" />Back to Users</button>
                 <h3 class="d-inline-block ms-3 mb-0">@(_detail.User.DisplayName ?? _detail.User.Email)</h3>
+                @* Site roles, beside the name: the one fact about a person an administrator
+                   opening this record most often came to check (item 216). *@
+                @foreach (var role in _detail.Roles)
+                {
+                    <span class="badge text-bg-secondary ms-2 align-middle" data-testid="site-role-badge">@role</span>
+                }
             </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-warning" @onclick="ImpersonateUser"><BenIcon Name="user" Class="me-1" />Impersonate</button>
@@ -273,6 +279,62 @@ else
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
+            </BenTab>
+
+            @* ── Site Roles (item 216) ───────────────────────────────────── *@
+            <BenTab Title="Site Roles" Id="site-roles">
+                <div class="mt-3" style="max-width:640px" data-testid="site-roles-panel">
+                    <p class="text-secondary small">
+                        Site roles apply across the whole site, not to one group. A person's role
+                        inside a group is set on the group's Members page, not here.
+                    </p>
+
+                    @if (_availableRoles.Count == 0)
+                    {
+                        <p class="text-secondary">
+                            No site roles are defined. Create them under <strong>Administration → Site Roles</strong> first.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2">
+                            @foreach (var role in _availableRoles)
+                            {
+                                var name = role;
+                                var locked = IsOwnSuperAdmin(name);
+                                var inputId = $"site-role-{name.ToLowerInvariant()}";
+                                <div class="form-check">
+                                    <input id="@inputId" type="checkbox" class="form-check-input"
+                                           checked="@_roleSelection.GetValueOrDefault(name)"
+                                           disabled="@(locked || _isSavingRoles)"
+                                           @onchange="@(e => _roleSelection[name] = e.Value is true)" />
+                                    <label class="form-check-label" for="@inputId">
+                                        <strong>@name</strong>
+                                        <span class="text-secondary"> — @DescribeRole(name)</span>
+                                        @if (locked)
+                                        {
+                                            <span class="text-secondary small d-block">This is you. Another SuperAdmin has to remove it.</span>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex align-items-center gap-3 mt-3">
+                            <button type="button" class="btn btn-primary" @onclick="SaveRoles" disabled="@_isSavingRoles">
+                                @(_isSavingRoles ? "Saving…" : "Save Roles")
+                            </button>
+                            <span class="text-secondary small">
+                                Takes effect the next time they sign in; their current sessions end within the hour.
+                            </span>
+                        </div>
+                    }
+
+                    @if (_rolesError is not null)
+                    {
+                        <div class="alert alert-danger py-2 mt-3 mb-0">@_rolesError</div>
+                    }
+                </div>
             </BenTab>
 
         </BenTabs>
@@ -541,6 +603,12 @@ else
     private string? _errorMessage;
     private string? _successMessage;
 
+    // Site roles (item 216): every role the site defines, and which of them are ticked.
+    private List<string> _availableRoles = [];
+    private Dictionary<string, bool> _roleSelection = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isSavingRoles;
+    private string? _rolesError;
+
     // Type lists (for dropdowns)
     private IReadOnlyList<UserAddressTypeRecord> _addressTypes = [];
     private IReadOnlyList<UserEmailTypeRecord>   _emailTypes   = [];
@@ -614,6 +682,15 @@ else
         _noteTypes       = (await AdminClient.GetUserNoteTypesAsync()).Items;
         _uploadFileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
 
+        // Every role the site defines, so a role created under Site Roles is assignable here
+        // without a code change — the seeded three are just the ones with a description.
+        _availableRoles = (await AdminClient.GetRolesAsync()).Items
+            .Select(r => r.Role.Name ?? string.Empty)
+            .Where(n => n.Length > 0)
+            .OrderBy(n => RoleOrder(n)).ThenBy(n => n)
+            .ToList();
+        ResetRoleSelection();
+
         // Build org-name lookup for the Memberships tab
         try
         {
@@ -657,6 +734,68 @@ else
         if (updated is not null) { _detail = _detail with { User = updated }; _successMessage = "Profile saved."; }
         else _errorMessage = "Save failed.";
     }
+
+    // ── Site roles (item 216) ─────────────────────────────────────────────────
+
+    private void ResetRoleSelection()
+    {
+        _roleSelection = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var role in _availableRoles)
+            _roleSelection[role] = _detail?.Roles.Contains(role, StringComparer.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>
+    /// The checkbox is locked rather than merely refused on save: a SuperAdmin unticking
+    /// themselves and then reading a refusal has learned the rule the slow way.
+    /// </summary>
+    private bool IsOwnSuperAdmin(string role)
+        => string.Equals(role, Ben.Data.Common.Constants.RoleNames.SuperAdmin, StringComparison.OrdinalIgnoreCase)
+           && UserState.UserId == UserId
+           && _detail?.Roles.Contains(role, StringComparer.OrdinalIgnoreCase) == true;
+
+    private async Task SaveRoles()
+    {
+        if (_detail is null) return;
+        _isSavingRoles = true; _rolesError = null; _successMessage = null;
+
+        var wanted = _roleSelection.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+        var saved = await AdminClient.SetUserRolesAsync(UserId, wanted);
+
+        _isSavingRoles = false;
+        if (saved is null)
+        {
+            // The server's two refusals are both about SuperAdmin — your own, or the last one.
+            _rolesError = "The roles were not saved. You cannot remove your own SuperAdmin role, "
+                        + "or the last SuperAdmin on the site.";
+            return;
+        }
+
+        _detail = _detail with { Roles = saved.Roles };
+        ResetRoleSelection();
+        _successMessage = saved.Roles.Count == 0
+            ? "Site roles saved: none."
+            : $"Site roles saved: {string.Join(", ", saved.Roles)}.";
+    }
+
+    /// <summary>
+    /// What each role actually grants, in the words RoleNames uses — so the checkbox says what
+    /// ticking it does rather than leaving the administrator to guess from the name.
+    /// </summary>
+    private static string DescribeRole(string role) => role.ToLowerInvariant() switch
+    {
+        "superadmin" => "everything: every administration page, impersonation, billing, and this screen.",
+        "admin"      => "sees the administration help documents. Grants nothing else yet.",
+        "moderator"  => "reviews what people post: the feed's report queue and media awaiting review. Nothing else.",
+        _            => "a custom role. It grants nothing unless the site's code checks for it by name.",
+    };
+
+    private static int RoleOrder(string role) => role.ToLowerInvariant() switch
+    {
+        "superadmin" => 0,
+        "admin"      => 1,
+        "moderator"  => 2,
+        _            => 3,
+    };
 
     private async Task ImpersonateUser()
     {

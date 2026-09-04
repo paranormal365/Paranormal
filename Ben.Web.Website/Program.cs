@@ -351,6 +351,36 @@ app.MapGet("/build-info.json", (IWebHostEnvironment env) =>
 }).AllowAnonymous();
 
 
+// ── Universal links and the web manifest (item 209) ──────────────────────────
+//
+// Both are endpoints rather than files in wwwroot, for the same two reasons: the association file
+// has NO EXTENSION so static middleware has no content type for it, and both must be served with
+// an exact type — iOS refuses an association file that is not application/json, over HTTPS, with
+// no redirect in front of it. Building them here also means the app identifier and the site name
+// come from configuration instead of from a JSON blob nothing validates.
+//
+// The path is the modern one. iOS 9 looked in the site root; every version since checks
+// /.well-known/ first, and serving only the well-known copy is what Apple documents today.
+app.MapGet("/.well-known/apple-app-site-association", (IConfiguration config) =>
+{
+    // No default. An association file naming the wrong team would be worse than none: it claims
+    // links for an app that cannot open them, and the failure appears only on somebody's phone.
+    var appId = config["Apple:AppLinks:AppId"];
+    if (string.IsNullOrWhiteSpace(appId)) return Results.NotFound();
+
+    return Results.Json(
+        Ben.Web.Website.Services.AppleAppSiteAssociation.For(appId),
+        contentType: "application/json");
+}).AllowAnonymous();
+
+app.MapGet("/manifest.webmanifest", (
+    Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site) =>
+    Results.Json(
+        Ben.Web.Website.Services.WebAppManifest.For(site.Value),
+        contentType: "application/manifest+json"))
+    .AllowAnonymous();
+
+
 // ── /go/{adId} — the counted door on a promoted card (item 186 F8) ───────────
 // A minimal endpoint, not a Blazor page: a redirect must not stand up a circuit. The API counts
 // the click and answers where the card leads; the redirect renders from NOTHING but the two

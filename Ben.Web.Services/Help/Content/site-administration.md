@@ -158,6 +158,40 @@ page reload — leaving impersonation always takes exactly one click, however yo
 Use it to see a reported problem through the reporter's eyes before assuming the cause. Actions
 you take while impersonating are real actions on their account.
 
+## Site roles
+
+There are three roles that apply across the whole site, separate from anyone's role inside a
+group:
+
+- **SuperAdmin** — everything: every page under Administration, impersonation, billing, and the
+  power to hand out these roles.
+- **Admin** — sees the administration help documents and, today, nothing else. It exists so that
+  widening it is a decision taken one capability at a time rather than all at once.
+- **Moderator** — reviews what people post: the feed's report queue and the media awaiting
+  review, with the power to approve, hold or hide. No billing, no user administration, no
+  impersonation. A SuperAdmin can moderate without holding this role.
+
+Everyone else is an ordinary member. Creating an account and confirming an email address makes
+someone a verified member; it never puts them in a site role.
+
+**To give somebody a role**, open **Administration → Users**, view the person, and open the
+**Site Roles** tab. Tick the roles they should hold and press **Save Roles**. What is ticked when
+you save is exactly what they end up with, so unticking a role removes it. The roles they hold
+also show as badges beside their name at the top of the page.
+
+It takes effect the next time they sign in. Any session they already have open is ended within
+the hour, so a removed role cannot linger past that.
+
+Two things the page refuses. You cannot remove your **own** SuperAdmin role — another SuperAdmin
+has to do that, and the box is locked to say so. And nobody can remove the **last** SuperAdmin
+on the site: make somebody else one first. Either would leave the site with nobody able to reach
+this screen.
+
+**Administration → Site Roles** is the list of roles themselves. It can add a new role name and
+delete an empty one, and it shows how many people hold each. A role you add there is offered on
+the Site Roles tab straight away, but it grants nothing until the site's code checks for it by
+name — it is a label, not a permission.
+
 ## The clipart library
 
 **Administration → Clipart Library** curates the shared artwork every group can use in the video

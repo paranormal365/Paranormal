@@ -155,7 +155,8 @@ public final class FieldSessionStore {
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
         do {
             sessions = try context.fetch(descriptor).map(FieldSessionSummary.init)
-            activeSessionId = sessions.first(where: \.isRecording)?.id
+            // Pending counts as open: a session set up and never started still resumes.
+            activeSessionId = sessions.first(where: \.isOpen)?.id
         } catch {
             state = .unavailable(reason: "Your sessions couldn't be read: \(error.localizedDescription)")
         }
@@ -393,6 +394,24 @@ public final class FieldSessionStore {
         activeSessionId = id
         load()
         return id
+    }
+
+    /// Start, pressed on the live screen: the moment the session's clock begins.
+    ///
+    /// `startedAt` is REWRITTEN here rather than kept from creation. Everything downstream — the
+    /// trimmer's track, the export's span, the media clock, the report's readout — measures from
+    /// it, and a session set up for ten minutes before Start would otherwise carry ten minutes of
+    /// empty timeline in front of its first reading.
+    public func beginRecording(_ id: UUID) async throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { return }
+        guard session.outcome == .pending else { return }   // idempotent: a double tap is not two starts
+        let at = now()
+        session.startedAt = at
+        session.outcome = .recording
+        try context.save()
+        if active?.sessionId == id { await active?.startSession(at: at) }
+        load()
     }
 
     public func endSession(_ id: UUID) async throws {

@@ -51,6 +51,25 @@ with a confidence score. **Approve** publishes it; **Hold** keeps it unpublished
 Neither deletes anything, and the author is only ever told their upload is being checked — never
 which check it tripped, because that would be a manual for dressing up the next one.
 
+The page opens on the **Waiting** pile, which is only what nobody has looked at yet — under
+automatic screening that is usually empty. What the screener refused sits in the **Held** pile,
+and it is refused, not denied: nothing the screener says is final, and Approve there publishes
+it like anywhere else. Scary is fine. The screener knows one thing, which is nudity; a ghost, a
+dark hallway or a frightening frame is "normal" to it.
+
+### When an account keeps sending it
+
+The one time an upload is refused outright rather than queued is an account that has used up the
+benefit of the doubt: **three confident refusals in a day** — a score the screener is sure
+about, not a borderline one — pause that account's photo and video uploads until the oldest of
+the three is a day old. Text posts still work. The poster is told their uploads are paused and
+nothing more.
+
+Rows from such an account carry an **Uploads paused** badge, and one a step short of it says
+so too. Approving any one of the three lifts the pause at once, because the rule counts what
+was *decided*, not what the screener first said — so a run of real evidence the model misread
+is one Approve away from clearing. Borderline scores never count toward a pause at all.
+
 ### The category question
 
 Beside the safety question sits a different one: **is this what it says it is?** A post's category

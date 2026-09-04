@@ -1,4 +1,6 @@
 ﻿
+@using Ben.Web.Website.Services
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 <!DOCTYPE html>
 <html lang="en">
 
@@ -78,6 +80,26 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    @* Installable on a home screen (item 209). The manifest is an endpoint, not a file: it takes
+       the site's name from SiteIdentity, because a name baked in here is read by an installer
+       rather than by a page and so goes stale without anybody seeing it.
+
+       theme-color paints the browser's own chrome — the address bar on Android, the title bar of
+       an installed window. It matches the Night theme's body background; a mismatch reads as a
+       flash of the wrong colour on every launch. Both spellings of the capability meta are
+       present: the apple- prefixed one is what iOS still reads, the unprefixed one is what
+       replaced it and what Chrome reads. *@
+    <link rel="manifest" href="/manifest.webmanifest" />
+    @* Both read from the same constant the manifest uses. Two copies of a colour drift, and this
+       particular drift shows as the browser chrome flashing a different shade on every launch —
+       the kind of fault nobody files a bug about and everybody notices. *@
+    <meta name="theme-color" content="@WebAppManifest.ThemeColor" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    @* The home-screen label, from SiteIdentity for the reason SiteIdentity exists: it is read by
+       a launcher rather than by a page, so a stale one goes unseen for years. *@
+    <meta name="apple-mobile-web-app-title" content="@WebAppManifest.ShortNameFor(SiteOptions.Value.Name)" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <HeadOutlet @rendermode="@InteractiveServer" />
     <!-- The dark half of ApexCharts' theming; the template ships only the light half. After the
          theme file so it can override it, before app.css so app.css still has the last word. -->

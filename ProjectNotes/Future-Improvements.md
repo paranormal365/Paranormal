@@ -9319,7 +9319,8 @@ noticing it extracted nothing.
 JPEG with `.clean.jpg` and `.thumb.jpg` written beside the untouched original, and a metadata row
 carrying dimensions and the raw dump. Probe rows and files removed afterwards (shared DB).
 
-**Phase B, still to build — Ben's delete-and-reassign flow** (spec given 2026-08-24, unchanged):
+**Phase B — BUILT 2026-09-04** (see the closing note at the end of this item). Ben's
+delete-and-reassign flow as specified 2026-08-24:
 when a user deletes a file that is shared and in use, ask whether they want it removed everywhere
 it is shared. If yes, honour it. If no, ask whether they still wish to delete it; if they do, the
 file and its EXIF record are **reassigned to the organization using it** rather than destroyed —
@@ -9330,6 +9331,46 @@ org-ownership, and personal-file listings that exclude reassigned files.
 
 ---
 
+
+**Phase B closing note (2026-09-04).** Ben's clarification the same day: *"Ownership remains
+with user who uploaded the file until they delete it and only if they choose not to delete
+usages beyond their account?"* — yes, and that is what shipped. Ownership never moves on its own;
+it moves only on the second answer of the delete dialog.
+
+*Schema:* `UploadFile.AppUserId` is now nullable and `OwnerOrganizationId` added (migration
+`AddUploadFileOwnerOrganization`). Nullable rather than re-pointed: every "is this mine" check
+reads `AppUserId == userId`, and null fails all of them at once — the personal listing, the owner
+gates, the account purge — with no second column each would have to remember. Who uploaded it is
+still `CreatedByAppUserId`.
+
+*Doors:* `GET api/upload-files/{id}/usage` (one row per group: shares, case copies, group
+copies, direct links — counts, not the group's case titles); plain `DELETE` now refuses with the
+usage (409) while a group is using it, where before it deleted without looking and left the
+group's copies pointing at nothing; `POST …/delete-everywhere` ends both share tables' rows,
+removes case copies with their comments and votes, the group's own copies, and every direct link
+(case, timeline, report, logo, ad, event evidence, equipment photo, client request), then
+destroys the file — refusing up front if a Field Kit session holds it; `POST …/reassign`
+requires the group to be *using* the file (or anyone could plant one), clears `AppUserId`, sets
+`OwnerOrganizationId`, keeps the id (so shares, copies and the metadata row keyed on it come
+along untouched), and gives the group a copy in its own Files the way copy-from-user does.
+
+*Gates:* `FileAudienceAccess.CanManageFileAsync` — owner, or the owning group's Owner /
+Administrator, or SuperAdmin; the former owner is deliberately out. `CanViewFileAsync` lets any
+active member of the owning group see it. The group purge releases the claim in its transaction
+and removes each file afterwards through `UploadFileRows`, never in bulk (the coverage guard's
+`UploadFiles` rule now says so).
+
+*UI:* `UploadFiles.razor` — usage first; a plain confirm when nobody else uses it; otherwise the
+two questions in a small dialog with a group picker when more than one group is using it.
+
+*Verified:* 47 controller tests (13 new) in a 4,064/0 suite; three guards proven to
+discriminate (the in-use refusal, the former-owner refusal, the session hold). Playwright
+`UploadFilesTests.Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt` written, not run here (the
+runner needs the two secrets). Help: new `your-files.md`. **Deploy note:** the migration must
+reach the site's database.
+
+*Found on the way:* Field Kit recordings are ordinary owned files and show in Upload Files, but a
+session holds them and there is no door for a person to delete a session — item 218.
 ## 181. A/V metadata stripping as an org setting, gated by plan (Ben, 2026-08-24 — BUILT)
 
 Ben: *"Make stripping the EXIF-like data from audio and video files a setting at the org level. It
@@ -10609,7 +10650,7 @@ which room, what was recorded at that moment — would make the PDF stand on its
 **Size:** small (half a day; the summary is a pure function of the document, already parsed by
 the player). **Depends on:** nothing. **Order:** early — cheapest item on the list.
 
-## 209. Universal links + a PWA manifest (open, Ben 2026-09-03)
+## 209. Universal links + a PWA manifest (CLOSED 2026-09-04 — AASA endpoint, manifest, entitlement)
 
 A link to a case opens the app on a phone that has it and installs cleanly on one that doesn't.
 An `apple-app-site-association` file served at the root, the associated-domains entitlement in
@@ -10619,7 +10660,45 @@ the app, and a web manifest with icons and a start URL.
 entitlement needs a signed build). **Depends on:** the App Store listing existing (it does) and a
 build after 1.0 review for the entitlement.
 
-## 210. Trim a field session to the evidence (open, Ben 2026-09-03)
+### Built 2026-09-04
+
+The app already had a `DeepLinkParser` reading website URLs, so the work was deciding **which
+paths the association file may claim** — narrower than the parser's grammar, because claiming a
+path the app cannot render is worse than claiming nothing: the link leaves Safari, where the real
+page is, and opens an app that shows a placeholder.
+
+Three paths parse and were deliberately **left out**:
+
+- `/events/{id}` and `/organizations/{org}/cases/{case}` — both parse, and both fall through to
+  `RootShell`'s `default:` arm, which renders "Coming soon".
+- `/attending/{token}` — the router reads the token and throws it away; its own comment says the
+  flow stays on the website until an association file exists. Claiming it would lose an RSVP.
+
+Nine patterns are claimed. **No `exclude` entries at all**: Apple's component ordering is easy to
+get subtly wrong and fails silently on a stranger's phone, so `/events` is claimed exactly rather
+than claiming `/events/*` and carving the detail route back out.
+
+Both documents are endpoints, not files — the association file has no extension so static
+middleware has no content type for it, and the app id and site name come from configuration.
+`UnclaimedPaths` carries the reason for each omission **as data**, so a test asserts each is absent
+and a later author finds the reasoning instead of tidying up the gap.
+
+24 C# tests, 5 Swift, 4 Playwright — the Playwright ones need no credentials and **were run**.
+Guards proven by breaking them. The manifest's short-name rule was caught by its own test: capping
+a domain suffix at four characters would keep `.paranormal` while stripping `.com`.
+
+**Still to do, and none of it is code.** Deploy so the association file is live (iOS caches the
+result, so it must be reachable before the app is installed); enable Associated Domains for the App
+ID in the developer portal; ship a build after 1.0 review, since the entitlement changes the
+provisioning profile. Until then the entitlement is inert and nothing regresses. **Nothing about
+it can be verified in the simulator** — iOS only performs the check on a real device.
+
+**Deliberately not done:** `webcredentials` for password autofill; it needs its own entitlement.
+
+**Worth doing when the screens exist:** claim `/events/*` and `/organizations/*/cases/*` once
+`RootShell` renders them, and `/attending/*` once the RSVP screen exists.
+
+## 210. Trim a field session to the evidence (CLOSED 2026-09-04 — on the phone, before upload)
 
 An hour-long recording usually matters for ten seconds. After upload, let the investigator
 choose the window to keep — the readings, marks and media inside it — and store only that on the
@@ -10631,6 +10710,31 @@ the report points at exactly the moment that mattered.
 document and cuts the media through ffmpeg where the host has it, the replaced-file bookkeeping,
 the sentence about the original, and the report citation carrying the window). **Depends on:**
 the media clock (shipped 2026-09-03) — the window is chosen on that timeline.
+
+### Built 2026-09-04 — on the phone, not the server
+
+Ben asked mid-build whether the trim could happen **before upload, on the phone, so the original
+stays on the device**. It can, and it is better on every axis: nothing on the server is ever
+destroyed, no irreversible operation, no conflict with published/cited/shared sessions, no server
+ffmpeg needed, and the upload itself shrinks. Built that way; a server-side trim for sessions
+already uploaded is NOT built and would be its own item.
+
+Ben's control spec (green in-dot, red out-dot, bolder band between, each handle's time shown while
+dragged) is `SessionTrimSlider`; his follow-ups — preview while trimming, and naming a clip — are
+`TrimPreview` and `back bedroom (20:00–30:00)`.
+
+Decisions in BenKit (43 tests): unknown-length recordings are **sent whole rather than guessed
+at**; a trimmed document **declares the window as its span**; and **audio offsets are rebased**
+after a cut — without that the recording lands on the timeline as far from its readings as the
+amount cut off the front. Media is cut via `AVAssetExportPresetPassthrough` into scratch; the
+original is never opened for writing.
+
+The UI harness found two real view bugs a screenshot never could: the drag double-counted the
+handle's offset (in point ran away, out point could not move) and the Form claimed the out-point
+drag as a row swipe. Both fixed; the drag test now asserts where the handle lands.
+
+**Not verified:** a real AVFoundation cut on a device, and the server round-trip of a trimmed
+document. One manual upload from a phone would close that. See README-trim-session-to-evidence.md.
 
 ## 211. App Attest for the Field Kit upload door (open, planned 2026-09-03)
 
@@ -10644,7 +10748,7 @@ a simulator bypass. **After 1.0 clears review** — it touches the app.
 ### Recommended order for 204–211
 
 208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
-All of 204–208 are closed. **Next: 209**, then 210; 211 stays gated on App Store review of 1.0.
+204–210 are closed. **Next:** 213/214/215 (Ben's queue, in that order or as he says); 211 stays gated on App Store review of 1.0.
 
 ## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
 
@@ -10690,4 +10794,151 @@ bouncing a non-SuperAdmin.
 
 Documented in `site-administration.md`; **self-service account closure was documented for the
 first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
+
+## 213. The App Store package for 1.0.2 (BUILT 2026-09-04 — submission waits, Ben's call)
+
+A second upload folder alongside the 1.0.0 one, with `1.0.2` in its name so the two cannot be
+confused, carrying the same iPhone and iPad video and screenshots. Plus a single document named
+with `1.0.2` before the `.md` holding everything App Review needs and every instruction for
+building and submitting the build.
+
+**Size:** medium. **Depends on:** the screenshots being recapturable, which needs item 214.
+
+### Built 2026-09-04
+
+`Ben.iOS/screenshots-1.0.2/` (byte-identical copies of the 1.0.0 set, dark, with a README saying
+which screens are now stale and that 214 recaptures them) and `Ben.iOS/APP-STORE-1.0.2.md` — the
+listing, privacy answers, review notes, the seven Guideline 2.1 answers, and the full build-and-
+submit procedure. `MARKETING_VERSION` 1.0.2 / build 2 set in the project and proven in the built
+bundle.
+
+Two findings while writing it: the "§3c" rejection answers the notes said were in APP-STORE.md
+were **never committed** — the file has no such section, so 1.0.2's document carries them; and
+the current tree holds two "paid plan" sentences with no purchase path, which is the one
+Guideline 3.1.1 risk in the build and is flagged for Ben's decision.
+
+Ben, 2026-09-04: *"I am going to wait until we finish everything to try to get the submission
+done."* So this is ready, not sent.
+
+## 214. Demo records for the simulator, so the screenshots have something to show (BUILT 2026-09-04)
+
+Screenshots taken against an empty simulator show empty screens. Seed records that exercise the
+**whole** Field Kit: **dark mode**, a **base level actually set**, and a gauge that visibly
+**moves** rather than sitting at zero. `-fieldKitFakeSensors` already drives the sensors; what is
+missing is a session worth photographing and the app being in the state a real night looks like.
+
+**Size:** medium. **Blocks:** item 213's screenshots.
+
+### Built 2026-09-04
+
+`FieldKitScreenshotTests` drives a real scripted night — room named, **base level set while
+pending**, Start, sentry armed, the needle at ~+60 mG *over report level*, a mark, the review, the
+trimmer — and attaches five Field Kit frames plus the home list; captured **dark** on the iPhone 17
+Pro Max (scaled to 1242×2688) and iPad Pro 13-inch (2064×2752 native). The feed/cases/
+investigations/events frames are carried from 1.0.0 unchanged: recapturing them needs a seeded
+persona's password, which lives only in Ben's environment. Two new 28 s previews from Start onward,
+recorded with `simctl io recordVideo` and cut with a small AVFoundation tool
+(`screenshots-1.0.2/tools/preview.swift`) because the Mac has no ffmpeg.
+
+The capture exposed two real layout bugs, both fixed and re-verified: the trimmer preview's chart
+drew over its readouts and Play button at 90 pt; and the iPad's live-session clock wrapped
+"10:03:01 A / M". Harness lessons: query containers by any element type, and relaunch after
+`-autoSignIn` lands or the Send screen photographs "Your session ended".
+
+
+## 215. A session should not start recording the moment it is created (BUILT 2026-09-04)
+
+Ben: *"They may want to set everything up first and then start."* So the button that currently
+says **Stop** becomes **Start**, and only then becomes **Stop** to end the session. A session that
+turned out to be nothing can be deleted straight away to free the space.
+
+Worth care: "interrupted" currently means the phone died mid-session, and a session created but
+never started is a third state that must not be reported as either a recording or a failure. The
+Field Kit UI tests drive start/stop directly and will all need revisiting.
+
+**Size:** medium.
+
+### Built 2026-09-04
+
+A fourth state, `pending`: the live screen opens with the gauge running and nothing logged; the bar
+reads *not started* with **Discard** and a green **Start**; Start begins the clock, opens the log
+and brings the Mark/Note/EVP/capture controls; Stop ends it as before. Recovery at launch leaves a
+pending session alone — nothing was lost, so it is not "interrupted". `startedAt` is rewritten at
+Start so the trimmer, export, media clock and readout all measure from the real beginning; audio
+starts at Start for the same reason. The engine has one log gate (`beginLogging`), proven to
+discriminate. 317 BenKit / 25 UI tests green, the demo-video script updated and run. The first
+screenshot exposed the clock saying "stopped" for a pending session — fixed to *not started*.
+See README-delayed-session-start.md. Ben's untracked upload probe will need the new Start tap.
+
+## 216. Nothing could put a person into a site role (BUILT 2026-09-04 — Site Roles tab on user detail)
+
+Ben, 2026-09-04: *"I don't see a way I can assign Site Roles to people. They obviously can be
+user and verified user by creating an account and verifying email. How do I, as SuperAdmin, add
+roles to users like Admin, Moderator or SuperAdmin?"*
+
+He could not, and the code knew it: `SuperAdminSeeder` creates Admin and Moderator with the
+comment "so a SuperAdmin can assign it", and nothing let one. **Site Roles** creates and deletes
+role names and counts holders; **New User** offers SuperAdmin at creation only; the user detail
+page had no roles section. The only writers were the two seeders. Admin and Moderator were
+reachable by a hand-typed `AspNetUserRoles` row and by nothing else — the eighth write-only
+feature found on this site, and the same shape as items 142, 151 and the others: a read surface
+and a seeded value with no door between them.
+
+**Built:** `PUT api/admin/app-users/{id}/roles` takes the whole set (checkboxes, not deltas),
+canonicalises names to the stored spelling, refuses to strip the caller's own SuperAdmin role or
+the last one on the site, bumps the security stamp so existing sessions re-sign-in at their next
+refresh, and audits as `AppUserRoles`. The user detail page shows role badges beside the name and
+a **Site Roles** tab: one checkbox per defined role with what it grants, the caller's own
+SuperAdmin box locked, and an honest note that it lands at the next sign-in with current sessions
+ending within the hour (bearer tokens are not re-read per request; refresh checks the stamp).
+
+Tests: eight controller tests, all green in a 4,040/0 suite; the own-SuperAdmin guard was shown
+to discriminate. A Playwright test of the tab is written but not yet run — the isolated runner
+needs `BEN_E2E_ADMIN_PASSWORD` and `BEN_SUPERADMIN_PASSWORD`, which left the repo in the secrets
+sweep. Help: `site-administration.md` § Site roles.
+
+**Left as is:** the New User form's SuperAdmin checkbox — still creation-only, still one role;
+the tab covers the rest and a second path to the same rows is a second thing to keep right.
+
+## 217. Refused uploads go to a person — unless the person is spamming (BUILT 2026-09-04)
+
+Ben, 2026-09-04, after asking whether the NSFW screener only checks for nudity ("the site is
+about ghost hunting... it should allow scary stuff"): *"Before it denies it, can it just submit it
+to admin, superadmin or moderator for approval instead of outright denial? ... Unless the person
+is spamming it."*
+
+**Already true, and worth writing down:** nothing was ever denied outright. Both of the
+screener's upper bands set `Held`, the Held pile on Feed Media, where Approve publishes; the post
+is always created and the author only told it is being checked. The model is
+`Falconsai/nsfw_image_detection`, two classes, trained on pornography — violence, gore and horror
+are not things it knows. Under automatic screening the page's default "Waiting" pile is nearly
+empty and the Held pile is where the work is; the help now says so.
+
+**Built — the spam exception.** `OrgMessage.MediaScreenerScore` stores the classifier's number
+(migration `AddOrgMessageScreenerScore`; `FeedMediaVerdict.Score`; set on create and by the
+pending sweep). `FeedMediaAbuse`: three posts by one author in 24 hours scored ≥ 0.85 *and still
+Held* pause that author's media uploads, checked before ingest so a paused account cannot fill
+the disk; text still posts; the message names no check. A moderator approving one of the three
+lifts it (the rule reads the decided state), borderline never counts, and nothing is written to
+the account — the window ends on its own. The queue shows "Uploads paused — N refusals today".
+
+Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Playwright — the
+e2e stack has no model and no fixture the classifier would refuse. Help:
+`moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
+
+## 218. A person cannot delete their own field session (open, found 2026-09-04)
+
+Found while closing item 180 Phase B, on Ben's question *"This will include FieldKit uploads?"*
+A session's recordings and document are ordinary files the person owns, listed in Upload Files
+and covered by the delete dialog — but `FieldSessionUploadFile` and
+`FieldSessionUpload.DocumentUploadFileId` hold them (Restrict), and the only doors that remove a
+session are the SuperAdmin orphan purge and, for the archive, *retract*, which unpublishes
+without deleting. So the file delete refuses with "part of a field session" and there is nowhere
+for the person to go next.
+
+**To decide before building:** retraction from the public archive is paid-only on purpose — the
+publish-then-hide exploit. A whole-session delete for a free account would be the same exploit by
+another door, so the rule is probably: delete freely while unpublished; once published, delete
+follows the retraction rule. The door itself is small (rows, files, share links, the session's
+place left alone as retract does) once that is settled.
 

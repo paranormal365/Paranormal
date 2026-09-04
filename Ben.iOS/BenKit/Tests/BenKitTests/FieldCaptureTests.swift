@@ -104,8 +104,13 @@ struct FieldCaptureTests {
         let (session, _, _, root) = makeSession(recorder: StubRecorder())
         defer { try? FileManager.default.removeItem(at: root) }
 
+        // Item 215: before Start the switch only says "record sound when we begin". A file that
+        // started before the session's clock would sit in the past on the media timeline.
         await session.setChannels([.magnetic, .audio])
-        #expect(session.recording != nil)
+        #expect(session.recording == nil, "nothing records before Start")
+
+        await session.startSession(at: Date())
+        #expect(session.recording != nil, "Start begins the audio the switch asked for")
 
         await session.setChannels([.magnetic])
         #expect(session.recording == nil)
@@ -176,6 +181,7 @@ struct FieldCaptureTests {
 
         let id = try store.startSession(locationLabel: "Cellar")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
 
         let session = try #require(store.active)
         await session.mark(kind: .manual, note: "cold spot")
@@ -202,6 +208,7 @@ struct FieldCaptureTests {
 
         let id = try store.startSession(locationLabel: "Hall")
         await store.activate(id, channels: [.magnetic, .audio])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         try await store.endSession(id)
 
         let source = try #require(store.replayData(for: id))
@@ -224,6 +231,7 @@ struct FieldCaptureTests {
 
         let id = try store.startSession(locationLabel: "Attic")
         await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)   // item 215: Start opens the log
         await store.active?.noteCapture(kind: .photo, relativePath: "media/photo-001.jpg",
                                         byteCount: 2_048)
         try await store.endSession(id)

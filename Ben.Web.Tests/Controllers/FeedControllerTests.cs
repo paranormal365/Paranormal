@@ -58,6 +58,45 @@ public sealed class FeedControllerTests
             },
         };
 
+    /// <summary>The same controller with a screener of the test's choosing (item 217).</summary>
+    private static FeedController Build(IDbContextFactory<BenDataContext> factory, Guid userId,
+        Ben.Data.WebApi.Services.Feed.IFeedMediaScreener screener)
+        => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
+               screener,
+               new Ben.Data.WebApi.Services.Feed.FeedLearningService(
+                   Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
+                   Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+    /// <summary>A screener that scores everything the same — the classifier with its mind made up.</summary>
+    private sealed class ScoringScreener(double score) : Ben.Data.WebApi.Services.Feed.IFeedMediaScreener
+    {
+        public bool IsAutomatic => true;
+        public Task<Ben.Data.WebApi.Services.Feed.FeedMediaVerdict> ScreenAsync(string storagePath, string? contentType, CancellationToken ct)
+            => Task.FromResult(Ben.Data.WebApi.Services.Feed.NsfwDecision.Decide(score));
+    }
+
+    /// <summary>A real, tiny JPEG as an upload — the ingest decodes it, so zeros will not do.</summary>
+    private static IFormFile JpegUpload()
+    {
+        var bytes = TestImages.Jpeg();
+        return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "media", "photo.jpg")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/jpeg",
+        };
+    }
+
     /// <summary>A controller with no signed-in user at all — a visitor (item 186).</summary>
     private static FeedController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
         => new(factory, Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot), Ben.Web.Tests.TestMedia.IngestToDisk(MediaRoot),
@@ -1143,5 +1182,142 @@ public sealed class FeedControllerTests
         Assert.False(record.HasMedia);
         Assert.False(record.MediaAwaitingReview);
         Assert.Equal(FeedMediaKind.None, record.MediaKind);
+    }
+
+    // ── Item 217: refused uploads go to a person — unless the person is spamming ─────────────
+    //
+    // Ben, 2026-09-04: "can it just submit it to admin, superadmin or moderator for approval
+    // instead of outright denial? ... Unless the person is spamming it." So: every held upload
+    // stays approvable, and only an account with three confident refusals in a day is refused
+    // outright. These tests pin both halves.
+
+    private const double ConfidentPorn = 0.99;
+    private const double Borderline    = 0.50;
+
+    private static async Task<ActionResult<FeedPostRecord>> PostPhotoAsync(FeedController c, string body)
+        => (await c.CreatePost(new CreateFeedPostRequest(body), JpegUpload(), CancellationToken.None));
+
+    [Fact]
+    public async Task A_confident_refusal_is_held_for_a_person_not_denied()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+
+        var result = await PostPhotoAsync(c, "first");
+
+        // The post exists, held, with the score on it — a moderator can still approve it.
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var db = factory.CreateDbContext();
+        var post = await db.OrgMessages.SingleAsync(m => m.AuthorAppUserId == sarah.Id);
+        Assert.Equal(FeedMediaReviewState.Held, post.MediaReviewState);
+        Assert.Equal(ConfidentPorn, post.MediaScreenerScore);
+    }
+
+    [Fact]
+    public async Task Three_confident_refusals_in_a_day_pause_the_fourth_upload()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+
+        for (var i = 0; i < Ben.Data.WebApi.Services.Feed.FeedMediaAbuse.RefusalsBeforePause; i++)
+            Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, $"post {i}")).Result);
+
+        var fourth = await PostPhotoAsync(c, "one more");
+
+        var refused = Assert.IsType<BadRequestObjectResult>(fourth.Result);
+        Assert.Equal(Ben.Data.WebApi.Services.Feed.FeedMediaAbuse.PausedMessage, refused.Value);
+        // Refused BEFORE ingest: no fourth file, no fourth post.
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(3, await db.OrgMessages.CountAsync(m => m.AuthorAppUserId == sarah.Id));
+        Assert.Equal(3, await db.UploadFiles.CountAsync(f => f.AppUserId == sarah.Id));
+    }
+
+    [Fact]
+    public async Task A_paused_account_can_still_post_text()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+        for (var i = 0; i < 3; i++) await PostPhotoAsync(c, $"post {i}");
+
+        var text = await c.CreatePost(new CreateFeedPostRequest("just words"), null, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(text.Result);
+    }
+
+    [Fact]
+    public async Task Two_refusals_do_not_pause_anything()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+        for (var i = 0; i < 2; i++) await PostPhotoAsync(c, $"post {i}");
+
+        Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, "third")).Result);
+    }
+
+    [Fact]
+    public async Task Borderline_scores_never_count_toward_a_pause()
+    {
+        // A night of dark, skin-toned frames from a real investigation must cost a moderator's
+        // minute, never an investigator's evening.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(Borderline));
+        for (var i = 0; i < 5; i++)
+            Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, $"post {i}")).Result);
+
+        Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, "sixth")).Result);
+    }
+
+    [Fact]
+    public async Task A_refusal_older_than_a_day_no_longer_counts()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+        for (var i = 0; i < 3; i++) await PostPhotoAsync(c, $"post {i}");
+
+        // Age the oldest refusal past the window.
+        await using (var db = factory.CreateDbContext())
+        {
+            var oldest = await db.OrgMessages.Where(m => m.AuthorAppUserId == sarah.Id)
+                .OrderBy(m => m.DateCreated).FirstAsync();
+            oldest.DateCreated = DateTime.UtcNow - Ben.Data.WebApi.Services.Feed.FeedMediaAbuse.Window - TimeSpan.FromMinutes(1);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, "a day later")).Result);
+    }
+
+    [Fact]
+    public async Task A_moderator_approving_one_of_the_three_lifts_the_pause()
+    {
+        // The rule reads what the queue decided, not what the screener first said.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id, new ScoringScreener(ConfidentPorn));
+        for (var i = 0; i < 3; i++) await PostPhotoAsync(c, $"post {i}");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var one = await db.OrgMessages.FirstAsync(m => m.AuthorAppUserId == sarah.Id);
+            one.MediaReviewState = FeedMediaReviewState.Approved;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, "after approval")).Result);
+    }
+
+    [Fact]
+    public async Task Manual_screening_never_pauses_because_it_has_no_score()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id); // ManualReviewScreener: Pending, no number
+        for (var i = 0; i < 4; i++)
+            Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, $"post {i}")).Result);
     }
 }

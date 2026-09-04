@@ -4032,6 +4032,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("MediaReviewedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<double?>("MediaScreenerScore")
+                        .HasColumnType("float");
+
                     b.Property<Guid?>("MediaUploadFileId")
                         .HasColumnType("uniqueidentifier");
 
@@ -6965,7 +6968,7 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
-                    b.Property<Guid>("AppUserId")
+                    b.Property<Guid?>("AppUserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("ArchivedFromUploadFileId")
@@ -7010,6 +7013,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
+                    b.Property<Guid?>("OwnerOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("ParentFileId")
                         .HasColumnType("uniqueidentifier");
 
@@ -7045,6 +7051,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("CaseCopyOfUploadFileId");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OwnerOrganizationId");
 
                     b.HasIndex("ParentFileId");
 
@@ -12531,8 +12539,7 @@ namespace Ben.Data.Source.Migrations
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
                         .WithMany()
                         .HasForeignKey("AppUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Ben.Data.Source.Entities.UploadFile", "ArchivedFromUploadFile")
                         .WithMany("ArchivedVersions")
@@ -12549,6 +12556,11 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("CreatedByAppUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "OwnerOrganization")
+                        .WithMany()
+                        .HasForeignKey("OwnerOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Ben.Data.Source.Entities.UploadFile", "ParentFile")
                         .WithMany("ChildClips")
@@ -12573,6 +12585,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CaseCopySourceFile");
 
                     b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OwnerOrganization");
 
                     b.Navigation("ParentFile");
 
