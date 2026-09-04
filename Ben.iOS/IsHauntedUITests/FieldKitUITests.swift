@@ -529,7 +529,11 @@ final class FieldKitUITests: XCTestCase {
         // this device signed in — asserting one state only would pass alone and fail in company.
         let explained = fresh.staticTexts.containing(
             NSPredicate(format: "label CONTAINS[c] 'Recording never needs an account'")).firstMatch
-        let picker = fresh.otherElements["upload-investigation"].firstMatch
+        // A Button, not an Other: the picker has always surfaced as a button, so the old
+        // otherElements query never matched and this test passed only through send-session.
+        // Once the trimmer (item 210) sat between the two, the Send button fell below the fold
+        // of a lazy Form and stopped being materialised — and the masked query showed itself.
+        let picker = fresh.buttons["upload-investigation"].firstMatch
         let sendButton = fresh.buttons["send-session"]
 
         let deadline = Date().addingTimeInterval(20)

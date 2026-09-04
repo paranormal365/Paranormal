@@ -30,10 +30,19 @@ public struct DeviceDataExporter: Sendable {
         public var trigger: DeviceDataEnvelope.Trigger
         /// Relative paths, as stored on the session.
         public var includedMedia: [String]
+        /// The stretch to send, when the operator chose one (item 210).
+        ///
+        /// **Nil means the whole session**, which is what every caller wanting the old behaviour
+        /// gets by leaving it out. When set, readings outside it are not written and the
+        /// document's own `started_at` and `ended_at` become the window's — otherwise the server
+        /// would record an hour-long session holding three readings, and the player would draw an
+        /// hour of empty timeline around them.
+        public var window: SessionWindow?
 
         public init(sessionId: UUID, startedAt: Date, endedAt: Date?, locationLabel: String?,
                     deviceModel: String, timezone: String?, batteryPercentAtStart: Double?,
-                    trigger: DeviceDataEnvelope.Trigger, includedMedia: [String]) {
+                    trigger: DeviceDataEnvelope.Trigger, includedMedia: [String],
+                    window: SessionWindow? = nil) {
             self.sessionId = sessionId
             self.startedAt = startedAt
             self.endedAt = endedAt
@@ -43,6 +52,7 @@ public struct DeviceDataExporter: Sendable {
             self.batteryPercentAtStart = batteryPercentAtStart
             self.trigger = trigger
             self.includedMedia = includedMedia
+            self.window = window
         }
     }
 
@@ -59,10 +69,14 @@ public struct DeviceDataExporter: Sendable {
     /// Builds `data.json` on its own — the document that describes a session, without its media.
     /// This is what a server import wants first: small, checkable, and complete on its own.
     public func buildDocument(_ request: Request, log: ReadingLog) async throws -> Data {
+        // A trimmed session declares the WINDOW as its span. The alternative — keeping the
+        // original start and end — would tell every reader the session ran for an hour and then
+        // hand them three readings, which reads as a night of missing data rather than as a
+        // deliberate excerpt.
         let envelope = DeviceDataEnvelope(
             device: .init(manufacturer: "Apple", model: request.deviceModel),
-            session: .init(startedAt: request.startedAt,
-                           endedAt: request.endedAt,
+            session: .init(startedAt: request.window?.start ?? request.startedAt,
+                           endedAt: request.window?.end ?? request.endedAt,
                            batteryPercentAtStart: request.batteryPercentAtStart,
                            locationLabel: request.locationLabel,
                            timezone: request.timezone,
@@ -71,7 +85,7 @@ public struct DeviceDataExporter: Sendable {
         // Encoded with no readings, then the array spliced in — so the readings never have to
         // be held as objects.
         var document = try DeviceDataJSON.encoder.encode(envelope)
-        let lines = try await log.rawLines()
+        let lines = try await log.rawLines(within: request.window)
 
         guard let insertion = Self.readingsArrayRange(in: document) else {
             throw ExportError.couldNotBuildDocument
@@ -121,7 +135,9 @@ public struct DeviceDataExporter: Sendable {
         }
 
         let bytes = try ZipWriter().write(entries, to: destination)
-        let readingCount = try await log.lineCount()
+        // Counted from what was WRITTEN, not from the log: a trimmed bundle reporting the whole
+        // log's line count would overstate what it contains on the one screen that says so.
+        let readingCount = try await log.rawLines(within: request.window).count
 
         return Result(url: destination, byteCount: bytes, readingCount: readingCount,
                       mediaCount: included.count, omittedMedia: omitted)
@@ -165,6 +181,82 @@ public struct DeviceDataExporter: Sendable {
             stamped = true
         }
         return stamped ? (text.data(using: .utf8) ?? document) : document
+    }
+
+    /// Moves every `start_offset_seconds` naming this file back by `seconds` (item 210).
+    ///
+    /// **Why a trim needs this at all.** A reading's `start_offset_seconds` says how far INTO the
+    /// recording that moment sits, and the player reconstructs where the recording begins by
+    /// subtracting it from the reading's time. Cut sixty minutes down to ten and every one of
+    /// those offsets is still measured from a beginning that is no longer in the file — so the
+    /// player would place the audio an hour away from the readings it belongs to, and the one
+    /// thing the whole feature is for, hearing what happened at the spike, would be broken.
+    ///
+    /// **A targeted rewrite rather than a re-encode.** Re-serialising the document would reorder
+    /// keys and reformat numbers across every reading, and those reading lines are the bytes the
+    /// device wrote. This walks to each `audio_ref` naming the file and edits only its offset,
+    /// leaving everything else exactly as it was.
+    ///
+    /// An offset that would go negative is clamped to zero: the reading sits at or before the
+    /// start of what was kept, which is where the cut file now begins.
+    public static func rebaseAudioOffsets(forFilename path: String, by seconds: TimeInterval,
+                                   in document: Data) -> Data {
+        guard seconds > 0, let text = String(data: document, encoding: .utf8) else { return document }
+
+        // Both spellings, because a log line written by an older build escapes its slashes and is
+        // spliced in verbatim.
+        let markers = [path, path.replacingOccurrences(of: "/", with: "\\/")]
+            .map { "\"filename\":\"\($0)\"" }
+
+        // Built forward into a new string rather than edited in place: an in-place edit
+        // invalidates every index after it, and the bookkeeping to recover from that is where
+        // this kind of loop stops terminating.
+        var out = ""
+        var cursor = text.startIndex
+
+        while cursor < text.endIndex {
+            let next = markers
+                .compactMap { text.range(of: $0, range: cursor..<text.endIndex) }
+                .min(by: { $0.lowerBound < $1.lowerBound })
+
+            guard let found = next else { break }
+
+            // The offset lives in the same small object as the filename, so the search stops at
+            // that object's closing brace and can never run on into the next reading.
+            guard let objectEnd = text[found.upperBound...].firstIndex(of: "}"),
+                  let key = text.range(of: "\"start_offset_seconds\":",
+                                       range: found.upperBound..<objectEnd)
+            else {
+                out += text[cursor..<found.upperBound]
+                cursor = found.upperBound
+                continue
+            }
+
+            let numberStart = key.upperBound
+            let numberEnd = text[numberStart..<objectEnd]
+                .firstIndex(where: { $0 == "," || $0 == "}" }) ?? objectEnd
+            let current = Double(text[numberStart..<numberEnd].trimmingCharacters(in: .whitespaces))
+
+            out += text[cursor..<numberStart]
+            if let current {
+                // Clamped at zero: a reading at or before the start of what was kept sits exactly
+                // where the cut file now begins.
+                out += Self.number(max(0, current - seconds))
+            } else {
+                out += text[numberStart..<numberEnd]
+            }
+            cursor = numberEnd
+        }
+
+        out += text[cursor...]
+        return out.data(using: .utf8) ?? document
+    }
+
+    /// A JSON number: whole values without a pointless ".0".
+    public static func number(_ value: Double) -> String {
+        value == value.rounded() && abs(value) < 1e15
+            ? String(Int64(value))
+            : String(value)
     }
 
     /// Every media path the document refers to — from `audio_ref` names and from the capture

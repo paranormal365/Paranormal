@@ -272,6 +272,30 @@ link that expires, can be withdrawn, and tells you whether it was opened. That i
 session's playback page on the website; see *Working a case* for what the link does and does not
 carry.
 
+### Sending only the part that mattered
+
+An hour of recording usually matters for ten seconds. On the **Send** screen, under **What to
+send**, the session sits on a track with a **green dot** at the start and a **red dot** at the
+end. Drag the green dot to move the in point and the red dot to move the out point; the time under
+each shows as you drag it, and the bolder green band between them is exactly what will be sent.
+
+Below the track you can see what is under the handle — the field and sound at that moment — and
+**Play what will be sent** runs from the in point to the out point with the recording following,
+so what you hear is what the group will get and nothing else. The list beneath says, file by file,
+what happens to each recording: sent whole, cut to a shorter stretch, or not sent because it falls
+outside the window. Readings and marks outside the window are not sent either.
+
+**The full recording stays on this phone.** Nothing outside the window leaves the device, and a cut
+recording is a copy — the original on the phone is never touched. Clearing the phone afterwards is
+a separate choice, offered only once everything has arrived, and it is the only thing that removes
+the original.
+
+A trimmed session is named for what it is: **back bedroom (20:00–30:00)**, with the in and out
+times after the session's own name, on the website's list, in the player and in any report that
+cites it. A session sent whole keeps its name.
+
+**Send the whole session** puts both dots back at the ends.
+
 ### Exporting a session
 
 A session can also be exported as a **.zip in the IsHaunted device data format** — the same

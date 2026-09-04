@@ -10657,7 +10657,7 @@ it can be verified in the simulator** — iOS only performs the check on a real 
 **Worth doing when the screens exist:** claim `/events/*` and `/organizations/*/cases/*` once
 `RootShell` renders them, and `/attending/*` once the RSVP screen exists.
 
-## 210. Trim a field session to the evidence (open, Ben 2026-09-03)
+## 210. Trim a field session to the evidence (CLOSED 2026-09-04 — on the phone, before upload)
 
 An hour-long recording usually matters for ten seconds. After upload, let the investigator
 choose the window to keep — the readings, marks and media inside it — and store only that on the
@@ -10669,6 +10669,31 @@ the report points at exactly the moment that mattered.
 document and cuts the media through ffmpeg where the host has it, the replaced-file bookkeeping,
 the sentence about the original, and the report citation carrying the window). **Depends on:**
 the media clock (shipped 2026-09-03) — the window is chosen on that timeline.
+
+### Built 2026-09-04 — on the phone, not the server
+
+Ben asked mid-build whether the trim could happen **before upload, on the phone, so the original
+stays on the device**. It can, and it is better on every axis: nothing on the server is ever
+destroyed, no irreversible operation, no conflict with published/cited/shared sessions, no server
+ffmpeg needed, and the upload itself shrinks. Built that way; a server-side trim for sessions
+already uploaded is NOT built and would be its own item.
+
+Ben's control spec (green in-dot, red out-dot, bolder band between, each handle's time shown while
+dragged) is `SessionTrimSlider`; his follow-ups — preview while trimming, and naming a clip — are
+`TrimPreview` and `back bedroom (20:00–30:00)`.
+
+Decisions in BenKit (43 tests): unknown-length recordings are **sent whole rather than guessed
+at**; a trimmed document **declares the window as its span**; and **audio offsets are rebased**
+after a cut — without that the recording lands on the timeline as far from its readings as the
+amount cut off the front. Media is cut via `AVAssetExportPresetPassthrough` into scratch; the
+original is never opened for writing.
+
+The UI harness found two real view bugs a screenshot never could: the drag double-counted the
+handle's offset (in point ran away, out point could not move) and the Form claimed the out-point
+drag as a row swipe. Both fixed; the drag test now asserts where the handle lands.
+
+**Not verified:** a real AVFoundation cut on a device, and the server round-trip of a trimmed
+document. One manual upload from a phone would close that. See README-trim-session-to-evidence.md.
 
 ## 211. App Attest for the Field Kit upload door (open, planned 2026-09-03)
 
@@ -10682,7 +10707,7 @@ a simulator bypass. **After 1.0 clears review** — it touches the app.
 ### Recommended order for 204–211
 
 208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
-204–209 are closed. **Next: 210** (trim a session); 211 stays gated on App Store review of 1.0.
+204–210 are closed. **Next:** 213/214/215 (Ben's queue, in that order or as he says); 211 stays gated on App Store review of 1.0.
 
 ## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
 
@@ -10728,4 +10753,34 @@ bouncing a non-SuperAdmin.
 
 Documented in `site-administration.md`; **self-service account closure was documented for the
 first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
+
+## 213. The App Store package for 1.0.2 (Ben, 2026-09-04)
+
+A second upload folder alongside the 1.0.0 one, with `1.0.2` in its name so the two cannot be
+confused, carrying the same iPhone and iPad video and screenshots. Plus a single document named
+with `1.0.2` before the `.md` holding everything App Review needs and every instruction for
+building and submitting the build.
+
+**Size:** medium. **Depends on:** the screenshots being recapturable, which needs item 214.
+
+## 214. Demo records for the simulator, so the screenshots have something to show (Ben, 2026-09-04)
+
+Screenshots taken against an empty simulator show empty screens. Seed records that exercise the
+**whole** Field Kit: **dark mode**, a **base level actually set**, and a gauge that visibly
+**moves** rather than sitting at zero. `-fieldKitFakeSensors` already drives the sensors; what is
+missing is a session worth photographing and the app being in the state a real night looks like.
+
+**Size:** medium. **Blocks:** item 213's screenshots.
+
+## 215. A session should not start recording the moment it is created (Ben, 2026-09-04)
+
+Ben: *"They may want to set everything up first and then start."* So the button that currently
+says **Stop** becomes **Start**, and only then becomes **Stop** to end the session. A session that
+turned out to be nothing can be deleted straight away to free the space.
+
+Worth care: "interrupted" currently means the phone died mid-session, and a session created but
+never started is a third state that must not be reported as either a recording or a failure. The
+Field Kit UI tests drive start/stop directly and will all need revisiting.
+
+**Size:** medium.
 
