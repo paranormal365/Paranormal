@@ -415,16 +415,38 @@
 }
 
 /* ── Library tab ────────────────────────────────────────────────────────────── */
-.bv-browser__tabs {
-    flex: 1;
+/* TelerikTabStrip's root does not carry this component's Blazor scope attribute, so a plain
+   `.bv-browser__tabs {}` compiles to a selector that can never match and silently does nothing —
+   the same trap the side panel's own tab strip fell into. It has to be reached through `::deep`
+   from `.bv-browser`, which is an authored element and does carry the attribute.
+
+   Without it the tab strip kept its default flex:0 1 auto, so it was as tall as its tab headers
+   and its content box came out one pixel high with overflow:hidden. Every card in the media bin
+   was in the page, and none of it could be seen: importing a picture looked like nothing had
+   happened at all. */
+.bv-browser ::deep .bv-browser__tabs {
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
 
-.bv-browser__local,
-.bv-browser__library {
-    flex: 1;
+/* And the tab's own content box is display:block by default, which means whatever is inside it
+   ignores flex sizing and grows to its content instead of scrolling. */
+.bv-browser ::deep .bv-browser__tabs .k-tabstrip-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.bv-browser ::deep .bv-browser__local,
+.bv-browser ::deep .bv-browser__library {
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
 }
 

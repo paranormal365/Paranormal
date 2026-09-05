@@ -156,3 +156,57 @@ public sealed class StillFrameArgsTests
         Assert.Equal("0.000", args[Array.IndexOf(args, "-ss") + 1]);
     }
 }
+
+/// <summary>
+/// No encoder is ever handed an odd width or height.
+/// </summary>
+/// <remarks>
+/// H.264 and H.265 in 4:2:0 cannot encode one. A 1007x675 photo — an ordinary screenshot or phone
+/// crop — was passed to the preview as its own canvas and ffmpeg aborted; in the browser that
+/// abort showed up as nothing at all, with the preview still showing the timeline as it had been
+/// before the picture was added. Found on screen while verifying the resolution work (2026-09-05
+/// audit, alongside export-5).
+/// </remarks>
+public sealed class EvenCanvasTests
+{
+    private static ExportSettings Settings() =>
+        new() { VideoCodec = "libx264", UseCrf = true, Crf = 23, PixelFormat = "yuv420p" };
+
+    [Theory]
+    [InlineData(1007, 675, "1006:674")]
+    [InlineData(1920, 1080, "1920:1080")]
+    [InlineData(1919, 1080, "1918:1080")]
+    public void An_image_segment_scales_to_an_even_canvas(int w, int h, string expected)
+    {
+        var args = ExportArgBuilders.BuildImageSegmentArgs(
+            "img.png", "seg.mp4", 5.0, Settings(), outputWidth: w, outputHeight: h);
+        var vf = args[Array.IndexOf(args, "-vf") + 1];
+
+        Assert.Contains($"scale={expected}:force_original_aspect_ratio=decrease", vf);
+        Assert.Contains($"pad={expected}:(ow-iw)/2:(oh-ih)/2", vf);
+    }
+
+    [Fact]
+    public void A_video_segment_scales_to_an_even_canvas()
+    {
+        var args = ExportArgBuilders.BuildTrimArgs(
+            "in.mp4", "out.mp4", 0, 5, 1.0, Settings(), outputWidth: 1007, outputHeight: 675);
+        var vf = args[Array.IndexOf(args, "-filter:v") + 1];
+
+        Assert.Contains("scale=1006:674", vf);
+    }
+
+    [Fact]
+    public void A_gap_filler_is_rendered_at_an_even_canvas()
+    {
+        var args = ExportArgBuilders.BuildFillerSegmentArgs("gap.mp4", 1.5, Settings(), 1007, 675);
+
+        Assert.Contains("color=c=black:s=1006x674:r=30", args);
+    }
+
+    [Fact]
+    public void An_unknown_canvas_stays_unknown_rather_than_becoming_minus_one()
+    {
+        Assert.Equal((0, 0), ExportArgBuilders.EvenCanvas(0, 0));
+    }
+}

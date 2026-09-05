@@ -156,6 +156,21 @@ internal static class ExportArgBuilders
         ];
     }
 
+    /// <summary>
+    /// Rounds a canvas down to even dimensions.
+    /// </summary>
+    /// <remarks>
+    /// H.264 and H.265 in 4:2:0 cannot encode an odd width or height. A 1007x675 photo — an
+    /// ordinary size for a screenshot or a phone crop — was handed straight to the encoder as its
+    /// own canvas, and ffmpeg aborted. In the browser that abort surfaced as nothing at all: the
+    /// preview simply stopped updating and kept showing the timeline as it had been before the
+    /// picture was added, which reads as the picture not having been added (2026-09-05 audit,
+    /// found while verifying export-5 on screen).
+    /// </remarks>
+    internal static (int Width, int Height) EvenCanvas(int width, int height) =>
+        (width > 0 ? width - (width % 2) : width,
+         height > 0 ? height - (height % 2) : height);
+
     internal static string[] BuildConcatCopyArgs(string listPath, string output) =>
         ["-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", output];
 
@@ -194,6 +209,8 @@ internal static class ExportArgBuilders
         args.AddRange(["-t", duration.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)]);
 
         var filterParts = new List<string>();
+        (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
         if (outputWidth > 0 && outputHeight > 0)
         {
             filterParts.Add($"scale={outputWidth}:{outputHeight}:force_original_aspect_ratio=decrease");
@@ -251,8 +268,9 @@ internal static class ExportArgBuilders
     {
         var ic  = System.Globalization.CultureInfo.InvariantCulture;
         var fps = s.Fps > 0 ? s.Fps : 30;
-        var w   = outputWidth  > 0 ? outputWidth  : 1920;
-        var h   = outputHeight > 0 ? outputHeight : 1080;
+        var (ew, eh) = EvenCanvas(outputWidth, outputHeight);
+        var w = ew > 0 ? ew : 1920;
+        var h = eh > 0 ? eh : 1080;
 
         var args = new List<string>
         {
@@ -316,6 +334,8 @@ internal static class ExportArgBuilders
         // than the target silently ignored the user's requested resolution entirely. Matches
         // BuildImageSegmentArgs' existing scale+pad so every segment kind lands on the same
         // canvas before compositing.
+        (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
         if (outputWidth > 0 && outputHeight > 0)
         {
             videoFilters.Add($"scale={outputWidth}:{outputHeight}:force_original_aspect_ratio=decrease");
@@ -426,6 +446,8 @@ internal static class ExportArgBuilders
         args.AddRange(["-ss", start.ToString("F3"), "-to", end.ToString("F3")]);
 
         var videoFilters = new List<string>();
+        (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
         if (outputWidth > 0 && outputHeight > 0)
         {
             videoFilters.Add($"scale={outputWidth}:{outputHeight}:force_original_aspect_ratio=decrease");
@@ -501,6 +523,8 @@ internal static class ExportArgBuilders
         };
 
         var filterParts = new List<string>();
+        (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
         if (outputWidth > 0 && outputHeight > 0)
         {
             filterParts.Add($"scale={outputWidth}:{outputHeight}:force_original_aspect_ratio=decrease");

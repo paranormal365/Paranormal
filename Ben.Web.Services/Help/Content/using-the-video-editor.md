@@ -152,6 +152,13 @@ instead of stepping frames.
 **Marker** drops a labelled point at the playhead. Markers are for you and anyone reviewing with
 you — a way to say "here" without cutting anything. They travel with the project.
 
+### Saving a single frame
+
+**Save Frame** writes the picture under the playhead to your machine as a PNG. It comes from the
+clip's own footage at full resolution rather than from the preview, so it is as sharp as the source
+allows — and it does not carry your titles or callouts, which is usually what you want from a frame
+you are going to share as evidence.
+
 ## Working on a clip
 
 Select a clip and the panel's **Properties** tab describes it.
@@ -167,6 +174,16 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Split** cuts the clip in two at the playhead.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
+
+## Layers above the picture
+
+The timeline can hold more than one video track. A clip on a track above the first plays over the
+one beneath it for as long as it runs, and everything on the timeline — the gaps included — keeps
+its place in the finished file. If you leave a gap between two clips, the export holds on black for
+exactly that long, the same as the timeline shows.
+
+Titles, callouts and clip art stack in the order you added them, whatever kind each one is: the
+newest sits on top, and that is how it renders.
 
 ## Titles and callouts
 
@@ -197,13 +214,29 @@ after an edit.
 
 **Export** renders the final video. Start from a preset — Web HD, High Quality, 720p, Mobile or
 WebM — and adjust only what you care about: format, codec, quality, resolution and frame rate.
-**Export Now** renders immediately; **Add to Queue** lines it up so you can keep working.
+**Export Now** renders immediately; **Add to Queue** lines it up so you can keep working, including
+while another export is already running.
+
+A few of those settings are worth knowing:
+
+- **Source resolution** keeps the size of your first clip instead of resizing anything. Choose it
+  when you are cutting 4K or phone footage and want the export to be what the camera recorded.
+- **Frame rate** defaults to 30. Lower it only if you need a smaller file.
+- The codecs on offer change with the format, because not every codec fits in every container. Pick
+  the format first.
+
+If something on the timeline could not be included — a clip whose media is not loaded, a piece of
+artwork that could not be read — the export still finishes and tells you what it left out. Read
+that list before you share the file.
 
 You choose where the result goes:
 
 - **To your machine** — the file is saved locally and never leaves it.
 - **To the server** — the finished video is uploaded and becomes an ordinary file in your media
   library, ready to attach to a case or publish.
+
+Closing that question without answering it asks whether you meant to throw the render away. Nothing
+is deleted unless you say so.
 
 Rendering is real work. A short project finishes quickly; a long one with overlays takes minutes,
 and both are faster with the native helper below.

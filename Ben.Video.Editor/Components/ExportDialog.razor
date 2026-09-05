@@ -228,8 +228,14 @@
 
                 @if (_job is { State: ExportJobState.Completed })
                 {
+                    @* The rendered length beside the timeline's own, because "the export is as
+                       long as the timeline" is the thing several of this pass's fixes were
+                       about, and it should be checkable without opening the file. *@
                     <div class="bv-export-form__success">
-                        ✓ Export complete in @_job.Elapsed.TotalSeconds.ToString("F1")s (@FormatBytes(_job.OutputSizeBytes))
+                        ✓ Export complete in @_job.Elapsed.TotalSeconds.ToString("F1")s
+                        (@FormatBytes(_job.OutputSizeBytes)@(_job.Duration > 0
+                            ? " · " + TimeSpan.FromSeconds(_job.Duration).ToString(@"m\:ss\.f")
+                            : ""))
                     </div>
                 }
 
