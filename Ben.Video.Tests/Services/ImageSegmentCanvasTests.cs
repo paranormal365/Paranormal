@@ -78,7 +78,31 @@ public sealed class ImageSegmentCanvasTests
 
         Assert.False(spec.Contains("OutputWidth: clip.Width", StringComparison.Ordinal),
             "the native image path must use the project canvas, matching ExportService.");
-        Assert.Contains("ParseResolution", src, StringComparison.Ordinal);
+        Assert.Contains("imgOutW", spec, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same agreement for video, which is where it had quietly stopped holding.
+    /// </summary>
+    /// <remarks>
+    /// The native path passed a zero canvas and a comment saying it matched the browser path. It
+    /// did not: the browser path scales each segment to the export canvas, so which engine
+    /// happened to render a given clip decided what size that segment came out — and concat is
+    /// what joins them (2026-09-05 audit, export-4).
+    /// </remarks>
+    [Fact]
+    public void NativeClipEncoder_AgreesWithTheWasmPathOnTheVideoCanvas()
+    {
+        var src = ReadSource(Path.Combine("Services", "NativeClipEncoder.cs"));
+
+        var i = src.IndexOf("SegmentKind.Video", StringComparison.Ordinal);
+        Assert.True(i >= 0, "video spec construction not found in NativeClipEncoder");
+        var spec = src[i..src.IndexOf("ExportQuality:", i, StringComparison.Ordinal)];
+
+        Assert.False(spec.Contains("OutputWidth: 0", StringComparison.Ordinal),
+            "the native video path must scale to the export canvas, matching ExportService's own "
+            + "BuildTrimArgs call — a zero canvas leaves the segment at its source resolution.");
+        Assert.Contains("OutputWidth: vw", spec, StringComparison.Ordinal);
     }
 
     [Fact]

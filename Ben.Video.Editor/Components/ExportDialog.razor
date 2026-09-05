@@ -233,6 +233,19 @@
                     </div>
                 }
 
+                @* Something on the timeline did not make it into the file. The export succeeded,
+                   so this is not an error — but it used to be silent, and the only way to find
+                   out was to watch the result (2026-09-05 audit, audio-1 class). *@
+                @if (_job is not null && _job.Warnings.Count > 0)
+                {
+                    <ul class="bv-export-form__warnings">
+                        @foreach (var warning in _job.Warnings)
+                        {
+                            <li>⚠ @warning</li>
+                        }
+                    </ul>
+                }
+
             </div>
 
             @if (_job is not { State: ExportJobState.Running })

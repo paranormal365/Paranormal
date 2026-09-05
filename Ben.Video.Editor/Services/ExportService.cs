@@ -115,11 +115,25 @@ public sealed class ExportService : IAsyncDisposable
         {
             await RunPipelineAsync(job, downloadToDisk);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (job.CancelRequested)
         {
             job.State        = ExportJobState.Cancelled;
             job.FinishedAt   = DateTimeOffset.UtcNow;
             job.PhaseLabel   = "Cancelled.";
+            job.NotifyProgress();
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled is what the person did, not what happened to them. A timeout inside a
+            // wedged ffmpeg worker also arrives here, and reporting it as "Cancelled." told
+            // somebody who had cancelled nothing that they had — so the export looked like their
+            // own doing and there was nothing to report (2026-09-05 audit, export-12).
+            job.State        = ExportJobState.Failed;
+            job.ErrorMessage = "The video engine stopped responding and the export was abandoned. "
+                             + "Reload the engine from the toolbar and try again; if it keeps "
+                             + "happening, the file may be too large for the browser to handle.";
+            job.FinishedAt   = DateTimeOffset.UtcNow;
+            job.PhaseLabel   = "Failed: the video engine stopped responding.";
             job.NotifyProgress();
         }
         catch (Exception ex)
@@ -496,6 +510,9 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.MemFsName is null)
                 throw new InvalidOperationException($"Clip '{clip.Name}' has no MEMFS source. Re-import the clip.");
 
+            // The canvas every segment lands on, whichever engine renders it.
+            var (fxW, fxH) = ResolveCanvas(s);
+
             // Item #38 phase 124 — offload this one clip's trim/encode to the native sidecar
             // when it's connected, via the exact same ExportArgBuilders.BuildTrimArgs the wasm
             // path below calls, so the resulting segment is structurally identical either way.
@@ -504,7 +521,8 @@ public sealed class ExportService : IAsyncDisposable
             // this one clip renders in the browser instead, the export itself never fails or
             // reruns because of it.
             var nativeBytes = _nativeSidecar.IsConnected
-                ? await _nativeClipEncoder.TryEncodeVideoSegmentAsync(clip, s, job.CancellationToken)
+                ? await _nativeClipEncoder.TryEncodeVideoSegmentAsync(
+                    clip, s, job.CancellationToken, fxW, fxH)
                 : null;
 
             if (nativeBytes is not null)
@@ -532,9 +550,8 @@ public sealed class ExportService : IAsyncDisposable
                 // Build trim args â€” use selected codec, CRF or bitrate, per-clip speed, volume and effects
                 var effectiveDuration = clip.EffectiveDuration > 0 ? clip.EffectiveDuration : clip.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
-                // The canvas an effect will run against: zoompan needs a literal size and cannot
-                // be told one as an expression (see ZoompanFragment).
-                var (fxW, fxH) = ResolveCanvas(s);
+                // fxW/fxH is also the canvas an effect runs against: zoompan needs a literal
+                // size and cannot be told one as an expression (see ZoompanFragment).
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
                     clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed, fxW, fxH);
                 // Muting the video track silences its clips, the same as muting each of them.
@@ -600,10 +617,13 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.MemFsName is null)
                 throw new InvalidOperationException($"Image clip '{clip.Name}' has no MEMFS source. Re-import the file.");
 
+            var (fxImgW, fxImgH) = ResolveCanvas(s);
+
             // Item #38 phase 124 — same native offload as TrimSegmentsAsync above, for image
             // clips. See that method's comment for the fall-through contract.
             var nativeBytes = _nativeSidecar.IsConnected
-                ? await _nativeClipEncoder.TryEncodeImageSegmentAsync(clip, s, job.CancellationToken)
+                ? await _nativeClipEncoder.TryEncodeImageSegmentAsync(
+                    clip, s, job.CancellationToken, fxImgW, fxImgH)
                 : null;
 
             if (nativeBytes is not null)
@@ -614,7 +634,6 @@ public sealed class ExportService : IAsyncDisposable
             else
             {
                 var duration = clip.Duration > 0 ? clip.Duration : 5.0;
-                var (fxImgW, fxImgH) = ResolveCanvas(s);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
                     clip.AppliedEffects, _effectRegistry, duration, 1.0, fxImgW, fxImgH);
                 // Item #9 — scale/pad to the PROJECT's output resolution, not the image's own
@@ -1172,7 +1191,8 @@ public sealed class ExportService : IAsyncDisposable
 
                 if (args.Length == 0)
                 {
-                    // Could not read SVG — skip this clip
+                    // The asset could not be read. Saying so beats a render that quietly lacks it.
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
                     continue;
                 }
 
@@ -1197,13 +1217,21 @@ public sealed class ExportService : IAsyncDisposable
                 // re-drawing it per frame at the already-interpolated geometry) instead of trying
                 // to replicate MotionKeyframeService's easing/bezier math as ffmpeg expressions.
                 var animated = await ApplyAnimatedClipArtAsync(clip, composited, s, outputName, tempFiles, job.CancellationToken);
-                if (animated is null) continue;
+                if (animated is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
+                    continue;
+                }
             }
             else
             {
                 // Raster (or simple SVG without animated control points) — static overlay
                 var overlayFile = await WriteClipArtToMemFsAsync(clip);
-                if (overlayFile is null) continue;
+                if (overlayFile is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
+                    continue;
+                }
                 tempFiles.Add(overlayFile);
 
                 var (vw, vh) = ResolveCanvas(s);
@@ -1508,9 +1536,13 @@ public sealed class ExportService : IAsyncDisposable
             var delayMs     = (int)Math.Round(Math.Max(0, ac.TimelinePosition) * 1000.0);
             var fullFilter  = delayMs > 0 ? $"{filterChain},adelay={delayMs}:all=1" : filterChain;
 
-            var segName = $"audio_seg_{i:D3}_{job.Id:N}.mp4";
+            // PCM, not the export's own codec: these exist only to be mixed, and the mix encodes
+            // the result. Compressing them first put every audio clip through a lossy codec twice
+            // (2026-09-05 audit, audio-24).
+            var segName = $"audio_seg_{i:D3}_{job.Id:N}.wav";
             tempFiles.Add(segName);
-            var segArgs = ExportArgBuilders.BuildAudioClipTrimArgs(ac.MemFsName, segName, start, end, fullFilter, s);
+            var segArgs = ExportArgBuilders.BuildAudioClipTrimArgs(
+                ac.MemFsName, segName, start, end, fullFilter, s, lossless: true);
             await _ffmpeg.ExecAsync(segArgs, job.CancellationToken);
             segmentNames.Add(segName);
         }
@@ -1577,7 +1609,11 @@ public sealed class ExportService : IAsyncDisposable
 
             if (item is VideoClip clip)
             {
-                if (clip.MemFsName is null) continue;
+                if (clip.MemFsName is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its media is not loaded.");
+                    continue;
+                }
 
                 var trimStart = clip.StartTrim;
                 var trimEnd   = clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration;
@@ -1597,7 +1633,11 @@ public sealed class ExportService : IAsyncDisposable
             else
             {
                 var image = (ImageClip)item;
-                if (image.MemFsName is null) continue;
+                if (image.MemFsName is null)
+                {
+                    job.Warnings.Add($"'{image.Name}' was left out: its media is not loaded.");
+                    continue;
+                }
 
                 tempFiles.Add(segName);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(

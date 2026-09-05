@@ -770,21 +770,33 @@ internal static class ExportArgBuilders
     /// is why this went unnoticed — that is the case the browser exercises most), and every other
     /// case only becomes correct with the seek on the input.</para>
     /// </summary>
+    /// <param name="lossless">
+    /// Write uncompressed PCM instead of the export's own audio codec. These segments exist only to
+    /// be fed to the mix, which encodes the result — compressing them first meant every audio clip
+    /// went through the codec twice, and lossy twice is audibly worse than lossy once for no gain
+    /// (2026-09-05 audit, audio-24). The intermediate is larger, and it is deleted as soon as the
+    /// mix has consumed it.
+    /// </param>
     internal static string[] BuildAudioClipTrimArgs(
-        string input, string output, double start, double end, string audioFilter, ExportSettings s)
+        string input, string output, double start, double end, string audioFilter, ExportSettings s,
+        bool lossless = false)
     {
         var ic = System.Globalization.CultureInfo.InvariantCulture;
-        return
-        [
+
+        var args = new List<string>
+        {
             "-ss", start.ToString("F3", ic),
             "-to", end.ToString("F3", ic),
             "-i", input,
             "-vn",
             "-filter:a", audioFilter,
-            "-c:a", s.AudioCodec,
-            "-b:a", $"{s.AudioBitrate}k",
-            output,
-        ];
+        };
+
+        if (lossless) args.AddRange(["-c:a", "pcm_s16le"]);
+        else          args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k"]);
+
+        args.Add(output);
+        return [.. args];
     }
 
     // ── Xfade filter_complex
