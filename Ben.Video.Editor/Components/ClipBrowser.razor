@@ -1450,6 +1450,27 @@
                 InvokeAsync(StateHasChanged);
             });
 
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+
+            // The browser fetches it itself when the host can say where from. Under Blazor Server
+            // the alternative pulls the file into the server's memory, copies it again into a byte
+            // array, and ships it over the circuit — three copies of a file the browser could have
+            // fetched directly, with a 2 GB ceiling on the way (2026-09-05 audit, site-2).
+            var directUrl = await MediaLib.GetDownloadUrlAsync(file.Id);
+            if (directUrl is not null)
+            {
+                var written = await OPFS.DownloadToClipAsync(directUrl, file.Id, ext);
+                if (written >= 0)
+                {
+                    _libraryCached.Add(file.Id);
+                    return;
+                }
+
+                // Fell through: the direct fetch failed, so try the way that always worked.
+                ErrorLog.Log($"ClipBrowser.DownloadAndCacheAsync({file.FileName})",
+                    "Direct download failed; falling back to fetching through the host.");
+            }
+
             byte[] bytes;
             try
             {
@@ -1467,7 +1488,6 @@
                 throw new TimeoutException($"Downloading {file.FileName} timed out.", ocex);
             }
 
-            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
             await OPFS.WriteFromBytesAsync(file.Id, ext, bytes);
             _libraryCached.Add(file.Id);
         }

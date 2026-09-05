@@ -152,6 +152,57 @@ export async function opfsEstimate() {
     }
 }
 
+/**
+ * Streams a URL straight into storage, without the bytes ever entering .NET.
+ *
+ * Under Blazor Server the alternative pulls the file into the server's memory, copies it again
+ * into a byte array, and ships it to the browser over the circuit — three copies of a file the
+ * browser could fetch itself, with a 2 GB ceiling from an int cast along the way (2026-09-05
+ * audit, site-2 and media-6).
+ *
+ * Reports progress against Content-Length when the server sends one. Returns the bytes written, or
+ * -1 with a reason, so the caller can fall back rather than treating a failure as an empty file.
+ */
+export async function opfsDownloadToClip(url, clipId, ext, dotnet, progressMethod) {
+    try {
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) return { bytes: -1, error: `HTTP ${response.status}` };
+
+        const total = Number(response.headers.get('content-length')) || 0;
+
+        const dir = await getClipsDir();
+        const fh  = await dir.getFileHandle(`${clipId}${ext}`, { create: true });
+        const wr  = await fh.createWritable();
+
+        const reader = response.body.getReader();
+        let written = 0;
+        let lastReported = -1;
+
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            await wr.write(value);
+            written += value.byteLength;
+
+            if (total > 0 && dotnet && progressMethod) {
+                // Whole percents only: a callback per chunk would cost more in interop than the
+                // download itself on a fast connection.
+                const percent = Math.floor((written / total) * 100);
+                if (percent !== lastReported) {
+                    lastReported = percent;
+                    try { dotnet.invokeMethodAsync(progressMethod, written / total); } catch { }
+                }
+            }
+        }
+
+        await wr.close();
+        return { bytes: written, error: null };
+    } catch (err) {
+        return { bytes: -1, error: String(err && err.message ? err.message : err) };
+    }
+}
+
 export async function opfsListClips() {
     try {
         const dir = await getClipsDir();

@@ -1797,7 +1797,8 @@ public sealed class ExportService : IAsyncDisposable
             ContentType:     MimeType(job.Settings.OutputFormat),
             SizeBytes:       job.OutputSizeBytes,
             DurationSeconds: job.Duration,
-            ReadBytesAsync:  () => ReadRetainedBytesAsync(blobUrl));
+            ReadBytesAsync:  () => ReadRetainedBytesAsync(blobUrl),
+            BlobUrl:         blobUrl);
 
         // NOT in a finally: a host that throws (upload failed) must keep its output, because the
         // destination prompt's whole recovery story is "you can still save it to your machine".

@@ -83,6 +83,41 @@ public sealed class OPFSService : IAsyncDisposable
     }
 
     /// <summary>Write raw bytes (e.g. downloaded from a web API) to OPFS.</summary>
+    /// <summary>
+    /// Streams a URL straight into storage, without the bytes passing through .NET.
+    /// </summary>
+    /// <returns>Bytes written, or -1 when it could not be done — the caller falls back.</returns>
+    /// <remarks>
+    /// The point is what it avoids under Blazor Server: fetching the file into the server's
+    /// memory, copying it again, and shipping it over the circuit (2026-09-05 audit, site-2).
+    /// </remarks>
+    public async Task<long> DownloadToClipAsync(
+        string url, Guid clipId, string ext,
+        DotNetObjectReference<object>? progressTarget = null, string? progressMethod = null)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return -1;
+
+        try
+        {
+            var result = await _module.InvokeAsync<DownloadResult>(
+                "opfsDownloadToClip", url, clipId.ToString(), ext, progressTarget, progressMethod);
+
+            if (result.Error is not null)
+                _errorLog.Log("OPFSService.DownloadToClipAsync", result.Error);
+
+            return result.Bytes;
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("OPFSService.DownloadToClipAsync", ex);
+            return -1;
+        }
+    }
+
+    /// <summary>What the browser's own streaming download reported.</summary>
+    private sealed record DownloadResult(long Bytes, string? Error);
+
     public async Task WriteFromBytesAsync(Guid clipId, string ext, byte[] bytes)
     {
         await EnsureInitAsync();

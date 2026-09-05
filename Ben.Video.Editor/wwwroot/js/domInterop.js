@@ -155,6 +155,33 @@ export async function blobUrlAsBytes(url) {
     return new Uint8Array(await resp.arrayBuffer());
 }
 
+/**
+ * Posts a blob straight from the browser to a URL, as a multipart file.
+ *
+ * The alternative — reading the blob into .NET and posting from there — is what the Blazor Server
+ * host used to do, and Blazor caps a JS-interop return value at 32 KB by default. A render is
+ * megabytes at least, so publishing from the site could not work at all (2026-09-05 audit,
+ * site-1). Here the bytes never leave the browser except on their way to the server.
+ *
+ * Returns the status and any body text rather than throwing, so the caller can say what the server
+ * said instead of "upload failed".
+ */
+export async function postBlobUrlTo(blobUrl, uploadUrl, fileName, contentType) {
+    try {
+        const blob = await (await fetch(blobUrl)).blob();
+
+        const form = new FormData();
+        form.append('file', new File([blob], fileName, { type: contentType || blob.type }), fileName);
+
+        const response = await fetch(uploadUrl, { method: 'POST', body: form, credentials: 'same-origin' });
+        const text = await response.text().catch(() => '');
+
+        return { ok: response.ok, status: response.status, body: text.slice(0, 300) };
+    } catch (err) {
+        return { ok: false, status: 0, body: String(err && err.message ? err.message : err) };
+    }
+}
+
 export function downloadText(text, fileName, mimeType) {
     const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
     const a = document.createElement('a');
