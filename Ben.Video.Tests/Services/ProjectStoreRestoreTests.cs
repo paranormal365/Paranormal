@@ -38,6 +38,9 @@ public sealed class ProjectStoreRestoreTests
         public FakeLocalStorageJsRuntime(Dictionary<string, string>? shared = null)
             => Storage = shared ?? [];
 
+        /// <summary>When true, every write is refused, as it is in a private window.</summary>
+        public bool Refuse { get; init; }
+
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
             => InvokeAsync<TValue>(identifier, CancellationToken.None, args);
 
@@ -45,15 +48,32 @@ public sealed class ProjectStoreRestoreTests
         {
             // ProjectStore imports the module once and caches the handle.
             if (identifier == "benImportEditorModule")
-                return ValueTask.FromResult((TValue)(object)new FakeStorageModule(Storage));
+                return ValueTask.FromResult((TValue)(object)new FakeStorageModule(Storage) { Refuse = Refuse });
 
             throw new NotSupportedException($"Unexpected top-level JS call: {identifier}");
         }
     }
 
     /// <summary>The imported <c>storageInterop.js</c> handle — mirrors that module's exports.</summary>
+    /// <remarks>
+    /// The real module reports whether a write succeeded, because the browser refuses one when its
+    /// quota is exhausted or storage is blocked. This mirrors that: <c>Refuse</c> lets a test say
+    /// no the way a private window does (2026-09-05 audit, persistence-9).
+    /// </remarks>
     private sealed class FakeStorageModule(Dictionary<string, string> storage) : IJSObjectReference
     {
+        /// <summary>When true, every write is refused, as it is in a private window.</summary>
+        public bool Refuse { get; init; }
+
+        /// <summary>
+        /// Returns the boolean the real module returns, or nothing when the caller used
+        /// <c>InvokeVoidAsync</c> and does not want an answer.
+        /// </summary>
+        private static ValueTask<TValue> Result<TValue>(bool value) =>
+            typeof(TValue) == typeof(bool)
+                ? ValueTask.FromResult((TValue)(object)value)
+                : default!;
+
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
             => InvokeAsync<TValue>(identifier, CancellationToken.None, args);
 
@@ -67,11 +87,11 @@ public sealed class ProjectStoreRestoreTests
                     return ValueTask.FromResult((TValue)(object?)value!);
                 }
                 case "setItem" when args is [string key, string value]:
-                    storage[key] = value;
-                    return default!;
+                    if (!Refuse) storage[key] = value;
+                    return Result<TValue>(!Refuse);
                 case "removeItem" when args is [string key]:
                     storage.Remove(key);
-                    return default!;
+                    return Result<TValue>(true);
                 default:
                     throw new NotSupportedException(
                         $"Unexpected storageInterop call: {identifier}({string.Join(", ", args ?? [])})");
@@ -81,13 +101,51 @@ public sealed class ProjectStoreRestoreTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// A save the browser refused is reported, not reported as a success.
+    /// </summary>
+    /// <remarks>
+    /// The JavaScript side has always said so: <c>setItem</c> returns false when the quota is
+    /// exhausted or storage is blocked, which is what happens in a private window. The C# side
+    /// called it through <c>InvokeVoidAsync</c> and threw the answer away, so a save that stored
+    /// nothing reported "Project saved." and the work was gone at the next reload (2026-09-05
+    /// audit, persistence-9).
+    /// </remarks>
+    [Fact]
+    public async Task SaveAsync_WhenStorageRefuses_SaysSoRatherThanReportingSuccess()
+    {
+        var storage        = new Dictionary<string, string>();
+        var (store, clips) = CreateStore(storage, storageRefuses: true);
+
+        clips.AddClip(new VideoClip { Name = "clip", Duration = 5 });
+
+        var ex = await Assert.ThrowsAsync<ProjectStorageException>(
+            () => store.SaveAsync("My Project"));
+
+        Assert.Contains("would not store", ex.Message);
+        Assert.Empty(storage);
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenStorageRefuses_LeavesTheProjectDirty()
+    {
+        var (store, clips) = CreateStore([], storageRefuses: true);
+        clips.AddClip(new VideoClip { Name = "clip", Duration = 5 });
+
+        await Assert.ThrowsAsync<ProjectStorageException>(() => store.SaveAsync("My Project"));
+
+        // Still unsaved work, so the unload guard and the autosave both still have a job to do.
+        Assert.True(store.IsDirty);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static (ProjectStore store, ClipStore clips) CreateStore(Dictionary<string, string> sharedStorage)
+    private static (ProjectStore store, ClipStore clips) CreateStore(
+        Dictionary<string, string> sharedStorage, bool storageRefuses = false)
     {
         var opts     = Options.Create(new VideoEditorOptions());
         var clips    = new ClipStore(opts);
-        var js       = new FakeLocalStorageJsRuntime(sharedStorage);
+        var js       = new FakeLocalStorageJsRuntime(sharedStorage) { Refuse = storageRefuses };
         var errorLog = new ErrorLogService();
         var motion   = new MotionKeyframeService();
         var projSvc  = new ProjectService(clips, motion, js, new NoOpHttpClientFactory(), opts);
@@ -95,7 +153,7 @@ public sealed class ProjectStoreRestoreTests
         var ffmpeg   = new FfmpegService(js, errorLog, new MemFsLedger(), new WorkerWatchdog());
         var mounter  = new SourceMounter(ffmpeg, opfs);
 
-        var store = new ProjectStore(clips, projSvc, opfs, ffmpeg, mounter, js, errorLog);
+        var store = new ProjectStore(clips, projSvc, opfs, ffmpeg, mounter, motion, js, errorLog);
         return (store, clips);
     }
 

@@ -261,3 +261,13 @@
 .bv-toolbar ::deep .bv-icon-only .k-button-text {
     display: none;
 }
+
+/* The unsaved mark, beside the name rather than inside it. As part of the input's value it became
+   part of the name the moment anybody renamed the project (2026-09-05 audit, persistence-5). */
+.bv-toolbar__proj-dirty {
+    margin-left: .15rem;
+    color: var(--kendo-color-warning, #d3b04c);
+    font-weight: 700;
+    line-height: 1;
+    cursor: default;
+}

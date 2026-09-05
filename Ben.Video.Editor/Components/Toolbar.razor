@@ -98,19 +98,23 @@
                     <DropDownButtonItems>
                         <DropDownButtonItem Icon="@SvgIcon.Plus"
                                             OnClick="OnNewProjectClicked">New</DropDownButtonItem>
+                        @* CanSave, not HasClips: a project can be worth saving without a video
+                           clip in it — markers, a title, audio, or simply unsaved changes. Gating
+                           on video content meant Save was disabled on work that plainly existed
+                           (2026-09-05 audit, persistence-4). *@
                         <DropDownButtonItem Icon="@SvgIcon.Save"
                                             OnClick="OnSaveClicked"
-                                            Enabled="@HasClips">Save</DropDownButtonItem>
+                                            Enabled="@CanSave">Save</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Download"
                                             OnClick="OnSaveToDeviceClicked"
-                                            Enabled="@HasClips">Save to Device…</DropDownButtonItem>
+                                            Enabled="@CanSave">Save to Device…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.FolderOpen"
                                             OnClick="OnOpenProjectListClicked">Open…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Upload"
                                             OnClick="OnImportJsonClicked">Import JSON…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Download"
                                             OnClick="OnExportJsonClicked"
-                                            Enabled="@HasClips">Export JSON</DropDownButtonItem>
+                                            Enabled="@CanSave">Export JSON</DropDownButtonItem>
                         @if (HasSubtitles)
                         {
                             <DropDownButtonItem Icon="@SvgIcon.FileTxt"
@@ -137,7 +141,14 @@
                        type="text"
                        value="@ProjectName"
                        @onchange="e => OnProjectNameChanged.InvokeAsync(e.Value?.ToString() ?? ProjectName)"
-                       title="Project name — click to rename" />
+                       title="@(IsDirty ? "Project name — click to rename. Unsaved changes." : "Project name — click to rename")" />
+                @* Drawn beside the box, not inside its value. As part of the value it became part
+                   of the name the moment anybody renamed the project (2026-09-05 audit,
+                   persistence-5). *@
+                @if (IsDirty)
+                {
+                    <span class="bv-toolbar__proj-dirty" title="Unsaved changes" aria-label="Unsaved changes">*</span>
+                }
         </ToolBarTemplateItem>
 
         @if (ShowProjectPersistence && ShowSaveToServer)
@@ -310,6 +321,7 @@
     <!-- Hidden file input for JSON import -->
     <input @ref="_importFileInput"
            type="file"
+           id="bv-import-json-input"
            accept=".benvideo,.json"
            class="bv-import-json-input"
            style="display:none"
@@ -488,7 +500,14 @@
     }
 
     private async Task OnImportFileSelectedAsync()
-        => await OnImportJson.InvokeAsync(_importFileInput);
+    {
+        await OnImportJson.InvokeAsync(_importFileInput);
+
+        // Cleared so the same file can be picked again. A file input only raises change when the
+        // selection differs, so choosing the same project twice — after a mistake, or to start
+        // over — did nothing at all the second time (2026-09-05 audit, persistence-19).
+        await (await DomAsync()).InvokeVoidAsync("clearFileInput", "bv-import-json-input");
+    }
 
     private async Task OnOpenProjectClicked()
         => await (await DomAsync()).InvokeVoidAsync("click", "input[type=file][accept*=benvideo]", false);
@@ -502,6 +521,12 @@
 
     /// <summary>Whether the operator tools (diagnostics chip and panel) are shown at all.</summary>
     [Parameter] public bool ShowDiagnostics { get; set; }
+
+    /// <summary>
+    /// Whether there is anything worth saving — which is not the same question as whether there is
+    /// a video clip on the timeline.
+    /// </summary>
+    [Parameter] public bool CanSave { get; set; }
 
     /// <summary>Restarts the video engine after a wedge or a crash.</summary>
     [Parameter] public EventCallback OnResetEngine { get; set; }

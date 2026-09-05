@@ -36,6 +36,7 @@ public sealed class ProjectStore : IAsyncDisposable
     private readonly SourceMounter  _mounter;
     private readonly IJSRuntime     _js;
     private readonly ErrorLogService _errorLog;
+    private readonly MotionKeyframeService _motion;
 
     // Audit #4 — typed localStorage access instead of interpolated eval strings. Imported lazily
     // and cached: ProjectStore is constructed during DI setup, long before JS interop is legal.
@@ -80,17 +81,24 @@ public sealed class ProjectStore : IAsyncDisposable
 
     public ProjectStore(ClipStore clips, ProjectService projectService,
         OPFSService opfs, FfmpegService ffmpeg, SourceMounter mounter,
-        IJSRuntime js, ErrorLogService errorLog)
+        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog)
     {
         _clips          = clips;
         _projectService = projectService;
         _opfs           = opfs;
         _ffmpeg         = ffmpeg;
         _mounter        = mounter;
+        _motion         = motion;
         _js             = js;
         _errorLog       = errorLog;
 
         _clips.OnChange += OnClipsChanged;
+
+        // Animating a layer is editing the project. Motion paths live in their own service, and
+        // nothing connected its changes to the dirty flag — so an afternoon spent on keyframes and
+        // nothing else left the project looking saved, with no prompt on the way out and nothing
+        // for autosave to write (2026-09-05 audit, persistence-11).
+        _motion.OnChanged += OnClipsChanged;
     }
 
     private void OnClipsChanged()
@@ -160,7 +168,11 @@ public sealed class ProjectStore : IAsyncDisposable
             var sizeBytes = Encoding.UTF8.GetByteCount(json);
 
             // Store to localStorage
-            await (await StorageAsync()).InvokeVoidAsync("setItem", $"{EntryPrefix}{id}", json);
+            // The result is the point: the browser reports a refused write rather than throwing,
+            // and this used to discard it and report success over the top (2026-09-05 audit,
+            // persistence-9).
+            var stored = await (await StorageAsync()).InvokeAsync<bool>("setItem", $"{EntryPrefix}{id}", json);
+            if (!stored) throw ProjectStorageException.WriteRefused($"“{projectName}”");
 
             // Update index
             var existing = Projects.FirstOrDefault(p => p.Id == id);
@@ -440,7 +452,8 @@ public sealed class ProjectStore : IAsyncDisposable
         // happens to contain quotes/backslashes (project names are user-typed) can't reshape a
         // script string, because there is no script string.
         var json = JsonSerializer.Serialize(Projects, _jsonOpts);
-        await (await StorageAsync()).InvokeVoidAsync("setItem", IndexKey, json);
+        var stored = await (await StorageAsync()).InvokeAsync<bool>("setItem", IndexKey, json);
+        if (!stored) throw ProjectStorageException.WriteRefused("the list of projects");
     }
 
     /// <summary>Item #69 fix — records (or clears) which project id <see cref="RestoreLastActiveAsync"/>
@@ -448,7 +461,9 @@ public sealed class ProjectStore : IAsyncDisposable
     private async Task PersistActiveIdAsync(Guid? id)
     {
         if (id is { } value)
-            await (await StorageAsync()).InvokeVoidAsync("setItem", ActiveKey, value.ToString());
+            // Not fatal: this only records which project to reopen, so a refusal costs the
+            // convenience and not the work.
+            await (await StorageAsync()).InvokeAsync<bool>("setItem", ActiveKey, value.ToString());
         else
             await (await StorageAsync()).InvokeVoidAsync("removeItem", ActiveKey);
     }

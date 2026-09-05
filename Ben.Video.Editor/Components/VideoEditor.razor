@@ -39,6 +39,7 @@
        check, so the button and the dialog can never disagree about whether there is anything
        to render (2026-09-05 audit, export-20). *@
     <Toolbar HasClips="@Clips.HasExportableContent"
+             CanSave="@(Clips.HasSaveableContent || Projects.IsDirty)"
              ShowMultiTrack="@EffectiveOptions.MultiTrack"
              ShowAudioTracks="@EffectiveOptions.AudioTracks"
              ShowTransitions="@EffectiveOptions.Transitions"
@@ -49,7 +50,11 @@
              RedoDescription="@Clips.RedoDescription"
              ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
              ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
-             ProjectName="@(Projects.CurrentProjectName + (Projects.IsDirty ? " *" : ""))"
+             @* The bare name. The asterisk used to be part of the value in this text box, so
+                renaming a project with unsaved changes saved it as "My Project *" — the marker
+                became part of the name, and stayed there (2026-09-05 audit, persistence-5). The
+                toolbar draws the unsaved mark from IsDirty beside the box instead. *@
+             ProjectName="@Projects.CurrentProjectName"
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"
              ShowNativeSidecar="@EffectiveOptions.NativeSidecar"
@@ -2442,6 +2447,12 @@
             await Projects.SaveAsync(Projects.CurrentProjectName);
             _notifications?.Show("Project saved.", ThemeConstants.Notification.ThemeColor.Success);
         }
+        catch (ProjectStorageException ex)
+        {
+            // Storage said no, which is a different thing from a bug and has something the person
+            // can do about it. The message already says what (2026-09-05 audit, persistence-9).
+            _notifications?.Show(ex.Message, ThemeConstants.Notification.ThemeColor.Error);
+        }
         catch (Exception ex)
         {
             _notifications?.Show($"Save failed: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
@@ -2503,15 +2514,27 @@
 
     private bool _showProjectList;
 
+    /// <summary>
+    /// Asks before throwing away unsaved work, and says no on the person's behalf if they decline.
+    /// </summary>
+    /// <remarks>
+    /// New asked; Open and Import JSON did not, and both replace the whole timeline. An afternoon's
+    /// editing could be gone by picking the wrong entry from a list (2026-09-05 audit,
+    /// persistence-6). One place asks, so a new way of replacing the project cannot forget.
+    /// </remarks>
+    private async Task<bool> ConfirmDiscardIfDirtyAsync(string what)
+    {
+        if (!Projects.IsDirty) return true;
+
+        return await JS.InvokeAsync<bool>("confirm",
+            $"“{Projects.CurrentProjectName}” has unsaved changes, and {what} will replace it. "
+            + "Continue?");
+    }
+
     private async Task NewProjectAsync()
     {
-        if (Projects.IsDirty)
-        {
-            // Simple JS confirm — a proper TelerikDialog would be Phase 39+ polish
-            var ok = await JS.InvokeAsync<bool>("confirm",
-                "Unsaved changes will be lost. Continue?");
-            if (!ok) return;
-        }
+        if (!await ConfirmDiscardIfDirtyAsync("starting a new project")) return;
+
         Clips.Reset();
         await Projects.NewProjectAsync();
         _selectedClip        = null;
@@ -2526,6 +2549,8 @@
 
     private async Task OnProjectListOpenAsync(ProjectSummary summary)
     {
+        if (!await ConfirmDiscardIfDirtyAsync($"opening “{summary.Name}”")) return;
+
         _selectedClip        = null;
         _selectedAudioClip   = null;
         _selectedTransition  = null;
@@ -2540,15 +2565,33 @@
 
     private async Task ImportProjectJsonAsync(ElementReference fileInput)
     {
-        var file = await Project.LoadAsync(fileInput);
+        if (!await ConfirmDiscardIfDirtyAsync("opening a project file")) return;
+
+        var (file, problem) = await Project.LoadWithReasonAsync(fileInput);
+
+        if (problem is not null)
+        {
+            // A file that is not a project used to be opened anyway: it deserialised into an empty
+            // project, so the timeline was replaced with a blank one and nothing said why
+            // (2026-09-05 audit, persistence-8).
+            _notifications?.Show(problem, ThemeConstants.Notification.ThemeColor.Error);
+            return;
+        }
+
         if (file is null) return;
+
         Projects.CurrentProjectName = file.ProjectName ?? Projects.CurrentProjectName;
         _selectedClip        = null;
         _selectedAudioClip   = null;
         _selectedTransition  = null;
         _selectedTextOverlay = null;
         _selectedImageClip   = null;
-        Project.RestoreAsync(file);
+
+        // Through the store, not straight into ClipStore: this is what remounts the media from
+        // browser storage. Restoring directly left every clip marked missing even when its source
+        // was sitting right there, so a same-browser round trip looked like lost media
+        // (2026-09-05 audit, persistence-7).
+        await Projects.LoadFromFileAsync(file, Projects.CurrentProjectName);
     }
 
     private void ToggleHelp() => _showHelp = !_showHelp;

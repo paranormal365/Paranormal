@@ -2084,6 +2084,18 @@ public sealed class ClipStore
     public IEnumerable<ClipArtClip> AllClipArtClips =>
         VideoTracks.SelectMany(t => t.ClipArtClips);
 
+    /// <summary>
+    /// Whether there is anything worth saving.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately wider than <see cref="HasExportableContent"/>. A project can be worth keeping
+    /// without a video clip in it — a set of markers, a title, an audio track, media sitting in the
+    /// bin — and gating Save on video content meant Save was disabled over work that was plainly
+    /// there (2026-09-05 audit, persistence-4).
+    /// </remarks>
+    public bool HasSaveableContent =>
+        _tracks.Any(t => t.Items.Count > 0) || _markers.Count > 0 || _mediaBin.Count > 0;
+
     /// <summary>Whether there is anything for an export to render.</summary>
     /// <remarks>
     /// The toolbar asked one question and the export dialog asked another: the dialog counted only
