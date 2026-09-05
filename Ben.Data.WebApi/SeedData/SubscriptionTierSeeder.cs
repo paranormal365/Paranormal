@@ -20,13 +20,19 @@ namespace Ben.Data.WebApi.SeedData;
 /// a SuperAdmin. A seeder that reasserted them on every startup would silently undo a real price
 /// change on the next restart — so it fills an empty table and never touches a populated one.</para>
 ///
-/// <para>The bands are item 85's worked example — 1–3 free, 4–10 at $15 — plus an unbounded top
-/// band, which the resolver requires so a group cannot outgrow the list.</para>
+/// <para>The bands started as item 85's worked example — 1–3 free, 4–10 at $15. The free band is
+/// gone (Ben, 2026-09-05: "an individual can be free... a group cannot"): a band priced at nothing
+/// is a subscription that costs nothing, and holding one reads as paid to every gate that asks. A
+/// group is free by having no subscription at all, so the ladder now starts paid at one member and
+/// ends with an unbounded band, which the resolver requires so a group cannot outgrow the list.</para>
 ///
-/// <para>Each paid band gets a monthly and a yearly price, the yearly one set to ten months —
-/// "two months free", which is the discount people recognise. The free band gets a monthly row
-/// only: a yearly price of zero is a cadence choice with no consequence, and offering it is a
-/// question asked for no reason.</para>
+/// <para>Each band gets a monthly and a yearly price, the yearly one set to ten months — "two
+/// months free", which is the discount people recognise.</para>
+///
+/// <para>These are the numbers a fresh database starts with, not the ones ishaunted.com charges:
+/// the seeder fills an empty table and never touches a populated one, so a live ladder that still
+/// carries a free band has to be corrected on the price-bands screen. The editor says so — see
+/// <c>SubscriptionTierResolver.WhyGroupsCanStillBeFree</c>.</para>
 /// </remarks>
 internal static class SubscriptionTierSeeder
 {
@@ -35,9 +41,8 @@ internal static class SubscriptionTierSeeder
 
     private static readonly (string Name, int Min, int? Max, decimal Monthly, int Sort)[] Bands =
     [
-        ("Free",         1,    3,   0m, 1),
-        ("Small group",  4,   10,  15m, 2),
-        ("Large group", 11, null,  40m, 3),
+        ("Small group",  1,   10,  15m, 1),
+        ("Large group", 11, null,  40m, 2),
     ];
 
     internal static async Task SeedAsync(IServiceProvider services, IConfiguration config)
@@ -147,6 +152,11 @@ internal static class SubscriptionTierSeeder
         // Written only when the free tier has NO capability rows of its own. A SuperAdmin who has
         // deliberately configured that tier owns it from then on; a seeder that overwrote their
         // choice on every restart would be worse than one that never ran.
+        //
+        // A FRESH database no longer seeds a free band at all (Ben, 2026-09-05), so this finds
+        // nothing and does nothing. It stays for the databases that already have one: those tiers
+        // are still live, still resolvable, and still ought to exclude private client work until
+        // somebody prices or removes them.
         {
             var freeTier = await db.SubscriptionTiers.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Name == "Free");
