@@ -202,6 +202,10 @@ builder.Services.AddHttpClient<Ben.Data.WebApi.Controllers.IAppleIdentityTokenVa
                                Ben.Data.WebApi.Controllers.AppleIdentityTokenValidator>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
+// Cleans message bodies written before sending sanitised them (2026-09-04). Idempotent: after the
+// first pass it finds nothing and writes nothing, so it stays registered rather than being a step
+// somebody has to remember on one deployment and never again.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBackfillService>();
 
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
