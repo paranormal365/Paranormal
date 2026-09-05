@@ -759,7 +759,7 @@
 
         if (_editingPage is null)
         {
-            var result = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
+            var (result, createError) = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
                 _pageForm.PageTitle.Trim(),
                 _pageForm.UrlName.Trim().ToLowerInvariant(),
                 _pageForm.PageHtml,
@@ -768,7 +768,9 @@
                 _pageForm.SortOrder,
                 _pageForm.FromTemplateId));
 
-            if (result is null) _dialogError = "Failed to create page. The URL slug may already be in use.";
+            // The server names the reserved word or the clashing address; the guess only stands in
+            // when no sentence came back.
+            if (result is null) _dialogError = createError ?? "Failed to create page. The URL slug may already be in use.";
             else
             {
                 _showPageDialog = false;
@@ -1009,11 +1011,12 @@
         _logoError = null;
         try
         {
-            var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
+            var (result, logoError) = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
                 _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
             if (result is null)
             {
-                _logoError = "Failed to add logo. The file may not exist, or you may not have permission.";
+                _logoError = logoError
+                    ?? "Failed to add logo. The file may not exist, or you may not have permission.";
             }
             else
             {

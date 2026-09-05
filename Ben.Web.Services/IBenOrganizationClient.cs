@@ -32,10 +32,24 @@ public interface IBenOrganizationClient
     Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
 
     /// <summary>Creates a new organization (SuperAdmin only).</summary>
-    Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
+    /// <summary>Creates a group, and hands back the server's refusal when it says no.</summary>
+    /// <remarks>Same reasoning as <see cref="UpdateOrganizationAsync"/>: the address rules refuse
+    /// with a sentence naming what is wrong, and "may already be in use" is a worse version of
+    /// it.</remarks>
+    Task<(OrganizationAdminRecord? Result, string? Error)> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
 
     /// <summary>Updates an organization's Name and UrlName. Requires Update access or SuperAdmin.</summary>
-    Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Saves a group's settings, and hands back the server's own refusal when it says no.
+    /// </summary>
+    /// <remarks>
+    /// The refusals this endpoint gives are sentences somebody has to act on — a name already
+    /// taken, or a plan that does not include members — and a page that guessed at them told an
+    /// owner they might lack permission on their own group while the server was explaining the
+    /// price of a plan. Same shape as <c>UpdateOrgCaseAsync</c>: the reason travels with the
+    /// result, and only prose is passed through.
+    /// </remarks>
+    Task<(OrganizationAdminRecord? Result, string? Error)> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
 
     /// <summary>Deletes an organization. Requires Delete access or SuperAdmin.</summary>
     Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default);
@@ -62,7 +76,8 @@ public interface IBenOrganizationClient
     // ── Organization Logos ────────────────────────────────────────────────────
 
     Task<LoadResult<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
-    Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
+    /// <summary>Adds a logo, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationLogoRecord? Result, string? Error)> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
@@ -91,8 +106,10 @@ public interface IBenOrganizationClient
 
     Task<LoadResult<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
     Task<LoadResult<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
-    Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
-    Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    /// <summary>Adds an address, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationAddressRecord? Result, string? Error)> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    /// <summary>Saves an address, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationAddressRecord? Result, string? Error)> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(string streetAddress1, string? streetAddress2, string city, string state, string zipCode, string country, CancellationToken token = default);
     Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default);
