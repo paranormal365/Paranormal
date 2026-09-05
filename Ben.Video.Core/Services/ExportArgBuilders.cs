@@ -1133,65 +1133,75 @@ internal static class ExportArgBuilders
         return [.. args];
     }
 
-    // ── Callout filter fragment ───────────────────────────────────────────────
-
     /// <summary>
-    /// Builds an ffmpeg video filter fragment for a <see cref="CalloutClip"/>.
-    /// The fragment can be inserted into a <c>-vf</c> chain alongside other video filters.
-    ///
-    /// <para>Coordinates are in canvas fractions (0–1) and converted to pixels using
-    /// ffmpeg's <c>W</c> and <c>H</c> variables so the expression is resolution-independent.</para>
-    ///
-    /// <para><b>Supported shapes:</b> Rectangle and Ellipse via <c>drawbox</c>.
-    /// Arrow, Line, Star, and Custom return an empty string because they are routed
-    /// through <c>SvgFrameRendererService</c> in <c>ExportService.ApplyCalloutsAsync</c>.</para>
+    /// Composites one clip from a track above the primary onto the picture built so far, at the
+    /// place on the timeline where it actually sits.
     /// </summary>
-    internal static string BuildCalloutFilter(CalloutClip c, ExportSettings s)
+    /// <param name="baseFile">The picture assembled so far.</param>
+    /// <param name="layerFile">The rendered segment for the clip on the upper track.</param>
+    /// <param name="start">Where the clip begins on the timeline, in seconds.</param>
+    /// <param name="duration">How long the clip lasts, in seconds.</param>
+    /// <param name="layerHasAudio">
+    /// Whether the layer segment carries sound of its own to fold into the mix.
+    /// </param>
+    /// <remarks>
+    /// <para>Secondary video tracks reached the output only as the far side of a cross-track
+    /// transition, so a clip placed on track 2 was simply absent from the render while the timeline
+    /// showed it plainly — multi-track was a feature of the editor and not of the product
+    /// (2026-09-05 audit, export-1).</para>
+    ///
+    /// <para>The composite that existed for this fed every layer in whole and unpositioned, which
+    /// would have put a clip from ten seconds in at the very start and then, because overlay repeats
+    /// its last frame by default, left it frozen over everything that followed. Each clip is
+    /// therefore shifted to its own timeline position and shown only across its own span; outside
+    /// it the picture underneath is what plays.</para>
+    ///
+    /// <para>Until clips carry a position and a size of their own (the plan's later phase), a clip
+    /// on an upper track covers the frame for as long as it runs, which is what the preview shows
+    /// too.</para>
+    /// </remarks>
+    internal static string[] BuildLayerCompositeArgs(
+        string baseFile, string layerFile, string output,
+        double start, double duration, ExportSettings s, bool layerHasAudio)
     {
-        // SVG-rendered shapes are handled separately — return empty so they're excluded from the vf chain
-        if (c.Shape is ShapeType.Arrow or ShapeType.Line or ShapeType.Star or ShapeType.Custom)
-            return string.Empty;
+        var ic    = System.Globalization.CultureInfo.InvariantCulture;
+        var from  = start.ToString("F3", ic);
+        var to    = (start + duration).ToString("F3", ic);
+        var delay = (int)Math.Round(Math.Max(0, start) * 1000.0);
 
-        var ic   = System.Globalization.CultureInfo.InvariantCulture;
-        var fill = ColorHelper.ToFfmpegColor(c.FillColor, includeAlpha: true);
-        var st   = c.StrokeWidth > 0
-            ? (int)Math.Round(c.StrokeWidth)
-            : 0;
+        var sb = new System.Text.StringBuilder();
 
-        // Canvas-fraction → pixel expression. drawbox's expression language only defines
-        // iw/ih (a.k.a. in_w/in_h) for the input frame size — the capital W/H used by the
-        // overlay filter are NOT valid here and fail the whole command with exit code 1.
-        // (This filter never actually ran before phase 75: the pass that used it dropped
-        // its video stream via a bare "-map 0:a?", so ffmpeg never evaluated the chain.)
-        var x  = $"(iw*{c.X.ToString("F4", ic)})";
-        var y  = $"(ih*{c.Y.ToString("F4", ic)})";
-        var w  = $"(iw*{c.Width.ToString("F4", ic)})";
-        var h  = $"(ih*{c.Height.ToString("F4", ic)})";
+        // setpts moves the layer to its own start; enable keeps it off screen everywhere else; and
+        // eof_action=pass hands the picture back to the layer underneath once the clip ends,
+        // rather than repeating its final frame to the end of the export.
+        sb.Append($"[1:v]setpts=PTS-STARTPTS+{from}/TB[ov];");
+        sb.Append($"[0:v][ov]overlay=enable='between(t,{from},{to})':eof_action=pass[vout]");
 
-        // Optional shadow. Intentionally a flat, unblurred box — `drawbox` has no blur
-        // capability, so `ShadowBlur`'s magnitude is only used as a presence gate here.
-        // The SVG-render path (animated callouts, and Arrow/Line/Star always) applies a
-        // real `feDropShadow` instead. Do not "fix" this into forcing the SVG path for
-        // static Rectangle/Ellipse — that path is materially more expensive (per-clip PNG
-        // rasterization + an extra ffmpeg overlay pass) and would regress export
-        // performance for the common case for a blur most users won't notice at the
-        // default 4px radius.
-        var fragments = new List<string>();
-
-        if (c.ShadowBlur > 0 || c.ShadowOffsetX != 0 || c.ShadowOffsetY != 0)
+        var withAudio = s.IncludeAudio && layerHasAudio;
+        if (withAudio)
         {
-            var shadowCol = ColorHelper.ToFfmpegColor(c.ShadowColor, includeAlpha: true);
-            var sx = $"(iw*{c.X.ToString("F4", ic)}+{c.ShadowOffsetX.ToString("F1", ic)})";
-            var sy = $"(ih*{c.Y.ToString("F4", ic)}+{c.ShadowOffsetY.ToString("F1", ic)})";
-            fragments.Add($"drawbox=x={sx}:y={sy}:w={w}:h={h}:color={shadowCol}:t=fill");
+            sb.Append(';');
+            if (delay > 0) sb.Append($"[1:a]adelay={delay}:all=1[oa];");
+            else           sb.Append("[1:a]anull[oa];");
+
+            // duration=first: the layer is a piece of a longer timeline, so the mix ends when the
+            // picture underneath does.
+            sb.Append("[0:a][oa]amix=inputs=2:duration=first:normalize=0:dropout_transition=0[amixed];");
+            sb.Append("[amixed]alimiter=limit=0.95[aout]");
         }
 
-        // Main shape (Rectangle / Ellipse — both render as drawbox; Ellipse will
-        // be improved when Blazor previews the SVG renderer in a later phase)
-        var thickness = st > 0 ? st.ToString(ic) : "fill";
-        fragments.Add($"drawbox=x={x}:y={y}:w={w}:h={h}:color={fill}:t={thickness}");
+        var args = new List<string> { "-i", baseFile, "-i", layerFile };
+        args.AddRange(["-filter_complex", sb.ToString(), "-map", "[vout]"]);
 
-        return string.Join(",", fragments);
+        // Without an explicit map the picture is the only thing selected, which is how a
+        // transition pass used to strip the sound out of a whole export.
+        if (withAudio)           args.AddRange(["-map", "[aout]"]);
+        else if (s.IncludeAudio) args.AddRange(["-map", "0:a?"]);
+
+        args.AddRange(AudioOutputArgs(s));
+        args.AddRange(QualityArgs(s));
+        args.AddRange(["-pix_fmt", s.PixelFormat, output]);
+        return [.. args];
     }
 
     /// <summary>
