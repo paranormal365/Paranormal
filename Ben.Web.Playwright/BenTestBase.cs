@@ -185,9 +185,30 @@ public abstract class BenTestBase : PageTest
     /// public repository — so the defaults are gone and a run without them stops with a message
     /// naming the variable rather than silently testing as somebody real.
     /// <para>Set them from your own shell, or source them from the API's
-    /// <c>appsettings.Development.json</c>, which is gitignored:
-    /// <c>BEN_SUPERADMIN_PASSWORD</c>, <c>BEN_USER_PASSWORD</c>, <c>BEN_MEMBER_PASSWORD</c>,
-    /// <c>BEN_VIEWER_PASSWORD</c>, <c>BEN_CLIENT_PASSWORD</c>.</para>
+    /// <c>appsettings.Development.json</c>, which is gitignored. <b>They do not all come from the
+    /// same key</b>, and using one for all five is the mistake that costs an hour: four of them
+    /// fail, the login helper's retries lock the shared seats, and the run reports dozens of
+    /// failures that look like product bugs.</para>
+    ///
+    /// <list type="table">
+    ///   <listheader><term>Variable</term><description>Where its value lives</description></listheader>
+    ///   <item><term>BEN_SUPERADMIN_PASSWORD</term>
+    ///         <description><c>SeedData:SuperAdmin:Password</c></description></item>
+    ///   <item><term>BEN_USER_PASSWORD</term>
+    ///         <description><c>SeedData:SeedOrganization:Users</c> — the entry for
+    ///         sarah.mitchell@benco.dev</description></item>
+    ///   <item><term>BEN_MEMBER_PASSWORD</term>
+    ///         <description>same list — james.thornton@benco.dev</description></item>
+    ///   <item><term>BEN_CLIENT_PASSWORD</term>
+    ///         <description>same list — daniel.park@benco.dev</description></item>
+    ///   <item><term>BEN_VIEWER_PASSWORD</term>
+    ///         <description><c>SeedData:DevData:Password</c> — victor.reyes@benco.dev, and every
+    ///         other roster account, which the roster seeder creates with that one value</description></item>
+    /// </list>
+    ///
+    /// <para>Check each seat before a run rather than after: a single
+    /// <c>POST /login</c> per account answers 200 or 401 in a second, and 401 on one of them is
+    /// worth more than the whole run's output.</para>
     /// </remarks>
     /// <summary>
     /// A strong password for an account this run is about to create.
@@ -318,6 +339,23 @@ public abstract class BenTestBase : PageTest
                               .CountAsync() > 0)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(20));
+                }
+
+                // ── Two answers that retrying cannot fix, and makes worse ────────
+                //
+                // Identity locks an account after five failed attempts. This loop makes five, so
+                // one wrong password locks the account it was aimed at — and the seats here are
+                // SHARED, so the next forty tests that sign in as that person fail too. A run on
+                // 2026-09-04 turned four wrong passwords into sixty-two failures, none of which
+                // were about the product.
+                //
+                // A wrong password will not become right on the fourth try, and a locked account
+                // will not open before the loop ends. Stop, and report what the page said.
+                if (await Page.GetByText("Invalid email or password", new() { Exact = false })
+                              .CountAsync() > 0
+                 || await Page.GetByText("locked", new() { Exact = false }).CountAsync() > 0)
+                {
+                    break;
                 }
 
                 // Dropped click, bad credentials, or a navigation still in flight from a sign-out
