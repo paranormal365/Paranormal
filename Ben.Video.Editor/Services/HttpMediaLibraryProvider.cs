@@ -102,8 +102,8 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibr
         var url     = $"{baseUrl}/api/upload-files/{fileId}/download";
 
         // Phase 150 — stream with progress reporting (best-effort: only when the response reports
-        // Content-Length) instead of ReadAsByteArrayAsync, matching DemoMediaLibraryProvider so
-        // real hosts get the same per-file progress UI on the Server tab.
+        // Content-Length) instead of ReadAsByteArrayAsync, so the Server tab can show per-file
+        // progress rather than an unmoving spinner.
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
         var totalBytes = response.Content.Headers.ContentLength;

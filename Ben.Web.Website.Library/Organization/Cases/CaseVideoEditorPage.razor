@@ -22,6 +22,16 @@
         return;
     }
 
+    @if (_needsSignIn)
+    {
+        <div class="container py-4">
+            <p class="text-muted">You must be signed in to edit this case's video.</p>
+            <a class="btn btn-primary"
+               href="/login?returnUrl=@Uri.EscapeDataString($"/organizations/{OrgId}/cases/{CaseId}/video-editor")">Sign in</a>
+        </div>
+        return;
+    }
+
     @if (_error is not null)
     {
         <div class="container py-3"><div class="alert alert-danger">@_error</div></div>
@@ -96,8 +106,14 @@
                         <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
                         <GridColumn Title="By" Width="130px">
                             <Template>
-                                @* GetMyVideoProjectsAsync only ever returns the viewer's own projects. *@
-                                <span class="text-muted small">You</span>
+                                @{ var owner = (VideoProjectRecord)context; }
+                                @* A case's projects are everybody's to see now, so this column has
+                                   real work to do (2026-09-05 audit, persistence-14 and site-7). *@
+                                <span class="text-muted small">
+                                    @(owner.CreatedByAppUserId == UserState.UserId
+                                        ? "You"
+                                        : owner.CreatedByName ?? "Member")
+                                </span>
                             </Template>
                         </GridColumn>
                         <GridColumn Title="Saved" Width="110px">
@@ -111,8 +127,14 @@
                                 @{ var row2 = (VideoProjectRecord)context; }
                                 <span class="d-flex gap-1 text-nowrap">
                                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row2))">Open</button>
-                                <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row2))" disabled="@(!(!_publishing))" title="Publish rendered video to case"><BenIcon Name="upload" /></button>
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(row2))"><BenIcon Name="trash-2" /></button>
+                                @* Reading is shared, writing is not: the server refuses a publish
+                                   or a delete on somebody else's project, and a button that can
+                                   only be refused is worse than no button. *@
+                                @if (row2.CreatedByAppUserId == UserState.UserId)
+                                {
+                                    <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row2))" disabled="@(!(!_publishing))" title="Publish rendered video to case"><BenIcon Name="upload" /></button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(row2))"><BenIcon Name="trash-2" /></button>
+                                }
                                 </span>
                             </Template>
                         </GridColumn>
@@ -146,6 +168,7 @@
     private CaseRecord? _case;
     private bool _loaded;
     private string? _error;
+    private bool     _needsSignIn;
     private List<VideoProjectRecord> _caseProjects = [];
     private LoadResult<VideoProjectRecord> _caseProjectsResult;
     private bool _loadingList;
@@ -196,7 +219,9 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { _error = "You must be signed in."; _loaded = true; return; }
+        // Not _error. Being signed out is not a fault, and a red alert saying so with nothing to
+        // click is a dead end (2026-09-05 audit, site-13).
+        if (!UserState.IsAuthenticated) { _needsSignIn = true; _loaded = true; return; }
 
         try
         {

@@ -23,7 +23,9 @@ time.
 
 - **My Videos** — your own workspace, for anything not tied to a case.
 - **A case's Video tab** — the same editor, opened against that case, for work your group will
-  attach to it.
+  attach to it. Projects saved there belong to the case: everybody who can open the case sees the
+  whole list and can open any of them. Only the person who saved a project can overwrite, publish
+  or delete it, so the list says who made each one.
 
 There is also a standalone editor that runs on its own, at
 [ishaunted.com/editors/video](https://ishaunted.com/editors/video/). It is the same editor with the
@@ -89,6 +91,10 @@ to see all of it.
 
 The scope only ever narrows what you could already see. It is not a way of reaching somebody
 else's footage, and choosing a case you have no part in shows nothing rather than refusing.
+
+The list is fetched once. If you upload something elsewhere while the editor is open, press the
+**refresh** button beside the scope lists to fetch it again. A render you publish from here
+refreshes the list on its own.
 
 Bringing a file over is deliberately **two clicks**:
 
@@ -256,7 +262,9 @@ You choose where the result goes:
 
 - **To your machine** — the file is saved locally and never leaves it.
 - **To the server** — the finished video is uploaded and becomes an ordinary file in your media
-  library, ready to attach to a case or publish.
+  library, ready to attach to a case or publish. Publishing a case project's render also puts it on
+  that case's Files tab, so the rest of the group can find it without going through the editor.
+  Publishing again replaces it rather than leaving both.
 
 Closing that question without answering it asks whether you meant to throw the render away. Nothing
 is deleted unless you say so.

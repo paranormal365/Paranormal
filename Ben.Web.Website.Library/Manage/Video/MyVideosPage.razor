@@ -24,7 +24,18 @@
 
     @if (!UserState.IsAuthenticated)
     {
-        <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
+        @* A sentence with nothing to click was the whole page: correct, and a dead end
+           (2026-09-05 audit, site-13). *@
+        <div class="container py-4">
+            <p class="text-muted">You must be signed in to use the video editor.</p>
+            <a class="btn btn-primary" href="/login?returnUrl=@Uri.EscapeDataString("/my-videos")">Sign in</a>
+            <p class="text-muted small mt-3 mb-0">
+                There is also a
+                <a href="/editors/video/" target="_blank" rel="noopener">standalone editor</a>
+                that runs entirely on your own computer. It edits and renders without signing in;
+                signing in is what connects it to your uploaded media.
+            </p>
+        </div>
         return;
     }
 

@@ -877,6 +877,24 @@
             }
         }
 
+        // Reload. The list was fetched once and never again, so a file uploaded from another tab
+        // — or the render this editor had just published — did not appear without reloading the
+        // whole page. A failed load had the same problem in reverse: the retry gate is "no files
+        // yet", which an error also satisfies, so there was nothing to press (2026-09-05 audit,
+        // media-10).
+        __builder.OpenComponent<TelerikButton>(seq++);
+        __builder.AddAttribute(seq++, "OnClick",
+            Microsoft.AspNetCore.Components.EventCallback.Factory
+                .Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(
+                    this, _ => RefreshLibraryAsync()));
+        __builder.AddAttribute(seq++, "Title",      "Reload this list from the server");
+        __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.ArrowRotateCw);
+        __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+        __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+        __builder.AddAttribute(seq++, "Enabled",    !_libraryLoading);
+        __builder.AddAttribute(seq++, "Class",      "bv-browser__scope-refresh");
+        __builder.CloseComponent();
+
         __builder.CloseElement(); // scope bar
     };
 
@@ -1253,6 +1271,15 @@
         await LoadLibraryAsync();
     }
 
+    /// <summary>
+    /// Reloads the server list, whatever state it is in.
+    /// </summary>
+    /// <remarks>
+    /// Public so the editor can call it after publishing a render, which is the one moment the
+    /// list is known to be out of date because this editor is what changed it.
+    /// </remarks>
+    public Task RefreshLibraryAsync() => LoadLibraryAsync();
+
     private async Task LoadLibraryAsync()
     {
         var generation = ++_libraryLoadGeneration;
@@ -1529,8 +1556,8 @@
                 // JS-interop marshaling for ffmpeg's own worker traffic, so heavy concurrent
                 // ffmpeg activity (e.g. the Server tab's own automatic eager thumbnail prefetch)
                 // can measurably delay an otherwise-fast download's completion callback —
-                // live-reproduced at 31.2s for a normally-68ms request. See
-                // DemoMediaLibraryProvider's own HttpClient.Timeout comment for the full story.
+                // live-reproduced at 31.2s for a normally-68ms request. The provider's own
+                // HttpClient.Timeout is generous for the same reason.
                 throw new TimeoutException($"Downloading {file.FileName} timed out.", ocex);
             }
 

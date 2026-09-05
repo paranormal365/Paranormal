@@ -2456,6 +2456,15 @@
         // and discard the user's only copy — see OnPublishExport's remarks.
         await Exporter.TakeRetainedExportAsync(job, exported => OnPublishExport.InvokeAsync(exported));
         FinishExportDestination();
+
+        // The one moment the Server tab is known to be stale, because this editor is what made it
+        // so. Best-effort: a list that did not reload is no worse than before (2026-09-05 audit,
+        // media-10).
+        if (_browser is not null)
+        {
+            try { await _browser.RefreshLibraryAsync(); }
+            catch (Exception ex) { ErrorLog.Log("VideoEditor.PublishExportAsync.Refresh", ex); }
+        }
     }
 
     private async Task PostExportToFeedAsync()
