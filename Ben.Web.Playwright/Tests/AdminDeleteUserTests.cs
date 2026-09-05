@@ -22,6 +22,34 @@ namespace Ben.Web.Playwright.Tests;
 [Category("DeleteUser")]
 public class AdminDeleteUserTests : BenTestBase
 {
+    /// <summary>
+    /// Your own row offers no live delete, and says why.
+    /// </summary>
+    /// <remarks>
+    /// The grid used to put an enabled trash button on every row, including the signed-in
+    /// SuperAdmin's, where clicking it only printed "Delete your own account from your profile".
+    /// That is the dead-end click items 149 and 150 ruled out — and it is what broke the three
+    /// tests below, because on a fresh database the SuperAdmin sorts first and they take the first
+    /// row. The control is now disabled there, with the reason as its tooltip, which is also why
+    /// those tests find a real one again: the tooltip they select by no longer matches your own.
+    /// </remarks>
+    [Test]
+    public async Task Your_own_row_offers_no_delete_and_says_why()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/users");
+        await WaitUntilLoadedAsync();
+
+        // Present, so the row keeps its shape rather than losing a control without explanation.
+        var own = Page.Locator("[title='Delete your own account from your profile']");
+        await Expect(own.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(own.First).ToBeDisabledAsync();
+
+        // Exactly one row is yours, and no live delete button carries your own account's row.
+        Assert.That(await own.CountAsync(), Is.EqualTo(1),
+            "Only the signed-in account's row should carry the disabled delete.");
+    }
+
     [Test]
     public async Task The_users_grid_has_a_delete_button_that_opens_the_delete_screen()
     {
