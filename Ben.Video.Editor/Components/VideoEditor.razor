@@ -361,7 +361,10 @@
                 }
                 else
                 {
-                    <VideoPreview @ref="_fullQualityPreview" OwnerLabel="FullQualityPreview" ShowWorkingWindowControls="false" />
+                    <VideoPreview @ref="_fullQualityPreview"
+                                  OwnerLabel="FullQualityPreview"
+                                  ShowWorkingWindowControls="false"
+                                  Standalone="true" />
                 }
             </WindowContent>
         </TelerikWindow>
@@ -632,6 +635,7 @@
     {
         Ffmpeg.OnStateChanged   += OnFfmpegStateChanged;
         Ffmpeg.OnWorkerCrashed  += OnFfmpegWorkerCrashed;
+        PreviewQuality.OnChanged += OnPreviewQualityChanged;
         Clips.OnChange          += OnClipsChanged;
         // A layer that moves takes its animation with it, and a layer that is removed does not
         // leave one behind (2026-09-05 audit, motion-3 and motion-18). The store has no idea the
@@ -1808,7 +1812,14 @@
                               .Where(c => c.MemFsName is not null)
                               .ToList();
 
-        if (videoClips.Count == 0 && imageClips.Count == 0) return;
+        // Nothing left to show. This used to return and leave the last render playing, so
+        // deleting every clip gave you an empty timeline above a preview still happily playing the
+        // footage you had just removed (2026-09-05 audit, preview-19).
+        if (videoClips.Count == 0 && imageClips.Count == 0)
+        {
+            await ClearWorkingWindowAsync();
+            return;
+        }
 
         // Item #59-#65 flakiness investigation, phase 144 (symptom S4) — this used to revoke the
         // OLD url right here, before the re-encode below even starts. That re-encode (trim
@@ -2001,12 +2012,34 @@
                 else
                     await Ffmpeg.ConcatClipsAsync(orderedNames, outName, scaleTo);
 
-                _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(outName);
+                // The soundtrack, in the window you actually edit in. Audio tracks were mixed
+                // only by the full-quality Preview, which re-renders the whole timeline — so
+                // while editing, a separate audio track was silent, and the only way to hear
+                // whether the music sat right against the picture was to wait for a full render
+                // (2026-09-05 audit, audio-6).
+                var mixed = await MixPreviewAudioAsync(outName, previewSettings);
+
+                _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(mixed);
+
+                if (mixed != outName)
+                {
+                    try { await Ffmpeg.DeleteFileAsync(mixed); } catch { }
+                }
             }
             BlobLifecycle.Created(_timelinePreviewUrl, "VideoEditor.timelinePreview");
             // Gaps included, and shorter by each blended junction's overlap — the same arithmetic
             // Export uses, so the scrubber's range is the length of the file actually loaded.
-            var totalDuration = ExportSegmentPlanner.TotalDuration(plan, junctions);
+            //
+            // A music track that runs past the last clip counts too: the mix keeps the longer of
+            // the two, so a scrubber measured on the picture alone would stop short of the file it
+            // is scrubbing (2026-09-05 audit, preview-18).
+            var audioEnd = Clips.AudibleAudioClips
+                .Select(a => a.TimelinePosition + a.EffectiveLength)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var totalDuration = Math.Max(
+                ExportSegmentPlanner.TotalDuration(plan, junctions), audioEnd);
 
             _timelinePreviewDuration = totalDuration;
             // VideoPreview.LoadUrlAsync does its own swap-then-revoke of whatever _preview is
@@ -2014,7 +2047,11 @@
             // selection happened in between). Capture that before the call so the check below
             // doesn't double-revoke the same string a second time.
             var previewWasShowing = _preview.CurrentUrl;
-            await _preview.LoadUrlAsync(_timelinePreviewUrl, totalDuration, PlaybackMode.Timeline);
+            // An auto-refresh keeps the playhead and carries on playing. Every rebuild used to
+            // start over, so editing anything past the first few seconds meant scrubbing back to
+            // where you were, every time (2026-09-05 audit, preview-2).
+            await _preview.LoadUrlAsync(
+                _timelinePreviewUrl, totalDuration, PlaybackMode.Timeline, preserveTime: true);
             PreviewFreshness.MarkFresh();
             RenderStatus.MarkAllCurrentRendered();
 
@@ -2069,6 +2106,82 @@
             try { await Ffmpeg.DeleteFileAsync(outName); } catch { }
             await BackgroundRender.EndDeletionHoldAsync();
         }
+    }
+
+    /// <summary>
+    /// Mixes the project's audio tracks into the assembled preview.
+    /// </summary>
+    /// <returns>
+    /// The mixed file, or <paramref name="assembled"/> unchanged when there is nothing to mix or
+    /// the mix could not be made.
+    /// </returns>
+    /// <remarks>
+    /// <para>Uses <see cref="AudioMixPlanner"/>, the same trim, position and filter arithmetic the
+    /// export uses, so the preview and the file agree about what the soundtrack sounds like.</para>
+    ///
+    /// <para>A failure here returns the silent assembly rather than throwing: a preview with no
+    /// music is worth having, and a preview that vanished because the music could not be mixed is
+    /// not.</para>
+    /// </remarks>
+    private async Task<string> MixPreviewAudioAsync(string assembled, ExportSettings previewSettings)
+    {
+        var plan = AudioMixPlanner.Plan(Clips.AudibleAudioClips);
+        if (plan.Count == 0) return assembled;
+
+        var segments = new List<string>(plan.Count);
+
+        try
+        {
+            for (var i = 0; i < plan.Count; i++)
+            {
+                var (source, start, end, filter) = plan[i];
+
+                var segName = $"preview_audio_{i:D3}_{Guid.NewGuid():N}.wav";
+                await Ffmpeg.ExecAsync(ExportArgBuilders.BuildAudioClipTrimArgs(
+                    source, segName, start, end, filter, previewSettings, lossless: true));
+                MemFs.Track(segName, 0, "preview-segment");
+                segments.Add(segName);
+            }
+
+            var mixedName = $"preview_mixed_{Guid.NewGuid():N}.mp4";
+            await Ffmpeg.ExecAsync(ExportArgBuilders.BuildAmixArgs(
+                assembled, segments, mixedName, previewSettings));
+            MemFs.Track(mixedName, 0, "preview-segment");
+
+            return mixedName;
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("VideoEditor.MixPreviewAudioAsync", ex);
+            return assembled;
+        }
+        finally
+        {
+            foreach (var segment in segments)
+            {
+                try { await Ffmpeg.DeleteFileAsync(segment); } catch { }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Empties the Working Window when the timeline has nothing left on it.
+    /// </summary>
+    private async Task ClearWorkingWindowAsync()
+    {
+        var stale = _timelinePreviewUrl;
+        _timelinePreviewUrl      = null;
+        _timelinePreviewDuration = 0;
+
+        if (_preview is not null) await _preview.ClearAsync();
+
+        if (stale is not null)
+        {
+            BlobLifecycle.Revoking(stale, "VideoEditor.timelinePreview");
+            try { await PreviewRevoker.RevokeAsync(stale); } catch { }
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -2533,6 +2646,22 @@
         ScheduleAutoPreview();
     }
 
+    /// <summary>
+    /// Changing the preview's render quality rebuilds it.
+    /// </summary>
+    /// <remarks>
+    /// The dropdown set a number that only the next rebuild would read, and a rebuild only happens
+    /// when the timeline changes — so choosing a different quality appeared to do nothing until
+    /// some unrelated edit happened to trigger one (2026-09-05 audit, preview-8).
+    /// </remarks>
+    private void OnPreviewQualityChanged()
+    {
+        SegmentCache.Clear();
+        PreviewFreshness.MarkStale();
+        ScheduleAutoPreview();
+        InvokeAsync(StateHasChanged);
+    }
+
     private void OnProjectStoreChanged()   => InvokeAsync(StateHasChanged);
     private void OnQueueChanged()          => InvokeAsync(StateHasChanged);
 
@@ -2565,22 +2694,28 @@
         {
             await Task.Delay(AutoPreviewDebounceMs, token);
 
-            // Wait out a busy main instance instead of letting RefreshWorkingWindowAsync's Ready guard
-            // silently drop this refresh — an auto-preview (or a rough→fine sharpen refresh) that
-            // fires while the previous assembly is still running used to just vanish, leaving the
-            // Working Window stale (or stuck at rough quality) until the next unrelated edit.
+            // Wait out a busy main instance instead of letting RefreshWorkingWindowAsync's Ready
+            // guard silently drop this refresh — an auto-preview (or a rough→fine sharpen refresh)
+            // that fires while the previous assembly is still running used to just vanish, leaving
+            // the Working Window stale (or stuck at rough quality) until the next unrelated edit.
             //
-            // Phase 143: this used to be a genuinely unbounded loop — if the worker ended up in
-            // Error (or wedged) with no further edit to supersede/cancel this token, it polled
-            // every 250ms forever for nothing. Now it gives up after a bounded wait, and reacts to
-            // Error immediately rather than waiting the whole budget only to still fail.
+            // AutoPreviewGate owns the actual decision (pure, unit-tested). The condition it adds
+            // is the export: a rebuild used to take its turn on the same engine mid-render,
+            // interleaving its encodes with the export's and making a render somebody is waiting
+            // on take longer, for a preview they are not watching (2026-09-05 audit, preview-20).
             var waitedMs = 0;
-            const int maxWaitMs = 60_000;
-            while (Ffmpeg.State != FfmpegState.Ready)
+            while (true)
             {
-                if (Ffmpeg.State == FfmpegState.Error || waitedMs >= maxWaitMs) return;
+                var exportRunning = Exporter.CurrentJob is { State: ExportJobState.Running };
+                var decision = AutoPreviewGate.Decide(Ffmpeg.State, exportRunning, waitedMs);
+
+                if (decision == AutoPreviewDecision.Run)     break;
+                if (decision == AutoPreviewDecision.Abandon) return;
+
                 await Task.Delay(250, token);
-                waitedMs += 250;
+
+                // An export is not a stall, so waiting for one does not count against the budget.
+                if (!exportRunning) waitedMs += 250;
             }
         }
         catch (TaskCanceledException)
@@ -2902,6 +3037,7 @@
 
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
         Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
+        PreviewQuality.OnChanged -= OnPreviewQualityChanged;
         StopStallWatch();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;

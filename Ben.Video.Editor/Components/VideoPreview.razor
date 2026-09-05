@@ -1,6 +1,6 @@
 @inject FfmpegService Ffmpeg
 @inject PreviewUrlRevoker PreviewRevoker
-@inject PlaybackService Playback
+@inject PlaybackService SharedPlayback
 @inject ClipStore Clips
 @inject ExportResolutionService ResolutionService
 @inject PreviewQualityService PreviewQuality
@@ -462,6 +462,29 @@
     [Parameter] public bool ShowWorkingWindowControls { get; set; } = true;
 
     /// <summary>
+    /// This player keeps its own playback state instead of sharing the editor's.
+    /// </summary>
+    /// <remarks>
+    /// The full-quality Preview window and the Working Window are two players showing two
+    /// different things, and both drove the one scoped <see cref="PlaybackService"/>. So the
+    /// popout's own playback moved the timeline's playhead, the timeline's moved the popout, and
+    /// pausing one paused the other — each was continually overwriting the other's idea of where
+    /// it was (2026-09-05 audit, preview-5).
+    /// </remarks>
+    [Parameter] public bool Standalone { get; set; }
+
+    private PlaybackService? _playback;
+
+    /// <summary>
+    /// The playback state this player drives: its own when standalone, the editor's otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Resolved once and cached, because every subscribe must be paired with an unsubscribe on the
+    /// same instance.
+    /// </remarks>
+    private PlaybackService Playback => _playback ??= Standalone ? new PlaybackService() : SharedPlayback;
+
+    /// <summary>
     /// Clears this instance's own URL tracking WITHOUT revoking the blob URL — for the moment
     /// right before the parent tears this instance down to hand its content off to a sibling
     /// instance about to take over display (e.g. toggling the popout — VideoEditor's own
@@ -490,8 +513,23 @@
     /// on cross-component <c>OnAfterRenderAsync</c> ordering isn't safe, so this instance owns
     /// applying its own deferred load once it's actually ready instead.
     /// </summary>
-    public async Task LoadUrlAsync(string blobUrl, double duration, PlaybackMode mode = PlaybackMode.Clip)
+    /// <param name="preserveTime">
+    /// Keep the playhead where it is and carry on playing, rather than starting over.
+    /// </param>
+    /// <remarks>
+    /// The Working Window is rebuilt after every edit, and each rebuild threw the playhead back to
+    /// zero and stopped playback. Trimming the end of a clip five minutes into a project meant
+    /// scrubbing back to five minutes, every single time (2026-09-05 audit, preview-2). An
+    /// explicit load — opening a project, selecting a clip — still starts at the beginning,
+    /// because there the beginning is what you want.
+    /// </remarks>
+    public async Task LoadUrlAsync(
+        string blobUrl, double duration, PlaybackMode mode = PlaybackMode.Clip,
+        bool preserveTime = false)
     {
+        var resumeAt   = preserveTime ? _currentTime : 0;
+        var wasPlaying = preserveTime && _playing;
+
         // Item #59-#65 flakiness investigation, phase 144 (symptom S4) — this used to revoke the
         // OLD url right here, before the new one was actually attached to the <video> element via
         // the loadSrc call below. Same race as VideoEditor.RefreshWorkingWindowAsync had (see its
@@ -506,16 +544,20 @@
         BlobLifecycle.Transfer(blobUrl, OwnerLabel); // caller (VideoEditor) created it under its own label
         _previewUrl  = blobUrl;
         _duration    = duration;
-        _currentTime = 0;
-        _scrubValue  = 0;
-        _playing     = false;
+        _currentTime = Math.Min(resumeAt, duration > 0 ? duration : resumeAt);
+        _scrubValue  = _currentTime;
+        _playing     = wasPlaying;
         _hasPreview  = true;
         Playback.NotifyLoaded(mode, duration);
         StateHasChanged();
 
         if (_module is not null)
         {
-            await _module.InvokeVoidAsync("loadSrc", _videoElementId, blobUrl);
+            if (preserveTime && resumeAt > 0)
+                await _module.InvokeVoidAsync(
+                    "loadSrcPreservingTime", _videoElementId, blobUrl, _currentTime, wasPlaying);
+            else
+                await _module.InvokeVoidAsync("loadSrc", _videoElementId, blobUrl);
 
             if (previousUrl is not null && previousUrl != blobUrl)
             {
@@ -533,6 +575,31 @@
         {
             _pendingLoadUrl = blobUrl;
         }
+    }
+
+    /// <summary>
+    /// Empties the player.
+    /// </summary>
+    /// <remarks>
+    /// Removing the last clip used to leave the previous render playing, so an empty timeline sat
+    /// above a preview still happily playing the footage you had just deleted (2026-09-05 audit,
+    /// preview-19). The blob URL itself belongs to the caller, which revokes it.
+    /// </remarks>
+    public async Task ClearAsync()
+    {
+        _previewUrl  = null;
+        _duration    = 0;
+        _currentTime = 0;
+        _scrubValue  = 0;
+        _playing     = false;
+        _hasPreview  = false;
+        _displayImageUrl = null;
+
+        if (_module is not null)
+            await _module.InvokeVoidAsync("clearSrc", _videoElementId);
+
+        Playback.NotifyLoaded(PlaybackMode.Timeline, 0);
+        await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -634,6 +701,12 @@
         var dt       = 1.0 / fps;
         var totalDur = Clips.TotalDuration;
 
+        // A slideshow's own clock. The loop drove the playback service and nothing else, so on an
+        // image-only timeline the counter stayed at 0:00, the scrubber never moved, and any title
+        // or callout drawn from the current time never appeared — playback looked broken even
+        // though the pictures were changing (2026-09-05 audit, preview-9).
+        _duration = totalDur;
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -642,7 +715,10 @@
                 if (next >= totalDur) next = totalDur;
 
                 Playback.NotifyTimeUpdate(next);
+                _currentTime = next;
+                _scrubValue  = next;
                 UpdateDisplayImage();
+                await OnTimeUpdate.InvokeAsync(next);
                 await InvokeAsync(StateHasChanged);
 
                 if (next >= totalDur) break;
@@ -744,6 +820,10 @@
         _imagePlayCts?.Dispose();
         Playback.OnSeekRequested -= OnSeekRequested;
         Clips.OnChange           -= OnClipsChanged;
+
+        // A standalone player owns its playback state, so it disposes it. The shared one belongs
+        // to the editor's scope and outlives this component.
+        if (Standalone) _playback?.Dispose();
 
         if (_previewUrl is not null)
         {

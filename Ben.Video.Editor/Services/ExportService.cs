@@ -1527,20 +1527,14 @@ public sealed class ExportService : IAsyncDisposable
         // implementing backlog #10 — per-channel volume would have been equally inert bolted onto
         // the same broken path). Each per-clip segment below is a normal audio-only ffmpeg output,
         // already positioned; amix combines them with no further position/offset math needed.
+        // AudioMixPlanner owns the trim/position/filter arithmetic, so the Working Window can mix
+        // the same way this does rather than having no sound at all (2026-09-05 audit, audio-6).
+        var plan = AudioMixPlanner.Plan(audioClips);
+
         var segmentNames = new List<string>();
-        for (var i = 0; i < audioClips.Count; i++)
+        for (var i = 0; i < plan.Count; i++)
         {
-            var ac = audioClips[i];
-            if (ac.MemFsName is null) continue;
-
-            var start = ac.StartTrim;
-            var end   = ac.EndTrim > ac.StartTrim ? ac.EndTrim : ac.Duration;
-            var clipDuration = end - start;
-            if (clipDuration <= 0) continue;
-
-            var filterChain = ExportArgBuilders.BuildAudioClipFilterChain(ac, clipDuration);
-            var delayMs     = (int)Math.Round(Math.Max(0, ac.TimelinePosition) * 1000.0);
-            var fullFilter  = delayMs > 0 ? $"{filterChain},adelay={delayMs}:all=1" : filterChain;
+            var (source, start, end, fullFilter) = plan[i];
 
             // PCM, not the export's own codec: these exist only to be mixed, and the mix encodes
             // the result. Compressing them first put every audio clip through a lossy codec twice
@@ -1548,7 +1542,7 @@ public sealed class ExportService : IAsyncDisposable
             var segName = $"audio_seg_{i:D3}_{job.Id:N}.wav";
             tempFiles.Add(segName);
             var segArgs = ExportArgBuilders.BuildAudioClipTrimArgs(
-                ac.MemFsName, segName, start, end, fullFilter, s, lossless: true);
+                source, segName, start, end, fullFilter, s, lossless: true);
             await _ffmpeg.ExecAsync(segArgs, job.CancellationToken);
             segmentNames.Add(segName);
         }
