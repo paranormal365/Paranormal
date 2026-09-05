@@ -97,9 +97,12 @@ public sealed class AdminOrganizationAdController : BenControllerBase
             var subject = approve
                 ? $"Your ad for {ad.Organization.Name} is live"
                 : $"Your ad for {ad.Organization.Name} was not approved";
+            // The headline is the group's own text and the reason is the reviewer's; both land in
+            // a body that is rendered as markup, so both are encoded.
+            var safeHeadline = Ben.Data.WebApi.Services.NotificationText.Safe(ad.Headline);
             var body = approve
-                ? $"\"{ad.Headline}\" was approved and now appears in the group finder and on the home page, marked Promoted."
-                : $"\"{ad.Headline}\" was declined: {reason}\n\nEdit the ad and submit it again whenever you're ready.";
+                ? $"\"{safeHeadline}\" was approved and now appears in the group finder and on the home page, marked Promoted."
+                : $"\"{safeHeadline}\" was declined: {Ben.Data.WebApi.Services.NotificationText.Safe(reason)}\n\nEdit the ad and submit it again whenever you're ready.";
             await _messages.SendAsync(subject, body, admins, userId, ct);
         }
 

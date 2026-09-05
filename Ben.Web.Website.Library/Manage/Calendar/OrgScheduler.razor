@@ -25,6 +25,17 @@
     }
     else
     {
+        @* The only way to add an event used to be knowing that a double-click on an empty slot
+           opens the editor. The editor is good; the door was invisible, which for the feature
+           that carries public events and walking tours is most of the feature (2026-09-04 sweep).
+           The button opens the same form the double-click does, on the next round hour. *@
+        <div class="d-flex justify-content-end mb-2">
+            <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
+                    @onclick="NewEventAsync">
+                <BenIcon Name="plus" Class="me-1" />New event
+            </button>
+        </div>
+
         @* TelerikScheduler with built-in edit form intercepted for custom fields *@
         <TelerikScheduler Data="@_appointments"
                           @bind-Date="@_schedulerDate"
@@ -641,6 +652,28 @@
     /// Intercept OnEdit to cancel the built-in form and show our custom dialog.
     /// Fires for both create (args.IsNew = true) and update (args.IsNew = false).
     /// </summary>
+    /// <summary>
+    /// Opens the event editor from the toolbar, on the next round hour.
+    /// </summary>
+    /// <remarks>
+    /// Routed through the scheduler's own edit path rather than duplicating its setup: the form's
+    /// defaults — a walking tour's events start public, an investigation group's start private —
+    /// live there, and a second way of opening the same dialog would be a second place for those
+    /// to drift.
+    /// </remarks>
+    private Task NewEventAsync()
+    {
+        var start = UserState.NowInViewerTimeZone();
+        start = start.Date.AddHours(start.Hour + 1);
+
+        return OnSchedulerEdit(new SchedulerEditEventArgs
+        {
+            IsNew = true,
+            Start = start,
+            End = start.AddHours(1),
+        });
+    }
+
     private async Task OnSchedulerEdit(SchedulerEditEventArgs args)
     {
         args.IsCancelled = true; // prevent built-in edit form

@@ -151,17 +151,20 @@ public sealed class OrganizationMergeService
 
         // Outside the transaction: the merge stands even if a message fails to send.
         var survivorName = string.IsNullOrWhiteSpace(newName) ? baseOrg.Name : newName.Trim();
+        // Group names are typed by their owners and these bodies are rendered as markup.
+        var safeMerged   = Services.NotificationText.Safe(mergedName);
+        var safeSurvivor = Services.NotificationText.Safe(survivorName);
         await _messages.SendAsync(
             $"{mergedName} is now part of {survivorName}",
-            $"<p>The group <strong>{mergedName}</strong> has merged into <strong>{survivorName}</strong>. "
+            $"<p>The group <strong>{safeMerged}</strong> has merged into <strong>{safeSurvivor}</strong>. "
             + "Your membership, cases, files and equipment moved with it — nothing was lost, and old "
             + "links to the group keep working.</p>",
             formerMemberIds, actingUserId, ct);
         if (clientIds.Count > 0)
             await _messages.SendAsync(
                 $"Your case is now handled by {survivorName}",
-                $"<p><strong>{mergedName}</strong>, the group handling your case, has merged into "
-                + $"<strong>{survivorName}</strong>. The same people remain on your case; only the "
+                $"<p><strong>{safeMerged}</strong>, the group handling your case, has merged into "
+                + $"<strong>{safeSurvivor}</strong>. The same people remain on your case; only the "
                 + "group's name has changed.</p>",
                 clientIds, actingUserId, ct);
 

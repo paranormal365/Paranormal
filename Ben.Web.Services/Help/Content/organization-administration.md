@@ -87,6 +87,19 @@ permissions let them open that queue, and for nobody else. Each banner names the
 waiting count and links straight to the tab where you act. Dismissing one keeps it away for the
 rest of your session; a new arrival brings it back.
 
+## Having a plan, and not having one
+
+A group is free by **having no plan at all**, not by being on a free one. There is no such thing
+as a free group plan: an individual can be free, a group cannot.
+
+With no plan a group can do public work — public cases, public investigations, results anyone can
+read. A plan is what lets it work with other people, take private-residence and client cases, and
+keep its own sessions to itself.
+
+The price is set by how many members the group has, and the **Billing** screen under Settings shows
+the band you are in and what it costs. If the price list has no charge for a group your size, that
+screen says there is nothing to buy rather than offering you a plan for nothing.
+
 ## Custom-role permissions and your plan
 
 Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,

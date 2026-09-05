@@ -223,6 +223,29 @@ public class OrganizationMembershipRequestControllerTests
     }
 
     /// <summary>
+    /// The decline note is typed by an administrator and lands in a body the applicant's
+    /// notification page renders as markup — so it is encoded, not passed through.
+    /// </summary>
+    [Fact]
+    public async Task Respond_Deny_EncodesTheResponseNoteInTheNotification()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        var admin = Build(factory, adminId, hasPermission: true);
+        await admin.Respond(orgId, reqId, new RespondToMembershipRequest(
+            OrganizationMembershipRequestStatus.Denied,
+            "<img src=x onerror=\"window.stolen=1\">", false, "Capacity"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var body = await db.UserMessages.AsNoTracking().Select(m => m.MessageBody).SingleAsync();
+
+        Assert.DoesNotContain("<img", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&lt;img", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// One person is free; working with somebody else is the paid part (Ben, 2026-08-31). The
     /// refusal lands at ACCEPTANCE — where the member would actually be added — and the applicant
     /// is never punished for a decision that is not theirs, so Apply itself stays open.

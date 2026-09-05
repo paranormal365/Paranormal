@@ -219,16 +219,23 @@ else
         // The kind and tours flag are on the organization, a different endpoint. Name, web
         // address and the applications flag are echoed back UNCHANGED — that endpoint takes
         // them as required values, and omitting them would blank the group's identity.
-        var orgSaved = _orgName.Length == 0
-            || await AdminClient.UpdateOrganizationAsync(OrgId,
+        string? orgError = null;
+        var orgSaved = true;
+        if (_orgName.Length > 0)
+        {
+            var (saved, error) = await AdminClient.UpdateOrganizationAsync(OrgId,
                    new AdminUpdateOrganizationRequest(_orgName, _orgUrlName,
                        IsAcceptingApplications: _orgAcceptingApplications,
                        Kind: _kind,
-                       RunsPublicTours: _runsPublicTours)) is not null;
+                       RunsPublicTours: _runsPublicTours));
+            orgSaved = saved is not null;
+            orgError = error;
+        }
 
         _saving = false;
 
         if (result is not null && orgSaved) _successMessage = "Settings saved.";
-        else _errorMessage = "Save failed. You may not have permission to update org settings.";
+        // The server's reason when there is one — see UpdateOrganizationAsync.
+        else _errorMessage = orgError ?? "Save failed. You may not have permission to update org settings.";
     }
 }

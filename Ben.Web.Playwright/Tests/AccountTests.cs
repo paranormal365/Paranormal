@@ -26,15 +26,18 @@ public class AccountTests : BenTestBase
     /// <summary>The authenticator secret this test enrolled with, so the teardown can undo it.</summary>
     private string? _enrolledSecret;
 
+    /// <summary>The throwaway account it enrolled, which is whose 2FA the teardown turns off.</summary>
+    private string? _enrolledEmail;
+    private string? _enrolledPassword;
+
     /// <summary>
-    /// Leaves the shared account with two-step sign-in off, however the test ended.
+    /// Leaves the enrolled account with two-step sign-in off, however the test ended.
     /// </summary>
     /// <remarks>
-    /// <para>The enrolment test turns 2FA on for the account the rest of the suite signs in with.
-    /// If it fails in the middle, the account is left demanding a code nobody has, and <i>every
-    /// other test in the suite</i> then fails at sign-in for a reason unrelated to what it was
-    /// testing. Cleaning up in a teardown rather than at the end of the test body is the
-    /// difference between one failure and a hundred.</para>
+    /// <para>The account is now a throwaway one this fixture created, not the shared seat — see
+    /// the enrolment test. This still runs, because the disable round trip is worth exercising on
+    /// every run, and because an account left demanding a code nobody has is untidy even when
+    /// nothing else uses it.</para>
     ///
     /// <para>It disables through the account's own endpoint with a freshly computed code, because
     /// there is no administrator override to fall back on — turning 2FA off is the account
@@ -45,16 +48,20 @@ public class AccountTests : BenTestBase
     {
         if (_enrolledSecret is null) return;
 
-        var secret = _enrolledSecret;
+        var secret   = _enrolledSecret;
+        var email    = _enrolledEmail    ?? UserEmail;
+        var password = _enrolledPassword ?? UserPassword;
         _enrolledSecret = null;
+        _enrolledEmail = null;
+        _enrolledPassword = null;
 
         var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
         var signIn = await api.PostAsync("/login", new()
         {
             DataObject = new Dictionary<string, object>
             {
-                ["email"] = UserEmail,
-                ["password"] = UserPassword,
+                ["email"] = email,
+                ["password"] = password,
                 ["twoFactorCode"] = Totp(secret),
             },
         });
@@ -207,16 +214,50 @@ public class AccountTests : BenTestBase
     /// The whole enrolment loop, with a code computed from the server's own secret.
     /// </summary>
     /// <remarks>
-    /// <para>Enrols and checks the recovery codes appear. The teardown then turns it back off
-    /// through the account's own endpoint, so the shared account is left as it was found — the rest
-    /// of the suite signs in with a password alone — and so the disable round trip is exercised on
-    /// every run rather than only when this test reaches its last line.</para>
+    /// <para>Enrols and checks the recovery codes appear, then the teardown turns it back off
+    /// through the account's own endpoint, so the disable round trip is exercised on every run
+    /// rather than only when this test reaches its last line.</para>
+    ///
+    /// <para><b>It enrols a throwaway account of its own</b>, which its sibling below has always
+    /// done and this one did not. Enrolling the shared seat meant that while this test ran — and
+    /// for as long as it stayed failed — every other test signing in as that person was refused,
+    /// and five refusals lock the account for everybody. A run on 2026-09-04 lost dozens of tests
+    /// that way. A test whose answer depends on its neighbours is worse than no test; a test its
+    /// neighbours' answers depend on is worse again.</para>
     /// </remarks>
     [Test]
     [Description("Enrolling with a real code turns it on and issues recovery codes.")]
     public async Task EnrollingWithARealCodeTurnsItOn()
     {
-        await LoginAsync(UserEmail, UserPassword);
+        var password = NewTestPassword();
+        var email = $"enrol{Unique}@example.com";
+
+        var admin = await AdminApiAsync();
+        Assert.That(admin, Is.Not.Null,
+            "Could not sign in as SuperAdmin to create a test account. If a run has just hammered "
+            + "sign-in, Identity may have locked that account — it clears itself after a few "
+            + "minutes.");
+
+        var created = await admin!.PostAsync("/api/admin/app-users", new()
+        {
+            DataObject = new Dictionary<string, object?>
+            {
+                ["email"] = email, ["password"] = password, ["displayName"] = "Enrolment",
+                ["userName"] = email, ["isEmailConfirmed"] = true, ["isSuperAdmin"] = false,
+            },
+        });
+        Assert.That(created.Ok, Is.True, $"Could not create the test account: {created.Status}");
+
+        // Recorded before the browser touches anything, so the teardown knows whose second factor
+        // to remove even if enrolment fails halfway.
+        _enrolledEmail = email;
+        _enrolledPassword = password;
+
+        Assert.That(await CompleteOnboardingViaApiAsync(email, password), Is.True,
+            "Could not mark the throwaway account as onboarded, so the wizard will intercept "
+            + "every page this test tries to open.");
+
+        await LoginAsync(email, password);
         await OpenSecurityTabAsync();
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Turn on two-step sign-in" }).ClickAsync();
@@ -400,6 +441,38 @@ public class AccountTests : BenTestBase
             BaseURL = ApiUrl,
             ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
         });
+    }
+
+    /// <summary>
+    /// Marks a fresh account as onboarded, so the browser can reach the page it was sent to.
+    /// </summary>
+    /// <remarks>
+    /// A new account has no onboarding stamp, and <c>OnboardingGate</c> sends anyone without one
+    /// to the wizard from whatever page they asked for. The seeded people are stamped at creation
+    /// precisely because that "silently hijacked whole e2e fixtures" once already. A throwaway
+    /// account created by a test is in the state a real new account is in, so it has to be walked
+    /// past the same door — through the API, because the wizard is not what this test is about.
+    /// </remarks>
+    private async Task<bool> CompleteOnboardingViaApiAsync(string email, string password)
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var signIn = await api.PostAsync("/login", new()
+        {
+            DataObject = new Dictionary<string, object> { ["email"] = email, ["password"] = password },
+        });
+        if (!signIn.Ok) return false;
+
+        var token = (await signIn.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var authed = await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+
+        var done = await authed.PostAsync("/api/me/onboarding/complete",
+            new() { DataObject = new Dictionary<string, object>() });
+        return done.Ok;
     }
 
     /// <summary>Enrols an account through the API and returns its authenticator secret.</summary>

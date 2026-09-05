@@ -95,32 +95,46 @@
                     }
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="150px">
+            <GridCommandColumn Width="90px">
                 <GridCommandButton Command="View"
                                    Icon="@SvgIcon.Eye"
                                    OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
                     View
                 </GridCommandButton>
-                @* Icon only, with Title for the tooltip and the accessible name.
-                   NO aria-label here: Telerik components do not splat unmatched attributes, they
-                   throw during render and take the circuit with them — that is item 112, which
-                   cost a debugging session when TelerikMaskedTextBox was given one. Title is a
-                   real GridCommandButton parameter; aria-label is not. *@
-                <GridCommandButton Command="Impersonate"
-                                   Icon="@SvgIcon.User"
-                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                                   Title="Impersonate this user"
-                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))" />
-                @* Goes to a page, not a dialog. Deleting somebody has consequences worth reading
-                   before agreeing to, and the counts do not fit in a confirm box — the same
-                   reasoning that gave the group delete its own screen. The account is preselected
-                   there, so the deliberate trip is still one click. *@
-                <GridCommandButton Command="Delete"
-                                   Icon="@SvgIcon.Trash"
-                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                   Title="Delete this user"
-                                   OnClick="@((GridCommandEventArgs e) => DeleteUser((AppUserRecord)e.Items.First()))" />
             </GridCommandColumn>
+            @* Impersonate and delete moved out of the command column so they can answer to the
+               row they are on. Both refuse on your own account, and a control that is offered and
+               then refuses is the dead-end click items 149 and 150 ruled out: three Playwright
+               tests clicked the first row's delete button and got the refusal, because on a fresh
+               database the SuperAdmin sorts first. Shown disabled rather than hidden, so the row
+               keeps its shape and the tooltip says why. *@
+            <GridColumn Title="" Width="110px" Sortable="false" Filterable="false" Context="row">
+                <Template>
+                    @{ var person = (AppUserRecord)row; }
+                    @if (person.Id == UserState.UserId)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-warning me-1" disabled
+                                title="You are signed in as this account">
+                            <BenIcon Name="user" />
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" disabled
+                                title="Delete your own account from your profile">
+                            <BenIcon Name="trash-2" />
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-warning me-1"
+                                title="Impersonate this user" @onclick="@(() => Impersonate(person))">
+                            <BenIcon Name="user" />
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                title="Delete this user" @onclick="@(() => DeleteUser(person))">
+                            <BenIcon Name="trash-2" />
+                        </button>
+                    }
+                </Template>
+            </GridColumn>
         </GridColumns>
     </TelerikGrid>
     </ChildContent>

@@ -50,10 +50,49 @@
             if (state is null) return;                // unknown state = no gate, and another chance later
 
             _done = true;
-            if (state == false) NavManager.NavigateTo("/onboarding");
+            if (state == false) NavManager.NavigateTo($"/onboarding{NextQuery()}");
         }
         catch { /* see the note above: never trap, never crash the layout */ }
         finally { _checking = false; }
+    }
+
+    /// <summary>
+    /// The page this person was heading for, as a query the wizard can hand back.
+    /// </summary>
+    /// <remarks>
+    /// <para>Without this the wizard is a trapdoor: somebody follows a link to a case, a group or
+    /// an invite, signs in, and lands on the home page with no idea where their link went. It
+    /// happened on both accounts in the 2026-09-04 walkthrough, and a link that quietly forgets
+    /// itself is worse than one that asks you to sign in twice.</para>
+    ///
+    /// <para>Signing in is the awkward case: the gate fires while the person is still on
+    /// <c>/login</c>, which is not a destination — so the login page's own <c>returnUrl</c> is
+    /// what gets carried, and it has already been through that page's open-redirect guard. The
+    /// wizard checks again anyway, because a value that arrives in a query string is never
+    /// trusted twice by the same code.</para>
+    /// </remarks>
+    private string NextQuery()
+    {
+        var uri = new Uri(NavManager.Uri);
+        var path = uri.AbsolutePath;
+
+        var next = path.Equals("/login", StringComparison.OrdinalIgnoreCase)
+            ? Microsoft.AspNetCore.WebUtilities.QueryHelpers
+                .ParseQuery(uri.Query).TryGetValue("returnUrl", out var fromLogin)
+                    ? fromLogin.ToString()
+                    : null
+            : path + uri.Query;
+
+        // Nowhere in particular is not worth carrying, and neither is the wizard itself.
+        if (string.IsNullOrWhiteSpace(next)
+            || next == "/"
+            || next.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+            || next.StartsWith("/onboarding", StringComparison.OrdinalIgnoreCase)
+            || !next.StartsWith('/')
+            || next.StartsWith("//"))
+            return string.Empty;
+
+        return $"?next={Uri.EscapeDataString(next)}";
     }
 
     public void Dispose()
