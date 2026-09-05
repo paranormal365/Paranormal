@@ -71,6 +71,11 @@ builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.AccountInfoService(
     sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>(),
     apiBaseUrl));
 
+// The publish destination. Without this registration — and the OnPublishExport the editor page
+// now passes — the editor offered no server destination at all, so every render went straight to
+// the downloads folder (2026-09-05 audit, F12).
+builder.Services.AddScoped<Ben.Wasm.Video.Services.WasmVideoExportPublisher>();
+
 // Records a successful sidecar pairing against the signed-in account, so the site can tell who is
 // running a native sidecar and which build. Optional by design — the editor calls it only if a
 // host registers one.

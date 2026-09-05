@@ -62,9 +62,29 @@ public sealed class ProjectStore : IAsyncDisposable
     public string CurrentProjectName { get; set; } = DefaultName();
 
     /// <summary>
-    /// ID of the currently loaded project, or <c>null</c> when no saved project is open.
+    /// The key this project is stored under in this browser, or null when it has never been saved
+    /// here.
     /// </summary>
-    public Guid? CurrentProjectId { get; private set; }
+    /// <remarks>
+    /// <para>Deliberately not the same thing as <see cref="CurrentServerId"/>. There used to be one
+    /// field for both, and opening a project from the server set it to the server's row id — so
+    /// the next local save wrote to browser storage under a key from the server's namespace. Two
+    /// unrelated identifiers sharing a field is the kind of thing that works until the day two
+    /// systems disagree about what a Guid means (2026-09-05 audit, F15).</para>
+    ///
+    /// <para>Opening a server project leaves this null on purpose: pressing Save then keeps a
+    /// local copy under a key of its own rather than pretending the server's row lives here.</para>
+    /// </remarks>
+    public Guid? CurrentLocalId { get; private set; }
+
+    /// <summary>
+    /// The server row this project came from or was saved to, or null when it exists only here.
+    /// </summary>
+    /// <remarks>
+    /// What a publish attaches its video to, and what a save-to-server updates instead of
+    /// creating a second row (2026-09-05 audit, persistence-13 and site-4).
+    /// </remarks>
+    public Guid? CurrentServerId { get; set; }
 
     /// <summary>
     /// <c>true</c> when the editor state has changed since the last save or open.
@@ -355,7 +375,12 @@ public sealed class ProjectStore : IAsyncDisposable
         finally { _restoring = false; }
 
         CurrentProjectName = name;
-        CurrentProjectId   = serverId;
+
+        // The server's row, not this browser's key. Setting the local key from the server id is
+        // what used to fork a server project into browser storage under a foreign identifier
+        // (2026-09-05 audit, F15).
+        CurrentServerId    = serverId;
+        CurrentLocalId     = null;
         IsDirty            = false;
         OnChanged?.Invoke();
         _ = Task.Run(async () => await RestoreOpfsFilesAsync(file));
@@ -373,8 +398,8 @@ public sealed class ProjectStore : IAsyncDisposable
         var projectName = name?.Trim() is { Length: > 0 } n ? n : CurrentProjectName;
         CurrentProjectName = projectName;
 
-        var id  = CurrentProjectId ?? Guid.NewGuid();
-        CurrentProjectId = id;
+        var id = CurrentLocalId ?? Guid.NewGuid();
+        CurrentLocalId = id;
 
         try
         {
@@ -453,7 +478,7 @@ public sealed class ProjectStore : IAsyncDisposable
 
             var summary = Projects.FirstOrDefault(p => p.Id == id);
             CurrentProjectName = summary?.Name ?? file.ProjectName ?? DefaultName();
-            CurrentProjectId   = id;
+            CurrentLocalId     = id;
             IsDirty            = false;
             await PersistActiveIdAsync(id);
             OnChanged?.Invoke();
@@ -508,7 +533,7 @@ public sealed class ProjectStore : IAsyncDisposable
         if (summary is null || summary.Name == trimmed) return;
 
         summary.Name = trimmed;
-        if (CurrentProjectId == id) CurrentProjectName = trimmed;
+        if (CurrentLocalId == id) CurrentProjectName = trimmed;
 
         try
         {
@@ -538,7 +563,7 @@ public sealed class ProjectStore : IAsyncDisposable
             // Item #69 — an active-pointer left dangling at a just-deleted id would otherwise
             // make the NEXT reload's restore silently no-op forever (RestoreLastActiveAsync
             // treats a stale pointer as "nothing to restore").
-            if (CurrentProjectId == id) await PersistActiveIdAsync(null);
+            if (CurrentLocalId == id) await PersistActiveIdAsync(null);
             OnChanged?.Invoke();
         }
         catch (Exception ex)
@@ -559,7 +584,8 @@ public sealed class ProjectStore : IAsyncDisposable
     /// </summary>
     public async Task NewProjectAsync()
     {
-        CurrentProjectId   = null;
+        CurrentLocalId     = null;
+        CurrentServerId    = null;
         CurrentProjectName = DefaultName();
         IsDirty            = false;
         await PersistActiveIdAsync(null); // clears the restore-on-reload pointer

@@ -29,6 +29,7 @@
     <Project Path="Ben.Video.Sidecar/Ben.Video.Sidecar.csproj" />
     <Project Path="Ben.Video.Sidecar.FakeFfmpeg/Ben.Video.Sidecar.FakeFfmpeg.csproj" />
     <Project Path="Ben.Wasm.Video/Ben.Wasm.Video.csproj" />
+    <Project Path="Ben.Wasm.Video.Tests/Ben.Wasm.Video.Tests.csproj" />
   </Folder>
   <Project Path="Ben.Web.Tests/Ben.Web.Tests.csproj" />
 </Solution>

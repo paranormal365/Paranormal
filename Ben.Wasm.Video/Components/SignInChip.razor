@@ -1,0 +1,52 @@
+@using Ben.Wasm.Video.Services
+@implements IDisposable
+@inject TokenStore Tokens
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@*
+    The standalone editor's only door to signing in and out.
+
+    There was none. Nothing anywhere linked to /login, and AuthService.LogoutAsync had no caller at
+    all — so the only way in was to know the URL and type it, and once in there was no way back out
+    (2026-09-05 audit, F11 and wasm-4).
+*@
+@if (Tokens.IsAuthenticated)
+{
+    <span class="bwv-signin bwv-signin--in" title="Signed in — your media library and Save to server are available">
+        <span class="bwv-signin__dot" aria-hidden="true"></span>
+        <button type="button" class="bwv-signin__action" @onclick="SignOutAsync">Sign out</button>
+    </span>
+}
+else
+{
+    <button type="button" class="bwv-signin bwv-signin__action"
+            @onclick="GoToSignIn"
+            title="Sign in to reach your uploaded media, save projects to the server and publish renders">
+        Sign in
+    </button>
+}
+
+@code {
+    protected override void OnInitialized() => Tokens.Changed += OnTokensChanged;
+
+    private void OnTokensChanged() => InvokeAsync(StateHasChanged);
+
+    /// <summary>
+    /// Goes to the sign-in page relative to this app's own base.
+    /// </summary>
+    /// <remarks>
+    /// Relative, not "/login". In production the editor is served under a sub-path, where "/" is
+    /// the site's root and not this app — so an absolute path navigates out of the editor entirely
+    /// (2026-09-05 audit, wasm-2).
+    /// </remarks>
+    private void GoToSignIn() => Nav.NavigateTo($"{Nav.BaseUri}login");
+
+    private async Task SignOutAsync()
+    {
+        await Auth.LogoutAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose() => Tokens.Changed -= OnTokensChanged;
+}

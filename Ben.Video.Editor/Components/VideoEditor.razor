@@ -62,6 +62,7 @@
              ShowDiagnostics="@EffectiveOptions.ShowDiagnostics"
              OnInitialize="LoadCoreAsync"
              OnResetEngine="ResetEngineAsync"
+             HostStatusContent="@HostStatusContent"
              OnOpen="OpenFilesAsync"
              OnPreview="RenderFullQualityPreviewAsync"
              OnExport="OpenExportDialog"
@@ -414,6 +415,8 @@
                              OnUpload="PublishExportAsync"
                              OnSaveToDevice="SaveExportToDeviceAsync"
                              OnDiscard="DiscardExportAsync"
+                             CanUpload="@EnablePublish"
+                             UploadUnavailableReason="@PublishUnavailableReason"
                              ShowPostToFeed="@(EnablePostToFeed && OnPostToFeed.HasDelegate)"
                              OnPostToFeed="PostExportToFeedAsync" />
 
@@ -517,6 +520,33 @@
 
     /// <summary>Host answers from the server's CanPost; the button never invites a refusal.</summary>
     [Parameter] public bool EnablePostToFeed { get; set; }
+
+    /// <summary>
+    /// Whether this person can currently publish a render to the server.
+    /// </summary>
+    /// <remarks>
+    /// Separate from whether the host offers publishing at all
+    /// (<see cref="OnPublishExport"/>), because the standalone host offers it and the person may
+    /// simply not be signed in yet — a state worth explaining rather than hiding (2026-09-05
+    /// audit, F12).
+    /// </remarks>
+    [Parameter] public bool EnablePublish { get; set; } = true;
+
+    /// <summary>What to say when publishing is offered but not currently possible.</summary>
+    [Parameter] public string? PublishUnavailableReasonText { get; set; }
+
+    /// <summary>
+    /// Host chrome for the toolbar — the standalone editor puts its sign-in state here.
+    /// </summary>
+    /// <remarks>
+    /// The editor does not know who is signed in and should not guess; it only leaves room. The
+    /// standalone host had no sign-in door at all before this, so the only way in was to know the
+    /// /login URL and type it (2026-09-05 audit, F11).
+    /// </remarks>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
+
+    private string PublishUnavailableReason =>
+        PublishUnavailableReasonText ?? "Sign in to upload this to your media library.";
 
     // ── Child component references ────────────────────────────────────────────
 

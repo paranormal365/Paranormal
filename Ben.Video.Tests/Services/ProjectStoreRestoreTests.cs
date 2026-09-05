@@ -206,7 +206,7 @@ public sealed class ProjectStoreRestoreTests
         await store.RestoreLastActiveAsync();
 
         Assert.Empty(clips.PrimaryVideoTrack!.Items);
-        Assert.Null(store.CurrentProjectId);
+        Assert.Null(store.CurrentLocalId);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class ProjectStoreRestoreTests
         await store.RestoreLastActiveAsync();
 
         Assert.Empty(clips.PrimaryVideoTrack!.Items);
-        Assert.Null(store.CurrentProjectId);
+        Assert.Null(store.CurrentLocalId);
     }
 
     [Fact]
@@ -253,7 +253,7 @@ public sealed class ProjectStoreRestoreTests
         await storeA.InitAsync();
         clipsA.PrimaryVideoTrack!.Items.Add(MakeClip());
         await storeA.SaveAsync("Will be deleted");
-        var id = storeA.CurrentProjectId!.Value;
+        var id = storeA.CurrentLocalId!.Value;
 
         await storeA.DeleteAsync(id);
 
@@ -274,7 +274,7 @@ public sealed class ProjectStoreRestoreTests
         await storeA.InitAsync();
         clipsA.PrimaryVideoTrack!.Items.Add(MakeClip("proj-one.mp4"));
         await storeA.SaveAsync("Project One");
-        var idOne = storeA.CurrentProjectId!.Value;
+        var idOne = storeA.CurrentLocalId!.Value;
 
         await storeA.NewProjectAsync();
         clipsA.Reset();

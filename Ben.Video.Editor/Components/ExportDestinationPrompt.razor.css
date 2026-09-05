@@ -14,3 +14,10 @@
     color: var(--bv-danger-text, #b00020);
     background: var(--bv-danger-bg, rgba(176, 0, 32, 0.08));
 }
+
+/* Why the server destination is unavailable. Quiet: not an error, just something to know. */
+.bv-export-destination-prompt__hint {
+    margin: .5rem 0 0;
+    font-size: .78rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}

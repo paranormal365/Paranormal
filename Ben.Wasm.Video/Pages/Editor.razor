@@ -4,6 +4,8 @@
 @implements IDisposable
 @inject AccountInfoService Account
 @inject TokenStore Tokens
+@inject WasmVideoExportPublisher Publisher
+@using Ben.Video.Editor.Models
 
 <PageTitle>Video Editor</PageTitle>
 
@@ -17,10 +19,41 @@
     flight and stays hidden if the question cannot be asked at all. Signing out hides it again on
     the next answer.
 *@
-<VideoEditor ShowDiagnostics="@_showDiagnostics" />
+@*
+    OnPublishExport is what makes a server destination exist at all: the editor offers one only
+    when the host supplies a handler, and this page supplied none — so every export went straight
+    to the downloads folder while the sign-in page promised that signing in lets you publish
+    finished renders (2026-09-05 audit, F12).
+
+    EnablePublish is separate from that. The destination is offered whether or not somebody is
+    signed in, disabled with a reason when they are not, because hiding it reads as the editor
+    being unable to publish rather than as a sign-in away.
+*@
+<VideoEditor ShowDiagnostics="@_showDiagnostics"
+             OnPublishExport="PublishAsync"
+             EnablePublish="@Tokens.IsAuthenticated"
+             PublishUnavailableReasonText="Sign in to upload this to your media library."
+             HostStatusContent="@SignInChip" />
+
+@code {
+    private RenderFragment SignInChip => __builder =>
+    {
+        <SignInChip />
+    };
+}
 
 @code {
     private bool _showDiagnostics;
+
+    /// <summary>
+    /// Sends a finished render to the server, letting every failure through.
+    /// </summary>
+    /// <remarks>
+    /// The editor's destination prompt catches, stays open and keeps "Save to my machine"
+    /// available. Returning normally tells it the video is safely on the server, at which point it
+    /// discards the only remaining copy — so swallowing anything here loses somebody's render.
+    /// </remarks>
+    private async Task PublishAsync(ExportedVideo exported) => await Publisher.PublishAsync(exported);
 
     protected override async Task OnInitializedAsync()
     {

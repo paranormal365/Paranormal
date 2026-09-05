@@ -39,11 +39,14 @@ public sealed class VideoExportPublisher(
     public async Task<PublishResult> PublishAsync(
         ExportedVideo exported, Guid? caseId, Guid? knownProjectId, CancellationToken ct = default)
     {
-        // ProjectStore.CurrentProjectId is the SERVER id whenever the project was opened from the
-        // server (LoadFromFileAsync stores it); it's null for a project that only ever existed in
-        // this browser. knownProjectId covers the in-between case — created by an earlier publish
-        // in this same session, so ProjectStore doesn't know about it either.
-        var projectId = knownProjectId ?? projectStore.CurrentProjectId;
+        // The open project first, the session's own id second. It used to be the other way round,
+        // so a stale id from an earlier publish outranked the project actually on screen — and a
+        // later export attached itself to whichever project had been published first that session
+        // (2026-09-05 audit, site-4).
+        //
+        // CurrentServerId is the server's row, now a separate field from the browser's own storage
+        // key; it is null for a project that has only ever existed in this browser.
+        var projectId = projectStore.CurrentServerId ?? knownProjectId;
 
         if (projectId is null)
         {
@@ -53,6 +56,10 @@ public sealed class VideoExportPublisher(
                     "Couldn't save the project to the server, so there was nowhere to attach the video.");
             projectId = saved.Id;
         }
+
+        // Remembered on the store, so the next publish in this session updates the same project
+        // rather than depending on the caller having threaded the id back through.
+        projectStore.CurrentServerId = projectId;
 
         // The one place the render actually lands on the .NET heap — deliberately not read until
         // we know we have somewhere to put it (see ExportedVideo's own remarks).

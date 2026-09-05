@@ -234,3 +234,43 @@ code {
 
 .bwv-theme-toggle::before { content: "\263D"; }                       /* moon: switch to dark */
 :root[data-bs-theme="dark"] .bwv-theme-toggle::before { content: "\2600"; }  /* sun: back to light */
+
+/* ── Sign-in chip ─────────────────────────────────────────────────────────── */
+/* The standalone editor's only door in and out. There was none: nothing linked to /login and
+   nothing called sign-out, so the only way in was to know the URL (2026-09-05 audit, F11). */
+.bwv-signin {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .72rem;
+    white-space: nowrap;
+}
+
+.bwv-signin__action {
+    background: none;
+    border: 1px solid var(--kendo-color-border, rgba(255, 255, 255, .18));
+    border-radius: 999px;
+    padding: .12rem .55rem;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.bwv-signin__action:hover { border-color: currentColor; }
+
+/* Signed in is a state, not an action — the dot carries it so the button can stay a button. */
+.bwv-signin__dot {
+    width: .45rem;
+    height: .45rem;
+    border-radius: 50%;
+    background: #4caf89;
+}
+
+/* ── Login page extras ────────────────────────────────────────────────────── */
+.bwv-login__back,
+.bwv-login__links {
+    margin-top: .9rem;
+    font-size: .82rem;
+}
+
+.bwv-login__links a { margin-right: .2rem; }
