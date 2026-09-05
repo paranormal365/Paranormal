@@ -207,6 +207,115 @@
         </div>
         }
 
+        @* ── Placement ───────────────────────────────────────────────────────────────────
+           A clip could only fill the frame. On a second video track that meant it replaced the
+           picture underneath and could never sit beside it or in a corner of it — no two cameras
+           side by side, no corner inset, no upright phone footage, no cutting a DVR's bars off
+           (2026-09-05 audit). *@
+        <div class="bv-clip-editor__section-heading">Placement</div>
+
+        @if (Clip.Transform is null)
+        {
+            <p class="bv-clip-editor__hint">
+                This clip fills the frame. Place it to put it in a corner or beside another clip,
+                to turn footage that was shot sideways, or to cut something off its edges.
+            </p>
+            <div class="bv-clip-editor__field">
+                <TelerikButton OnClick="AddTransform"
+                               Icon="@SvgIcon.Plus"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Info">
+                    Place this clip
+                </TelerikButton>
+            </div>
+        }
+        else
+        {
+            var t = Clip.Transform;
+            <div class="bv-clip-editor__effect-card">
+                <div class="bv-clip-editor__effect-header">
+                    <span class="bv-clip-editor__effect-name">Where it sits</span>
+                    <TelerikButton OnClick="RemoveTransform"
+                                   Icon="@SvgIcon.X"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Title="Go back to filling the frame" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <TelerikDropDownList Data="@_placementPresets"
+                                         Value="@_selectedPreset"
+                                         ValueChanged="@((string v) => ApplyPreset(v))"
+                                         ValueExpression="@(() => _selectedPreset)"
+                                         DefaultText="Preset…"
+                                         Class="bv-clip-editor__effect-dropdown" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Across @((t.Width * 100).ToString("F0"))% from @((t.X * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@t.X" ValueChanged="@((double v) => UpdateTransform(x => x.X = v))"
+                                   ValueExpression="@(() => t.X)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@t.Width" ValueChanged="@((double v) => UpdateTransform(x => x.Width = v))"
+                                   ValueExpression="@(() => t.Width)" Min="0.05" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.05, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Down @((t.Height * 100).ToString("F0"))% from @((t.Y * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@t.Y" ValueChanged="@((double v) => UpdateTransform(x => x.Y = v))"
+                                   ValueExpression="@(() => t.Y)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@t.Height" ValueChanged="@((double v) => UpdateTransform(x => x.Height = v))"
+                                   ValueExpression="@(() => t.Height)" Min="0.05" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.05, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">Turn (@t.Rotation.ToString("F0"))°</label>
+                    <TelerikSlider Value="@t.Rotation" ValueChanged="@((double v) => UpdateTransform(x => x.Rotation = v))"
+                                   ValueExpression="@(() => t.Rotation)" Min="-180" Max="180" SmallStep="90" LargeStep="90"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(-180.0, 180.0, 90.0)" Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">Opacity (@((t.Opacity * 100).ToString("F0"))%)</label>
+                    <TelerikSlider Value="@t.Opacity" ValueChanged="@((double v) => UpdateTransform(x => x.Opacity = v))"
+                                   ValueExpression="@(() => t.Opacity)" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__section-heading">Cut off the edges</div>
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Left @((t.CropLeft * 100).ToString("F0"))% · right @((t.CropRight * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@t.CropLeft" ValueChanged="@((double v) => UpdateTransform(x => x.CropLeft = v))"
+                                   ValueExpression="@(() => t.CropLeft)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@t.CropRight" ValueChanged="@((double v) => UpdateTransform(x => x.CropRight = v))"
+                                   ValueExpression="@(() => t.CropRight)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
+                </div>
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Top @((t.CropTop * 100).ToString("F0"))% · bottom @((t.CropBottom * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@t.CropTop" ValueChanged="@((double v) => UpdateTransform(x => x.CropTop = v))"
+                                   ValueExpression="@(() => t.CropTop)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@t.CropBottom" ValueChanged="@((double v) => UpdateTransform(x => x.CropBottom = v))"
+                                   ValueExpression="@(() => t.CropBottom)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
+                </div>
+            </div>
+        }
+
         @* ── Hidden areas ────────────────────────────────────────────────────────────────
            Members cut evidence reels from footage shot inside people's homes, and a private
            engagement's own rule is that what identifies the client or the address does not go
@@ -607,6 +716,63 @@
     {
         if (Clip is null) return;
         Clips.RemoveEffect(Clip.Id, fx);
+    }
+
+    // ── Placement ────────────────────────────────────────────────────────────
+
+    /// <summary>Layouts worth one click, because nobody wants to find 0.7 by dragging.</summary>
+    private static readonly List<string> _placementPresets =
+        ["Fill the frame", "Top left corner", "Top right corner", "Bottom left corner",
+         "Bottom right corner", "Left half", "Right half", "Turn upright", "Turn back"];
+
+    private string? _selectedPreset;
+
+    private void AddTransform()
+    {
+        if (Clip is null) return;
+        // A quarter-size inset in the bottom right: visibly placed, so the controls below have
+        // something to move rather than starting at "exactly as it was".
+        Clips.CommitClipTransform(Clip.Id,
+            new ClipTransform { X = 0.68, Y = 0.66, Width = 0.3, Height = 0.3 }, Clip.Transform);
+    }
+
+    private void RemoveTransform()
+    {
+        if (Clip is null) return;
+        Clips.CommitClipTransform(Clip.Id, null, Clip.Transform);
+    }
+
+    private void UpdateTransform(Action<ClipTransform> change)
+    {
+        if (Clip?.Transform is not { } current) return;
+
+        var updated = current with { };
+        change(updated);
+        Clips.CommitClipTransform(Clip.Id, updated, current);
+    }
+
+    private void ApplyPreset(string preset)
+    {
+        _selectedPreset = preset;
+        if (Clip is null) return;
+
+        var current = Clip.Transform ?? new ClipTransform();
+
+        var updated = preset switch
+        {
+            "Fill the frame"        => current with { X = 0,    Y = 0,    Width = 1.0, Height = 1.0 },
+            "Top left corner"       => current with { X = 0.02, Y = 0.03, Width = 0.3, Height = 0.3 },
+            "Top right corner"      => current with { X = 0.68, Y = 0.03, Width = 0.3, Height = 0.3 },
+            "Bottom left corner"    => current with { X = 0.02, Y = 0.66, Width = 0.3, Height = 0.3 },
+            "Bottom right corner"   => current with { X = 0.68, Y = 0.66, Width = 0.3, Height = 0.3 },
+            "Left half"             => current with { X = 0,    Y = 0,    Width = 0.5, Height = 1.0 },
+            "Right half"            => current with { X = 0.5,  Y = 0,    Width = 0.5, Height = 1.0 },
+            "Turn upright"          => current with { Rotation = 90 },
+            "Turn back"             => current with { Rotation = -90 },
+            _                       => current,
+        };
+
+        Clips.CommitClipTransform(Clip.Id, updated, Clip.Transform);
     }
 
     // ── Hidden areas ─────────────────────────────────────────────────────────

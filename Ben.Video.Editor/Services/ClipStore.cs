@@ -272,6 +272,38 @@ public sealed class ClipStore
     }
 
     /// <summary>
+    /// Replaces where a clip's picture sits, undoably.
+    /// </summary>
+    /// <remarks>
+    /// Null means "fill the frame", which is what every clip did before placement existed and what
+    /// most clips should go on doing.
+    /// </remarks>
+    public void CommitClipTransform(Guid clipId, ClipTransform? after, ClipTransform? before)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == clipId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            Action<ClipTransform?> set = item switch
+            {
+                VideoClip v => t => v.Transform = t,
+                ImageClip i => t => i.Transform = t,
+                _           => _ => { },
+            };
+
+            if (item is not (VideoClip or ImageClip)) return;
+
+            var command = new SetClipTransformCommand(set, after, before, item.Name);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
     /// Replaces a clip's hidden areas, undoably.
     /// </summary>
     /// <remarks>
@@ -2983,6 +3015,7 @@ public sealed class ClipStore
         SourceFileSize    = p.SourceFileSize,
         SourceContentHash = p.SourceContentHash,
         Redactions        = [.. p.Redactions.Select(r => r with { })],
+        Transform         = p.Transform is null ? null : p.Transform with { },
     };
 
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
@@ -3089,6 +3122,7 @@ public sealed class ClipStore
         SourceFileSize    = p.SourceFileSize,
         SourceContentHash = p.SourceContentHash,
         Redactions        = [.. p.Redactions.Select(r => r with { })],
+        Transform         = p.Transform is null ? null : p.Transform with { },
     };
 
     private static CalloutClip RestoreCalloutClip(ProjectCalloutClip p) => new()

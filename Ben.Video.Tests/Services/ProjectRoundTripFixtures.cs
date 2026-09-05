@@ -26,6 +26,11 @@ internal static class Fixtures
         SourceFileId      = Guid.NewGuid(),
         SourceFileSize    = 48900846,
         SourceContentHash = "a1b2c3",
+        Transform         = new ClipTransform
+        {
+            X = 0.55, Y = 0.6, Width = 0.4, Height = 0.35, Rotation = 12.5,
+            CropLeft = 0.05, CropTop = 0.06, CropRight = 0.07, CropBottom = 0.08, Opacity = 0.85,
+        },
         Redactions        = [new RedactionRegion
         {
             X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,
@@ -84,6 +89,11 @@ internal static class Fixtures
         SourceFileId      = Guid.NewGuid(),
         SourceFileSize    = 16161,
         SourceContentHash = "091a2b",
+        Transform         = new ClipTransform
+        {
+            X = 0.55, Y = 0.6, Width = 0.4, Height = 0.35, Rotation = 12.5,
+            CropLeft = 0.05, CropTop = 0.06, CropRight = 0.07, CropBottom = 0.08, Opacity = 0.85,
+        },
         Redactions        = [new RedactionRegion
         {
             X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,

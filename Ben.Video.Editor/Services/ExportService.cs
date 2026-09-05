@@ -563,7 +563,8 @@ public sealed class ExportService : IAsyncDisposable
                 // Muting the video track silences its clips, the same as muting each of them.
                 var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, !_clips.IsAudible(clip),
                     sourceHasAudio: clip.HasAudio,
-                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
+                    transform: clip.Transform);
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
 
@@ -1697,9 +1698,17 @@ public sealed class ExportService : IAsyncDisposable
             var next = $"composite_{index:D3}_{job.Id:N}.mp4";
             tempFiles.Add(next);
 
+            var placement = item switch
+            {
+                VideoClip v => v.Transform,
+                ImageClip i => i.Transform,
+                _           => null,
+            };
+
             await _ffmpeg.ExecAsync(ExportArgBuilders.BuildLayerCompositeArgs(
                 composited, segName, next, item.TimelinePosition, item.EffectiveLength, s,
-                layerHasAudio: segHasAudio),
+                layerHasAudio: segHasAudio,
+                transform: placement, frameWidth: vw, frameHeight: vh),
                 job.CancellationToken);
 
             if (tempFiles.Remove(segName)) await _ffmpeg.DeleteFileAsync(segName);
@@ -1723,12 +1732,12 @@ public sealed class ExportService : IAsyncDisposable
     private string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
-        string? extraVf = null, bool sourceHasAudio = true)
+        string? extraVf = null, bool sourceHasAudio = true, ClipTransform? transform = null)
     {
         var (vw, vh) = ResolveCanvas(s);
         return ExportArgBuilders.BuildTrimArgs(
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
-            outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
+            outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio, transform: transform);
     }
 
     private static IEnumerable<string> QualityArgs(ExportSettings s)

@@ -1337,6 +1337,29 @@ internal sealed class CommitCalloutPropertyCommand : IEditorCommand
     public void Undo()    => _revert(_clip);
 }
 
+/// <summary>Undo/redo for where a clip's picture sits in the frame.</summary>
+internal sealed class SetClipTransformCommand : IEditorCommand
+{
+    private readonly Action<ClipTransform?> _set;
+    private readonly ClipTransform? _after, _before;
+    private readonly string _clipName;
+
+    public string Description => $"Placement of \"{_clipName}\"";
+
+    public SetClipTransformCommand(
+        Action<ClipTransform?> set, ClipTransform? after, ClipTransform? before, string clipName)
+    {
+        _set      = set;
+        _after    = after;
+        _before   = before;
+        _clipName = clipName;
+    }
+
+    // Copies, so redoing after further edits still restores the values this command recorded.
+    public void Execute() => _set(_after is null ? null : _after with { });
+    public void Undo()    => _set(_before is null ? null : _before with { });
+}
+
 /// <summary>Undo/redo for the set of areas hidden on a clip.</summary>
 /// <remarks>
 /// Holds both lists outright rather than a closure that rebuilds one. Getting undo wrong here

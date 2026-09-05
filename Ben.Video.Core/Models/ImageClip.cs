@@ -30,6 +30,16 @@ public sealed record ImageClip : TrackItem
     public List<RedactionRegion> Redactions { get; set; } = [];
 
     /// <summary>
+    /// Where this clip's picture sits in the frame, and how much of it is used.
+    /// </summary>
+    /// <remarks>
+    /// Null means "fill the frame", which is what every clip did before this existed. Set it to
+    /// put a second camera in a corner or beside the first, to turn portrait phone footage
+    /// upright, or to cut a DVR's bars off (2026-09-05 audit).
+    /// </remarks>
+    public ClipTransform? Transform { get; set; }
+
+    /// <summary>
     /// Blob URL of the thumbnail image shown on the timeline chip and in the clip browser.
     /// Created via a JS canvas render — no ffmpeg required.
     /// </summary>

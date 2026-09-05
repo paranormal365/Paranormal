@@ -177,6 +177,9 @@ public sealed class ProjectVideoClip
 
     /// <summary>Parts of this clip's picture that must not be shown.</summary>
     public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>Where this clip's picture sits in the frame. Null means it fills it.</summary>
+    public ClipTransform? Transform { get; set; }
 }
 
 /// <summary>Serialized <see cref="AudioClip"/>.</summary>
@@ -322,6 +325,9 @@ public sealed class ProjectImageClip
 
     /// <summary>Parts of this clip's picture that must not be shown.</summary>
     public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>Where this clip's picture sits in the frame. Null means it fills it.</summary>
+    public ClipTransform? Transform { get; set; }
 }
 
 /// <summary>Serialized <see cref="AppliedEffect"/></summary> — effect id + parameter snapshot.</summary>

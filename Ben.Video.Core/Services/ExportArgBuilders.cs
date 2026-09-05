@@ -299,7 +299,7 @@ internal static class ExportArgBuilders
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
         string? extraVf = null, int outputWidth = 0, int outputHeight = 0,
-        bool sourceHasAudio = true)
+        bool sourceHasAudio = true, ClipTransform? transform = null)
     {
         // Every segment carries an audio stream when the export includes audio — a real one, or
         // silence. Mixed stream layouts are what broke concat: an image or a muted clip was written
@@ -335,6 +335,29 @@ internal static class ExportArgBuilders
         // BuildImageSegmentArgs' existing scale+pad so every segment kind lands on the same
         // canvas before compositing.
         (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
+        // Cropping and turning come before the scale to the canvas, so what fills the frame is the
+        // part being kept, at its own proportions. Cutting a DVR's bars off after the picture had
+        // already been letterboxed into the canvas would work and would throw away resolution
+        // doing it (2026-09-05 audit, the completeness critic's crop/rotate item).
+        if (transform is not null && !transform.IsIdentity)
+        {
+            var keepW = Math.Max(0.02, 1.0 - Math.Clamp(transform.CropLeft, 0, 1) - Math.Clamp(transform.CropRight, 0, 1));
+            var keepH = Math.Max(0.02, 1.0 - Math.Clamp(transform.CropTop, 0, 1) - Math.Clamp(transform.CropBottom, 0, 1));
+            var ic    = System.Globalization.CultureInfo.InvariantCulture;
+
+            if (keepW < 1.0 || keepH < 1.0)
+                videoFilters.Add(
+                    $"crop=iw*{keepW.ToString("F6", ic)}:ih*{keepH.ToString("F6", ic)}"
+                    + $":iw*{Math.Clamp(transform.CropLeft, 0, 0.98).ToString("F6", ic)}"
+                    + $":ih*{Math.Clamp(transform.CropTop, 0, 0.98).ToString("F6", ic)}");
+
+            if (Math.Abs(transform.Rotation) > 0.001)
+            {
+                var radians = (transform.Rotation * Math.PI / 180.0).ToString("F6", ic);
+                videoFilters.Add($"rotate={radians}:ow=rotw({radians}):oh=roth({radians})");
+            }
+        }
 
         if (outputWidth > 0 && outputHeight > 0)
         {
@@ -1299,7 +1322,8 @@ internal static class ExportArgBuilders
 
     internal static string[] BuildLayerCompositeArgs(
         string baseFile, string layerFile, string output,
-        double start, double duration, ExportSettings s, bool layerHasAudio)
+        double start, double duration, ExportSettings s, bool layerHasAudio,
+        ClipTransform? transform = null, int frameWidth = 0, int frameHeight = 0)
     {
         var ic    = System.Globalization.CultureInfo.InvariantCulture;
         var from  = start.ToString("F3", ic);
@@ -1308,11 +1332,22 @@ internal static class ExportArgBuilders
 
         var sb = new System.Text.StringBuilder();
 
+        // Where the layer goes. Without a transform it covers the whole frame at 0,0, which is
+        // what a second video track could only ever do before — replace the picture underneath
+        // rather than sit beside it or in a corner of it (2026-09-05 audit).
+        var placement = ClipTransformFilter.BuildSourceChain(transform, frameWidth, frameHeight);
+        var (px, py)  = placement is null
+            ? (0, 0)
+            : ClipTransformFilter.Offset(transform, frameWidth, frameHeight);
+
         // setpts moves the layer to its own start; enable keeps it off screen everywhere else; and
         // eof_action=pass hands the picture back to the layer underneath once the clip ends,
         // rather than repeating its final frame to the end of the export.
-        sb.Append($"[1:v]setpts=PTS-STARTPTS+{from}/TB[ov];");
-        sb.Append($"[0:v][ov]overlay=enable='between(t,{from},{to})':eof_action=pass[vout]");
+        sb.Append("[1:v]setpts=PTS-STARTPTS+").Append(from).Append("/TB");
+        if (placement is not null) sb.Append(',').Append(placement);
+        sb.Append("[ov];");
+
+        sb.Append($"[0:v][ov]overlay={px}:{py}:enable='between(t,{from},{to})':eof_action=pass[vout]");
 
         var withAudio = s.IncludeAudio && layerHasAudio;
         if (withAudio)
