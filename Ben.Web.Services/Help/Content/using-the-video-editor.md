@@ -11,7 +11,13 @@ your footage is downloaded to your own machine, edited there, and rendered there
 video goes back to the server, and only if you ask it to.
 
 ![The video editor, open and empty](/help/media/using-the-video-editor/editor-overview.png)
-*The editor: preview at the top, timeline below, media and properties in the panel on the right.*
+*The editor: the picture at the top, the timeline below it, and media and properties in the panel
+on the right.*
+
+The three parts are yours to size. Drag the seam above the timeline to give the timeline more room
+or hand it back to the picture; drag the panel's left edge to widen it; collapse the panel with the
+button in its header and bring it back from the toolbar. The editor remembers all of it for next
+time.
 
 ## Where to find it
 

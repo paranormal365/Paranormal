@@ -1,11 +1,17 @@
 /*
  * CSS custom properties written by VideoEditor.razor via style attribute:
- *   --bv-browser-w   : clip browser width  (px)
- *   --bv-timeline-h  : timeline height     (px)
+ *   --bv-timeline-h    : timeline height        (px)
+ *   --bv-panel-w       : side panel width       (px)
+ *   --bv-canvas-aspect : composition aspect     (e.g. "1280 / 720")
  */
 .bv-editor {
     display: flex;
     flex-direction: column;
+    /* Named container for the "too narrow to edit in" rules at the end of this file. A container
+       query rather than a media query: the editor is embedded in pages with their own chrome, so
+       what matters is the width this component has, not the width of the screen. */
+    container-type: inline-size;
+    container-name: bv-editor;
     position: relative;
     height: 100%;
     width: 100%;
@@ -14,41 +20,53 @@
     color: var(--kendo-color-on-surface, var(--bv-text));
 }
 
-/* ── Workspace row — content moved to floating TelerikWindow panel ──────────── */
+/* ── Workspace row: the stage, and the panel beside it ─────────────────────── */
+/* Takes every pixel the toolbar and the timeline row leave. min-height:0 is what lets it
+   actually shrink — without it a flex item refuses to go below its content height, and the
+   overflow lands somewhere nobody can scroll. */
 .bv-workspace {
-    display: none;
-}
-
-/* Clip browser — width driven by --bv-browser-w */
-.bv-workspace__browser {
-    width: var(--bv-browser-w, 240px);
-    flex-shrink: 0;
-    overflow: hidden;
-    transition: width 150ms ease;
-}
-
-.bv-workspace__browser--hidden {
-    width: 0 !important;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
 }
 
-/* Center preview grows to fill remaining space */
-.bv-workspace__preview {
-    flex: 1;
+.bv-workspace__stage {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
     min-width: 0;
+    min-height: 0;
+}
+
+/* ── Side panel (Media & Properties) ───────────────────────────────────────── */
+/* Docked, not floating. As a TelerikWindow it covered the timeline's own controls, forgot its
+   position on reload, and gave a form twice its height 420px to live in. */
+.bv-side-panel {
+    width: var(--bv-panel-w, 340px);
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     overflow: hidden;
-    transition: flex 150ms ease;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
 }
 
-.bv-workspace__preview--hidden {
-    display: none;
-}
-
-/* Right properties panel(s) */
-.bv-workspace__props {
+.bv-side-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .25rem .25rem .25rem .6rem;
     flex-shrink: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-side-panel__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--kendo-color-on-surface, var(--bv-text));
 }
 
 /* ── Asset browser side panel ────────────────────────────────────────────── */
@@ -59,84 +77,18 @@
     border-right: 1px solid var(--kendo-color-border, var(--bv-border));
 }
 
-/* ── Floating Media & Properties panel (TelerikWindow) ──────────────────── */
-/* TelerikWindow doesn't forward the Blazor scope attribute onto its own root
-   element, so `.bv-media-panel-window` alone never matches once compiled to
-   `.bv-media-panel-window[b-xxx] ...`. Root the ::deep at `.bv-editor`
-   instead — a plain authored <div> that reliably carries the scope
-   attribute — then match the rest by class name regardless of scope. */
-.bv-editor ::deep .bv-media-panel-window .k-window-content {
-    padding: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
+/* ── Side-panel tab strip ──────────────────────────────────────────────────── */
+/* TelerikTabStrip's own root (.k-tabstrip) does not carry this component's Blazor scope
+   attribute — verified with getAttribute, no b-xxx on it — so a plain `.bv-side-panel__tabs {}`
+   compiles to a selector that can never match and silently no-ops. It has to go through
+   `.bv-editor ::deep`, anchored on an authored div that does carry the attribute.
 
-/* MinHeight="200px" on the TelerikWindow (so the content area can't be resized
-   too small in normal use) also fights the minimized state, where Telerik tries
-   to shrink to just the titlebar — leaving a tall empty box below the titlebar
-   with the content hidden inside it. Drop the floor once minimized. */
-.bv-editor ::deep .bv-media-panel-window.k-window-minimized {
-    height: auto !important;
-    min-height: 0 !important;
-}
-
-/* Telerik's theme only ever gives .k-window-titlebar top-corner radius (it relies on
-   .k-window's own radius + overflow to round the bottom edge while content is showing).
-   Once minimized, the titlebar's own rectangle IS the whole visible window, so its
-   un-rounded bottom corners show through square — add the missing bottom radius here. */
-.bv-editor ::deep .bv-media-panel-window.k-window-minimized .k-window-titlebar {
-    border-end-start-radius: var(--kendo-border-radius-xxl);
-    border-end-end-radius: var(--kendo-border-radius-xxl);
-}
-
-.bv-media-panel-title {
-    font-size: .8rem;
-    font-weight: 600;
-}
-
-/* ── Preview popout window (TelerikWindow) ───────────────────────────────── */
-/* Same root cause/workaround as .bv-media-panel-window above: TelerikWindow's
-   root doesn't carry the Blazor scope attribute, so this must go through
-   .bv-editor ::deep instead of a plain scoped selector. */
-.bv-editor ::deep .bv-preview-popout-window .k-window-content {
-    padding: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Full-quality Preview output (item #36 phase 84) — "Rendering…" status shown in place of the
-   video element while ExportService's pipeline runs. */
-.bv-fullquality-preview__status {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    text-align: center;
-    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
-    font-size: .875rem;
-    background: #000;
-}
-
-/* Props tab: fill the window content area, scroll internally.
-   Same root cause as the TelerikWindow note above: TelerikTabStrip's own
-   root element (.k-tabstrip) doesn't carry the Blazor scope attribute
-   either (verified via getAttribute — no b-xxx present), so a plain
-   `.bv-media-panel-tabs { ... }` here compiles to a scoped selector that
-   can never match it, regardless of !important; it silently no-ops. Must
-   go through .bv-editor ::deep the same way.
-   Once it actually applies: .k-tabstrip's own default flex:0 1 auto (no
-   min-height override) means it sizes to its OWN content height instead of
-   the space .k-window-content actually gives it. When that content (tab
-   nav + .bv-props-tab's sliders) is taller than the window, the excess
-   silently gets clipped by .k-window-content's overflow:hidden instead of
-   becoming reachable via .bv-props-tab's own overflow-y:auto — so anything
-   past ~Speed (Effects, Volume automation, ...) was invisible AND
-   unscrollable. flex:1 1 0 + min-height:0 forces it to take only the space
-   it's actually given, so the scroll happens where it's supposed to. */
-.bv-editor ::deep .bv-media-panel-tabs {
+   Once it applies: .k-tabstrip's default flex:0 1 auto sizes it to its own content, so a form
+   taller than the panel was clipped by the ancestor's overflow:hidden instead of scrolling in
+   .bv-props-tab, and everything past Speed was invisible AND unreachable. flex:1 1 0 with
+   min-height:0 makes it take exactly the space it is given, so the scroll happens where it
+   belongs. */
+.bv-editor ::deep .bv-side-panel__tabs {
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -144,8 +96,22 @@
     min-height: 0;
 }
 
+/* The tab's own content box is display:block by default, which means the panel inside it ignores
+   any flex sizing and grows to its content — the Properties form then stood 1206px tall inside a
+   571px panel and was simply clipped, with nothing to scroll. Making this a flex column is what
+   gives .bv-props-tab a definite height to scroll within. */
+.bv-editor ::deep .bv-side-panel__tabs .k-tabstrip-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
 .bv-props-tab {
-    flex: 1;
+    flex: 1 1 0;
+    height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
@@ -160,28 +126,26 @@
 }
 
 /* ── Timeline row ──────────────────────────────────────────────────────────── */
-/* height is the user's drag-resized preference (LayoutService.TimelineHeight, up
-   to 600px) but flex-shrink:0 let it stay that size even when the toolbar +
-   this row + the preview row together exceed the viewport — .bv-editor's own
-   overflow:hidden then silently clipped whatever didn't fit (usually the
-   preview row's transport controls). flex-shrink:1 lets both resizable rows
-   compress together instead, so the container never grows past its own box. */
+/* The timeline is the element with a height; the preview takes what is left. This row exists so
+   that height has somewhere to live: VideoTimeline's own root asks for height:100%, and as a bare
+   flex child of .bv-editor that made its flex-basis the whole editor — the preview then shrank in
+   proportion to that basis and ended up a 38px strip under 700px of empty timeline (2026-09-05
+   audit, F4). flex-shrink:1 so a short window compresses it rather than clipping the transport. */
 .bv-timeline-row {
-    height: var(--bv-timeline-h, 180px);   /* slightly shorter — preview gets more space */
-    min-height: 90px;
-    flex-shrink: 1;
+    height: var(--bv-timeline-h, 260px);
+    min-height: 120px;
+    flex: 0 1 auto;
     overflow: hidden;
-    transition: height 150ms ease;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
 }
 
-/* ── Preview row (below timeline) ──────────────────────────────────────────── */
+/* ── Preview row ───────────────────────────────────────────────────────────── */
+/* No height of its own — deliberately. See the note above. */
 .bv-preview-row {
-    height: var(--bv-preview-h, 180px);  /* compact default; user can override via --bv-preview-h */
-    min-height: 90px;
-    flex-shrink: 1;
+    flex: 1 1 auto;
+    min-height: 220px;
     overflow: hidden;
     display: flex;
-    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
 }
 
 /* ── Three-point editing marks (item #51) ──────────────────────────────────── */
@@ -319,4 +283,45 @@ kbd {
     border-left: 1px solid var(--kendo-color-border, var(--bv-border));
     background: var(--kendo-color-surface, var(--bv-surface-2));
     overflow-y: auto;
+}
+
+/* ── Too narrow to edit in ─────────────────────────────────────────────────── */
+/* Under 900px the panel and the timeline cannot both be useful, and what actually happened was
+   worse than cramped: the media panel was display:none'd, leaving no way to import anything, and
+   nothing said so. A phone gets an honest sentence instead (2026-09-05 audit, completeness pass).
+   A container query, not a media query: the editor is embedded in a page whose own chrome takes
+   width, so what matters is the space this component has, not the size of the screen. */
+.bv-editor__too-narrow {
+    display: none;
+}
+
+@container bv-editor (max-width: 900px) {
+    .bv-editor__too-narrow {
+        display: flex;
+        flex-direction: column;
+        gap: .75rem;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 2rem 1.5rem;
+        flex: 1 1 auto;
+        color: var(--kendo-color-on-surface, var(--bv-text));
+    }
+
+    .bv-editor__too-narrow-title {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .bv-editor__too-narrow-body {
+        font-size: .85rem;
+        color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+        max-width: 32ch;
+    }
+
+    .bv-workspace,
+    .bv-timeline-row,
+    .bv-editor > .bv-divider {
+        display: none;
+    }
 }

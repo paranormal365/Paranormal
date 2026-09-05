@@ -24,8 +24,18 @@
 }
 
 /* ── Screen area ────────────────────────────────────────────────────────── */
+/* The stage is the composition's own shape.
+   It used to be whatever box flexbox left over, with the video letterboxed inside it by
+   object-fit:contain. Fine for the picture, wrong for everything drawn on top: the callout, title
+   and control-point overlays are positioned against this element's box (inset:0, and
+   PreviewGeometryService measures it), so they drifted from the frame whenever the two shapes
+   disagreed. With aspect-ratio they are the same box, and object-fit has nothing left to do
+   (2026-09-05 audit, F4). */
 .bv-preview__screen {
-    flex: 1;
+    aspect-ratio: var(--bv-canvas-aspect, 16 / 9);
+    flex: 0 1 auto;
+    max-width: 100%;
+    max-height: 100%;
     position: relative;
     background: #000;
     display: flex;

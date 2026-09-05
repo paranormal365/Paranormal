@@ -28,10 +28,7 @@
         return;
     }
 
-    @* 100vh alone ignores the site's TelerikAppBar (58px) sitting above <main>, which has no
-       explicit height of its own for a height:100% chain to resolve against — the 58px
-       overshoot pushed the video editor's transport controls below the visible viewport. *@
-    <div class="d-flex flex-column" style="height:calc(100vh - 58px); overflow:hidden;">
+    <div class="ben-editor-page">
 
         @* ── Header bar ──────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">

@@ -1,13 +1,15 @@
 // ResizableDivider.razor.js
 // Handles pointer-drag resizing. Called from ResizableDivider.razor via JS isolation.
 //
-// initDivider(el, dotNetRef, direction)
+// initDivider(el, dotNetRef, direction, target)
 //   el          – the divider <div> element
 //   dotNetRef   – DotNetObjectReference to ResizableDivider.razor
-//   direction   – "horizontal" (left/right, changes width of prev sibling)
-//               | "vertical"  (up/down,   changes height of prev sibling)
+//   direction   – "horizontal" (left/right, changes a sibling's width)
+//               | "vertical"  (up/down,   changes a sibling's height)
+//   target      – "previous" (default) or "next": which neighbour is resized. Dragging toward a
+//                 "next" target shrinks it, so the delta is inverted for that case.
 
-export function initDivider(el, dotNetRef, direction) {
+export function initDivider(el, dotNetRef, direction, target) {
     // The element can already be gone. Blazor resolves an ElementReference at call time, and these
     // dividers are rendered per track inside a loop, so a re-render between OnAfterRenderAsync
     // firing and the interop landing — restoring a saved project adds tracks, which is exactly
@@ -22,13 +24,14 @@ export function initDivider(el, dotNetRef, direction) {
     let startSize = 0;
 
     const isH = direction === "horizontal";
+    const resizesNext = target === "next";
 
     el.addEventListener("pointerdown", e => {
         if (e.button !== 0) return;
         dragging = true;
         startPos = isH ? e.clientX : e.clientY;
 
-        const sibling = el.previousElementSibling;
+        const sibling = resizesNext ? el.nextElementSibling : el.previousElementSibling;
         if (!sibling) { dragging = false; return; }
         const rect = sibling.getBoundingClientRect();
         startSize = isH ? rect.width : rect.height;
@@ -39,7 +42,9 @@ export function initDivider(el, dotNetRef, direction) {
 
     el.addEventListener("pointermove", e => {
         if (!dragging) return;
-        const delta   = (isH ? e.clientX : e.clientY) - startPos;
+        const raw     = (isH ? e.clientX : e.clientY) - startPos;
+        // Toward a "next" neighbour is away from its far edge, so the sign flips.
+        const delta   = resizesNext ? -raw : raw;
         const newSize = Math.round(startSize + delta);
         dotNetRef.invokeMethodAsync("OnDragAsync", newSize);
     });

@@ -354,4 +354,137 @@ public class WasmEditorTests : BenTestBase
 
         TestContext.Out.WriteLine($"timeline chips: {await Page.Locator(".bv-clip-chip").CountAsync()}");
     }
+
+    // ── Layout ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The picture gets the room, and the timeline is sized to its tracks.
+    /// </summary>
+    /// <remarks>
+    /// The timeline's root asked for <c>height: 100%</c> as a bare flex child of the editor, which
+    /// made its flex-basis the whole editor: the preview shrank in proportion and ended up a
+    /// 38-pixel strip under 700 pixels of empty timeline. Nothing caught it because nothing had
+    /// ever measured the editor on screen (2026-09-05 audit, F4).
+    /// </remarks>
+    [Test]
+    [Description("At 1440x900 the preview is the biggest thing on screen, not a strip.")]
+    public async Task ThePictureGetsMostOfTheHeight()
+    {
+        await GoAsync();
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        var editor   = await Page.Locator(".bv-editor").BoundingBoxAsync();
+        var screen   = await Page.Locator(".bv-preview__screen").BoundingBoxAsync();
+        var timeline = await Page.Locator(".bv-timeline-row").BoundingBoxAsync();
+
+        Assert.That(screen!.Height, Is.GreaterThan(300),
+            "The preview stage is smaller than a thumbnail — the timeline is claiming the height again.");
+        Assert.That(timeline!.Height, Is.LessThan(editor!.Height * 0.5),
+            "The timeline is taking more than half the editor before a single clip is on it.");
+    }
+
+    /// <summary>
+    /// The stage is the composition's shape, so the overlays drawn on it land where the frame is.
+    /// </summary>
+    [Test]
+    [Description("The preview stage matches the project's aspect ratio.")]
+    public async Task ThePreviewStageIsTheShapeOfTheComposition()
+    {
+        await GoAsync();
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        var screen = await Page.Locator(".bv-preview__screen").BoundingBoxAsync();
+        var aspect = screen!.Width / screen.Height;
+
+        Assert.That(aspect, Is.EqualTo(16.0 / 9.0).Within(0.02),
+            $"The stage is {screen.Width}x{screen.Height}, which is not the 16:9 the project renders at.");
+    }
+
+    /// <summary>
+    /// The panel sits beside the editor rather than on top of it.
+    /// </summary>
+    /// <remarks>
+    /// As a floating window it covered the timeline header's own Ripple, Callout and Marker buttons
+    /// at every viewport width — present in the DOM, invisible to a person (2026-09-05 audit, F3).
+    /// </remarks>
+    [Test]
+    [Description("The Media & Properties panel does not overlap the timeline's controls.")]
+    public async Task ThePanelDoesNotCoverTheTimelineControls()
+    {
+        await GoAsync();
+        await Expect(Page.Locator(".bv-side-panel")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        var panel  = await Page.Locator(".bv-side-panel").BoundingBoxAsync();
+        var header = await Page.Locator(".bv-timeline__header").BoundingBoxAsync();
+
+        var overlaps = panel!.X < header!.X + header.Width
+                    && header.X < panel.X + panel.Width
+                    && panel.Y < header.Y + header.Height
+                    && header.Y < panel.Y + panel.Height;
+
+        Assert.That(overlaps, Is.False,
+            "The panel is sitting on top of the timeline header, where it hides Ripple, Callout and Marker.");
+
+        foreach (var label in new[] { "Ripple", "Marker" })
+            await Expect(Page.Locator(".bv-timeline__header").GetByText(label, new() { Exact = false }).First)
+                .ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    /// <summary>
+    /// A resized layout is still there after a reload.
+    /// </summary>
+    [Test]
+    [Description("Dragging the seam grows the timeline, and the size survives a reload.")]
+    public async Task TheLayoutIsRemembered()
+    {
+        await GoAsync();
+        await Expect(Page.Locator(".bv-timeline-row")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        var before = (await Page.Locator(".bv-timeline-row").BoundingBoxAsync())!.Height;
+
+        var seam = await Page.Locator(".bv-editor > .bv-divider--vertical").BoundingBoxAsync();
+        await Page.Mouse.MoveAsync(seam!.X + seam.Width / 2, seam.Y + seam.Height / 2);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync(seam.X + seam.Width / 2, seam.Y - 80, new() { Steps = 10 });
+        await Page.Mouse.UpAsync();
+
+        // The drag is applied through a Blazor render, so give it a moment rather than asserting
+        // on the frame the mouse-up happened in.
+        await Page.WaitForTimeoutAsync(500);
+
+        var dragged = (await Page.Locator(".bv-timeline-row").BoundingBoxAsync())!.Height;
+        Assert.That(dragged, Is.GreaterThan(before + 40),
+            "Dragging the seam upward did not grow the timeline.");
+
+        // The write is debounced; give it room before reloading out from under it.
+        await Page.WaitForTimeoutAsync(600);
+        await Page.ReloadAsync();
+        await Expect(Page.Locator(".bv-timeline-row")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        var restored = (await Page.Locator(".bv-timeline-row").BoundingBoxAsync())!.Height;
+        Assert.That(restored, Is.EqualTo(dragged).Within(4),
+            "The timeline went back to its default height, so the layout was not remembered.");
+    }
+
+    /// <summary>
+    /// A phone is told, rather than shown a half-built editor with no way to import anything.
+    /// </summary>
+    [Test]
+    [Description("Below 900px the editor says it needs a wider window.")]
+    public async Task ANarrowWindowGetsAnHonestMessage()
+    {
+        await GoAsync();
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        await Page.SetViewportSizeAsync(390, 844);
+
+        await Expect(Page.Locator(".bv-editor__too-narrow")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Page.Locator(".bv-workspace")).ToBeHiddenAsync();
+        await Expect(Page.Locator(".bv-timeline-row")).ToBeHiddenAsync();
+
+        // And it comes back, as the message promises.
+        await Page.SetViewportSizeAsync(1440, 900);
+        await Expect(Page.Locator(".bv-workspace")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Page.Locator(".bv-editor__too-narrow")).ToBeHiddenAsync();
+    }
 }

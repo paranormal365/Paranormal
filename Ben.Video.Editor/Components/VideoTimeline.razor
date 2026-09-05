@@ -1597,6 +1597,39 @@
         await OnItemRemoved.InvokeAsync(item.Id);
     }
 
+    /// <summary>
+    /// The height this timeline would like: its chrome plus a row per track, plus the overlay lanes
+    /// each track is carrying.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read by <c>VideoEditor</c> so a project with one track does not reserve the space a
+    /// project with six needs, and a project with six is not squeezed into the space one needs. The
+    /// person's own drag always wins — see <c>LayoutService.AutoFitTimeline</c>.</para>
+    ///
+    /// <para>The numbers match the stylesheet: <c>.bv-timeline__header</c> and the ruler are fixed
+    /// chrome, <c>.bv-track</c> has a 56px floor, and each overlay lane is an inline 40px row
+    /// (<c>overlayItems.Count * 40</c> in the markup above). They are approximate on purpose —
+    /// this only decides a starting size, and being a row out is invisible.</para>
+    /// </remarks>
+    public int PreferredHeightPx
+    {
+        get
+        {
+            const int Chrome     = 34 + 26;  // header + ruler
+            const int TrackRow   = 56;
+            const int OverlayRow = 40;
+            const int MarkerRuler = 22;
+
+            var tracks = Clips.Tracks.Count;
+            var overlayRows = Clips.Tracks.Sum(t => t.Items.Count(
+                i => i is CalloutClip or TextOverlay or ClipArtClip));
+
+            var markers = EffectiveOptions.Markers && Clips.Markers.Count > 0 ? MarkerRuler : 0;
+
+            return Chrome + markers + (tracks * TrackRow) + (overlayRows * OverlayRow);
+        }
+    }
+
  // --- Multi-select bulk operations ---
 
     public IReadOnlyList<Guid> GetMultiSelectedIds() => _multiSelectedIds.ToList();

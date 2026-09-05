@@ -44,9 +44,9 @@ public sealed class EditorThemeTokenTests
     /// <summary>Tokens the app sets as an inline style at runtime rather than in a stylesheet.</summary>
     private static readonly string[] SetAtRuntime =
     [
-        "--bv-preview-h",       // VideoEditor, from LayoutService
-        "--bv-browser-w",       // panel width, dragged by the user
-        "--bv-timeline-h",      // panel height, dragged by the user
+        "--bv-timeline-h",      // VideoEditor, from LayoutService — dragged by the user
+        "--bv-panel-w",         // side-panel width, dragged by the user
+        "--bv-canvas-aspect",   // the composition's shape, from ExportResolutionService
         "--bv-marker-color",    // per-marker, from the marker's own colour
         "--bv-waveform-height", // per-waveform, from the Height parameter
         "--bv-wf-progress",     // per-waveform playback position

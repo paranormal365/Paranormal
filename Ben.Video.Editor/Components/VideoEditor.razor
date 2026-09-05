@@ -31,7 +31,7 @@
 @implements IAsyncDisposable
 @implements IKeyboardCommandTarget
 
-<div class="bv-editor" @ref="_editorRoot" style="--bv-preview-h: @(Layout.PreviewHeight)px">
+<div class="bv-editor" @ref="_editorRoot" style="--bv-timeline-h: @(Layout.TimelineHeight)px; --bv-panel-w: @(Layout.PanelWidth)px; --bv-canvas-aspect: @CanvasAspect">
 
     <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
     @* Preview/Export need video OR image content (matches ExportService.RunPipelineAsync's
@@ -76,8 +76,8 @@
              OnToggleQueue="() => _showQueuePanel = !_showQueuePanel"
              ShowAssetBrowser="@_showAssetBrowser"
              OnToggleAssetBrowser="() => _showAssetBrowser = !_showAssetBrowser"
-             ShowPanel="@(!_panelVisible)"
-             OnTogglePanel="() => { _panelVisible = true; _panelState = WindowState.Default; }"
+             ShowPanel="@Layout.PanelCollapsed"
+             OnTogglePanel="@(() => Layout.SetPanelCollapsed(false))"
              IsFullscreen="@_isFullscreen"
              OnToggleFullscreen="ToggleFullscreenAsync"
              HasSubtitles="@Clips.AllTextOverlays.Any()"
@@ -88,162 +88,181 @@
     <ProjectListDialog @bind-Visible="_showProjectList"
                        OnOpen="OnProjectListOpenAsync" />
 
-    <!-- ── Floating Media & Properties panel ───────────────────────────── -->
-    <TelerikWindow @bind-Visible="_panelVisible"
-                   @bind-State="_panelState"
-                   Draggable="true"
-                   Resizable="true"
-                   PersistContent="true"
-                   ContainmentSelector=".bv-editor"
-                   @bind-Width="_panelWidth"
-                   @bind-Height="_panelHeight"
-                   MinWidth="240px"
-                   MinHeight="200px"
-                   @bind-Top="_panelTop"
-                   @bind-Left="_panelLeft"
-                   Class="bv-media-panel-window">
-        <WindowTitle>
-            <span class="bv-media-panel-title">Media &amp; Properties</span>
-        </WindowTitle>
-        <WindowActions>
-            <WindowAction Name="Minimize" />
-            <WindowAction Name="Close" />
-        </WindowActions>
-        <WindowContent>
-            <TelerikTabStrip @bind-ActiveTabId="_panelTab"
-                             Size="@ThemeConstants.TabStrip.Size.Small"
-                             PersistTabContent="true"
-                             Class="bv-media-panel-tabs">
+    @* Shown only under 900px, by a container query — see the stylesheet. Rendered always so the
+       editor never has to guess at a viewport it cannot measure from C#. *@
+    <div class="bv-editor__too-narrow">
+        <span class="bv-editor__too-narrow-title">This editor needs a wider window</span>
+        <span class="bv-editor__too-narrow-body">
+            Editing video means a timeline, a picture and a properties panel side by side. Open this
+            on a desktop or laptop, or widen this window, and it will come back.
+        </span>
+    </div>
 
-                <TabStripTab Title="📁 Media" Id="media">
-                    <ClipBrowser @ref="_browser"
-                                 EditorOptions="EffectiveOptions"
-                                 OnClipSelected="OnClipSelectedAsync"
-                                 OnAddToTimeline="AddClipToTimeline"
-                                 OnAudioClipAdded="OnAudioClipAdded" />
-                </TabStripTab>
+    <!-- ── Workspace: the picture, and the panel beside it ──────────────── -->
+    @* The Media & Properties panel used to be a floating TelerikWindow parked at the right edge,
+       where it covered the timeline's own Ripple, Callout and Marker buttons at any width, forgot
+       where it had been put on every reload, and gave Properties 320x420 to show a form twice that
+       tall. It is a docked column now: nothing overlaps, the form gets the full height of the
+       editor, and the width is remembered (2026-09-05 audit, F3). *@
+    <div class="bv-workspace">
 
-                @if (_showAssetBrowser)
+        <div class="bv-workspace__stage">
+            <!-- ── Preview ──────────────────────────────────────────────── -->
+            <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
+                @if (!_isPoppedOut)
                 {
-                    <TabStripTab Title="🖼 Assets" Id="assets">
-                        <AssetBrowser />
-                    </TabStripTab>
+                    <VideoPreview @ref="_preview"
+                                  OwnerLabel="WorkingWindow"
+                                  OnTimeUpdate="OnPreviewTimeUpdate"
+                                  MotionLayerId="@_motionLayerId"
+                                  OnMotionKeyframeSelected="OnMotionKeyframeSelected"
+                                  OnAddKeyframeAt="AddKeyframeAt"
+                                  ActiveCallout="@_selectedCallout"
+                                  ActiveClipArt="@_selectedClipArt"
+                                  ActiveTextOverlay="@_selectedTextOverlay"
+                                  OnCanvasItemSelected="OnCanvasItemSelected"
+                                  OnPopoutRequested="OpenPopoutAsync"
+                                  SnappingEnabled="@EffectiveOptions.Snapping"
+                                  SelectedCanvasItem="@SelectedCanvasItem"
+                                  OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
                 }
+            </div>
 
-                <TabStripTab Title="⚙ Properties" Id="props">
-                    <div class="bv-props-tab">
-                        @if (_selectedClip is not null)
-                        {
-                            <ClipEditor Clip="@_selectedClip"
-                                        EditorOptions="EffectiveOptions"
-                                        OnClose="ClearSelectedClip"
-                                        OnTrimApplied="OnTrimApplied"
-                                        OnClipSplit="OnClipSplit"
-                                        OnClipDeleted="OnClipDeleted" />
-                        }
-                        else if (_selectedAudioClip is not null)
-                        {
-                            <AudioClipEditor Clip="@_selectedAudioClip"
-                                             OnClose="ClearSelectedAudioClip"
-                                             OnClipDeleted="OnAudioClipDeleted"
-                                             OnClipSplit="OnAudioClipSplit" />
-                        }
-                        else if (_selectedImageClip is not null)
-                        {
-                            <ImageClipEditor Clip="@_selectedImageClip"
-                                             OnClose="ClearSelectedImageClip"
-                                             OnRemove="OnImageClipRemoved"
-                                             OnClipSplit="OnImageClipSplit" />
-                        }
-                        else if (_selectedCallout is not null)
-                        {
-                            <CalloutEditor Clip="@_selectedCallout"
-                                           OnClose="@(() => _selectedCallout = null)"
-                                           OnRemove="@(() => { Clips.RemoveCallout(_selectedCallout!.Id); _selectedCallout = null; })"
-                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else if (_selectedClipArt is not null)
-                        {
-                            <ClipArtEditor Clip="@_selectedClipArt"
-                                           OnClose="@(() => _selectedClipArt = null)"
-                                           OnRemove="@(() => { Clips.RemoveClipArtClip(_selectedClipArt!.Id); _selectedClipArt = null; })"
-                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else if (_motionLayerId.HasValue)
-                        {
-                            <MotionKeyframeEditor LayerId="@_motionLayerId"
-                                                  LayerType="@_motionLayerType"
-                                                  KeyframeIndex="@_motionKeyframeIndex"
-                                                  OnClose="@(() => { _motionLayerId = null; _motionLayerType = null; })" />
-                        }
-                        else if (_selectedTransition is not null)
-                        {
-                            <TransitionEditor Transition="@_selectedTransition"
-                                              OnClose="ClearSelectedTransition"
-                                              OnRemoved="ClearSelectedTransition" />
-                        }
-                        else if (_selectedTextOverlay is not null)
-                        {
-                            <TextOverlayEditor Overlay="@_selectedTextOverlay"
-                                               OnClose="ClearSelectedTextOverlay"
-                                               OnRemoved="ClearSelectedTextOverlay"
-                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else
-                        {
-                            <div class="bv-props-empty">Select a clip on the timeline to edit its properties.</div>
-                        }
-                    </div>
-                </TabStripTab>
-
-            </TelerikTabStrip>
-        </WindowContent>
-    </TelerikWindow>
-
-    <!-- ── Preview (above timeline) ─────────────────────────────────────── -->
-    <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
-        @if (!_isPoppedOut)
+        @if (!_isPoppedOut && Playback.State.Mode == PlaybackMode.Clip && _previewedLibraryClip is not null)
         {
-            <VideoPreview @ref="_preview"
-                          OwnerLabel="WorkingWindow"
-                          OnTimeUpdate="OnPreviewTimeUpdate"
-                          MotionLayerId="@_motionLayerId"
-                          OnMotionKeyframeSelected="OnMotionKeyframeSelected"
-                          OnAddKeyframeAt="AddKeyframeAt"
-                          ActiveCallout="@_selectedCallout"
-                          ActiveClipArt="@_selectedClipArt"
-                          ActiveTextOverlay="@_selectedTextOverlay"
-                          OnCanvasItemSelected="OnCanvasItemSelected"
-                          OnPopoutRequested="OpenPopoutAsync"
-                          SnappingEnabled="@EffectiveOptions.Snapping"
-                          SelectedCanvasItem="@SelectedCanvasItem"
-                          OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+            <!-- ── Three-point editing marks (item #51) ─────────────────────────── -->
+            <div class="bv-mark-inout">
+                <TelerikButton OnClick="MarkIn" Size="@ThemeConstants.Button.Size.Small" Title="Mark in-point at the current preview position">
+                    Mark In
+                </TelerikButton>
+                <TelerikButton OnClick="MarkOut" Size="@ThemeConstants.Button.Size.Small" Title="Mark out-point at the current preview position">
+                    Mark Out
+                </TelerikButton>
+                @if (_markedIn.HasValue || _markedOut.HasValue)
+                {
+                    <span class="bv-mark-inout__summary">
+                        @(_markedIn.HasValue ? PlaybackService.FormatTime(_markedIn.Value) : "—") → @(_markedOut.HasValue ? PlaybackService.FormatTime(_markedOut.Value) : "—")
+                        (next "Add to Timeline" uses this range)
+                    </span>
+                    <TelerikButton OnClick="ClearMarks" Size="@ThemeConstants.Button.Size.Small" FillMode="@ThemeConstants.Button.FillMode.Flat" Title="Clear marks">
+                        Clear
+                    </TelerikButton>
+                }
+            </div>
+        }
+        </div>
+
+        @if (!Layout.PanelCollapsed)
+        {
+            <ResizableDivider Direction="horizontal" Target="next"
+                              OnResize="@(px => Layout.SetPanelWidth(px))" />
+
+            <aside class="bv-side-panel">
+                <div class="bv-side-panel__header">
+                    <span class="bv-side-panel__title">Media &amp; Properties</span>
+                    <TelerikButton OnClick="@(() => Layout.TogglePanel())"
+                                   Icon="@SvgIcon.WindowMinimize"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   Title="Collapse this panel" />
+                </div>
+                <TelerikTabStrip ActiveTabId="@Layout.PanelTab"
+                                 ActiveTabIdChanged="@(id => Layout.SetPanelTab(id))"
+                                 Size="@ThemeConstants.TabStrip.Size.Small"
+                                 PersistTabContent="true"
+                                 Class="bv-side-panel__tabs">
+
+                    <TabStripTab Title="📁 Media" Id="media">
+                        <ClipBrowser @ref="_browser"
+                                     EditorOptions="EffectiveOptions"
+                                     OnClipSelected="OnClipSelectedAsync"
+                                     OnAddToTimeline="AddClipToTimeline"
+                                     OnAudioClipAdded="OnAudioClipAdded" />
+                    </TabStripTab>
+
+                    @if (_showAssetBrowser)
+                    {
+                        <TabStripTab Title="🖼 Assets" Id="assets">
+                            <AssetBrowser />
+                        </TabStripTab>
+                    }
+
+                    <TabStripTab Title="⚙ Properties" Id="props">
+                        <div class="bv-props-tab">
+                            @if (_selectedClip is not null)
+                            {
+                                <ClipEditor Clip="@_selectedClip"
+                                            EditorOptions="EffectiveOptions"
+                                            OnClose="ClearSelectedClip"
+                                            OnTrimApplied="OnTrimApplied"
+                                            OnClipSplit="OnClipSplit"
+                                            OnClipDeleted="OnClipDeleted" />
+                            }
+                            else if (_selectedAudioClip is not null)
+                            {
+                                <AudioClipEditor Clip="@_selectedAudioClip"
+                                                 OnClose="ClearSelectedAudioClip"
+                                                 OnClipDeleted="OnAudioClipDeleted"
+                                                 OnClipSplit="OnAudioClipSplit" />
+                            }
+                            else if (_selectedImageClip is not null)
+                            {
+                                <ImageClipEditor Clip="@_selectedImageClip"
+                                                 OnClose="ClearSelectedImageClip"
+                                                 OnRemove="OnImageClipRemoved"
+                                                 OnClipSplit="OnImageClipSplit" />
+                            }
+                            else if (_selectedCallout is not null)
+                            {
+                                <CalloutEditor Clip="@_selectedCallout"
+                                               OnClose="@(() => _selectedCallout = null)"
+                                               OnRemove="@(() => { Clips.RemoveCallout(_selectedCallout!.Id); _selectedCallout = null; })"
+                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else if (_selectedClipArt is not null)
+                            {
+                                <ClipArtEditor Clip="@_selectedClipArt"
+                                               OnClose="@(() => _selectedClipArt = null)"
+                                               OnRemove="@(() => { Clips.RemoveClipArtClip(_selectedClipArt!.Id); _selectedClipArt = null; })"
+                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else if (_motionLayerId.HasValue)
+                            {
+                                <MotionKeyframeEditor LayerId="@_motionLayerId"
+                                                      LayerType="@_motionLayerType"
+                                                      KeyframeIndex="@_motionKeyframeIndex"
+                                                      OnClose="@(() => { _motionLayerId = null; _motionLayerType = null; })" />
+                            }
+                            else if (_selectedTransition is not null)
+                            {
+                                <TransitionEditor Transition="@_selectedTransition"
+                                                  OnClose="ClearSelectedTransition"
+                                                  OnRemoved="ClearSelectedTransition" />
+                            }
+                            else if (_selectedTextOverlay is not null)
+                            {
+                                <TextOverlayEditor Overlay="@_selectedTextOverlay"
+                                                   OnClose="ClearSelectedTextOverlay"
+                                                   OnRemoved="ClearSelectedTextOverlay"
+                                                   OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else
+                            {
+                                <div class="bv-props-empty">Select a clip on the timeline to edit its properties.</div>
+                            }
+                        </div>
+                    </TabStripTab>
+
+                </TelerikTabStrip>
+            </aside>
         }
     </div>
 
-    @if (!_isPoppedOut && Playback.State.Mode == PlaybackMode.Clip && _previewedLibraryClip is not null)
-    {
-        <!-- ── Three-point editing marks (item #51) ─────────────────────────── -->
-        <div class="bv-mark-inout">
-            <TelerikButton OnClick="MarkIn" Size="@ThemeConstants.Button.Size.Small" Title="Mark in-point at the current preview position">
-                Mark In
-            </TelerikButton>
-            <TelerikButton OnClick="MarkOut" Size="@ThemeConstants.Button.Size.Small" Title="Mark out-point at the current preview position">
-                Mark Out
-            </TelerikButton>
-            @if (_markedIn.HasValue || _markedOut.HasValue)
-            {
-                <span class="bv-mark-inout__summary">
-                    @(_markedIn.HasValue ? PlaybackService.FormatTime(_markedIn.Value) : "—") → @(_markedOut.HasValue ? PlaybackService.FormatTime(_markedOut.Value) : "—")
-                    (next "Add to Timeline" uses this range)
-                </span>
-                <TelerikButton OnClick="ClearMarks" Size="@ThemeConstants.Button.Size.Small" FillMode="@ThemeConstants.Button.FillMode.Flat" Title="Clear marks">
-                    Clear
-                </TelerikButton>
-            }
-        </div>
-    }
-    <ResizableDivider Direction="vertical" OnResize="@(px => Layout.SetPreviewHeight(px))" />
+    @* The seam. Target="next" so dragging it upward grows the timeline; the preview simply takes
+       what is left, which is why it no longer needs a height of its own. *@
+    <ResizableDivider Direction="vertical" Target="next"
+                      OnResize="@(px => Layout.SetTimelineHeight(px))" />
+
 
     @if (_isPoppedOut)
     {
@@ -319,16 +338,21 @@
     }
 
     <!-- ── Timeline ─────────────────────────────────────────────────────── -->
-    <VideoTimeline @ref="_timeline"
-                   MultiTrack="@EffectiveOptions.MultiTrack"
-                   AudioTracks="@EffectiveOptions.AudioTracks"
-                   EditorOptions="EffectiveOptions"
-                   OnItemSelected="OnTimelineItemSelected"
-                   OnItemRemoved="OnTimelineItemRemoved"
-                   OnRelinkRequested="OnRelinkRequestedAsync"
-                   OnBulkDelete="OnBulkDeleteAsync"
-                   OnBulkMove="OnBulkMoveAsync"
-                   OnTimelineKeyframeSelected="OnTimelineKeyframeSelected" />
+    @* Wrapped, and the wrapper is what carries the height. The timeline's own root asks for
+       height:100%, which as a bare flex child of .bv-editor made its flex-basis the whole editor
+       and squeezed the preview to a strip (2026-09-05 audit, F4). *@
+    <div class="bv-timeline-row">
+        <VideoTimeline @ref="_timeline"
+                       MultiTrack="@EffectiveOptions.MultiTrack"
+                       AudioTracks="@EffectiveOptions.AudioTracks"
+                       EditorOptions="EffectiveOptions"
+                       OnItemSelected="OnTimelineItemSelected"
+                       OnItemRemoved="OnTimelineItemRemoved"
+                       OnRelinkRequested="OnRelinkRequestedAsync"
+                       OnBulkDelete="OnBulkDeleteAsync"
+                       OnBulkMove="OnBulkMoveAsync"
+                       OnTimelineKeyframeSelected="OnTimelineKeyframeSelected" />
+    </div>
 
     <!-- ── Export Dialog ───────────────────────────────────────────────────────── -->
     <ExportDialog @ref="_exportDialog"
@@ -467,28 +491,12 @@
     private double?                _markedIn;
     private double?                _markedOut;
     private bool                   _showAssetBrowser;
-    // Item #65 — defaults shared between the field initializers below and both
-    // OnAfterRenderAsync self-heal blocks (item #53/phase 114's TelerikWindow
-    // ContainmentSelector-clamp fix) so all three stay in lock-step by construction instead of
-    // needing the same literals kept in sync by hand across three spots.
-    private const string DefaultPanelTop    = "68px";  // clears the toolbar row (.bv-toolbar, ~61px tall)
-    private const string DefaultPanelLeft   = "calc(100% - 328px)"; // docked right: width + 8px margin
-    private const string DefaultPanelWidth  = "320px";
-    private const string DefaultPanelHeight = "420px";
+    // The panel's position, size and window state used to live here as four strings kept in
+    // lock-step with two self-heal blocks, because a floating TelerikWindow clamped against
+    // .bv-editor could measure a mid-layout container and overwrite its own defaults. A docked
+    // column has no position to lose, so all of that is gone; what remains is in LayoutService,
+    // which also persists it (2026-09-05 audit, F3).
 
-    private bool                   _panelVisible  = true;
-    // Item #65, revised by the user 2026-08-13 after living with it: starts OPEN, positioned at
-    // the right edge (DefaultPanelLeft below) rather than minimized. The original ask was "not on
-    // the left" — minimizing was one way to satisfy that, but having the panel simply sit on the
-    // right is the behaviour actually wanted. Note this panel is a floating TelerikWindow with no
-    // true dock-into-layout mode, so "pinned right" here means positioned at the right edge, not
-    // reflowing the editor around it.
-    private WindowState            _panelState    = WindowState.Default;
-    private string                 _panelTab      = "media";
-    private string                 _panelTop      = DefaultPanelTop;
-    private string                 _panelLeft     = DefaultPanelLeft;
-    private string                 _panelWidth    = DefaultPanelWidth;
-    private string                 _panelHeight   = DefaultPanelHeight;
     private TelerikNotification?   _notifications;
 
     // Audit #4 — typed DOM helpers instead of eval'd source strings; every lookup is null-guarded
@@ -623,6 +631,11 @@
         if (firstRender)
         {
             await Keyboard.RegisterAsync(this);
+
+            // Before the project loads, so the editor paints once at the size it will keep rather
+            // than snapping from the defaults after the first frame.
+            await RestoreLayoutAsync();
+
             await Projects.InitAsync();  // load project index from localStorage
 
             // Item #69 fix — restore whichever project was last active, if this host opts into
@@ -635,33 +648,6 @@
             _fullscreenSelfRef = DotNetObjectReference.Create(this);
             await _fullscreenModule.InvokeVoidAsync("addChangeListener", _fullscreenSelfRef);
 
-            // Backlog #53: TelerikWindow's ContainmentSelector-driven clamp runs its own
-            // mount-time measurement of .bv-editor, and on first paint that container can still
-            // be mid-layout (worst case, momentarily 0×0) — the bad clamp result then flows back
-            // through @bind-Top/@bind-Left/@bind-Width/@bind-Height and overwrites our own
-            // known-good defaults before the user ever sees or touches the panel. There is by
-            // definition no legitimate prior drag/resize to preserve at this exact point, so it's
-            // always safe to unconditionally reassert the intended defaults here — a no-op when
-            // Telerik behaved, a fix when it didn't.
-            _panelTop    = DefaultPanelTop;
-            _panelLeft   = DefaultPanelLeft;
-            _panelWidth  = DefaultPanelWidth;
-            _panelHeight = DefaultPanelHeight;
-            StateHasChanged();
-        }
-
-        // Same root cause as above, but for the rarer case reported after first paint: some
-        // later re-clamp (e.g. a ResizeObserver tick during a minimize/restore or tab-switch
-        // animation) corrupts the panel again after the user already positioned it. "0px" is
-        // never a legitimate resting width/height (MinWidth/MinHeight are 240px/200px, well
-        // above anything a real drag/resize could produce), so it's an unambiguous signal to
-        // self-heal without needing to guess at timing or risk fighting a deliberate user drag.
-        if (_panelWidth == "0px" || _panelHeight == "0px")
-        {
-            _panelTop    = DefaultPanelTop;
-            _panelLeft   = DefaultPanelLeft;
-            _panelWidth  = DefaultPanelWidth;
-            _panelHeight = DefaultPanelHeight;
             StateHasChanged();
         }
 
@@ -1144,9 +1130,8 @@
     /// </summary>
     private async Task OpenFilesAsync()
     {
-        _panelVisible = true;
-        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
-        _panelTab = "media";
+        Layout.SetPanelCollapsed(false);
+        Layout.SetPanelTab("media");
         StateHasChanged();
 
         // Let the panel (and therefore ClipBrowser's file input) actually render before the picker
@@ -1300,10 +1285,9 @@
 
     private async Task OnTimelineItemSelected(TrackItem item)
     {
-        // Auto-switch to Properties tab and ensure window is visible
-        _panelTab     = "props";
-        _panelVisible = true;
-        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
+        // Auto-switch to Properties and make sure the panel is showing.
+        Layout.SetPanelTab("props");
+        Layout.SetPanelCollapsed(false);
 
         // Selecting any other layer exits an active motion-path edit — mirrors the fix already
         // applied in the other direction by ActivateMotionPath (which clears the selections below).
@@ -2214,6 +2198,9 @@
 
     private void OnClipsChanged()
     {
+        // Adding a track or an overlay lane changes how much room the timeline wants. Courtesy
+        // only: it stops as soon as the person drags the seam themselves.
+        AutoFitTimeline();
         InvokeAsync(StateHasChanged);
         PreviewFreshness.MarkStale();
         ScheduleAutoPreview();
@@ -2437,12 +2424,97 @@
         StateHasChanged();
     }
     private void OnPlaybackStateChanged()   => InvokeAsync(StateHasChanged);
-    private void OnLayoutChanged()          => InvokeAsync(StateHasChanged);
 
-    // ── Layout resize callbacks ────────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Re-renders for a layout change, and remembers it.
+    /// </summary>
+    /// <remarks>
+    /// Debounced because a drag raises this on every pointermove: without it a single resize would
+    /// write to localStorage a hundred times. The write is fire-and-forget — a browser that refuses
+    /// to store (private mode, quota) still gets a working editor for this session, which is what
+    /// <c>storageInterop.setItem</c>'s own false return is for.
+    /// </remarks>
+    private void OnLayoutChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        ScheduleLayoutSave();
+    }
 
-    private void OnBrowserResized(int px)  => Layout.SetBrowserWidth(px);
-    private void OnTimelineResized(int px) => Layout.SetTimelineHeight(px);
+    private CancellationTokenSource? _layoutSaveCts;
+
+    private void ScheduleLayoutSave()
+    {
+        _layoutSaveCts?.Cancel();
+        _layoutSaveCts?.Dispose();
+        _layoutSaveCts = new CancellationTokenSource();
+        var token = _layoutSaveCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(300, token);
+                var storage = await StorageAsync();
+                await storage.InvokeAsync<bool>("setItem", LayoutService.StorageKey, Layout.Serialise());
+            }
+            catch (OperationCanceledException) { /* superseded by a later change */ }
+            catch (Exception ex) { ErrorLog.Log("VideoEditor.SaveLayout", ex); }
+        });
+    }
+
+    private IJSObjectReference? _storage;
+
+    private async Task<IJSObjectReference> StorageAsync() =>
+        _storage ??= await JS.InvokeAsync<IJSObjectReference>(
+            "benImportEditorModule", "js/storageInterop.js");
+
+    /// <summary>Restores the remembered panel width, timeline height and tab.</summary>
+    private async Task RestoreLayoutAsync()
+    {
+        try
+        {
+            var storage = await StorageAsync();
+            var stored  = await storage.InvokeAsync<string?>("getItem", LayoutService.StorageKey);
+            Layout.Apply(LayoutService.Deserialise(stored));
+        }
+        catch (Exception ex)
+        {
+            // A layout preference is never worth failing to open the editor over.
+            ErrorLog.Log("VideoEditor.RestoreLayout", ex);
+        }
+    }
+
+    // ── Layout ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The composition's shape, as an <c>aspect-ratio</c> value for the preview stage.
+    /// </summary>
+    /// <remarks>
+    /// The black stage used to be whatever box the flexbox left over, with the video letterboxed
+    /// inside it by <c>object-fit: contain</c>. That is fine for the picture and wrong for
+    /// everything drawn on top of it: the callout, title and control-point overlays are positioned
+    /// against the stage's own box, so they drifted away from the frame whenever the two shapes
+    /// disagreed. Giving the stage the composition's aspect ratio makes the two the same box
+    /// (2026-09-05 audit, F4).
+    /// </remarks>
+    private string CanvasAspect
+    {
+        get
+        {
+            var w = ExportRes.Width  > 0 ? ExportRes.Width  : 1920;
+            var h = ExportRes.Height > 0 ? ExportRes.Height : 1080;
+            return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{w} / {h}");
+        }
+    }
+
+    /// <summary>
+    /// Sizes the timeline to the tracks it holds, until the person sizes it themselves.
+    /// </summary>
+    private void AutoFitTimeline()
+    {
+        if (_timeline is null) return;
+        Layout.AutoFitTimeline(_timeline.PreferredHeightPx);
+    }
 
     // ── Multi-select bulk handlers ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -2499,6 +2571,8 @@
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
         BackgroundRender.OnLoopError -= OnBackgroundRenderLoopError;
+        _layoutSaveCts?.Cancel();
+        _layoutSaveCts?.Dispose();
         Clips.OnChange          -= OnClipsChanged;
         Playback.OnStateChanged -= OnPlaybackStateChanged;
         Layout.OnChanged        -= OnLayoutChanged;
