@@ -60,6 +60,22 @@ a real write rather than trusting a feature check, and the person is told up fro
 reopened there will have missing clips. Every write was failing and being swallowed as non-fatal,
 so the editor worked perfectly until a reload.
 
+## Verified on screen
+
+Standalone host at 1440x900: a 29.5 second clip and a 186 second music track.
+
+- The frame-rate picker opens at **30**, matching the export, not 24.
+- The preview's commands show the mix running in the Working Window:
+  `-ss 0.000 -to 186.540 -i …mp3 -vn -filter:a volume=… -c:a pcm_s16le preview_audio_000_….wav`
+  then `amix=inputs=2:duration=longest:normalize=0:dropout_transition=0` with the limiter, mapping
+  `[aout]`. The music is audible while editing for the first time.
+- The preview's duration is **186.5s**, matching the timeline, so the scrubber covers the music
+  that runs past the last clip rather than stopping at the picture.
+- Playing from 1:00 and then dragging a clip: playback carried straight on and was at **2:07**
+  after the rebuild, with the new length. It used to jump to 0:00 and stop.
+- **Set In** and **Set Out** appear on a video clip and are correctly disabled while the playhead
+  is elsewhere. With the playhead at 12s, Set Out trimmed the clip from 0:29.5 to exactly **0:12.0**.
+
 ## Not done in this phase
 
 - **A `ProjectSettingsService` merging `ExportResolutionService` and `PlaybackService.SessionFps`.**
