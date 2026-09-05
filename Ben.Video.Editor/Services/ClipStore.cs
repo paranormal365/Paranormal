@@ -1700,6 +1700,69 @@ public sealed class ClipStore
 
     // â”€â”€ Transition management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+    // ── Media bin ─────────────────────────────────────────────────────────────
+
+    private readonly List<TrackItem> _mediaBin = [];
+
+    /// <summary>
+    /// The media you have brought in, whether or not any of it is on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// <para>There was no such thing. The Media panel's three tabs listed the timeline's own items,
+    /// so "your media" and "your edit" were one list: declining the insert prompt left the clip
+    /// nowhere, removing it from the timeline meant importing the file again, and using one source
+    /// twice was only possible by finding a copy of it already placed (2026-09-05 audit,
+    /// media-panel-3 and F8).</para>
+    ///
+    /// <para>Entries are ordinary clips that happen to live outside any track. Placing one puts a
+    /// copy on the timeline, so the same source can be used as often as you like and trimming one
+    /// placement leaves the others alone.</para>
+    /// </remarks>
+    public IReadOnlyList<TrackItem> MediaBin => _mediaBin;
+
+    /// <summary>Adds a source to the bin. Undoable.</summary>
+    public void AddToBin(TrackItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (_mediaBin.Any(i => i.Id == item.Id)) return;
+
+        PushCommand(new AddToBinCommand(_mediaBin, item, _mediaBin.Count));
+        _mediaBin.Add(item);
+        Notify();
+    }
+
+    /// <summary>
+    /// Takes a source out of the bin.
+    /// </summary>
+    /// <remarks>
+    /// Clips already placed from it stay exactly as they are: each holds its own copy of the
+    /// arrangement and points at the same file, so removing the card removes a card rather than
+    /// pulling footage out from under an edit.
+    /// </remarks>
+    public void RemoveFromBin(Guid binItemId)
+    {
+        var index = _mediaBin.FindIndex(i => i.Id == binItemId);
+        if (index < 0) return;
+
+        var item = _mediaBin[index];
+        PushCommand(new RemoveFromBinCommand(_mediaBin, item, index));
+        _mediaBin.RemoveAt(index);
+        Notify();
+    }
+
+    /// <summary>How many times this source has been placed on the timeline.</summary>
+    public int TimesOnTimeline(Guid binItemId) =>
+        _tracks.SelectMany(t => t.Items).Count(i => i.SourceBinId == binItemId);
+
+    /// <summary>The bin's video sources, in the order they were brought in.</summary>
+    public IEnumerable<VideoClip> BinVideoClips => _mediaBin.OfType<VideoClip>();
+
+    /// <summary>The bin's audio sources.</summary>
+    public IEnumerable<AudioClip> BinAudioClips => _mediaBin.OfType<AudioClip>();
+
+    /// <summary>The bin's pictures.</summary>
+    public IEnumerable<ImageClip> BinImageClips => _mediaBin.OfType<ImageClip>();
+
     /// <summary>
     /// Insert a transition between two adjacent clips on the same track.
     /// Requires Transitions feature flag.
@@ -2572,6 +2635,7 @@ public sealed class ClipStore
     {
         _tracks.Clear();
         _markers.Clear();
+        _mediaBin.Clear();
         _undoStack.Clear();
         _redoStack.Clear();
         // Re-add the mandatory primary video track
@@ -2595,6 +2659,7 @@ public sealed class ClipStore
     {
         _tracks.Clear();
         _markers.Clear();
+        _mediaBin.Clear();
         _undoStack.Clear();
         _redoStack.Clear();
 
@@ -2637,6 +2702,8 @@ public sealed class ClipStore
         foreach (var m in project.Markers)
             _markers.Add(m);
 
+        RestoreBin(project);
+
         NormalizeLayerIndices();
         Notify();
     }
@@ -2662,9 +2729,78 @@ public sealed class ClipStore
             overlays[i].LayerIndex = i;
     }
 
+    /// <summary>
+    /// Fills the media bin from a project file.
+    /// </summary>
+    /// <remarks>
+    /// <para>A file written before the bin existed has no <c>Bin</c> section, and opening it to an
+    /// empty Media panel would read as having lost the footage. So for those, the bin is seeded
+    /// from what is on the timeline — one entry per distinct source, which is what the panel used
+    /// to show anyway.</para>
+    ///
+    /// <para>Seeded entries get their own ids and are linked to the clips they were derived from,
+    /// so the "on timeline" count is right immediately and re-saving writes a real bin.</para>
+    /// </remarks>
+    private void RestoreBin(ProjectFile project)
+    {
+        if (!project.Bin.IsEmpty)
+        {
+            foreach (var pv in project.Bin.VideoClips) _mediaBin.Add(RestoreVideoClip(pv));
+            foreach (var pa in project.Bin.AudioClips) _mediaBin.Add(RestoreAudioClip(pa));
+            foreach (var pi in project.Bin.ImageClips) _mediaBin.Add(RestoreImageClip(pi));
+            return;
+        }
+
+        // An older project: one bin entry per source already on the timeline.
+        foreach (var group in _tracks.SelectMany(t => t.Items)
+                                     .Where(TrackLayout.IsSequential)
+                                     .GroupBy(SourceKeyOf))
+        {
+            var first = group.First();
+            var entry = CloneForBin(first);
+            if (entry is null) continue;
+
+            _mediaBin.Add(entry);
+
+            foreach (var placed in group)
+                placed.SourceBinId = entry.Id;
+        }
+    }
+
+    /// <summary>
+    /// What makes two placed clips the same source: the file they came from, or failing that their
+    /// name.
+    /// </summary>
+    private static string SourceKeyOf(TrackItem item) =>
+        item.OriginalFileName
+        ?? (item as VideoClip)?.MemFsName
+        ?? (item as AudioClip)?.BlobUrl
+        ?? (item as ImageClip)?.MemFsName
+        ?? item.Name;
+
+    /// <summary>A bin entry made from a placed clip: same media, its own identity, untrimmed.</summary>
+    private static TrackItem? CloneForBin(TrackItem item) => item switch
+    {
+        VideoClip v => v with
+        {
+            Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0,
+            ThumbnailUrls = [.. v.ThumbnailUrls],
+            VolumeAutomation = [.. v.VolumeAutomation],
+            AppliedEffects = [.. v.AppliedEffects],
+        },
+        AudioClip a => a with
+        {
+            Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0,
+            VolumeAutomation = [.. a.VolumeAutomation],
+        },
+        ImageClip i => i with { Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0 },
+        _ => null,
+    };
+
     private static VideoClip RestoreVideoClip(ProjectVideoClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,
@@ -2690,6 +2826,7 @@ public sealed class ClipStore
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,
@@ -2765,6 +2902,7 @@ public sealed class ClipStore
     private static ImageClip RestoreImageClip(ProjectImageClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,

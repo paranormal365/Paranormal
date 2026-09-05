@@ -32,6 +32,16 @@ public abstract record TrackItem
     public double Duration { get; set; }
 
     /// <summary>
+    /// The media-bin entry this was placed from, when it was.
+    /// </summary>
+    /// <remarks>
+    /// One source can be placed on the timeline as many times as you like, so the bin needs to know
+    /// how many of its own entries are in use — the "on timeline ×2" a card shows. Null for
+    /// anything that predates the bin, and for the bin entries themselves.
+    /// </remarks>
+    public Guid? SourceBinId { get; set; }
+
+    /// <summary>
     /// How much of the timeline this item occupies, in seconds.
     /// </summary>
     /// <remarks>

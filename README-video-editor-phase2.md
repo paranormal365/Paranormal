@@ -115,15 +115,24 @@ knows the formats the lists missed. Imports land where the track actually ends, 
 length and ignoring overlays. Nothing is dropped in silence: an import the host has switched off
 now says so on its own row instead of reporting a successful import that produced nothing.
 
-## Not done in Phase 2
+### The media bin
 
-**The media bin** — unplaced media that lives in the panel, survives a save, and is placed on
-request (plan item D3). The defects behind it are fixed: imports no longer land on top of each
-other, no longer use the wrong end of the track, and no longer vanish silently. What remains is the
-feature itself, and it is a real one: the Media tab's three lists are hand-built render-tree code
-that today shows the timeline's own items, so a bin means a new concept in the model, in the
-project file, and in the riskiest component in the editor. It deserves its own pass rather than
-being bolted onto the end of this one.
+The Media panel's three tabs listed the timeline's own items, so "your media" and "your edit" were
+one list. Declining the insert prompt left the clip nowhere, removing it from the timeline meant
+importing the file again, and using one source twice was only possible by finding a copy of it
+already placed.
+
+`ClipStore.MediaBin` holds what you have brought in. Imports go there and are placed when you ask —
+except the first file into an empty project, which is placed for you (`AutoPlaceFirstImport`). Each
+card carries **+** to place at the playhead and says *on timeline* or *on timeline ×2*, so the bin
+tells you what is in use. Placing always copies, so one source can be used repeatedly and trimming
+one placement leaves the others alone. Removing a card removes the card: anything already placed
+keeps working, because each placement holds its own arrangement and points at the same file.
+
+The bin is saved with the project (`ProjectFile.Bin`). A project written before it existed has no
+such section, and opening one to an empty Media panel would read as having lost the footage — so
+its bin is seeded from the timeline, one entry per distinct source, linked to the clips it was
+derived from, and the next save writes a real bin.
 
 ## Verifying## Verifying
 

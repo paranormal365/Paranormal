@@ -15,6 +15,16 @@ public sealed class VideoEditorOptions
     public bool MultiTrack { get; set; } = false;
 
     /// <summary>
+    /// Whether the first thing imported into an empty project is placed on the timeline for you.
+    /// </summary>
+    /// <remarks>
+    /// Imports go to the media bin and are placed when you ask, which is how an editor with a bin
+    /// behaves. The exception is the very first file into an empty project: nobody opens an editor,
+    /// picks a video and wants to look at an empty timeline. Default: true.
+    /// </remarks>
+    public bool AutoPlaceFirstImport { get; set; } = true;
+
+    /// <summary>
     /// Enable dedicated audio tracks independent from video clips.
     /// Requires MultiTrack = true to show multiple audio tracks; a single audio track
     /// is shown even in single-track mode when this is true.

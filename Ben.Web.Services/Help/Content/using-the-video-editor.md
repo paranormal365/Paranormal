@@ -47,6 +47,17 @@ where pressing it again is the right move.
 
 ## Bringing in footage
 
+Everything you bring in lands in the **Media** panel first. That is your material for this project,
+and it is not the same thing as your edit: a clip sits there whether or not it is on the timeline,
+and the card tells you which — *on timeline*, or *on timeline ×2* if you have used it twice.
+
+Press **+** on a card to place it at the playhead. The same source can be placed as many times as
+you like, and trimming one placement leaves the others alone. **Remove from media** takes the card
+away; anything already on the timeline stays exactly as it is.
+
+The one shortcut: the first thing you bring into an empty project is placed for you, because nobody
+picks a video and then wants to look at an empty timeline.
+
 There are two ways in.
 
 **From your machine** — the **Open** button takes files straight off your disk. Nothing about them

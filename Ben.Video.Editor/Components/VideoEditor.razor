@@ -177,7 +177,9 @@
                                      EditorOptions="EffectiveOptions"
                                      OnClipSelected="OnClipSelectedAsync"
                                      OnAddToTimeline="AddClipToTimeline"
-                                     OnAudioClipAdded="OnAudioClipAdded" />
+                                     OnAudioClipAdded="OnAudioClipAdded"
+                                     OnAddImageToTimeline="AddImageToTimeline"
+                                     OnAddAudioToTimeline="AddAudioToTimeline" />
                     </TabStripTab>
 
                     @if (_showAssetBrowser)
@@ -1216,7 +1218,11 @@
     /// </summary>
     private void AddClipToTimeline(VideoClip clip)
     {
-        var wasAlreadyPlaced = Clips.AllVideoClips.Any(c => c.Id == clip.Id);
+        // Placing from the media bin always makes a copy: the bin entry stays as the source, and
+        // the same source can be placed as often as you like without one placement's trims and
+        // effects following the others (2026-09-05 audit, plan D3).
+        var fromBin = Clips.MediaBin.Any(i => i.Id == clip.Id);
+        var wasAlreadyPlaced = fromBin || Clips.AllVideoClips.Any(c => c.Id == clip.Id);
 
         // Item #51 — three-point editing: if this is the clip currently marked in the preview,
         // capture that before the item #48 clone below replaces clip's identity.
@@ -1234,6 +1240,7 @@
             clip = clip with
             {
                 Id               = Guid.NewGuid(),
+                SourceBinId      = fromBin ? clip.Id : clip.SourceBinId,
                 ThumbnailUrls    = [.. clip.ThumbnailUrls],
                 VolumeAutomation = [.. clip.VolumeAutomation],
                 AppliedEffects   = [.. clip.AppliedEffects],
@@ -1252,7 +1259,9 @@
 
         var track    = Clips.PrimaryVideoTrack;
         var existing = track.VideoClips.Select(c => (c.TimelinePosition, c.TrimmedDuration)).ToList();
-        var playhead = Clips.TotalDuration > 0 ? Playback.State.Progress * Clips.TotalDuration : 0;
+        // The playhead is a timeline position; Progress × TotalDuration mixed the media clock with
+        // the timeline's length (2026-09-05 audit, F6).
+        var playhead = Playback.State.TimelineTime;
         var position = TimelineDropCalculator.ResolvePlayheadAnchoredPosition(
             playhead, clip.TrimmedDuration, existing);
 
@@ -1266,6 +1275,48 @@
 
         clip.TimelinePosition = position;
         Clips.AddClipToTrack(track.Id, clip);
+    }
+
+    /// <summary>Places a picture from the media bin at the playhead.</summary>
+    private void AddImageToTimeline(ImageClip source)
+    {
+        var track = Clips.PrimaryVideoTrack;
+        var copy  = source with { Id = Guid.NewGuid(), SourceBinId = source.Id };
+
+        copy.TimelinePosition = ResolvePlacementPosition(track, copy.EffectiveLength);
+        Clips.AddClipToTrack(track.Id, copy);
+    }
+
+    /// <summary>Places an audio source from the media bin on an audio track.</summary>
+    private void AddAudioToTimeline(AudioClip source)
+    {
+        var track = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
+        var copy  = source with
+        {
+            Id = Guid.NewGuid(),
+            SourceBinId = source.Id,
+            VolumeAutomation = [.. source.VolumeAutomation],
+        };
+
+        copy.TimelinePosition = ResolvePlacementPosition(track, copy.EffectiveLength);
+        Clips.AddClipToTrack(track.Id, copy);
+    }
+
+    /// <summary>
+    /// Where a newly placed item goes: at the playhead when there is room, otherwise after
+    /// whatever is in the way.
+    /// </summary>
+    /// <remarks>
+    /// Pictures and audio used to be appended to the end of the track no matter where the playhead
+    /// was, which is not where anybody is looking (2026-09-05 audit, F8).
+    /// </remarks>
+    private double ResolvePlacementPosition(TimelineTrack track, double length)
+    {
+        var playhead = Playback.State.TimelineTime;
+
+        return TrackLayout.Overlaps(track, playhead, length)
+            ? TrackLayout.EndOf(track)
+            : playhead;
     }
 
     private void ConfirmRippleInsert()

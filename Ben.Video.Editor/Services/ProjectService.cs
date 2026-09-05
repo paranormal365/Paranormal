@@ -257,6 +257,17 @@ public sealed class ProjectService
         Tracks      = _clips.Tracks.Select(MapTrack).ToList(),
         Markers     = _clips.Markers.ToList(),
         MotionPaths = _motion.AllPaths.Select(MapMotionPath).ToList(),
+        Bin         = MapBin(),
+    };
+
+    /// <summary>
+    /// The media bin, so what you imported survives a save whether or not you placed it.
+    /// </summary>
+    private ProjectMediaBin MapBin() => new()
+    {
+        VideoClips = _clips.BinVideoClips.Select(MapVideoClip).ToList(),
+        AudioClips = _clips.BinAudioClips.Select(MapAudioClip).ToList(),
+        ImageClips = _clips.BinImageClips.Select(MapImageClip).ToList(),
     };
 
     private ProjectOptionsSnapshot BuildOptionsSnapshot()
@@ -301,6 +312,7 @@ public sealed class ProjectService
     private static ProjectVideoClip MapVideoClip(VideoClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,
@@ -326,6 +338,7 @@ public sealed class ProjectService
     private static ProjectAudioClip MapAudioClip(AudioClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,
@@ -391,6 +404,7 @@ public sealed class ProjectService
     private static ProjectImageClip MapImageClip(ImageClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,

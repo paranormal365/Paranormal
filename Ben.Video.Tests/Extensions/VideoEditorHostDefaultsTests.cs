@@ -44,6 +44,8 @@ public sealed class VideoEditorHostDefaultsTests
             "a rendering choice for projects with alpha footage, not a capability to switch on everywhere",
         [nameof(VideoEditorOptions.MediaLibrary)] =
             "needs a server; set by ApplyServerIntegration",
+        [nameof(VideoEditorOptions.AutoPlaceFirstImport)] =
+            "a behaviour preference, already true by default",
         [nameof(VideoEditorOptions.ShowDiagnostics)] =
             "decided per signed-in user by the host, not per deployment",
     };

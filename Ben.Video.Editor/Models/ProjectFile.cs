@@ -32,6 +32,31 @@ public sealed class ProjectFile
     /// <summary>Named cue points on the timeline ruler.</summary>
     public List<TimelineMarker>    Markers      { get; set; } = [];
     public List<ProjectMotionPath> MotionPaths  { get; set; } = [];
+
+    /// <summary>
+    /// The media brought into this project, whether or not any of it is on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// Absent from files written before the media bin existed, which is why it defaults to empty
+    /// rather than being required: an older project simply has nothing unplaced, and opening it
+    /// fills the bin from what is on its timeline.
+    /// </remarks>
+    public ProjectMediaBin Bin { get; set; } = new();
+}
+
+/// <summary>The media bin's contents, by kind.</summary>
+/// <remarks>
+/// Three lists rather than one polymorphic one: System.Text.Json needs a discriminator to round-trip
+/// a mixed list, and the rest of this file already keeps clips apart by kind for the same reason.
+/// </remarks>
+public sealed class ProjectMediaBin
+{
+    public List<ProjectVideoClip> VideoClips { get; set; } = [];
+    public List<ProjectAudioClip> AudioClips { get; set; } = [];
+    public List<ProjectImageClip> ImageClips { get; set; } = [];
+
+    /// <summary>True when there is nothing to restore — an older file, or an empty project.</summary>
+    public bool IsEmpty => VideoClips.Count == 0 && AudioClips.Count == 0 && ImageClips.Count == 0;
 }
 
 /// <summary>
@@ -76,6 +101,9 @@ public sealed class ProjectTrack
 public sealed class ProjectVideoClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }
@@ -115,6 +143,9 @@ public sealed class ProjectVideoClip
 public sealed class ProjectAudioClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }
@@ -202,6 +233,9 @@ public sealed class ProjectTextOverlay
 public sealed class ProjectImageClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }

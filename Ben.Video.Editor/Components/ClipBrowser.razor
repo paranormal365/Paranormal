@@ -246,6 +246,12 @@
     [Parameter] public EventCallback<VideoClip> OnAddToTimeline  { get; set; }
     [Parameter] public EventCallback<AudioClip> OnAudioClipAdded { get; set; }
 
+    /// <summary>Places a picture from the bin on the timeline.</summary>
+    [Parameter] public EventCallback<ImageClip> OnAddImageToTimeline { get; set; }
+
+    /// <summary>Places an audio source from the bin on its own track.</summary>
+    [Parameter] public EventCallback<AudioClip> OnAddAudioToTimeline { get; set; }
+
     /// <summary>Effective options from the parent VideoEditor. Null = use the IOptions value from DI.</summary>
     [Parameter] public VideoEditorOptions? EditorOptions { get; set; }
 
@@ -492,10 +498,10 @@
             __builder.OpenElement(4, "span"); __builder.AddContent(5, _loadingMessage); __builder.CloseElement();
             __builder.AddMarkupContent(6, "</div>");
         }
-        else if (!Clips.AllVideoClips.Any())
+        else if (!Clips.BinVideoClips.Any())
         {
             __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No video clips yet."); __builder.CloseElement();
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No video yet."); __builder.CloseElement();
             __builder.OpenElement(14, "p");
             __builder.AddContent(15, "Click ");
             __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
@@ -507,7 +513,7 @@
         {
             __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
             int seq = 30;
-            foreach (var clip in Clips.AllVideoClips)
+            foreach (var clip in Clips.BinVideoClips)
             {
                 var c = clip;
                 var cls = $"bv-clip-card {(_selectedId == clip.Id ? "bv-clip-card--selected" : "")} {(_isDragging && _selectedId == clip.Id ? "bv-clip-card--dragging" : "")}";
@@ -541,7 +547,7 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, FormatDuration(clip.TrimmedDuration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.TrimmedDuration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
@@ -556,7 +562,7 @@
                 __builder.CloseComponent();
                 __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveClip(c)));
-                __builder.AddAttribute(seq++, "Title",      "Remove clip");
+                __builder.AddAttribute(seq++, "Title",      "Remove from media");
                 __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
                 __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
                 __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
@@ -571,11 +577,11 @@
 
     private RenderFragment AudioClipGrid => __builder =>
     {
-        var allAudio = Clips.AllAudioClips.ToList();
+        var allAudio = Clips.BinAudioClips.ToList();
         if (!allAudio.Any())
         {
             __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No audio clips yet."); __builder.CloseElement();
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No audio yet."); __builder.CloseElement();
             __builder.OpenElement(14, "p");
             __builder.AddContent(15, "Click ");
             __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
@@ -606,14 +612,22 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, FormatDuration(clip.Duration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddAudioToTimelineAsync(a)));
+                __builder.AddAttribute(seq++, "Title",      "Add to timeline");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Plus);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Primary);
+                __builder.CloseComponent();
+                __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveAudioClip(a)));
-                __builder.AddAttribute(seq++, "Title",      "Remove audio clip");
+                __builder.AddAttribute(seq++, "Title",      "Remove from media");
                 __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
                 __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
                 __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
@@ -628,11 +642,11 @@
 
     private RenderFragment ImageClipGrid => __builder =>
     {
-        var allImages = Clips.AllImageClips.ToList();
+        var allImages = Clips.BinImageClips.ToList();
         if (!allImages.Any())
         {
             __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No image clips yet."); __builder.CloseElement();
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No pictures yet."); __builder.CloseElement();
             __builder.OpenElement(14, "p");
             __builder.AddContent(15, "Click ");
             __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
@@ -677,14 +691,22 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, $"{FormatDuration(clip.Duration)} · still"); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddImageToTimelineAsync(img)));
+                __builder.AddAttribute(seq++, "Title",      "Add to timeline");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Plus);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Primary);
+                __builder.CloseComponent();
+                __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveImageClip(img)));
-                __builder.AddAttribute(seq++, "Title",      "Remove image clip");
+                __builder.AddAttribute(seq++, "Title",      "Remove from media");
                 __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
                 __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
                 __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
@@ -1866,7 +1888,14 @@
                     HasAudio = meta.HasAudio,
                 ThumbnailUrls = [.. thumbs], OpfsExt = ext,
             };
-            Clips.AddClip(videoClip);
+            // Into the media bin, not straight onto the timeline. Placing is a separate, deliberate
+            // step — except for the very first thing brought into an empty project, where nobody
+            // wants to pick a video and then be shown an empty timeline (2026-09-05 audit,
+            // media-panel-3 / plan D3).
+            var placeIt = Options.AutoPlaceFirstImport && Clips.TotalDuration <= 0;
+            Clips.AddToBin(videoClip);
+            if (placeIt) await OnAddToTimeline.InvokeAsync(videoClip);
+
             ScheduleLazyThumbnailFill(videoClip, memFsName, meta.Duration, upfrontCount, fullCount);
             Update(status, ImportStage.Done, 100);
         }
@@ -1914,7 +1943,7 @@
             var imgTrack2  = Clips.PrimaryVideoTrack;
             var imgPos2    = TrackLayout.EndOf(imgTrack2);
 
-            Clips.AddImageClip(new ImageClip
+            var imageClip = new ImageClip
             {
                 Id               = imgClipId2,
                 Name             = status.FileName,
@@ -1925,7 +1954,11 @@
                 ThumbnailUrl     = thumbUrl,
                 TimelinePosition = imgPos2,
                 OpfsExt          = imgExt2,
-            });
+            };
+
+            var placeImage = Options.AutoPlaceFirstImport && Clips.TotalDuration <= 0;
+            Clips.AddToBin(imageClip);
+            if (placeImage) await OnAddImageToTimeline.InvokeAsync(imageClip);
             Update(status, ImportStage.Done, 100);
         }
         finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
@@ -1968,9 +2001,11 @@
                 return;
             }
 
-            var audioTrack = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
-            clip.TimelinePosition = TrackLayout.EndOf(audioTrack);
-            Clips.AddClipToTrack(audioTrack.Id, clip);
+            // The bin first; audio is placed on its own track when asked for, or straight away when
+            // it is the first thing in an empty project.
+            var placeAudio = Options.AutoPlaceFirstImport && Clips.TotalDuration <= 0;
+            Clips.AddToBin(clip);
+            if (placeAudio) await OnAddAudioToTimeline.InvokeAsync(clip);
 
             await OnAudioClipAdded.InvokeAsync(clip);
             Update(status, ImportStage.Done, 100);
@@ -1986,6 +2021,12 @@
         await OnClipSelected.InvokeAsync(clip);
     }
 
+    private async Task AddAudioToTimelineAsync(AudioClip clip)
+        => await OnAddAudioToTimeline.InvokeAsync(clip);
+
+    private async Task AddImageToTimelineAsync(ImageClip clip)
+        => await OnAddImageToTimeline.InvokeAsync(clip);
+
     private async Task AddToTimelineAsync(VideoClip clip)
     {
         _selectedId = clip.Id;
@@ -1994,13 +2035,18 @@
 
     private void RemoveClip(VideoClip clip)
     {
+        // A card is a source now, so this takes it out of the media bin. Anything already placed
+        // from it keeps working: each placement holds its own arrangement and points at the same
+        // file (2026-09-05 audit, plan D3).
         if (_selectedId == clip.Id) _selectedId = null;
-        Clips.RemoveClip(clip.Id);
+        Clips.RemoveFromBin(clip.Id);
     }
 
-    private void RemoveAudioClip(AudioClip clip) => Clips.RemoveClip(clip.Id);
+    // These cards are sources now, so removing one takes it out of the media bin. Anything already
+    // placed from it keeps working — it holds its own arrangement and points at the same file.
+    private void RemoveAudioClip(AudioClip clip) => Clips.RemoveFromBin(clip.Id);
 
-    private void RemoveImageClip(ImageClip clip) => Clips.RemoveClip(clip.Id);
+    private void RemoveImageClip(ImageClip clip) => Clips.RemoveFromBin(clip.Id);
 
     // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -2013,6 +2059,26 @@
         MediaKindRouter.Decide(name) == MediaKind.Image;
 
     private static string GetImageMimeType(string name) => MediaKindRouter.ImageMimeType(name);
+
+    /// <summary>
+    /// The card's second line: how long the source is, and how many times it is on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// The count is what tells the bin apart from the edit. Without it, a card gives no clue
+    /// whether it is already in use — which is the question anybody looking at a bin is asking.
+    /// </remarks>
+    private string CardMeta(TrackItem source, double durationSeconds)
+    {
+        var used = Clips.TimesOnTimeline(source.Id);
+        var when = FormatDuration(durationSeconds);
+
+        return used switch
+        {
+            0 => when,
+            1 => $"{when} · on timeline",
+            _ => $"{when} · on timeline ×{used}",
+        };
+    }
 
     private static string FormatDuration(double seconds)
     {
