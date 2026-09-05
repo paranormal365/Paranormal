@@ -154,6 +154,7 @@ internal static class Fixtures
         FadeInSeconds    = 0.9,
         FadeOutSeconds   = 1.1,
         Opacity          = 0.83,
+        MaxWidth          = 0.6,
         ShadowColor      = ColorHelper.Pack(40, 50, 60, 130),
         ShadowOffsetX    = 8.0,
         ShadowOffsetY    = 2.0,

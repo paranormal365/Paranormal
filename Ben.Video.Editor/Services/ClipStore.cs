@@ -2076,6 +2076,36 @@ public sealed class ClipStore
         Notify();
     }
 
+    /// <summary>
+    /// Applies one change to a title, undoably.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same shape as <see cref="CommitCalloutUpdate"/>, and added for the same reason it
+    /// exists there. Titles were the one thing on the timeline whose edits were not undoable at
+    /// all: <see cref="UpdateTextOverlay"/> wrote straight into the model and pushed nothing, so
+    /// Ctrl+Z after changing a title undid whatever had happened before it (2026-09-05 audit,
+    /// titles-4).</para>
+    ///
+    /// <para>Per property rather than per panel, so undo steps back through the edits somebody
+    /// actually made instead of one opaque "the title changed".</para>
+    /// </remarks>
+    public void CommitTextOverlayUpdate(
+        Guid overlayId, string propertyPath,
+        Action<TextOverlay> apply, Action<TextOverlay> revert)
+    {
+        foreach (var track in _tracks)
+        {
+            var overlay = track.Items.OfType<TextOverlay>().FirstOrDefault(o => o.Id == overlayId);
+            if (overlay is null) continue;
+            if (track.IsLocked) return;
+
+            apply(overlay);
+            PushCommand(new CommitTextOverlayPropertyCommand(overlay, propertyPath, apply, revert));
+            Notify();
+            return;
+        }
+    }
+
     /// <summary>Remove a text overlay by id.</summary>
     public void RemoveTextOverlay(Guid overlayId) => RemoveClip(overlayId);
 
@@ -2951,6 +2981,7 @@ public sealed class ClipStore
             FadeInSeconds    = p.FadeInSeconds,
             FadeOutSeconds   = p.FadeOutSeconds,
             Opacity          = p.Opacity,
+        MaxWidth         = p.MaxWidth,
             ShadowColor      = p.ShadowColor,
             ShadowOffsetX    = p.ShadowOffsetX,
             ShadowOffsetY    = p.ShadowOffsetY,

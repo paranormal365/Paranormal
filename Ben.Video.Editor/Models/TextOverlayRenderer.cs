@@ -35,31 +35,64 @@ public static class TextOverlayRenderer
         double x, y;
         string anchor, baseline;
 
+        // Which point of the text box the position refers to. Alignment decides that, and it
+        // decides it whether or not the position was set by dragging.
+        //
+        // It used to change underneath the drag. Without an override, a centred bottom title was
+        // anchored middle/after-edge — the drag handle sat at the middle of its bottom edge, which
+        // is where the text was. The first drag wrote OverrideX/Y and the renderer switched to
+        // start/before-edge, so the same numbers now meant the box's TOP-LEFT: the title jumped
+        // right by half its width and down by its whole height, usually clean off the frame
+        // (2026-09-05 audit, titles-2).
+        //
+        // Anchoring by alignment in both cases means the handle marks the same point before and
+        // after, so a drag moves the title by exactly the distance dragged. A title dragged before
+        // this change moves once, to where its handle always claimed it was.
+        anchor = overlay.HorizontalAlign switch
+        {
+            TextHorizontalAlign.Left  => "start",
+            TextHorizontalAlign.Right => "end",
+            _                         => "middle",
+        };
+
+        baseline = overlay.VerticalAlign switch
+        {
+            TextVerticalAlign.Top    => "text-before-edge",
+            TextVerticalAlign.Bottom => "text-after-edge",
+            _                        => "middle",
+        };
+
         if (overlay.OverrideX.HasValue || overlay.OverrideY.HasValue)
         {
-            x        = (overlay.OverrideX ?? 0.5) * canvasW;
-            y        = (overlay.OverrideY ?? 0.5) * canvasH;
-            anchor   = "start";
-            baseline = "text-before-edge";
+            x = (overlay.OverrideX ?? MotionEffectiveGeometry.TextAnchorX(overlay, canvasW)) * canvasW;
+            y = (overlay.OverrideY ?? MotionEffectiveGeometry.TextAnchorY(overlay, canvasH)) * canvasH;
         }
         else
         {
-            (x, anchor) = overlay.HorizontalAlign switch
+            x = overlay.HorizontalAlign switch
             {
-                TextHorizontalAlign.Left  => ((double)overlay.OffsetX, "start"),
-                TextHorizontalAlign.Right => ((double)(canvasW - overlay.OffsetX), "end"),
-                _                         => (canvasW / 2.0, "middle"),
+                TextHorizontalAlign.Left  => overlay.OffsetX,
+                TextHorizontalAlign.Right => canvasW - overlay.OffsetX,
+                _                         => canvasW / 2.0,
             };
-            (y, baseline) = overlay.VerticalAlign switch
+            y = overlay.VerticalAlign switch
             {
-                TextVerticalAlign.Top    => ((double)overlay.OffsetY, "text-before-edge"),
-                TextVerticalAlign.Bottom => ((double)(canvasH - overlay.OffsetY), "text-after-edge"),
-                _                        => (canvasH / 2.0, "middle"),
+                TextVerticalAlign.Top    => overlay.OffsetY,
+                TextVerticalAlign.Bottom => canvasH - overlay.OffsetY,
+                _                        => canvasH / 2.0,
             };
         }
 
         var lines      = overlay.Text.Replace("\r\n", "\n").Split('\n');
         var lineHeight = overlay.FontSize * 1.2;
+
+        // How wide the title may draw, in pixels. Null means no limit, which is what titles have
+        // always done: a long sentence drew as one line and ran off both sides of the frame
+        // (2026-09-05 audit, titles-6). Callouts have wrapped for a while and the wrapping code is
+        // shared — only titles had no way to ask for it.
+        var wrapWidthPx = overlay.MaxWidth is { } fraction && fraction > 0
+            ? fraction * canvasW
+            : 0.0;
 
         var shadow     = SvgShadowFilter.Build(overlay.ShadowColor, overlay.ShadowOffsetX, overlay.ShadowOffsetY, overlay.ShadowBlur);
         var shadowAttr = overlay.ShadowBlur > 0 ? " filter=\"url(#bv-shadow)\"" : string.Empty;
@@ -74,6 +107,8 @@ public static class TextOverlayRenderer
             // so the parent <text> carries neither whole-block attr; fill stays the inherited
             // default for any run whose own Color is null.
             var runLines = RichTextTspanBuilder.SplitIntoLines(runs);
+            if (wrapWidthPx > 0)
+                runLines = RichTextTspanBuilder.WrapLines(runLines, wrapWidthPx, overlay.FontSize);
             lines = RichTextTspanBuilder.ToPlainLines(runLines);
             var firstDy = baseline == "middle" ? -(lines.Length - 1) * lineHeight / 2 : 0.0;
             tspans        = RichTextTspanBuilder.BuildTspans(runLines, x, firstDy, lineHeight, overlay.FontSize);
@@ -82,6 +117,9 @@ public static class TextOverlayRenderer
         }
         else
         {
+            if (wrapWidthPx > 0)
+                lines = CalloutTextWrapper.Wrap(lines, wrapWidthPx, overlay.FontSize);
+
             var sb = new System.Text.StringBuilder();
             // First tspan carries no dy for start/top-anchored text (grows naturally downward from the
             // anchor); for middle-baseline text the whole block is centered around y by offsetting the

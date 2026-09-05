@@ -428,6 +428,7 @@ public sealed class ProjectService
         FadeInSeconds    = o.FadeInSeconds,
         FadeOutSeconds   = o.FadeOutSeconds,
         Opacity          = o.Opacity,
+        MaxWidth         = o.MaxWidth,
         ShadowColor      = o.ShadowColor,
         ShadowOffsetX    = o.ShadowOffsetX,
         ShadowOffsetY    = o.ShadowOffsetY,

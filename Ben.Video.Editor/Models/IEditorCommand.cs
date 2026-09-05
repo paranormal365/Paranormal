@@ -1337,6 +1337,38 @@ internal sealed class CommitCalloutPropertyCommand : IEditorCommand
     public void Undo()    => _revert(_clip);
 }
 
+/// <summary>Undo/redo for a committed <see cref="TextOverlay"/> property change.</summary>
+/// <remarks>
+/// Titles were the one thing on the timeline whose edits could not be undone. Changing a font,
+/// a colour, an alignment or the words themselves went straight into the model with nothing pushed
+/// onto the stack, so Ctrl+Z after a title edit undid whatever had happened before it instead —
+/// which is worse than doing nothing (2026-09-05 audit, titles-4).
+/// </remarks>
+internal sealed class CommitTextOverlayPropertyCommand : IEditorCommand
+{
+    private readonly TextOverlay _overlay;
+    private readonly string      _propertyPath;
+    private readonly Action<TextOverlay> _apply;
+    private readonly Action<TextOverlay> _revert;
+
+    public string Description => $"Edit title {_propertyPath}";
+
+    public CommitTextOverlayPropertyCommand(
+        TextOverlay overlay,
+        string      propertyPath,
+        Action<TextOverlay> apply,
+        Action<TextOverlay> revert)
+    {
+        _overlay      = overlay;
+        _propertyPath = propertyPath;
+        _apply        = apply;
+        _revert       = revert;
+    }
+
+    public void Execute() => _apply(_overlay);
+    public void Undo()    => _revert(_overlay);
+}
+
 /// <summary>Undo/redo for a committed <see cref="ClipArtClip"/> property change — mirrors
 /// <see cref="CommitCalloutPropertyCommand"/> exactly.</summary>
 internal sealed class CommitClipArtPropertyCommand : IEditorCommand

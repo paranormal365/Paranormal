@@ -274,6 +274,11 @@ public sealed class ProjectTextOverlay
     public double FadeOutSeconds   { get; set; }
     public double Opacity          { get; set; } = 1.0;
 
+    /// <summary>
+    /// The widest the title may draw, as a fraction of the canvas. Null means no limit.
+    /// </summary>
+    public double? MaxWidth        { get; set; }
+
     // Shadow (packed ARGB double via ColorHelper)
     public double ShadowColor      { get; set; }
     public double ShadowOffsetX    { get; set; } = 3.0;

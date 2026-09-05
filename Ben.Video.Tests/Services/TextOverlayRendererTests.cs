@@ -79,8 +79,21 @@ public sealed class TextOverlayRendererTests
         Assert.Contains($"y=\"{expectedY}\"", svg);
     }
 
+    /// <summary>
+    /// A dragged title is anchored the same way an undragged one is.
+    /// </summary>
+    /// <remarks>
+    /// <para>This test used to assert the opposite, and the opposite was the bug. Without an
+    /// override a centred bottom title anchors middle/after-edge, which is where its drag handle
+    /// sits. The first drag wrote an override and the renderer switched to start/before-edge, so
+    /// the same numbers now meant the box's top-left: the title jumped right by half its width and
+    /// down by its whole height, usually clean off the frame (2026-09-05 audit, titles-2).</para>
+    ///
+    /// <para>The position says where the anchor is; the alignment says which point of the text
+    /// that is. Dragging moves a title by exactly the distance dragged.</para>
+    /// </remarks>
     [Fact]
-    public void Render_HasOverride_UsesTopLeftAnchorRegardlessOfAlignment()
+    public void Render_HasOverride_StillAnchorsByItsAlignment()
     {
         var overlay = MakeOverlay() with
         {
@@ -89,8 +102,38 @@ public sealed class TextOverlayRendererTests
         };
         var svg = TextOverlayRenderer.Render(overlay, 1000, 400);
 
-        Assert.Contains("text-anchor=\"start\"", svg);
-        Assert.Contains("dominant-baseline=\"text-before-edge\"", svg);
+        Assert.Contains("text-anchor=\"end\"", svg);
+        Assert.Contains("dominant-baseline=\"text-after-edge\"", svg);
+    }
+
+    /// <summary>
+    /// The override is still what decides where the anchor point lands.
+    /// </summary>
+    [Fact]
+    public void Render_HasOverride_PutsTheAnchorWhereTheOverrideSays()
+    {
+        var overlay = MakeOverlay() with { OverrideX = 0.25, OverrideY = 0.75 };
+        var svg     = TextOverlayRenderer.Render(overlay, 1000, 400);
+
+        Assert.Contains("y=\"300.000\"", svg);
+        Assert.Contains("x=\"250.000\"", svg);
+    }
+
+    /// <summary>
+    /// Half an override still means half: the axis that was not dragged keeps its alignment
+    /// position rather than snapping to the middle of the frame.
+    /// </summary>
+    [Fact]
+    public void Render_HasOnlyOneOverride_LeavesTheOtherAxisWhereAlignmentPutIt()
+    {
+        var overlay = MakeOverlay() with
+        {
+            OverrideX = 0.25, OverrideY = null,
+            VerticalAlign = TextVerticalAlign.Bottom, OffsetY = 40,
+        };
+        var svg = TextOverlayRenderer.Render(overlay, 1000, 400);
+
+        Assert.Contains("y=\"360.000\"", svg);
     }
 
     // ── Multi-line ───────────────────────────────────────────────────────────

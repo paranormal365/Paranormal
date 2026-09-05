@@ -24,7 +24,11 @@
         <!-- Text content (item #16 — inline runs: Bold/Underline/Sub/Superscript/Color per selection) -->
         <div class="bv-toe__field">
             <label class="bv-toe__label">Text</label>
-            <TelerikEditor @bind-Value="_richTextHtml"
+            @* Committed as the editor reports a change, not on a button. The words a person
+               typed used to sit in this field until Apply was pressed, and any of three
+               high-frequency events could discard them first (2026-09-05 audit, titles-5). *@
+            <TelerikEditor Value="@_richTextHtml"
+                           ValueChanged="@((string v) => OnRichTextChangedAsync(v))"
                            Tools="@_editorTools"
                            Height="120px" />
         </div>
@@ -33,9 +37,10 @@
         <div class="bv-toe__field">
             <label class="bv-toe__label">Font</label>
             <TelerikDropDownList Data="@_fontFamilies"
-                                 @bind-Value="_fontFamily"
-                                 Width="100%"
-                                 OnChange="@(async () => await GoogleFontService.EnsureLoadedAsync(_fontFamily))" />
+                                 Value="@_fontFamily"
+                                 ValueChanged="@((string v) => OnFontFamilyChangedAsync(v))"
+                                 ValueExpression="@(() => _fontFamily)"
+                                 Width="100%" />
         </div>
 
         <!-- Font size -->
@@ -47,7 +52,9 @@
                     <span class="bv-toe__live-badge" title="This layer has a motion path — size below tracks the interpolated scale at the current playhead time, not a fixed value.">● Live</span>
                 }
             </label>
-            <TelerikSlider @bind-Value="_fontSize"
+            <TelerikSlider Value="@_fontSize"
+                           ValueChanged="@((int v) => CommitFontSize(v))"
+                           ValueExpression="@(() => _fontSize)"
                            Min="12"
                            Max="120"
                            SmallStep="2"
@@ -67,7 +74,7 @@
         <!-- Background box -->
         <div class="bv-toe__field bv-toe__field--row">
             <label class="bv-toe__label">Background box</label>
-            <input type="checkbox" @bind="_hasBox" />
+            <input type="checkbox" checked="@_hasBox" @onchange="OnHasBoxChanged" />
         </div>
         @if (_hasBox)
         {
@@ -83,7 +90,9 @@
         <div class="bv-toe__field">
             <label class="bv-toe__label">Horizontal align</label>
             <TelerikDropDownList Data="@_hAligns"
-                                 @bind-Value="_hAlign"
+                                 Value="@_hAlign"
+                                 ValueChanged="@((TextHorizontalAlign v) => CommitHorizontalAlign(v))"
+                                 ValueExpression="@(() => _hAlign)"
                                  Width="100%" />
         </div>
 
@@ -91,7 +100,9 @@
         <div class="bv-toe__field">
             <label class="bv-toe__label">Vertical align</label>
             <TelerikDropDownList Data="@_vAligns"
-                                 @bind-Value="_vAlign"
+                                 Value="@_vAlign"
+                                 ValueChanged="@((TextVerticalAlign v) => CommitVerticalAlign(v))"
+                                 ValueExpression="@(() => _vAlign)"
                                  Width="100%" />
         </div>
 
@@ -99,11 +110,11 @@
         <div class="bv-toe__field bv-toe__field--two-col">
             <div>
                 <label class="bv-toe__label">X offset <span class="bv-toe__value">@_offsetX px</span></label>
-                <TelerikNumericTextBox @bind-Value="_offsetX" Min="0" Max="1920" Width="100%" />
+                <TelerikNumericTextBox Value="@_offsetX" ValueChanged="@((int v) => CommitOffsetX(v))" ValueExpression="@(() => _offsetX)" Min="0" Max="1920" Width="100%" />
             </div>
             <div>
                 <label class="bv-toe__label">Y offset <span class="bv-toe__value">@_offsetY px</span></label>
-                <TelerikNumericTextBox @bind-Value="_offsetY" Min="0" Max="1080" Width="100%" />
+                <TelerikNumericTextBox Value="@_offsetY" ValueChanged="@((int v) => CommitOffsetY(v))" ValueExpression="@(() => _offsetY)" Min="0" Max="1080" Width="100%" />
             </div>
         </div>
 
@@ -128,12 +139,45 @@
             </div>
         }
 
+        @* ── Wrapping and opacity ────────────────────────────────────────────── *@
+        <div class="bv-toe__field bv-toe__field--row">
+            <label class="bv-toe__label"
+                   title="Break long lines instead of running off the sides of the frame">
+                Wrap long lines
+            </label>
+            <input type="checkbox" checked="@(_maxWidth is not null)" @onchange="OnWrapChanged" />
+        </div>
+        @if (_maxWidth is { } width)
+        {
+            <div class="bv-toe__field">
+                <label class="bv-toe__label">
+                    Line width &nbsp;<span class="bv-toe__value">@((width * 100).ToString("F0"))% of frame</span>
+                </label>
+                <TelerikSlider Value="@width"
+                               ValueChanged="@((double v) => CommitMaxWidth(v))"
+                               ValueExpression="@(() => width)"
+                               Min="0.2" Max="1.0" SmallStep="0.05" LargeStep="0.2" Width="100%"
+                               LabelTemplate="@SliderLabelTemplates.Endpoints(0.2, 1.0, 0.2)" />
+            </div>
+        }
+
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Opacity &nbsp;<span class="bv-toe__value">@((_opacity * 100).ToString("F0"))%</span></label>
+            <TelerikSlider Value="@_opacity"
+                           ValueChanged="@((double v) => CommitOpacity(v))"
+                           ValueExpression="@(() => _opacity)"
+                           Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25" Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" />
+        </div>
+
         <!-- Timeline position / duration -->
         <div class="bv-toe__field">
             <label class="bv-toe__label">
                 Start &nbsp;<span class="bv-toe__value">@FormatTime(_position)</span>
             </label>
-            <TelerikSlider @bind-Value="_position"
+            <TelerikSlider Value="@_position"
+                           ValueChanged="@((double v) => CommitPosition(v))"
+                           ValueExpression="@(() => _position)"
                            Min="0.0"
                            Max="@_maxPosition"
                            SmallStep="0.1"
@@ -145,7 +189,9 @@
             <label class="bv-toe__label">
                 Duration &nbsp;<span class="bv-toe__value">@FormatTime(_duration)</span>
             </label>
-            <TelerikSlider @bind-Value="_duration"
+            <TelerikSlider Value="@_duration"
+                           ValueChanged="@((double v) => CommitDuration(v))"
+                           ValueExpression="@(() => _duration)"
                            Min="0.5"
                            Max="@_maxDuration"
                            SmallStep="0.1"
@@ -158,11 +204,11 @@
         <div class="bv-toe__field bv-toe__field--two-col">
             <div>
                 <label class="bv-toe__label">Fade in <span class="bv-toe__value">@_fadeIn.ToString("F1")s</span></label>
-                <TelerikSlider @bind-Value="_fadeIn" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
+                <TelerikSlider Value="@_fadeIn" ValueChanged="@((double v) => CommitFadeIn(v))" ValueExpression="@(() => _fadeIn)" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
             </div>
             <div>
                 <label class="bv-toe__label">Fade out <span class="bv-toe__value">@_fadeOut.ToString("F1")s</span></label>
-                <TelerikSlider @bind-Value="_fadeOut" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
+                <TelerikSlider Value="@_fadeOut" ValueChanged="@((double v) => CommitFadeOut(v))" ValueExpression="@(() => _fadeOut)" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
             </div>
         </div>
 
@@ -176,31 +222,26 @@
         </div>
         <div class="bv-toe__field">
             <ColorPickerField Label="Shadow colour" Value="_shadowColor"
-                              ValueChanged="@(v => { _shadowColor = v; })"
+                              ValueChanged="@(v => CommitShadowColor(v))"
                               ShowAlpha="true" />
         </div>
         <div class="bv-toe__field bv-toe__field--two-col">
             <div>
                 <label class="bv-toe__label">Offset X <span class="bv-toe__value">@_shadowOffsetX</span></label>
-                <TelerikSlider @bind-Value="_shadowOffsetX" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
+                <TelerikSlider Value="@_shadowOffsetX" ValueChanged="@((double v) => CommitShadowOffsetX(v))" ValueExpression="@(() => _shadowOffsetX)" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
             </div>
             <div>
                 <label class="bv-toe__label">Offset Y <span class="bv-toe__value">@_shadowOffsetY</span></label>
-                <TelerikSlider @bind-Value="_shadowOffsetY" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
+                <TelerikSlider Value="@_shadowOffsetY" ValueChanged="@((double v) => CommitShadowOffsetY(v))" ValueExpression="@(() => _shadowOffsetY)" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
             </div>
         </div>
         <div class="bv-toe__field">
             <label class="bv-toe__label">Blur <span class="bv-toe__value">@_shadowBlur px</span></label>
-            <TelerikSlider @bind-Value="_shadowBlur" Min="0" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 30.0, 5.0)" />
+            <TelerikSlider Value="@_shadowBlur" ValueChanged="@((double v) => CommitShadowBlur(v))" ValueExpression="@(() => _shadowBlur)" Min="0" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 30.0, 5.0)" />
         </div>
 
         <!-- Actions -->
         <div class="bv-toe__actions">
-            <TelerikButton OnClick="Apply"
-                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                           Size="@ThemeConstants.Button.Size.Small">
-                Apply
-            </TelerikButton>
             <TelerikButton OnClick="OnAnimateClicked"
                            Icon="@SvgIcon.MapMarker"
                            FillMode="@ThemeConstants.Button.FillMode.Flat"
@@ -241,6 +282,8 @@
     private bool                 _hasBox;
     private string               _boxColor   = "#000000";
     private double               _boxOpacity = 0.5;
+    private double?              _maxWidth;
+    private double               _opacity    = 1.0;
     private TextHorizontalAlign  _hAlign     = TextHorizontalAlign.Center;
     private TextVerticalAlign    _vAlign     = TextVerticalAlign.Bottom;
     private int                  _offsetX;
@@ -328,6 +371,8 @@
             _hasBox     = Overlay.BoxColor is not null;
             _hAlign     = Overlay.HorizontalAlign;
             _vAlign     = Overlay.VerticalAlign;
+            _maxWidth   = Overlay.MaxWidth;
+            _opacity    = Overlay.Opacity;
             _offsetX    = Overlay.OffsetX;
             _offsetY    = Overlay.OffsetY;
             _position   = Overlay.TimelinePosition;
@@ -384,6 +429,10 @@
     {
         var (r, g, b, _) = ColorHelper.Unpack(val);
         _fontColor = $"#{r:X2}{g:X2}{b:X2}";
+
+        var was   = Overlay?.FontColor;
+        var value = _fontColor;
+        Commit("font colour", o => o.FontColor = value, o => o.FontColor = was!);
     }
 
     private double BoxColorToDouble()
@@ -400,6 +449,7 @@
         var (r, g, b, a) = ColorHelper.Unpack(val);
         _boxColor   = $"#{r:X2}{g:X2}{b:X2}";
         _boxOpacity = a / 255.0;
+        CommitBoxColor();
     }
 
     // ── Actions ──────────────────────────────────────────────────────────────
@@ -413,44 +463,202 @@
             ? runs
             : [new TextRun { Text = overlay.Text, Bold = overlay.FontBold, Underline = overlay.FontUnderline }];
 
-    private async Task Apply()
+    // ── Committing ───────────────────────────────────────────────────────────
+    //
+    // Every field goes through Commit, which is what the callout and clip-art panels have always
+    // done. This panel used to hold a whole set of locally-edited values and write them only when
+    // Apply was pressed, which caused two separate problems: nothing a person did to a title could
+    // be undone (titles-4), and any of three high-frequency events — a project mutation anywhere,
+    // a keyframe change, a playback tick — refreshed the panel and silently discarded whatever was
+    // typed but not yet applied (titles-5). Both were listed in the 2026-09-05 audit.
+
+    /// <summary>Applies one change to the selected title, undoably.</summary>
+    /// <remarks>
+    /// The revert closure captures the value that was there before, so undo puts back exactly that
+    /// rather than the panel's idea of it — the panel may have been refreshed since.
+    /// </remarks>
+    private void Commit(string propertyPath, Action<TextOverlay> apply, Action<TextOverlay> revert)
     {
         if (Overlay is null) return;
+        Clips.CommitTextOverlayUpdate(Overlay.Id, propertyPath, apply, revert);
+    }
 
-        var runs = await RunParser.HtmlToRunsAsync(_richTextHtml);
+    private async Task OnRichTextChangedAsync(string html)
+    {
+        _richTextHtml = html;
+        if (Overlay is null) return;
+
+        var runs      = await RunParser.HtmlToRunsAsync(html);
         var plainText = string.Concat(runs.Select(r => r.Text));
+        var name      = string.IsNullOrWhiteSpace(plainText)
+            ? "Text"
+            : plainText[..Math.Min(plainText.Length, 20)];
 
-        var updated = Overlay with
-        {
-            Text             = plainText,
-            Name             = string.IsNullOrWhiteSpace(plainText) ? "Text" : plainText[..Math.Min(plainText.Length, 20)],
-            Runs             = runs,
-            FontFamily       = _fontFamily,
-            FontSize         = _fontSize,
-            FontColor        = _fontColor,
-            BoxColor         = _hasBox ? $"{_boxColor}@{_boxOpacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}" : null,
-            HorizontalAlign  = _hAlign,
-            VerticalAlign    = _vAlign,
-            OffsetX          = _offsetX,
-            OffsetY          = _offsetY,
-            TimelinePosition = _position,
-            Duration         = _duration,
-            FadeInSeconds    = _fadeIn,
-            FadeOutSeconds   = _fadeOut,
-            ShadowColor      = _shadowColor,
-            ShadowOffsetX    = _shadowOffsetX,
-            ShadowOffsetY    = _shadowOffsetY,
-            ShadowBlur       = _shadowBlur,
-        };
+        var (wasText, wasRuns, wasName) = (Overlay.Text, Overlay.Runs, Overlay.Name);
 
-        Clips.UpdateTextOverlay(updated);
+        Commit("text",
+            o => { o.Text = plainText; o.Runs = runs; o.Name = name; },
+            o => { o.Text = wasText;   o.Runs = wasRuns; o.Name = wasName; });
+    }
+
+    private async Task OnFontFamilyChangedAsync(string family)
+    {
+        _fontFamily = family;
+        // A Google font has to be fetched before the live preview can draw with it; a system font
+        // makes this a no-op.
+        await GoogleFontService.EnsureLoadedAsync(family);
+
+        var was = Overlay?.FontFamily;
+        Commit("font", o => o.FontFamily = family, o => o.FontFamily = was!);
+    }
+
+    private void CommitFontSize(int size)
+    {
+        _fontSize = size;
+        var was = Overlay?.FontSize ?? size;
+        Commit("size", o => o.FontSize = size, o => o.FontSize = was);
+    }
+
+    private void CommitHorizontalAlign(TextHorizontalAlign align)
+    {
+        _hAlign = align;
+        var was = Overlay?.HorizontalAlign ?? align;
+        Commit("horizontal alignment", o => o.HorizontalAlign = align, o => o.HorizontalAlign = was);
+    }
+
+    private void CommitVerticalAlign(TextVerticalAlign align)
+    {
+        _vAlign = align;
+        var was = Overlay?.VerticalAlign ?? align;
+        Commit("vertical alignment", o => o.VerticalAlign = align, o => o.VerticalAlign = was);
+    }
+
+    private void CommitOffsetX(int value)
+    {
+        _offsetX = value;
+        var was = Overlay?.OffsetX ?? value;
+        Commit("X offset", o => o.OffsetX = value, o => o.OffsetX = was);
+    }
+
+    private void CommitOffsetY(int value)
+    {
+        _offsetY = value;
+        var was = Overlay?.OffsetY ?? value;
+        Commit("Y offset", o => o.OffsetY = value, o => o.OffsetY = was);
+    }
+
+    private void CommitPosition(double value)
+    {
+        _position = value;
+        var was = Overlay?.TimelinePosition ?? value;
+        Commit("start", o => o.TimelinePosition = value, o => o.TimelinePosition = was);
+    }
+
+    private void CommitDuration(double value)
+    {
+        _duration = value;
+        var was = Overlay?.Duration ?? value;
+        Commit("duration", o => o.Duration = value, o => o.Duration = was);
+    }
+
+    private void CommitFadeIn(double value)
+    {
+        _fadeIn = value;
+        var was = Overlay?.FadeInSeconds ?? value;
+        Commit("fade in", o => o.FadeInSeconds = value, o => o.FadeInSeconds = was);
+    }
+
+    private void CommitFadeOut(double value)
+    {
+        _fadeOut = value;
+        var was = Overlay?.FadeOutSeconds ?? value;
+        Commit("fade out", o => o.FadeOutSeconds = value, o => o.FadeOutSeconds = was);
+    }
+
+    private void CommitShadowColor(double value)
+    {
+        _shadowColor = value;
+        var was = Overlay?.ShadowColor ?? value;
+        Commit("shadow colour", o => o.ShadowColor = value, o => o.ShadowColor = was);
+    }
+
+    private void CommitShadowOffsetX(double value)
+    {
+        _shadowOffsetX = value;
+        var was = Overlay?.ShadowOffsetX ?? value;
+        Commit("shadow offset", o => o.ShadowOffsetX = value, o => o.ShadowOffsetX = was);
+    }
+
+    private void CommitShadowOffsetY(double value)
+    {
+        _shadowOffsetY = value;
+        var was = Overlay?.ShadowOffsetY ?? value;
+        Commit("shadow offset", o => o.ShadowOffsetY = value, o => o.ShadowOffsetY = was);
+    }
+
+    private void CommitShadowBlur(double value)
+    {
+        _shadowBlur = value;
+        var was = Overlay?.ShadowBlur ?? value;
+        Commit("shadow blur", o => o.ShadowBlur = value, o => o.ShadowBlur = was);
+    }
+
+    /// <summary>
+    /// Turns wrapping on at a sensible width, or off entirely.
+    /// </summary>
+    /// <remarks>
+    /// 80% of the frame when first switched on: wide enough that a short title is unaffected,
+    /// narrow enough that the wrap is visibly doing something.
+    /// </remarks>
+    private void OnWrapChanged(ChangeEventArgs e)
+    {
+        var on  = e.Value is true;
+        var was = Overlay?.MaxWidth;
+        _maxWidth = on ? was ?? 0.8 : null;
+
+        var value = _maxWidth;
+        Commit("line width", o => o.MaxWidth = value, o => o.MaxWidth = was);
+    }
+
+    private void CommitMaxWidth(double value)
+    {
+        _maxWidth = value;
+        var was = Overlay?.MaxWidth;
+        Commit("line width", o => o.MaxWidth = value, o => o.MaxWidth = was);
+    }
+
+    private void CommitOpacity(double value)
+    {
+        _opacity = value;
+        var was = Overlay?.Opacity ?? value;
+        Commit("opacity", o => o.Opacity = value, o => o.Opacity = was);
+    }
+
+    private void OnHasBoxChanged(ChangeEventArgs e)
+    {
+        _hasBox = e.Value is true;
+        CommitBoxColor();
+    }
+
+    private void CommitBoxColor()
+    {
+        var was   = Overlay?.BoxColor;
+        var value = _hasBox
+            ? $"{_boxColor}@{_boxOpacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}"
+            : null;
+
+        Commit("background box", o => o.BoxColor = value, o => o.BoxColor = was);
     }
 
     /// <summary>Clears a drag-set on-canvas position, reverting to alignment + offsets.</summary>
     private void ResetPosition()
     {
         if (Overlay is null) return;
-        Clips.UpdateTextOverlay(Overlay with { OverrideX = null, OverrideY = null });
+        var (wasX, wasY) = (Overlay.OverrideX, Overlay.OverrideY);
+
+        Commit("position",
+            o => { o.OverrideX = null; o.OverrideY = null; },
+            o => { o.OverrideX = wasX; o.OverrideY = wasY; });
     }
 
     private async Task Remove()
