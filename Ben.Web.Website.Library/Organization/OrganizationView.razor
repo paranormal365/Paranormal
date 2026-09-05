@@ -689,7 +689,7 @@
         _isSaving = true;
         StateHasChanged();
 
-        var updated = await AdminClient.UpdateOrganizationAsync(OrgId,
+        var (updated, saveError) = await AdminClient.UpdateOrganizationAsync(OrgId,
             new AdminUpdateOrganizationRequest(
                 _editName.Trim(),
                 _editUrlName.Trim().ToLowerInvariant(),
@@ -710,7 +710,12 @@
         }
         else
         {
-            _errorMessage = "Save failed. The URL name may already be in use, or you may not have permission.";
+            // The server's own sentence, when it gave one. It is always better than a guess: the
+            // plan gate explains what a plan costs, and the URL check names the address that is
+            // taken. Guessing here once told an owner they might lack permission on their own
+            // group while the server was explaining the price of adding a second person.
+            _errorMessage = saveError
+                ?? "Save failed. The URL name may already be in use, or you may not have permission.";
         }
     }
 }

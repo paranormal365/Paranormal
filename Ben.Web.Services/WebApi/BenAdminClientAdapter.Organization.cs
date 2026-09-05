@@ -31,11 +31,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default)
         => _api.GetAsync<OrganizationAdminRecord>($"/api/organizations/{id}", token);
 
-    public Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default)
-        => _api.PostAsync<AdminCreateOrganizationRequest, OrganizationAdminRecord>("/api/organizations", request, token);
+    public Task<(OrganizationAdminRecord? Result, string? Error)> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminCreateOrganizationRequest, OrganizationAdminRecord>(
+               HttpMethod.Post, "/api/organizations", request, token);
 
-    public Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default)
-        => _api.PutAsync<AdminUpdateOrganizationRequest, OrganizationAdminRecord>($"/api/organizations/{id}", request, token);
+    public Task<(OrganizationAdminRecord? Result, string? Error)> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminUpdateOrganizationRequest, OrganizationAdminRecord>(
+               HttpMethod.Put, $"/api/organizations/{id}", request, token);
 
     public Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{id}", token);
@@ -70,8 +72,9 @@ public sealed partial class BenAdminClientAdapter
         return result;
     }
 
-    public Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default)
-        => _api.PostAsync<CmsCreateLogoRequest, OrganizationLogoRecord>($"/api/organizations/{orgId}/logos", request, token);
+    public Task<(OrganizationLogoRecord? Result, string? Error)> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CmsCreateLogoRequest, OrganizationLogoRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/logos", request, token);
 
     public Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default)
         => _api.PutAsync<CmsUpdateLogoRequest, OrganizationLogoRecord>($"/api/organizations/{orgId}/logos/{logoId}", request, token);
@@ -121,11 +124,13 @@ public sealed partial class BenAdminClientAdapter
         return result;
     }
 
-    public Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default)
-        => _api.PostAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>($"/api/organizations/{orgId}/addresses", request, token);
+    public Task<(OrganizationAddressRecord? Result, string? Error)> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/addresses", request, token);
 
-    public Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default)
-        => _api.PutAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>($"/api/organizations/{orgId}/addresses/{addressId}", request, token);
+    public Task<(OrganizationAddressRecord? Result, string? Error)> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/addresses/{addressId}", request, token);
 
     public Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/addresses/{addressId}", token);
