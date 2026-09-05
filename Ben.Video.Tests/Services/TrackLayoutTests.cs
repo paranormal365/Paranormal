@@ -149,6 +149,18 @@ public sealed class TrackLayoutTests
         Assert.Null(TrackLayout.Validate(track));
     }
 
+    /// <summary>
+    /// A clip is added the moment the file is picked and gains its duration when the probe comes
+    /// back, so a length of zero is a normal in-between state rather than a broken track.
+    /// </summary>
+    [Fact]
+    public void A_clip_that_has_no_duration_yet_is_not_a_problem()
+    {
+        var track = Track(Clip(0, 0, "still probing"), Clip(0, 5, "ready"));
+
+        Assert.Null(TrackLayout.Validate(track));
+    }
+
     [Fact]
     public void A_clip_before_the_beginning_is_reported()
     {

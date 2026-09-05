@@ -765,17 +765,31 @@ public sealed class ClipStoreTests
     }
 
     [Fact]
-    public void AddTransition_SetsTimelinePosition_CentredAtBoundary()
+    /// <summary>
+    /// A transition covers the stretch where both clips play, and pulls the second one back to
+    /// create it.
+    /// </summary>
+    /// <remarks>
+    /// It used to be centred on the junction and moved nothing, which meant the timeline claimed a
+    /// length the render never produced: ffmpeg's xfade output is A + B − d, so every marker,
+    /// overlay and audio clip after the junction sat later than whatever it had been lined up with
+    /// on screen (2026-09-05 audit, transitions-3).
+    /// </remarks>
+    public void AddTransition_CoversTheOverlapItCreates()
     {
         var (store, trackId, clipA, clipB) = CreateStoreWithTwoClips();
-        clipA.TimelinePosition = 0;
-        clipA.Duration         = 5;
 
         store.AddTransition(trackId, clipA.Id, clipB.Id, TransitionStyle.Fade, 2.0);
 
         var t = store.PrimaryVideoTrack.Items.OfType<Transition>().Single();
-        // Expected: fromClip.TimelinePosition + fromClip.Duration - duration/2
-        Assert.Equal(clipA.TimelinePosition + clipA.Duration - 1.0, t.TimelinePosition, precision: 5);
+        var clipAEnd = clipA.TimelinePosition + clipA.TrimmedDuration;
+
+        Assert.Equal(clipAEnd - 2.0, t.TimelinePosition, precision: 5);
+        Assert.Equal(2.0, t.Duration, precision: 5);
+
+        // The second clip moved back to meet it, so the two overlap by exactly the crossfade.
+        Assert.Equal(clipAEnd - 2.0, clipB.TimelinePosition, precision: 5);
+        Assert.Null(store.ValidateAll());
     }
 
     [Fact]
@@ -922,14 +936,20 @@ public sealed class ClipStoreTests
         var originalDuration = t.Duration;
         var originalPosition = t.TimelinePosition;
 
+        var originalClipBPosition = clipB.TimelinePosition;
+
         store.UpdateTransition(t.Id, TransitionStyle.WipeLeft, 2.0);
         Assert.Equal(TransitionStyle.WipeLeft, t.Style);
 
+        // Two steps now: the style and duration change, and the clip moving to match the longer
+        // overlap it asks for.
+        store.Undo();
         store.Undo();
 
         Assert.Equal(originalStyle, t.Style);
         Assert.Equal(originalDuration, t.Duration, precision: 5);
         Assert.Equal(originalPosition, t.TimelinePosition, precision: 5);
+        Assert.Equal(originalClipBPosition, clipB.TimelinePosition, precision: 5);
     }
 
     [Fact]

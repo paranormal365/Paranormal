@@ -494,14 +494,33 @@ public sealed class ClipStore
     }
 
     /// <summary>Add any TrackItem to the specified track.</summary>
+    /// <summary>
+    /// Adds an item to a track, after whatever is already there.
+    /// </summary>
+    /// <remarks>
+    /// <para>It never set a position. Every clip added this way therefore sat at zero, so a second
+    /// import landed exactly on top of the first — the model had them stacked while the lane drew
+    /// them politely side by side (2026-09-05 audit, F5 and media-panel-4). The method has always
+    /// been documented as "append"; this makes it true in time as well as in list order.</para>
+    ///
+    /// <para>A position the caller has already chosen is respected: the Server tab places at the
+    /// playhead, and restoring a project sets every position from the file. Only the default of
+    /// zero is treated as "wherever it fits".</para>
+    /// </remarks>
     public void AddClipToTrack(Guid trackId, TrackItem item)
     {
         var track = RequireTrack(trackId);
         if (track.IsLocked) return;
+
+        if (item.TimelinePosition <= TrackLayout.Tolerance && TrackLayout.IsSequential(item))
+            item.TimelinePosition = TrackLayout.EndOf(track);
+
         var index = track.Items.Count;
         item.Order = index;
         track.Items.Add(item);
         PushCommand(new AddClipCommand(track, item, index));
+        ResortSequential(track);
+        AssertLaidOut(track);
         Notify();
     }
 
@@ -588,6 +607,7 @@ public sealed class ClipStore
             // drag simply left the two clips overlapping (2026-09-05 audit, F5).
             MakeRoomFor(track, item);
 
+            ReconcileTransitions(track);
             ResortSequential(track);
             AssertLaidOut(track);
             Notify();
@@ -1343,6 +1363,7 @@ public sealed class ClipStore
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
 
+            ReconcileTransitions(track);
             ResortSequential(track);
             AssertLaidOut(track);
             Notify();
@@ -1470,6 +1491,8 @@ public sealed class ClipStore
             track.Items.Insert(idx + 1, second);
             RenumberItems(track);
             PushCommand(new SplitClipCommand(track, original, first, second, idx));
+            ReconcileTransitions(track);
+            ResortSequential(track);
             Notify();
             return;
         }
@@ -1645,20 +1668,29 @@ public sealed class ClipStore
         var to    = track.Items.FirstOrDefault(i => i.Id == toClipId)
                     ?? throw new ArgumentException("toClipId not found on track.");
 
-        // Use TrimmedDuration (not the raw, untrimmed source Duration) for VideoClip —
-        // otherwise a transition placed after a split/trimmed piece lands far past
-        // where that piece actually ends on the timeline (same pitfall as
-        // TimelineTrack.TotalDuration).
-        var fromEndSeconds = from.TimelinePosition + (from is VideoClip fromVc ? fromVc.TrimmedDuration : from.Duration);
+        // Never longer than the clips it joins can spare — a two-second crossfade between
+        // one-second clips renders as something ffmpeg has to invent (2026-09-05 audit,
+        // transitions-7). The 1.0s the callers hard-code is a request, not a promise.
+        durationSeconds = TransitionDurationClamp.Clamp(
+            durationSeconds, from.EffectiveLength, to.EffectiveLength);
+
+        var fromEndSeconds = from.TimelinePosition + from.EffectiveLength;
         var transition = new Transition
         {
             Name             = $"{style}",
             Style            = style,
             FromClipId       = fromClipId,
             ToClipId         = toClipId,
-            TimelinePosition = fromEndSeconds - (durationSeconds / 2),
+            TimelinePosition = fromEndSeconds - durationSeconds,
             Duration         = durationSeconds,
         };
+
+        // The two clips genuinely play at once for the length of the crossfade, so the second one
+        // moves back to meet the first and everything after it follows. Without this the timeline
+        // claimed a length the render never produced: ffmpeg's xfade output is A + B − d, so every
+        // marker, overlay and audio clip after the junction drifted later than what it lined up
+        // with on screen (2026-09-05 audit, transitions-3).
+        ShiftFrom(track, to, -durationSeconds, transition.Id);
         // Insert right before `to` (not appended last) — Order must reflect chronological
         // position, not insertion order: the timeline UI walks Items sorted by Order to
         // compute each chip's rendered gap from the previous chip's end, so an
@@ -1754,8 +1786,25 @@ public sealed class ClipStore
         if (transition is null)
             throw new ArgumentException("Transition not found.", nameof(transitionId));
 
+        var owningTrack = _tracks.First(t => t.Items.Contains(transition));
+        var toItem      = owningTrack.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+
+        if (fromItem is not null && toItem is not null)
+            durationSeconds = TransitionDurationClamp.Clamp(
+                durationSeconds, fromItem.EffectiveLength, toItem.EffectiveLength);
+
+        // Lengthening the crossfade pulls the second clip further back, shortening it lets it out
+        // again — the overlap and the duration are the same number seen twice.
+        var delta = durationSeconds - transition.Duration;
+
         var command = BuildTransitionStyleUpdate(transition, fromItem, style, durationSeconds);
         PushCommand(command);
+
+        if (toItem is not null && !owningTrack.IsLocked)
+            ShiftFrom(owningTrack, toItem, -delta, transition.Id);
+
+        ResortSequential(owningTrack);
+        AssertLaidOut(owningTrack);
         Notify();
     }
 
@@ -1811,7 +1860,34 @@ public sealed class ClipStore
     }
 
     /// <summary>Remove a transition by id.</summary>
-    public void RemoveTransition(Guid transitionId) => RemoveClip(transitionId);
+    /// <summary>
+    /// Removes a transition and gives back the time it was borrowing.
+    /// </summary>
+    /// <remarks>
+    /// Adding one pulled the second clip back to overlap the first for its duration; removing it
+    /// has to push that clip and everything after it forward again, or the two stay overlapping
+    /// with nothing to justify it (2026-09-05 audit, transitions-3).
+    /// </remarks>
+    public void RemoveTransition(Guid transitionId)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == transitionId));
+        var transition = track?.Items.OfType<Transition>().FirstOrDefault(t => t.Id == transitionId);
+
+        if (track is null || transition is null) { RemoveClip(transitionId); return; }
+
+        var to = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+        var duration = transition.Duration;
+
+        using (BeginBatch())
+        {
+            RemoveClip(transitionId);
+            if (to is not null && !track.IsLocked) ShiftFrom(track, to, duration);
+        }
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
 
     // â”€â”€ Text overlay management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2120,6 +2196,116 @@ public sealed class ClipStore
         var command = new CompositeCommand("Make room", shifts);
         PushCommand(command);
         command.Execute();
+    }
+
+    /// <summary>
+    /// Moves <paramref name="anchor"/> and everything after it on the track by
+    /// <paramref name="seconds"/>.
+    /// </summary>
+    /// <remarks>
+    /// Used to open and close the overlap a transition needs. The shift is pushed as its own undo
+    /// step so removing a transition can put the clips back exactly.
+    /// </remarks>
+    private void ShiftFrom(TimelineTrack track, TrackItem anchor, double seconds, Guid? exceptId = null)
+    {
+        if (Math.Abs(seconds) < TrackLayout.Tolerance) return;
+
+        var affected = TrackLayout.SequentialItems(track)
+            .Where(i => i.Id != exceptId
+                     && i.TimelinePosition >= anchor.TimelinePosition - TrackLayout.Tolerance)
+            .ToList();
+
+        if (affected.Count == 0) return;
+
+        var steps = affected
+            .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                i, i.TimelinePosition, Math.Max(0, i.TimelinePosition + seconds)))
+            .ToList();
+
+        var command = new CompositeCommand(seconds < 0 ? "Close for transition" : "Reopen after transition", steps);
+        PushCommand(command);
+        command.Execute();
+    }
+
+    /// <summary>
+    /// Drops transitions whose clips are no longer where they were.
+    /// </summary>
+    /// <remarks>
+    /// <para>A transition names two clips and sits on the junction between them. Nothing checked
+    /// that the junction still existed: removing, splitting, trimming or moving either clip left
+    /// the transition behind, pointing at a clip that was gone or no longer adjacent, and the
+    /// export then matched transitions to junctions by position and applied it to whichever pair
+    /// happened to be there (2026-09-05 audit, transitions-5).</para>
+    ///
+    /// <para>Called after every edit that can move a clip. Silent by design — a transition whose
+    /// junction a person has just deleted is not news.</para>
+    /// </remarks>
+    /// <summary>
+    /// Pushes apart any clips that overlap without a transition to justify it.
+    /// </summary>
+    /// <remarks>
+    /// The repair half of the invariant. Every edit that can create an overlap resolves it up
+    /// front, so this is normally a no-op; what it exists for is the case where the justification
+    /// disappears rather than the overlap appearing — a transition dropped because its junction is
+    /// gone leaves the two clips still sitting on top of each other.
+    /// </remarks>
+    private void CloseUnjustifiedOverlaps(TimelineTrack track)
+    {
+        if (track.IsLocked) return;
+
+        // Front to back, so closing one overlap cannot leave a later one measured against a
+        // position that is about to change.
+        for (var guard = 0; guard < 100; guard++)
+        {
+            var items = TrackLayout.SequentialItems(track);
+            var moved = false;
+
+            for (var i = 1; i < items.Count; i++)
+            {
+                var previous = items[i - 1];
+                var item     = items[i];
+
+                var allowed = TrackLayout.AllowedOverlap(track, previous, item);
+                var overlap = previous.TimelinePosition + previous.EffectiveLength
+                            - item.TimelinePosition - allowed;
+
+                if (overlap <= TrackLayout.Tolerance) continue;
+
+                ShiftFrom(track, item, overlap);
+                moved = true;
+                break;
+            }
+
+            if (!moved) return;
+        }
+    }
+
+    private void ReconcileTransitions(TimelineTrack track)
+    {
+        var stale = track.Items.OfType<Transition>().Where(t =>
+        {
+            var from = track.Items.FirstOrDefault(i => i.Id == t.FromClipId);
+            var to   = track.Items.FirstOrDefault(i => i.Id == t.ToClipId);
+
+            if (from is null || to is null) return true;
+
+            // Still adjacent? The junction is where the first one ends, less the overlap the
+            // transition itself opened.
+            var junction = from.TimelinePosition + from.EffectiveLength - t.Duration;
+            return Math.Abs(to.TimelinePosition - junction) > 0.05;
+        }).ToList();
+
+        if (stale.Count == 0) return;
+
+        foreach (var transition in stale)
+            track.Items.Remove(transition);
+
+        RenumberItems(track);
+
+        // The overlap only existed because the transition did. Close whatever is left over — by
+        // position, not by clip id, because the clip a transition pointed at may well have been
+        // replaced by the very edit that stranded it (splitting one produces two new items).
+        CloseUnjustifiedOverlaps(track);
     }
 
     private static void ResortSequential(TimelineTrack track)

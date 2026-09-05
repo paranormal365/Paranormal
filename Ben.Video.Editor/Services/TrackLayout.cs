@@ -50,6 +50,28 @@ public static class TrackLayout
         item is VideoClip or AudioClip or ImageClip;
 
     /// <summary>
+    /// How much two clips are allowed to overlap because a transition joins them.
+    /// </summary>
+    /// <remarks>
+    /// A crossfade is not decoration: the two clips genuinely play at once for its duration, and
+    /// the render is shorter than the sum of its parts by exactly that much. So the pair is allowed
+    /// to overlap by the transition's length and no more — which is also how the timeline can show
+    /// the truth, rather than claiming a length the export does not produce (2026-09-05 audit,
+    /// transitions-3).
+    /// </remarks>
+    public static double AllowedOverlap(TimelineTrack track, TrackItem first, TrackItem second)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+
+        return track.Items.OfType<Transition>()
+            .Where(t => (t.FromClipId == first.Id && t.ToClipId == second.Id)
+                     || (t.FromClipId == second.Id && t.ToClipId == first.Id))
+            .Select(t => t.Duration)
+            .DefaultIfEmpty(0)
+            .Max();
+    }
+
+    /// <summary>
     /// Whether something of <paramref name="duration"/> seconds placed at
     /// <paramref name="position"/> would land on top of anything already on the track.
     /// </summary>
@@ -61,12 +83,7 @@ public static class TrackLayout
     {
         ArgumentNullException.ThrowIfNull(track);
 
-        var end = position + duration;
-
-        return SequentialItems(track).Any(other =>
-            other.Id != excludeItemId
-            && other.TimelinePosition < end - Tolerance
-            && other.TimelinePosition + other.EffectiveLength > position + Tolerance);
+        return FirstOverlapping(track, position, duration, excludeItemId) is not null;
     }
 
     /// <summary>The first item the given span would land on, if any.</summary>
@@ -78,9 +95,21 @@ public static class TrackLayout
         var end = position + duration;
 
         return SequentialItems(track).FirstOrDefault(other =>
-            other.Id != excludeItemId
-            && other.TimelinePosition < end - Tolerance
-            && other.TimelinePosition + other.EffectiveLength > position + Tolerance);
+        {
+            if (other.Id == excludeItemId) return false;
+
+            // A transition joining the two buys exactly its own duration of overlap.
+            var allowed = excludeItemId is { } movingId
+                ? track.Items.OfType<Transition>()
+                       .Where(t => (t.FromClipId == movingId && t.ToClipId == other.Id)
+                                || (t.FromClipId == other.Id && t.ToClipId == movingId))
+                       .Select(t => t.Duration)
+                       .DefaultIfEmpty(0).Max()
+                : 0;
+
+            return other.TimelinePosition < end - allowed - Tolerance
+                && other.TimelinePosition + other.EffectiveLength > position + allowed + Tolerance;
+        });
     }
 
     /// <summary>
@@ -114,17 +143,20 @@ public static class TrackLayout
             if (item.TimelinePosition < -Tolerance)
                 return $"'{item.Name}' starts at {item.TimelinePosition:0.###}s, before the beginning.";
 
-            if (item.EffectiveLength <= 0)
-                return $"'{item.Name}' has no length.";
+            // A clip with no length yet is normal: it is added the moment the file is picked and
+            // gains its duration when the probe comes back. Nothing to complain about, and it
+            // cannot overlap anything either.
 
             if (i == 0) continue;
 
             var previous = items[i - 1];
             var previousEnd = previous.TimelinePosition + previous.EffectiveLength;
+            var allowed = AllowedOverlap(track, previous, item);
 
-            if (item.TimelinePosition < previousEnd - Tolerance)
+            if (item.TimelinePosition < previousEnd - allowed - Tolerance)
                 return $"'{item.Name}' starts at {item.TimelinePosition:0.###}s, "
-                     + $"inside '{previous.Name}' which runs to {previousEnd:0.###}s.";
+                     + $"inside '{previous.Name}' which runs to {previousEnd:0.###}s"
+                     + (allowed > 0 ? $" (a transition allows {allowed:0.###}s of it)." : ".");
         }
 
         return null;
