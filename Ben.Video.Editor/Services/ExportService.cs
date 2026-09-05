@@ -141,6 +141,71 @@ public sealed class ExportService : IAsyncDisposable
         return job;
     }
 
+    // ── Still frame ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Saves the frame at <paramref name="timelineSeconds"/> as a PNG on the person's machine.
+    /// </summary>
+    /// <returns>The suggested filename, or null with a reason when there is no frame there.</returns>
+    /// <remarks>
+    /// <para>For a site whose members are cutting evidence reels, the single frame where something
+    /// appears is what actually gets shared, and the editor could only produce video (2026-09-05
+    /// audit, the completeness critic's list).</para>
+    ///
+    /// <para>The frame comes from the clip's own source at its full resolution, not from the
+    /// preview: the preview is a scaled proxy, and a still taken from it would be softer than the
+    /// footage it came from — which is exactly the wrong trade for a frame someone is going to
+    /// look closely at. Overlays are therefore not on it, which is also the right answer for a
+    /// frame offered as evidence.</para>
+    /// </remarks>
+    public async Task<(string? FileName, string? Problem)> SaveFrameAsync(double timelineSeconds)
+    {
+        var item = TrackLayout.SequentialItems(_clips.PrimaryVideoTrack)
+            .FirstOrDefault(i => timelineSeconds >= i.TimelinePosition
+                              && timelineSeconds < i.TimelinePosition + i.EffectiveLength);
+
+        var (source, sourceSeconds) = item switch
+        {
+            // Timeline time back to the clip's own: subtract where it starts, add what was
+            // trimmed off its head, and undo the speed change.
+            VideoClip v when v.MemFsName is not null =>
+                (v.MemFsName, v.StartTrim + (timelineSeconds - v.TimelinePosition) * v.Speed),
+            ImageClip i when i.MemFsName is not null => (i.MemFsName, 0.0),
+            _ => (null, 0.0),
+        };
+
+        if (source is null)
+            return (null, "There is no clip at the playhead to take a frame from.");
+
+        var output = $"frame_{Guid.NewGuid():N}.png";
+
+        try
+        {
+            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildStillFrameArgs(source, output, sourceSeconds));
+
+            var name    = $"frame-{FormatTimecode(timelineSeconds)}.png";
+            var blobUrl = await _ffmpeg.CreatePreviewUrlAsync(output, "image/png");
+            await _ffmpeg.DownloadBlobUrlAsync(blobUrl, name);
+            return (name, null);
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("ExportService.SaveFrameAsync", $"Could not save the frame: {ex.Message}", ex.ToString());
+            return (null, $"Could not save the frame: {ex.Message}");
+        }
+        finally
+        {
+            try { await _ffmpeg.DeleteFileAsync(output); } catch { }
+        }
+    }
+
+    /// <summary>A filename-safe timecode, so two frames from one project never collide.</summary>
+    private static string FormatTimecode(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return $"{(int)t.TotalMinutes:D2}m{t.Seconds:D2}s{t.Milliseconds:D3}";
+    }
+
     // â”€â”€ Pipeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task RunPipelineAsync(ExportJob job, bool downloadToDisk = true)
@@ -160,7 +225,7 @@ public sealed class ExportService : IAsyncDisposable
                                .ToList();
         var extraVideoTracks = _clips.VideoTracks.Where(t => t.Id != primary.Id).ToList();
 
-        if (videoClips.Count == 0 && imageClips.Count == 0)
+        if (!_clips.HasExportableContent)
             throw new InvalidOperationException("No clips on the timeline to export.");
 
         var s         = job.Settings;
@@ -306,6 +371,10 @@ public sealed class ExportService : IAsyncDisposable
                 outputName = await ApplyWatermarkAsync(job, outputName, wmConfig, s, tempFiles);
                 ThrowIfCancelled(job);
             }
+
+            // ── Phase 4.6: The container the person chose ─────────────────────
+            outputName = await FinaliseContainerAsync(job, outputName, s, tempFiles);
+            ThrowIfCancelled(job);
 
             // Final sanity probe (backlog #29): a mid-pipeline pass that silently dropped the
             // video stream (e.g. an explicit -map that deselected it) exits 0, and every later
@@ -465,7 +534,7 @@ public sealed class ExportService : IAsyncDisposable
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
                 // The canvas an effect will run against: zoompan needs a literal size and cannot
                 // be told one as an expression (see ZoompanFragment).
-                var (fxW, fxH) = ParseResolution(s.Resolution);
+                var (fxW, fxH) = ResolveCanvas(s);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
                     clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed, fxW, fxH);
                 // Muting the video track silences its clips, the same as muting each of them.
@@ -545,16 +614,16 @@ public sealed class ExportService : IAsyncDisposable
             else
             {
                 var duration = clip.Duration > 0 ? clip.Duration : 5.0;
-                var (fxImgW, fxImgH) = ParseResolution(s.Resolution);
+                var (fxImgW, fxImgH) = ResolveCanvas(s);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
                     clip.AppliedEffects, _effectRegistry, duration, 1.0, fxImgW, fxImgH);
                 // Item #9 — scale/pad to the PROJECT's output resolution, not the image's own
                 // source size. Passing clip.Width/clip.Height made the filter
                 // "scale={imgW}:{imgH},pad={imgW}:{imgH}" — a no-op that left every image segment
                 // at its native resolution, which is exactly the reported symptom. Every other
-                // segment path in this file already derives its canvas from ParseResolution(s.Resolution);
+                // segment path in this file already derives its canvas from the export settings;
                 // this was the one that didn't.
-                var (imgW, imgH) = ParseResolution(s.Resolution);
+                var (imgW, imgH) = ResolveCanvas(s);
                 var args     = ExportArgBuilders.BuildImageSegmentArgs(
                     clip.MemFsName, segName, duration, s,
                     outputWidth: imgW, outputHeight: imgH,
@@ -663,6 +732,43 @@ public sealed class ExportService : IAsyncDisposable
     }
 
     /// <summary>
+    /// Rewrites the finished render into the chosen container, with the flags that container wants.
+    /// </summary>
+    /// <remarks>
+    /// A stream copy, so nothing is re-encoded. Everything upstream works in mp4 intermediates and
+    /// the last step used to be a rename, which meant a WebM export was an MP4 file with a .webm
+    /// name (2026-09-05 audit, export-14). A failure here leaves the previous file in place: the
+    /// render is finished and correct, and the wrong extension is better than no export.
+    /// </remarks>
+    private async Task<string> FinaliseContainerAsync(
+        ExportJob job, string input, ExportSettings s, List<string> tempFiles)
+    {
+        Advance(job, 92, "Writing the file…");
+
+        var remuxed = $"container_{job.Id:N}.{s.OutputFormat}";
+
+        try
+        {
+            await _ffmpeg.ExecAsync(
+                ExportArgBuilders.BuildContainerArgs(input, remuxed, s), job.CancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            job.Warnings.Add($"Could not rewrite the file as {s.OutputFormat.ToUpperInvariant()}: {ex.Message}");
+            return input;
+        }
+
+        var final = $"{SanitiseFilename(s.OutputFilename)}.{s.OutputFormat}";
+        if (tempFiles.Remove(input)) await _ffmpeg.DeleteFileAsync(input);
+        else await _ffmpeg.DeleteFileAsync(input);
+
+        await RenameAsync(remuxed, final);
+        job.CompletedPhases.Add($"Written as {s.OutputFormat.ToUpperInvariant()}");
+        return final;
+    }
+
+    /// <summary>
     /// Renders the gaps the plan asked for, so the returned plan is all real files.
     /// </summary>
     private async Task<IReadOnlyList<ExportSegment>> RenderFillerSegmentsAsync(
@@ -670,7 +776,7 @@ public sealed class ExportService : IAsyncDisposable
     {
         if (!plan.Any(p => p.Kind == ExportSegmentKind.Filler)) return plan;
 
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         var filled   = new List<ExportSegment>(plan.Count);
         var index    = 0;
 
@@ -820,7 +926,7 @@ public sealed class ExportService : IAsyncDisposable
         IReadOnlyList<TextOverlay> overlays)
     {
         var composited = inputName;
-        var (vw, vh)   = ParseResolution(s.Resolution);
+        var (vw, vh)   = ResolveCanvas(s);
 
         var overlayIdx = _overlayPassIndex;
         foreach (var overlay in overlays)
@@ -936,7 +1042,7 @@ public sealed class ExportService : IAsyncDisposable
         IReadOnlyList<CalloutClip> svgShapes)
     {
         var composited    = inputName;
-        var (vw, vh)      = ParseResolution(s.Resolution);
+        var (vw, vh)      = ResolveCanvas(s);
 
         // ── SVG-rendered shapes (via SvgFrameRendererService) ────────────────
         // Static shapes composite ONE PNG via a looped input (fades as alpha-fade filters);
@@ -1060,7 +1166,7 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.AssetFormat == VideoAssetFormat.Svg && clip.ControlPoints is { Count: > 0 })
             {
                 // SVG with control points — render frame-by-frame via SvgAnimationExporter
-                var (width, height) = ParseResolution(s.Resolution);
+                var (width, height) = ResolveCanvas(s);
                 var (args, writtenFiles) = await _svgExporter.RenderAsync(
                     clip, composited, s.Fps, width, height, tempFiles);
 
@@ -1100,7 +1206,7 @@ public sealed class ExportService : IAsyncDisposable
                 if (overlayFile is null) continue;
                 tempFiles.Add(overlayFile);
 
-                var (vw, vh) = ParseResolution(s.Resolution);
+                var (vw, vh) = ResolveCanvas(s);
                 var filter = ExportArgBuilders.BuildClipArtStaticOverlayFilter(clip, vw, vh);
 
                 await _ffmpeg.ExecAsync(
@@ -1154,7 +1260,7 @@ public sealed class ExportService : IAsyncDisposable
         var sourceFile = await _opfs.ReadAsJSFileAsync(guid, $".{ext}");
         if (sourceFile is null) return null;
 
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         var frameCount = Math.Max(1, (int)Math.Round(clip.Duration * s.Fps));
         var startT = clip.TimelinePosition;
         var endT   = clip.TimelinePosition + clip.Duration;
@@ -1458,7 +1564,7 @@ public sealed class ExportService : IAsyncDisposable
 
         Advance(job, 67, $"Compositing {layers.Count} clip(s) from {extraTracks.Count} track(s)…");
 
-        var (vw, vh)   = ParseResolution(s.Resolution);
+        var (vw, vh)   = ResolveCanvas(s);
         var composited = baseLayer;
         var index      = 0;
 
@@ -1530,12 +1636,12 @@ public sealed class ExportService : IAsyncDisposable
 
     // â”€â”€ ffmpeg arg builders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private static string[] BuildTrimArgs(
+    private string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
         string? extraVf = null, bool sourceHasAudio = true)
     {
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         return ExportArgBuilders.BuildTrimArgs(
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
             outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
@@ -1566,9 +1672,20 @@ public sealed class ExportService : IAsyncDisposable
             throw new OperationCanceledException("Export cancelled by user.");
     }
 
+    /// <summary>
+    /// Moves the progress bar, never backwards.
+    /// </summary>
+    /// <remarks>
+    /// The phases each announce a percentage of their own, and several of them start lower than
+    /// the one before ended — the bar visibly ran backwards several times in a single job, which
+    /// reads as the export restarting (2026-09-05 audit, export-8). A phase that would go
+    /// backwards keeps the number and changes only the label, so the words still say what is
+    /// happening. Reaching 100 is the exception: the end of the job is allowed to say so however
+    /// it arrives.
+    /// </remarks>
     private static void Advance(ExportJob job, int pct, string label)
     {
-        job.OverallPercent = pct;
+        job.OverallPercent = pct >= 100 ? 100 : Math.Max(job.OverallPercent, pct);
         job.PhaseLabel     = label;
         job.NotifyProgress();
     }
@@ -1679,17 +1796,36 @@ public sealed class ExportService : IAsyncDisposable
     }
 
     /// <summary>Parse a "WxH" resolution string into (width, height). Defaults to 1920×1080.</summary>
+    /// <summary>
+    /// The canvas for a settings object with no clips to consult.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the instance <see cref="ResolveCanvas"/>, which can answer "source resolution"
+    /// honestly. This overload keeps the old behaviour for callers that have no timeline.
+    /// </remarks>
     internal static (int w, int h) ParseResolution(string resolution)
+        => ExportCanvas.Resolve(resolution);
+
+    /// <summary>
+    /// The canvas this export renders at, resolving "source resolution" against the first clip on
+    /// the timeline rather than quietly rescaling everything to Full HD (2026-09-05 audit,
+    /// export-5).
+    /// </summary>
+    private (int w, int h) ResolveCanvas(ExportSettings s)
     {
-        if (!string.IsNullOrEmpty(resolution))
-        {
-            var parts = resolution.Split('x');
-            if (parts.Length == 2
-                && int.TryParse(parts[0], out var w)
-                && int.TryParse(parts[1], out var h))
-                return (w, h);
-        }
-        return (1920, 1080);
+        if (!string.IsNullOrWhiteSpace(s.Resolution))
+            return ExportCanvas.Resolve(s.Resolution);
+
+        var first = TrackLayout.SequentialItems(_clips.PrimaryVideoTrack)
+            .Select(i => i switch
+            {
+                VideoClip v => (v.Width, v.Height),
+                ImageClip i2 => (i2.Width, i2.Height),
+                _ => (0, 0),
+            })
+            .FirstOrDefault(d => d.Item1 > 0 && d.Item2 > 0);
+
+        return ExportCanvas.Resolve(s.Resolution, first.Item1, first.Item2);
     }
 
     /// <summary>
@@ -1721,7 +1857,7 @@ public sealed class ExportService : IAsyncDisposable
         await _ffmpeg.WriteFileAsync(wmMemFs, wmRef);
         tempFiles.Add(wmMemFs);
 
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         var filter   = WatermarkService.BuildOverlayFilter(config, wmMemFs, vw, vh);
 
         var outputName = $"wm_{job.Id:N}.{s.OutputFormat}";

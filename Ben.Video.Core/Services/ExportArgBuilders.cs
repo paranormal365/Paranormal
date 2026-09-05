@@ -94,6 +94,68 @@ internal static class ExportArgBuilders
         return [.. args];
     }
 
+    /// <summary>
+    /// Writes the finished render into the container the person actually asked for, without
+    /// re-encoding anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>The pipeline works in <c>.mp4</c> intermediates and the last step simply renamed the
+    /// final one to the chosen extension. Choosing WebM therefore produced an MP4 file called
+    /// <c>.webm</c> — the codecs inside were right, the container was not, and what happens next
+    /// depends entirely on how forgiving the player is.</para>
+    ///
+    /// <para>A stream copy is cheap: no frame is decoded, so this costs a file rewrite rather than
+    /// a second encode. It is also the only place the container-level flags can be set
+    /// (2026-09-05 audit, export-14).</para>
+    /// </remarks>
+    internal static string[] BuildContainerArgs(string input, string output, ExportSettings s)
+    {
+        var args = new List<string> { "-i", input, "-c", "copy" };
+
+        var isMp4Family = s.OutputFormat is "mp4" or "mov" or "m4v";
+
+        // H.265 in an MP4 is tagged "hev1" by default, and QuickTime, Safari and most Apple
+        // hardware will not play that. "hvc1" is the same bytes with the tag every consumer player
+        // expects, so an export that opened nowhere on a Mac now opens everywhere.
+        if (isMp4Family && s.VideoCodec is "libx265" or "hevc")
+            args.AddRange(["-tag:v", "hvc1"]);
+
+        // Moves the index to the front of the file, so a browser can start playing before the
+        // whole thing has downloaded. For a render people upload and share, this is the difference
+        // between playing at once and waiting for the last byte.
+        if (isMp4Family)
+            args.AddRange(["-movflags", "+faststart"]);
+
+        args.Add(output);
+        return [.. args];
+    }
+
+    /// <summary>
+    /// One frame, as a picture.
+    /// </summary>
+    /// <param name="input">The clip to take it from.</param>
+    /// <param name="output">The PNG to write.</param>
+    /// <param name="sourceSeconds">Where in that clip's own timeline to take it from.</param>
+    /// <remarks>
+    /// For a site whose members are cutting evidence reels, the single frame where something
+    /// appears is the thing that actually gets shared — more often than the clip it came from —
+    /// and the editor could only produce video (2026-09-05 audit, the completeness critic's list).
+    /// Seeking on the input rather than after it means ffmpeg decodes to the frame and stops,
+    /// instead of decoding everything before it first.
+    /// </remarks>
+    internal static string[] BuildStillFrameArgs(string input, string output, double sourceSeconds)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        return
+        [
+            "-ss", Math.Max(0, sourceSeconds).ToString("F3", ic),
+            "-i", input,
+            "-frames:v", "1",
+            "-update", "1",
+            output,
+        ];
+    }
+
     internal static string[] BuildConcatCopyArgs(string listPath, string output) =>
         ["-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", output];
 

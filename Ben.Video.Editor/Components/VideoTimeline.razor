@@ -115,6 +115,17 @@
                     Marker
                 </TelerikButton>
             }
+            @if (OnSaveFrame.HasDelegate)
+            {
+                <TelerikButton OnClick="SaveFrameAtPlayhead"
+                               Icon="@SvgIcon.Image"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Class="btn-sm text-nowrap"
+                               Title="Save the frame at the playhead as a picture">
+                    Save Frame
+                </TelerikButton>
+            }
         </div>
     </div>
 
@@ -1435,6 +1446,17 @@
     }
 
  // --- Marker actions ---
+
+    /// <summary>
+    /// Raised with the playhead's timeline position when someone asks for the frame there.
+    /// </summary>
+    /// <remarks>
+    /// The timeline knows where the playhead is; the editor owns the export service that can
+    /// render a frame, so the button asks rather than doing it itself.
+    /// </remarks>
+    [Parameter] public EventCallback<double> OnSaveFrame { get; set; }
+
+    private Task SaveFrameAtPlayhead() => OnSaveFrame.InvokeAsync(Playback.State.TimelineTime);
 
     private void AddMarkerAtPlayhead()
         // Progress is a fraction of whatever the preview holds; multiplying it by the timeline's

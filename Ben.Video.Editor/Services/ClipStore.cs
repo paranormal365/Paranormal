@@ -2084,6 +2084,18 @@ public sealed class ClipStore
     public IEnumerable<ClipArtClip> AllClipArtClips =>
         VideoTracks.SelectMany(t => t.ClipArtClips);
 
+    /// <summary>Whether there is anything for an export to render.</summary>
+    /// <remarks>
+    /// The toolbar asked one question and the export dialog asked another: the dialog counted only
+    /// the primary track's video clips, so an image-only timeline opened a dialog whose Export
+    /// button was permanently disabled (2026-09-05 audit, export-20). One answer for both, and for
+    /// the pipeline's own "nothing to export" check.
+    /// </remarks>
+    public bool HasExportableContent => AllVideoClips.Any() || AllImageClips.Any();
+
+    /// <summary>How many clips an export would render, for the dialog's summary line.</summary>
+    public int ExportableItemCount => AllVideoClips.Count() + AllImageClips.Count();
+
     /// <summary>All video tracks ordered by track.Order.</summary>
     public IEnumerable<TimelineTrack> VideoTracks =>
         _tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order);

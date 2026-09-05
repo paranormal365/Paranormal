@@ -34,11 +34,10 @@
 <div class="bv-editor" @ref="_editorRoot" style="--bv-timeline-h: @(Layout.TimelineHeight)px; --bv-panel-w: @(Layout.PanelWidth)px; --bv-canvas-aspect: @CanvasAspect">
 
     <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
-    @* Preview/Export need video OR image content (matches ExportService.RunPipelineAsync's
-       own "no clips" check) — checking only Clips.Clips (video-only) left both buttons
-       permanently disabled for an image-only timeline, even though both Preview and
-       Export otherwise fully support image clips. *@
-    <Toolbar HasClips="@(Clips.AllVideoClips.Any() || Clips.AllImageClips.Any())"
+    @* One predicate, shared with the export dialog and the pipeline's own "nothing to export"
+       check, so the button and the dialog can never disagree about whether there is anything
+       to render (2026-09-05 audit, export-20). *@
+    <Toolbar HasClips="@Clips.HasExportableContent"
              ShowMultiTrack="@EffectiveOptions.MultiTrack"
              ShowAudioTracks="@EffectiveOptions.AudioTracks"
              ShowTransitions="@EffectiveOptions.Transitions"
@@ -354,7 +353,8 @@
                        OnBulkDelete="OnBulkDeleteAsync"
                        OnBulkMove="OnBulkMoveAsync"
                        OnTimelineKeyframeSelected="OnTimelineKeyframeSelected"
-                       OnDropConflict="OnDropConflictAsync" />
+                       OnDropConflict="OnDropConflictAsync"
+                       OnSaveFrame="OnSaveFrameAsync" />
     </div>
 
     <!-- ── Export Dialog ───────────────────────────────────────────────────────── -->
@@ -1354,6 +1354,25 @@
     /// after a fumbled drag). The prompt already existed for "Add to Timeline"; this is the same
     /// question arriving from a drag (2026-09-05 audit, F5).
     /// </remarks>
+    /// <summary>
+    /// Saves the frame under the playhead as a picture on the person's machine.
+    /// </summary>
+    /// <remarks>
+    /// For an evidence site the frame where something appears is the artefact people share most,
+    /// and until now the editor could only produce video (2026-09-05 audit, the completeness
+    /// critic's list).
+    /// </remarks>
+    private async Task OnSaveFrameAsync(double timelineSeconds)
+    {
+        var (fileName, problem) = await Exporter.SaveFrameAsync(timelineSeconds);
+
+        _notifications?.Show(
+            problem ?? $"Saved {fileName}.",
+            problem is null
+                ? ThemeConstants.Notification.ThemeColor.Success
+                : ThemeConstants.Notification.ThemeColor.Error);
+    }
+
     private Task OnDropConflictAsync(VideoTimeline.DropConflict conflict)
     {
         _pendingDrop = conflict;

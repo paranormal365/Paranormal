@@ -9,8 +9,11 @@
    deliberately stay separate components. *@
 @if (Visible)
 {
+    @* Closing the window used to delete the finished render outright, with no confirmation and
+       nothing to say it had happened — an accidental X, or Escape, threw away a long export
+       (2026-09-05 audit, export-17). Closing now asks; the file is only deleted on purpose. *@
     <TelerikWindow Visible="true"
-                   VisibleChanged="@(async v => { if (!v) await DismissAsync(); })"
+                   VisibleChanged="@(v => { if (!v) AskBeforeDiscarding(); })"
                    Width="420px"
                    Modal="true"
                    Draggable="true"
@@ -18,16 +21,41 @@
                    Class="bv-export-destination-prompt">
         <WindowTitle>Export Complete</WindowTitle>
         <WindowContent>
-            <p class="bv-export-destination-prompt__text">
-                <strong>@FileName</strong> is ready@(SizeLabel is null ? "" : $" ({SizeLabel})").
-                Where should it go?
-            </p>
+            @if (_confirmingDiscard)
+            {
+                <p class="bv-export-destination-prompt__text" role="alert">
+                    Discard <strong>@FileName</strong>? The render is finished, and throwing it
+                    away means rendering it again from scratch.
+                </p>
+            }
+            else
+            {
+                <p class="bv-export-destination-prompt__text">
+                    <strong>@FileName</strong> is ready@(SizeLabel is null ? "" : $" ({SizeLabel})").
+                    Where should it go?
+                </p>
+            }
             @if (_error is not null)
             {
                 <p class="bv-export-destination-prompt__error" role="alert">@_error</p>
             }
         </WindowContent>
         <WindowFooter>
+            @if (_confirmingDiscard)
+            {
+                <TelerikButton OnClick="ConfirmDiscardAsync"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                               Size="@ThemeConstants.Button.Size.Small">
+                    Discard it
+                </TelerikButton>
+                <TelerikButton OnClick="KeepIt"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               Size="@ThemeConstants.Button.Size.Small">
+                    Keep it
+                </TelerikButton>
+            }
+            else
+            {
             @* Busy state is on the whole footer, not just the clicked button: publishing a large
                render is slow enough that a second click on the OTHER button would otherwise start
                a download of a file publish is midway through consuming. *@
@@ -56,12 +84,13 @@
                            Size="@ThemeConstants.Button.Size.Small">
                 Save to my machine
             </TelerikButton>
-            <TelerikButton OnClick="DismissAsync"
+            <TelerikButton OnClick="AskBeforeDiscarding"
                            Enabled="@(!_busy)"
                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                            Size="@ThemeConstants.Button.Size.Small">
                 Discard
             </TelerikButton>
+            }
         </WindowFooter>
     </TelerikWindow>
 }
@@ -166,8 +195,27 @@
         }
     }
 
-    private async Task DismissAsync()
+    private bool _confirmingDiscard;
+
+    /// <summary>
+    /// Turns any attempt to close into a question, rather than a deletion.
+    /// </summary>
+    private void AskBeforeDiscarding()
     {
+        if (_busy) return;
+        _confirmingDiscard = true;
+        StateHasChanged();
+    }
+
+    private void KeepIt()
+    {
+        _confirmingDiscard = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDiscardAsync()
+    {
+        _confirmingDiscard = false;
         await OnDiscard.InvokeAsync();
         await CloseAsync();
     }
@@ -175,6 +223,7 @@
     private async Task CloseAsync()
     {
         _error = null;
+        _confirmingDiscard = false;
         Visible = false;
         await VisibleChanged.InvokeAsync(false);
     }
