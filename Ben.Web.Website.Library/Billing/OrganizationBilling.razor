@@ -57,10 +57,14 @@
                 <h2 class="h5 card-title">Current plan</h2>
                 @if (_subscription is null || _subscription.Status == SubscriptionStatus.Free)
                 {
-                    <p class="mb-1">This group is on the <strong>free plan</strong> — public
+                    @*  "Free plan" was the wrong noun, and it is the noun the whole confusion
+                        was built on: a group is free by having NO plan, not by holding one that
+                        costs nothing (Ben, 2026-09-05).  *@
+                    <p class="mb-1">This group has <strong>no plan</strong> — public
                         investigations, no charge.</p>
-                    <p class="text-secondary small mb-0">Paid plans add private-residence and
-                        client work. Prices are on the <a href="/pricing">pricing page</a>.</p>
+                    <p class="text-secondary small mb-0">A plan is what lets a group work with
+                        other people, take private-residence and client work, and keep its own
+                        sessions. Prices are on the <a href="/pricing">pricing page</a>.</p>
                 }
                 else
                 {
@@ -89,6 +93,31 @@
         </div>
 
         @* ── Subscribe / renew ────────────────────────────────────────────── *@
+        @*  A group is never free (Ben, 2026-09-05): "an individual can be free... a group cannot."
+            When the band that prices this group costs nothing there is nothing to sell, and
+            offering a $0 Subscribe button was worse than useless — pressing it wrote a real
+            subscription with no card, which every paid feature then read as paid. The server
+            refuses it now; this is the door, closed on the same rule.  *@
+        @if (_quote is not null && _quote.ListPrice <= 0m)
+        {
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Nothing to subscribe to</h2>
+                    <p class="mb-1">
+                        The price list has no charge for a group your size, so there is no plan to
+                        buy here. A group is free by not having a plan at all.
+                    </p>
+                    <p class="text-secondary small mb-0">
+                        Paid plans are what let a group work with other people, take private
+                        residence cases and keep its own sessions. See the
+                        <a href="/pricing">current price list</a>, or ask us to price a band for a
+                        group your size.
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="h5 card-title">
@@ -162,11 +191,12 @@
                 }
             </div>
         </div>
+        }
 
         @* ── The money trail ──────────────────────────────────────────────── *@
         <h2 class="h5 mt-4 mb-2">Billing history</h2>
         <BenListState TItem="OrgBillingHistoryRecord" Result="@_history" Loading="@false"
-                      EmptyText="No charges or payments yet — the free plan costs nothing.">
+                      EmptyText="No charges or payments yet — a group with no plan is charged nothing.">
             <table class="table align-middle">
                 <thead><tr>
                     <th>Date</th><th>What</th><th class="text-end">Amount</th>

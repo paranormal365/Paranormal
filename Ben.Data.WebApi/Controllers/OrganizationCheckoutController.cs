@@ -76,6 +76,21 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
             return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");
 
+        // ── A group is never free (Ben, 2026-09-05) ──────────────────────────
+        // "An individual can be free... a group cannot." A band priced at zero was still sellable
+        // here, and selling it wrote a real Active subscription with no card — which every paywall
+        // on the site reads as paid. One click lifted the member limit, the storage cap, private
+        // field sessions and private event evidence. The free state for a group is having NO
+        // subscription, not holding one that costs nothing, so there is nothing here to buy.
+        //
+        // Checked against the LIST price, not the payable one: a coupon that discounts a real
+        // price to zero is item 195's trial and still goes through the free-fulfilment path below.
+        if (listPrice <= 0m)
+            return BadRequest(
+                "There is nothing to subscribe to at that size. A group is free by not having a "
+                + "plan at all — being on one is what a paid plan means. If your group needs a "
+                + "plan, the price list is where its bands are set.");
+
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
 
