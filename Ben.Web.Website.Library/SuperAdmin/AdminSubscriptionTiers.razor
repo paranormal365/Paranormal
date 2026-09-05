@@ -29,7 +29,14 @@
         <div class="col">
             <h3 class="mb-0">Price Bands<HelpLink Slug="site-administration" Anchor="billing" /></h3>
         </div>
-        <div class="col-auto">
+        <div class="col-auto d-flex gap-2">
+            @* Some reshapes cannot be done a band at a time, because every order of single edits
+               passes through a state the rules refuse — splitting an unbounded top band is the
+               example. This edits the whole ladder and is judged on where it ends up. *@
+            <button type="button" class="btn btn-outline-secondary" id="reshape-ladder"
+                    @onclick="OpenLadder">
+                <BenIcon Name="layers" Class="me-1" />Reshape the ladder
+            </button>
             <button type="button" class="btn btn-primary" @onclick="OpenCreate">
                 <BenIcon Name="plus" Class="me-1" />New Band
             </button>
@@ -302,6 +309,82 @@
     </ChildContent>
 </BenModal>
 
+@*  The whole ladder in one form.
+
+    The band-at-a-time dialog above validates the list after that single edit, which is right for an
+    ordinary change and makes some legitimate reshapes impossible to express: splitting an unbounded
+    top band is refused whichever end you start from, because bounding the top leaves the members
+    above it unpriced and adding the band above overlaps the unbounded one below. This posts every
+    band together and is judged only on where it ends up (2026-09-05).  *@
+<BenModal @bind-Visible="@_showLadder" Title="Reshape the ladder" Size="lg">
+    <ChildContent>
+        <p class="text-secondary small">
+            Every band, saved together and checked once at the end. The list below <em>is</em> the
+            ladder: a band you remove here is retired, and one you add is created. Bands must start
+            at one member, meet without gaps, and the last one must have no upper limit.
+        </p>
+
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th style="min-width:9rem;">Name</th>
+                    <th style="width:6rem;">From</th>
+                    <th style="width:6rem;">To</th>
+                    <th style="width:7rem;">Monthly</th>
+                    <th style="width:7rem;">Yearly</th>
+                    <th style="width:7rem;">Open cases</th>
+                    <th style="width:3rem;"></th>
+                </tr>
+            </thead>
+            @* Named, because the grid behind this dialog has a tbody too and a test that reached
+               for "the first row" found that one instead. *@
+            <tbody id="ladder-rows">
+                @for (var i = 0; i < _ladder.Count; i++)
+                {
+                    var row = _ladder[i];
+                    <tr>
+                        <td><input class="form-control form-control-sm" @bind="row.Name" /></td>
+                        <td><input type="number" min="1" class="form-control form-control-sm" @bind="row.MinMembers" /></td>
+                        <td>
+                            @* Empty means unbounded, which the last band must be. *@
+                            <input type="number" min="1" class="form-control form-control-sm"
+                                   placeholder="∞" @bind="row.MaxMembers" />
+                        </td>
+                        <td><input type="number" min="0" step="0.01" class="form-control form-control-sm" @bind="row.Monthly" /></td>
+                        <td><input type="number" min="0" step="0.01" class="form-control form-control-sm" @bind="row.Yearly" /></td>
+                        <td>
+                            <input type="number" min="0" class="form-control form-control-sm"
+                                   placeholder="no cap" @bind="row.OpenCases" />
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    title="Remove this band" @onclick="@(() => _ladder.Remove(row))">
+                                <BenIcon Name="trash-2" />
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="AddLadderRow">
+            <BenIcon Name="plus" Class="me-1" />Add a band
+        </button>
+
+        @if (_ladderError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3">@_ladderError</div>
+        }
+
+        <div class="d-flex gap-2 justify-content-end mt-3">
+            <button type="button" class="btn btn-secondary" @onclick="() => _showLadder = false">Cancel</button>
+            <button type="button" class="btn btn-primary" disabled="@_savingLadder" @onclick="SaveLadderAsync">
+                @(_savingLadder ? "Saving…" : "Save the ladder")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
 @code {
     private bool _loading = true;
     private LoadResult<SubscriptionTierAdminRecord> _tiersResult;
@@ -313,6 +396,28 @@
     private SubscriptionTierAdminRecord? _editing;
     private TierImpactRecord? _impact;
     private TierForm _form = new();
+
+    private bool _showLadder;
+    private bool _savingLadder;
+    private string? _ladderError;
+    private List<LadderRow> _ladder = [];
+
+    /// <summary>One band while the whole ladder is being edited.</summary>
+    /// <remarks>
+    /// A class rather than a record: these rows are bound to and edited in place, and every field
+    /// is nullable-friendly because an empty upper limit means unbounded and an empty cap means no
+    /// cap — two different absences that both have to survive a round trip through the form.
+    /// </remarks>
+    private sealed class LadderRow
+    {
+        public Guid? Id { get; set; }
+        public string Name { get; set; } = "";
+        public int MinMembers { get; set; } = 1;
+        public int? MaxMembers { get; set; }
+        public decimal Monthly { get; set; }
+        public decimal Yearly { get; set; }
+        public int? OpenCases { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -332,6 +437,75 @@
         _tiersResult = await AdminClient.GetSubscriptionTiersAsync();
         _validationProblem = await AdminClient.GetTierValidationAsync();
         _loading = false;
+    }
+
+    /// <summary>Loads the current ladder into the whole-ladder form.</summary>
+    /// <remarks>
+    /// Only the ACTIVE banded tiers: a retired band is not part of the ladder, and a tier sold to a
+    /// kind of business rather than a size of team (item 198) never was. Bringing either into this
+    /// form would put it back into the ladder on the next save.
+    /// </remarks>
+    private void OpenLadder()
+    {
+        _ladderError = null;
+        _ladder = [.. (_tiersResult.Items ?? [])
+            .Where(t => t.IsActive && t.IsBandedByMembers)
+            .OrderBy(t => t.MinMembers)
+            .Select(t => new LadderRow
+            {
+                Id         = t.Id,
+                Name       = t.Name,
+                MinMembers = t.MinMembers,
+                MaxMembers = t.MaxMembers,
+                Monthly    = t.Prices.FirstOrDefault(p => p.Interval == BillingInterval.Monthly && p.IsActive)?.Price ?? 0m,
+                Yearly     = t.Prices.FirstOrDefault(p => p.Interval == BillingInterval.Yearly && p.IsActive)?.Price ?? 0m,
+                OpenCases  = t.Limits.FirstOrDefault(l => l.Limit == SubscriptionLimit.OpenCases)?.MaxValue,
+            })];
+        _showLadder = true;
+    }
+
+    private void AddLadderRow()
+    {
+        // Starts where the last band ends, because that is the only place a new band can legally
+        // go — and the top band it follows has to give up its unbounded end to make room.
+        var last = _ladder.LastOrDefault();
+        if (last is not null && last.MaxMembers is null) last.MaxMembers = last.MinMembers;
+
+        _ladder.Add(new LadderRow
+        {
+            Name       = "",
+            MinMembers = (last?.MaxMembers ?? 0) + 1,
+            MaxMembers = null,
+        });
+    }
+
+    private async Task SaveLadderAsync()
+    {
+        _savingLadder = true;
+        _ladderError  = null;
+        try
+        {
+            var request = new SaveSubscriptionLadderRequest(
+            [
+                .. _ladder.Select((row, i) => new SaveLadderBandRequest(
+                    row.Id, row.Name?.Trim() ?? "", row.MinMembers, row.MaxMembers, i + 1,
+                    [
+                        new SaveTierPriceRequest(BillingInterval.Monthly, row.Monthly, IsActive: true),
+                        new SaveTierPriceRequest(BillingInterval.Yearly, row.Yearly, IsActive: true),
+                    ],
+                    row.OpenCases is { } cap
+                        ? [new SubscriptionTierLimitAdminRecord(SubscriptionLimit.OpenCases, cap)]
+                        : []))
+            ]);
+
+            var (result, error) = await AdminClient.SaveSubscriptionLadderAsync(request);
+            if (result is null) { _ladderError = error ?? "The ladder could not be saved."; return; }
+
+            _showLadder = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) { _ladderError = ex.Message; }
+        finally { _savingLadder = false; }
     }
 
     private void OpenCreate()

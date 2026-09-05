@@ -48,6 +48,44 @@ public record SubscriptionTierAdminRecord(
     bool IsBandedByMembers = true);
 
 /// <summary>Replaces a tier's included-areas checklist (item 156 Phase A).</summary>
+/// <summary>
+/// The whole ladder, saved as one change.
+/// </summary>
+/// <remarks>
+/// <para>Judged on where it ends up rather than on each step, which is the point: some legitimate
+/// reshapes have no legal intermediate state. Splitting an unbounded top band into a bounded one
+/// and a new band above it cannot be done a band at a time — bounding the top first leaves the
+/// members above it unpriced, and adding the new band first overlaps the unbounded one below.</para>
+///
+/// <para>The list IS the ladder. A banded tier that is active today and absent here is retired,
+/// because that is the only way to say a band goes: there is no delete while subscriptions point
+/// at these rows.</para>
+/// </remarks>
+public sealed record SaveSubscriptionLadderRequest(IReadOnlyList<SaveLadderBandRequest> Bands);
+
+/// <summary>One band in a whole-ladder save. <c>Id</c> is null for a band being added.</summary>
+public sealed record SaveLadderBandRequest(
+    Guid? Id,
+    string Name,
+    int MinMembers,
+    int? MaxMembers,
+    int SortOrder,
+    IReadOnlyList<SaveTierPriceRequest> Prices,
+    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits)
+{
+    /// <summary>
+    /// The same band as a single-tier save, so both doors share one validator and one writer.
+    /// </summary>
+    /// <remarks>
+    /// A ladder band is always active and always banded by member count — an inactive band is one
+    /// left out of the list, and a tier sold to a kind of business (item 198) is not part of the
+    /// ladder at all.
+    /// </remarks>
+    public SaveSubscriptionTierRequest AsTierRequest()
+        => new(Name, MinMembers, MaxMembers, SortOrder, IsActive: true, Prices, Limits,
+               IsBandedByMembers: true);
+}
+
 public sealed record SetTierPermissionAreasRequest(
     IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas);
 

@@ -33,6 +33,17 @@ public interface IBenBillingClient
         Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default);
 
     /// <summary>
+    /// Saves the whole ladder as one change, judged on where it ends up.
+    /// </summary>
+    /// <remarks>
+    /// For reshapes that have no legal intermediate state — splitting an unbounded top band, or
+    /// retiring the lowest one — which a band-at-a-time save can never express. The list sent is
+    /// the ladder: an active band left out of it is retired.
+    /// </remarks>
+    Task<(IReadOnlyList<SubscriptionTierAdminRecord>? Result, string? Error)> SaveSubscriptionLadderAsync(
+        SaveSubscriptionLadderRequest request, CancellationToken token = default);
+
+    /// <summary>
     /// What saving this edit would do to the groups on the band — computed without saving or
     /// sending anything. The editor shows it before the save is confirmed.
     /// </summary>
