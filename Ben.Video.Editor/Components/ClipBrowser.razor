@@ -1626,6 +1626,12 @@
             // record, the main ffmpeg instance mounts it (zero-copy WORKERFS) rather than a full
             // MEMFS byte write — falling back to a real write only when mounting isn't possible.
             await OPFS.WriteAsync(clipId, ext, cachedFile);
+
+            // Where this media came from, recorded on the clip so the project can find it again on
+            // another machine. Without it a project restores by reading THIS browser's storage by
+            // clip id, so opening it anywhere else marks every clip missing (2026-09-05 audit,
+            // F14). Taken once here rather than per branch — all three place the same file.
+            var print = await OPFS.FingerprintAsync(clipId, ext);
             var memFsName = await Mounter.MountAsync(clipId, ext);
             if (memFsName is null)
             {
@@ -1661,6 +1667,9 @@
                     Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
                     HasAudio = meta.HasAudio,
                     ThumbnailUrls = [.. thumbs], OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 };
                 // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
                 // the primary track AND computes its TimelinePosition — calling Clips.AddClip
@@ -1680,6 +1689,9 @@
                 {
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 };
                 // Without an audio track to land on, the clip would silently vanish —
                 // decoded and reported "done" but never placed anywhere. Create one
@@ -1715,6 +1727,9 @@
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = 5.0, Width = libW, Height = libH,
                     ThumbnailUrl = thumbUrl, TimelinePosition = imgPos, OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 });
             }
             Update(status, ImportStage.Done, 100);

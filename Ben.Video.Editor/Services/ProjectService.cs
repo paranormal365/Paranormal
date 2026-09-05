@@ -357,6 +357,11 @@ public sealed class ProjectService
         // Falls back to the clip's name, which is what the file was called when it was imported.
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,       // OPFS extension for auto-restore
+        // The three that make a project portable: which server file the media came from, and
+        // enough to tell whether a re-fetch brought back the same thing (2026-09-05 audit, F14).
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
     };
 
     private static ProjectAudioClip MapAudioClip(AudioClip c) => new()
@@ -379,6 +384,9 @@ public sealed class ProjectService
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
     };
 
     private static ProjectTransition MapTransition(Transition t) => new()
@@ -445,6 +453,9 @@ public sealed class ProjectService
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
     };
 
     private static ProjectCalloutClip MapCalloutClip(CalloutClip c) => new()

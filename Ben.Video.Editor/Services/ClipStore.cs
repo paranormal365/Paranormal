@@ -2848,6 +2848,9 @@ public sealed class ClipStore
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
     };
 
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
@@ -2870,6 +2873,9 @@ public sealed class ClipStore
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
     };
 
     private static Transition RestoreTransition(ProjectTransition p) => new()
@@ -2946,6 +2952,9 @@ public sealed class ClipStore
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
     };
 
     private static CalloutClip RestoreCalloutClip(ProjectCalloutClip p) => new()

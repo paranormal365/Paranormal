@@ -130,6 +130,50 @@ export async function opfsReadAsFile(clipId, ext) {
 }
 
 /**
+ * Size, and — when the file is small enough to be worth it — a SHA-256 of a stored clip.
+ *
+ * This is what makes a project portable. A clip records where its media came from so the editor
+ * can fetch it again on another machine, and these two are how it tells that what came back is the
+ * same file rather than something that has since replaced it (2026-09-05 audit, F14).
+ *
+ * The ceiling is not an optimisation. crypto.subtle.digest has no streaming form, so hashing means
+ * holding the whole file in memory at once, and the footage this editor is built for runs to
+ * hundreds of megabytes on a single browser thread. Above the ceiling the hash is simply null, and
+ * the size check stands on its own — "not taken" must never read as "did not match".
+ *
+ * @param {string} clipId
+ * @param {string} ext
+ * @param {number} maxHashBytes files at or under this size are hashed; larger ones are not
+ * @returns {Promise<{size: number, hash: string|null}|null>} null when there is no such file
+ */
+export async function opfsFingerprint(clipId, ext, maxHashBytes) {
+    let file;
+    try {
+        const dir = await getClipsDir();
+        const fh  = await dir.getFileHandle(`${clipId}${ext}`);
+        file = await fh.getFile();
+    } catch {
+        return null;
+    }
+
+    let hash = null;
+    if (file.size > 0 && file.size <= maxHashBytes) {
+        try {
+            const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+            hash = Array.from(new Uint8Array(digest))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        } catch {
+            // No hash rather than no fingerprint: crypto.subtle is unavailable over plain http on
+            // some browsers, and the size check is still worth having there.
+            hash = null;
+        }
+    }
+
+    return { size: file.size, hash };
+}
+
+/**
  * List all files in the bv-clips/ OPFS directory.
  * Returns an array of { clipId, ext, sizeBytes } objects.
  * clipId is the filename without extension (the Guid string).

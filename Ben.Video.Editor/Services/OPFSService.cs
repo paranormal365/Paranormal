@@ -141,6 +141,38 @@ public sealed class OPFSService : IAsyncDisposable
     }
 
     /// <summary>
+    /// The size, and where it is cheap enough a SHA-256, of a clip already in storage.
+    /// </summary>
+    /// <remarks>
+    /// What a portable project records so a re-fetch on another machine can be checked against it
+    /// (2026-09-05 audit, F14). Null when there is no such file, or when storage is unavailable —
+    /// both mean "nothing to record", which is a state the callers already handle. A null hash
+    /// inside a non-null result means the file was above
+    /// <see cref="MediaFingerprint.MaximumHashableBytes"/>, never that it failed to match.
+    /// </remarks>
+    public async Task<(long Size, string? Hash)?> FingerprintAsync(Guid clipId, string ext)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return null;
+
+        try
+        {
+            var result = await _module.InvokeAsync<OpfsFingerprint?>(
+                "opfsFingerprint", clipId.ToString(), ext, MediaFingerprint.MaximumHashableBytes);
+
+            return result is null ? null : (result.Size, result.Hash);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort by design: without a fingerprint the clip simply cannot be verified on
+            // another machine, which is exactly where it was before this existed.
+            _errorLog.Log("OPFSService.FingerprintAsync",
+                $"Could not fingerprint {clipId}{ext}: {ex.Message}", ex.ToString());
+            return null;
+        }
+    }
+
+    /// <summary>
     /// How much of the browser's storage this site is using, and how much it may use.
     /// </summary>
     /// <remarks>
@@ -321,3 +353,10 @@ public sealed record OpfsClipEntry(string ClipId, string Ext, long SizeBytes)
     /// <summary>The OPFS file name: <c>{ClipId}{Ext}</c>.</summary>
     public string FileName => $"{ClipId}{Ext}";
 }
+
+/// <summary>What <c>opfsFingerprint</c> reports about a stored clip.</summary>
+/// <remarks>
+/// A null <see cref="Hash"/> means the file was too large to hash, not that hashing failed — see
+/// <see cref="MediaFingerprint.MaximumHashableBytes"/>.
+/// </remarks>
+public sealed record OpfsFingerprint(long Size, string? Hash);

@@ -162,6 +162,18 @@ public sealed class ProjectVideoClip
     /// </summary>
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
 }
 
 /// <summary>Serialized <see cref="AudioClip"/>.</summary>
@@ -191,6 +203,18 @@ public sealed class ProjectAudioClip
     public bool   IsMediaMissing   { get; set; } = true;
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
 }
 
 /// <summary>Serialized <see cref="Transition"/>.</summary>
@@ -275,6 +299,18 @@ public sealed class ProjectImageClip
     public bool   IsMediaMissing   { get; set; } = true;
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
 }
 
 /// <summary>Serialized <see cref="AppliedEffect"/></summary> — effect id + parameter snapshot.</summary>
