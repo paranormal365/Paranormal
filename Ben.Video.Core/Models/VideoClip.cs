@@ -23,6 +23,17 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     /// <summary>MEMFS filename of the source video (set after the file is written to ffmpeg MEMFS).</summary>
     public string? MemFsName { get; set; }
 
+    /// <summary>
+    /// Parts of this clip's picture that must not be shown.
+    /// </summary>
+    /// <remarks>
+    /// Faces, number plates, house numbers — whatever identifies a client or an address. The
+    /// editor had a whole-frame blur and nothing that could obscure part of a picture, so a clip
+    /// with one identifying detail in it could only be left out (2026-09-05 audit, the
+    /// completeness critic's first item). Empty on every clip until somebody draws one.
+    /// </remarks>
+    public List<RedactionRegion> Redactions { get; set; } = [];
+
     /// <summary>Thumbnail blob: URLs extracted from the clip (populated after load).</summary>
     public List<string> ThumbnailUrls { get; set; } = [];
 

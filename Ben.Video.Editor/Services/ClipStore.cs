@@ -271,6 +271,46 @@ public sealed class ClipStore
         Notify();
     }
 
+    /// <summary>
+    /// Replaces a clip's hidden areas, undoably.
+    /// </summary>
+    /// <remarks>
+    /// <para>The whole list rather than one region, because adding, removing and moving all change
+    /// it and there is no reason to have three ways of doing that.</para>
+    ///
+    /// <para>Undo matters more here than elsewhere. Silently losing a redaction leaves somebody
+    /// exporting a face they believe they covered, so the command records both lists outright
+    /// instead of a closure that reconstructs one.</para>
+    /// </remarks>
+    public void CommitClipRedactions(
+        Guid clipId, List<RedactionRegion> after, List<RedactionRegion> before)
+    {
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(before);
+
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == clipId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            Action<List<RedactionRegion>> set = item switch
+            {
+                VideoClip v => list => v.Redactions = list,
+                ImageClip i => list => i.Redactions = list,
+                _           => _ => { },
+            };
+
+            if (item is not (VideoClip or ImageClip)) return;
+
+            var command = new SetRedactionsCommand(set, after, before, item.Name);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
     // ── Callout clips ─────────────────────────────────────────────────────────
 
     /// <summary>Add a callout clip to the primary video track with full undo support.</summary>
@@ -2942,6 +2982,7 @@ public sealed class ClipStore
         SourceFileId      = p.SourceFileId,
         SourceFileSize    = p.SourceFileSize,
         SourceContentHash = p.SourceContentHash,
+        Redactions        = [.. p.Redactions.Select(r => r with { })],
     };
 
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
@@ -3047,6 +3088,7 @@ public sealed class ClipStore
         SourceFileId      = p.SourceFileId,
         SourceFileSize    = p.SourceFileSize,
         SourceContentHash = p.SourceContentHash,
+        Redactions        = [.. p.Redactions.Select(r => r with { })],
     };
 
     private static CalloutClip RestoreCalloutClip(ProjectCalloutClip p) => new()

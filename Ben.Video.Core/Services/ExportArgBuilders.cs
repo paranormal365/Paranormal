@@ -1261,6 +1261,42 @@ internal static class ExportArgBuilders
     /// on an upper track covers the frame for as long as it runs, which is what the preview shows
     /// too.</para>
     /// </remarks>
+    /// <summary>
+    /// A pass over one already-rendered segment that obscures its redacted regions.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own pass rather than a fragment in the segment's filter chain, because hiding
+    /// part of a picture means splitting the frame, cropping, blurring and laying the piece back —
+    /// a graph, not a chain. Everything in it is a core filter, so it runs in the browser engine
+    /// and the native sidecar alike.</para>
+    ///
+    /// <para>Returns null when there is nothing to hide, and the caller keeps the segment it
+    /// already has.</para>
+    /// </remarks>
+    internal static string[]? BuildRedactionArgs(
+        string input, string output,
+        IReadOnlyList<RedactionRegion> regions, int frameWidth, int frameHeight, ExportSettings s)
+    {
+        var graph = RedactionFilter.Build(regions, frameWidth, frameHeight);
+        if (graph is null) return null;
+
+        var args = new List<string>
+        {
+            "-i", input,
+            "-filter_complex", graph,
+            "-map", "[vout]",
+        };
+
+        // The sound is untouched and has to survive: mapping only the picture is how an earlier
+        // pass in this pipeline used to strip the audio out of a whole export.
+        if (s.IncludeAudio) args.AddRange(["-map", "0:a?"]);
+
+        args.AddRange(AudioPassthroughArgs(s));
+        args.AddRange(QualityArgs(s));
+        args.AddRange(["-pix_fmt", s.PixelFormat, output]);
+        return [.. args];
+    }
+
     internal static string[] BuildLayerCompositeArgs(
         string baseFile, string layerFile, string output,
         double start, double duration, ExportSettings s, bool layerHasAudio)

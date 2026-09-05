@@ -26,6 +26,11 @@ internal static class Fixtures
         SourceFileId      = Guid.NewGuid(),
         SourceFileSize    = 48900846,
         SourceContentHash = "a1b2c3",
+        Redactions        = [new RedactionRegion
+        {
+            X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,
+            Style = RedactionStyle.Pixelate, Strength = 8.5,
+        }],
         SourceBinId      = Guid.NewGuid(),
         LinkedClipId     = Guid.NewGuid(),
         StartTrim        = 1.5,
@@ -79,6 +84,11 @@ internal static class Fixtures
         SourceFileId      = Guid.NewGuid(),
         SourceFileSize    = 16161,
         SourceContentHash = "091a2b",
+        Redactions        = [new RedactionRegion
+        {
+            X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,
+            Style = RedactionStyle.Pixelate, Strength = 8.5,
+        }],
         SourceBinId      = Guid.NewGuid(),
         Width            = 1007,
         Height           = 675,

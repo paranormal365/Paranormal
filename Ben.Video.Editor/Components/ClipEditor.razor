@@ -207,6 +207,99 @@
         </div>
         }
 
+        @* ── Hidden areas ────────────────────────────────────────────────────────────────
+           Members cut evidence reels from footage shot inside people's homes, and a private
+           engagement's own rule is that what identifies the client or the address does not go
+           out. The editor had a whole-frame blur and nothing that could obscure part of a
+           picture, so a clip with one identifying detail in it could only be left out
+           (2026-09-05 audit). *@
+        <div class="bv-clip-editor__section-heading">Hidden areas</div>
+
+        @if (Clip.Redactions.Count == 0)
+        {
+            <p class="bv-clip-editor__hint">
+                Cover a face, a number plate or a house number so the clip can still be shared.
+            </p>
+        }
+
+        @foreach (var region in Clip.Redactions)
+        {
+            var r = region;
+            var index = Clip.Redactions.IndexOf(r) + 1;
+            <div class="bv-clip-editor__effect-card">
+                <div class="bv-clip-editor__effect-header">
+                    <span class="bv-clip-editor__effect-name">Area @index</span>
+                    <TelerikButton OnClick="@(() => RemoveRedaction(r))"
+                                   Icon="@SvgIcon.X"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Title="Stop hiding this area" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">How</label>
+                    <TelerikDropDownList Data="@_redactionStyles"
+                                         Value="@r.Style"
+                                         ValueChanged="@((RedactionStyle v) => UpdateRedaction(r, x => x.Style = v))"
+                                         ValueExpression="@(() => r.Style)"
+                                         Class="bv-clip-editor__effect-dropdown" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">Strength (@r.Strength.ToString("F0"))</label>
+                    <TelerikSlider Value="@r.Strength"
+                                   ValueChanged="@((double v) => UpdateRedaction(r, x => x.Strength = v))"
+                                   ValueExpression="@(() => r.Strength)"
+                                   Min="1" Max="10" SmallStep="1" LargeStep="3"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(1.0, 10.0, 3.0)"
+                                   Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Across @((r.Width * 100).ToString("F0"))% from @((r.X * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@r.X" ValueChanged="@((double v) => UpdateRedaction(r, x => x.X = v))"
+                                   ValueExpression="@(() => r.X)"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
+                                   Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@r.Width" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Width = v))"
+                                   ValueExpression="@(() => r.Width)"
+                                   Min="0.02" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.02, 1.0, 0.25)"
+                                   Class="bv-clip-editor__slider" />
+                </div>
+
+                <div class="bv-clip-editor__field">
+                    <label class="bv-clip-editor__label">
+                        Down @((r.Height * 100).ToString("F0"))% from @((r.Y * 100).ToString("F0"))%
+                    </label>
+                    <TelerikSlider Value="@r.Y" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Y = v))"
+                                   ValueExpression="@(() => r.Y)"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
+                                   Class="bv-clip-editor__slider" />
+                    <TelerikSlider Value="@r.Height" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Height = v))"
+                                   ValueExpression="@(() => r.Height)"
+                                   Min="0.02" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.02, 1.0, 0.25)"
+                                   Class="bv-clip-editor__slider" />
+                </div>
+            </div>
+        }
+
+        <div class="bv-clip-editor__field">
+            <TelerikButton OnClick="AddRedaction"
+                           Icon="@SvgIcon.Plus"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Hide part of this clip's picture">
+                Hide an area
+            </TelerikButton>
+        </div>
+
         <!-- ── Action buttons ──────────────────────────────────────────────────────────────── -->
         <div class="bv-clip-editor__actions">
         <div class="bv-clip-editor__field">
@@ -310,6 +403,9 @@
 }
 
 @code {
+    private static readonly List<RedactionStyle> _redactionStyles =
+        [.. Enum.GetValues<RedactionStyle>()];
+
     // ── Parameters ──────────────────────────────────────────────────────────
 
     /// <summary>The clip currently being edited. Null = panel is hidden.</summary>
@@ -512,6 +608,54 @@
         if (Clip is null) return;
         Clips.RemoveEffect(Clip.Id, fx);
     }
+
+    // ── Hidden areas ─────────────────────────────────────────────────────────
+    //
+    // Undoable like everything else, and for a stronger reason than usual: an accidental Ctrl+Z
+    // that quietly removed a redaction would leave somebody exporting a face they believe they
+    // covered. The store records the whole list either way, so undo puts back exactly what was
+    // there.
+
+    private void AddRedaction()
+    {
+        if (Clip is null) return;
+
+        var region = new RedactionRegion();
+        var before = Snapshot(Clip);
+
+        Clips.CommitClipRedactions(Clip.Id, [.. before, region], before);
+    }
+
+    private void RemoveRedaction(RedactionRegion region)
+    {
+        if (Clip is null) return;
+
+        var before = Snapshot(Clip);
+        Clips.CommitClipRedactions(Clip.Id, [.. before.Where(r => !ReferenceEquals(r, region))], before);
+    }
+
+    private void UpdateRedaction(RedactionRegion region, Action<RedactionRegion> change)
+    {
+        if (Clip is null) return;
+
+        var before = Snapshot(Clip);
+        var after  = Clip.Redactions
+            .Select(r => ReferenceEquals(r, region) ? Apply(r, change) : r with { })
+            .ToList();
+
+        Clips.CommitClipRedactions(Clip.Id, after, before);
+    }
+
+    private static RedactionRegion Apply(RedactionRegion region, Action<RedactionRegion> change)
+    {
+        var copy = region with { };
+        change(copy);
+        return copy;
+    }
+
+    /// <summary>Copies, so undo holds values rather than the very objects being edited.</summary>
+    private static List<RedactionRegion> Snapshot(VideoClip clip) =>
+        [.. clip.Redactions.Select(r => r with { })];
 
     private void UpdateEffectParameter(AppliedEffect fx, string key, double value)
     {

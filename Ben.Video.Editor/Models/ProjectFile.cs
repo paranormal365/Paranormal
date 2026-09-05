@@ -174,6 +174,9 @@ public sealed class ProjectVideoClip
     public Guid?   SourceFileId      { get; set; }
     public long?   SourceFileSize    { get; set; }
     public string? SourceContentHash { get; set; }
+
+    /// <summary>Parts of this clip's picture that must not be shown.</summary>
+    public List<RedactionRegion> Redactions { get; set; } = [];
 }
 
 /// <summary>Serialized <see cref="AudioClip"/>.</summary>
@@ -316,6 +319,9 @@ public sealed class ProjectImageClip
     public Guid?   SourceFileId      { get; set; }
     public long?   SourceFileSize    { get; set; }
     public string? SourceContentHash { get; set; }
+
+    /// <summary>Parts of this clip's picture that must not be shown.</summary>
+    public List<RedactionRegion> Redactions { get; set; } = [];
 }
 
 /// <summary>Serialized <see cref="AppliedEffect"/></summary> — effect id + parameter snapshot.</summary>

@@ -362,6 +362,7 @@ public sealed class ProjectService
         SourceFileId      = c.SourceFileId,
         SourceFileSize    = c.SourceFileSize,
         SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
     };
 
     private static ProjectAudioClip MapAudioClip(AudioClip c) => new()
@@ -457,6 +458,7 @@ public sealed class ProjectService
         SourceFileId      = c.SourceFileId,
         SourceFileSize    = c.SourceFileSize,
         SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
     };
 
     private static ProjectCalloutClip MapCalloutClip(CalloutClip c) => new()

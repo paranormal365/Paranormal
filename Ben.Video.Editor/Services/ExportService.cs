@@ -567,12 +567,54 @@ public sealed class ExportService : IAsyncDisposable
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
 
-            segments.Add(segName);
+            var finished = await ApplyRedactionsAsync(job, segName, clip.Redactions, s, tempFiles);
+
+            segments.Add(finished);
             job.CompletedPhases.Add($"Trimmed: {clip.Name}");
         }
 
         Advance(job, 45, "All clips trimmed.");
         return segments;
+    }
+
+    /// <summary>
+    /// Obscures a segment's redacted regions, if it has any.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own pass over the finished segment, because hiding part of a picture is a filter
+    /// graph rather than a chain — split, crop, blur, lay it back.</para>
+    ///
+    /// <para><b>A failure here fails the export.</b> Every other optional step in this pipeline
+    /// degrades: a thumbnail that will not generate costs a thumbnail. This one cannot, because
+    /// carrying on would produce a finished video with the face still in it, handed to somebody
+    /// who asked for it to be hidden and has no reason to check (2026-09-05 audit, the
+    /// completeness critic's first item).</para>
+    /// </remarks>
+    private async Task<string> ApplyRedactionsAsync(
+        ExportJob job, string segment, IReadOnlyList<RedactionRegion> regions,
+        ExportSettings s, List<string> tempFiles)
+    {
+        if (regions.Count == 0) return segment;
+
+        var (vw, vh) = ResolveCanvas(s);
+        var redacted = $"redact_{Guid.NewGuid():N}.mp4";
+
+        var args = ExportArgBuilders.BuildRedactionArgs(segment, redacted, regions, vw, vh, s);
+        if (args is null)
+        {
+            // Every region was too small to draw. Saying so beats a silent nothing, because the
+            // person who drew them believes something is hidden.
+            job.Warnings.Add(
+                "A hidden area was too small to render and has been left out. Check the picture "
+                + "before sharing it.");
+            return segment;
+        }
+
+        tempFiles.Add(redacted);
+        await _ffmpeg.ExecAsync(args, job.CancellationToken);
+
+        if (tempFiles.Remove(segment)) await _ffmpeg.DeleteFileAsync(segment);
+        return redacted;
     }
 
     /// <summary>
@@ -658,7 +700,9 @@ public sealed class ExportService : IAsyncDisposable
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
 
-            segments.Add(segName);
+            var finished = await ApplyRedactionsAsync(job, segName, clip.Redactions, s, tempFiles);
+
+            segments.Add(finished);
             job.CompletedPhases.Add($"Rendered image: {clip.Name}");
         }
 

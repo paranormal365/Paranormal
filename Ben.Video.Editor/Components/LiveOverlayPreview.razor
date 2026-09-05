@@ -17,9 +17,19 @@
    video, not yet overlay-composited) — never mount this next to a preview that's already playing
    the real rendered output, or overlays would double up. *@
 
-@if (_svgMarkups.Count > 0 || _clipArtItems.Count > 0)
+@if (_svgMarkups.Count > 0 || _clipArtItems.Count > 0 || _redactions.Count > 0)
 {
     <div class="bv-live-overlay-preview">
+        @* A blurred box drawn where the export will blur, so an area can be placed by eye against
+           the picture rather than by reading percentages off two sliders. The CSS blur is not the
+           same filter the render uses and does not claim to be — its job is to show what is
+           covered, and it says so. *@
+        @foreach (var region in _redactions)
+        {
+            <div class="bv-live-overlay-preview__redaction bv-live-overlay-preview__redaction--@region.Style.ToString().ToLowerInvariant()"
+                 title="This area is hidden in the finished video"
+                 style="left:@(F(region.X * 100))%; top:@(F(region.Y * 100))%; width:@(F(region.Width * 100))%; height:@(F(region.Height * 100))%;"></div>
+        }
         @foreach (var svg in _svgMarkups)
         {
             @((MarkupString)svg)
@@ -46,6 +56,9 @@
 }
 
 @code {
+    /// <summary>Areas hidden on whichever clip is under the playhead.</summary>
+    private List<RedactionRegion> _redactions = [];
+
     [Parameter, EditorRequired] public double CurrentTime  { get; set; }
     [Parameter]                 public int    CanvasWidth  { get; set; } = 1920;
     [Parameter]                 public int    CanvasHeight { get; set; } = 1080;
@@ -88,6 +101,15 @@
             .Where(i => CurrentTime >= i.TimelinePosition && CurrentTime < i.TimelinePosition + i.Duration)
             .OrderBy(i => i.LayerIndex)
             .ToList();
+
+        // Areas hidden on whichever clip is playing. Drawn from the clip rather than from the
+        // selection, so an area stays visible while somebody works on something else and cannot be
+        // forgotten about.
+        _redactions =
+        [
+            .. active.OfType<VideoClip>().SelectMany(c => c.Redactions),
+            .. active.OfType<ImageClip>().SelectMany(c => c.Redactions),
+        ];
 
         _svgMarkups = active
             .Where(i => i is CalloutClip or TextOverlay)

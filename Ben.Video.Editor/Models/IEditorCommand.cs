@@ -1337,6 +1337,35 @@ internal sealed class CommitCalloutPropertyCommand : IEditorCommand
     public void Undo()    => _revert(_clip);
 }
 
+/// <summary>Undo/redo for the set of areas hidden on a clip.</summary>
+/// <remarks>
+/// Holds both lists outright rather than a closure that rebuilds one. Getting undo wrong here
+/// means somebody exports a face they believe they covered.
+/// </remarks>
+internal sealed class SetRedactionsCommand : IEditorCommand
+{
+    private readonly Action<List<RedactionRegion>> _set;
+    private readonly List<RedactionRegion> _after, _before;
+    private readonly string _clipName;
+
+    public string Description => $"Hidden areas on \"{_clipName}\"";
+
+    public SetRedactionsCommand(
+        Action<List<RedactionRegion>> set,
+        List<RedactionRegion> after, List<RedactionRegion> before, string clipName)
+    {
+        _set      = set;
+        _after    = after;
+        _before   = before;
+        _clipName = clipName;
+    }
+
+    // Fresh copies each time: the same command can be undone and redone repeatedly, and handing
+    // out the stored list would let the panel edit the history.
+    public void Execute() => _set([.. _after.Select(r => r with { })]);
+    public void Undo()    => _set([.. _before.Select(r => r with { })]);
+}
+
 /// <summary>Undo/redo for a committed <see cref="TextOverlay"/> property change.</summary>
 /// <remarks>
 /// Titles were the one thing on the timeline whose edits could not be undone. Changing a font,

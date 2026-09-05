@@ -19,6 +19,17 @@ public sealed record ImageClip : TrackItem
     public string? MemFsName { get; set; }
 
     /// <summary>
+    /// Parts of this clip's picture that must not be shown.
+    /// </summary>
+    /// <remarks>
+    /// Faces, number plates, house numbers — whatever identifies a client or an address. The
+    /// editor had a whole-frame blur and nothing that could obscure part of a picture, so a clip
+    /// with one identifying detail in it could only be left out (2026-09-05 audit, the
+    /// completeness critic's first item). Empty on every clip until somebody draws one.
+    /// </remarks>
+    public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>
     /// Blob URL of the thumbnail image shown on the timeline chip and in the clip browser.
     /// Created via a JS canvas render — no ffmpeg required.
     /// </summary>
