@@ -227,6 +227,20 @@
                                         Indeterminate="@(GetDownloadPercent() < 0)"
                                         Class="bv-toolbar__progress" />
                 }
+                @* The one control that gets the editor going again, next to the thing saying it
+                   is stuck. Without it a wedge or a crash left the person with a red chip and no
+                   action anywhere in the interface (2026-09-05 audit, F7). *@
+                @if (ShowResetEngine)
+                {
+                    <TelerikButton OnClick="OnResetEngineClicked"
+                                   Icon="@SvgIcon.ArrowRotateCw"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                   Class="btn-sm text-nowrap"
+                                   Title="Restart the video engine. Your project is untouched.">
+                        Restart engine
+                    </TelerikButton>
+                }
         </ToolBarTemplateItem>
 
         @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip: MEMFS residency, the
@@ -385,13 +399,24 @@
     // Item #71 — decision logic lives in FfmpegStatusPresentation (pure, unit-tested) rather than
     // inline here; see that class's doc comment for the actual bug this phase fixes.
     private string StatusLabel => FfmpegStatusPresentation.Label(
-        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel,
+        Ffmpeg.LastError, Ffmpeg.IsWorkerWedged);
 
     private string StatusCssClass =>
-        $"bv-toolbar__status bv-status--{FfmpegStatusPresentation.CssModifier(Ffmpeg.State, Ffmpeg.IsWorkerBusy)}";
+        $"bv-toolbar__status bv-status--{FfmpegStatusPresentation.CssModifier(Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.IsWorkerWedged)}";
 
     private string StatusTooltip => FfmpegStatusPresentation.Tooltip(
-        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel,
+        Ffmpeg.LastError, Ffmpeg.IsWorkerWedged);
+
+    /// <summary>
+    /// Whether to show the restart button beside the status chip — for everyone, not only for a
+    /// host that switched diagnostics on (2026-09-05 audit, F7).
+    /// </summary>
+    private bool ShowResetEngine =>
+        FfmpegStatusPresentation.ShouldOfferReset(Ffmpeg.State, Ffmpeg.IsWorkerWedged);
+
+    private async Task OnResetEngineClicked() => await OnResetEngine.InvokeAsync();
 
     private async Task OnInitializeClicked() => await OnInitialize.InvokeAsync();
     private async Task OnOpenClicked()       => await OnOpen.InvokeAsync();
@@ -477,6 +502,9 @@
 
     /// <summary>Whether the operator tools (diagnostics chip and panel) are shown at all.</summary>
     [Parameter] public bool ShowDiagnostics { get; set; }
+
+    /// <summary>Restarts the video engine after a wedge or a crash.</summary>
+    [Parameter] public EventCallback OnResetEngine { get; set; }
 
     private bool _showSidecarPanel;
 

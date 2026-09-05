@@ -103,6 +103,16 @@
 .bv-status--ready       { color: #4caf89; border-color: #4caf89; }
 .bv-status--error       { color: #e06c75; border-color: #e06c75; }
 
+/* A stuck engine used to be visible only on the diagnostics chip, which most people never see, so
+   it looked exactly like a slow one — forever (2026-09-05 audit, F7). Filled and still, not
+   pulsing: a pulse says "working on it", which is the opposite of what this means. */
+.bv-status--wedged {
+    color: var(--kendo-color-warning, #d3b04c);
+    border-color: var(--kendo-color-warning, #d3b04c);
+    background: color-mix(in srgb, var(--kendo-color-warning, #d3b04c) 20%, transparent);
+    font-weight: 600;
+}
+
 /* Item #71 — both busy shapes (a real Processing exec, and a lighter worker call caught by
    FfmpegStatusPresentation.IsBusyButNotProcessing) collapse to this single "busy" modifier so they
    read as one visual concept. User-requested "info" color (Telerik's own --kendo-color-info token,

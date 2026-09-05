@@ -54,6 +54,7 @@
              ShowNativeSidecar="@EffectiveOptions.NativeSidecar"
              ShowDiagnostics="@EffectiveOptions.ShowDiagnostics"
              OnInitialize="LoadCoreAsync"
+             OnResetEngine="ResetEngineAsync"
              OnOpen="OpenFilesAsync"
              OnPreview="RenderFullQualityPreviewAsync"
              OnExport="OpenExportDialog"
@@ -327,7 +328,35 @@
                 @if (_fullQualityRendering)
                 {
                     <div class="bv-fullquality-preview__status">
-                        Rendering full-quality preview&hellip; @_fullQualityPercent%
+                        <div>Rendering full-quality preview&hellip; @_fullQualityPercent%</div>
+
+                        @* A render that stops reporting progress used to be indistinguishable from
+                           a slow one, with nothing to press either way (2026-09-05 audit, F7). *@
+                        @if (_fullQualityStalled)
+                        {
+                            <p class="bv-fullquality-preview__stalled" role="alert">
+                                No progress for @PreviewStallSeconds seconds. The video engine may
+                                be stuck. Your project is untouched either way.
+                            </p>
+                        }
+
+                        <div class="bv-fullquality-preview__actions">
+                            <TelerikButton OnClick="CancelFullQualityPreview"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                           Class="btn-sm text-nowrap">
+                                Stop
+                            </TelerikButton>
+                            @if (_fullQualityStalled)
+                            {
+                                <TelerikButton OnClick="ResetFromStalledPreviewAsync"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                               Class="btn-sm text-nowrap">
+                                    Stop and restart the engine
+                                </TelerikButton>
+                            }
+                        </div>
                     </div>
                 }
                 else
@@ -602,6 +631,7 @@
     protected override void OnInitialized()
     {
         Ffmpeg.OnStateChanged   += OnFfmpegStateChanged;
+        Ffmpeg.OnWorkerCrashed  += OnFfmpegWorkerCrashed;
         Clips.OnChange          += OnClipsChanged;
         // A layer that moves takes its animation with it, and a layer that is removed does not
         // leave one behind (2026-09-05 audit, motion-3 and motion-18). The store has no idea the
@@ -790,6 +820,8 @@
         _fullQualityPreviewUrl = null;
         _fullQualityRendering = true;
         _fullQualityPercent   = 0;
+        _fullQualityLastTick  = DateTimeOffset.UtcNow;
+        StartStallWatch();
         StateHasChanged();
 
         // Same resolution the user has actually configured for Export (ExportResolutionService is
@@ -808,6 +840,13 @@
         // subscribing to OnProgress actually see ticks during the render instead of only after.
         var exportTask = Exporter.ExportAsync(settings, downloadToDisk: false);
         var job = Exporter.CurrentJob!;
+
+        // Held so the window's Cancel — and closing the window at all — can reach it. Without
+        // this the render had no handle anywhere: a preview that stalled could not be stopped,
+        // could not be closed out of, and left the engine occupied for everything else
+        // (2026-09-05 audit, F7).
+        _fullQualityJob      = job;
+        _fullQualityLastTick = DateTimeOffset.UtcNow;
         job.OnProgress += OnFullQualityProgress;
 
         try
@@ -818,6 +857,14 @@
         {
             job.OnProgress -= OnFullQualityProgress;
             _fullQualityRendering = false;
+            _fullQualityJob       = null;
+            StopStallWatch();
+        }
+
+        if (job.State == ExportJobState.Cancelled)
+        {
+            StateHasChanged();
+            return;
         }
 
         if (job.State != ExportJobState.Completed || job.PreviewBlobUrl is null)
@@ -845,9 +892,67 @@
 
     private void OnFullQualityProgress() => InvokeAsync(() =>
     {
-        _fullQualityPercent = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
+        _fullQualityPercent  = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
+        _fullQualityLastTick = DateTimeOffset.UtcNow;
+        _fullQualityStalled  = false;
         StateHasChanged();
     });
+
+    /// <summary>The render behind the preview window, while one is running.</summary>
+    private ExportJob?       _fullQualityJob;
+    private DateTimeOffset   _fullQualityLastTick;
+    private bool             _fullQualityStalled;
+    private Timer?           _stallWatch;
+
+    /// <summary>How long without a progress tick before the window says so and offers a reset.</summary>
+    private const int PreviewStallSeconds = 10;
+
+    /// <summary>
+    /// Watches for a render that has stopped reporting progress.
+    /// </summary>
+    /// <remarks>
+    /// The window showed "Rendering… N%" and nothing else, so a stalled render and a slow one
+    /// looked identical for as long as anyone was willing to wait. Ten seconds of silence is not
+    /// proof of a wedge, but it is enough to stop pretending progress is being made and to put the
+    /// two ways out — stop, or restart the engine — in front of the person (2026-09-05 audit, F7).
+    /// </remarks>
+    private void StartStallWatch()
+    {
+        StopStallWatch();
+        _stallWatch = new Timer(_ => InvokeAsync(() =>
+        {
+            if (!_fullQualityRendering) return;
+
+            var stalled = (DateTimeOffset.UtcNow - _fullQualityLastTick).TotalSeconds >= PreviewStallSeconds;
+            if (stalled == _fullQualityStalled) return;
+
+            _fullQualityStalled = stalled;
+            StateHasChanged();
+        }), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private void StopStallWatch()
+    {
+        _stallWatch?.Dispose();
+        _stallWatch = null;
+        _fullQualityStalled = false;
+    }
+
+    /// <summary>Stops the render behind the preview window.</summary>
+    private void CancelFullQualityPreview()
+    {
+        _fullQualityJob?.Cancel();
+        _notifications?.Show("Preview stopped.", ThemeConstants.Notification.ThemeColor.Info);
+    }
+
+    /// <summary>Stops the render and restarts the engine underneath it.</summary>
+    private async Task ResetFromStalledPreviewAsync()
+    {
+        _fullQualityJob?.Cancel();
+        _showFullQualityPreview = false;
+        StopStallWatch();
+        await ResetEngineAsync();
+    }
 
     private async Task OpenFullQualityWindowAsync()
     {
@@ -866,6 +971,11 @@
 
     private void OnCloseFullQualityPreview()
     {
+        // Closing used to leave the render going, holding the engine for a result nothing would
+        // ever show (2026-09-05 audit, F7).
+        _fullQualityJob?.Cancel();
+        StopStallWatch();
+
         _showFullQualityPreview = false;
         // Item #59-#65 flakiness investigation, phase 144 — closing this window unmounts the
         // whole @if (_showFullQualityPreview) block, so Blazor disposes _fullQualityPreview right
@@ -1133,6 +1243,67 @@
             SegmentCache.Clear();
         }
         catch { /* error stored in Ffmpeg.LastError */ }
+    }
+
+    /// <summary>
+    /// Restarts the video engine after it has wedged or crashed, and puts the preview back.
+    /// </summary>
+    private async Task ResetEngineAsync()
+    {
+        await Ffmpeg.ResetWorkerAsync();
+        await LoadCoreAsync();
+
+        _notifications?.Show("Video engine restarted.", ThemeConstants.Notification.ThemeColor.Success);
+        ScheduleAutoPreview();
+        StateHasChanged();
+    }
+
+    /// <summary>When the editor last restarted the engine by itself.</summary>
+    private DateTimeOffset? _lastAutoEngineRestart;
+
+    /// <summary>
+    /// The engine trapped. Restart it without being asked, and say what happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>A crash used to leave the editor quietly broken: the preview stopped refreshing,
+    /// every export refused to start, and the only clue was a status chip most people never look
+    /// at (2026-09-05 audit, F7).</para>
+    ///
+    /// <para>The restart is rate limited, because whatever crashed the engine is usually still on
+    /// the timeline — restarting and immediately re-rendering would crash it again, and a tight
+    /// loop is worse than staying broken. Running out of memory is never restarted for: a fresh
+    /// engine has exactly as much memory as the one that just filled up, so the honest answer is
+    /// to say the work is too big for a browser tab and point at the helper that has no such
+    /// limit.</para>
+    /// </remarks>
+    private void OnFfmpegWorkerCrashed(WorkerFailureKind kind)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            _notifications?.Show(
+                WorkerFailureClassifier.Explain(kind, EffectiveOptions.NativeSidecar),
+                kind == WorkerFailureKind.OutOfMemory
+                    ? ThemeConstants.Notification.ThemeColor.Warning
+                    : ThemeConstants.Notification.ThemeColor.Error);
+
+            if (!FfmpegCrashRecoveryPolicy.ShouldRestart(kind, _lastAutoEngineRestart, now))
+            {
+                if (kind == WorkerFailureKind.Crashed)
+                    _notifications?.Show(
+                        FfmpegCrashRecoveryPolicy.DeclinedMessage(_lastAutoEngineRestart, now),
+                        ThemeConstants.Notification.ThemeColor.Warning);
+
+                StateHasChanged();
+                return;
+            }
+
+            _lastAutoEngineRestart = now;
+            await LoadCoreAsync();
+            ScheduleAutoPreview();
+            StateHasChanged();
+        });
     }
 
     /// <summary>
@@ -1870,6 +2041,24 @@
             {
                 try { await Ffmpeg.DeleteFileAsync(orphan); } catch { }
             }
+        }
+        catch (Exception ex)
+        {
+            // Anything that goes wrong assembling the Working Window used to escape into a
+            // fire-and-forget task and disappear: no message, no log entry, and the preview simply
+            // stopped updating while still showing an older assembly. That is the shape of the
+            // whole F7 report — the editor looked fine and had quietly stopped keeping up
+            // (2026-09-05 audit, F7). The last good preview is deliberately left on screen, being
+            // more use than a blank frame, and the person is told it is behind.
+            ErrorLog.Log("VideoEditor.RefreshWorkingWindowAsync", ex);
+            PreviewFreshness.MarkStale();
+
+            _notifications?.Show(
+                "The preview could not be rebuilt, so it is showing an earlier version. "
+                + WorkerFailureClassifier.Explain(Ffmpeg.LastFailureKind, EffectiveOptions.NativeSidecar),
+                ThemeConstants.Notification.ThemeColor.Warning);
+
+            await InvokeAsync(StateHasChanged);
         }
         finally
         {
@@ -2712,6 +2901,8 @@
         }
 
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+        Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
+        StopStallWatch();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
         BackgroundRender.OnLoopError -= OnBackgroundRenderLoopError;

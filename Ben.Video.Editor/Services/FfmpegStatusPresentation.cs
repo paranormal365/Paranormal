@@ -23,8 +23,22 @@ public static class FfmpegStatusPresentation
     public static bool IsBusyButNotProcessing(FfmpegState state, bool isWorkerBusy) =>
         state == FfmpegState.Ready && isWorkerBusy;
 
-    public static string Label(FfmpegState state, bool isWorkerBusy, int progressPercent, string? downloadLabel, string? lastError) =>
-        state switch
+    /// <summary>
+    /// The label everyone sees, wedge included.
+    /// </summary>
+    /// <param name="isWedged">
+    /// Whether the watchdog has flagged the in-flight command as stuck. A wedge used to show only
+    /// on the diagnostics chip, which is an operator tool the host switches on per user — so for
+    /// everybody else a stuck engine looked like a slow one, indefinitely, with nothing offering a
+    /// way out (2026-09-05 audit, F7).
+    /// </param>
+    public static string Label(
+        FfmpegState state, bool isWorkerBusy, int progressPercent, string? downloadLabel,
+        string? lastError, bool isWedged = false)
+    {
+        if (isWedged) return "Stuck — reset it";
+
+        return state switch
         {
             FfmpegState.Idle        => "Not loaded",
             FfmpegState.LoadingCore => downloadLabel ?? "Loading ffmpeg…",
@@ -33,19 +47,43 @@ public static class FfmpegStatusPresentation
             FfmpegState.Error       => $"Error: {lastError}",
             _                       => string.Empty,
         };
+    }
+
+    /// <summary>
+    /// Whether to offer the person a way to restart the engine.
+    /// </summary>
+    /// <remarks>
+    /// A wedge never clears itself, and an engine in Error will not run another command, so in both
+    /// cases the editor stays stuck until something restarts it. Offering that in the toolbar is
+    /// the difference between "the editor is broken" and "press this".
+    /// </remarks>
+    public static bool ShouldOfferReset(FfmpegState state, bool isWedged) =>
+        isWedged || state == FfmpegState.Error;
 
     /// <summary>The badge's CSS state modifier — <c>bv-status--&lt;this&gt;</c>. Both busy shapes
     /// (a real Processing exec and <see cref="IsBusyButNotProcessing"/>) deliberately collapse to
     /// the same modifier ("busy") so they get identical visual treatment: fixing the correctness
     /// gap without unifying the styling would just have produced two different-looking badges that
     /// both mean "not available right now", defeating the "unambiguous at a glance" goal.</summary>
-    public static string CssModifier(FfmpegState state, bool isWorkerBusy) =>
-        IsBusyButNotProcessing(state, isWorkerBusy) || state == FfmpegState.Processing
+    public static string CssModifier(FfmpegState state, bool isWorkerBusy, bool isWedged = false)
+    {
+        if (isWedged) return "wedged";
+
+        return IsBusyButNotProcessing(state, isWorkerBusy) || state == FfmpegState.Processing
             ? "busy"
             : state.ToString().ToLowerInvariant();
+    }
 
-    public static string Tooltip(FfmpegState state, bool isWorkerBusy, int progressPercent, string? downloadLabel, string? lastError) =>
-        IsBusyButNotProcessing(state, isWorkerBusy)
+    public static string Tooltip(
+        FfmpegState state, bool isWorkerBusy, int progressPercent, string? downloadLabel,
+        string? lastError, bool isWedged = false)
+    {
+        if (isWedged)
+            return "The video engine has not responded for a while. Restarting it is safe — your "
+                 + "project is untouched, and only the step it was in the middle of is lost.";
+
+        return IsBusyButNotProcessing(state, isWorkerBusy)
             ? "ffmpeg is busy with a lighter operation (e.g. import) — it doesn't report a percent, but it's not available for a new command right now."
             : Label(state, isWorkerBusy, progressPercent, downloadLabel, lastError);
+    }
 }

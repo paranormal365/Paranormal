@@ -325,3 +325,21 @@ kbd {
         display: none;
     }
 }
+
+/* ── Full-quality preview: stalled render ─────────────────────────────────── */
+/* A render that stops reporting progress used to look exactly like a slow one, with nothing to
+   press either way (2026-09-05 audit, F7). */
+.bv-fullquality-preview__stalled {
+    margin: .6rem 0 0;
+    font-size: .78rem;
+    line-height: 1.45;
+    color: var(--kendo-color-warning, #d3b04c);
+}
+
+.bv-fullquality-preview__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-top: .75rem;
+    justify-content: center;
+}

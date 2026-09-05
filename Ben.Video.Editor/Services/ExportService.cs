@@ -437,10 +437,16 @@ public sealed class ExportService : IAsyncDisposable
                 else
                 {
                     Advance(job, 95, "Preparing preview…");
-                    // Deliberately NOT deleted here — the full-quality preview popout keeps
-                    // playing this blob URL and explicitly revokes it later via
-                    // RevokePreviewUrlAsync (VideoEditor.razor, unchanged by this phase).
                     job.PreviewBlobUrl = await _opfs.ReadExportAsBlobUrlAsync(job.Id, ext);
+
+                    // Deleted, like the download path's copy. This used to be kept on the grounds
+                    // that the preview window was still playing it, which stopped being true when
+                    // the blob URL became an in-memory Blob rather than a live handle on the file
+                    // (phase 144). So every full-quality preview left a full-size render in
+                    // browser storage that nothing would ever read or clean up — checking a
+                    // ten-minute project a few times could quietly cost gigabytes (2026-09-05
+                    // audit, preview-4).
+                    await _opfs.DeleteExportAsync(job.Id, ext);
                 }
             }
             else

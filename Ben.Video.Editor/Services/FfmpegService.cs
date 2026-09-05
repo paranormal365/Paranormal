@@ -155,6 +155,9 @@ public sealed class FfmpegService : IAsyncDisposable
     /// escape hatch a future Reset button depends on).</summary>
     public async Task TerminateAsync()
     {
+        LastFailureKind = WorkerFailureKind.Recoverable;
+        _watchdog.CommandFinished();
+
         if (_module is not null)
         {
             await InvokeTracedAsync("terminate", () => _module.InvokeVoidAsync("terminate").AsTask());
@@ -164,6 +167,18 @@ public sealed class FfmpegService : IAsyncDisposable
         _memFsLedger.Clear();
         SetState(FfmpegState.Idle);
     }
+
+    /// <summary>
+    /// Tears the engine down and clears the wedge, so a fresh <see cref="LoadAsync"/> can run.
+    /// </summary>
+    /// <remarks>
+    /// The wedge flag never clears itself, and a wedged command holds the worker lock forever, so
+    /// this deliberately goes around the lock the same way <see cref="TerminateAsync"/> does. It is
+    /// the escape hatch the toolbar's restart button depends on — before it existed the only
+    /// control that mentioned a wedge was the diagnostics chip, which most people never see
+    /// (2026-09-05 audit, F7).
+    /// </remarks>
+    public Task ResetWorkerAsync() => TerminateAsync();
 
     // ─── JS Callbacks ────────────────────────────────────────────────────────
 
@@ -699,6 +714,10 @@ public sealed class FfmpegService : IAsyncDisposable
         // here, so a command that starts right after one that finished at 100% would briefly —
         // or, if it stalls, indefinitely — show a stale 100%/whatever% instead of 0%).
         if (state == FfmpegState.Processing) ProgressPercent = 0;
+
+        // Reaching Ready means the engine is alive again, whatever it last died of.
+        if (state == FfmpegState.Ready) LastFailureKind = WorkerFailureKind.Recoverable;
+
         State = state;
         OnStateChanged?.Invoke();
     }
@@ -827,11 +846,36 @@ public sealed class FfmpegService : IAsyncDisposable
     /// duplicated <c>LastError = ex.Message; SetState(FfmpegState.Error); throw;</c> — same
     /// behavior, plus now surfaced to <see cref="ErrorLogService"/> (previously invisible: it
     /// wasn't injected into this service at all).</summary>
+    /// <summary>
+    /// What kind of failure the engine last hit, so the editor can tell a bad command from a
+    /// trapped instance from a full heap.
+    /// </summary>
+    public WorkerFailureKind LastFailureKind { get; private set; } = WorkerFailureKind.Recoverable;
+
+    /// <summary>
+    /// Fires when the engine has stopped and nothing else will run on it until it is reloaded.
+    /// </summary>
+    /// <remarks>
+    /// Every failure used to leave the state at Error and say nothing, so after a crash the editor
+    /// went quiet: the preview stopped refreshing, exports refused to start, and the only clue was
+    /// a status chip most people never look at (2026-09-05 audit, F7). This is the signal that
+    /// lets the editor restart the engine and say so.
+    /// </remarks>
+    public event Action<WorkerFailureKind>? OnWorkerCrashed;
+
     private void RecordFailure(string operation, Exception ex)
     {
         LastError = ex.Message;
         _errorLog.Log($"FfmpegService.{operation}", ex);
+
+        // The message alone is often too thin to classify — a trap surfaces as a bare
+        // "RuntimeError" from JS interop — so the engine's own recent log is read alongside it.
+        LastFailureKind = WorkerFailureClassifier.Classify($"{ex.Message}\n{BuildLogTailText()}");
+
         SetState(FfmpegState.Error);
+
+        if (WorkerFailureClassifier.NeedsReload(LastFailureKind))
+            OnWorkerCrashed?.Invoke(LastFailureKind);
     }
 
     public async ValueTask DisposeAsync()
