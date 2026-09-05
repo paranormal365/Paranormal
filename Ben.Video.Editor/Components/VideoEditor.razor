@@ -1722,22 +1722,44 @@
             // Merge video and image segments in timeline order. Durations travel alongside —
             // item #57 T2 needs each segment's real length for xfade junction offset math
             // (mirrors ExportService.RunPipelineAsync's orderedSegments), not just concat order.
-            var orderedSegments = videoClips
-                .Select((c, i) => (pos: c.TimelinePosition, name: videoSegmentNames[i],
-                                    dur: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
-                .Concat(imageClips.Select((c, i) => (pos: c.TimelinePosition, name: imageSegmentNames[i],
-                                                      dur: c.Duration > 0 ? c.Duration : 5.0)))
-                .OrderBy(x => x.pos)
+            var placed = videoClips
+                .Select((c, i) => (Segment: videoSegmentNames[i], ClipId: c.Id, Start: c.TimelinePosition,
+                                   Duration: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
+                .Concat(imageClips.Select((c, i) => (Segment: imageSegmentNames[i], ClipId: c.Id,
+                                                     Start: c.TimelinePosition,
+                                                     Duration: c.Duration > 0 ? c.Duration : 5.0)))
                 .ToList();
-            var orderedNames     = orderedSegments.Select(x => x.name).ToArray();
-            var orderedDurations = orderedSegments.Select(x => x.dur).ToList();
+
+            // The same plan Export builds, so the Working Window shows the gaps rather than
+            // closing them — a preview that silently omitted them disagreed with both the timeline
+            // above it and the file Export produced (2026-09-05 audit, preview-3 and export-2).
+            var plan = ExportSegmentPlanner.Plan(placed).ToList();
+
+            // Gap fillers are encoded at the preview's own canvas so the re-encoding concat below
+            // does not have to letterbox them differently from everything else.
+            var gapCanvas = PreviewScaleTarget();
+            for (var i = 0; i < plan.Count; i++)
+            {
+                if (plan[i].Kind != ExportSegmentKind.Filler) continue;
+
+                var gapName = $"preview_gap_{Guid.NewGuid():N}.mp4";
+                await Ffmpeg.ExecAsync(ExportArgBuilders.BuildFillerSegmentArgs(
+                    gapName, plan[i].Duration, previewSettings,
+                    gapCanvas?.Width ?? 0, gapCanvas?.Height ?? 0));
+                MemFs.Track(gapName, 0, "preview-segment");
+                plan[i] = plan[i] with { Segment = gapName };
+            }
+
+            var orderedNames     = plan.Select(x => x.Segment).ToArray();
+            var orderedDurations = plan.Select(x => x.Duration).ToList();
 
             // Item #57 T2 — WYSIWYG preview: same-track transitions get a real xfade blend at
             // the junction instead of a hard cut, exactly like Export (reuses the same, T0-fixed,
             // BuildXfadeFilterComplex offset math). Cross-track transitions are out of scope here
             // — this preview only ever assembles PrimaryVideoTrack, same as before this phase.
-            var transitions   = Clips.AllTransitions.Where(t => !IsCrossTrackTransition(t)).OrderBy(t => t.Order).ToList();
-            var hasTransitions = EffectiveOptions.Transitions && transitions.Count > 0 && orderedNames.Length > 1;
+            var junctions = ExportSegmentPlanner.MatchTransitions(
+                plan, Clips.AllTransitions.Where(t => !IsCrossTrackTransition(t)));
+            var hasTransitions = junctions.Any(t => t is not null);
             var scaleTo = PreviewScaleTarget();
 
             // Item #36's core promise: only re-render where changes occurred — never re-encode at
@@ -1778,7 +1800,7 @@
             else
             {
                 if (hasTransitions)
-                    await ApplyPreviewXfadeTransitionsAsync(orderedNames, orderedDurations, transitions, previewSettings, scaleTo, outName);
+                    await ApplyPreviewXfadeTransitionsAsync(orderedNames, orderedDurations, junctions, previewSettings, scaleTo, outName);
                 else if (allPinned)
                     await Ffmpeg.ConcatCopyAsync(orderedNames, outName);
                 else
@@ -1787,17 +1809,9 @@
                 _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(outName);
             }
             BlobLifecycle.Created(_timelinePreviewUrl, "VideoEditor.timelinePreview");
-            var totalDuration   = videoClips.Sum(c => c.TrimmedDuration)
-                                 + imageClips.Sum(c => c.Duration > 0 ? c.Duration : 5.0);
-
-            // Item #57 T2 — the xfade pass above physically shortens the assembled output by each
-            // blended junction's overlap (mirrors BuildXfadeFilterComplex's own offset recurrence:
-            // every junction gets an xfade once hasTransitions is true, using transitions[i] or a
-            // default Fade/1.0s for any junction without an explicit one). Without this, the
-            // Working Window's scrubber range would run ~1s past the real loaded video's end.
-            if (hasTransitions)
-                for (var i = 0; i < orderedNames.Length - 1; i++)
-                    totalDuration -= i < transitions.Count ? transitions[i].Duration : 1.0;
+            // Gaps included, and shorter by each blended junction's overlap — the same arithmetic
+            // Export uses, so the scrubber's range is the length of the file actually loaded.
+            var totalDuration = ExportSegmentPlanner.TotalDuration(plan, junctions);
 
             _timelinePreviewDuration = totalDuration;
             // VideoPreview.LoadUrlAsync does its own swap-then-revoke of whatever _preview is
@@ -1857,15 +1871,17 @@
     /// fragile combined one.
     /// </summary>
     private async Task ApplyPreviewXfadeTransitionsAsync(
-        string[] orderedNames, List<double> orderedDurations, List<Transition> transitions,
+        string[] orderedNames, List<double> orderedDurations, IReadOnlyList<Transition?> junctions,
         ExportSettings previewSettings, (int Width, int Height)? scaleTo, string outName)
     {
-        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(orderedNames.ToList(), orderedDurations, transitions);
+        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(
+            orderedNames, orderedDurations, junctions, withAudio: previewSettings.IncludeAudio);
         var blendedName = scaleTo is null ? outName : $"xfade_blend_{Guid.NewGuid():N}.mp4";
 
         var args = new List<string>();
         foreach (var n in orderedNames) { args.Add("-i"); args.Add(n); }
         args.AddRange(["-filter_complex", filterArgs, "-map", "[vout]"]);
+        if (previewSettings.IncludeAudio) args.AddRange(["-map", "[aout]"]);
         args.AddRange(ExportArgBuilders.AudioOutputArgs(previewSettings));
         args.AddRange(ExportArgBuilders.QualityArgs(previewSettings));
         args.AddRange(["-pix_fmt", previewSettings.PixelFormat, blendedName]);

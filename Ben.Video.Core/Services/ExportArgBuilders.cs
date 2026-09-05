@@ -49,8 +49,14 @@ internal static class ExportArgBuilders
     /// <para><c>inputs</c> is <c>N+1</c> because input 0 is the video's own audio track, which
     /// participates in the mix alongside the standalone audio clips.</para>
     /// </summary>
+    /// <param name="videoHasAudio">
+    /// Whether the assembled video carries an audio stream of its own. Referencing <c>[0:a]</c>
+    /// when it does not is a graph ffmpeg refuses to build, which is what made "Separate Audio" on
+    /// the only clip, and any slideshow with music, fail outright (2026-09-05 audit, audio-1).
+    /// </param>
     internal static string[] BuildAmixArgs(
-        string videoInput, IReadOnlyList<string> audioSegments, string output, ExportSettings s)
+        string videoInput, IReadOnlyList<string> audioSegments, string output, ExportSettings s,
+        bool videoHasAudio = true)
     {
         var args = new List<string> { "-i", videoInput };
         var labels = new List<string>();
@@ -61,9 +67,23 @@ internal static class ExportArgBuilders
             labels.Add($"[{labels.Count + 1}:a]");
         }
 
-        var n = labels.Count;
+        var inputs = labels.Count + (videoHasAudio ? 1 : 0);
+        var chain  = (videoHasAudio ? "[0:a]" : string.Empty) + string.Join("", labels);
+
+        // amix's defaults are wrong for an edit. normalize=1 divides every input by the number of
+        // inputs, so adding one music track quietly dropped the dialogue by about 6 dB — the track
+        // people add last is the one that made everything else quieter. dropout_transition then
+        // swelled the remaining inputs back up over two seconds each time one ended. Both are
+        // sensible for live mixing and neither is what a timeline means: a clip at full volume
+        // stays at full volume (2026-09-05 audit, audio-3).
+        //
+        // Summing instead of averaging can exceed full scale, so the limiter catches the peaks the
+        // old division used to hide. It is transparent until something would have clipped.
+        var filter = $"{chain}amix=inputs={inputs}:duration=longest:normalize=0:dropout_transition=0[amixed];"
+                   + "[amixed]alimiter=limit=0.95[aout]";
+
         args.AddRange([
-            "-filter_complex", $"[0:a]{string.Join("", labels)}amix=inputs={n + 1}:duration=longest[aout]",
+            "-filter_complex", filter,
             "-map", "0:v",
             "-map", "[aout]",
             "-c:v", "copy",
@@ -101,8 +121,15 @@ internal static class ExportArgBuilders
             "-loop", "1",
             "-framerate", (s.Fps > 0 ? s.Fps : 30).ToString(),
             "-i", input,
-            "-t", duration.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
         };
+
+        // A picture has no sound, but the segment still needs an audio stream or concat cannot
+        // join it to the clips around it — which is how a slideshow with a music track came out
+        // silent (2026-09-05 audit, export-3 and audio-2).
+        if (s.IncludeAudio)
+            args.AddRange(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
+
+        args.AddRange(["-t", duration.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)]);
 
         var filterParts = new List<string>();
         if (outputWidth > 0 && outputHeight > 0)
@@ -138,7 +165,50 @@ internal static class ExportArgBuilders
             args.AddRange(["-preset", s.Preset]);
 
         args.AddRange(["-pix_fmt", s.PixelFormat]);
-        args.Add("-an");
+
+        if (s.IncludeAudio)
+            args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k", "-shortest"]);
+        else
+            args.Add("-an");
+
+        args.Add(output);
+        return [.. args];
+    }
+
+    /// <summary>
+    /// A stretch of black and silence, standing in for a gap on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// Gaps used to be closed on export: segments were concatenated back to back while the audio,
+    /// the overlays and the chapter marks all kept their timeline positions, so everything after
+    /// the first gap played against the wrong picture (2026-09-05 audit, export-2). Rendering the
+    /// gap is what keeps the export the same length as the timeline that produced it.
+    /// </remarks>
+    internal static string[] BuildFillerSegmentArgs(
+        string output, double duration, ExportSettings s, int outputWidth, int outputHeight)
+    {
+        var ic  = System.Globalization.CultureInfo.InvariantCulture;
+        var fps = s.Fps > 0 ? s.Fps : 30;
+        var w   = outputWidth  > 0 ? outputWidth  : 1920;
+        var h   = outputHeight > 0 ? outputHeight : 1080;
+
+        var args = new List<string>
+        {
+            "-f", "lavfi", "-i", $"color=c=black:s={w}x{h}:r={fps}",
+        };
+
+        if (s.IncludeAudio)
+            args.AddRange(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
+
+        args.AddRange(["-t", duration.ToString("F3", ic)]);
+        args.AddRange(QualityArgs(s));
+        args.AddRange(["-pix_fmt", s.PixelFormat]);
+
+        if (s.IncludeAudio)
+            args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k"]);
+        else
+            args.Add("-an");
+
         args.Add(output);
         return [.. args];
     }
@@ -151,12 +221,26 @@ internal static class ExportArgBuilders
         string? extraVf = null, int outputWidth = 0, int outputHeight = 0,
         bool sourceHasAudio = true)
     {
+        // Every segment carries an audio stream when the export includes audio — a real one, or
+        // silence. Mixed stream layouts are what broke concat: an image or a muted clip was written
+        // with "-an", and joining those to clips that do have sound dropped the audio from the
+        // result or failed outright. A slideshow with music was the everyday case (2026-09-05
+        // audit, export-3 and audio-2). BuildBackgroundRenderVideoArgs has always done this; the
+        // real export path never did.
+        var hasRealAudio = s.IncludeAudio && !muteAudio && sourceHasAudio;
+
+        // Seek BEFORE the input, not after. With "-i input -ss start", the filter graph sees the
+        // source's own timestamps — so a volume envelope or a fade computed against the trimmed
+        // length was applied to the head that had just been discarded (2026-09-05 audit, audio-4).
         var args = new List<string>
         {
+            "-ss",  start.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
+            "-to",  end.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
             "-i",   input,
-            "-ss",  start.ToString("F3"),
-            "-to",  end.ToString("F3"),
         };
+
+        if (s.IncludeAudio && !hasRealAudio)
+            args.AddRange(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
 
         // Build the video filter chain: scale/pad (resolution) → setpts (speed) → eq (colour) → fade
         var videoFilters = new List<string>();
@@ -217,7 +301,7 @@ internal static class ExportArgBuilders
         // rather than cosmetic: "-filter:a volume=…" against a stream that is not there aborts the
         // whole command. In ffmpeg.wasm that abort is what leaves a preview render apparently
         // frozen. Selecting a clip on the timeline runs exactly this builder.
-        if (s.IncludeAudio && !muteAudio && sourceHasAudio)
+        if (hasRealAudio)
         {
             // Build composite audio filter chain: [atempo chain] + [volume automation]
             // atempo is limited to [0.5, 2.0] per filter instance.
@@ -232,6 +316,13 @@ internal static class ExportArgBuilders
             if (audioFilters.Count > 0)
                 args.AddRange(["-filter:a", string.Join(",", audioFilters)]);
 
+            args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k"]);
+        }
+        else if (s.IncludeAudio)
+        {
+            // Silence from the anullsrc input above, cut to this segment's length so the streams
+            // end together.
+            args.AddRange(["-map", "0:v:0", "-map", "1:a:0", "-shortest"]);
             args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k"]);
         }
         else
@@ -634,39 +725,104 @@ internal static class ExportArgBuilders
     // ── Xfade filter_complex
 
     /// <summary>
-    /// <paramref name="segmentDurations"/> must be parallel to <paramref name="segments"/> — the
-    /// real encoded duration of each segment, in the same order. Each junction's offset uses the
-    /// standard chained-xfade recurrence (offset_i = offset_{i-1} + segmentDurations[i] -
-    /// transitionDuration_i); before this fix the code hardcoded every segment as exactly 5
-    /// seconds long (<c>cumOffset += 5.0 - dur</c>), which produced wrong junction offsets — and
-    /// therefore visibly/audibly wrong transitions — for any timeline whose clips weren't all
-    /// precisely 5 seconds.
+    /// The filter graph that joins every segment into one, blending the junctions that have a
+    /// transition and cutting the rest.
     /// </summary>
+    /// <param name="segments">The rendered segments, in the order they play.</param>
+    /// <param name="segmentDurations">
+    /// Parallel to <paramref name="segments"/>: the real encoded duration of each one. Junction
+    /// offsets are accumulated from these — the code once assumed every segment was exactly five
+    /// seconds long, which put the blend in the wrong place on any other timeline.
+    /// </param>
+    /// <param name="junctions">
+    /// One entry per junction, from <see cref="ExportSegmentPlanner.MatchTransitions"/>. Null is a
+    /// cut. Passing the transitions as a plain list instead was the defect: they were paired with
+    /// junctions by position, so a single transition anywhere on the track gave every other
+    /// junction an unrequested one-second fade (2026-09-05 audit, transitions-2).
+    /// </param>
+    /// <param name="withAudio">
+    /// Whether the segments carry audio streams. When they do, the graph builds a matching audio
+    /// chain and labels it <c>[aout]</c>; the caller must map it, or the export is silent.
+    /// </param>
     internal static string BuildXfadeFilterComplex(
-        List<string> segments, List<double> segmentDurations, List<Transition> transitions)
+        IReadOnlyList<string> segments,
+        IReadOnlyList<double> segmentDurations,
+        IReadOnlyList<Transition?> junctions,
+        bool withAudio)
     {
+        ArgumentNullException.ThrowIfNull(segments);
+        ArgumentNullException.ThrowIfNull(segmentDurations);
+        ArgumentNullException.ThrowIfNull(junctions);
+
         if (segmentDurations.Count != segments.Count)
             throw new ArgumentException(
                 $"segmentDurations count ({segmentDurations.Count}) must match segments count ({segments.Count}).",
                 nameof(segmentDurations));
 
-        var sb        = new System.Text.StringBuilder();
-        var prev      = "[0:v]";
-        var cumOffset = 0.0;
+        if (segments.Count > 1 && junctions.Count != segments.Count - 1)
+            throw new ArgumentException(
+                $"junctions count ({junctions.Count}) must be one fewer than segments count ({segments.Count}).",
+                nameof(junctions));
+
+        if (segments.Count == 0) return string.Empty;
+
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+
+        // A single segment still has to be labelled, because the caller maps [vout]/[aout].
+        if (segments.Count == 1)
+        {
+            sb.Append("[0:v]null[vout]");
+            if (withAudio) sb.Append(";[0:a]anull[aout]");
+            return sb.ToString();
+        }
+
+        var prevV = "[0:v]";
+        var prevA = "[0:a]";
+
+        // How long the chain built so far runs. A crossfade overlaps its two clips, so it makes
+        // the accumulated stream shorter than the sum of its parts by exactly its own duration —
+        // which is also why the timeline shortens when one is added (see TrackLayout.AllowedOverlap).
+        var accumulated = segmentDurations[0];
 
         for (var i = 0; i < segments.Count - 1; i++)
         {
-            var t      = i < transitions.Count ? transitions[i] : null;
-            var dur    = t?.Duration ?? 1.0;
-            var style  = t?.Style ?? TransitionStyle.Fade;
-            var outTag = i < segments.Count - 2 ? $"[x{i:D2}]" : "[vout]";
+            var last   = i == segments.Count - 2;
+            var outV   = last ? "[vout]" : $"[x{i:D2}]";
+            var outA   = last ? "[aout]" : $"[a{i:D2}]";
+            var t      = junctions[i];
 
-            cumOffset += segmentDurations[i] - dur;
+            if (t is null)
+            {
+                // A plain cut. Joining video and audio in one concat filter keeps the two chains
+                // the same length, which is what lets the next junction's crossfade line up.
+                sb.Append(withAudio
+                    ? $"{prevV}{prevA}[{i + 1}:v][{i + 1}:a]concat=n=2:v=1:a=1{outV}{outA};"
+                    : $"{prevV}[{i + 1}:v]concat=n=2:v=1:a=0{outV};");
 
-            sb.Append($"{prev}[{i + 1}:v]xfade=transition={XfadeStyle(style)}");
-            sb.Append($":duration={dur:F2}:offset={cumOffset:F2}{outTag};");
+                accumulated += segmentDurations[i + 1];
+            }
+            else
+            {
+                var dur    = t.Duration;
+                var offset = accumulated - dur;
 
-            prev = outTag;
+                sb.Append($"{prevV}[{i + 1}:v]xfade=transition={XfadeStyle(t.Style)}");
+                sb.Append($":duration={dur.ToString("F2", ic)}:offset={offset.ToString("F2", ic)}{outV};");
+
+                // The picture blends and the sound does not: that is what made every export with a
+                // transition come out silent, because the caller could only map the one labelled
+                // output the graph produced (2026-09-05 audit, transitions-1). acrossfade always
+                // works on the tail of its first input, which is exactly where xfade's offset puts
+                // the blend, so the two chains stay in step without a second offset to keep.
+                if (withAudio)
+                    sb.Append($"{prevA}[{i + 1}:a]acrossfade=d={dur.ToString("F2", ic)}{outA};");
+
+                accumulated += segmentDurations[i + 1] - dur;
+            }
+
+            prevV = outV;
+            prevA = outA;
         }
 
         return sb.ToString().TrimEnd(';');

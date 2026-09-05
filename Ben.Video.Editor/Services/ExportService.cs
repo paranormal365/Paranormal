@@ -183,15 +183,31 @@ public sealed class ExportService : IAsyncDisposable
             // chained xfade offsets. VideoClip uses EffectiveDuration (trim ÷ speed — the real
             // wall-clock length of the encoded segment); ImageClip mirrors the same
             // "> 0 ? : 5.0" fallback RenderImageSegmentsAsync uses when writing that segment.
-            var orderedSegments = videoClips
-                .Select((c, i) => (pos: c.TimelinePosition, seg: videoSegments[i],
-                                    dur: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
-                .Concat(imageClips.Select((c, i) => (pos: c.TimelinePosition, seg: imageSegments[i],
-                                                      dur: c.Duration > 0 ? c.Duration : 5.0)))
-                .OrderBy(x => x.pos)
+            var placed = videoClips
+                .Select((c, i) => (Segment: videoSegments[i], ClipId: c.Id, Start: c.TimelinePosition,
+                                   Duration: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
+                .Concat(imageClips.Select((c, i) => (Segment: imageSegments[i], ClipId: c.Id,
+                                                     Start: c.TimelinePosition,
+                                                     Duration: c.Duration > 0 ? c.Duration : 5.0)))
                 .ToList();
-            var allSegments         = orderedSegments.Select(x => x.seg).ToList();
-            var allSegmentDurations = orderedSegments.Select(x => x.dur).ToList();
+
+            // The plan is where the gaps become real. Everything downstream — the audio mix, the
+            // overlays, the chapter marks — is positioned in timeline time, so an export that
+            // closed its gaps put all of them against the wrong picture from the first gap onward
+            // (2026-09-05 audit, export-2).
+            var plan = ExportSegmentPlanner.Plan(placed);
+            ThrowIfCancelled(job);
+
+            plan = await RenderFillerSegmentsAsync(job, plan, s, tempFiles);
+
+            var allSegments         = plan.Select(x => x.Segment).ToList();
+            var allSegmentDurations = plan.Select(x => x.Duration).ToList();
+
+            // Which transition belongs to which junction, decided by the clips it names rather
+            // than by its position in the list. Matching by index meant one transition anywhere on
+            // the track gave every other junction an unrequested one-second fade (transitions-2).
+            var junctions = ExportSegmentPlanner.MatchTransitions(
+                plan, _clips.AllTransitions.Where(t => !IsCrossTrack(t)));
 
             // ── Phase 2: Build output via filtergraph or simple concat ───────
             // Same-track transitions only — cross-track ones were already baked into
@@ -203,7 +219,7 @@ public sealed class ExportService : IAsyncDisposable
             // transition on this host, and a project carries its own. Gating the render here meant
             // a project made on the site, opened on a host with the flag off, silently exported
             // hard cuts (2026-09-05 audit, transitions-15).
-            var hasXfadeTransitions = _clips.AllTransitions.Any(t => !IsCrossTrack(t));
+            var hasXfadeTransitions = junctions.Any(t => t is not null);
 
             // Item #70 phase 162 — try to run concat AND the audio mix as one sidecar job. When it
             // engages, the audio mix moves EARLIER than its usual position in this pipeline; that
@@ -220,7 +236,8 @@ public sealed class ExportService : IAsyncDisposable
             }
             else if (hasXfadeTransitions)
             {
-                composited = await ApplyTransitionsAsync(job, allSegments, allSegmentDurations, s, tempFiles);
+                composited = await ApplyTransitionsAsync(
+                    job, allSegments, allSegmentDurations, junctions, s, tempFiles);
                 ThrowIfCancelled(job);
             }
             else
@@ -639,25 +656,61 @@ public sealed class ExportService : IAsyncDisposable
         return outputName;
     }
 
+    /// <summary>
+    /// Renders the gaps the plan asked for, so the returned plan is all real files.
+    /// </summary>
+    private async Task<IReadOnlyList<ExportSegment>> RenderFillerSegmentsAsync(
+        ExportJob job, IReadOnlyList<ExportSegment> plan, ExportSettings s, List<string> tempFiles)
+    {
+        if (!plan.Any(p => p.Kind == ExportSegmentKind.Filler)) return plan;
+
+        var (vw, vh) = ParseResolution(s.Resolution);
+        var filled   = new List<ExportSegment>(plan.Count);
+        var index    = 0;
+
+        foreach (var segment in plan)
+        {
+            if (segment.Kind != ExportSegmentKind.Filler)
+            {
+                filled.Add(segment);
+                continue;
+            }
+
+            var name = $"gap_{job.Id:N}_{index++:D3}.mp4";
+            tempFiles.Add(name);
+
+            await _ffmpeg.ExecAsync(
+                ExportArgBuilders.BuildFillerSegmentArgs(name, segment.Duration, s, vw, vh),
+                job.CancellationToken);
+
+            filled.Add(segment with { Segment = name });
+        }
+
+        job.CompletedPhases.Add($"Rendered {index} gap(s)");
+        return filled;
+    }
+
     private async Task<string> ApplyTransitionsAsync(
-        ExportJob job, List<string> segments, List<double> segmentDurations, ExportSettings s, List<string> tempFiles)
+        ExportJob job, List<string> segments, List<double> segmentDurations,
+        IReadOnlyList<Transition?> junctions, ExportSettings s, List<string> tempFiles)
     {
         Advance(job, 50, "Applying transitions…");
 
-        // Build xfade filter_complex for consecutive segment pairs. Cross-track transitions
-        // are excluded — they were already baked into their "from" clip's segment by
-        // ApplyCrossTrackTransitionsAsync, and BuildXfadeFilterComplex's positional
-        // transitions[i]<->segments[i] pairing would misalign if one were mixed in here.
-        var transitions = _clips.AllTransitions.Where(t => !IsCrossTrack(t)).OrderBy(t => t.Order).ToList();
-        var outputName  = $"transitioned_{job.Id:N}.mp4";
+        var outputName = $"transitioned_{job.Id:N}.mp4";
         tempFiles.Add(outputName);
 
-        // Build the filter_complex string
-        var filterArgs = BuildXfadeFilterComplex(segments, segmentDurations, transitions);
+        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(
+            segments, segmentDurations, junctions, withAudio: s.IncludeAudio);
 
         // Inputs
         var inputArgs = segments.SelectMany(s2 => new[] { "-i", s2 }).ToList();
         inputArgs.AddRange(["-filter_complex", filterArgs, "-map", "[vout]"]);
+
+        // Mapping the picture and nothing else is what made every export with a transition come
+        // out silent: the audio codec arguments below were applied to a stream that was never
+        // selected (2026-09-05 audit, transitions-1).
+        if (s.IncludeAudio) inputArgs.AddRange(["-map", "[aout]"]);
+
         inputArgs.AddRange(AudioOutputArgs(s));
         inputArgs.AddRange(QualityArgs(s));
         inputArgs.AddRange(["-pix_fmt", s.PixelFormat, outputName]);
@@ -1417,10 +1470,6 @@ public sealed class ExportService : IAsyncDisposable
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
             outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
     }
-
-    private static string BuildXfadeFilterComplex(
-        List<string> segments, List<double> segmentDurations, List<Transition> transitions)
-        => ExportArgBuilders.BuildXfadeFilterComplex(segments, segmentDurations, transitions);
 
     private static IEnumerable<string> QualityArgs(ExportSettings s)
         => ExportArgBuilders.QualityArgs(s);
