@@ -1668,7 +1668,11 @@
                 var end     = vid.EndTrim > vid.StartTrim ? vid.EndTrim : vid.Duration;
                 var effectiveDuration = vid.EffectiveDuration > 0 ? vid.EffectiveDuration : vid.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(vid, effectiveDuration);
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(vid.AppliedEffects, EffectRegistry, effectiveDuration, vid.Speed);
+                // The preview encodes each clip at its own native size, so that is the canvas an
+                // effect runs against here.
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    vid.AppliedEffects, EffectRegistry, effectiveDuration, vid.Speed,
+                    vid.Width, vid.Height);
                 var args = ExportArgBuilders.BuildTrimArgs(
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
@@ -1706,7 +1710,8 @@
 
                 var segName = $"preview_img_{Guid.NewGuid():N}.mp4";
                 var duration = img.Duration > 0 ? img.Duration : 5.0;
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(img.AppliedEffects, EffectRegistry, duration);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    img.AppliedEffects, EffectRegistry, duration, 1.0, img.Width, img.Height);
                 var args = ExportArgBuilders.BuildImageSegmentArgs(
                     img.MemFsName!, segName, duration, previewSettings,
                     outputWidth: img.Width, outputHeight: img.Height,

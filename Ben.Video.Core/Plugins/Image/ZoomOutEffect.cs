@@ -25,7 +25,8 @@ public sealed class ZoomOutEffect : IClipEffect
     };
 
     public string BuildFilterFragment(
-        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0)
+        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         var ic  = System.Globalization.CultureInfo.InvariantCulture;
         var ez  = p.GetValueOrDefault("end_zoom", 1.5);
@@ -33,9 +34,12 @@ public sealed class ZoomOutEffect : IClipEffect
         var d   = clipDuration;
         if (d <= 0 || ez <= 1.0) return string.Empty;
 
-        var frames = (int)Math.Ceiling(d * 25);
-        var ease   = EasingHelper.GetClamped(eas, "on/fps", d);
-        var ezStr  = ez.ToString("F3", ic);
-        return $"zoompan=z='1+({ezStr}-1)*{ease}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={frames}:s=iw+\"x\"+ih";
+        var ease  = EasingHelper.GetClamped(eas, ZoompanFragment.TimeVariable, d);
+        var ezStr = ez.ToString("F3", ic);
+
+        return ZoompanFragment.Build(
+            $"1+({ezStr}-1)*{ease}",
+            ZoompanFragment.CentredX, ZoompanFragment.CentredY,
+            canvasWidth, canvasHeight);
     }
 }

@@ -550,7 +550,9 @@ internal static class ExportArgBuilders
         IReadOnlyList<AppliedEffect> effects,
         ClipEffectRegistry registry,
         double clipDuration,
-        double speed = 1.0)
+        double speed = 1.0,
+        int canvasWidth = 0,
+        int canvasHeight = 0)
     {
         if (effects.Count == 0) return string.Empty;
 
@@ -559,7 +561,8 @@ internal static class ExportArgBuilders
         {
             var def = registry.GetById(applied.EffectId);
             if (def is null) continue;
-            var frag = def.BuildFilterFragment(applied.Parameters, clipDuration, speed);
+            var frag = def.BuildFilterFragment(
+                applied.Parameters, clipDuration, speed, canvasWidth, canvasHeight);
             if (!string.IsNullOrEmpty(frag))
                 fragments.Add(frag);
         }

@@ -26,7 +26,8 @@ public sealed class ZoomInEffect : IClipEffect
     };
 
     public string BuildFilterFragment(
-        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0)
+        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         var ic  = System.Globalization.CultureInfo.InvariantCulture;
         var d   = Math.Min(p.GetValueOrDefault("duration", 2.0), clipDuration);
@@ -34,12 +35,12 @@ public sealed class ZoomInEffect : IClipEffect
         var eas = (int)Math.Round(p.GetValueOrDefault("easing", EasingHelper.EaseOut));
         if (d <= 0) return string.Empty;
 
-        // zoompan: zoom decreases from sz→1 over d seconds, centred
-        // z=sz - (sz-1)*ease; x/y centred on the current zoom
-        var fps   = 25; // conservative; actual fps comes from source
-        var frames = (int)Math.Ceiling(d * fps);
-        var ease  = EasingHelper.GetClamped(eas, "on/fps", d);
+        var ease  = EasingHelper.GetClamped(eas, ZoompanFragment.TimeVariable, d);
         var szStr = sz.ToString("F3", ic);
-        return $"zoompan=z='{szStr}-({szStr}-1)*{ease}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={frames}:s=iw+\"x\"+ih";
+
+        return ZoompanFragment.Build(
+            $"{szStr}-({szStr}-1)*{ease}",
+            ZoompanFragment.CentredX, ZoompanFragment.CentredY,
+            canvasWidth, canvasHeight);
     }
 }

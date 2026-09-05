@@ -62,7 +62,9 @@ public static class ArgvFactory
             var end = clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration;
             var effectiveDuration = clip.EffectiveDuration > 0 ? clip.EffectiveDuration : clip.Duration;
             var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
-            var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, registry, effectiveDuration, clip.Speed);
+            var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                clip.AppliedEffects, registry, effectiveDuration, clip.Speed,
+                spec.OutputWidth, spec.OutputHeight);
 
             return spec.Pass == RenderPassKind.Export
                 ? ExportArgBuilders.BuildTrimArgs(
@@ -86,7 +88,8 @@ public static class ArgvFactory
             };
 
             var duration = clip.Duration > 0 ? clip.Duration : 5.0;
-            var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, registry, duration);
+            var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                clip.AppliedEffects, registry, duration, 1.0, spec.OutputWidth, spec.OutputHeight);
 
             return spec.Pass == RenderPassKind.Export
                 ? ExportArgBuilders.BuildImageSegmentArgs(

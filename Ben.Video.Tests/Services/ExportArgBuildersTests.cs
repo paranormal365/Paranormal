@@ -1926,7 +1926,9 @@ public sealed class ExportArgBuildersTests
         public string DisplayName => id;
         public IReadOnlyList<ClipEffectParameter> ParameterSchema => [];
         public AppliedEffect CreateDefault() => new() { EffectId = id };
-        public string BuildFilterFragment(IReadOnlyDictionary<string, double> parameters, double clipDuration, double speed = 1.0)
+        public string BuildFilterFragment(
+            IReadOnlyDictionary<string, double> parameters, double clipDuration, double speed = 1.0,
+            int canvasWidth = 0, int canvasHeight = 0)
             => fragment;
     }
 

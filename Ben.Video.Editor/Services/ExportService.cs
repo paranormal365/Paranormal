@@ -463,7 +463,11 @@ public sealed class ExportService : IAsyncDisposable
                 // Build trim args â€” use selected codec, CRF or bitrate, per-clip speed, volume and effects
                 var effectiveDuration = clip.EffectiveDuration > 0 ? clip.EffectiveDuration : clip.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed);
+                // The canvas an effect will run against: zoompan needs a literal size and cannot
+                // be told one as an expression (see ZoompanFragment).
+                var (fxW, fxH) = ParseResolution(s.Resolution);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed, fxW, fxH);
                 // Muting the video track silences its clips, the same as muting each of them.
                 var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, !_clips.IsAudible(clip),
                     sourceHasAudio: clip.HasAudio,
@@ -541,8 +545,9 @@ public sealed class ExportService : IAsyncDisposable
             else
             {
                 var duration = clip.Duration > 0 ? clip.Duration : 5.0;
+                var (fxImgW, fxImgH) = ParseResolution(s.Resolution);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
-                    clip.AppliedEffects, _effectRegistry, duration);
+                    clip.AppliedEffects, _effectRegistry, duration, 1.0, fxImgW, fxImgH);
                 // Item #9 — scale/pad to the PROJECT's output resolution, not the image's own
                 // source size. Passing clip.Width/clip.Height made the filter
                 // "scale={imgW}:{imgH},pad={imgW}:{imgH}" — a no-op that left every image segment
@@ -1490,7 +1495,7 @@ public sealed class ExportService : IAsyncDisposable
 
                 tempFiles.Add(segName);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
-                    image.AppliedEffects, _effectRegistry, item.EffectiveLength);
+                    image.AppliedEffects, _effectRegistry, item.EffectiveLength, 1.0, vw, vh);
 
                 await _ffmpeg.ExecAsync(ExportArgBuilders.BuildImageSegmentArgs(
                     image.MemFsName, segName, item.EffectiveLength, s,
