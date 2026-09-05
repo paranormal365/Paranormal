@@ -331,9 +331,23 @@ When the editor starts it clears out any footage no project is using any more, s
 project eventually gives the space back. It only does this once it can see the full list of
 projects, so nothing is removed on a guess.
 
-If a project is opened somewhere the footage was never imported — another machine, another
-browser — the clips show as missing, and the timeline, titles and edits are all still there waiting
-for the files.
+### Opening a project somewhere else
+
+A clip you brought over from the **Server** tab remembers which file it came from, so opening that
+project on another machine, or in another browser, fetches the footage back on its own. Small
+downloads just happen. Anything larger than about 50 MB asks first, and **Later** is a real answer:
+the project still opens, and the clips wait.
+
+Two things it will not do. A clip you imported straight off your own machine cannot be fetched
+back, because that file only exists where you put it. And if the file on the server has been
+replaced since you saved the project, the clip stays missing rather than being quietly relinked to
+different footage — editing against the wrong material is worse than a clip that says it has none.
+
+For either of those, right-click the clip and choose **Replace Media…** to point it at the file
+yourself. The replacement is kept, so it is still there the next time you open the project.
+
+A clip whose footage is missing stays on the timeline with all its trims, titles and edits intact,
+and is left out of any render until its file is back.
 
 ## Working signed out
 
