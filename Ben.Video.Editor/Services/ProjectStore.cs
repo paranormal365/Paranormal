@@ -751,13 +751,60 @@ public sealed class ProjectStore : IAsyncDisposable
     public event Action? OnRefetchOffered;
 
     /// <summary>
-    /// Everything currently on the timeline or in the bin, whether or not it has media.
+    /// The placed clips a re-fetch applies to.
     /// </summary>
+    /// <remarks>
+    /// <para>Deliberately not the media bin. A project saved without a bin section is given one on
+    /// open, seeded from the timeline with a <b>fresh id per entry</b> — so fetching media for a
+    /// bin entry writes a new copy of the file under a new id on every single reload. Found on
+    /// screen: one reload of a one-clip project left three copies of the same file in storage.</para>
+    ///
+    /// <para>Bin entries do not need their own copy. They are clones of a placed clip, made to
+    /// represent the source in the panel, and <see cref="ShareMediaWithBinEntriesAsync"/> points
+    /// each one at the media its clip already has.</para>
+    /// </remarks>
     private IEnumerable<TrackItem> AllRestorableItems =>
         _clips.AllVideoClips.Cast<TrackItem>()
             .Concat(_clips.AllAudioClips)
-            .Concat(_clips.AllImageClips)
-            .Concat(_clips.MediaBin);
+            .Concat(_clips.AllImageClips);
+
+    /// <summary>
+    /// Points each media-bin entry at the media the clip it was cloned from now has.
+    /// </summary>
+    /// <remarks>
+    /// The bin card is a view of a source, not a second copy of it. Sharing the placed clip's
+    /// mounted file is what the bin does within a session anyway.
+    /// </remarks>
+    private void ShareMediaWithBinEntries()
+    {
+        foreach (var entry in _clips.MediaBin.Where(e => e.IsMediaMissing))
+        {
+            var placed = _clips.AllVideoClips.Cast<TrackItem>()
+                .Concat(_clips.AllAudioClips)
+                .Concat(_clips.AllImageClips)
+                .FirstOrDefault(c => c.SourceBinId == entry.Id && !c.IsMediaMissing);
+
+            if (placed is null) continue;
+
+            var memFsName = placed switch
+            {
+                VideoClip v => v.MemFsName,
+                AudioClip a => a.MemFsName,
+                ImageClip i => i.MemFsName,
+                _           => null,
+            };
+            if (memFsName is null) continue;
+
+            switch (entry)
+            {
+                case VideoClip v: v.MemFsName = memFsName; break;
+                case AudioClip a: a.MemFsName = memFsName; break;
+                case ImageClip i: i.MemFsName = memFsName; break;
+            }
+
+            entry.IsMediaMissing = false;
+        }
+    }
 
     /// <summary>
     /// Fetches missing media back from the server, or asks first when there is a lot of it.
@@ -825,7 +872,11 @@ public sealed class ProjectStore : IAsyncDisposable
 
         var outcome = await _relink.RelinkAsync(items, ct);
 
-        if (outcome.Restored > 0) _clips.NotifyChanged();
+        if (outcome.Restored > 0)
+        {
+            ShareMediaWithBinEntries();
+            _clips.NotifyChanged();
+        }
         return outcome;
     }
 

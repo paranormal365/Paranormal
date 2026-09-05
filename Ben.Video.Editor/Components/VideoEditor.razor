@@ -444,6 +444,17 @@
                         OnOverwrite="ConfirmOverwriteInsert"
                         OnCancel="CancelRippleInsert" />
 
+    @* ── The picker "Replace Media…" opens ────────────────────────────────────── *@
+    @*
+       This element did not exist. "Replace Media…" clicked "#bv-relink-input", which matched
+       nothing at all, so the menu item did nothing whatsoever — the editor's only offer to repair
+       a clip whose media it had lost could not even be started (2026-09-05 audit, F14, found on
+       screen). Its handler had been written, maintained and audited for a control that was never
+       on the page.
+    *@
+    <input type="file" id="bv-relink-input" accept="video/*,audio/*,image/*"
+           style="display:none" @onchange="OnRelinkFileChangedAsync" />
+
     <!-- ── Keyboard shortcut help overlay ──────────────────────────────────────── -->
     @if (_showHelp)
     {
