@@ -237,11 +237,21 @@ public class OrganizationMembershipController : BenControllerBase
     /// The permission areas this group's plan includes (item 156 Phase E) — what the role editor
     /// grays against, with the plan's name for the upgrade note.
     /// </summary>
+    /// <remarks>
+    /// <b>Members only.</b> It answers with the group's plan NAME, and it used to answer for any
+    /// group to anybody signed in — so a stranger could read which plan any group was on, one id
+    /// at a time. That is commercial information about somebody else's business, and no part of
+    /// it belongs to a person with no relationship to the group (2026-09-04 sweep).
+    /// </remarks>
     [HttpGet("{organizationId:guid}/included-areas")]
     public async Task<ActionResult<OrgIncludedAreasResponse>> GetIncludedAreas(
         Guid organizationId, CancellationToken cancellationToken)
     {
-        _ = GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserIdOrThrow();
+        if (!User.IsInRole(RoleNames.SuperAdmin)
+            && !await _organizationSecurityService.BelongsToAsync(userId, organizationId, cancellationToken))
+            return Forbid();
+
         using var scope = HttpContext.RequestServices.CreateScope();
         var dbFactory = scope.ServiceProvider
             .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();

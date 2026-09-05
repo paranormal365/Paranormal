@@ -158,7 +158,9 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     /// <param name="IntoPlaceId">The record that survives and inherits everything.</param>
     public sealed record MergeRequest(Guid IntoPlaceId);
 
-    /// <param name="Moved">What was repointed, so the caller can see the merge did something.</param>
+    /// <summary>
+    /// What the merge repointed, so the caller can see it did something.
+    /// </summary>
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
         int FieldSessions, int Rooms);

@@ -131,23 +131,23 @@ public sealed class PublicPlaceController : ControllerBase
 }
 
 /// <summary>What a visitor gets for one place.</summary>
+/// <remarks>
+/// <para><c>Sessions</c> and <c>EventEvidence</c> are both defaulted, so every existing caller —
+/// the website's place page among them — keeps compiling and simply renders no archive until it
+/// asks for one.</para>
+///
+/// <para><c>EventEvidence</c> is what guests photographed at public events HERE and chose to
+/// contribute. It is a separate list from <c>Sessions</c> rather than folded into it, because the
+/// two are different things and pretending otherwise would be dishonest: a field session is a
+/// document of readings taken over a night, and this is one picture somebody took on a walk.
+/// Merging them would put a photograph in a table whose columns are reading counts and
+/// magnetometer models.</para>
+/// </remarks>
 public sealed record PublicPlaceResponse(
     PlaceRecord Place,
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
-    // Defaulted so every existing caller — the website's place page among them — keeps compiling
-    // and simply renders no archive until it asks for one.
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
-    /// <summary>
-    /// What guests photographed at public events HERE and chose to contribute.
-    /// </summary>
-    /// <remarks>
-    /// A separate list from <paramref name="Sessions"/> rather than folded into it, because the
-    /// two are different things and pretending otherwise would be dishonest: a field session is a
-    /// document of readings taken over a night, and this is one picture somebody took on a walk.
-    /// Merging them would put a photograph in a table whose columns are reading counts and
-    /// magnetometer models.
-    /// </remarks>
     IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
 
 /// <summary>
@@ -163,6 +163,14 @@ public sealed record PublicPlaceResponse(
 /// <para><see cref="DeviceModel"/> is here for an unglamorous but necessary reason: phone
 /// magnetometers differ, and a reader comparing a spike across two visits deserves to know
 /// whether they are comparing two instruments as well as two nights.</para>
+///
+/// <para><c>MarkerCount</c> is the moments the recorder flagged — the single most comparable
+/// number across visits. "Eleven of twelve people marked something on those stairs" is the
+/// archive's whole point.</para>
+///
+/// <para><c>Media</c> is the photos, video and audio a reviewer has cleared for this page, empty
+/// until one has, and null rather than empty for callers that never ask — so an older client
+/// renders no gallery rather than an empty one.</para>
 /// </remarks>
 public sealed record PublicPlaceSessionRow(
     Guid Id,
@@ -172,25 +180,10 @@ public sealed record PublicPlaceSessionRow(
     DateTime StartedAt,
     DateTime? EndedAt,
     int ReadingCount,
-    /// <summary>Moments the recorder flagged. The single most comparable number across visits —
-    /// "eleven of twelve people marked something on those stairs" is the archive's whole point.</summary>
     int MarkerCount,
     string DeviceModel,
     DateTime PublishedAtUtc,
     Guid DocumentUploadFileId,
-    /// <summary>
-    /// Photos, video and audio a reviewer has cleared for this page — empty until one has.
-    /// </summary>
-    /// <remarks>
-    /// <para>This shipped as a COUNT, on the reasoning that serving should wait until the archive
-    /// had the screening, reporting and blocking the feed already has. Those exist now
-    /// (post-moderation, the flag endpoint and the moderator queue), so the files themselves are
-    /// offered — a visitor told that eleven people recorded here and shown none of it was being
-    /// asked to take the archive on faith, which is the one thing this feature exists to end.</para>
-    ///
-    /// <para>Nulled rather than empty for callers that never ask, so an older client renders no
-    /// gallery rather than an empty one.</para>
-    /// </remarks>
     IReadOnlyList<ArchiveMediaItem>? Media = null)
 {
     /// <summary>

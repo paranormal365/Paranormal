@@ -6,8 +6,15 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <!-- CS1591: Missing XML comment for publicly visible type — suppressed because
-             boilerplate admin/entity controllers are self-documenting by name. -->
-        <NoWarn>$(NoWarn);1591</NoWarn>
+             boilerplate admin/entity controllers are self-documenting by name.
+
+             CS1573: "some parameters documented, not all". The house style on the request and
+             response records here is to explain the two or three fields that need explaining and
+             leave `Guid Id` alone, which this rule forbids: it wants every parameter documented or
+             none. Writing "<param name="Id">The id.</param>" forty-nine times would satisfy the
+             compiler and tell a reader nothing. Where a whole record needs describing, the prose
+             goes in <remarks> and names the fields there. -->
+        <NoWarn>$(NoWarn);1591;1573</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

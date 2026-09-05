@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System.Security.Claims;
@@ -68,6 +69,67 @@ public class OrganizationMembershipControllerTests
             }
         };
         return ctrl;
+    }
+
+    // ── Included areas: a group's plan is its own business ───────────────────
+    //
+    // It answers with the plan NAME, and it used to answer for any group to anybody signed in —
+    // so a stranger could read which plan any group was on, one id at a time (2026-09-04 sweep).
+
+    /// <summary>
+    /// The controller resolves its DbContext from the request's services for this endpoint, so a
+    /// test that reaches past the guard has to supply them.
+    /// </summary>
+    private static OrganizationMembershipController WithRequestServices(
+        OrganizationMembershipController ctrl, IDbContextFactory<BenDataContext> factory)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(factory);
+        ctrl.ControllerContext.HttpContext.RequestServices = services.BuildServiceProvider();
+        return ctrl;
+    }
+
+    [Fact]
+    public async Task GetIncludedAreas_RefusesSomebodyWhoDoesNotBelongToTheGroup()
+    {
+        var userId = Guid.NewGuid();
+        var orgId  = Guid.NewGuid();
+        var svc    = ServiceMock();
+        svc.Setup(x => x.BelongsToAsync(userId, orgId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+
+        var result = await Build(svc, userId).GetIncludedAreas(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetIncludedAreas_AnswersAMemberOfTheGroup()
+    {
+        var userId  = Guid.NewGuid();
+        var orgId   = Guid.NewGuid();
+        var factory = CreateFactory();
+        var svc     = ServiceMock();
+        svc.Setup(x => x.BelongsToAsync(userId, orgId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var result = await WithRequestServices(Build(svc, userId), factory).GetIncludedAreas(orgId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>A SuperAdmin runs the site, and every admin screen depends on reading this.</summary>
+    [Fact]
+    public async Task GetIncludedAreas_AnswersASuperAdminWhoBelongsToNothing()
+    {
+        var userId  = Guid.NewGuid();
+        var orgId   = Guid.NewGuid();
+        var factory = CreateFactory();
+        var svc     = ServiceMock();
+        svc.Setup(x => x.BelongsToAsync(userId, orgId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+
+        var ctrl = WithRequestServices(Build(svc, userId, isSuperAdmin: true), factory);
+        var result = await ctrl.GetIncludedAreas(orgId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
     }
 
     // ── SearchUsers ───────────────────────────────────────────────────────────

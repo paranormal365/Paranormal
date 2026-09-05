@@ -39,14 +39,26 @@ public sealed class EquipmentCatalogController : BenControllerBase
     }
 
     /// <summary>
-    /// Approved brands, optionally name-filtered. Also returns the caller's own pending
-    /// proposals — a proposer can keep using their own unapproved entry immediately; nobody
-    /// else's pending work is visible here.
+    /// Approved brands, optionally name-filtered and optionally narrowed to a category. Also
+    /// returns the caller's own pending proposals — a proposer can keep using their own
+    /// unapproved entry immediately; nobody else's pending work is visible here.
     /// </summary>
+    /// <remarks>
+    /// <b>categoryId narrows to makes that actually make one.</b> The add-equipment form asks for
+    /// a category, then a make, then a model. The model list has always been filtered; the make
+    /// list was not, so choosing "Audio Recorder" still offered tripod and radio brands, and the
+    /// two questions after it disagreed about what was on offer (2026-09-04 sweep).
+    ///
+    /// A category lives on the MODEL, not the brand, so this is "brands with at least one model
+    /// in that category" — which is the honest reading and needs no new column. A brand the
+    /// caller proposed themselves is kept whatever the category says: it may have no models yet,
+    /// and hiding somebody's own pending entry from the form they proposed it for is the kind of
+    /// filtering that reads as data loss.
+    /// </remarks>
     [HttpGet("brands")]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<EquipmentBrandRecord>>> GetBrands(
-        [FromQuery] string? search, CancellationToken ct)
+        [FromQuery] string? search, [FromQuery] Guid? categoryId, CancellationToken ct)
     {
         var callerId = GetCurrentUserIdOrNull();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -54,6 +66,12 @@ public sealed class EquipmentCatalogController : BenControllerBase
             .Where(b => b.IsApproved || (callerId != null && b.ProposedByAppUserId == callerId));
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(b => EF.Functions.Like(b.Name, $"%{search}%"));
+        if (categoryId is { } category)
+            query = query.Where(b =>
+                (callerId != null && b.ProposedByAppUserId == callerId)
+                || db.EquipmentModels.Any(m => m.EquipmentBrandId == b.Id
+                                            && m.EquipmentCategoryId == category
+                                            && m.IsApproved));
 
         var brands = await query
             .OrderBy(b => b.Name)

@@ -333,6 +333,19 @@ public sealed class FieldSessionPublishController : BenControllerBase
 
         foreach (var file in files)
         {
+            // A file whose bytes are still in the database has no path on disk for the screener to
+            // read. It cannot be looked at, so it is HELD rather than waved through: the whole
+            // point of the screen is that unreviewed media does not go public. Same answer the
+            // catch below gives, for the same reason.
+            if (string.IsNullOrWhiteSpace(file.StoragePath))
+            {
+                _log.LogWarning(
+                    "Session {SessionId} has media with no stored path; it stays private until reviewed.",
+                    session.Id);
+                session.MediaReviewState = FeedMediaReviewState.Pending;
+                return;
+            }
+
             FeedMediaVerdict verdict;
             try
             {
