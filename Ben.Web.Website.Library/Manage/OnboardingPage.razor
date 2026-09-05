@@ -167,11 +167,33 @@
         }
         catch { /* the profile page can fix anything this misses */ }
 
-        await StampAndLeaveAsync(OnboardingRouting.DestinationFor(_intent));
+        // Where they were going beats where their answer would send them. Somebody who followed a
+        // link to a case and was intercepted by this wizard wants the case, not the front door of
+        // whatever they said brought them here.
+        await StampAndLeaveAsync(Next ?? OnboardingRouting.DestinationFor(_intent));
     }
 
     private async Task SkipAsync()
-        => await StampAndLeaveAsync("/");
+        => await StampAndLeaveAsync(Next ?? "/");
+
+    /// <summary>
+    /// Where this person was heading when the wizard interrupted them, or null.
+    /// </summary>
+    /// <remarks>
+    /// Set by <c>OnboardingGate</c>. Guarded here as well as there: a local path only, never an
+    /// absolute URL and never protocol-relative, so a crafted <c>/onboarding?next=…</c> link
+    /// cannot make this page a redirector to somewhere else. Same rule the sign-in page applies
+    /// to its own <c>returnUrl</c>.
+    /// </remarks>
+    [Parameter, SupplyParameterFromQuery(Name = "next")]
+    public string? NextParameter { get; set; }
+
+    private string? Next =>
+        !string.IsNullOrWhiteSpace(NextParameter)
+        && NextParameter.StartsWith('/')
+        && !NextParameter.StartsWith("//")
+            ? NextParameter
+            : null;
 
     private async Task StampAndLeaveAsync(string destination)
     {
