@@ -29,8 +29,10 @@ There is also a standalone editor that runs on its own, at
 [ishaunted.com/editors/video](https://ishaunted.com/editors/video/). It is the same editor with the
 same features — multiple tracks, titles, transitions, effects, saved projects and all — and it
 keeps your footage even further from the server: media goes straight from the site to your machine
-without passing through the web server at all. The one difference worth knowing is what happens
-before you sign in: see [Working signed out](#working-signed-out) below.
+without passing through the web server at all. Sign in there, from the button in its toolbar, and
+it lists your uploaded media, saves projects to the server and publishes finished renders just as
+the site does. The one difference worth knowing is what happens before you sign in: see
+[Working signed out](#working-signed-out) below.
 
 ## Start the engine
 
@@ -331,14 +333,18 @@ The standalone editor can be used without signing in, and quite a lot works that
 from your machine, edit them, render the result and save it back to your machine. All of that is
 local.
 
-Signing in is what connects it to the site. Until you do:
+Signing in is what connects it to the site. The button is in the toolbar, at the right-hand end.
+Until you use it:
 
-- the **Server** tab has nothing to list, because listing your media is a request the site must be
-  able to attribute to you;
-- **Save to Server** and publishing a finished render have nowhere to go, for the same reason.
+- the **Server** tab says so and offers the same button, rather than showing an empty list — an
+  empty list would mean you had uploaded nothing, which is a different thing;
+- **Save to Server** is not offered, because it has nowhere to go;
+- after an export, the destination prompt still shows the server option, greyed out, so you can
+  see it exists and what it needs.
 
 So: edit locally as much as you like, sign in when you want your own footage or want to keep the
-result somewhere other than this computer.
+result somewhere other than this computer. If your sign-in expires part-way through, the editor
+says so and keeps the render — signing in again and uploading once more is the whole fix.
 
 ## When something looks wrong
 

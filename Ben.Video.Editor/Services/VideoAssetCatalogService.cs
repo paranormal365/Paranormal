@@ -27,14 +27,18 @@ public sealed class VideoAssetCatalogService
     private const string LocalStorageKey   = "bv-shared-catalog";
     private const string WatermarkCacheKey = "bv-watermark-version";
 
+    private readonly ErrorLogService? _errorLog;
+
     public VideoAssetCatalogService(
         IEnumerable<IAssetProvider> providers,
         IOptions<VideoEditorOptions> options,
-        IHttpClientFactory httpFactory)
+        IHttpClientFactory httpFactory,
+        ErrorLogService? errorLog = null)
     {
         _providers   = providers;
         _options     = options;
         _httpFactory = httpFactory;
+        _errorLog    = errorLog;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -48,11 +52,29 @@ public sealed class VideoAssetCatalogService
         if (_cached is not null) return _cached;
 
         var all = new List<VideoAssetCatalogItem>();
+        var anySucceeded = false;
+
         foreach (var provider in _providers.Where(p => p.IsEnabled))
         {
-            var items = await provider.GetAssetsAsync(ct);
-            all.AddRange(items);
+            // One provider's failure is not the catalogue's. The account library needs a signed-in
+            // account and the shared catalogue does not, so opening the Assets tab signed out let
+            // a 401 out of the account provider and took the whole tab down with it — including
+            // the shapes that would have loaded perfectly well (2026-09-05 audit, callouts-5).
+            try
+            {
+                all.AddRange(await provider.GetAssetsAsync(ct));
+                anySucceeded = true;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _errorLog?.Log($"VideoAssetCatalogService.{provider.GetType().Name}", ex);
+            }
         }
+
+        // Not cached when nothing worked: a catalogue that failed once would otherwise stay empty
+        // for the life of the session, so signing in would not fix it.
+        if (!anySucceeded && _providers.Any(p => p.IsEnabled)) return all;
 
         _cached = all;
         return _cached;

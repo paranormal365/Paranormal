@@ -464,3 +464,19 @@
     white-space: nowrap;
     cursor: default;
 }
+
+/* A refused library, with the host's own way in beneath it. Neither an error nor an empty state:
+   there is something the person can do, and both of the old treatments described a situation that
+   was not true (2026-09-05 audit, F11 and site-11). */
+.bv-browser__signin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .6rem;
+    padding: 1.25rem .75rem;
+    text-align: center;
+    font-size: .8rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-browser__signin p { margin: 0; line-height: 1.5; }

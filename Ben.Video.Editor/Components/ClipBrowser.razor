@@ -322,6 +322,12 @@
     // ── Library state ─────────────────────────────────────────────────────────
     private bool                           _libraryLoading;
     private string?                        _libraryError;
+
+    /// <summary>The library refused us, which is a different thing from it being empty.</summary>
+    private bool                           _libraryNeedsSignIn;
+
+    /// <summary>The host's own sign-in chrome, so the refusal can offer a way in.</summary>
+    [Parameter] public RenderFragment?     HostStatusContent { get; set; }
     private IReadOnlyList<MediaLibraryFile> _libraryFiles = [];
     private readonly HashSet<Guid>          _libraryImporting = [];
 
@@ -889,6 +895,25 @@
             __builder.OpenElement(seq++, "span"); __builder.AddContent(seq++, "Loading library…"); __builder.CloseElement();
             __builder.CloseElement();
         }
+        else if (_libraryNeedsSignIn)
+        {
+            // A refusal, said as a refusal, with whatever way in the host offers. An empty tab or
+            // a raw HTTP message both describe a state that is not true (2026-09-05 audit, F11 and
+            // site-11).
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin");
+            __builder.OpenElement(seq++, "p");
+            __builder.AddContent(seq++,
+                "Sign in to see the files you have uploaded. Everything else in the editor works "
+                + "signed out.");
+            __builder.CloseElement();
+
+            if (HostStatusContent is not null)
+            {
+                __builder.AddContent(seq++, HostStatusContent);
+            }
+
+            __builder.CloseElement();
+        }
         else if (_libraryError is not null)
         {
             __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error");
@@ -1234,20 +1259,38 @@
 
         _libraryLoading = true;
         _libraryError   = null;
+        _libraryNeedsSignIn = false;
         StateHasChanged();
 
         IReadOnlyList<MediaLibraryFile> files = [];
         string? error = null;
-        try   { files = await MediaLib.GetFilesAsync(CurrentScope); }
-        catch (Exception ex) { error = ex.Message; ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex); }
+        var needsSignIn = false;
+
+        try
+        {
+            files = await MediaLib.GetFilesAsync(CurrentScope);
+        }
+        catch (MediaLibraryUnauthorizedException)
+        {
+            // Not an error to describe, a state with an action attached. This used to show either
+            // an empty tab or a raw HTTP message, both of which say something untrue about why
+            // there is nothing here (2026-09-05 audit, F11 and site-11).
+            needsSignIn = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex);
+        }
 
         // A newer scope was chosen while this was in flight. Its results are the answer to a
         // question nobody is asking any more, and writing them would undo the newer selection.
         if (generation != _libraryLoadGeneration) return;
 
-        _libraryFiles   = files;
-        _libraryError   = error;
-        _libraryLoading = false;
+        _libraryFiles     = files;
+        _libraryError     = error;
+        _libraryNeedsSignIn = needsSignIn;
+        _libraryLoading   = false;
         StateHasChanged();
 
         // Phase 150 — seed the "downloaded locally" badge from a real OPFS check so it survives a

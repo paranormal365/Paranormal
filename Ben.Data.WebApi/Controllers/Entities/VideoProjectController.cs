@@ -26,14 +26,17 @@ public sealed class VideoProjectController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly ILogger<VideoProjectController>? _logger;
 
     public VideoProjectController(IDbContextFactory<BenDataContext> db, IMapper mapper,
-        IFileStorageService fileStorage, IMediaIngestService mediaIngest)
+        IFileStorageService fileStorage, IMediaIngestService mediaIngest,
+        ILogger<VideoProjectController>? logger = null)
     {
         _db          = db;
         _mapper      = mapper;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
+        _logger      = logger;
     }
 
     // GET /api/video-projects[?caseId=...]
@@ -134,6 +137,11 @@ public sealed class VideoProjectController : BenControllerBase
 
         if (!isSuperAdmin && entity.CreatedByAppUserId != userId) return Forbid();
 
+        // The published video goes with the project. Deleting a project used to leave its render
+        // behind — a file nothing referenced any more, still on disk and still counted against the
+        // account's storage, with no way to reach it (2026-09-05 audit, persistence-15).
+        await RemovePublishedVideoAsync(db, entity.PublishedUploadFileId, ct);
+
         db.VideoProjects.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -190,15 +198,65 @@ public sealed class VideoProjectController : BenControllerBase
         db.UploadFiles.Add(upload);
         db.UploadFileMetadata.Add(ingested.Metadata);
 
+        // The render this replaces. Publishing twice used to leave the first one orphaned: nothing
+        // pointed at it any more, it was unreachable from the interface, and it still took up the
+        // account's storage. Somebody iterating on an export could leave a dozen behind
+        // (2026-09-05 audit, persistence-15).
+        var previousUploadId = project.PublishedUploadFileId;
+
         project.PublishedUploadFileId = upload.Id;
         project.DateUpdated           = DateTime.UtcNow;
         project.UpdatedByAppUserId    = userId;
 
         await db.SaveChangesAsync(ct);
+
+        // After the save, so a failure here leaves the new video in place and only the old one
+        // behind — the opposite order can delete the previous render and then fail to record the
+        // new one, which loses both.
+        await RemovePublishedVideoAsync(db, previousUploadId, ct);
         return Ok(_mapper.Map<VideoProjectRecord>(project));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Removes a published render, from the database and from disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>Best-effort on the file itself: a row removed without its bytes costs disk space,
+    /// while bytes removed without the row would leave a record pointing at nothing. The
+    /// recoverable failure is the one to prefer.</para>
+    ///
+    /// <para>Only ever called for a render this project itself published, so there is nothing to
+    /// check about who owns it — the caller has already established that.</para>
+    /// </remarks>
+    private async Task RemovePublishedVideoAsync(
+        BenDataContext db, Guid? uploadFileId, CancellationToken ct)
+    {
+        if (uploadFileId is not { } id) return;
+
+        var upload = await db.UploadFiles.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (upload is null) return;
+
+        var metadata = await db.UploadFileMetadata
+            .Where(m => m.UploadFileId == id)
+            .ToListAsync(ct);
+
+        db.UploadFileMetadata.RemoveRange(metadata);
+        db.UploadFiles.Remove(upload);
+        await db.SaveChangesAsync(ct);
+
+        if (string.IsNullOrWhiteSpace(upload.StoragePath)) return;
+
+        try { await _fileStorage.DeleteAsync(upload.StoragePath, ct); }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex,
+                "Removed the record for published video {UploadId} but could not delete {Path}.",
+                id, upload.StoragePath);
+        }
+    }
+
 
     private async Task<bool> CanAccessCaseAsync(Guid caseId, CancellationToken ct)
     {

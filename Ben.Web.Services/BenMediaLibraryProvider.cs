@@ -53,6 +53,13 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider, IMediaLibra
                      + ScopeQuery(scope);
         var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
 
+        // A refusal is not an empty library. Returning [] for any failure showed the Server tab as
+        // "no files" to somebody whose session had simply expired — which reads as "you have not
+        // uploaded anything" (2026-09-05 audit, site-11).
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized
+                                or System.Net.HttpStatusCode.Forbidden)
+            throw new Ben.Video.Editor.Services.MediaLibraryUnauthorizedException();
+
         if (!response.IsSuccessStatusCode)
             return [];
 
