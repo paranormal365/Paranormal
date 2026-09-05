@@ -842,6 +842,26 @@
     private List<BvMenuItem> _markerMenuItems     = [];
     private List<BvMenuItem> _transitionMenuItems = [];
 
+    /// <summary>
+    /// Fades a clip up from black at its start, or down to black at its end.
+    /// </summary>
+    /// <remarks>
+    /// The honest replacement for the cross-track crossfade: it is the clip's own property, the
+    /// export already renders it, and it survives a save. One second, or a quarter of the clip if
+    /// that is shorter.
+    /// </remarks>
+    private void FadeClip(TrackItem item, bool fadeIn)
+    {
+        if (item is not VideoClip clip) return;
+
+        var seconds = Math.Min(1.0, clip.EffectiveLength / 4);
+        if (seconds <= 0) return;
+
+        Clips.UpdateClipEffects(clip.Id, fadeIn
+            ? clip.Effects with { FadeInSeconds  = seconds }
+            : clip.Effects with { FadeOutSeconds = seconds });
+    }
+
     private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
     {
         await SelectItem(item);
@@ -851,12 +871,13 @@
         var canSplit  = item is VideoClip vc2 &&
                         playhead > vc2.TimelinePosition &&
                         playhead < vc2.TimelinePosition + vc2.TrimmedDuration;
+        // A locked track refuses every mutation in the store, silently — which from the menu looked
+        // like a broken editor: Duplicate, Split, Separate Audio, Speed, Replace, Remove and Ripple
+        // Delete all stayed enabled and all did nothing (2026-09-05 audit, timeline-12).
+        var locked    = Clips.FindTrackOf(item.Id)?.IsLocked == true;
         var isMedia   = item is VideoClip or AudioClip;
         var isRemovable = item is not Transition;
         var canSeparateAudio = item is VideoClip vcAudio && vcAudio.MemFsName is not null && !vcAudio.MuteAudio;
-        var crossTrackTarget = EffectiveOptions.Transitions && EffectiveOptions.MultiTrack && item is VideoClip vcOverlap
-            ? FindCrossTrackOverlapCandidate(vcOverlap)
-            : null;
 
         _clipMenuItems =
         [
@@ -864,7 +885,7 @@
                     Action = () => Task.CompletedTask /* properties panel already opened by SelectItem */ },
             new() { Text = "Duplicate",  Icon = SvgIcon.Copy,
                     Action = () => { Clips.DuplicateClip(item.Id); return Task.CompletedTask; },
-                    IsDisabled = !isMedia },
+                    IsDisabled = locked || !isMedia },
             new() { IsSeparator = true },
             new() { Text = "Split at Playhead", Icon = SvgIcon.Cut,
                     Action = () =>
@@ -874,29 +895,34 @@
                             // ClipStore.SplitClipAtTimelineTime.
                             Clips.SplitClipAtTimelineTime(vc3.Id, Playback.State.TimelineTime);
                         return Task.CompletedTask;
-                    }, IsDisabled = !canSplit },
+                    }, IsDisabled = locked || !canSplit },
             new() { Text = "Separate Audio", Icon = SvgIcon.VolumeUp,
                     Action = async () =>
                     {
                         if (item is VideoClip vc4)
                             await SeparateAudioAsync(vc4);
-                    }, IsDisabled = !canSeparateAudio },
-            new() { Text = "Add Crossfade to Overlapping Clip",
-                    Action = () =>
-                    {
-                        if (crossTrackTarget is not null)
-                            try { Clips.AddCrossTrackTransition(item.Id, crossTrackTarget.Id); } catch { }
-                        return Task.CompletedTask;
-                    }, IsDisabled = crossTrackTarget is null },
+                    }, IsDisabled = locked || !canSeparateAudio },
+            @* "Add Crossfade to Overlapping Clip" stood here. It built a cross-track transition,
+               which the export turned into a segment longer than the two clips it replaced while
+               leaving every later offset measured against the old length — a corrupt render — and
+               which the preview never showed at all. A clip's own fade in and out does the same
+               job honestly, and both are already persisted and exported (2026-09-05 audit,
+               transitions-9). *@
+            new() { Text = "Fade In", Icon = SvgIcon.BrightnessContrast,
+                    Action = () => { FadeClip(item, fadeIn: true); return Task.CompletedTask; },
+                    IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Fade Out", Icon = SvgIcon.BrightnessContrast,
+                    Action = () => { FadeClip(item, fadeIn: false); return Task.CompletedTask; },
+                    IsDisabled = locked || item is not VideoClip },
             new() { IsSeparator = true },
-            new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
-            new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
-            new() { Text = "Speed: 2×",   Action = () => { SetSpeed(item, 2.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
+            new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Speed: 2×",   Action = () => { SetSpeed(item, 2.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
             new() { IsSeparator = true },
             new() { Text = item.IsMediaMissing ? "Replace Media…" : "Replace Source…",
                     Icon = SvgIcon.Link,
                     Action = async () => await OnRelinkRequested.InvokeAsync(item.Id),
-                    IsDisabled = !isMedia },
+                    IsDisabled = locked || !isMedia },
             new() { IsSeparator = true },
             new() { Text = "Remove",        Icon = SvgIcon.Trash,
                     Action = async () =>
@@ -911,7 +937,7 @@
                         if (_selectedItemId == item.Id) _selectedItemId = null;
                         _multiSelectedIds.Remove(item.Id);
                         await OnItemRemoved.InvokeAsync(item.Id);
-                    }, IsDisabled = !isRemovable },
+                    }, IsDisabled = locked || !isRemovable },
             new() { Text = "Ripple Delete", Icon = SvgIcon.Minus,
                     Action = async () =>
                     {
@@ -919,7 +945,7 @@
                         if (_selectedItemId == item.Id) _selectedItemId = null;
                         _multiSelectedIds.Remove(item.Id);
                         await OnItemRemoved.InvokeAsync(item.Id);
-                    }, IsDisabled = !isMedia },
+                    }, IsDisabled = locked || !isMedia },
         ];
 
         if (_clipMenu is not null)
@@ -1480,10 +1506,9 @@
     }
 
     private void ToggleMute(TimelineTrack track)
-    {
-        track.IsMuted = !track.IsMuted;
-        Clips.NotifyChanged();
-    }
+        // Through the store, so it is undoable and so export and preview see it — the flag used to
+        // be flipped straight on the model and read by nothing (2026-09-05 audit, timeline-11).
+        => Clips.MuteTrack(track.Id, !track.IsMuted);
 
     // ── Resizable / collapsible track row height (item #44) ─────────────────────
     // Purely visual, UI-only state — doesn't touch track/clip data, doesn't persist
@@ -1890,7 +1915,7 @@
             var newDuration = TransitionDurationClamp.Clamp(requested, _transitionResizeFromDur, _transitionResizeToDur);
 
             _resizingTransition.Duration         = newDuration;
-            _resizingTransition.TimelinePosition = _transitionResizeFromEndSeconds - newDuration / 2;
+            _resizingTransition.TimelinePosition = _transitionResizeFromEndSeconds - newDuration;
             StateHasChanged();
             return;
         }
@@ -2033,7 +2058,10 @@
         {
             var transition = _resizingTransition;
             _resizingTransition = null;
-            try { Clips.UpdateTransition(transition.Id, transition.Style, transition.Duration); }
+            // The original duration, not the one the live drag just wrote — otherwise the undo step
+            // records no change at all and undoing a resize does nothing (2026-09-05 audit,
+            // transitions-6).
+            try { Clips.CommitTransitionResize(transition.Id, _transitionResizeOriginalDuration); }
             catch { /* transition or track vanished mid-drag — nothing to commit */ }
         }
 

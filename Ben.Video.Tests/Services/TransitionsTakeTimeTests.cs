@@ -183,4 +183,50 @@ public sealed class TransitionsTakeTimeTests
         Assert.Empty(track.Items.OfType<Transition>());
         Assert.Null(store.ValidateAll());
     }
+
+    /// <summary>
+    /// Dragging a transition's edge is undoable.
+    /// </summary>
+    /// <remarks>
+    /// The drag mutated the transition live for a smooth preview, and the commit then handed
+    /// UpdateTransition the duration it had just written — so the undo step recorded "from 2s to
+    /// 2s" and undoing did nothing (2026-09-05 audit, transitions-6).
+    /// </remarks>
+    [Fact]
+    public void Resizing_by_dragging_an_edge_can_be_undone()
+    {
+        var (store, track, a, b) = TwoClips();
+        store.AddTransition(track.Id, a.Id, b.Id, TransitionStyle.Fade, 1.0);
+        var transition = track.Items.OfType<Transition>().Single();
+        var originalDuration = transition.Duration;
+        var originalClipB    = b.TimelinePosition;
+
+        // What the live drag does: write straight to the model.
+        transition.Duration = 2.0;
+        transition.TimelinePosition -= 1.0;
+
+        store.CommitTransitionResize(transition.Id, originalDuration);
+        Assert.Equal(2.0, transition.Duration, 3);
+
+        store.Undo();   // the clip moving to match
+        store.Undo();   // the duration change
+
+        Assert.Equal(originalDuration, transition.Duration, 3);
+        Assert.Equal(originalClipB, b.TimelinePosition, 3);
+        Assert.Null(store.ValidateAll());
+    }
+
+    [Fact]
+    public void A_resize_that_changes_nothing_adds_no_undo_step()
+    {
+        var (store, track, a, b) = TwoClips();
+        store.AddTransition(track.Id, a.Id, b.Id, TransitionStyle.Fade, 1.0);
+        var transition = track.Items.OfType<Transition>().Single();
+
+        store.CommitTransitionResize(transition.Id, transition.Duration);
+        store.Undo();
+
+        // The undo that ran was the AddTransition, not a phantom resize.
+        Assert.Empty(track.Items.OfType<Transition>());
+    }
 }

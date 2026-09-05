@@ -82,17 +82,50 @@ import landed exactly on top of the first. It appends in time now, not just in l
 position the caller has already chosen is respected, so the Server tab still places at the playhead
 and restoring a project still uses the positions in the file.
 
-## Still to do in Phase 2
+### The rest of the phase
 
-Deliberately not in this branch, in the plan's order:
+**Track state means something.** `IsMuted` was documented as "audio suppressed during playback and
+export" and nothing read it — the menu flipped the flag straight on the model, so muting changed
+the icon and the render was identical, and it could not be undone. It goes through the store now,
+is undoable, and export asks one question (`ClipStore.IsAudible`) so preview and render cannot
+disagree. A locked track's context-menu items are disabled rather than enabled-and-silent, and
+Delete on a locked track says so instead of appearing broken.
 
-- the media bin and one placement policy for every import (plan item C / D3)
-- retiring cross-track transitions in favour of clip fade-in/out (D2, transitions-9)
-- an undoable commit for the transition edge-drag resize (transitions-6)
-- motion keyframes stored relative to their layer (motion-3)
-- track mute and lock actually honoured by preview and export (audio-5, timeline-11/12)
+**Animation follows its layer.** Keyframes are stored in project seconds and nothing connected them
+to the layer they animate, so dragging a callout left its movement behind, playing over whatever
+was there instead. The store now announces when an item moves or is removed, and the editor
+forwards that to the keyframe service: the animation travels with the layer, and a removed layer
+does not leave an orphan path to be written into the project file.
 
-## Verifying
+**Cross-track crossfades are retired.** What they produced could not be rendered correctly: the
+export replaced the first clip's segment with a merged one longer than the two it replaced, while
+every later offset stayed measured against the old length — and the preview never showed any of it.
+Fading a clip up from black or down to it does the job honestly, was already exported and saved
+(`ClipEffects.FadeInSeconds`/`FadeOutSeconds`), and is now offered on the clip's own right-click
+menu. A project made earlier can still hold one; it is skipped rather than rendered wrongly.
+
+**Resizing a transition can be undone.** The drag mutated the transition live for a smooth preview
+and the commit then handed `UpdateTransition` the duration it had just written, so the undo step
+recorded "from 2s to 2s".
+
+**One place decides what a file is.** Two extension lists used to, and anything they did not name
+took the video path — a `.heic` from a phone or a `.caf` recording became a 0×0 video clip with an
+empty filmstrip. `MediaKindRouter` asks the browser's own type first and the extension second, and
+knows the formats the lists missed. Imports land where the track actually ends, measured by trimmed
+length and ignoring overlays. Nothing is dropped in silence: an import the host has switched off
+now says so on its own row instead of reporting a successful import that produced nothing.
+
+## Not done in Phase 2
+
+**The media bin** — unplaced media that lives in the panel, survives a save, and is placed on
+request (plan item D3). The defects behind it are fixed: imports no longer land on top of each
+other, no longer use the wrong end of the track, and no longer vanish silently. What remains is the
+feature itself, and it is a real one: the Media tab's three lists are hand-built render-tree code
+that today shows the timeline's own items, so a bin means a new concept in the model, in the
+project file, and in the riskiest component in the editor. It deserves its own pass rather than
+being bolted onto the end of this one.
+
+## Verifying## Verifying
 
 ```
 dotnet build Ben.slnx

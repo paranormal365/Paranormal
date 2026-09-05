@@ -38,6 +38,13 @@ export function fileSize(inputId, index) {
     return document.getElementById(inputId)?.files?.[index]?.size ?? 0;
 }
 
+/** The browser's own MIME type for the file — what the operating system says it is, rather than
+ *  what somebody named it. Empty when the browser has no idea, which is common for the less usual
+ *  formats; the caller falls back to the extension. */
+export function fileType(inputId, index) {
+    return document.getElementById(inputId)?.files?.[index]?.type ?? '';
+}
+
 /** The File itself, handed back as a JS object reference so C# can stream it without a byte[]
  *  copy (same pattern as sidecarInterop.fetchResultAsFile). Null when absent. */
 export function fileAt(inputId, index) {

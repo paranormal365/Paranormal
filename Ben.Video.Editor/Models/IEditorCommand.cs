@@ -1126,6 +1126,24 @@ internal sealed class UpdateEffectParameterCommand : IEditorCommand
 
 // ── Phase 36: Track locking ───────────────────────────────────────────────────
 
+/// <summary>Muting or unmuting a track, so it can be undone like any other edit.</summary>
+internal sealed class MuteTrackCommand : IEditorCommand
+{
+    private readonly TimelineTrack _track;
+    private readonly bool          _muted;
+
+    public string Description => _muted ? "Mute track" : "Unmute track";
+
+    public MuteTrackCommand(TimelineTrack track, bool muted)
+    {
+        _track = track;
+        _muted = muted;
+    }
+
+    public void Execute() => _track.IsMuted = _muted;
+    public void Undo()    => _track.IsMuted = !_muted;
+}
+
 /// <summary>Undo/redo for locking or unlocking a <see cref="TimelineTrack"/>.</summary>
 internal sealed class LockTrackCommand : IEditorCommand
 {

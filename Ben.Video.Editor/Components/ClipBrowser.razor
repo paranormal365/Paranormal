@@ -1774,12 +1774,19 @@
                     var status = _importStatuses[i];
                     try
                     {
-                        if (IsAudioFile(status.FileName))
-                            await ImportAudioFileAtIndexAsync(i, status);
-                        else if (IsImageFile(status.FileName))
-                            await ImportImageFileAtIndexAsync(i, status);
-                        else
-                            await ImportVideoFileAtIndexAsync(i, status);
+                        // The browser's own type first, the extension second — see
+                        // MediaKindRouter. Two extension lists used to decide, and anything they
+                        // did not name took the video path, so a .heic or a .caf became a 0x0
+                        // video clip with an empty filmstrip (2026-09-05 audit, media-panel-8).
+                        var contentType = await (await DomAsync())
+                            .InvokeAsync<string>("fileType", "bv-file-input", i);
+
+                        switch (MediaKindRouter.Decide(status.FileName, contentType))
+                        {
+                            case MediaKind.Audio: await ImportAudioFileAtIndexAsync(i, status); break;
+                            case MediaKind.Image: await ImportImageFileAtIndexAsync(i, status); break;
+                            default:              await ImportVideoFileAtIndexAsync(i, status); break;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -1868,7 +1875,14 @@
 
     private async Task ImportImageFileAtIndexAsync(int index, FileImportStatus status)
     {
-        if (!Options.ImageClips) { Update(status, ImportStage.Done); return; }
+        if (!Options.ImageClips)
+        {
+            // It used to mark the row Done at 100% and add nothing, so the import window reported
+            // a success that produced no clip (2026-09-05 audit, F8 / ClipBrowser image path).
+            status.ErrorText = "Pictures are switched off in this editor.";
+            Update(status, ImportStage.Error);
+            return;
+        }
         IJSObjectReference? fileRef = null;
         try
         {
@@ -1893,8 +1907,12 @@
             int w = dims.Length > 0 ? dims[0] : 0, h = dims.Length > 1 ? dims[1] : 0;
             if (w > 0) status.MetaText = $"{w}×{h}";
 
+            // Where the track really ends: by each item's trimmed length, and ignoring overlays,
+            // which sit above the picture rather than after it. The old sum used the untrimmed
+            // Duration of everything on the track, so an import after a trimmed clip landed in
+            // empty space (2026-09-05 audit, F8).
             var imgTrack2  = Clips.PrimaryVideoTrack;
-            var imgPos2    = imgTrack2.Items.Any() ? imgTrack2.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
+            var imgPos2    = TrackLayout.EndOf(imgTrack2);
 
             Clips.AddImageClip(new ImageClip
             {
@@ -1938,16 +1956,22 @@
                 Id = audioClipId, Name = status.FileName, MemFsName = memFsName,
                 Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = audioExt,
             };
-            // Without an audio track to land on, the clip would silently vanish —
-            // decoded and reported "done" but never placed anywhere. Create one
-            // on demand, same as the always-present default video track — but
-            // only when the host has actually enabled the AudioTracks feature.
-            if (Options.AudioTracks)
+            // Without an audio track to land on the clip would be decoded, reported "done" and
+            // placed nowhere — which is what used to happen when the host had AudioTracks off: the
+            // import window said it worked and nothing appeared (2026-09-05 audit, F2). One is
+            // created on demand, exactly like the always-present video track; a host that has
+            // deliberately switched audio off is told, not ignored.
+            if (!Options.AudioTracks)
             {
-                var t = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
-                clip.TimelinePosition = t.Items.Any() ? t.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
-                Clips.AddClipToTrack(t.Id, clip);
+                status.ErrorText = "Audio tracks are switched off in this editor.";
+                Update(status, ImportStage.Error);
+                return;
             }
+
+            var audioTrack = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
+            clip.TimelinePosition = TrackLayout.EndOf(audioTrack);
+            Clips.AddClipToTrack(audioTrack.Id, clip);
+
             await OnAudioClipAdded.InvokeAsync(clip);
             Update(status, ImportStage.Done, 100);
         }
@@ -1980,30 +2004,15 @@
 
     // ── Utilities ─────────────────────────────────────────────────────────────
 
-    private static bool IsAudioFile(string name)
-    {
-        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
-        return ext is ".mp3" or ".wav" or ".aac" or ".ogg" or ".flac" or ".m4a" or ".opus" or ".wma";
-    }
+    // One place decides what a file is — see MediaKindRouter. These remain for the callers that
+    // only have a name to go on (the server library's own listing carries its content type).
+    private static bool IsAudioFile(string name) =>
+        MediaKindRouter.Decide(name) == MediaKind.Audio;
 
-    private static bool IsImageFile(string name)
-    {
-        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
-        return ext is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".svg";
-    }
+    private static bool IsImageFile(string name) =>
+        MediaKindRouter.Decide(name) == MediaKind.Image;
 
-    private static string GetImageMimeType(string name)
-    {
-        return System.IO.Path.GetExtension(name).ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".png"            => "image/png",
-            ".gif"            => "image/gif",
-            ".webp"           => "image/webp",
-            ".bmp"            => "image/bmp",
-            _                 => "image/png",
-        };
-    }
+    private static string GetImageMimeType(string name) => MediaKindRouter.ImageMimeType(name);
 
     private static string FormatDuration(double seconds)
     {

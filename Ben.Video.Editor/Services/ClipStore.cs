@@ -126,6 +126,45 @@ public sealed class ClipStore
     /// reorder, split, duplicate) are silently ignored. Pushes a <see cref="LockTrackCommand"/>
     /// for undo/redo support.
     /// </summary>
+    /// <summary>
+    /// Mutes or unmutes a track.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TimelineTrack.IsMuted"/> is documented as "audio suppressed during playback and
+    /// export", and nothing read it: the menu item flipped the flag straight on the model and a
+    /// muted track was mixed into the render exactly like any other. It was not undoable either
+    /// (2026-09-05 audit, audio-5 and timeline-11).
+    /// </remarks>
+    public void MuteTrack(Guid trackId, bool muted)
+    {
+        var track = RequireTrack(trackId);
+        if (track.IsMuted == muted) return;
+        PushCommand(new MuteTrackCommand(track, muted));
+        track.IsMuted = muted;
+        Notify();
+    }
+
+    /// <summary>
+    /// Whether this item's sound should be heard at all — its own mute, or its track's.
+    /// </summary>
+    /// <remarks>
+    /// The one place to ask, so preview and export cannot disagree. A muted video track silences
+    /// its clips' own audio; a muted audio track drops out of the mix entirely.
+    /// </remarks>
+    public bool IsAudible(TrackItem item)
+    {
+        var track = FindTrackOf(item.Id);
+        if (track is { IsMuted: true }) return false;
+
+        return item is not VideoClip { MuteAudio: true };
+    }
+
+    /// <summary>Audio clips that should actually be mixed, in the order they play.</summary>
+    public IEnumerable<AudioClip> AudibleAudioClips =>
+        AudioTracks.Where(t => !t.IsMuted)
+                   .SelectMany(t => t.AudioClips)
+                   .OrderBy(a => a.TimelinePosition);
+
     public void LockTrack(Guid trackId, bool locked)
     {
         var track = RequireTrack(trackId);
@@ -269,6 +308,7 @@ public sealed class ClipStore
             var clip = track.Items[idx];
             track.Items.RemoveAt(idx);
             RenumberItems(track);
+            ItemRemoved?.Invoke(clipId);
             PushCommand(new RemoveClipCommand(track, clip, idx));
             Notify();
             return;
@@ -337,6 +377,7 @@ public sealed class ClipStore
             var clip = track.Items[idx];
             track.Items.RemoveAt(idx);
             RenumberItems(track);
+            ItemRemoved?.Invoke(clipId);
             PushCommand(new RemoveClipCommand(track, clip, idx));
             Notify();
             return;
@@ -784,6 +825,7 @@ public sealed class ClipStore
             if (track.IsLocked) return;
             var item = track.Items[idx];
             track.Items.RemoveAt(idx);
+            ItemRemoved?.Invoke(itemId);
             RenumberItems(track);
             PushCommand(new RemoveClipCommand(track, item, idx));
             Notify();
@@ -1363,6 +1405,7 @@ public sealed class ClipStore
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
 
+            AnnounceShift(item, originalPosition, finalPos);
             ReconcileTransitions(track);
             ResortSequential(track);
             AssertLaidOut(track);
@@ -1416,6 +1459,7 @@ public sealed class ClipStore
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
 
+            AnnounceShift(item, originalPosition, finalPos);
             ResortSequential(toTrack);
             AssertLaidOut(toTrack);
             Notify();
@@ -1425,6 +1469,7 @@ public sealed class ClipStore
         fromTrack.Items.Remove(item);
         toTrack.Items.Add(item);
         PushCommand(new MoveClipToTrackCommand(fromTrack, toTrack, item, originalPosition, finalPos));
+        AnnounceShift(item, originalPosition, finalPos);
         ResortSequential(fromTrack);
         ResortSequential(toTrack);
         AssertLaidOut(fromTrack);
@@ -1705,61 +1750,20 @@ public sealed class ClipStore
     }
 
     /// <summary>
-    /// Insert a crossfade transition between two <see cref="VideoClip"/>s that live on
-    /// <em>different</em> video tracks and overlap in time (e.g. a clip on a higher track
-    /// dropped on top of part of a clip on a lower track). The overlap window itself becomes
-    /// the transition's duration and position — unlike <see cref="AddTransition"/>, the caller
-    /// does not choose a duration. "From"/"to" is determined by track <see cref="TimelineTrack.Order"/>
-    /// (lower Order = from, higher Order = to), not by argument order, so it always reads as
-    /// "the lower track's clip transitions into the higher track's clip" regardless of which
-    /// clip id is passed first.
-    /// Requires the Transitions feature flag.
+    /// Cross-track crossfades are not offered any more.
     /// </summary>
-    public void AddCrossTrackTransition(Guid clipAId, Guid clipBId, TransitionStyle style = TransitionStyle.Fade)
-    {
-        var trackA = FindTrackOf(clipAId) ?? throw new ArgumentException("clipAId not found on any track.");
-        var trackB = FindTrackOf(clipBId) ?? throw new ArgumentException("clipBId not found on any track.");
+    /// <remarks>
+    /// <para><c>AddCrossTrackTransition</c> stood here. What it produced could not be rendered
+    /// correctly: the export replaced the first clip's segment with a merged one whose length is
+    /// fromDur + toDur − overlap, while every later offset was still measured against the original
+    /// length, so everything after the junction drifted — and the preview never showed it at all
+    /// (2026-09-05 audit, transitions-9).</para>
+    ///
+    /// <para>Fading a clip up from black or down to it is the honest version of the same idea, and
+    /// it already existed: <c>ClipEffects.FadeInSeconds</c> and <c>FadeOutSeconds</c>, which the
+    /// export renders and a project file saves. The clip's right-click menu offers both.</para>
+    /// </remarks>
 
-        if (trackA.Id == trackB.Id)
-            throw new InvalidOperationException(
-                "Both clips are on the same track — use AddTransition for same-track transitions.");
-
-        var clipA = trackA.Items.First(i => i.Id == clipAId) as VideoClip
-                    ?? throw new ArgumentException("clipAId must be a VideoClip.");
-        var clipB = trackB.Items.First(i => i.Id == clipBId) as VideoClip
-                    ?? throw new ArgumentException("clipBId must be a VideoClip.");
-
-        // Sort by track Order so "from"/"to" reflects "lower track to higher track" regardless
-        // of which clip the caller happened to pass first.
-        var (fromTrack, fromClip, toTrack, toClip) = trackA.Order < trackB.Order
-            ? (trackA, clipA, trackB, clipB)
-            : (trackB, clipB, trackA, clipA);
-
-        var fromEnd = fromClip.TimelinePosition + fromClip.TrimmedDuration;
-        var toEnd   = toClip.TimelinePosition + toClip.TrimmedDuration;
-        var overlapStart = Math.Max(fromClip.TimelinePosition, toClip.TimelinePosition);
-        var overlapEnd   = Math.Min(fromEnd, toEnd);
-        if (overlapEnd <= overlapStart)
-            throw new ArgumentException("Clips do not overlap in time.");
-
-        var transition = new Transition
-        {
-            Name             = $"{style}",
-            Style            = style,
-            FromClipId       = fromClip.Id,
-            ToClipId         = toClip.Id,
-            TimelinePosition = overlapStart,
-            Duration         = overlapEnd - overlapStart,
-        };
-        // Same chronological-insertion-index pattern as AddTransition/AddTextOverlay/AddCallout —
-        // lives on the "to" (higher) track since that's the track it visually hands off to.
-        var index = toTrack.Items.Count(i => i.TimelinePosition <= transition.TimelinePosition);
-        transition.Order = index;
-        toTrack.Items.Insert(index, transition);
-        RenumberItems(toTrack);
-        PushCommand(new AddClipCommand(toTrack, transition, index));
-        Notify();
-    }
 
     /// <summary>
     /// Update the style and/or duration of an existing transition.
@@ -1829,6 +1833,33 @@ public sealed class ClipStore
     }
 
     /// <summary>
+    /// Commits a transition's edge-drag resize, given what its duration was before the drag.
+    /// </summary>
+    /// <remarks>
+    /// The drag mutates the transition live for a smooth preview, and the commit then called
+    /// <see cref="UpdateTransition"/> with the duration it had just finished writing — so the undo
+    /// step recorded "from 2s to 2s" and undoing did nothing at all (2026-09-05 audit,
+    /// transitions-6). Passing the original in is the whole fix.
+    /// </remarks>
+    public void CommitTransitionResize(Guid transitionId, double originalDuration)
+    {
+        var track      = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == transitionId));
+        var transition = track?.Items.OfType<Transition>().FirstOrDefault(t => t.Id == transitionId);
+        if (track is null || transition is null) return;
+
+        var requested = transition.Duration;
+        if (Math.Abs(requested - originalDuration) < TrackLayout.Tolerance) return;
+
+        // Put it back so UpdateTransition sees the real before-value and can record it.
+        transition.Duration = originalDuration;
+        var toItem = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+        if (toItem is not null)
+            transition.TimelinePosition += originalDuration - requested;
+
+        UpdateTransition(transitionId, transition.Style, requested);
+    }
+
+    /// <summary>
     /// Shared mutation behind <see cref="UpdateTransition"/> and
     /// <see cref="ApplyStyleToAllTransitions"/> — applies the new style/duration to
     /// <paramref name="transition"/>, recentres it on <paramref name="fromItem"/>'s end (if
@@ -1849,8 +1880,10 @@ public sealed class ClipStore
 
         if (fromItem is not null)
         {
-            var fromEndSeconds = fromItem.TimelinePosition + (fromItem is VideoClip fromVc ? fromVc.TrimmedDuration : fromItem.Duration);
-            transition.TimelinePosition = fromEndSeconds - (durationSeconds / 2);
+            // The transition covers the stretch where both clips play, which starts where the
+            // first clip ends less the crossfade — not centred on the junction. See AddTransition.
+            var fromEndSeconds = fromItem.TimelinePosition + fromItem.EffectiveLength;
+            transition.TimelinePosition = fromEndSeconds - durationSeconds;
         }
 
         return new UpdateTransitionCommand(
@@ -2196,6 +2229,9 @@ public sealed class ClipStore
         var command = new CompositeCommand("Make room", shifts);
         PushCommand(command);
         command.Execute();
+
+        foreach (var moved in toShift)
+            ItemTimeShifted?.Invoke(moved.Id, shiftBy);
     }
 
     /// <summary>
@@ -2225,6 +2261,9 @@ public sealed class ClipStore
         var command = new CompositeCommand(seconds < 0 ? "Close for transition" : "Reopen after transition", steps);
         PushCommand(command);
         command.Execute();
+
+        foreach (var moved in affected)
+            ItemTimeShifted?.Invoke(moved.Id, seconds);
     }
 
     /// <summary>
@@ -2366,6 +2405,25 @@ public sealed class ClipStore
     {
         if (_suppressNotify) { _pendingNotify = true; return; }
         OnChange?.Invoke();
+    }
+
+    /// <summary>
+    /// Raised when an item's position on the timeline changes, with how far it moved.
+    /// </summary>
+    /// <remarks>
+    /// Motion keyframes are stored in project seconds, so a layer that moves has to take its
+    /// animation with it. The store does not know about the keyframe service — the editor
+    /// subscribes and forwards (2026-09-05 audit, motion-3).
+    /// </remarks>
+    public event Action<Guid, double>? ItemTimeShifted;
+
+    /// <summary>Raised when an item is removed, so anything hanging off it can be cleaned up.</summary>
+    public event Action<Guid>? ItemRemoved;
+
+    private void AnnounceShift(TrackItem item, double from, double to)
+    {
+        if (Math.Abs(to - from) < TrackLayout.Tolerance) return;
+        ItemTimeShifted?.Invoke(item.Id, to - from);
     }
 
     /// <summary>Explicitly raise OnChange â€” for external callers that mutate track state directly (e.g. IsMuted toggle).</summary>

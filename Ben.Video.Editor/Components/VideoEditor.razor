@@ -527,6 +527,12 @@
     /// the HUD keeps tracking a layer through <see cref="ActivateMotionPath"/>, which clears all
     /// three (see that method's own comment for why) — without this fallback, clicking the HUD's
     /// own "⏱ Animate" button would make the HUD itself vanish.</summary>
+    /// <summary>Whatever is selected on the timeline, of any kind.</summary>
+    private TrackItem? SelectedTimelineItem =>
+        (TrackItem?)_selectedClip ?? (TrackItem?)_selectedAudioClip ?? (TrackItem?)_selectedImageClip
+        ?? (TrackItem?)_selectedCallout ?? (TrackItem?)_selectedClipArt
+        ?? (TrackItem?)_selectedTextOverlay ?? _selectedTransition;
+
     private TrackItem? SelectedCanvasItem =>
         (TrackItem?)_selectedCallout ?? _selectedClipArt ?? _selectedTextOverlay
         ?? (_motionLayerId.HasValue
@@ -595,6 +601,11 @@
     {
         Ffmpeg.OnStateChanged   += OnFfmpegStateChanged;
         Clips.OnChange          += OnClipsChanged;
+        // A layer that moves takes its animation with it, and a layer that is removed does not
+        // leave one behind (2026-09-05 audit, motion-3 and motion-18). The store has no idea the
+        // keyframe service exists; this is the join.
+        Clips.ItemTimeShifted   += OnItemTimeShifted;
+        Clips.ItemRemoved       += OnItemRemovedFromStore;
         Playback.OnStateChanged += OnPlaybackStateChanged;
         Layout.OnChanged        += OnLayoutChanged;
         Projects.OnChanged      += OnProjectStoreChanged;
@@ -905,6 +916,17 @@
                 break;
 
             case "Delete" or "Backspace":
+                // The store refuses to remove anything from a locked track, and silently — so
+                // pressing Delete cleared the selection and left the clip sitting there, which
+                // reads as the key being broken (2026-09-05 audit, timeline-12).
+                if (SelectedTimelineItem is { } toDelete && Clips.FindTrackOf(toDelete.Id) is { IsLocked: true })
+                {
+                    _notifications?.Show(
+                        "That track is locked. Unlock it from the track menu to change it.",
+                        ThemeConstants.Notification.ThemeColor.Info);
+                    break;
+                }
+
                 // Bulk delete if timeline has a multi-selection
                 var multiIds = _timeline?.GetMultiSelectedIds();
                 if (multiIds is { Count: >= 2 })
@@ -2448,6 +2470,12 @@
         Motion.UpsertKeyframe(_motionLayerId.Value, _motionLayerType, kf);
         StateHasChanged();
     }
+    private void OnItemTimeShifted(Guid itemId, double deltaSeconds)
+        => Motion.ShiftKeyframes(itemId, deltaSeconds);
+
+    private void OnItemRemovedFromStore(Guid itemId)
+        => Motion.RemovePath(itemId);
+
     private void OnPlaybackStateChanged()   => InvokeAsync(StateHasChanged);
 
     /// <summary>
@@ -2599,6 +2627,8 @@
         _layoutSaveCts?.Cancel();
         _layoutSaveCts?.Dispose();
         Clips.OnChange          -= OnClipsChanged;
+        Clips.ItemTimeShifted   -= OnItemTimeShifted;
+        Clips.ItemRemoved       -= OnItemRemovedFromStore;
         Playback.OnStateChanged -= OnPlaybackStateChanged;
         Layout.OnChanged        -= OnLayoutChanged;
         Projects.OnChanged      -= OnProjectStoreChanged;

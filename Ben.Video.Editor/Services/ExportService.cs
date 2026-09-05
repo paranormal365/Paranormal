@@ -161,16 +161,13 @@ public sealed class ExportService : IAsyncDisposable
 
         try
         {
-            // ── Phase 0: Cross-track transitions — pre-render the merged crossfade
-            // segment for each one BEFORE the normal per-clip trim pass, so the "from"
-            // clip's own segment (produced by TrimSegmentsAsync below) is transparently
-            // replaced by the merged one. This is also how a secondary video track's
-            // clip becomes part of the export output at all — see ApplyCrossTrackTransitionsAsync.
-            var crossTrackOverrides = await ApplyCrossTrackTransitionsAsync(job, s, tempFiles);
-            ThrowIfCancelled(job);
-
             // ── Phase 1: Render all timeline segments (video + image) in order ─
-            var videoSegments = await TrimSegmentsAsync(job, videoClips, s, tempFiles, crossTrackOverrides);
+            // A cross-track transition pass used to run before this one, replacing the first
+            // clip's segment with a merged crossfade. It produced a segment longer than the two it
+            // replaced while every later offset stayed measured against the old length, so
+            // everything after the junction drifted — see IsCrossTrack (2026-09-05 audit,
+            // transitions-9).
+            var videoSegments = await TrimSegmentsAsync(job, videoClips, s, tempFiles, []);
             ThrowIfCancelled(job);
 
             List<string> imageSegments = [];
@@ -262,7 +259,7 @@ public sealed class ExportService : IAsyncDisposable
             // already-mixed track, audibly doubling them.
             // The project's audio tracks are mixed whether or not this host offers the button
             // that creates them (2026-09-05 audit, F2/titles-11 class).
-            if (_clips.AudioTracks.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
+            if (_clips.AudibleAudioClips.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
             {
                 composited = await MixAudioTracksAsync(job, composited, s, tempFiles);
                 ThrowIfCancelled(job);
@@ -449,7 +446,8 @@ public sealed class ExportService : IAsyncDisposable
                 var effectiveDuration = clip.EffectiveDuration > 0 ? clip.EffectiveDuration : clip.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed);
-                var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, clip.MuteAudio,
+                // Muting the video track silences its clips, the same as muting each of them.
+                var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, !_clips.IsAudible(clip),
                     sourceHasAudio: clip.HasAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
@@ -474,76 +472,20 @@ public sealed class ExportService : IAsyncDisposable
     /// documented/common case); a cross-track transition whose lower-track clip is itself on
     /// a secondary track is skipped.
     /// </summary>
-    private async Task<Dictionary<Guid, string>> ApplyCrossTrackTransitionsAsync(
-        ExportJob job, ExportSettings s, List<string> tempFiles)
-    {
-        var overrides = new Dictionary<Guid, string>();
-
-        var crossTrack = _clips.AllTransitions.Where(IsCrossTrack).ToList();
-        if (crossTrack.Count == 0) return overrides;
-
-        Advance(job, 46, $"Applying {crossTrack.Count} cross-track transition(s)…");
-
-        foreach (var transition in crossTrack)
-        {
-            var fromTrack = _clips.FindTrackOf(transition.FromClipId);
-            var toTrack   = _clips.FindTrackOf(transition.ToClipId);
-            if (fromTrack is null || toTrack is null) continue;
-            if (fromTrack.Id != _clips.PrimaryVideoTrack.Id) continue;
-
-            var fromClip = fromTrack.Items.OfType<VideoClip>().FirstOrDefault(c => c.Id == transition.FromClipId);
-            var toClip   = toTrack.Items.OfType<VideoClip>().FirstOrDefault(c => c.Id == transition.ToClipId);
-            if (fromClip?.MemFsName is null || toClip?.MemFsName is null) continue;
-
-            var fromSeg = $"xfrom_{transition.Id:N}.mp4";
-            var toSeg   = $"xto_{transition.Id:N}.mp4";
-            tempFiles.Add(fromSeg);
-            tempFiles.Add(toSeg);
-
-            var (xvw, xvh) = ParseResolution(s.Resolution);
-
-            var fromStart = fromClip.StartTrim;
-            var fromEnd   = fromClip.EndTrim > fromClip.StartTrim ? fromClip.EndTrim : fromClip.Duration;
-            var fromVol   = ExportArgBuilders.BuildVolumeAutomationFilter(fromClip, fromEnd - fromStart);
-            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
-                fromClip.MemFsName, fromSeg, fromStart, fromEnd, fromClip.Speed, s,
-                fromVol, fromClip.Effects, fromClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh,
-                sourceHasAudio: fromClip.HasAudio), job.CancellationToken);
-
-            var toStart = toClip.StartTrim;
-            var toEnd   = toClip.EndTrim > toClip.StartTrim ? toClip.EndTrim : toClip.Duration;
-            var toVol   = ExportArgBuilders.BuildVolumeAutomationFilter(toClip, toEnd - toStart);
-            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
-                toClip.MemFsName, toSeg, toStart, toEnd, toClip.Speed, s,
-                toVol, toClip.Effects, toClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh,
-                sourceHasAudio: toClip.HasAudio), job.CancellationToken);
-
-            var mergedName = $"xmerged_{transition.Id:N}.mp4";
-            tempFiles.Add(mergedName);
-
-            // Where, within fromClip's own rendered/trimmed segment, the overlap begins.
-            var offset = transition.TimelinePosition - fromClip.TimelinePosition;
-            var filter = ExportArgBuilders.BuildCrossTrackXfadeFilter(transition.Style, transition.Duration, offset);
-
-            var args = new List<string> { "-i", fromSeg, "-i", toSeg, "-filter_complex", filter, "-map", "[vout]" };
-            args.AddRange(AudioOutputArgs(s));
-            args.AddRange(QualityArgs(s));
-            args.AddRange(["-pix_fmt", s.PixelFormat, mergedName]);
-            await _ffmpeg.ExecAsync([.. args], job.CancellationToken);
-
-            // Item #38 phase D — fromSeg/toSeg are fully consumed now.
-            if (tempFiles.Remove(fromSeg)) await _ffmpeg.DeleteFileAsync(fromSeg);
-            if (tempFiles.Remove(toSeg)) await _ffmpeg.DeleteFileAsync(toSeg);
-
-            overrides[fromClip.Id] = mergedName;
-        }
-
-        job.CompletedPhases.Add($"Cross-track transitions applied ({overrides.Count})");
-        return overrides;
-    }
-
+    /// <summary>
+    /// Transitions that span two tracks are ignored.
+    /// </summary>
+    /// <remarks>
+    /// <para>There used to be a pass here that rendered them. It replaced the first clip's segment
+    /// with a merged one whose length is fromDur + toDur − overlap, while every later offset was
+    /// still measured against the original length — so everything after the junction drifted, and
+    /// the preview never showed any of it. The way to fade a clip in or out is the clip's own
+    /// FadeInSeconds/FadeOutSeconds, which this pipeline already renders and a project already
+    /// saves (2026-09-05 audit, transitions-9).</para>
+    ///
+    /// <para>A project made before this can still hold one. It is skipped rather than rendered
+    /// wrongly, which is why <see cref="IsCrossTrack"/> stays.</para>
+    /// </remarks>
     private bool IsCrossTrack(Transition t) =>
         _clips.FindTrackOf(t.FromClipId)?.Id != _clips.FindTrackOf(t.ToClipId)?.Id;
 
@@ -623,7 +565,7 @@ public sealed class ExportService : IAsyncDisposable
         _nativeAssembleMixedAudio = false;
 
         var audioClips = s.IncludeAudio
-            ? _clips.AudioTracks.SelectMany(t => t.AudioClips).OrderBy(a => a.TimelinePosition).ToList()
+            ? _clips.AudibleAudioClips.ToList()
             : [];
 
         _remoteSegments.SyncInstance(_nativeSidecar.InstanceId);
@@ -1331,10 +1273,10 @@ public sealed class ExportService : IAsyncDisposable
     private async Task<string> MixAudioTracksAsync(
         ExportJob job, string videoInput, ExportSettings s, List<string> tempFiles)
     {
-        var audioClips = _clips.AudioTracks
-                               .SelectMany(t => t.AudioClips)
-                               .OrderBy(a => a.TimelinePosition)
-                               .ToList();
+        // A muted track is not mixed. The flag has always been documented as "audio suppressed
+        // during playback and export"; nothing read it, so muting a track changed the icon and
+        // nothing else (2026-09-05 audit, audio-5).
+        var audioClips = _clips.AudibleAudioClips.ToList();
 
         if (audioClips.Count == 0) return videoInput;
 
