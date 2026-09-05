@@ -2,6 +2,7 @@ using Ben.Video.Editor.Models;
 using Ben.Video.Editor.Services;
 using Ben.Video.RenderService;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
 
 namespace Ben.Video.Editor.Extensions;
@@ -157,6 +158,12 @@ public static class ServiceCollectionExtensions
 
         // Project persistence — separate named HttpClient for POST/PUT to a document API.
         services.AddHttpClient(ProjectPersistenceHttpClientName);
+
+        // The default way to save a project to a server: over HTTP, for a host whose browser
+        // carries its own credentials. A Blazor Server host replaces this with one that goes
+        // through the client it already authenticates — the previous arrangement had no way to
+        // reach the circuit's token, so its Save to Server answered 401 (2026-09-05 audit, F13).
+        services.TryAddScoped<IProjectServerStore, HttpProjectServerStore>();
 
         // Native sidecar (item #38 phase E) — scoped so each editor session gets its own
         // connection/pairing state; registered unconditionally (cheap: nothing probes until

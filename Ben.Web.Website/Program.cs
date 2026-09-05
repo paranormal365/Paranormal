@@ -86,6 +86,13 @@ builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
 // publish a real video at all (2026-09-05 audit, site-1).
 builder.Services.AddScoped<Ben.Web.Services.IVideoUploadRelay,
                            Ben.Web.Website.Services.BrowserVideoUploadRelay>();
+
+// Save to Server, through the client this host already authenticates. The editor's default store
+// posts over a named HttpClient, and the bearer token here lives in the circuit where a
+// root-registered message handler cannot reach it — so that button answered 401, always
+// (2026-09-05 audit, F13).
+builder.Services.AddScoped<Ben.Video.Editor.Services.IProjectServerStore,
+                           Ben.Web.Services.BenProjectServerStore>();
 builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
 // ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
 // leading slash, which BaseAddress treats as root-relative and so discards the base path - see the

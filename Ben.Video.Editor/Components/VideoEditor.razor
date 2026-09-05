@@ -5,6 +5,7 @@
 @inject KeyboardShortcutService Keyboard
 @inject ProjectService Project
 @inject ProjectStore Projects
+@inject IProjectServerStore ServerProjects
 @inject ErrorLogService ErrorLog
 @inject ExportQueueService ExportQueue
 @inject MotionKeyframeService Motion
@@ -39,6 +40,10 @@
        check, so the button and the dialog can never disagree about whether there is anything
        to render (2026-09-05 audit, export-20).
 
+       ShowSaveToServer is the store's own answer, not a configured URL. A URL being set says the
+       server exists, not that this person can reach it — and on the site it was set while every
+       save answered 401 (2026-09-05 audit, F13).
+
        ProjectName is the bare name. The unsaved asterisk used to be part of the value in the
        toolbar's text box, so renaming a project with unsaved changes saved it as "My Project *" —
        the marker became part of the name and stayed there (2026-09-05 audit, persistence-5). The
@@ -54,7 +59,7 @@
              UndoDescription="@Clips.UndoDescription"
              RedoDescription="@Clips.RedoDescription"
              ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
-             ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+             ShowSaveToServer="@ServerProjects.IsAvailable"
              ProjectName="@Projects.CurrentProjectName"
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"
@@ -422,7 +427,7 @@
 
     <!-- ── Post-export save prompt (immediate exports only — see OnExportComplete) ─── -->
     <ExportSavePrompt @bind-Visible="_showExportSavePrompt"
-                      ShowServerOption="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+                      ShowServerOption="@ServerProjects.IsAvailable"
                       OnSaveLocally="SaveProjectAsync"
                       OnSaveToServer="SaveToServerHandlerAsync" />
 
@@ -2519,22 +2524,26 @@
 
         try
         {
-            var progress = new Progress<TransferProgress>(tp =>
-            {
-                _transfer.Update(tp);
-                InvokeAsync(StateHasChanged);
-            });
+            // Through the host's own store, not a raw post. The editor used to post over a named
+            // HttpClient, which on a Blazor Server host cannot reach the circuit's bearer token —
+            // so this button answered 401 there, always (2026-09-05 audit, F13).
+            var file = Project.BuildCurrentProjectFile(Projects.CurrentProjectName);
 
-            var response = await Project.SaveToServerAsync(Projects.CurrentProjectName, progress: progress);
+            var (id, problem) = await ServerProjects.SaveAsync(file, Projects.CurrentServerId);
 
             _transfer = null;
 
-            if (response.IsSuccessStatusCode)
+            if (problem is null)
+            {
+                // Remembered so the next save updates this project rather than creating another
+                // copy of it (2026-09-05 audit, persistence-13).
+                Projects.CurrentServerId = id;
                 _notifications?.Show("Project saved to server.", ThemeConstants.Notification.ThemeColor.Success);
+            }
             else
-                _notifications?.Show(
-                    $"Save to server failed: {(int)response.StatusCode} {response.ReasonPhrase}",
-                    ThemeConstants.Notification.ThemeColor.Error);
+            {
+                _notifications?.Show(problem, ThemeConstants.Notification.ThemeColor.Error);
+            }
         }
         catch (Exception ex)
         {
