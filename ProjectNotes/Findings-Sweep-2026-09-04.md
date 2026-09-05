@@ -78,9 +78,20 @@ Two smaller things sit inside this one:
 - The ladder and the rule disagree about what free means. The Free tier's band is 1–3 members;
   `PaidPlan.WhyCannotAddMemberAsync` says the second member needs a plan.
 
-I could not check whether the live price list has a $0 band — reading the production database was
-blocked, and rightly. If it does, this is exploitable there as it stands. The seeded ladder used
-here is Free 1–3 at $0, Small group 4–10 at $15, Large 11+ at $40.
+**ANSWERED 2026-09-05: production was never exposed.** The live price list is readable without a
+database connection — it is what the pricing page is served from — and every band on it is priced:
+
+| Band | Members | Monthly |
+|------|---------|--------:|
+| Small Group | 1–3 | $20 |
+| Standard Group | 4–10 | $40 |
+| Large Group | 11–25 | $60 |
+| Enterprise | 26+ | $100 |
+
+There is no $0 band, so the zero-payable path was never reachable on ishaunted.com. The hole was
+real on a **fresh** database, whose seeded ladder carried Free 1–3 at $0 — which is where it was
+demonstrated, and which the seeder no longer creates. The advisory added to the price-bands editor
+stays silent against the live list, because nothing there is priced at nothing.
 
 ## 4. The refusal that should sell a plan blames the wrong thing
 
