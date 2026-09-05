@@ -74,7 +74,8 @@ export function register(dotnetRef) {
     // below were actually handled.
     const claimed = e.key === ' ' || e.key === 'Spacebar' || e.key === 'Backspace' || e.key === 'Delete'
       || e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End'
-      || ((e.ctrlKey || e.metaKey) && ['z', 'Z', 'y', 'Y'].includes(e.key))
+      // Cmd+D is the browser's bookmark shortcut, so the editor has to claim it to use it.
+      || ((e.ctrlKey || e.metaKey) && ['z', 'Z', 'y', 'Y', 'd', 'D'].includes(e.key))
     if (claimed) e.preventDefault()
 
     // Cmd counts as the modifier. Forwarding only ctrlKey meant undo and redo — the two shortcuts

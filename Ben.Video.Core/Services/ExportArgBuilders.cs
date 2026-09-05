@@ -1465,7 +1465,10 @@ internal static class ExportArgBuilders
         var ic = System.Globalization.CultureInfo.InvariantCulture;
 
         var ow = Math.Max(1, (int)(clip.Width * vw));
-        var oh = clip.Height > 0 ? Math.Max(1, (int)(clip.Height * vh)) : ow;
+        // One resolver, shared with the preview and the selection box. Each of the three used to
+        // decide for itself what a missing height meant, and they disagreed (2026-09-05 audit,
+        // callouts-10).
+        var oh = Math.Max(1, (int)(ClipArtGeometry.HeightFraction(clip, vw, vh) * vh));
         var px = (int)(clip.X * vw);
         var py = (int)(clip.Y * vh);
 

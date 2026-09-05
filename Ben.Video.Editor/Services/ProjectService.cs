@@ -526,6 +526,8 @@ public sealed class ProjectService
         Width            = c.Width,
         Height           = c.Height,
         Rotation         = c.Rotation,
+        NativeWidth      = c.NativeWidth,
+        NativeHeight     = c.NativeHeight,
         Opacity          = c.Opacity,
         TintColor        = c.TintColor,
         ControlPointValues = new Dictionary<string, double>(c.ControlPointValues),

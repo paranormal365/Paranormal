@@ -33,11 +33,16 @@ public static class MotionEffectiveGeometry
         return ExportArgBuilders.ApplyMotionFrame(overlay, frame);
     }
 
-    /// <summary>ClipArtClip.Height of -1 means "preserve aspect ratio from Width" — there's no
-    /// asset pixel-aspect data resolved at this layer, so callers fall back to a square box
-    /// until a real height is set by resizing. Matches ClipArtControlPointOverlay's own
-    /// fallback exactly.</summary>
-    public static double EffectiveClipArtHeight(ClipArtClip clip) => clip.Height > 0 ? clip.Height : clip.Width;
+    /// <summary>
+    /// A clip-art layer's height as a fraction of the canvas.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to <see cref="ClipArtGeometry"/>, which the export uses too. The three places that
+    /// needed this each had their own answer and the answers disagreed, so the same artwork was
+    /// drawn, selected and rendered at three different shapes (2026-09-05 audit, callouts-10).
+    /// </remarks>
+    public static double EffectiveClipArtHeight(ClipArtClip clip, int canvasWidth, int canvasHeight) =>
+        ClipArtGeometry.HeightFraction(clip, canvasWidth, canvasHeight);
 
     /// <summary>The text overlay's anchor X as a canvas fraction — <see cref="TextOverlay.OverrideX"/>
     /// if set, else an alignment-based approximation. ffmpeg's runtime-measured text_w/text_h

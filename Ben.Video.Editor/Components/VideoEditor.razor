@@ -477,6 +477,7 @@
                         <tr><td><kbd>Escape</kbd></td><td>Close editor panel / clear selection</td></tr>
                         <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
                         <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> / <kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>D</kbd></td><td>Duplicate the selected clip, title, callout or artwork</td></tr>
                         <tr><td><kbd>M</kbd></td><td>Add marker at playhead</td></tr>
                         <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame (nudge, with a layer selected)</td></tr>
                         <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>Jump to the start / end</td></tr>
@@ -1255,6 +1256,20 @@
                 _selectedTextOverlay = null;
                 _showHelp            = false;
                 _timeline?.ClearMultiSelection();
+                break;
+
+            case "d" or "D" when ctrl:
+                // Camtasia's shortcut for the thing people do most with an annotation: make
+                // another one just like it. Nothing in the editor had a duplicate shortcut at all
+                // (2026-09-05 audit, callouts-15).
+                if (SelectedTimelineItem is { } toDuplicate)
+                {
+                    if (Clips.FindTrackOf(toDuplicate.Id) is { IsLocked: true })
+                        _notifications?.Show(
+                            "That track is locked.", ThemeConstants.Notification.ThemeColor.Warning);
+                    else
+                        Clips.DuplicateClip(toDuplicate.Id);
+                }
                 break;
 
             case "z" or "Z" when ctrl && !shift:

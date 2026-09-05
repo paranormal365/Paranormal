@@ -55,10 +55,6 @@ public sealed class ProjectRoundTripParityTests
             "derived from the audio itself and recomputed on open",
         ["CalloutClip.AssetMissing"] =
             "decided when the asset is resolved on open",
-        ["ClipArtClip.NativeWidth"] =
-            "read from the asset when it resolves on open",
-        ["ClipArtClip.NativeHeight"] =
-            "read from the asset when it resolves on open",
         ["TrackItem.SourceBinId"] =
             "re-linked to the media bin entry on open, which for an older project is created then",
         ["TrackItem.LayerIndex"] =

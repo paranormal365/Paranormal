@@ -864,10 +864,46 @@ public sealed class ClipStore
                     VolumeAutomation = new List<VolumeKeyframe>(ac.VolumeAutomation),
                     // BlobUrl and WaveformPeaks intentionally shared (read-only data)
                 },
+
+                // Overlays could not be duplicated at all, so making three matching callouts meant
+                // building each from scratch and matching every colour, size and font by hand —
+                // the thing Camtasia's Ctrl+D exists for (2026-09-05 audit, callouts-15).
+                //
+                // Every dictionary and list is copied rather than shared: two callouts made from
+                // one is the whole point, and a shared control-point dictionary would make editing
+                // either of them edit both.
+                CalloutClip cc => cc with
+                {
+                    Id                 = Guid.NewGuid(),
+                    TimelinePosition   = cc.TimelinePosition + cc.Duration + 0.1,
+                    ControlPointValues = new Dictionary<string, double>(cc.ControlPointValues),
+                    Runs               = cc.Runs is null ? null : [.. cc.Runs],
+                },
+
+                ClipArtClip ar => ar with
+                {
+                    Id                 = Guid.NewGuid(),
+                    TimelinePosition   = ar.TimelinePosition + ar.Duration + 0.1,
+                    ControlPointValues = new Dictionary<string, double>(ar.ControlPointValues),
+                    ControlPointColors = new Dictionary<string, string>(ar.ControlPointColors),
+                },
+
+                TextOverlay to => to with
+                {
+                    Id               = Guid.NewGuid(),
+                    TimelinePosition = to.TimelinePosition + to.Duration + 0.1,
+                    Runs             = to.Runs is null ? null : [.. to.Runs],
+                },
+
                 _ => null,
             };
 
             if (copy is null) return;
+
+            // An overlay's row is decided by its layer, and a copy belongs above what it was
+            // copied from rather than sharing its row.
+            if (copy is CalloutClip or ClipArtClip or TextOverlay)
+                copy.LayerIndex = NextLayerIndex();
 
             copy.Order = track.Items.Count;
             track.Items.Add(copy);
@@ -3081,6 +3117,8 @@ public sealed class ClipStore
         Width            = p.Width,
         Height           = p.Height,
         Rotation         = p.Rotation,
+        NativeWidth      = p.NativeWidth,
+        NativeHeight     = p.NativeHeight,
         Opacity          = p.Opacity,
         TintColor        = p.TintColor,
         ControlPointValues = new Dictionary<string, double>(p.ControlPointValues),

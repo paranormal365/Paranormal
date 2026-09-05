@@ -17,7 +17,7 @@ public sealed class ProjectFile
     /// and what tells a reader that a file came from a newer editor than itself — which used to
     /// open silently and half-work.
     /// </remarks>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>Format version — bump when breaking changes are made to this schema.</summary>
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -465,6 +465,10 @@ public sealed class ProjectClipArtClip
     public double Width    { get; set; } = 0.2;
     public double Height   { get; set; } = -1.0;
     public double Rotation { get; set; }
+
+    /// <summary>The artwork's own pixel size, so a missing height resolves the same way everywhere.</summary>
+    public int?   NativeWidth      { get; set; }
+    public int?   NativeHeight     { get; set; }
     public double Opacity  { get; set; } = 1.0;
     public double? TintColor { get; set; }
 

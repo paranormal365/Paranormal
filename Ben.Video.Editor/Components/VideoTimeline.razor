@@ -887,6 +887,10 @@
         // Delete all stayed enabled and all did nothing (2026-09-05 audit, timeline-12).
         var locked    = Clips.FindTrackOf(item.Id)?.IsLocked == true;
         var isMedia   = item is VideoClip or AudioClip;
+        // Overlays duplicate now too. Making three matching callouts used to mean building each
+        // from scratch (2026-09-05 audit, callouts-15). A transition belongs to the junction
+        // between two clips, so a second copy of one has nowhere to be.
+        var canDuplicate = item is not Transition;
         var isRemovable = item is not Transition;
         var canSeparateAudio = item is VideoClip vcAudio && vcAudio.MemFsName is not null && !vcAudio.MuteAudio;
 
@@ -896,7 +900,7 @@
                     Action = () => Task.CompletedTask /* properties panel already opened by SelectItem */ },
             new() { Text = "Duplicate",  Icon = SvgIcon.Copy,
                     Action = () => { Clips.DuplicateClip(item.Id); return Task.CompletedTask; },
-                    IsDisabled = locked || !isMedia },
+                    IsDisabled = locked || !canDuplicate },
             new() { IsSeparator = true },
             new() { Text = "Split at Playhead", Icon = SvgIcon.Cut,
                     Action = () =>

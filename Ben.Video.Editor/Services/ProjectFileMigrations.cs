@@ -26,9 +26,43 @@ public static class ProjectFileMigrations
         // and linking it to the clips it was derived from. Filling the bin here instead would
         // hand it entries sharing ids with timeline clips, which is worse than doing nothing.
         //
+        // Version 2 → 3 moved an arrow or line callout's path points from canvas fractions to
+        // fractions of the callout's own box. As canvas fractions they had no relationship to the
+        // shape that owned them, so moving or resizing a callout left its arrow behind
+        // (2026-09-05 audit, callouts-3). An older file's values are read in the space they were
+        // written in and rewritten in the new one.
+        if (file.SchemaVersion < 3)
+        {
+            foreach (var callout in file.Tracks.SelectMany(t => t.CalloutClips))
+                MigrateCalloutPathPoints(callout);
+        }
+
         // Stamping the version is the part that matters, so a file read once is written back at
         // the current version rather than being migrated again on every open.
         file.SchemaVersion = ProjectFile.CurrentSchemaVersion;
         return file;
+    }
+
+    /// <summary>
+    /// Rewrites one callout's path points from canvas fractions to box fractions.
+    /// </summary>
+    /// <remarks>
+    /// Works on the DTO rather than the model because migration happens before anything is
+    /// restored — the same arithmetic, applied where the old values still are.
+    /// </remarks>
+    private static void MigrateCalloutPathPoints(ProjectCalloutClip callout)
+    {
+        var cpv = callout.ControlPointValues;
+
+        foreach (var key in CalloutControlPointSpace.PathKeys)
+        {
+            if (!cpv.TryGetValue(key, out var canvasValue)) continue;
+
+            var isX = key.EndsWith('X');
+            cpv[key] = CalloutControlPointSpace.FromCanvas(
+                canvasValue,
+                isX ? callout.X : callout.Y,
+                isX ? callout.Width : callout.Height);
+        }
     }
 }

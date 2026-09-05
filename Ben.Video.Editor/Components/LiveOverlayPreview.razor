@@ -110,7 +110,8 @@
         }
     }
 
-    private static double EffectiveHeight(ClipArtClip clip) => MotionEffectiveGeometry.EffectiveClipArtHeight(clip);
+    private double EffectiveHeight(ClipArtClip clip) =>
+        MotionEffectiveGeometry.EffectiveClipArtHeight(clip, CanvasWidth, CanvasHeight);
 
     /// <summary>
     /// Inline CSS for the recolor-tint overlay div, or null when there's nothing to tint. Uses a

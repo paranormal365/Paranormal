@@ -176,6 +176,8 @@ internal static class Fixtures
         Width            = 0.33,
         Height           = 0.27,
         Rotation         = 45.5,
+        NativeWidth       = 512,
+        NativeHeight      = 256,
         Opacity          = 0.66,
         TintColor        = ColorHelper.Pack(200, 100, 50, 255),
         ControlPointValues = new Dictionary<string, double> { ["thickness"] = 0.8 },

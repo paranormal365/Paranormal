@@ -204,7 +204,7 @@
     private ActiveItem Build(ClipArtClip clip)
     {
         var e = MotionEffectiveGeometry.Effective(Motion, clip, CurrentTime);
-        return new ActiveItem(clip, new CanvasHitRect(e.X, e.Y, e.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(e)));
+        return new ActiveItem(clip, new CanvasHitRect(e.X, e.Y, e.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(e, CanvasWidth, CanvasHeight)));
     }
 
     /// <summary>Text has no width/height model — a fixed-size hit box centred on its anchor
@@ -318,7 +318,7 @@
                 return (ec.Width, ec.Height);
             case ClipArtClip a:
                 var ea = MotionEffectiveGeometry.Effective(Motion, a, CurrentTime);
-                return (ea.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(ea));
+                return (ea.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(ea, CanvasWidth, CanvasHeight));
             default:
                 return (0.0, 0.0);
         }
@@ -469,12 +469,12 @@
             case ClipArtClip a:
             {
                 var current = MotionEffectiveGeometry.Effective(Motion, a, CurrentTime);
-                var effH    = MotionEffectiveGeometry.EffectiveClipArtHeight(current);
+                var effH    = MotionEffectiveGeometry.EffectiveClipArtHeight(current, CanvasWidth, CanvasHeight);
                 var nw = widthFrac ?? current.Width;
                 var nh = heightFrac ?? effH;
                 if (Math.Abs(nw - current.Width) < 1e-9 && Math.Abs(nh - effH) < 1e-9) return;
                 var baseW = a.Width;
-                var baseH = MotionEffectiveGeometry.EffectiveClipArtHeight(a);
+                var baseH = MotionEffectiveGeometry.EffectiveClipArtHeight(a, CanvasWidth, CanvasHeight);
                 var oldKf = Motion.GetPath(a.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
                 Motion.EditLayer(a.Id, "ClipArtClip", CurrentTime,
                     () => MotionEffectiveGeometry.StaticSeed(a, CurrentTime),
