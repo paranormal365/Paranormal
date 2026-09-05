@@ -61,17 +61,20 @@ public sealed class EventEvidenceController : BenControllerBase
         _screener    = screener;
     }
 
+    /// <remarks>
+    /// <para><c>PublishedToPlaceAtUtc</c> is when the submitter contributed this to the place's
+    /// archive, or null. Separate from <c>Status</c>, which is the operator's verdict on their own
+    /// gallery — the two answer different questions and one is not the other's shorthand.</para>
+    ///
+    /// <para><c>PlaceAcceptsArchive</c> is whether the event has a public place to contribute to
+    /// at all.</para>
+    /// </remarks>
     public sealed record EvidenceSubmissionRecord(
         Guid Id, Guid OrgCalendarEventId, string EventTitle,
         string SubmitterDisplayName, Guid UploadFileId, string FileName, string ContentType,
         string? Note, EvidenceSubmissionStatus Status, string? RejectionReason,
         DateTime DateCreated,
-        /// <summary>
-        /// When the submitter contributed this to the place's archive, or null. Separate from
-        /// <paramref name="Status"/>, which is the operator's verdict on their own gallery.
-        /// </summary>
         DateTime? PublishedToPlaceAtUtc = null,
-        /// <summary>Whether the event has a public place to contribute to at all.</summary>
         bool PlaceAcceptsArchive = false);
 
     // ── the visitor's door ────────────────────────────────────────────────────

@@ -103,8 +103,9 @@ public sealed class FieldSessionUploadController : BenControllerBase
     /// caller's own" — this endpoint returns nothing else, and a person is entitled to see where
     /// their own work happened. Any shared map must go through <c>MayReadAsync</c> instead; a
     /// coordinate is the most sensitive thing a session carries.</para>
+    ///
+    /// <para>The viewport bounds are all four or none; none means everything.</para>
     /// </remarks>
-    /// <param name="north">Viewport bounds. All four or none; none means everything.</param>
     /// <summary>
     /// Deletes one of your own sessions — the recordings, the document, the share links and the
     /// row (item 218).

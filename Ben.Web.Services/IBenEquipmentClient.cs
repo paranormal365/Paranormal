@@ -18,7 +18,15 @@ public interface IBenEquipmentClient
     // ── Public catalog (Phase 1) ─────────────────────────────────────────────
 
     Task<LoadResult<EquipmentCategoryRecord>> GetEquipmentCategoriesAsync(CancellationToken token = default);
-    Task<LoadResult<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default);
+    /// <summary>
+    /// Approved makes, optionally name-filtered and optionally narrowed to a category.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="categoryId"/> narrows to makes that have a model in that category, which is
+    /// what the add-equipment form wants: it asks category, then make, then model, and the model
+    /// list was the only one of the three that filtered.
+    /// </remarks>
+    Task<LoadResult<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
     Task<LoadResult<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default);
     Task<LoadResult<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
     /// <summary>One make and model, with links and photos pooled from every copy.</summary>

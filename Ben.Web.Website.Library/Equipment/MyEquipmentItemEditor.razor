@@ -302,7 +302,7 @@
             _categoryId = model?.EquipmentCategoryId;
             _brandId    = model?.EquipmentBrandId;
             _modelId    = Item.EquipmentModelId;
-            if (_categoryId is not null) _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
+            if (_categoryId is not null) _brands = [.. (await AdminClient.GetEquipmentBrandsAsync(categoryId: _categoryId)).Items];
             if (_brandId is not null) _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
         }
 
@@ -316,7 +316,9 @@
         _categoryId = categoryId;
         _brandId = null; _modelId = null;
         _models = [];
-        _brands = categoryId is null ? [] : [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
+        // Narrowed to makes that actually make this kind of thing. Choosing "Audio Recorder" and
+        // then being offered tripod brands made the second question disagree with the first.
+        _brands = categoryId is null ? [] : [.. (await AdminClient.GetEquipmentBrandsAsync(categoryId: categoryId)).Items];
     }
 
     private async Task OnBrandChangedAsync(Guid? brandId)
@@ -354,7 +356,9 @@
         }
         else
         {
-            _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
+            // The make they just proposed comes back whatever the category filter says — the
+            // endpoint keeps a caller's own proposal, which has no models yet by definition.
+            _brands = [.. (await AdminClient.GetEquipmentBrandsAsync(categoryId: _categoryId)).Items];
             _newBrandName = string.Empty;
             await OnBrandChangedAsync(proposal.Created.Id);
         }

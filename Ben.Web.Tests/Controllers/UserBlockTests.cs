@@ -125,8 +125,8 @@ public sealed class UserBlockTests
         Assert.IsType<NoContentResult>(await Blocks(factory, sarah.Id).Block(troll.Id, default));
 
         // Gone for Sarah — on the plain feed AND the ranked one, which pages differently.
-        Assert.DoesNotContain(ReadFeedAsync(Feed(factory, sarah.Id)).Result, p => p.AuthorAppUserId == troll.Id);
-        Assert.DoesNotContain(ReadFeedAsync(Feed(factory, sarah.Id), "foryou").Result, p => p.AuthorAppUserId == troll.Id);
+        Assert.DoesNotContain(await ReadFeedAsync(Feed(factory, sarah.Id)), p => p.AuthorAppUserId == troll.Id);
+        Assert.DoesNotContain(await ReadFeedAsync(Feed(factory, sarah.Id), "foryou"), p => p.AuthorAppUserId == troll.Id);
 
         // Still there for James: a block is one reader's choice, not a takedown — that is what
         // Report is for.

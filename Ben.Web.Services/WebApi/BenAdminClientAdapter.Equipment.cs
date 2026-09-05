@@ -18,8 +18,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<EquipmentCategoryRecord>> GetEquipmentCategoriesAsync(CancellationToken token = default)
         => _api.GetAnonymousListAsync<EquipmentCategoryRecord>("/api/equipment-catalog/categories", token);
 
-    public Task<LoadResult<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default)
-    {        var url = "/api/equipment-catalog/brands" + (string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search)}");
+    public Task<LoadResult<EquipmentBrandRecord>> GetEquipmentBrandsAsync(
+        string? search = null, Guid? categoryId = null, CancellationToken token = default)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search)) parts.Add($"search={Uri.EscapeDataString(search)}");
+        if (categoryId is { } id) parts.Add($"categoryId={id}");
+        var url = "/api/equipment-catalog/brands" + (parts.Count == 0 ? "" : "?" + string.Join("&", parts));
         return _api.GetListAsync<EquipmentBrandRecord>(url, token);
     }
 

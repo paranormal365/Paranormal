@@ -95,7 +95,7 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
     /// Records a sign-in that never passes a password check — Sign in with Apple.
     /// </summary>
     /// <remarks>
-    /// <para>Called explicitly rather than by overriding <see cref="SignInAsync"/>, which the
+    /// <para>Called explicitly rather than by overriding <c>SignInAsync</c>, which the
     /// password path also runs: overriding it would count every password sign-in twice, once here
     /// and once from <see cref="CheckPasswordSignInAsync"/>. An explicit call at the one place an
     /// Apple session is minted is the only shape that counts each sign-in exactly once.</para>
