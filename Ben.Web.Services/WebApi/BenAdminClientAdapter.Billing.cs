@@ -37,6 +37,14 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<SaveSubscriptionTierRequest, SubscriptionTierAdminRecord>(
             HttpMethod.Put, $"/api/admin/subscription-tiers/{id}", request, token);
 
+    public async Task<(IReadOnlyList<SubscriptionTierAdminRecord>? Result, string? Error)> SaveSubscriptionLadderAsync(
+        SaveSubscriptionLadderRequest request, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<SaveSubscriptionLadderRequest, List<SubscriptionTierAdminRecord>>(
+            HttpMethod.Put, "/api/admin/subscription-tiers/ladder", request, token);
+        return (result, error);
+    }
+
     public Task<TierImpactRecord?> PreviewTierImpactAsync(
         Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default)
         => _api.PostAsync<SaveSubscriptionTierRequest, TierImpactRecord>(

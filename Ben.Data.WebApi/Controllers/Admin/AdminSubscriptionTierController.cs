@@ -51,14 +51,18 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
             .OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers)
             .ToListAsync(ct);
 
-        var counts = await db.OrganizationSubscriptions.AsNoTracking()
+        var counts = await SubscriberCountsAsync(db, ct);
+
+        return Ok(tiers.Select(t => ToRecord(t, counts.GetValueOrDefault(t.Id))));
+    }
+
+    /// <summary>How many groups sit on each band, for the "who does this affect" column.</summary>
+    private static Task<Dictionary<Guid, int>> SubscriberCountsAsync(BenDataContext db, CancellationToken ct)
+        => db.OrganizationSubscriptions.AsNoTracking()
             .Where(s => s.SubscriptionTierId != null)
             .GroupBy(s => s.SubscriptionTierId!.Value)
             .Select(g => new { TierId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.TierId, x => x.Count, ct);
-
-        return Ok(tiers.Select(t => ToRecord(t, counts.GetValueOrDefault(t.Id))));
-    }
 
     /// <summary>
     /// What is wrong with the price list as it stands, or null. Read by the editor so the problem
@@ -313,6 +317,137 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
                     CreatedByAppUserId = userId,
                 });
         }
+    }
+
+    /// <summary>
+    /// Saves the whole ladder at once, judged on where it ends up rather than on each step.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why one-band-at-a-time is not enough.</b> <see cref="Update"/> validates the list
+    /// as it will be after that single edit, which is right for an ordinary change and makes some
+    /// legitimate reshapes impossible to express. Splitting an unbounded top band into a bounded
+    /// one and a new band above it is the example that forced this: bounding the top first leaves
+    /// nothing covering the members above it, and adding the new band first overlaps the unbounded
+    /// band below. Both steps are refused, in either order, so the end state cannot be reached —
+    /// found on 2026-09-05 trying to bring a database's ladder in line with the live one.</para>
+    ///
+    /// <para><b>The list sent IS the ladder.</b> A banded tier that is active today and absent from
+    /// the request is retired, because that is the only way to say "this band goes" — there is no
+    /// delete, and there should not be one while subscriptions point at these rows. Tiers sold to a
+    /// kind of business rather than a size of team (item 198) are not part of the ladder and are
+    /// left alone.</para>
+    ///
+    /// <para><b>All of it or none of it.</b> Every band is written onto the tracked graph, the
+    /// finished state is validated once, and only then is anything saved — so a refusal persists
+    /// nothing at all and needs no transaction to undo. A half-applied ladder is worse than the one
+    /// it replaced: <c>Resolve</c> throws on an unusable list, so pricing, the permission-area gate
+    /// and the renewal job would all stop together.</para>
+    /// </remarks>
+    [HttpPut("ladder")]
+    public async Task<ActionResult<IEnumerable<SubscriptionTierAdminRecord>>> SaveLadder(
+        [FromBody] SaveSubscriptionLadderRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+
+        if (request.Bands.Count == 0)
+            return BadRequest("A ladder needs at least one band, or no group can be priced.");
+
+        foreach (var band in request.Bands)
+            if (Invalid(band.AsTierRequest()) is { } bad)
+                return BadRequest($"\"{band.Name}\": {bad}");
+
+        if (request.Bands.Select(b => b.Id).Where(id => id is not null).Distinct().Count()
+            != request.Bands.Count(b => b.Id is not null))
+            return BadRequest("The same band appears twice.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var now      = DateTime.UtcNow;
+        var existing = await db.SubscriptionTiers
+            .Include(t => t.Prices).Include(t => t.Limits)
+            .Include(t => t.PermissionAreas).Include(t => t.ExcludedCapabilities)
+            .ToListAsync(ct);
+
+        // Recorded before anything is applied, so the notices sent after the save describe the
+        // change a group actually experienced rather than the state it ended in. The scalar clones
+        // are what the audit diff reads: a "before" taken after Apply would show no change at all,
+        // because it would be the same tracked object.
+        var beforeTerms = existing.ToDictionary(t => t.Id, TierChangeAnalyzer.TermsOf);
+        var beforeRows  = existing.ToDictionary(t => t.Id, t => new SubscriptionTier
+        {
+            Id = t.Id, Name = t.Name, MinMembers = t.MinMembers, MaxMembers = t.MaxMembers,
+            SortOrder = t.SortOrder, IsActive = t.IsActive,
+        });
+        var touched     = new List<SubscriptionTier>();
+
+        foreach (var band in request.Bands)
+        {
+            var tierRequest = band.AsTierRequest();
+
+            if (band.Id is { } id)
+            {
+                var tier = existing.FirstOrDefault(t => t.Id == id);
+                if (tier is null) return BadRequest($"\"{band.Name}\" no longer exists.");
+                Apply(tier, tierRequest, userId, now, isNew: false);
+                touched.Add(tier);
+            }
+            else
+            {
+                var tier = new SubscriptionTier
+                {
+                    Id = Guid.NewGuid(), DateCreated = now, CreatedByAppUserId = userId,
+                };
+                Apply(tier, tierRequest, userId, now, isNew: true);
+
+                // A new band starts all-inclusive, the same rule the seeder follows: an empty
+                // checklist means "everything", and a band that silently included nothing would
+                // gate features nobody chose to gate.
+                foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                    tier.PermissionAreas.Add(new SubscriptionTierPermissionArea
+                    {
+                        SubscriptionTierId = tier.Id, Area = area,
+                        DateCreated = now, CreatedByAppUserId = userId,
+                    });
+
+                db.SubscriptionTiers.Add(tier);
+                existing.Add(tier);
+                touched.Add(tier);
+            }
+        }
+
+        var kept = request.Bands.Where(b => b.Id is not null).Select(b => b.Id!.Value).ToHashSet();
+        foreach (var retired in existing.Where(t =>
+                     t.IsBandedByMembers && t.IsActive && !kept.Contains(t.Id) && !touched.Contains(t)))
+        {
+            retired.IsActive           = false;
+            retired.DateUpdated        = now;
+            retired.UpdatedByAppUserId = userId;
+        }
+
+        // Nothing has been saved yet, so a refusal here leaves the database exactly as it was —
+        // the context is discarded with the request and takes every pending change with it.
+        if (SubscriptionTierResolver.Validate(existing) is { } problem)
+            return BadRequest($"That would leave the price list unusable: {problem}");
+
+        await db.SaveChangesAsync(ct);
+
+        foreach (var tier in touched)
+        {
+            if (beforeRows.TryGetValue(tier.Id, out var wasRow))
+                await _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, wasRow, tier, userId, AppSources.WebApi);
+            else
+                await _auditLog.LogCreateAsync(nameof(SubscriptionTier), tier.Id, tier, userId, AppSources.WebApi);
+
+            var after   = TierChangeAnalyzer.TermsOf(tier);
+            var before  = beforeTerms.TryGetValue(tier.Id, out var b) ? b : after;
+            var changes = TierChangeAnalyzer.Analyze(before.Limits, after.Limits, before.Prices, after.Prices);
+            await _notifier.ApplyAsync(tier.Id, tier.Name, changes, userId, ct);
+        }
+
+        var counts = await SubscriberCountsAsync(db, ct);
+        return Ok(existing.Where(t => t.IsActive)
+                          .OrderBy(t => t.SortOrder)
+                          .Select(t => ToRecord(t, counts.GetValueOrDefault(t.Id))));
     }
 
     /// <summary>

@@ -413,6 +413,27 @@ on the band, the save pauses and shows the blast radius first: improvements are 
 groups immediately, reductions are queued and delivered up to two weeks before each group's own
 renewal — paid groups keep the terms they bought until then.
 
+### Reshaping the ladder
+
+Editing one band at a time is right for an ordinary change and cannot express every legitimate
+one, because each save is judged on the list as it will be after that single edit. Splitting an
+unbounded top band is the case that shows it: bounding the top leaves the members above it
+unpriced, and adding the band above first overlaps the unbounded one below. Both orders are
+refused, so the shape you want is unreachable a band at a time.
+
+**Reshape the ladder** edits every band on one form and is judged only on where it ends up. Add a
+band, remove one, move the boundaries, and save once. The rules are the same — start at one
+member, meet without gaps, and leave the last band with no upper limit — but they are checked
+against the finished ladder rather than each step, and a refusal changes nothing at all.
+
+The list on that form **is** the ladder. A band you remove there is retired rather than deleted,
+for the same reason as everywhere else: a band that has priced a period is part of the billing
+record. Groups already on a retired band keep the terms they bought until their renewal.
+
+There is no free band, and there should not be. A group is free by having no plan at all, not by
+holding one that costs nothing — a plan that costs nothing is still a plan, and every paid feature
+reads it as one. The editor says so if a band is ever priced at zero.
+
 **Coupons** manages discount campaigns. A *shared* campaign is one code everybody types; a
 *generated* campaign is a batch of single-use codes you can print or mail, each withdrawable on
 its own, and addressable to a specific account. A campaign can be limited by date window, total
