@@ -76,6 +76,11 @@ builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.AccountInfoService(
 // the downloads folder (2026-09-05 audit, F12).
 builder.Services.AddScoped<Ben.Wasm.Video.Services.WasmVideoExportPublisher>();
 
+// Lets the editor gate server-backed actions on being signed in rather than on a URL being
+// configured — the difference between a button that works and one that answers 401.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IEditorSignInState,
+                           Ben.Wasm.Video.Services.WasmSignInState>();
+
 // Records a successful sidecar pairing against the signed-in account, so the site can tell who is
 // running a native sidecar and which build. Optional by design — the editor calls it only if a
 // host registers one.

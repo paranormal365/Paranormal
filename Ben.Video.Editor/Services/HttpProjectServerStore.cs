@@ -17,11 +17,23 @@ namespace Ben.Video.Editor.Services;
 /// </remarks>
 public sealed class HttpProjectServerStore(
     IHttpClientFactory httpClientFactory,
-    IOptions<VideoEditorOptions> options) : IProjectServerStore
+    IOptions<VideoEditorOptions> options,
+    IEditorSignInState? signInState = null) : IProjectServerStore
 {
     private readonly VideoEditorOptions _options = options.Value;
 
-    public bool IsAvailable => !string.IsNullOrWhiteSpace(_options.DocumentPostUrl);
+    /// <summary>
+    /// A server to save to, and somebody to save it as.
+    /// </summary>
+    /// <remarks>
+    /// A configured URL alone was the old answer, and it offered Save to Server to somebody who
+    /// was signed out — a button that could only ever answer 401. A host that can say whether
+    /// anybody is signed in gets asked; one that cannot keeps the old behaviour, which is right
+    /// for a host with no accounts.
+    /// </remarks>
+    public bool IsAvailable =>
+        !string.IsNullOrWhiteSpace(_options.DocumentPostUrl)
+        && (signInState?.IsSignedIn ?? true);
 
     public async Task<(Guid? Id, string? Problem)> SaveAsync(
         ProjectFile file, Guid? existingId, Guid? caseId = null, CancellationToken ct = default)

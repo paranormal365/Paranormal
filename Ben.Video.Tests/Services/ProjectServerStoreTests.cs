@@ -21,12 +21,16 @@ public sealed class HttpProjectServerStoreTests
     private static (HttpProjectServerStore Store, SpyHandler Handler) Create(
         HttpStatusCode status = HttpStatusCode.OK,
         string body = """{"id":"11111111-1111-1111-1111-111111111111"}""",
-        string? postUrl = BaseUrl)
+        string? postUrl = BaseUrl,
+        bool? signedIn = null)
     {
         var handler = new SpyHandler(status, body);
         var options = Options.Create(new VideoEditorOptions { DocumentPostUrl = postUrl });
 
-        return (new HttpProjectServerStore(new SingleClientFactory(handler), options), handler);
+        return (new HttpProjectServerStore(
+            new SingleClientFactory(handler),
+            options,
+            signedIn is null ? null : new StubSignInState(signedIn.Value)), handler);
     }
 
     [Fact]
@@ -114,7 +118,47 @@ public sealed class HttpProjectServerStoreTests
         Assert.True(store.IsAvailable);
     }
 
+    /// <summary>
+    /// The other half of the same question: a server exists, but nobody is signed in to it.
+    /// </summary>
+    /// <remarks>
+    /// The standalone editor showed Save to Server while signed out, and the button could only
+    /// ever answer 401 (2026-09-05 audit, F13's other half).
+    /// </remarks>
+    [Fact]
+    public void A_signed_out_person_is_not_offered_a_server_to_save_to()
+    {
+        var (store, _) = Create(signedIn: false);
+
+        Assert.False(store.IsAvailable);
+    }
+
+    [Fact]
+    public void A_signed_in_person_is()
+    {
+        var (store, _) = Create(signedIn: true);
+
+        Assert.True(store.IsAvailable);
+    }
+
+    /// <summary>
+    /// A host that cannot answer the question keeps the old behaviour, which is the right one for
+    /// a host with no accounts at all.
+    /// </summary>
+    [Fact]
+    public void A_host_that_knows_nothing_about_sign_in_still_offers_the_server()
+    {
+        var (store, _) = Create();
+
+        Assert.True(store.IsAvailable);
+    }
+
     // ── Support ───────────────────────────────────────────────────────────────
+
+    private sealed class StubSignInState(bool signedIn) : IEditorSignInState
+    {
+        public bool IsSignedIn => signedIn;
+    }
 
     private sealed class SpyHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
