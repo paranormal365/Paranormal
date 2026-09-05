@@ -33,9 +33,44 @@ async function getExportsDir() {
 
 /** Returns true when OPFS is available in this browser. */
 export async function opfsIsAvailable() {
-    return typeof navigator !== 'undefined'
-        && 'storage' in navigator
-        && typeof navigator.storage.getDirectory === 'function';
+    if (typeof navigator === 'undefined'
+        || !('storage' in navigator)
+        || typeof navigator.storage.getDirectory !== 'function') {
+        return false;
+    }
+
+    // Having the storage is not the same as being able to write to it. Every write here goes
+    // through createWritable(), which Safari did not implement on the main thread until version
+    // 26 — so this check said yes, each write then threw, and the person's media was never
+    // persisted. Nothing surfaced that: the editor worked until the page was reloaded, at which
+    // point every clip came back missing (2026-09-05 audit, the completeness critic's browser-
+    // support item).
+    //
+    // Probed once rather than asserted from a feature list, because the prototype exists in some
+    // builds where the call still fails.
+    if (_writableProbe === null) _writableProbe = probeWritable();
+    return await _writableProbe;
+}
+
+let _writableProbe = null;
+
+async function probeWritable() {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const name = `.bv-write-probe-${Math.random().toString(36).slice(2)}`;
+        const fh   = await root.getFileHandle(name, { create: true });
+
+        try {
+            const wr = await fh.createWritable();
+            await wr.close();
+            return true;
+        } finally {
+            try { await root.removeEntry(name); } catch { /* nothing to tidy */ }
+        }
+    } catch (err) {
+        console.warn('[opfs] storage is present but not writable here:', err);
+        return false;
+    }
 }
 
 /**

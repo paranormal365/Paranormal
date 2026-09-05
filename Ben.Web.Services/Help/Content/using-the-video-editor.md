@@ -69,6 +69,8 @@ uploads, and anything shared with you through a group or a case.
 ![The Server tab listing media held on the site](/help/media/using-the-video-editor/media-library.png)
 *Everything you can reach, with its size. Clicking a file downloads it to this browser.*
 
+Importing shows a row per file, and each row can be cancelled while it is still working.
+
 ### Finding the right file
 
 The list above the files narrows what the tab shows:
@@ -171,6 +173,9 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Apply Speed** slows a moment down or runs a long stretch faster.
 - **Apply Volume** sets the clip's level; audio clips also carry a draggable volume envelope on the
   timeline itself, for fading within a single clip.
+- **Set In** and **Set Out** trim the clip to where the playhead is, so you can trim to what you
+  are actually watching instead of typing a timecode. Both are available while the playhead is over
+  the clip.
 - **Split** cuts the clip in two at the playhead.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
@@ -205,9 +210,25 @@ frame while they are on screen.
 ## Preview and export
 
 **Preview** renders the real thing at full quality in a separate window, so you can check the
-finished result before committing to it. Meanwhile the editor keeps its own rough preview up to
-date in the background as you work — which is why the status chip sometimes says it is busy shortly
-after an edit.
+finished result before committing to it. It can be stopped at any point, and if it stops reporting
+progress the window says so and offers to restart the video engine.
+
+Meanwhile the editor keeps its own rough preview up to date in the background as you work — which
+is why the status chip sometimes says it is busy shortly after an edit. That preview keeps your
+place: it carries on from where you were rather than jumping back to the start after every change,
+and it plays your audio tracks, so you can hear how the music sits against the picture while you
+are still editing.
+
+### If the engine stops
+
+The video engine runs inside the browser and can occasionally stop — most often on a very large
+file. When it does, the status chip says so and a **Restart engine** button appears beside it. Your
+project is untouched; only the step that was in progress is lost. The editor usually restarts it
+for you.
+
+If the message says the file is more than the browser can hold, restarting will not help: that is a
+limit of the browser itself. Use a shorter selection, a smaller export resolution, or the native
+helper described below, which does not have the limit.
 
 ![The Render and Export dialog](/help/media/using-the-video-editor/export-dialog.png)
 *Presets for the common cases, and every setting underneath them if you want it.*

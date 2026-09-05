@@ -11,6 +11,7 @@
 @inject LayoutService Layout
 @inject ExportResolutionService ExportRes
 @inject PreviewQualityService PreviewQuality
+@inject OPFSService Opfs
 @inject PreviewFreshnessService PreviewFreshness
 @inject RenderStatusService RenderStatus
 @inject PreviewSegmentCache SegmentCache
@@ -686,6 +687,8 @@
             // than snapping from the defaults after the first frame.
             await RestoreLayoutAsync();
 
+            await WarnIfMediaCannotBeStoredAsync();
+
             await Projects.InitAsync();  // load project index from localStorage
 
             // Item #69 fix — restore whichever project was last active, if this host opts into
@@ -1247,6 +1250,29 @@
             SegmentCache.Clear();
         }
         catch { /* error stored in Ffmpeg.LastError */ }
+    }
+
+    /// <summary>
+    /// Says up front when this browser cannot keep the media between visits.
+    /// </summary>
+    /// <remarks>
+    /// The editor writes every imported file to the browser's own storage so a project can be
+    /// reopened. Where that storage cannot be written — Safari before version 26 has the storage
+    /// but not the call used to write to it — every write failed and was swallowed as non-fatal,
+    /// so the editor worked perfectly until the page was reloaded and then every clip came back
+    /// missing. Losing an afternoon's work is not something to find out about afterwards
+    /// (2026-09-05 audit, the completeness critic's browser-support item).
+    /// </remarks>
+    private async Task WarnIfMediaCannotBeStoredAsync()
+    {
+        await Opfs.EnsureInitAsync();
+        if (Opfs.IsAvailable) return;
+
+        _notifications?.Show(
+            "This browser will not let the editor keep your media between visits, so a project "
+            + "reopened here will have missing clips. Editing and export work as normal — save "
+            + "the finished video before you leave. Chrome or Edge do not have this limit.",
+            ThemeConstants.Notification.ThemeColor.Warning);
     }
 
     /// <summary>
