@@ -64,6 +64,6 @@ public sealed class PrerenderedFormsTests
         // flag, an auth check — a form could stay hidden for a reason nobody can see.
         var source = File.ReadAllText(RepoFile("Ben.Web.Website.Library/Kit/BenInteractiveOnly.razor"));
         Assert.Contains("@if (RendererInfo.IsInteractive)", source);
-        Assert.Equal(1, Regex.Matches(source, @"@if\s*\(").Count);
+        Assert.Single(Regex.Matches(source, @"@if\s*\("));
     }
 }

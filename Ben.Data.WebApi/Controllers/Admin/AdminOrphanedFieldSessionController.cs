@@ -64,9 +64,9 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
     /// <remarks>
     /// The set is recomputed here rather than taken from the caller: a list posted back could name
     /// a session that has since become readable, and re-deriving it means the button can only ever
-    /// delete what the rule already covers. <paramref name="expectedCount"/> is the caller saying
-    /// what they were shown — if the answer has changed since, nothing is deleted and the new
-    /// count comes back, because a screen that has gone stale should not act on the old number.
+    /// delete what the rule already covers. The ids on the request are the caller saying what they
+    /// were shown — if the answer has changed since, nothing is deleted and the new count comes
+    /// back, because a screen that has gone stale should not act on the old number.
     /// </remarks>
     /// <summary>
     /// Deletes the sessions named in the request.

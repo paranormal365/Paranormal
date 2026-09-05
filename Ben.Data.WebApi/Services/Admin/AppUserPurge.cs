@@ -386,7 +386,7 @@ public sealed class AppUserPurge
     /// release — which is exactly how the organization purge came to be refused by the database
     /// twice in front of Ben.</para>
     ///
-    /// <para><paramref name="pendingSessionIds"/> are sessions the purge is about to delete, so
+    /// <para><paramref name="going"/> names the rows the purge is about to delete, so
     /// their references must not be counted as reasons the row has to survive. Passed empty after
     /// the deletes have actually happened.</para>
     /// </remarks>

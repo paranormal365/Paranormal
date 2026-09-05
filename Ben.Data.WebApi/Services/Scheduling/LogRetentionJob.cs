@@ -157,8 +157,15 @@ public sealed class LogRetentionJob : IScheduledJob
         // points at another has no Logs table to sweep - and used to say so as an ERROR, once an
         // hour, into the production Logs table (18 rows by 2026-09-03). Nothing to sweep is not a
         // fault; say so once, quietly, and leave.
+        // EF1002 warns that an interpolated string reaches SQL unparameterised, which is true and
+        // is the point: a table NAME cannot be a parameter. What makes it safe is that `table` has
+        // been through IsPlainIdentifier above and can only ever be letters, digits and
+        // underscores — it never carries a value from outside. Suppressed here rather than
+        // solution-wide, so the next raw query still has to argue for itself.
+#pragma warning disable EF1002
         var tableExists = await db.Database.SqlQueryRaw<int>($"SELECT CASE WHEN OBJECT_ID(N'[{table}]', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
             .FirstOrDefaultAsync(ct) == 1;
+#pragma warning restore EF1002
         if (!tableExists)
         {
             if (!_missingTableReported)
@@ -176,9 +183,11 @@ public sealed class LogRetentionJob : IScheduledJob
             // The cutoff is a parameter. The batch size and table name are interpolated — the
             // first is a compile-time constant, the second has been checked against
             // IsPlainIdentifier above, and neither can carry a value from outside.
+#pragma warning disable EF1002    // see the note above: the table name is a checked identifier
             var batch = await db.Database.ExecuteSqlRawAsync(
                 $"DELETE TOP ({BatchSize}) FROM [{table}] WHERE [TimeStamp] < {{0}}",
                 new object[] { cutoff }, ct);
+#pragma warning restore EF1002
 
             removed += batch;
             if (batch < BatchSize) break;               // caught up
