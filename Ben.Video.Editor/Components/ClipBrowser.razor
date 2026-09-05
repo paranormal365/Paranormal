@@ -1911,7 +1911,7 @@
 
             var videoClip = new VideoClip
             {
-                Id = clipId, Name = status.FileName, MemFsName = memFsName,
+                Id = clipId, Name = status.FileName, OriginalFileName = status.FileName, MemFsName = memFsName,
                 Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
                     HasAudio = meta.HasAudio,
                 ThumbnailUrls = [.. thumbs], OpfsExt = ext,
@@ -1977,6 +1977,7 @@
             {
                 Id               = imgClipId2,
                 Name             = status.FileName,
+                OriginalFileName = status.FileName,
                 MemFsName        = memFsName,
                 Duration         = 5.0,
                 Width            = w,
@@ -2017,7 +2018,7 @@
 
             var clip = new AudioClip
             {
-                Id = audioClipId, Name = status.FileName, MemFsName = memFsName,
+                Id = audioClipId, Name = status.FileName, OriginalFileName = status.FileName, MemFsName = memFsName,
                 Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = audioExt,
             };
             // Without an audio track to land on the clip would be decoded, reported "done" and

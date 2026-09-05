@@ -259,9 +259,19 @@
         _showProjectList = false;
         try
         {
-            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
-                record.ProjectJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // ProjectSerializer, not a fresh options object. This used to build its own with only
+            // case-insensitive names and no string-enum converter — and the editor writes every
+            // enum as a string, so opening a server project here always threw and was swallowed by
+            // the catch below, which is why it looked like nothing happened (2026-09-05 audit,
+            // persistence-1).
+            var (file, problem) = Ben.Video.Editor.Services.ProjectSerializer.Parse(record.ProjectJson);
+            if (problem is not null)
+            {
+                // Said out loud rather than swallowed: a project that will not open is worth a
+                // reason, not a shrug.
+                Toasts.Error(problem);
+                return;
+            }
             if (file is not null)
                 await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
         }

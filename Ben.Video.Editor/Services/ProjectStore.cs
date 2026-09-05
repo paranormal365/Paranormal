@@ -49,13 +49,8 @@ public sealed class ProjectStore : IAsyncDisposable
     private const string EntryPrefix = "bv-proj-";
     private const string ActiveKey  = "bv-proj-active";
 
-    private static readonly JsonSerializerOptions _jsonOpts = new()
-    {
-        WriteIndented               = true,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
-        Converters                  = { new JsonStringEnumConverter() },
-    };
+    // See ProjectSerializer: one settings object for everything that reads or writes a project.
+    private static JsonSerializerOptions _jsonOpts => ProjectSerializer.Options;
 
     // ── State ─────────────────────────────────────────────────────────────────
 
