@@ -1,4 +1,5 @@
 using Ben.Video.Editor.Models;
+using Ben.Video.Editor.Models.Assets;
 
 namespace Ben.Video.Editor.Services;
 
@@ -26,7 +27,8 @@ public sealed class MediaRelinkService(
     SourceMounter mounter,
     FfmpegService ffmpeg,
     ErrorLogService errorLog,
-    IMediaLibraryProvider? library = null)
+    IMediaLibraryProvider? library = null,
+    VideoAssetCatalogService? assets = null)
 {
     /// <summary>What one run managed.</summary>
     /// <param name="Restored">Clips whose media is back.</param>
@@ -151,6 +153,98 @@ public sealed class MediaRelinkService(
         item.IsMediaMissing = false;
         return Verdict.Restored;
     }
+
+    /// <summary>
+    /// Puts back any clip art whose asset file is not on this machine.
+    /// </summary>
+    /// <remarks>
+    /// <para>Clip art had the same problem as footage and none of the repair. Its
+    /// <c>AssetSource</c> is documented as the key to re-downloading the file, and nothing ever
+    /// used it: the restore walked video, audio and image clips only. At export the layer was left
+    /// out, in the preview it drew nothing, and the timeline chip looked entirely normal because
+    /// clip art's <c>IsMediaMissing</c> was never set either (2026-09-05 audit, callouts-14).</para>
+    ///
+    /// <para>Two outcomes, and the second one matters as much as the first: art that can be
+    /// fetched again is fetched, and art that cannot is <b>marked missing</b>, so the chip carries
+    /// the warning it always had a place for rather than the layer quietly vanishing from the
+    /// finished video.</para>
+    /// </remarks>
+    public async Task<int> RestoreClipArtAsync(
+        IReadOnlyCollection<ClipArtClip> art, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(art);
+        if (art.Count == 0) return 0;
+
+        var catalogue = assets is null
+            ? []
+            : await SafeCatalogueAsync(ct);
+
+        var restored = 0;
+
+        foreach (var clip in art)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (!Guid.TryParse(clip.AssetId, out var assetId)) continue;
+
+            var ext = "." + FormatExtension(clip.AssetFormat);
+
+            if (await opfs.ExistsAsync(assetId, ext))
+            {
+                clip.IsMediaMissing = false;
+                continue;
+            }
+
+            var item = catalogue.FirstOrDefault(
+                i => string.Equals(i.Id, clip.AssetId, StringComparison.OrdinalIgnoreCase)
+                     && i.Source == clip.AssetSource);
+
+            if (item is null || assets is null)
+            {
+                // Nothing to fetch it from — say so on the chip rather than letting the layer
+                // disappear from the render with the timeline still looking fine.
+                clip.IsMediaMissing = true;
+                continue;
+            }
+
+            try
+            {
+                await assets.EnsureLocalAsync(item, ct: ct);
+                var here = await opfs.ExistsAsync(assetId, ext);
+                clip.IsMediaMissing = !here;
+                if (here) restored++;
+            }
+            catch (Exception ex)
+            {
+                clip.IsMediaMissing = true;
+                errorLog.Log($"MediaRelinkService.ClipArt({clip.Name})", ex);
+            }
+        }
+
+        return restored;
+    }
+
+    private async Task<IReadOnlyList<VideoAssetCatalogItem>> SafeCatalogueAsync(CancellationToken ct)
+    {
+        // A catalogue that will not load is a reason to mark art missing, not a reason to fail the
+        // whole restore — everything else about the project is still worth having.
+        try { return await assets!.GetAllAssetsAsync(ct); }
+        catch (Exception ex)
+        {
+            errorLog.Log("MediaRelinkService.Catalogue", ex);
+            return [];
+        }
+    }
+
+    /// <summary>Where clip art of this format is filed, matching the asset providers.</summary>
+    private static string FormatExtension(VideoAssetFormat format) => format switch
+    {
+        VideoAssetFormat.Svg    => "svg",
+        VideoAssetFormat.Avif   => "avif",
+        VideoAssetFormat.WebP   => "webp",
+        VideoAssetFormat.Gif    => "gif",
+        VideoAssetFormat.Lottie => "json",
+        _                       => "png",
+    };
 
     /// <summary>
     /// Puts the server's copy into the library cache, by whichever route the host offers.

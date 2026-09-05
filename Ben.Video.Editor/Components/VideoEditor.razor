@@ -2786,6 +2786,19 @@
 
     private static string ClipCount(int count) => count == 1 ? "1 clip" : $"{count} clips";
 
+    /// <summary>
+    /// Replaces a clip's media with a file the person picked, and keeps the replacement.
+    /// </summary>
+    /// <remarks>
+    /// <para>This used to write the browser's session filesystem and nothing else, so the
+    /// replacement lasted exactly as long as the tab. Somebody who patiently re-linked eight clips
+    /// found all eight missing again the next time they opened the project — the one repair the
+    /// editor offered did not survive being used (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>The clip keeps its recorded server file only when the replacement really is that
+    /// file. Picking a different one and keeping the old id would let a later re-fetch quietly
+    /// overwrite the replacement with the footage it was chosen instead of.</para>
+    /// </remarks>
     private async Task OnRelinkFileChangedAsync(ChangeEventArgs _)
     {
         if (_relinkItemId is null) return;
@@ -2797,14 +2810,46 @@
                 "fileAt", "bv-relink-input", 0);
 
             var fileName = await (await DomAsync()).InvokeAsync<string>("fileName", "bv-relink-input", 0);
+            var ext      = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
 
-            var memFsName = $"relink_{Guid.NewGuid():N}_{fileName}";
-            await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+            // Storage is the copy of record, exactly as it is for an import. Written first so the
+            // clip can be mounted from it rather than carrying a session-only MEMFS copy.
+            await Opfs.WriteAsync(itemId, ext, fileRef);
+
+            var memFsName = await Mounter.MountAsync(itemId, ext);
+            if (memFsName is null)
+            {
+                memFsName = $"relink_{Guid.NewGuid():N}_{fileName}";
+                await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+            }
             await fileRef.DisposeAsync();
 
-            Clips.RelinkClip(itemId, memFsName);
+            var item  = Clips.FindItem(itemId);
+            var print = await Opfs.FingerprintAsync(itemId, ext);
+
+            // Only the same file keeps the same identity.
+            var stillTheRecordedFile = item is not null
+                && item.SourceFileId is not null
+                && MediaFingerprint.Compare(
+                       item.SourceFileSize, item.SourceContentHash, print?.Size, print?.Hash)
+                   is MediaFingerprint.Verdict.Matches;
+
+            Clips.RelinkClip(
+                itemId, memFsName, ext,
+                sourceFileId:      stillTheRecordedFile ? item!.SourceFileId : null,
+                sourceFileSize:    print?.Size,
+                sourceContentHash: print?.Hash);
         }
-        catch { /* silently ignore — user may have cancelled the dialog */ }
+        catch (Exception ex)
+        {
+            // Not silent any more. A cancelled picker raises nothing at all — this fires on a
+            // change event, so reaching here means a real failure, and swallowing it left somebody
+            // looking at a clip that stayed missing with no reason given.
+            ErrorLog.Log("VideoEditor.OnRelinkFileChangedAsync", ex);
+            _notifications?.Show(
+                "That file could not be used to replace this clip's media.",
+                ThemeConstants.Notification.ThemeColor.Error);
+        }
         finally
         {
             _relinkItemId = null;

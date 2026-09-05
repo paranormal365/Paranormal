@@ -775,7 +775,19 @@ public sealed class ProjectStore : IAsyncDisposable
     /// </remarks>
     private async Task OfferToRefetchAsync()
     {
-        if (_relink is null || !_relink.IsAvailable) return;
+        if (_relink is null) return;
+
+        // Clip art first, and never asked about: an icon is kilobytes, and the alternative is a
+        // layer that vanishes from the finished video while the timeline looks fine
+        // (2026-09-05 audit, callouts-14).
+        var art = _clips.AllClipArtClips.ToList();
+        if (art.Count > 0)
+        {
+            var restoredArt = await _relink.RestoreClipArtAsync(art);
+            if (restoredArt > 0 || art.Any(a => a.IsMediaMissing)) _clips.NotifyChanged();
+        }
+
+        if (!_relink.IsAvailable) return;
 
         var candidates = MediaRelinkService.Candidates(AllRestorableItems);
         if (candidates.Count == 0) return;

@@ -482,27 +482,63 @@ internal sealed class RelinkClipCommand : IEditorCommand
     private readonly TrackItem _item;
     private readonly string?   _oldMemFs, _newMemFs;
 
+    // Where the media is stored and where it came from, both sides of the edit.
+    //
+    // Re-linking used to write the browser's session filesystem and nothing else, so a re-linked
+    // clip was missing again the moment the project was reopened — the one repair the editor
+    // offered did not survive being used (2026-09-05 audit, F14). Persisting it means undo has to
+    // put all of it back, not just the session path.
+    private readonly string? _oldExt,  _newExt;
+    private readonly Guid?   _oldFileId,   _newFileId;
+    private readonly long?   _oldFileSize, _newFileSize;
+    private readonly string? _oldFileHash, _newFileHash;
+
     public string Description => $"Re-link \"{_item.Name}\"";
 
-    public RelinkClipCommand(TrackItem item, string? oldMemFs, string newMemFs)
+    public RelinkClipCommand(
+        TrackItem item, string? oldMemFs, string newMemFs,
+        string? newExt = null, Guid? newFileId = null,
+        long? newFileSize = null, string? newFileHash = null)
     {
         _item      = item;
         _oldMemFs  = oldMemFs;
         _newMemFs  = newMemFs;
+
+        _oldExt      = item.OpfsExt;
+        _oldFileId   = item.SourceFileId;
+        _oldFileSize = item.SourceFileSize;
+        _oldFileHash = item.SourceContentHash;
+
+        _newExt      = newExt ?? item.OpfsExt;
+        _newFileId   = newFileId;
+        _newFileSize = newFileSize;
+        _newFileHash = newFileHash;
     }
 
     public void Execute()
     {
         if (_item is VideoClip vc) vc.MemFsName = _newMemFs;
         else if (_item is AudioClip ac) ac.MemFsName = _newMemFs;
-        _item.IsMediaMissing = false;
+        else if (_item is ImageClip ic) ic.MemFsName = _newMemFs;
+
+        _item.OpfsExt           = _newExt;
+        _item.SourceFileId      = _newFileId;
+        _item.SourceFileSize    = _newFileSize;
+        _item.SourceContentHash = _newFileHash;
+        _item.IsMediaMissing    = false;
     }
 
     public void Undo()
     {
         if (_item is VideoClip vc) vc.MemFsName = _oldMemFs;
         else if (_item is AudioClip ac) ac.MemFsName = _oldMemFs;
-        _item.IsMediaMissing = _oldMemFs is null;
+        else if (_item is ImageClip ic) ic.MemFsName = _oldMemFs;
+
+        _item.OpfsExt           = _oldExt;
+        _item.SourceFileId      = _oldFileId;
+        _item.SourceFileSize    = _oldFileSize;
+        _item.SourceContentHash = _oldFileHash;
+        _item.IsMediaMissing    = _oldMemFs is null;
     }
 }
 

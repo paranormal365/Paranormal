@@ -524,7 +524,8 @@ public sealed class ClipStore
         Notify();
     }
 
-    private TrackItem? FindItem(Guid id)
+    /// <summary>The item with this id, on whichever track it sits.</summary>
+    public TrackItem? FindItem(Guid id)
     {
         foreach (var track in _tracks)
         {
@@ -1119,7 +1120,28 @@ public sealed class ClipStore
     /// Re-link a clip to a new MEMFS source after project restore.
     /// Clears <see cref="TrackItem.IsMediaMissing"/> and pushes an undo command.
     /// </summary>
-    public void RelinkClip(Guid itemId, string newMemFsName)
+    /// <param name="opfsExt">
+    /// The extension the replacement was stored under, when it was persisted.
+    /// </param>
+    /// <param name="sourceFileId">
+    /// The server file the replacement is, when it is one — null when it is a file off this
+    /// person's own machine, or when it is not the file the clip previously recorded.
+    /// </param>
+    /// <param name="sourceFileSize">The replacement's size.</param>
+    /// <param name="sourceContentHash">Its hash, when one was taken.</param>
+    /// <remarks>
+    /// <para>Re-linking used to write the browser's session filesystem and nothing else, so the
+    /// replacement lasted exactly as long as the tab: reopening the project showed the clip as
+    /// missing again. The one repair the editor offered did not survive being used
+    /// (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>An image clip was silently not handled at all — its <c>MemFsName</c> was left alone
+    /// while the clip was marked present, so re-linking a picture produced a clip that claimed to
+    /// have media and pointed at nothing.</para>
+    /// </remarks>
+    public void RelinkClip(
+        Guid itemId, string newMemFsName, string? opfsExt = null,
+        Guid? sourceFileId = null, long? sourceFileSize = null, string? sourceContentHash = null)
     {
         foreach (var track in _tracks)
         {
@@ -1128,13 +1150,16 @@ public sealed class ClipStore
 
             string? oldMemFs = item is VideoClip vc ? vc.MemFsName
                              : item is AudioClip ac ? ac.MemFsName
+                             : item is ImageClip ic ? ic.MemFsName
                              : null;
 
-            if (item is VideoClip vc2) vc2.MemFsName = newMemFsName;
-            else if (item is AudioClip ac2) ac2.MemFsName = newMemFsName;
-            item.IsMediaMissing = false;
+            // Built before the edit is applied: it captures what is being replaced.
+            var command = new RelinkClipCommand(
+                item, oldMemFs, newMemFsName,
+                opfsExt, sourceFileId, sourceFileSize, sourceContentHash);
 
-            PushCommand(new RelinkClipCommand(item, oldMemFs, newMemFsName));
+            command.Execute();
+            PushCommand(command);
             Notify();
             return;
         }
