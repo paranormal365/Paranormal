@@ -146,8 +146,8 @@
             @FormatTime(_currentTime) / @FormatTime(_duration)
         </span>
 
-        <span class="bv-preview__frame-count" title="Frame @(_currentFrame + 1) of @_totalFrames">
-            F@((_currentFrame + 1).ToString("D4")) / @_totalFrames.ToString("D4")
+        <span class="bv-preview__frame-count" title="Frame @_currentFrame of @_totalFrames">
+            F@(_currentFrame.ToString("D4")) / @_totalFrames.ToString("D4")
         </span>
 
         <span class="bv-preview__spacer"></span>
@@ -333,8 +333,10 @@
 
     // ── Frame-accurate display ────────────────────────────────────────────────
 
-    private int _currentFrame => (int)(_currentTime * Playback.SessionFps);
-    private int _totalFrames  => _duration > 0 ? (int)Math.Ceiling(_duration * Playback.SessionFps) : 0;
+    // FrameMath, not inline arithmetic: the counter used to read one past the end at the end,
+    // showing a frame that does not exist (2026-09-05 audit, preview-14).
+    private int _currentFrame => FrameMath.FrameAt(_currentTime, Playback.SessionFps, _duration);
+    private int _totalFrames  => FrameMath.TotalFrames(_duration, Playback.SessionFps);
 
     private static readonly List<int> _fpsOptions = [60, 30, 25, 24, 23, 15];
 

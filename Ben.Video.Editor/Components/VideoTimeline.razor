@@ -1093,6 +1093,11 @@
         RenderStatus.OnChanged   += OnClipsChanged;
         Timeline.ZoomScale   = EffectiveOptions.DefaultTimelineZoom;
         Timeline.DisplayMode = EffectiveOptions.TimelineDisplayMode;
+
+        // The ruler counts in the session's own frames. It used to use a constant 30, so at any
+        // other frame rate it numbered frames that did not exist and stepping the preview by one
+        // did not move it by one (2026-09-05 audit, timeline-17).
+        Timeline.Fps = Playback.SessionFps;
         _rippleOverride      = EffectiveOptions.RippleEdit;
     }
 
@@ -1271,7 +1276,12 @@
         catch { /* cosmetic only — JS interop unavailable is not worth surfacing */ }
     }
 
-    private void OnPlaybackChanged() => InvokeAsync(StateHasChanged);
+    private void OnPlaybackChanged()
+    {
+        // Changing the frame rate has to move the ruler with it, not just the preview's stepping.
+        Timeline.Fps = Playback.SessionFps;
+        InvokeAsync(StateHasChanged);
+    }
 
     private async Task FitToViewAsync()
     {

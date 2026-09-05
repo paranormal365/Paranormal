@@ -112,11 +112,17 @@ public sealed class PlaybackService : IDisposable
 
     /// <summary>
     /// Working frame rate for the current editing session.
-    /// Used by VideoPreview to display frame numbers and for single-frame stepping.
-    /// Kept in sync with ExportDialog's frame-rate picker.
-    /// Default: 30 fps.
+    /// Used by VideoPreview to display frame numbers and for single-frame stepping, and by the
+    /// timeline ruler when it counts in frames. Kept in sync with ExportDialog's frame-rate
+    /// picker.
     /// </summary>
-    public int SessionFps { get; private set; } = 24;
+    /// <remarks>
+    /// The default was 24 while the documentation right here said 30, the export default said 30,
+    /// and the ruler assumed 30 — so until somebody opened the export dialog, stepping a frame
+    /// moved the preview by a twenty-fourth of a second and the ruler counted thirtieths
+    /// (2026-09-05 audit, preview-7 and timeline-17).
+    /// </remarks>
+    public int SessionFps { get; private set; } = 30;
 
     /// <summary>Update the working frame rate and notify subscribers.</summary>
     public void SetSessionFps(int fps)

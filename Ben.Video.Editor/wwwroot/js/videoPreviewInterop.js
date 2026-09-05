@@ -13,12 +13,35 @@ export function init(elementId, dotnet) {
     const el = document.getElementById(elementId);
     if (!el) return;
 
-    el.addEventListener('timeupdate', () => {
-        dotnet.invokeMethodAsync('OnVideoTimeUpdate', el.currentTime);
-    });
-    el.addEventListener('ended',  () => dotnet.invokeMethodAsync('OnVideoEnded'));
-    el.addEventListener('play',   () => dotnet.invokeMethodAsync('OnVideoPlay'));
-    el.addEventListener('pause',  () => dotnet.invokeMethodAsync('OnVideoPause'));
+    // The playhead follows the frames, not the browser's own timer.
+    //
+    // 'timeupdate' fires roughly four times a second, and it was the only thing driving the
+    // playhead, the frame counter and every overlay positioned from the current time. So the
+    // playhead advanced in visible quarter-second jumps, a title timed to a particular moment
+    // appeared up to a quarter of a second late, and stepping a single frame reported a time that
+    // could be several frames out (2026-09-05 audit, preview-10).
+    //
+    // A frame loop reports on every painted frame while playing and stops when it does not, so
+    // there is no cost at all when nothing is moving. 'timeupdate' is kept for the paused cases
+    // it still covers — seeking, scrubbing, loading — where no frames are being painted.
+    let frameLoop = 0;
+
+    const reportTime = () => dotnet.invokeMethodAsync('OnVideoTimeUpdate', el.currentTime);
+
+    const tick = () => {
+        if (el.paused || el.ended) { frameLoop = 0; return; }
+        reportTime();
+        frameLoop = requestAnimationFrame(tick);
+    };
+
+    const startLoop = () => { if (!frameLoop) frameLoop = requestAnimationFrame(tick); };
+    const stopLoop  = () => { if (frameLoop) { cancelAnimationFrame(frameLoop); frameLoop = 0; } };
+
+    el.addEventListener('timeupdate', () => { if (el.paused) reportTime(); });
+    el.addEventListener('seeked', reportTime);
+    el.addEventListener('ended',  () => { stopLoop(); reportTime(); dotnet.invokeMethodAsync('OnVideoEnded'); });
+    el.addEventListener('play',   () => { startLoop(); dotnet.invokeMethodAsync('OnVideoPlay'); });
+    el.addEventListener('pause',  () => { stopLoop(); reportTime(); dotnet.invokeMethodAsync('OnVideoPause'); });
     // Item #59-#65 flakiness investigation, phase 144 — previously nothing observed this at all,
     // so a dead/revoked blob: URL (or any other media load failure) failed completely silently:
     // a blank preview with no error anywhere. Explicitly NO retry here — the whole point of this
@@ -29,7 +52,7 @@ export function init(elementId, dotnet) {
         dotnet.invokeMethodAsync('OnVideoError', detail, el.currentSrc || el.src || '');
     });
 
-    _refs.set(elementId, { el, dotnet });
+    _refs.set(elementId, { el, dotnet, stopLoop });
 }
 
 /**
@@ -127,6 +150,8 @@ export function setMuted(elementId, muted) {
 export function dispose(elementId) {
     const ref = _refs.get(elementId);
     if (!ref) return;
+    // Stop the frame loop first: it calls into .NET, and the component is going away.
+    ref.stopLoop?.();
     // Remove src to release memory
     ref.el.src = '';
     ref.el.load();
