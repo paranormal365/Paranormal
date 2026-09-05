@@ -42,13 +42,27 @@ public sealed class OPFSService : IAsyncDisposable
     /// Lazy-loads the JS module and checks browser OPFS support.
     /// Safe to call multiple times; only initialises once.
     /// </summary>
-    public async Task EnsureInitAsync()
+    private Task? _init;
+
+    public Task EnsureInitAsync() => _init ??= InitOnceAsync();
+
+    /// <summary>
+    /// Loads the module and asks whether storage is usable, exactly once.
+    /// </summary>
+    /// <remarks>
+    /// The guard used to be <c>if (_module is not null) return;</c>, set before the availability
+    /// answer came back. Two callers arriving together — which is now the ordinary case, since both
+    /// the media panel and the startup storage check ask — meant the second returned immediately
+    /// with <see cref="IsAvailable"/> still false, and the editor announced that this browser
+    /// cannot keep your media on a browser that plainly can. Caching the task rather than the
+    /// module makes the second caller wait for the first's answer instead of racing past it.
+    /// </remarks>
+    private async Task InitOnceAsync()
     {
-        if (_module is not null) return;
         try
         {
-            _module      = await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModuleUrl);
-            IsAvailable  = await _module.InvokeAsync<bool>("opfsIsAvailable");
+            _module     = await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModuleUrl);
+            IsAvailable = await _module.InvokeAsync<bool>("opfsIsAvailable");
         }
         catch (Exception ex)
         {

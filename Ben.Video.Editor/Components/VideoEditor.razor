@@ -37,7 +37,12 @@
     <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
     @* One predicate, shared with the export dialog and the pipeline's own "nothing to export"
        check, so the button and the dialog can never disagree about whether there is anything
-       to render (2026-09-05 audit, export-20). *@
+       to render (2026-09-05 audit, export-20).
+
+       ProjectName is the bare name. The unsaved asterisk used to be part of the value in the
+       toolbar's text box, so renaming a project with unsaved changes saved it as "My Project *" —
+       the marker became part of the name and stayed there (2026-09-05 audit, persistence-5). The
+       toolbar draws that mark from IsDirty beside the box instead. *@
     <Toolbar HasClips="@Clips.HasExportableContent"
              CanSave="@(Clips.HasSaveableContent || Projects.IsDirty)"
              ShowMultiTrack="@EffectiveOptions.MultiTrack"
@@ -50,10 +55,6 @@
              RedoDescription="@Clips.RedoDescription"
              ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
              ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
-             @* The bare name. The asterisk used to be part of the value in this text box, so
-                renaming a project with unsaved changes saved it as "My Project *" — the marker
-                became part of the name, and stayed there (2026-09-05 audit, persistence-5). The
-                toolbar draws the unsaved mark from IsDirty beside the box instead. *@
              ProjectName="@Projects.CurrentProjectName"
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"

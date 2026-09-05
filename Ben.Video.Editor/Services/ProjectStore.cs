@@ -579,7 +579,26 @@ public sealed class ProjectStore : IAsyncDisposable
         // clip's media (nor MEMFS content) was ever actually restored, only its metadata.
         await _opfs.EnsureInitAsync();
         if (!_opfs.IsAvailable) return;
-        // Wait for ffmpeg to be ready before writing to MEMFS
+
+        // Nothing to restore, so nothing to start an engine for.
+        if (!file.Tracks.Any(t => t.VideoClips.Count > 0 || t.AudioClips.Count > 0
+                               || t.ImageClips.Count > 0)
+            && file.Bin.IsEmpty)
+            return;
+
+        // The engine has to be running before anything can be written into its filesystem, and on
+        // a reload it is not: the project came back with every clip marked missing and the media
+        // sitting right there in storage, waiting for somebody to press Initialize — which nothing
+        // asked them to do (2026-09-05 audit, persistence-16). A project with clips in it is
+        // reason enough to start the engine.
+        if (_ffmpeg.State is FfmpegState.Idle)
+        {
+            try { await _ffmpeg.LoadAsync(); }
+            catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfsFilesAsync", ex); }
+        }
+
+        // Still waited for, because loading takes a moment and another caller may already have
+        // started it. The bound is what stops a wedged engine holding this forever.
         var waited = 0;
         while (_ffmpeg.State != FfmpegState.Ready && waited < 30_000)
         {
@@ -605,7 +624,7 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllVideoClips.FirstOrDefault(c => c.Id == vc.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(vc.Id, vc.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(vc.Id, vc.SourceBinId, vc.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
@@ -619,7 +638,7 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllAudioClips.FirstOrDefault(c => c.Id == ac.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(ac.Id, ac.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(ac.Id, ac.SourceBinId, ac.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
@@ -633,13 +652,43 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllImageClips.FirstOrDefault(c => c.Id == ic.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(ic.Id, ic.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(ic.Id, ic.SourceBinId, ic.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
                 }
                 catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfs(image)", ex); }
             }
+        }
+
+        // The media bin too. Its entries are what a placed clip's media is actually filed under,
+        // and they are also placeable in their own right — a bin left unmounted shows cards that
+        // cannot be added to the timeline.
+        foreach (var (id, ext) in file.Bin.VideoClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!))
+                     .Concat(file.Bin.AudioClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!)))
+                     .Concat(file.Bin.ImageClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!))))
+        {
+            try
+            {
+                var entry = _clips.MediaBin.FirstOrDefault(i => i.Id == id);
+                if (entry is null) continue;
+
+                var memFsName = await RestoreFromAsync(id, ext);
+                if (memFsName is null) continue;
+
+                switch (entry)
+                {
+                    case VideoClip v: v.MemFsName = memFsName; break;
+                    case AudioClip a: a.MemFsName = memFsName; break;
+                    case ImageClip i: i.MemFsName = memFsName; break;
+                }
+
+                entry.IsMediaMissing = false;
+            }
+            catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfs(bin)", ex); }
         }
 
         // Pre-existing gap, surfaced by item #69's fix: nothing above notifies the ClipStore
@@ -658,14 +707,38 @@ public sealed class ProjectStore : IAsyncDisposable
     /// mechanics), so a project always finishes restoring even on a browser where mounting isn't
     /// available — just without the memory win.
     /// </summary>
-    private async Task<string?> RestoreOneAsync(Guid clipId, string opfsExt)
+    /// <param name="sourceBinId">
+    /// The media-bin entry this clip was placed from, when it was.
+    /// </param>
+    /// <remarks>
+    /// <para>The stored file is named after whichever clip first imported it, and placing from the
+    /// bin makes a copy with an id of its own. So a placed clip's media is filed under its bin
+    /// entry's id, not its own — and looking only under its own id found nothing, which meant that
+    /// since the media bin was introduced, no placed clip's media had ever come back after a
+    /// reload. The project restored, the file was sitting right there, and every clip said
+    /// "missing" (found on screen while verifying phase 5 of the 2026-09-05 audit).</para>
+    ///
+    /// <para>Its own id is still tried first, because a clip imported straight onto the timeline
+    /// before the bin existed is filed under that.</para>
+    /// </remarks>
+    private async Task<string?> RestoreOneAsync(Guid clipId, Guid? sourceBinId, string opfsExt)
     {
-        var mounted = await _mounter.MountAsync(clipId, opfsExt);
+        var restored = await RestoreFromAsync(clipId, opfsExt);
+        if (restored is not null) return restored;
+
+        return sourceBinId is { } binId && binId != clipId
+            ? await RestoreFromAsync(binId, opfsExt)
+            : null;
+    }
+
+    private async Task<string?> RestoreFromAsync(Guid storedId, string opfsExt)
+    {
+        var mounted = await _mounter.MountAsync(storedId, opfsExt);
         if (mounted is not null) return mounted;
 
-        var jsFile = await _opfs.ReadAsJSFileAsync(clipId, opfsExt);
+        var jsFile = await _opfs.ReadAsJSFileAsync(storedId, opfsExt);
         if (jsFile is null) return null;
-        var memFsName = $"{clipId}{opfsExt}";
+        var memFsName = $"{storedId}{opfsExt}";
         await _ffmpeg.WriteFileAsync(memFsName, jsFile);
         return memFsName;
     }

@@ -301,11 +301,29 @@ site by a different address, means pairing once more.
 
 ## Saving your work
 
+The editor saves the project for you, a couple of seconds after you stop editing. You do not have
+to think about it, and the name at the top of the toolbar carries a `*` while there is anything not
+yet written. If you close the tab with unsaved work, or with a render still going, the browser asks
+before letting you.
+
 **Save to Server** stores the project — the arrangement, the trims, the titles, all of it — under
 your account, so you can pick it up on another machine. **Saved Projects** lists what you have.
 
 A project is not the video. It is the recipe: which clips, in what order, cut where. The video
 itself only exists once you export.
+
+### Where your footage lives
+
+Everything you import is copied into the browser's own storage, which is what lets you reopen a
+project and find the clips still there. The media panel shows how much of that storage is in use.
+
+When the editor starts it clears out any footage no project is using any more, so deleting a
+project eventually gives the space back. It only does this once it can see the full list of
+projects, so nothing is removed on a guess.
+
+If a project is opened somewhere the footage was never imported — another machine, another
+browser — the clips show as missing, and the timeline, titles and edits are all still there waiting
+for the files.
 
 ## Working signed out
 
