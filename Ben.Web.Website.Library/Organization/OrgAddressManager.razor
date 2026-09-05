@@ -378,14 +378,15 @@ else
             _addrState.Latitude,
             _addrState.Longitude);
 
-        var saved = _editId.HasValue
+        var (saved, saveError) = _editId.HasValue
             ? await AdminClient.UpdateOrgAddressAsync(OrgId, _editId.Value, request)
             : await AdminClient.CreateOrgAddressAsync(OrgId, request);
 
         _saving = false;
 
         if (saved is not null) { await LoadAddressesAsync(); CancelForm(); }
-        else _errorMessage = "Save failed. You may not have permission to manage addresses.";
+        // The server's reason when it gave one; the guess only when it did not.
+        else _errorMessage = saveError ?? "Save failed. You may not have permission to manage addresses.";
     }
 
     private async Task ConfirmDeleteAsync(Guid addressId)

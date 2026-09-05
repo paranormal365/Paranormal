@@ -51,7 +51,8 @@ public class OrgMessageControllerTests
     {
         var ctrl = new OrgMessageController(
             factory, CreateMapper(),
-            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -78,6 +79,53 @@ public class OrgMessageControllerTests
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = recipientId, Role = OrganizationMemberRole.Member,  IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = senderId });
         await db.SaveChangesAsync();
         return (factory, orgId, senderId, recipientId);
+    }
+
+    // ── Stored markup (2026-09-04) ───────────────────────────────────────────
+    //
+    // A message body is authored in a rich-text editor and rendered as markup by every reader, so
+    // whatever is stored runs in the reader's session. It used to be stored exactly as posted: an
+    // <img onerror> in a broadcast executed for each recipient, on the site's own origin, with no
+    // CSP standing in the way. These pin the cleaning that stops it.
+
+    [Fact]
+    public async Task Send_StripsEventHandlersFromTheStoredBody()
+    {
+        var (factory, orgId, senderId, recipientId) = await SeedAsync();
+        var sender = Build(factory, senderId);
+
+        await sender.Send(orgId, new SendOrgMessageRequest(
+            OrgMessageChannel.DirectMessage, "Kickoff",
+            "<p>Kickoff Friday.</p><img src=x onerror=\"window.stolen=document.cookie\">",
+            false, null, null, [recipientId]), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.OrgMessages.AsNoTracking().Select(m => m.Body).SingleAsync();
+
+        Assert.DoesNotContain("onerror", stored, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("document.cookie", stored, StringComparison.OrdinalIgnoreCase);
+        // The legitimate formatting the editor produces survives — cleaning must not turn a
+        // rich-text message into a wall of escaped tags.
+        Assert.Contains("Kickoff Friday.", stored);
+        Assert.Contains("<p>", stored);
+    }
+
+    [Fact]
+    public async Task Send_StripsScriptTagsFromTheStoredBody()
+    {
+        var (factory, orgId, senderId, recipientId) = await SeedAsync();
+        var sender = Build(factory, senderId);
+
+        await sender.Send(orgId, new SendOrgMessageRequest(
+            OrgMessageChannel.OrgBroadcast, "Notice",
+            "Read this<script>window.stolen=1</script>",
+            false, null, null, []), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.OrgMessages.AsNoTracking().Select(m => m.Body).SingleAsync();
+
+        Assert.DoesNotContain("<script", stored, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read this", stored);
     }
 
     // ── GetInbox ──────────────────────────────────────────────────────────────

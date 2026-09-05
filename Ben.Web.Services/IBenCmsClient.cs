@@ -21,7 +21,11 @@ public interface IBenCmsClient
 
     Task<LoadResult<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
     Task<CmsPageDetail?> GetCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
-    Task<CmsPageDetail?> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default);
+    /// <summary>Creates a page, and hands back the server's refusal when it says no.</summary>
+    /// <remarks>Matches <see cref="UpdateCmsPageAsync"/>, which has carried its reason since it
+    /// was written. Create sat beside it guessing "the URL slug may already be in use" at a server
+    /// that names the reserved word or the clash.</remarks>
+    Task<(CmsPageDetail? Result, string? Error)> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default);
     Task<(CmsPageDetail? Result, string? Error)> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default);
     Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
 

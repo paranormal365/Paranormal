@@ -19,12 +19,14 @@ public sealed class OrgMessageController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+    private readonly Ben.Data.WebApi.Services.ICmsMarkupSanitizer _sanitizer;
 
     public OrgMessageController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer)
     {
-        _db = db; _mapper = mapper; _security = security;
+        _db = db; _mapper = mapper; _security = security; _sanitizer = sanitizer;
     }
 
     /// <summary>
@@ -183,7 +185,13 @@ public sealed class OrgMessageController : BenControllerBase
             ParentMessageId    = request.ParentMessageId,
             ChannelType        = request.ChannelType,
             Subject            = request.Subject?.Trim(),
-            Body               = request.Body.Trim(),
+            // Authored in a rich-text editor and rendered as markup by every reader, so the
+            // stored body is attacker-controlled HTML unless it is cleaned here. It was not:
+            // an <img onerror> in a broadcast ran in each recipient's session, on this site's
+            // origin, with no CSP to stop it. Cleaned on the way IN, the same rule the CMS and
+            // publications already follow — cleaning at render would leave every stored payload
+            // one forgotten call site away from firing.
+            Body               = _sanitizer.SanitizeHtml(request.Body.Trim()),
             IsEncrypted        = request.IsEncrypted,
             IsPublic           = request.ChannelType == OrgMessageChannel.PublicFeed,
             CaseId             = request.CaseId,

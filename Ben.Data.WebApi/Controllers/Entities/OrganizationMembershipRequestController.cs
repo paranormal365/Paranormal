@@ -322,17 +322,20 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         var subject = accepted
             ? $"Membership Accepted: {orgName}"
             : $"Membership Application Update: {orgName}";
+        // Everything a person typed is encoded on the way into a body that is rendered as markup —
+        // the group's name and the responder's note both are. See NotificationText.
+        var safeOrgName = Ben.Data.WebApi.Services.NotificationText.Safe(orgName);
         var body = accepted
-            ? $"Your application to join <strong>{orgName}</strong> has been accepted. Welcome to the organization!"
+            ? $"Your application to join <strong>{safeOrgName}</strong> has been accepted. Welcome to the organization!"
               + (seat is null ? string.Empty
-                  : $"<br><br><strong>{orgName}</strong> has grown past its plan's member count, so your "
+                  : $"<br><br><strong>{safeOrgName}</strong> has grown past its plan's member count, so your "
                   + $"seat is billed individually: <strong>${seat.PriceAtStart:0.00} per "
                   + $"{Ben.Data.WebApi.Services.Billing.OverflowSeats.CadenceNoun(seat.Interval)}</strong>. "
                   + "Your membership is active now; you'll find the seat and its status on the Pricing page.")
-            : $"Your application to join <strong>{orgName}</strong> has not been approved at this time. " +
+            : $"Your application to join <strong>{safeOrgName}</strong> has not been approved at this time. " +
               (string.IsNullOrWhiteSpace(request.ResponseNote)
                   ? string.Empty
-                  : $"<br><br><em>{request.ResponseNote.Trim()}</em>");
+                  : $"<br><br><em>{Ben.Data.WebApi.Services.NotificationText.Safe(request.ResponseNote.Trim())}</em>");
 
         var message = new UserMessage
         {
