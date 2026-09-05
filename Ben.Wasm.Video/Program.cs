@@ -30,20 +30,16 @@ var apiBaseUrl = cfg["WebApiBaseUrl"]?.TrimEnd('/');
 
 builder.Services.AddBenVideoEditor(options =>
 {
-    // With no API configured the editor still runs fully local — file-picker imports, OPFS
-    // persistence, in-browser render — which is also the safe state for a fresh checkout.
-    if (string.IsNullOrEmpty(apiBaseUrl)) return;
+    // Everything a person can do with media already on their machine, applied before the API
+    // check below: this host IS the local-first editor, and a deployment with no WebApi
+    // configured is still a complete one. Leaving these at their library defaults is what made
+    // /editors/video a single-track editor with no titles, no transitions, no audio track and no
+    // project restored on reload (2026-09-05 audit, F2).
+    VideoEditorHostDefaults.ApplyEditingDefaults(options);
 
-    // Without this the Server tab is never rendered at all — the host wired up the media-library
-    // client, the base URL and the sign-in that authorises it, and then left the one flag that
-    // puts the tab on screen at its default of false. Signing in appeared to do nothing.
-    options.MediaLibrary        = true;
-    options.MediaLibraryBaseUrl = apiBaseUrl;
-    options.AssetCatalogUrl     = apiBaseUrl;
-    options.DocumentPostUrl     = $"{apiBaseUrl}/api/video-projects";
-
-    // The native sidecar pairs against the user's own loopback, orthogonal to hosting model.
-    options.NativeSidecar = true;
+    // The media library, the shared asset catalog and Save-to-server — the only things that need
+    // a server. No-op when nothing is configured.
+    VideoEditorHostDefaults.ApplyServerIntegration(options, apiBaseUrl);
 });
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

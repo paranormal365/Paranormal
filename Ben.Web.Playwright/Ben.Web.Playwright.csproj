@@ -34,6 +34,12 @@
   <ItemGroup>
     <!-- Test fixtures (e.g. audio files for upload/playback tests) copied next to the built DLL -->
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The seeded demo media, linked rather than copied into the repo twice: these are the same
+         four small real files the editor's Server tab lists, so an import test and a download test
+         exercise the same bytes. Tiny (33-83 KB), so they cost nothing in CI. -->
+    <None Include="..\Ben.Data.WebApi\SeedData\Media\*"
+          Link="Fixtures\Media\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -34,6 +34,82 @@ public class WasmEditorTests : BenTestBase
         ViewportSize = new ViewportSize { Width = 1440, Height = 900 },
     };
 
+    /// <summary>
+    /// Skips the whole fixture when the WebAssembly host is not running.
+    /// </summary>
+    /// <remarks>
+    /// Without this every test here failed with a raw navigation error whenever :5180 was down —
+    /// eight failures in about ninety milliseconds that say nothing about the code and bury the
+    /// ones that do. A missing host is a missing precondition, so Ignore, the same convention
+    /// <c>BenTestBase.SkipIfFeatureOffAsync</c> uses (2026-09-05 audit, F19).
+    /// </remarks>
+    [OneTimeSetUp]
+    public async Task SkipWhenTheWasmHostIsNotRunning()
+    {
+        using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        try
+        {
+            var response = await probe.GetAsync(WasmUrl);
+            if (!response.IsSuccessStatusCode)
+                Assert.Ignore($"The WebAssembly editor host at {WasmUrl} answered {(int)response.StatusCode}.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Assert.Ignore(
+                $"The WebAssembly editor host is not running at {WasmUrl}. " +
+                "Start it with: dotnet run --project Ben.Wasm.Video --urls http://localhost:5180");
+        }
+    }
+
+    /// <summary>The media the editor imports in these tests, as paths on this machine.</summary>
+    /// <remarks>
+    /// Real files, not generated placeholders: an empty or synthetic file can pass an import test
+    /// while telling you nothing about whether ffmpeg could read it. These four are the repo's own
+    /// seeded demo media, linked into the output by the csproj.
+    /// </remarks>
+    protected static string FixtureMedia(string fileName)
+    {
+        var path = Path.Combine(TestContext.CurrentContext.TestDirectory, "Fixtures", "Media", fileName);
+        Assert.That(File.Exists(path), $"Fixture media is missing from the test output: {path}");
+        return path;
+    }
+
+    /// <summary>
+    /// Starts the ffmpeg engine and waits for it to be ready, which nearly every editing test needs
+    /// before it can do anything.
+    /// </summary>
+    protected async Task EnsureEngineReadyAsync()
+    {
+        var initialize = Page.GetByRole(AriaRole.Button, new() { Name = "Initialize" });
+        if (await initialize.CountAsync() > 0)
+            await initialize.First.ClickAsync();
+
+        await Expect(Page.Locator(".bv-toolbar__status"))
+            .ToContainTextAsync("Ready", new() { Timeout = 180_000 });
+    }
+
+    /// <summary>
+    /// Imports a file from disk through the media panel's own file input, the way the Open button
+    /// does.
+    /// </summary>
+    /// <remarks>
+    /// The input lives inside <c>ClipBrowser</c> and is only in the DOM while the Media &amp;
+    /// Properties panel is open, so this makes sure the panel is showing first. Nothing in the
+    /// suite drove <c>#bv-file-input</c> before, which is why importing — the first thing anybody
+    /// does — had no coverage at all (2026-09-05 audit, F19).
+    /// </remarks>
+    protected async Task ImportFixtureAsync(string fileName)
+    {
+        var input = Page.Locator("#bv-file-input");
+        if (await input.CountAsync() == 0)
+        {
+            await Page.GetByRole(AriaRole.Button, new() { Name = "Open" }).First.ClickAsync();
+            await Expect(input).ToBeAttachedAsync(new() { Timeout = 15_000 });
+        }
+
+        await input.SetInputFilesAsync(FixtureMedia(fileName));
+    }
+
     /// <summary>Loads a route on the WASM host and waits for the app to boot.</summary>
     private async Task GoAsync(string route = "/")
     {

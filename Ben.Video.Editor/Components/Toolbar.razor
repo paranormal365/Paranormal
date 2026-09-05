@@ -19,6 +19,7 @@
         {
             <ToolBarButton OnClick="OnInitializeClicked"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Overflow="@ToolBarItemOverflow.Never"
                            Icon="@SvgIcon.Play">
                 Initialize
             </ToolBarButton>
@@ -28,6 +29,7 @@
         <ToolBarButton OnClick="OnOpenClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.FolderOpen">
             Open
         </ToolBarButton>
@@ -39,6 +41,7 @@
         <ToolBarButton OnClick="OnPreviewClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Eye"
                        Title="Preview the final result at full resolution/quality (opens in a separate window)">
             Preview
@@ -48,21 +51,27 @@
         <ToolBarButton OnClick="OnExportClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Download"
                        Title="Render the final video locally in the browser (ffmpeg.wasm), then save or upload">
             Export
         </ToolBarButton>
 
         <!-- Undo -->
-        @* These three carry a label as well as an icon. They are the only buttons here without
-           Overflow="Never", so they are the ones that can collapse into the "…" menu — and a menu
-           of unlabelled icons makes people guess. The label is hidden while the button is in the
-           bar (see .bv-icon-only in the stylesheet) and shows in the menu, which renders in a
-           popup outside the toolbar. *@
+        @* Undo/Redo carry a label as well as an icon, hidden in the bar (.bv-icon-only) and shown
+           if they ever render in a menu — a menu of unlabelled icons is a list of guesses.
+
+           Every action button before the spacer now sets Overflow="Never". They used to take
+           Telerik's default of Auto, so as soon as the status chip grew a progress bar the whole
+           primary row — Initialize, Open, Preview, Export, Undo, Redo — collapsed into "…", and
+           the first thing the help tells a new person to press was not on screen (2026-09-05
+           audit, F1). What may still collapse is deliberately the two least urgent items: the
+           Assets toggle and Save-to-server, both labelled. *@
         <ToolBarButton OnClick="OnUndoClicked"
                        Enabled="@CanUndo"
                        Icon="@SvgIcon.Undo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Class="bv-icon-only"
                        Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")">
             Undo
@@ -73,6 +82,7 @@
                        Enabled="@CanRedo"
                        Icon="@SvgIcon.Redo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Class="bv-icon-only"
                        Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")">
             Redo
@@ -108,8 +118,10 @@
                             <DropDownButtonItem Icon="@SvgIcon.FileTxt"
                                                 OnClick="OnExportVttClicked">Export Captions (.vtt)</DropDownButtonItem>
                         }
+                        @* Named for what it opens. As "Help" nobody found the shortcut list, and
+                           the same word means the help article everywhere else on the site. *@
                         <DropDownButtonItem Icon="@SvgIcon.QuestionCircle"
-                                            OnClick="OnHelpClicked">Help</DropDownButtonItem>
+                                            OnClick="OnHelpClicked">Keyboard shortcuts</DropDownButtonItem>
                         @if (ShowErrorLog)
                         {
                             <DropDownButtonItem Icon="@SvgIcon.FileError"
@@ -143,36 +155,22 @@
 
         <ToolBarSpacer />
 
-        <!-- Panel visibility toggles — never overflow into the "..." menu, these are
-             always-relevant layout controls, not one-off actions. -->
-        <ToolBarButton OnClick="OnToggleClipBrowserClicked"
-                       Icon="@SvgIcon.LayoutSideBySide"
-                       FillMode="@(ShowClipBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowClipBrowser ? "bv-toggle--active" : "")"
-                       Title="Toggle clip browser" />
-        <ToolBarButton OnClick="OnTogglePreviewClicked"
-                       Icon="@SvgIcon.Eye"
-                       FillMode="@(ShowPreview ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowPreview ? "bv-toggle--active" : "")"
-                       Title="Toggle preview" />
-        <ToolBarButton OnClick="OnToggleTimelineClicked"
-                       Icon="@SvgIcon.Film"
-                       FillMode="@(ShowTimeline ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowTimeline ? "bv-toggle--active" : "")"
-                       Title="Toggle timeline" />
+        @* The clip-browser / preview / timeline toggles that used to sit here were wired to
+           parameters VideoEditor never passed, so every click invoked an empty delegate and the
+           buttons rendered permanently "active". The panel they would have hidden no longer
+           exists either. Removed with their parameters and LayoutService members rather than
+           wired up: Camtasia has no such toggles, and the Media & Properties panel has its own
+           close and reopen (2026-09-05 audit, F4). *@
+        @* Labelled and allowed to collapse: this is the first thing to give up the bar when
+           space runs out, and in the "…" menu a bare picture icon says nothing. *@
         <ToolBarButton OnClick="OnToggleAssetBrowserClicked"
                        Icon="@SvgIcon.Image"
                        FillMode="@(ShowAssetBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowAssetBrowser ? "bv-toggle--active" : "")"
-                       Title="Toggle asset browser (clipart, callouts, catalog)" />
+                       Class="@(ShowAssetBrowser ? "bv-toggle--active bv-icon-only" : "bv-icon-only")"
+                       Title="Toggle asset browser (clipart, callouts, catalog)">
+            Assets
+        </ToolBarButton>
         @if (ShowPanel)
         {
             <ToolBarButton OnClick="OnTogglePanelClicked"
@@ -328,11 +326,6 @@
     [Parameter] public bool ShowSaveToServer    { get; set; }
     [Parameter] public string ProjectName       { get; set; } = "project";
 
-    // Panel visibility state (read by toggle button fill modes)
-    [Parameter] public bool ShowClipBrowser     { get; set; } = true;
-    [Parameter] public bool ShowPreview         { get; set; } = true;
-    [Parameter] public bool ShowTimeline        { get; set; } = true;
-
     [Parameter] public EventCallback OnInitialize { get; set; }
     [Parameter] public EventCallback OnOpen       { get; set; }
     [Parameter] public EventCallback OnPreview    { get; set; }
@@ -353,9 +346,6 @@
     /// </summary>
     [Parameter] public EventCallback OnSave          { get; set; }
     [Parameter] public EventCallback<ElementReference> OnOpenProject { get; set; }
-    [Parameter] public EventCallback OnToggleClipBrowser { get; set; }
-    [Parameter] public EventCallback OnTogglePreview     { get; set; }
-    [Parameter] public EventCallback OnToggleTimeline    { get; set; }
     [Parameter] public int            QueueCount          { get; set; }
     [Parameter] public bool           HasSubtitles        { get; set; }
     [Parameter] public bool           ShowAssetBrowser    { get; set; }
@@ -436,9 +426,6 @@
     private async Task OnSaveToServerClicked() => await OnSaveToServer.InvokeAsync();
     private async Task OnSaveClicked() => await OnSave.InvokeAsync();
 
-    private async Task OnToggleClipBrowserClicked()    => await OnToggleClipBrowser.InvokeAsync();
-    private async Task OnTogglePreviewClicked()         => await OnTogglePreview.InvokeAsync();
-    private async Task OnToggleTimelineClicked()        => await OnToggleTimeline.InvokeAsync();
     private async Task OnToggleAssetBrowserClicked()    => await OnToggleAssetBrowser.InvokeAsync();
     private async Task OnTogglePanelClicked()           => await OnTogglePanel.InvokeAsync();
     private async Task OnToggleQueueClicked()           => await OnToggleQueue.InvokeAsync();

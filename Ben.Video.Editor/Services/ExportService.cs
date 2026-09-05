@@ -202,7 +202,11 @@ public sealed class ExportService : IAsyncDisposable
             // matched here (BuildXfadeFilterComplex assumes transitions[i] pairs with
             // segments[i], which a mixed-in cross-track transition would misalign).
             string composited;
-            var hasXfadeTransitions = _options.Transitions && _clips.AllTransitions.Any(t => !IsCrossTrack(t));
+            // Not gated on _options.Transitions: the flag decides whether a person can ADD a
+            // transition on this host, and a project carries its own. Gating the render here meant
+            // a project made on the site, opened on a host with the flag off, silently exported
+            // hard cuts (2026-09-05 audit, transitions-15).
+            var hasXfadeTransitions = _clips.AllTransitions.Any(t => !IsCrossTrack(t));
 
             // Item #70 phase 162 — try to run concat AND the audio mix as one sidecar job. When it
             // engages, the audio mix moves EARLIER than its usual position in this pipeline; that
@@ -229,7 +233,10 @@ public sealed class ExportService : IAsyncDisposable
             }
 
             // â”€â”€ Phase 3: Text overlays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            if (_options.TextOverlays && _clips.AllTextOverlays.Any())
+            // Same rule as transitions above: a title in the project is rendered whatever this
+            // host lets people create (2026-09-05 audit, titles-11). Callouts below already work
+            // this way, which is what made the inconsistency obvious.
+            if (_clips.AllTextOverlays.Any())
             {
                 composited = await ApplyTextOverlaysAsync(job, composited, s, tempFiles);
                 ThrowIfCancelled(job);
@@ -253,7 +260,9 @@ public sealed class ExportService : IAsyncDisposable
             // Skipped when the native assemble already mixed audio (item #70 phase 162) —
             // re-running it here would amix the standalone clips a SECOND time on top of the
             // already-mixed track, audibly doubling them.
-            if (_options.AudioTracks && _clips.AudioTracks.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
+            // The project's audio tracks are mixed whether or not this host offers the button
+            // that creates them (2026-09-05 audit, F2/titles-11 class).
+            if (_clips.AudioTracks.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
             {
                 composited = await MixAudioTracksAsync(job, composited, s, tempFiles);
                 ThrowIfCancelled(job);
@@ -261,9 +270,10 @@ public sealed class ExportService : IAsyncDisposable
 
             // â”€â”€ Phase 5: Download â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // â”€â”€ Phase 5: Embed chapters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // s.EmbedChapters is the person's own choice in the export dialog, and the markers are
+            // in the project; the host flag only decides whether this host can add one.
             var markers = _clips.Markers;
             if (s.EmbedChapters
-                && _options.Markers
                 && markers.Count > 0
                 && s.OutputFormat != "webm")
             {
@@ -468,7 +478,6 @@ public sealed class ExportService : IAsyncDisposable
         ExportJob job, ExportSettings s, List<string> tempFiles)
     {
         var overrides = new Dictionary<Guid, string>();
-        if (!_options.Transitions) return overrides;
 
         var crossTrack = _clips.AllTransitions.Where(IsCrossTrack).ToList();
         if (crossTrack.Count == 0) return overrides;
@@ -613,7 +622,7 @@ public sealed class ExportService : IAsyncDisposable
     {
         _nativeAssembleMixedAudio = false;
 
-        var audioClips = (_options.AudioTracks && s.IncludeAudio)
+        var audioClips = s.IncludeAudio
             ? _clips.AudioTracks.SelectMany(t => t.AudioClips).OrderBy(a => a.TimelinePosition).ToList()
             : [];
 
@@ -1678,9 +1687,19 @@ public sealed class ExportService : IAsyncDisposable
         await _ffmpeg.DeleteFileAsync(inputName);
         if (tempFiles.Remove(wmMemFs)) await _ffmpeg.DeleteFileAsync(wmMemFs);
 
+
+        // Back to the name the person chose. The watermark pass writes to wm_<jobid>.<fmt>, and
+        // returning that made it the download's filename — a watermarked export arrived as
+        // wm_9f3c….mp4 while an unwatermarked one kept "my-video.mp4" (2026-09-05 audit,
+        // export-6). Renaming here keeps the caller's single outputName true for the probe, the
+        // OPFS move and the browser download alike.
+        var finalName = inputName;
+        await RenameAsync(outputName, finalName);
+        tempFiles.Remove(outputName);
+
         job.CompletedPhases.Add("Watermark applied");
         Advance(job, 93, "Watermark applied.");
-        return outputName;
+        return finalName;
     }
 
     // â”€â”€ Chapter embed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

@@ -70,12 +70,17 @@ public class AudioScrubModeTests : BenTestBase
     {
         if (!await NavigateToTghCaseFilesTabAsync())
         {
-            Assert.Pass("TGH org not visible; seed data may differ.");
+            // A precondition of the environment, not a result: Ignore leaves the run honest
+            // about what was not exercised. Assert.Pass reported a green test for a browser that
+            // never reached the page (2026-09-05 audit, F19).
+            Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
         if (!await UploadTestAudioAsync())
         {
-            Assert.Pass("Audio upload/preview did not render in time — skipping.");
+            // Not a precondition: uploading the file and getting a player is the behaviour under
+            // test, so failing to do it is a failure.
+            Assert.Fail("Audio upload/preview did not render in time.");
             return;
         }
 
@@ -100,12 +105,17 @@ public class AudioScrubModeTests : BenTestBase
     {
         if (!await NavigateToTghCaseFilesTabAsync())
         {
-            Assert.Pass("TGH org not visible; seed data may differ.");
+            // A precondition of the environment, not a result: Ignore leaves the run honest
+            // about what was not exercised. Assert.Pass reported a green test for a browser that
+            // never reached the page (2026-09-05 audit, F19).
+            Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
         if (!await UploadTestAudioAsync())
         {
-            Assert.Pass("Audio upload/preview did not render in time — skipping.");
+            // Not a precondition: uploading the file and getting a player is the behaviour under
+            // test, so failing to do it is a failure.
+            Assert.Fail("Audio upload/preview did not render in time.");
             return;
         }
 

@@ -19,8 +19,12 @@ video goes back to the server, and only if you ask it to.
 - **A case's Video tab** — the same editor, opened against that case, for work your group will
   attach to it.
 
-There is also a standalone editor that runs on its own. It behaves identically, with one
-difference worth knowing: see [Working signed out](#working-signed-out) below.
+There is also a standalone editor that runs on its own, at
+[ishaunted.com/editors/video](https://ishaunted.com/editors/video/). It is the same editor with the
+same features — multiple tracks, titles, transitions, effects, saved projects and all — and it
+keeps your footage even further from the server: media goes straight from the site to your machine
+without passing through the web server at all. The one difference worth knowing is what happens
+before you sign in: see [Working signed out](#working-signed-out) below.
 
 ## Start the engine
 
@@ -102,6 +106,29 @@ shifts later. **Overwrite** is what you want when you are deliberately replacing
 - **TC** switches the ruler between timecode and frame numbers.
 - **Ripple** decides what happens to everything downstream when you trim or delete: with it on, the
   gap closes and later clips move back; with it off, the gap stays.
+
+### Keyboard
+
+Most of the timeline can be driven from the keyboard, and the full list is in the editor itself:
+**File → Keyboard shortcuts**, or press <kbd>?</kbd>.
+
+The ones worth knowing straight away:
+
+| Key | Does |
+|---|---|
+| <kbd>Space</kbd> | Play or pause |
+| <kbd>←</kbd> / <kbd>→</kbd> | Step one frame back or forward |
+| <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the start or the end |
+| <kbd>S</kbd> | Split the selected clip at the playhead |
+| <kbd>M</kbd> | Drop a marker at the playhead |
+| <kbd>Delete</kbd> | Remove what is selected |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> | Undo (<kbd>Shift</kbd> as well to redo) |
+| <kbd>Escape</kbd> | Clear the selection |
+
+On a Mac, <kbd>⌘</kbd> works everywhere <kbd>Ctrl</kbd> does.
+
+With a title, callout or piece of clip art selected, the arrow keys nudge it around the frame
+instead of stepping frames.
 
 ### Marking a moment
 

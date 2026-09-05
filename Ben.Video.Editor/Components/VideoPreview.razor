@@ -666,7 +666,8 @@
         _displayImageUrl = active.ThumbnailUrl;
     }
 
-    private async Task RewindAsync()
+    /// <summary>Sends the playhead to the start (Home).</summary>
+    public async Task RewindAsync()
     {
         _imagePlayCts?.Cancel();
         if (_hasPreview && _module is not null)
@@ -674,6 +675,22 @@
         else
         {
             Playback.NotifyTimeUpdate(0);
+            UpdateDisplayImage();
+        }
+    }
+
+    /// <summary>Sends the playhead to the end of what is loaded (End).</summary>
+    public async Task SeekToEndAsync()
+    {
+        _imagePlayCts?.Cancel();
+        var end = _duration > 0 ? _duration : Clips.TotalDuration;
+        if (end <= 0) return;
+
+        if (_hasPreview && _module is not null)
+            await _module.InvokeVoidAsync("seek", _videoElementId, end);
+        else
+        {
+            Playback.NotifyTimeUpdate(end);
             UpdateDisplayImage();
         }
     }
@@ -697,7 +714,10 @@
 
     // ── Frame stepping ───────────────────────────────────────────────────────
 
-    private void StepBackAsync()
+    /// <summary>Steps one frame back. Public so the editor's arrow-key shortcut can call it —
+    /// the buttons' own tooltips and the keyboard help have always promised arrow stepping, and
+    /// nothing implemented it (2026-09-05 audit, preview-6).</summary>
+    public void StepBackAsync()
     {
         if (!HasContent || Playback.SessionFps <= 0) return;
         var frameDuration = 1.0 / Playback.SessionFps;
@@ -707,7 +727,8 @@
         if (!_hasPreview) UpdateDisplayImage();
     }
 
-    private void StepForwardAsync()
+    /// <summary>Steps one frame forward. See <see cref="StepBackAsync"/>.</summary>
+    public void StepForwardAsync()
     {
         if (!HasContent || Playback.SessionFps <= 0) return;
         var frameDuration = 1.0 / Playback.SessionFps;

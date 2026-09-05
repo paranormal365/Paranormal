@@ -7,56 +7,16 @@ public sealed class LayoutServiceTests
     // ── Default values ────────────────────────────────────────────────────────
 
     [Fact]
-    public void Defaults_AreAllVisible_WithExpectedSizes()
+    public void Defaults_AreTheExpectedSizes()
     {
         var layout = new LayoutService();
 
-        Assert.True(layout.ShowClipBrowser);
-        Assert.True(layout.ShowPreview);
-        Assert.True(layout.ShowTimeline);
         Assert.Equal(240, layout.BrowserWidth);
         Assert.Equal(220, layout.TimelineHeight);
+        Assert.Equal(180, layout.PreviewHeight);
     }
 
-    // ── Toggle methods ────────────────────────────────────────────────────────
-
-    [Fact]
-    public void ToggleClipBrowser_FlipsState()
-    {
-        var layout = new LayoutService();
-
-        layout.ToggleClipBrowser();
-        Assert.False(layout.ShowClipBrowser);
-
-        layout.ToggleClipBrowser();
-        Assert.True(layout.ShowClipBrowser);
-    }
-
-    [Fact]
-    public void TogglePreview_FlipsState()
-    {
-        var layout = new LayoutService();
-
-        layout.TogglePreview();
-        Assert.False(layout.ShowPreview);
-
-        layout.TogglePreview();
-        Assert.True(layout.ShowPreview);
-    }
-
-    [Fact]
-    public void ToggleTimeline_FlipsState()
-    {
-        var layout = new LayoutService();
-
-        layout.ToggleTimeline();
-        Assert.False(layout.ShowTimeline);
-
-        layout.ToggleTimeline();
-        Assert.True(layout.ShowTimeline);
-    }
-
-    // ── SetBrowserWidth clamping ──────────────────────────────────────────────
+    // ── Resize ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void SetBrowserWidth_ValidValue_SetsExact()
@@ -145,42 +105,6 @@ public sealed class LayoutServiceTests
     }
 
     // ── OnChanged event ───────────────────────────────────────────────────────
-
-    [Fact]
-    public void ToggleClipBrowser_RaisesOnChanged()
-    {
-        var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
-
-        layout.ToggleClipBrowser();
-
-        Assert.True(fired);
-    }
-
-    [Fact]
-    public void TogglePreview_RaisesOnChanged()
-    {
-        var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
-
-        layout.TogglePreview();
-
-        Assert.True(fired);
-    }
-
-    [Fact]
-    public void ToggleTimeline_RaisesOnChanged()
-    {
-        var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
-
-        layout.ToggleTimeline();
-
-        Assert.True(fired);
-    }
 
     [Fact]
     public void SetBrowserWidth_RaisesOnChanged()

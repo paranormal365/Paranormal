@@ -7,10 +7,11 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class LayoutService
 {
-    // ── visibility ────────────────────────────────────────────────────────────
-    public bool ShowClipBrowser  { get; private set; } = true;
-    public bool ShowPreview      { get; private set; } = true;
-    public bool ShowTimeline     { get; private set; } = true;
+    // The clip-browser / preview / timeline visibility flags and their toggles lived here and
+    // were read by nothing: the toolbar buttons that would have flipped them were never wired to
+    // this service, and the workspace they hid no longer exists in the markup. Removed with those
+    // buttons rather than connected — Camtasia has no such toggles, and the Media & Properties
+    // panel owns its own close/reopen (2026-09-05 audit, F4).
 
     // ── sizes (CSS-custom-property values written onto .bv-editor) ───────────
     /// <summary>Width of the Clip Browser panel in pixels.</summary>
@@ -32,25 +33,6 @@ public sealed class LayoutService
 
     // ── change notification ───────────────────────────────────────────────────
     public event Action? OnChanged;
-
-    // ── visibility toggles ────────────────────────────────────────────────────
-    public void ToggleClipBrowser()
-    {
-        ShowClipBrowser = !ShowClipBrowser;
-        Notify();
-    }
-
-    public void TogglePreview()
-    {
-        ShowPreview = !ShowPreview;
-        Notify();
-    }
-
-    public void ToggleTimeline()
-    {
-        ShowTimeline = !ShowTimeline;
-        Notify();
-    }
 
     // ── resize ────────────────────────────────────────────────────────────────
     public void SetBrowserWidth(int px)

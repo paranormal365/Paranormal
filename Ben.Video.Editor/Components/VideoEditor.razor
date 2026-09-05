@@ -381,13 +381,14 @@
                         <tr><td><kbd>Space</kbd></td><td>Play / Pause preview</td></tr>
                         <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selected clip(s)</td></tr>
                         <tr><td><kbd>S</kbd></td><td>Split selected video clip at playhead</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Click</kbd></td><td>Multi-select clips on timeline</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Click</kbd></td><td>Multi-select clips on timeline</td></tr>
                         <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Nudge selected clips ±1 s</td></tr>
                         <tr><td><kbd>Escape</kbd></td><td>Close editor panel / clear selection</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> / <kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
                         <tr><td><kbd>M</kbd></td><td>Add marker at playhead</td></tr>
-                        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame in preview</td></tr>
+                        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame (nudge, with a layer selected)</td></tr>
+                        <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>Jump to the start / end</td></tr>
                         <tr><td><kbd>Fit</kbd> button</td><td>Zoom timeline to fit all clips in view</td></tr>
                         <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
                     </tbody>
@@ -947,6 +948,19 @@
                     Clips.RemoveClipArtClip(_selectedClipArt.Id);
                     _selectedClipArt = null;
                 }
+                // Titles and transitions were the two selectable things Delete ignored, though the
+                // shortcut table promises it removes "the selected clip" and both have a Properties
+                // panel with a Remove button (2026-09-05 audit, titles-7 and transitions-10).
+                else if (_selectedTextOverlay is not null)
+                {
+                    Clips.RemoveTextOverlay(_selectedTextOverlay.Id);
+                    _selectedTextOverlay = null;
+                }
+                else if (_selectedTransition is not null)
+                {
+                    Clips.RemoveTransition(_selectedTransition.Id);
+                    _selectedTransition = null;
+                }
                 break;
 
             // Item #57 P5 — arrow-key nudge for the selected canvas layer (Callout/ClipArt/
@@ -954,7 +968,27 @@
             // fires when one of those three is actually selected — an unmatched arrow key here
             // falls through with no effect, same as today.
             case "ArrowLeft" or "ArrowRight" or "ArrowUp" or "ArrowDown":
-                NudgeSelectedCanvasItem(key, shift);
+                // With a canvas layer selected the arrows nudge it (item #57 P5). With nothing on
+                // the canvas selected they step one frame, which the transport buttons' tooltips
+                // ("Step back one frame (←)") and the shortcut help have always promised and
+                // nothing implemented (2026-09-05 audit, preview-6).
+                if (SelectedCanvasItem is not null)
+                {
+                    NudgeSelectedCanvasItem(key, shift);
+                }
+                else if (_preview is not null)
+                {
+                    if (key == "ArrowLeft")  _preview.StepBackAsync();
+                    if (key == "ArrowRight") _preview.StepForwardAsync();
+                }
+                break;
+
+            case "Home" when !ctrl:
+                if (_preview is not null) await _preview.RewindAsync();
+                break;
+
+            case "End" when !ctrl:
+                if (_preview is not null) await _preview.SeekToEndAsync();
                 break;
 
             case "[" when !ctrl:
@@ -1010,8 +1044,14 @@
                 break;
 
             case "Escape":
+                // Every selection kind, not the four that happened to be listed: an image, callout
+                // or clip-art selection survived Escape and kept its Properties panel open
+                // (2026-09-05 audit, F10).
                 _selectedClip        = null;
                 _selectedAudioClip   = null;
+                _selectedImageClip   = null;
+                _selectedCallout     = null;
+                _selectedClipArt     = null;
                 _selectedTransition  = null;
                 _selectedTextOverlay = null;
                 _showHelp            = false;
