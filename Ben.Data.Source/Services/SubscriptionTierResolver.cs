@@ -107,6 +107,37 @@ public static class SubscriptionTierResolver
             ?? bands[^1];
     }
 
+    /// <summary>
+    /// Why this price list still offers a group something for nothing, or null when it does not.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ben's rule, 2026-09-05:</b> "I don't think a 'free group' should ever be a
+    /// subscribable thing. An individual can be free... a group cannot." A group's free state is
+    /// having no subscription; a band priced at zero is a subscription that costs nothing, and
+    /// holding one reads as paid to every gate that asks.</para>
+    ///
+    /// <para><b>Advisory, deliberately — not part of <see cref="Validate"/>.</b> Validate's verdict
+    /// makes <see cref="Resolve"/> throw, and a database whose ladder already carries a zero band
+    /// would stop being able to price anything at all: checkout, the area gate and the renewal job
+    /// would all fail at once. A pricing mistake must not become an outage. So this reports, the
+    /// editor shows it, and the point of sale is where the refusal actually bites.</para>
+    /// </remarks>
+    public static string? WhyGroupsCanStillBeFree(IReadOnlyList<SubscriptionTier> tiers)
+    {
+        var free = tiers
+            .Where(t => t.IsActive && t.IsBandedByMembers)
+            .FirstOrDefault(t => t.Prices.Any(p => p.IsActive && p.Price <= 0m));
+
+        if (free is null) return null;
+
+        var range = free.MaxMembers is { } max ? $"{free.MinMembers}–{max}" : $"{free.MinMembers}+";
+
+        return $"\"{free.Name}\" ({range} members) is priced at nothing, so a group that size can "
+             + "hold a subscription without paying — and a subscription is what every paid feature "
+             + "checks. A group is free by having no plan, not by being on a free one. Give the "
+             + "band a price, or take it out of the ladder.";
+    }
+
     /// <summary>Whether growth past this band is priced per extra member (item 144).</summary>
     public static bool AllowsOverflow(SubscriptionTier tier)
         => tier.Prices.Any(p => p.IsActive && p.PricePerExtraMember is not null);

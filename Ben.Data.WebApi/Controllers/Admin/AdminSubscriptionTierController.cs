@@ -72,7 +72,11 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         // (item 144), so validation without Prices would wrongly refuse a sound list.
         var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
 
-        return Ok(SubscriptionTierResolver.Validate(tiers));
+        // The blocking problem first, because it is the one that stops the list working at all.
+        // The free-band advisory only when there is no blocker: a group priced at nothing is a
+        // real fault, but the list still functions, so it must not hide a list that does not.
+        return Ok(SubscriptionTierResolver.Validate(tiers)
+               ?? SubscriptionTierResolver.WhyGroupsCanStillBeFree(tiers));
     }
 
     [HttpPost]
