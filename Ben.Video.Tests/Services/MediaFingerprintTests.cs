@@ -73,6 +73,31 @@ public sealed class MediaFingerprintTests
         Assert.Equal(MediaFingerprint.Verdict.Unknown, verdict);
     }
 
+    // ── What a verdict means for the file in hand ─────────────────────────────
+
+    [Fact]
+    public void A_matching_file_may_be_used()
+        => Assert.True(MediaFingerprint.MayUse(MediaFingerprint.Verdict.Matches));
+
+    /// <summary>
+    /// A file that does not match is not used, however inconvenient that is.
+    /// </summary>
+    /// <remarks>
+    /// Silently editing against footage that replaced the original is worse than a clip that still
+    /// says its media is missing.
+    /// </remarks>
+    [Fact]
+    public void A_file_that_does_not_match_is_refused()
+        => Assert.False(MediaFingerprint.MayUse(MediaFingerprint.Verdict.Differs));
+
+    /// <summary>
+    /// A file nothing can be said about is used. Refusing on "cannot tell" would leave every
+    /// project saved before any of this existed unable to find its own media.
+    /// </summary>
+    [Fact]
+    public void A_file_that_cannot_be_checked_is_still_used()
+        => Assert.True(MediaFingerprint.MayUse(MediaFingerprint.Verdict.Unknown));
+
     [Fact]
     public void An_ordinary_clip_is_worth_hashing()
         => Assert.True(MediaFingerprint.ShouldHash(48_900_846));

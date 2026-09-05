@@ -36,6 +36,10 @@ public sealed class ProjectStore : IAsyncDisposable
     private readonly SourceMounter  _mounter;
     private readonly IJSRuntime     _js;
     private readonly ErrorLogService _errorLog;
+
+    /// <summary>Re-fetching missing media from the server, when the host can.</summary>
+    /// <remarks>Optional: a host with no media library has nothing to fetch from.</remarks>
+    private readonly MediaRelinkService? _relink;
     private readonly MotionKeyframeService _motion;
 
     // Audit #4 — typed localStorage access instead of interpolated eval strings. Imported lazily
@@ -101,8 +105,10 @@ public sealed class ProjectStore : IAsyncDisposable
 
     public ProjectStore(ClipStore clips, ProjectService projectService,
         OPFSService opfs, FfmpegService ffmpeg, SourceMounter mounter,
-        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog)
+        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog,
+        MediaRelinkService? relink = null)
     {
+        _relink         = relink;
         _clips          = clips;
         _projectService = projectService;
         _opfs           = opfs;
@@ -724,6 +730,98 @@ public sealed class ProjectStore : IAsyncDisposable
         // adds makes it visible on every single restore, so a one-time notify once the whole
         // batch finishes is worth doing here rather than leaving a fixed project looking broken.
         _clips.NotifyChanged();
+
+        // Whatever is still missing may be on the server.
+        await OfferToRefetchAsync();
+    }
+
+    // ── Re-fetching missing media ─────────────────────────────────────────────
+
+    /// <summary>
+    /// The clips a re-fetch could bring back, when there are any.
+    /// </summary>
+    /// <remarks>
+    /// Set when a restore left media missing that the server can supply and the total is large
+    /// enough to be worth asking about. The host renders the question; this store never decides on
+    /// its own to move hundreds of megabytes.
+    /// </remarks>
+    public IReadOnlyList<MediaRelinkCandidate> PendingRefetch { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="PendingRefetch"/> becomes non-empty.</summary>
+    public event Action? OnRefetchOffered;
+
+    /// <summary>
+    /// Everything currently on the timeline or in the bin, whether or not it has media.
+    /// </summary>
+    private IEnumerable<TrackItem> AllRestorableItems =>
+        _clips.AllVideoClips.Cast<TrackItem>()
+            .Concat(_clips.AllAudioClips)
+            .Concat(_clips.AllImageClips)
+            .Concat(_clips.MediaBin);
+
+    /// <summary>
+    /// Fetches missing media back from the server, or asks first when there is a lot of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what makes a project portable. Restoring reads this browser's storage by clip
+    /// id, so a project opened on a second machine — or after the storage was cleared — came back
+    /// with every clip missing and a manual re-link per clip as the only way out, while help
+    /// promised you could pick a project up on another machine (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>Small fetches happen without asking, because being asked about four megabytes is
+    /// noise. Anything larger, or anything whose size was never recorded, waits for an answer —
+    /// somebody opening a project on a tethered phone to check one title should not have an
+    /// evening's session recordings start moving in silence.</para>
+    /// </remarks>
+    private async Task OfferToRefetchAsync()
+    {
+        if (_relink is null || !_relink.IsAvailable) return;
+
+        var candidates = MediaRelinkService.Candidates(AllRestorableItems);
+        if (candidates.Count == 0) return;
+
+        if (MediaRelinkPlan.ShouldAskFirst(candidates))
+        {
+            PendingRefetch = candidates;
+            OnRefetchOffered?.Invoke();
+            return;
+        }
+
+        await RefetchMissingMediaAsync(candidates);
+    }
+
+    /// <summary>
+    /// Fetches the media for <paramref name="candidates"/>, or for everything offered.
+    /// </summary>
+    /// <remarks>
+    /// Public so a host can call it when somebody answers the question. Nothing here can make a
+    /// project worse: a clip whose file could not be fetched, or came back different, is left
+    /// exactly as it was.
+    /// </remarks>
+    public async Task<MediaRelinkService.Outcome> RefetchMissingMediaAsync(
+        IReadOnlyList<MediaRelinkCandidate>? candidates = null, CancellationToken ct = default)
+    {
+        PendingRefetch = [];
+        if (_relink is null) return new MediaRelinkService.Outcome(0, 0, 0);
+
+        var wanted = (candidates ?? MediaRelinkService.Candidates(AllRestorableItems))
+            .Select(c => c.ClipId)
+            .ToHashSet();
+
+        var items = AllRestorableItems.Where(i => wanted.Contains(i.Id)).ToList();
+        if (items.Count == 0) return new MediaRelinkService.Outcome(0, 0, 0);
+
+        var outcome = await _relink.RelinkAsync(items, ct);
+
+        if (outcome.Restored > 0) _clips.NotifyChanged();
+        return outcome;
+    }
+
+    /// <summary>Dismisses the offer without fetching anything.</summary>
+    public void DeclineRefetch()
+    {
+        PendingRefetch = [];
+        OnChanged?.Invoke();
     }
 
     /// <summary>

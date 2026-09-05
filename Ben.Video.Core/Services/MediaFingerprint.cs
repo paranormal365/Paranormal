@@ -49,6 +49,22 @@ public static class MediaFingerprint
     }
 
     /// <summary>
+    /// Whether a file with this verdict may be used as a clip's media.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only <see cref="Verdict.Differs"/> refuses. <see cref="Verdict.Unknown"/> is accepted
+    /// on purpose: a project saved before any of this existed records neither size nor hash, and a
+    /// clip above the hash ceiling records no hash — refusing on "cannot tell" would leave every
+    /// older project permanently unable to find its own media, which is the state this whole
+    /// feature exists to end.</para>
+    ///
+    /// <para>The asymmetry is deliberate. Being unable to verify is the situation the editor was
+    /// already in; being able to verify and finding a mismatch is new information, and acting on
+    /// it is the whole point of recording anything.</para>
+    /// </remarks>
+    public static bool MayUse(Verdict verdict) => verdict is not Verdict.Differs;
+
+    /// <summary>
     /// Compares what was recorded when the project was saved with what came back now.
     /// </summary>
     /// <param name="expectedSize">The size recorded on the clip, or null.</param>

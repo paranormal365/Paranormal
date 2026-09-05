@@ -96,6 +96,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<KeyboardShortcutService>();
         services.AddScoped<ProjectService>();
         services.AddScoped<ProjectStore>();
+        // Puts a project's media back when it was opened somewhere the media is not. Registered
+        // unconditionally; it does nothing without a media library to fetch from, which is the
+        // right behaviour for a host that has none (2026-09-05 audit, F14).
+        services.AddScoped<MediaRelinkService>();
         services.AddScoped<ErrorLogService>();
         services.AddScoped<LayoutService>();
         services.AddScoped<ExportResolutionService>();

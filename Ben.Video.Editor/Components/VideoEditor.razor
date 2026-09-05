@@ -432,6 +432,11 @@
                       OnSaveLocally="SaveProjectAsync"
                       OnSaveToServer="SaveToServerHandlerAsync" />
 
+    <!-- ── Media this project needs, waiting on the server (2026-09-05 audit, F14) ── -->
+    <MissingMediaPrompt Candidates="@Projects.PendingRefetch"
+                        OnDownload="DownloadMissingMediaAsync"
+                        OnLater="Projects.DeclineRefetch" />
+
     <!-- ── "Not enough room" insert/overwrite confirmation (items #25, #49) ───────── -->
     <RippleInsertPrompt Visible="_rippleInsertPromptVisible"
                         ClipName="@(_pendingDrop?.Item.Name ?? _pendingRippleClip?.Name ?? "this clip")"
@@ -688,6 +693,8 @@
         Playback.OnStateChanged += OnPlaybackStateChanged;
         Layout.OnChanged        += OnLayoutChanged;
         Projects.OnChanged      += OnProjectStoreChanged;
+        // The offer is raised from the background restore, so nothing would repaint to show it.
+        Projects.OnRefetchOffered += OnProjectStoreChanged;
         ExportQueue.OnChanged   += OnQueueChanged;
 
         // Item #36 phase C — opt-in background render worker. Pause/resume piggybacks on the
@@ -2746,6 +2753,39 @@
         await (await DomAsync()).InvokeVoidAsync("click", "#bv-relink-input", false);
     }
 
+    /// <summary>
+    /// Fetches the media a restored project is missing, and says how it went.
+    /// </summary>
+    /// <remarks>
+    /// A clip whose file could not be fetched, or came back different from the one the project was
+    /// saved against, is left missing rather than relinked to different footage — so this reports
+    /// both numbers instead of only the good one.
+    /// </remarks>
+    private async Task DownloadMissingMediaAsync()
+    {
+        var outcome = await Projects.RefetchMissingMediaAsync();
+
+        if (outcome.Restored > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Restored)} downloaded.",
+                ThemeConstants.Notification.ThemeColor.Success);
+
+        if (outcome.Mismatched > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Mismatched)} could not be used: the file on the server is not "
+                + "the one this project was saved against.",
+                ThemeConstants.Notification.ThemeColor.Warning);
+
+        if (outcome.Failed > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Failed)} could not be downloaded.",
+                ThemeConstants.Notification.ThemeColor.Error);
+
+        StateHasChanged();
+    }
+
+    private static string ClipCount(int count) => count == 1 ? "1 clip" : $"{count} clips";
+
     private async Task OnRelinkFileChangedAsync(ChangeEventArgs _)
     {
         if (_relinkItemId is null) return;
@@ -3277,6 +3317,7 @@
         Playback.OnStateChanged -= OnPlaybackStateChanged;
         Layout.OnChanged        -= OnLayoutChanged;
         Projects.OnChanged      -= OnProjectStoreChanged;
+        Projects.OnRefetchOffered -= OnProjectStoreChanged;
         ExportQueue.OnChanged   -= OnQueueChanged;
         await BackgroundRender.DisposeAsync();
 
