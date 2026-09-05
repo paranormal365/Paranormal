@@ -700,7 +700,20 @@
             // ProjectPersistence. Previously nothing ever called this: File > Save could report
             // "Project saved." and a reload would still silently discard everything.
             if (EffectiveOptions.ProjectPersistence)
+            {
                 await Projects.RestoreLastActiveAsync();
+
+                // Only once the restore has finished, so opening a project cannot immediately
+                // schedule a write of what was just read.
+                Projects.EnableAutosave();
+
+                // pagehide is the one event that fires on every way out — a closed tab, a followed
+                // link, and on a phone a switch to another app, where beforeunload often does not
+                // fire at all (2026-09-05 audit, F9).
+                _unloadSelfRef = DotNetObjectReference.Create(this);
+                await (await DomAsync()).InvokeVoidAsync(
+                    "flushOnPageHide", _unloadSelfRef, nameof(OnPageHiding));
+            }
 
             _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", FullscreenModulePath);
             _fullscreenSelfRef = DotNetObjectReference.Create(this);
@@ -904,6 +917,7 @@
 
     private void OnFullQualityProgress() => InvokeAsync(() =>
     {
+        _ = UpdateUnloadGuardAsync();
         _fullQualityPercent  = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
         _fullQualityLastTick = DateTimeOffset.UtcNow;
         _fullQualityStalled  = false;
@@ -2349,6 +2363,8 @@
 
     private void OnExportComplete()
     {
+        _ = UpdateUnloadGuardAsync();
+
         // ExportDialog invokes this both when a job is queued (AddToQueueAsync, fired at enqueue
         // time — not when the queued render actually finishes) and when an immediate export
         // genuinely completes (StartExportAsync, after the render). ActiveCount > 0 only ever
@@ -2731,8 +2747,60 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void OnProjectStoreChanged()   => InvokeAsync(StateHasChanged);
-    private void OnQueueChanged()          => InvokeAsync(StateHasChanged);
+    private DotNetObjectReference<VideoEditor>? _unloadSelfRef;
+    private bool _unloadGuardOn;
+
+    /// <summary>
+    /// The last chance to write the project, as the page goes away.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnPageHiding() => await Projects.FlushAutosaveAsync();
+
+    private void OnProjectStoreChanged()
+    {
+        _ = UpdateUnloadGuardAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Turns the browser's "leave site?" prompt on and off as there becomes, or stops being,
+    /// something worth losing.
+    /// </summary>
+    /// <remarks>
+    /// Nothing asked before this: closing the tab took whatever was unsaved with it, and a render
+    /// in progress with it — a render lives entirely in the tab, so leaving does not background it,
+    /// it destroys it (2026-09-05 audit, F9). The handler is removed when there is nothing to
+    /// protect, both because a page that always warns gets its warning ignored and because a
+    /// registered beforeunload disables the browser's back/forward cache.
+    /// </remarks>
+    private async Task UpdateUnloadGuardAsync()
+    {
+        var renderRunning = Exporter.CurrentJob is { State: ExportJobState.Running };
+
+        var shouldGuard = UnloadGuardPolicy.ShouldGuard(
+            Projects.IsDirty, Projects.AutosavePending, renderRunning);
+
+        if (shouldGuard == _unloadGuardOn) return;
+        _unloadGuardOn = shouldGuard;
+
+        try
+        {
+            await (await DomAsync()).InvokeVoidAsync(
+                "setUnloadGuard", shouldGuard,
+                UnloadGuardPolicy.Reason(Projects.IsDirty, renderRunning));
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("VideoEditor.UpdateUnloadGuardAsync", ex);
+        }
+    }
+    private void OnQueueChanged()
+    {
+        // A render running in this tab is worth stopping somebody from leaving over, so the guard
+        // follows the queue as well as the dirty flag.
+        _ = UpdateUnloadGuardAsync();
+        InvokeAsync(StateHasChanged);
+    }
 
     // ── Working Window auto-refresh (item #11, fulfilled unconditionally as of
     // item #36 phase 84) ────────────────────────────────────────────────────────
@@ -3108,6 +3176,7 @@
         Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
         PreviewQuality.OnChanged -= OnPreviewQualityChanged;
         StopStallWatch();
+        _unloadSelfRef?.Dispose();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
         BackgroundRender.OnLoopError -= OnBackgroundRenderLoopError;

@@ -103,8 +103,99 @@ public sealed class ProjectStore : IAsyncDisposable
 
     private void OnClipsChanged()
     {
+        // Restoring a project is not editing it: the store raises change events as it rebuilds the
+        // timeline, and treating those as edits would mark a freshly-opened project dirty and set
+        // autosave writing it straight back.
+        if (_restoring) return;
+
         IsDirty = true;
         OnChanged?.Invoke();
+        ScheduleAutosave();
+    }
+
+    // ── Autosave ──────────────────────────────────────────────────────────────
+
+    /// <summary>How long the editing has to stop before the project is written.</summary>
+    /// <remarks>
+    /// Long enough that a drag or a burst of typing writes once at the end rather than continually,
+    /// short enough that walking away from the machine has already saved.
+    /// </remarks>
+    public static readonly TimeSpan AutosaveIdle = TimeSpan.FromSeconds(2);
+
+    private CancellationTokenSource? _autosaveCts;
+    private bool _autosaveEnabled;
+    private bool _restoring;
+
+    /// <summary>True while an autosave is scheduled and has not run.</summary>
+    /// <remarks>Read by the unload guard: work that has not reached storage is worth stopping for.</remarks>
+    public bool AutosavePending => _autosaveCts is { IsCancellationRequested: false };
+
+    /// <summary>When the project was last written, for the "Saved ·" hint.</summary>
+    public DateTime? LastSavedAt { get; private set; }
+
+    /// <summary>
+    /// Starts writing the project a couple of seconds after editing stops.
+    /// </summary>
+    /// <remarks>
+    /// <para>Nothing wrote anything unless somebody chose Save. A reload, a crashed tab or a closed
+    /// window took the whole session with it, and the editor is exactly the kind of place people
+    /// work for an hour without thinking about files (2026-09-05 audit, F9).</para>
+    ///
+    /// <para>A project that has never been saved gets a name of its own rather than being skipped,
+    /// because an unnamed project is precisely the one most likely to be lost.</para>
+    /// </remarks>
+    public void EnableAutosave() => _autosaveEnabled = true;
+
+    private void ScheduleAutosave()
+    {
+        if (!_autosaveEnabled) return;
+
+        _autosaveCts?.Cancel();
+        _autosaveCts?.Dispose();
+        _autosaveCts = new CancellationTokenSource();
+
+        _ = AutosaveAfterIdleAsync(_autosaveCts.Token);
+    }
+
+    private async Task AutosaveAfterIdleAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(AutosaveIdle, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return; // superseded by a later edit
+        }
+
+        await FlushAutosaveAsync();
+    }
+
+    /// <summary>
+    /// Writes the project now, if there is anything to write.
+    /// </summary>
+    /// <remarks>
+    /// Also called as the page is hidden, which is the last chance a tab gets and the one path that
+    /// fires on every way out, including switching apps on a phone.
+    /// </remarks>
+    public async Task FlushAutosaveAsync()
+    {
+        if (!_autosaveEnabled || !IsDirty) return;
+
+        try
+        {
+            await SaveAsync(CurrentProjectName);
+        }
+        catch (ProjectStorageException)
+        {
+            // Storage refused. SaveAsync has already left the project dirty and logged it; an
+            // autosave is not the place to interrupt somebody, and the unload guard will still
+            // stop them leaving with the work unsaved.
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("ProjectStore.FlushAutosaveAsync", ex);
+        }
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────
@@ -137,7 +228,11 @@ public sealed class ProjectStore : IAsyncDisposable
     public async Task LoadFromFileAsync(ProjectFile file, string name, Guid? serverId = null)
     {
         await _ready.Task; // wait for InitAsync if called before the editor finishes startup
-        _projectService.RestoreAsync(file);
+
+        _restoring = true;
+        try { _projectService.RestoreAsync(file); }
+        finally { _restoring = false; }
+
         CurrentProjectName = name;
         CurrentProjectId   = serverId;
         IsDirty            = false;
@@ -196,7 +291,11 @@ public sealed class ProjectStore : IAsyncDisposable
 
             await PersistIndexAsync();
             await PersistActiveIdAsync(id);
-            IsDirty = false;
+            IsDirty     = false;
+            LastSavedAt = DateTime.Now;
+
+            // A save is a save, however it was triggered — nothing is pending any more.
+            _autosaveCts?.Cancel();
             OnChanged?.Invoke();
         }
         catch (Exception ex)
@@ -220,10 +319,16 @@ public sealed class ProjectStore : IAsyncDisposable
             var json = await (await StorageAsync()).InvokeAsync<string?>("getItem", $"{EntryPrefix}{id}");
             if (string.IsNullOrEmpty(json)) return;
 
-            var file = JsonSerializer.Deserialize<ProjectFile>(json, _jsonOpts);
-            if (file is null) return;
+            var (file, problem) = ProjectSerializer.Parse(json);
+            if (file is null)
+            {
+                _errorLog.Log("ProjectStore.OpenAsync", problem ?? "Stored project could not be read.");
+                return;
+            }
 
-            _projectService.RestoreAsync(file);
+            _restoring = true;
+            try { _projectService.RestoreAsync(file); }
+            finally { _restoring = false; }
 
             var summary = Projects.FirstOrDefault(p => p.Id == id);
             CurrentProjectName = summary?.Name ?? file.ProjectName ?? DefaultName();
