@@ -432,15 +432,24 @@
 }
 
 /* Clip items area — width driven by min-width on the container (zoom × canvas) */
+/* The lane is a positioning context, not a row of boxes.
+   Chips were laid out in flex flow with the gap to the previous chip as a leading margin, clamped
+   at zero — so a clip positioned BEFORE the previous one's end was drawn after it instead, and an
+   overlap could not be seen (2026-09-05 audit, F5). Each chip now carries the left offset its own
+   TimelinePosition implies, which is the same arithmetic the ruler, the playhead and the overlay
+   lanes already use. */
 .bv-track__items {
     flex: 1;
     overflow-x: visible;
-    display: flex;
-    align-items: center;
     padding: .25rem 0;   /* horizontal must be 0 — first clip aligns with ruler 0.0s mark */
-    gap: 0;
     min-width: 0;
-    position: relative; /* anchor for .bv-snap-guide */
+    position: relative; /* anchor for .bv-snap-guide and for the chips themselves */
+}
+
+/* An absolutely-positioned chip has no height of its own to stretch, so it takes the lane's. */
+.bv-track__items > .bv-clip-chip {
+    top: .25rem;
+    bottom: .25rem;
 }
 
 /* ── Overlay layer row (Callout/Text/ClipArt — backlog #39) ─────────────────

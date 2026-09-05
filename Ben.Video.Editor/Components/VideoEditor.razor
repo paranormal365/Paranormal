@@ -351,7 +351,8 @@
                        OnRelinkRequested="OnRelinkRequestedAsync"
                        OnBulkDelete="OnBulkDeleteAsync"
                        OnBulkMove="OnBulkMoveAsync"
-                       OnTimelineKeyframeSelected="OnTimelineKeyframeSelected" />
+                       OnTimelineKeyframeSelected="OnTimelineKeyframeSelected"
+                       OnDropConflict="OnDropConflictAsync" />
     </div>
 
     <!-- ── Export Dialog ───────────────────────────────────────────────────────── -->
@@ -383,7 +384,7 @@
 
     <!-- ── "Not enough room" insert/overwrite confirmation (items #25, #49) ───────── -->
     <RippleInsertPrompt Visible="_rippleInsertPromptVisible"
-                        ClipName="@(_pendingRippleClip?.Name ?? "this clip")"
+                        ClipName="@(_pendingDrop?.Item.Name ?? _pendingRippleClip?.Name ?? "this clip")"
                         OnConfirm="ConfirmRippleInsert"
                         OnOverwrite="ConfirmOverwriteInsert"
                         OnCancel="CancelRippleInsert" />
@@ -485,6 +486,8 @@
     private bool                   _showQueuePanel;
     private bool                   _showExportSavePrompt;
     private bool                   _rippleInsertPromptVisible;
+    /// <summary>A drag that landed on an occupied spot and is waiting for Insert or Overwrite.</summary>
+    private VideoTimeline.DropConflict? _pendingDrop;
     private VideoClip?             _pendingRippleClip;
     private double                 _pendingRipplePosition;
     private VideoClip?             _previewedLibraryClip;
@@ -994,37 +997,26 @@
                 break;
 
             case "s" or "S" when !ctrl:
-                if (_selectedClip is not null)
                 {
-                    var splitAt = Playback.State.CurrentTime;
-                    if (splitAt > 0 && splitAt < _selectedClip.TrimmedDuration)
+                    // The playhead is a timeline position, and SplitClip takes a position measured
+                    // from the clip's own start. Handing it the playhead cut early by exactly the
+                    // clip's start — right only for a clip beginning at zero, which is why it
+                    // looked correct (2026-09-05 audit, timeline-1).
+                    var selected = (TrackItem?)_selectedClip ?? (TrackItem?)_selectedAudioClip ?? _selectedImageClip;
+                    if (selected is not null)
                     {
-                        try { Clips.SplitClip(_selectedClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedClip = null;
-                    }
-                }
-                else if (_selectedAudioClip is not null)
-                {
-                    var splitAt = Playback.State.CurrentTime;
-                    var trimmedDuration = _selectedAudioClip.EndTrim > _selectedAudioClip.StartTrim
-                        ? _selectedAudioClip.EndTrim - _selectedAudioClip.StartTrim
-                        : _selectedAudioClip.Duration;
-                    if (splitAt > 0 && splitAt < trimmedDuration)
-                    {
-                        try { Clips.SplitClip(_selectedAudioClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedAudioClip = null;
-                    }
-                }
-                else if (_selectedImageClip is not null)
-                {
-                    var splitAt = Playback.State.CurrentTime;
-                    if (splitAt > 0 && splitAt < _selectedImageClip.Duration)
-                    {
-                        try { Clips.SplitClip(_selectedImageClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedImageClip = null;
+                        if (Clips.SplitClipAtTimelineTime(selected.Id, Playback.State.TimelineTime))
+                        {
+                            _selectedClip      = null;
+                            _selectedAudioClip = null;
+                            _selectedImageClip = null;
+                        }
+                        else
+                        {
+                            _notifications?.Show(
+                                "Put the playhead inside the clip to split it.",
+                                ThemeConstants.Notification.ThemeColor.Info);
+                        }
                     }
                 }
                 break;
@@ -1056,10 +1048,10 @@
             case "m" or "M" when !ctrl && !shift && !alt:
                 if (EffectiveOptions.Markers)
                 {
-                    var t = Clips.TotalDuration > 0
-                        ? Playback.State.Progress * Clips.TotalDuration
-                        : 0;
-                    Clips.AddMarker(t);
+                    // Progress × TotalDuration was a fraction of whatever the preview held, scaled
+                    // by the timeline's length — two different clocks multiplied together. With a
+                    // clip loaded it put the marker somewhere unrelated to the playhead.
+                    Clips.AddMarker(Playback.State.TimelineTime);
                 }
                 break;
 
@@ -1256,8 +1248,12 @@
 
     private void ConfirmRippleInsert()
     {
-        if (_pendingRippleClip is not null)
+        if (_pendingDrop is { } drop)
+            Clips.MoveWithInsert(drop.Item.Id, drop.TrackId, drop.Position, drop.OriginalPosition);
+        else if (_pendingRippleClip is not null)
             Clips.InsertClipWithRipple(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
     }
@@ -1266,17 +1262,38 @@
     /// pending clip would land on top of instead of shifting subsequent clips later.</summary>
     private void ConfirmOverwriteInsert()
     {
-        if (_pendingRippleClip is not null)
+        if (_pendingDrop is { } drop)
+            Clips.MoveWithOverwrite(drop.Item.Id, drop.TrackId, drop.Position, drop.OriginalPosition);
+        else if (_pendingRippleClip is not null)
             Clips.OverwriteInsert(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
+    }
+
+    /// <summary>
+    /// A clip was dragged onto an occupied spot with ripple off. Ask, rather than decide.
+    /// </summary>
+    /// <remarks>
+    /// The alternative to asking is picking one silently: sliding the clip past what it landed on
+    /// (surprising — it is not where they dropped it) or replacing what was underneath (destructive
+    /// after a fumbled drag). The prompt already existed for "Add to Timeline"; this is the same
+    /// question arriving from a drag (2026-09-05 audit, F5).
+    /// </remarks>
+    private Task OnDropConflictAsync(VideoTimeline.DropConflict conflict)
+    {
+        _pendingDrop = conflict;
+        _rippleInsertPromptVisible = true;
+        return InvokeAsync(StateHasChanged);
     }
 
     private void CancelRippleInsert()
     {
         // Declining leaves the clip unplaced — it stays in the library for the user to add again
         // (e.g. by dragging it to a spot they pick themselves) rather than silently placing it
-        // somewhere they didn't ask for.
+        // somewhere they didn't ask for. A dragged clip has already been put back by the timeline.
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
     }
@@ -1294,12 +1311,20 @@
         _motionLayerId   = null;
         _motionLayerType = null;
 
+        // Selecting on the timeline moves the timeline's playhead to the clip's start; it does not
+        // load that clip's raw source into the Working Window. It used to, which swapped the window
+        // into a single-clip preview with its own clock starting at zero and no way back except
+        // making an edit — and every subsequent split, marker or title placement then read that
+        // clock as if it were the timeline's (2026-09-05 audit, F6 and timeline-3). Previewing one
+        // clip on its own is still what clicking a card in the Media tab does.
+        Playback.SetTimelineTime(item.TimelinePosition);
+
         if (item is VideoClip clip)
         {
             _selectedAudioClip  = null;
             _selectedTransition = null;
             _selectedClip = clip;
-            await OnClipSelectedAsync(clip);
+            StateHasChanged();
         }
         else if (item is AudioClip audio)
         {

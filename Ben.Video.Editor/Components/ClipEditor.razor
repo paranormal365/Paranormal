@@ -330,8 +330,9 @@
         _volume    = Clip.Volume;
         _selectedEffectId = null;
 
-        // Default split to current playhead position (clamped to trimmed region)
-        var playheadOffset = Playback.State.CurrentTime;
+        // The slider is an offset within this clip, so the playhead has to be converted from the
+        // timeline's clock before it can seed it (2026-09-05 audit, timeline-1).
+        var playheadOffset = Playback.State.TimelineTime - Clip.TimelinePosition;
         _splitAt = Math.Clamp(playheadOffset, 0, Clip.TrimmedDuration);
         if (_splitAt <= 0 || _splitAt >= Clip.TrimmedDuration)
             _splitAt = Clip.TrimmedDuration / 2.0;

@@ -562,18 +562,34 @@ public sealed class ClipStore
 
             if (Math.Abs(delta) < 0.001) { Notify(); return; }
 
-            // Ripple: shift items that are at or after the clip's new position
-            var boundary = Math.Min(originalPosition, finalPos);
-            var shifted  = track.Items
-                .Where(i => i.Id != itemId && i.TimelinePosition >= boundary)
+            // A ripple move is a lift and an insert, and it used to be neither: every item after
+            // the lower of the two positions was shifted by the DRAG DISTANCE. Dragging a clip
+            // eighteen seconds earlier therefore moved the clips behind it eighteen seconds
+            // earlier too — straight through zero and into negative time (found by the new
+            // no-overlap assertion, 2026-09-05).
+            //
+            // Lift: the clips that were after this one close up by its own length, not by how far
+            // it travelled.
+            var length = item.EffectiveLength;
+            var shifted = TrackLayout.SequentialItems(track)
+                .Where(i => i.Id != itemId
+                         && i.TimelinePosition >= originalPosition - TrackLayout.Tolerance)
                 .ToList();
 
             // Reset to original so Execute() can apply cleanly
             item.TimelinePosition = originalPosition;
 
-            var cmd = new RippleCommitDraggedCommand(item, originalPosition, finalPos, shifted, delta);
+            var cmd = new RippleCommitDraggedCommand(item, originalPosition, finalPos, shifted, -length);
             PushCommand(cmd);
             cmd.Execute();
+
+            // Insert: whatever is where it landed moves on to make room. Ripple already means
+            // "close the gaps"; this is the other half of the same idea, and without it a backwards
+            // drag simply left the two clips overlapping (2026-09-05 audit, F5).
+            MakeRoomFor(track, item);
+
+            ResortSequential(track);
+            AssertLaidOut(track);
             Notify();
             return;
         }
@@ -1318,10 +1334,17 @@ public sealed class ClipStore
                 Notify();
                 return;
             }
-            var finalPos = Math.Max(0, item.TimelinePosition);
+            // Where the pointer left it, then out of anything it landed on. A drop onto an
+            // occupied spot used to be written verbatim, so two clips sat on top of each other in
+            // the model while the lane drew them politely side by side (2026-09-05 audit, F5).
+            var finalPos = ResolveDropPosition(track, item, Math.Max(0, item.TimelinePosition));
             item.TimelinePosition = finalPos;
+
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
+
+            ResortSequential(track);
+            AssertLaidOut(track);
             Notify();
             return;
         }
@@ -1364,13 +1387,16 @@ public sealed class ClipStore
             return;
         }
 
-        var finalPos = Math.Max(0, item.TimelinePosition);
+        var finalPos = ResolveDropPosition(toTrack, item, Math.Max(0, item.TimelinePosition));
         item.TimelinePosition = finalPos;
 
         if (toTrack.Id == fromTrack.Id)
         {
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
+
+            ResortSequential(toTrack);
+            AssertLaidOut(toTrack);
             Notify();
             return;
         }
@@ -1378,6 +1404,10 @@ public sealed class ClipStore
         fromTrack.Items.Remove(item);
         toTrack.Items.Add(item);
         PushCommand(new MoveClipToTrackCommand(fromTrack, toTrack, item, originalPosition, finalPos));
+        ResortSequential(fromTrack);
+        ResortSequential(toTrack);
+        AssertLaidOut(fromTrack);
+        AssertLaidOut(toTrack);
         Notify();
     }
 
@@ -1389,6 +1419,35 @@ public sealed class ClipStore
     /// Throws <see cref="ArgumentException"/> if the item is not found, is not a splittable
     /// type, or the split point is outside its range. Undoable.
     /// </summary>
+    /// <summary>
+    /// Splits the item under an <b>absolute timeline position</b>, in seconds from the start of the
+    /// project.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="SplitClip"/> takes a position measured from the clip's own start, and every
+    /// caller in the editor handed it the playhead instead — an absolute time. For the first clip
+    /// on a track the two happen to be equal, which is why it looked right; for anything after it
+    /// the cut landed early by exactly the clip's start position, and for a clip whose start is
+    /// past the playhead it threw and was swallowed (2026-09-05 audit, timeline-1 and audio-9).</para>
+    ///
+    /// <para>Returns false rather than throwing when the playhead is not inside the item, because
+    /// that is an ordinary thing for a person to do — press the key with the playhead somewhere
+    /// else — and the caller wants to say so, not to catch.</para>
+    /// </remarks>
+    public bool SplitClipAtTimelineTime(Guid itemId, double timelineSeconds)
+    {
+        var item = _tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == itemId);
+        if (item is null) return false;
+
+        var offset = timelineSeconds - item.TimelinePosition;
+
+        // Strictly inside: a cut exactly on either edge produces a zero-length piece.
+        if (offset <= 0 || offset >= item.EffectiveLength) return false;
+
+        SplitClip(itemId, offset);
+        return true;
+    }
+
     public void SplitClip(Guid itemId, double splitAt)
     {
         foreach (var track in _tracks)
@@ -1899,6 +1958,209 @@ public sealed class ClipStore
     /// why the pre-existing undo test passed (it asserted on the caller's own now-orphaned
     /// reference rather than through the track).</para>
     /// </summary>
+    /// <summary>
+    /// Puts a track's sequential items back in playing order and renumbers <c>Order</c> to match.
+    /// </summary>
+    /// <remarks>
+    /// A drag changed only <see cref="TrackItem.TimelinePosition"/>. <c>Order</c> was left as it
+    /// was, and export sequences by <c>Order</c> — so dragging the second clip in front of the
+    /// first left a timeline that showed one arrangement and rendered another (2026-09-05 audit,
+    /// timeline-10). Overlays and transitions keep their own relative order: <c>LayerIndex</c>, not
+    /// position, is what decides which of them is drawn on top.
+    /// </remarks>
+    /// <summary>
+    /// The nearest position at or after <paramref name="preferred"/> where this item fits without
+    /// landing on anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule a person expects from a timeline: a clip dropped onto an occupied spot goes
+    /// after what is there rather than into it. It is deliberately the last line of defence — the
+    /// timeline offers Insert or Overwrite before it gets here, and this is what happens when
+    /// nobody chose (a drop with ripple off, an import, a restored project).</para>
+    ///
+    /// <para>Overlays and transitions are not resolved: they are supposed to sit over the picture.</para>
+    /// </remarks>
+    private static double ResolveDropPosition(TimelineTrack track, TrackItem item, double preferred)
+    {
+        if (!TrackLayout.IsSequential(item)) return preferred;
+
+        var length = item.EffectiveLength;
+        if (length <= 0) return preferred;
+
+        var position = preferred;
+
+        // Walk forward past whatever is in the way. Each step lands on the far edge of the blocker,
+        // so this terminates: there are finitely many items and each is passed at most once.
+        while (TrackLayout.FirstOverlapping(track, position, length, item.Id) is { } blocker)
+            position = blocker.TimelinePosition + blocker.EffectiveLength;
+
+        return position;
+    }
+
+    /// <summary>
+    /// Moves an item to <paramref name="position"/> and pushes whatever is there out of the way.
+    /// </summary>
+    /// <remarks>
+    /// The "Insert" answer to a drop onto an occupied spot. One undo step covers the move and the
+    /// room made for it, so undoing puts the whole track back.
+    /// </remarks>
+    public void MoveWithInsert(Guid itemId, Guid trackId, double position, double originalPosition)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Id == trackId);
+        var item  = track?.Items.FirstOrDefault(i => i.Id == itemId)
+                 ?? _tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == itemId);
+        if (track is null || item is null || track.IsLocked) return;
+
+        var finalPos = Math.Max(0, position);
+
+        var steps = new List<IEditorCommand>
+        {
+            new SetClipPositionCommand(item, originalPosition, finalPos),
+        };
+
+        item.TimelinePosition = finalPos;
+
+        var length  = item.EffectiveLength;
+        var blocker = TrackLayout.FirstOverlapping(track, finalPos, length, item.Id);
+        if (blocker is not null)
+        {
+            var shiftBy = finalPos + length - blocker.TimelinePosition;
+            steps.AddRange(TrackLayout.SequentialItems(track)
+                .Where(i => i.Id != item.Id
+                         && i.TimelinePosition >= blocker.TimelinePosition - TrackLayout.Tolerance)
+                .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                    i, i.TimelinePosition, i.TimelinePosition + shiftBy)));
+        }
+
+        item.TimelinePosition = originalPosition;   // so Execute applies cleanly
+
+        var command = new CompositeCommand("Insert clip", steps);
+        PushCommand(command);
+        command.Execute();
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
+
+    /// <summary>
+    /// Moves an item to <paramref name="position"/>, replacing whatever it lands on.
+    /// </summary>
+    /// <remarks>
+    /// The "Overwrite" answer. What is underneath is trimmed back, split around, or removed —
+    /// <see cref="OverwriteInsert"/> already does exactly that for a newly added clip, so this
+    /// lifts the item out of the track first and then re-adds it through that path, which keeps one
+    /// implementation of the hard part.
+    /// </remarks>
+    public void MoveWithOverwrite(Guid itemId, Guid trackId, double position, double originalPosition)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Id == trackId);
+        if (track is null || track.IsLocked) return;
+
+        var sourceTrack = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == itemId));
+        var item = sourceTrack?.Items.FirstOrDefault(i => i.Id == itemId);
+        if (sourceTrack is null || item is null || sourceTrack.IsLocked) return;
+
+        // Overwrite is only defined for video clips today (see OverwriteInsert). Anything else
+        // falls back to insert, which is lossless — better than an edit nobody can undo into.
+        if (item is not VideoClip clip)
+        {
+            MoveWithInsert(itemId, trackId, position, originalPosition);
+            return;
+        }
+
+        // One notification for the pair. They are still two undo steps — lifting the clip out and
+        // putting it back over what was there — which reads correctly when undone one at a time.
+        using (BeginBatch())
+        {
+            RemoveClip(itemId);
+            clip.TimelinePosition = Math.Max(0, position);
+            OverwriteInsert(trackId, clip, Math.Max(0, position));
+        }
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
+
+    /// <summary>
+    /// Pushes whatever <paramref name="item"/> has landed on later, so it fits exactly where it was
+    /// dropped.
+    /// </summary>
+    /// <remarks>
+    /// The insert half of an insert-or-overwrite drop. Everything from the first blocker onwards
+    /// moves by the same amount, so their spacing is preserved rather than collapsed, and the shift
+    /// is pushed as its own undo step beside the move — undoing the drop puts the whole track back.
+    /// </remarks>
+    private void MakeRoomFor(TimelineTrack track, TrackItem item)
+    {
+        if (!TrackLayout.IsSequential(item)) return;
+
+        var length = item.EffectiveLength;
+        if (length <= 0) return;
+
+        var blocker = TrackLayout.FirstOverlapping(track, item.TimelinePosition, length, item.Id);
+        if (blocker is null) return;
+
+        var neededAt = item.TimelinePosition + length;
+        var shiftBy  = neededAt - blocker.TimelinePosition;
+        if (shiftBy <= 0) return;
+
+        var toShift = TrackLayout.SequentialItems(track)
+            .Where(i => i.Id != item.Id && i.TimelinePosition >= blocker.TimelinePosition - TrackLayout.Tolerance)
+            .ToList();
+
+        var shifts = toShift
+            .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                i, i.TimelinePosition, i.TimelinePosition + shiftBy))
+            .ToList();
+
+        if (shifts.Count == 0) return;
+
+        var command = new CompositeCommand("Make room", shifts);
+        PushCommand(command);
+        command.Execute();
+    }
+
+    private static void ResortSequential(TimelineTrack track)
+    {
+        var sequential = track.Items.Where(TrackLayout.IsSequential)
+                                    .OrderBy(i => i.TimelinePosition)
+                                    .ToList();
+        if (sequential.Count == 0) return;
+
+        var others = track.Items.Where(i => !TrackLayout.IsSequential(i)).ToList();
+
+        track.Items.Clear();
+        track.Items.AddRange(sequential);
+        track.Items.AddRange(others);
+
+        RenumberItems(track);
+    }
+
+    /// <summary>
+    /// Asserts the no-overlap invariant in debug builds.
+    /// </summary>
+    /// <remarks>
+    /// Debug only, and deliberately loud there: an overlap is a bug in whichever edit produced it,
+    /// and the failing assertion names the track and the two clips. Release builds carry on — a
+    /// person mid-edit is not helped by a crash.
+    /// </remarks>
+    [System.Diagnostics.Conditional("DEBUG")]
+    private static void AssertLaidOut(TimelineTrack track)
+    {
+        var problem = TrackLayout.Validate(track);
+        System.Diagnostics.Debug.Assert(problem is null, $"Track '{track.Label}': {problem}");
+    }
+
+    /// <summary>
+    /// Checks every track. Public so tests can hold the whole store to the invariant after an edit.
+    /// </summary>
+    /// <returns>The first problem found, or null when every track is laid out properly.</returns>
+    public string? ValidateAll() =>
+        _tracks.Select(t => TrackLayout.Validate(t) is { } p ? $"Track '{t.Label}': {p}" : null)
+               .FirstOrDefault(p => p is not null);
+
     private static void RenumberItems(TimelineTrack track)
     {
         for (var i = 0; i < track.Items.Count; i++)

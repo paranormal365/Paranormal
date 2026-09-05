@@ -4063,19 +4063,34 @@ public sealed class ClipStoreTests
     }
 
     [Fact]
-    public void RippleCommitDraggedPosition_ShiftsSubsequentClips()
+    /// <summary>
+    /// A ripple move is a lift and an insert: the clips after it close up, then the ones where it
+    /// lands are pushed on.
+    /// </summary>
+    /// <remarks>
+    /// <para>This used to assert that everything downstream moved by the <b>drag distance</b>, which
+    /// is a different tool — "move this clip and everything after it" — and it fell apart the moment
+    /// the drag went backwards: dragging a clip eighteen seconds earlier moved the clips behind it
+    /// eighteen seconds earlier too, through zero and into negative time. The no-overlap assertion
+    /// added on 2026-09-05 is what surfaced it.</para>
+    ///
+    /// <para>Here: a runs 0–5, b runs 7–10. Lifting a closes b up by a's own length, to 2. Dropping
+    /// a at 3 then pushes b clear again, to 8 — so the two end up adjacent, which is what closing
+    /// the gaps means.</para>
+    /// </remarks>
+    public void RippleCommitDraggedPosition_LiftsAndInserts()
     {
         var store = CreateStore();
         var a = new VideoClip { Name = "a.mp4", Duration = 5, TimelinePosition = 0 };
         var b = new VideoClip { Name = "b.mp4", Duration = 3, TimelinePosition = 7 };
         store.AddClip(a); store.AddClip(b);
 
-        // Simulate drag: a moved from 0 → 3 (delta = +3)
         a.TimelinePosition = 3.0;
         store.RippleCommitDraggedPosition(a.Id, 0.0);
 
-        // b was at 7, delta = +3, so b should shift to 10
-        Assert.Equal(10.0, b.TimelinePosition, 3);
+        Assert.Equal(3.0, a.TimelinePosition, 3);
+        Assert.Equal(8.0, b.TimelinePosition, 3);
+        Assert.Null(store.ValidateAll());
     }
 
     [Fact]
@@ -4088,6 +4103,9 @@ public sealed class ClipStoreTests
 
         a.TimelinePosition = 3.0;
         store.RippleCommitDraggedPosition(a.Id, 0.0);
+
+        // Two steps now: the lift-and-move, and the room made where it landed.
+        store.Undo();
         store.Undo();
 
         Assert.Equal(0.0,  a.TimelinePosition, 3);

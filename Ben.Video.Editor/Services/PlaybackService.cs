@@ -46,7 +46,10 @@ public sealed class PlaybackService : IDisposable
             Mode       = mode,
             Duration   = duration,
             CurrentTime = 0,
-            IsPlaying  = false
+            IsPlaying  = false,
+            // Loading the timeline assembly puts the playhead at its start; loading one clip for a
+            // look does not move the timeline's playhead at all.
+            TimelineTime = mode == PlaybackMode.Timeline ? 0 : _state.TimelineTime,
         };
         Notify();
     }
@@ -56,7 +59,29 @@ public sealed class PlaybackService : IDisposable
     /// </summary>
     public void NotifyTimeUpdate(double currentTime)
     {
-        _state = _state with { CurrentTime = currentTime };
+        _state = _state with
+        {
+            CurrentTime  = currentTime,
+            TimelineTime = _state.Mode == PlaybackMode.Clip ? _state.TimelineTime : currentTime,
+        };
+        Notify();
+    }
+
+    /// <summary>
+    /// Moves the timeline's own playhead without touching whatever the preview happens to be
+    /// showing.
+    /// </summary>
+    /// <remarks>
+    /// Used when selecting a clip on the timeline: the playhead goes to that clip's start so the
+    /// next split or marker acts where the person is looking, while a clip preview loaded in the
+    /// Working Window keeps playing its own thing.
+    /// </remarks>
+    public void SetTimelineTime(double seconds)
+    {
+        var clamped = Math.Max(0, seconds);
+        if (Math.Abs(clamped - _state.TimelineTime) < 0.0005) return;
+
+        _state = _state with { TimelineTime = clamped };
         Notify();
     }
 
@@ -113,7 +138,11 @@ public sealed class PlaybackService : IDisposable
     public void RequestSeek(double seconds)
     {
         seconds = Math.Max(0, _state.Duration > 0 ? Math.Min(seconds, _state.Duration) : seconds);
-        _state  = _state with { CurrentTime = seconds };
+        _state  = _state with
+        {
+            CurrentTime  = seconds,
+            TimelineTime = _state.Mode == PlaybackMode.Clip ? _state.TimelineTime : seconds,
+        };
         Notify();
         OnSeekRequested?.Invoke(seconds);
     }
