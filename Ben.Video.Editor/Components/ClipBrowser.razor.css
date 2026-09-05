@@ -450,3 +450,6 @@
     overflow-y: auto;
 }
 
+
+/* Cancelled is not an error: somebody asked for it. Muted rather than red. */
+.bv-import-badge--cancelled  { color: var(--bv-text-muted); border-color: var(--bv-border); }

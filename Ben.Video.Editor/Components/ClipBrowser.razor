@@ -395,7 +395,7 @@
         }
     }
 
-    private enum ImportStage { Queued, Preview, Downloading, Writing, Metadata, Thumbnails, Audio, Done, Error }
+    private enum ImportStage { Queued, Preview, Downloading, Writing, Metadata, Thumbnails, Audio, Done, Cancelled, Error }
 
     private sealed class FileImportStatus
     {
@@ -417,12 +417,19 @@
         public string?         ErrorText   { get; set; }
         public string?         MetaText    { get; set; }
         public long?           MemFsBytes  { get; set; }
-        /// <summary>Item #59-#65 flakiness investigation, phase 145 — set only for imports that
-        /// support cancellation (currently just the server-library path). Null for the local
-        /// file-picker path, which has no long-running network stage to cancel.</summary>
+        /// <summary>
+        /// Cancels this file's import.
+        /// </summary>
+        /// <remarks>
+        /// Only the server-library path used to set this, so on the local path the Cancel button
+        /// was rendered and did nothing — the note here said a local import had "no long-running
+        /// stage to cancel", which is not true of a half-gigabyte file being written to storage,
+        /// probed and turned into a filmstrip (2026-09-05 audit, media-9). Cancellation lands
+        /// between stages, which is where the time actually goes.
+        /// </remarks>
         public CancellationTokenSource? Cts { get; set; }
 
-        public bool    IsDone          => Stage is ImportStage.Done or ImportStage.Error;
+        public bool    IsDone          => Stage is ImportStage.Done or ImportStage.Cancelled or ImportStage.Error;
         public string  OriginalSizeText => FormatBytes(SizeBytes);
         public string? MemFsSizeText    => MemFsBytes.HasValue ? FormatBytes(MemFsBytes.Value) : null;
 
@@ -996,6 +1003,7 @@
         ImportStage.Thumbnails  => "Thumbnails…",
         ImportStage.Audio       => "Audio…",
         ImportStage.Done        => "Done ✓",
+        ImportStage.Cancelled   => "Cancelled",
         ImportStage.Error       => "Error ✗",
         _                       => string.Empty,
     };
@@ -1496,7 +1504,7 @@
                             ?? await Ffmpeg.GetMetadataAsync(memFsName);
                 status.MetaText = $"{FormatDuration(meta.Duration)} · {meta.Width}×{meta.Height}";
 
-                Update(status, ImportStage.Thumbnails, 66);
+            Update(status, ImportStage.Thumbnails, 66);
                 // Item #59-#65 flakiness investigation, phase 145 (symptom S3) — only a small
                 // upfront batch generates synchronously (blocking this import); the rest fill in
                 // lazily afterward through ScheduleLazyThumbnailFill, per the user's explicit
@@ -1794,8 +1802,20 @@
                 for (var i = 0; i < count; i++)
                 {
                     var status = _importStatuses[i];
+
+                    // Every local import gets a real token, so the Cancel button beside it does
+                    // something. It used to be rendered only when Cts was set, which the local
+                    // path never did — but a half-gigabyte file being written to storage, probed
+                    // and turned into a filmstrip is exactly the case somebody wants to stop
+                    // (2026-09-05 audit, media-9).
+                    status.Cts?.Dispose();
+                    status.Cts = new CancellationTokenSource();
+                    var ct = status.Cts.Token;
+
                     try
                     {
+                        ct.ThrowIfCancellationRequested();
+
                         // The browser's own type first, the extension second — see
                         // MediaKindRouter. Two extension lists used to decide, and anything they
                         // did not name took the video path, so a .heic or a .caf became a 0x0
@@ -1805,10 +1825,16 @@
 
                         switch (MediaKindRouter.Decide(status.FileName, contentType))
                         {
-                            case MediaKind.Audio: await ImportAudioFileAtIndexAsync(i, status); break;
-                            case MediaKind.Image: await ImportImageFileAtIndexAsync(i, status); break;
-                            default:              await ImportVideoFileAtIndexAsync(i, status); break;
+                            case MediaKind.Audio: await ImportAudioFileAtIndexAsync(i, status, ct); break;
+                            case MediaKind.Image: await ImportImageFileAtIndexAsync(i, status, ct); break;
+                            default:              await ImportVideoFileAtIndexAsync(i, status, ct); break;
                         }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Asked for, not gone wrong: it reads as cancelled rather than failed, and
+                        // the rest of the batch carries on.
+                        Update(status, ImportStage.Cancelled);
                     }
                     catch (Exception ex)
                     {
@@ -1819,7 +1845,7 @@
                 }
             }
 
-            if (_importStatuses.All(s => s.Stage == ImportStage.Done))
+            if (_importStatuses.All(s => s.Stage is ImportStage.Done or ImportStage.Cancelled))
             {
                 await Task.Delay(1200);
                 CloseImportWindow();
@@ -1853,7 +1879,8 @@
         return memFsName;
     }
 
-    private async Task ImportVideoFileAtIndexAsync(int index, FileImportStatus status)
+    private async Task ImportVideoFileAtIndexAsync(
+        int index, FileImportStatus status, CancellationToken ct)
     {
         IJSObjectReference? fileRef = null;
         try
@@ -1869,14 +1896,15 @@
 
             Update(status, ImportStage.Metadata, 33);
             // Item #70 phase 159 — sidecar first, wasm on null (see AddCachedFileToTimelineAsync).
-            var meta = await SidecarMedia.TryGetMetadataAsync(clipId, ext, CancellationToken.None)
+            var meta = await SidecarMedia.TryGetMetadataAsync(clipId, ext, ct)
                        ?? await Ffmpeg.GetMetadataAsync(memFsName);
             status.MetaText = $"{FormatDuration(meta.Duration)} · {meta.Width}×{meta.Height}";
 
+            ct.ThrowIfCancellationRequested();
             Update(status, ImportStage.Thumbnails, 66);
             var fullCount = ThumbnailPlanner.FullCount(meta.Duration);
             var upfrontCount = ThumbnailPlanner.UpfrontCount(meta.Duration);
-            var thumbs = await SidecarMedia.TryExtractThumbnailsAsync(clipId, ext, upfrontCount, meta.Duration, CancellationToken.None)
+            var thumbs = await SidecarMedia.TryExtractThumbnailsAsync(clipId, ext, upfrontCount, meta.Duration, ct)
                          ?? await Ffmpeg.ExtractThumbnailsAsync(memFsName, upfrontCount, meta.Duration);
             RegisterWasmThumbnails(thumbs);
             if (thumbs.Length > 0) await SetThumbnailPreviewAsync(status, thumbs[0]);
@@ -1902,7 +1930,8 @@
         finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
     }
 
-    private async Task ImportImageFileAtIndexAsync(int index, FileImportStatus status)
+    private async Task ImportImageFileAtIndexAsync(
+        int index, FileImportStatus status, CancellationToken ct)
     {
         if (!Options.ImageClips)
         {
@@ -1924,6 +1953,7 @@
             var memFsName = await WriteAndMountAsync(imgClipId2, imgExt2, "img", status.FileName, fileRef);
             status.MemFsBytes = status.SizeBytes;
 
+            ct.ThrowIfCancellationRequested();
             Update(status, ImportStage.Metadata, 50);
             var mime    = GetImageMimeType(status.FileName);
             var thumbUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, mime);
@@ -1964,7 +1994,8 @@
         finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
     }
 
-    private async Task ImportAudioFileAtIndexAsync(int index, FileImportStatus status)
+    private async Task ImportAudioFileAtIndexAsync(
+        int index, FileImportStatus status, CancellationToken ct)
     {
         IJSObjectReference? fileRef = null;
         try
@@ -1979,7 +2010,7 @@
             status.MemFsBytes = status.SizeBytes;
 
             Update(status, ImportStage.Audio, 50);
-            var meta    = await SidecarMedia.TryGetMetadataAsync(audioClipId, audioExt, CancellationToken.None)
+            var meta    = await SidecarMedia.TryGetMetadataAsync(audioClipId, audioExt, ct)
                           ?? await Ffmpeg.GetMetadataAsync(memFsName);
             var blobUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, "audio/mpeg");
             status.MetaText = FormatDuration(meta.Duration);
