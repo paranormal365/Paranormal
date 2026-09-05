@@ -453,3 +453,14 @@
 
 /* Cancelled is not an error: somebody asked for it. Muted rather than red. */
 .bv-import-badge--cancelled  { color: var(--bv-text-muted); border-color: var(--bv-border); }
+
+/* How much of the browser's storage the imported media takes. Quiet: it is a fact worth having to
+   hand, not a warning (2026-09-05 audit, media-2). */
+.bv-browser__storage {
+    margin-left: auto;
+    margin-right: .5rem;
+    font-size: .68rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    white-space: nowrap;
+    cursor: default;
+}

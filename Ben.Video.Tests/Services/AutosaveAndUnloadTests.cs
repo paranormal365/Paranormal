@@ -97,8 +97,8 @@ public sealed class AutosaveTests
         clips.AddClip(new VideoClip { Name = "clip", Duration = 5 });
         await store.FlushAutosaveAsync();
 
-        Assert.Empty(storage.Where(kv => kv.Key.StartsWith("bv-proj-", StringComparison.Ordinal)
-                                      && kv.Key != "bv-proj-index"));
+        Assert.DoesNotContain(storage, kv => kv.Key.StartsWith("bv-proj-", StringComparison.Ordinal)
+                                          && kv.Key != "bv-proj-index");
     }
 
     [Fact]

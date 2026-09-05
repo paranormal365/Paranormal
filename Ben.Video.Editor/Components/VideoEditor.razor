@@ -713,6 +713,12 @@
                 _unloadSelfRef = DotNetObjectReference.Create(this);
                 await (await DomAsync()).InvokeVoidAsync(
                     "flushOnPageHide", _unloadSelfRef, nameof(OnPageHiding));
+
+                // Housekeeping, once the project list and the open project are both known. Nothing
+                // ever freed a source, so every import a person had ever made was still taking up
+                // room in the browser's storage (2026-09-05 audit, media-2). Deliberately not
+                // awaited: it reads every saved project, and the editor should not wait on it.
+                _ = SweepUnusedMediaAsync();
             }
 
             _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", FullscreenModulePath);
@@ -2749,6 +2755,39 @@
 
     private DotNetObjectReference<VideoEditor>? _unloadSelfRef;
     private bool _unloadGuardOn;
+
+    /// <summary>
+    /// Frees stored media that no project refers to, and says so when it found some.
+    /// </summary>
+    /// <remarks>
+    /// Quiet when there was nothing to do, which is the usual case. Worth a word when it was not,
+    /// because "where did my disk space go" is a question this answers.
+    /// </remarks>
+    private async Task SweepUnusedMediaAsync()
+    {
+        try
+        {
+            var (files, bytes) = await Projects.SweepUnusedMediaAsync();
+            if (files == 0) return;
+
+            _notifications?.Show(
+                $"Freed {FormatBytes(bytes)} of storage from {files} file(s) no project was using.",
+                ThemeConstants.Notification.ThemeColor.Info);
+        }
+        catch (Exception ex)
+        {
+            // Housekeeping failing is not worth interrupting anybody over.
+            ErrorLog.Log("VideoEditor.SweepUnusedMediaAsync", ex);
+        }
+    }
+
+    private static string FormatBytes(long b) => b switch
+    {
+        < 1024        => $"{b} B",
+        < 1_048_576   => $"{b / 1024.0:F1} KB",
+        < 1_073_741_824 => $"{b / 1_048_576.0:F1} MB",
+        _             => $"{b / 1_073_741_824.0:F2} GB",
+    };
 
     /// <summary>
     /// The last chance to write the project, as the page goes away.

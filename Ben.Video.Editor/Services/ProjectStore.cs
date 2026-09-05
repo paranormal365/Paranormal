@@ -113,6 +113,120 @@ public sealed class ProjectStore : IAsyncDisposable
         ScheduleAutosave();
     }
 
+    // ── Housekeeping ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Deletes stored media that no saved project, and nothing currently open, refers to.
+    /// </summary>
+    /// <returns>How many files were removed, and how many bytes that freed.</returns>
+    /// <remarks>
+    /// <para>Nothing ever freed a source. Every import writes a copy of the file into the browser's
+    /// own storage so the project can be reopened, and removing the clip, deleting the project, or
+    /// simply closing the tab left that copy behind forever. A few sessions with large footage fill
+    /// the quota, at which point saving starts failing (2026-09-05 audit, media-2 and
+    /// persistence-12).</para>
+    ///
+    /// <para>Reconciles against every saved project rather than counting references, and refuses to
+    /// run at all when the project list could not be read — see
+    /// <see cref="OpfsGarbageCollector.CanSweep"/>, because a failure to read the index makes every
+    /// file look unreferenced.</para>
+    /// </remarks>
+    public async Task<(int Files, long Bytes)> SweepUnusedMediaAsync()
+    {
+        var stored = await _opfs.ListClipsAsync();
+        if (stored.Count == 0) return (0, 0);
+
+        if (!OpfsGarbageCollector.CanSweep(_indexWasRead, Projects.Count, stored.Count))
+        {
+            _errorLog.Log("ProjectStore.SweepUnusedMediaAsync",
+                $"Refused to sweep: {stored.Count} stored file(s) with "
+                + $"{Projects.Count} known project(s) and index read = {_indexWasRead}.");
+            return (0, 0);
+        }
+
+        var referenced = await CollectReferencedClipIdsAsync();
+
+        var byId = stored
+            .Where(e => Guid.TryParse(e.ClipId, out _))
+            .ToDictionary(e => Guid.Parse(e.ClipId));
+
+        var orphans = OpfsGarbageCollector.FindOrphans(byId.Keys, referenced);
+
+        var files = 0;
+        long bytes = 0;
+
+        foreach (var id in orphans)
+        {
+            var entry = byId[id];
+            try
+            {
+                await _opfs.DeleteAsync(id, entry.Ext);
+                files++;
+                bytes += entry.SizeBytes;
+            }
+            catch (Exception ex)
+            {
+                _errorLog.Log("ProjectStore.SweepUnusedMediaAsync", ex);
+            }
+        }
+
+        return (files, bytes);
+    }
+
+    /// <summary>
+    /// Every clip id mentioned by a saved project, by what is open now, or by the media bin.
+    /// </summary>
+    /// <remarks>
+    /// The bin matters as much as the timeline: media imported and not yet placed is media somebody
+    /// intends to use, and sweeping it would delete a file out from under the panel showing it.
+    /// </remarks>
+    private async Task<HashSet<Guid>> CollectReferencedClipIdsAsync()
+    {
+        var referenced = new HashSet<Guid>();
+
+        foreach (var item in _clips.Tracks.SelectMany(t => t.Items)) referenced.Add(item.Id);
+        foreach (var item in _clips.MediaBin) referenced.Add(item.Id);
+
+        foreach (var summary in Projects.ToList())
+        {
+            try
+            {
+                var json = await (await StorageAsync())
+                    .InvokeAsync<string?>("getItem", $"{EntryPrefix}{summary.Id}");
+                if (string.IsNullOrEmpty(json)) continue;
+
+                var (file, _) = ProjectSerializer.Parse(json);
+                if (file is null) continue;
+
+                foreach (var id in ReferencedIds(file)) referenced.Add(id);
+            }
+            catch (Exception ex)
+            {
+                // A project that cannot be read has to be assumed to reference everything, so the
+                // sweep is abandoned rather than run on partial information.
+                _errorLog.Log("ProjectStore.CollectReferencedClipIdsAsync", ex);
+                throw;
+            }
+        }
+
+        return referenced;
+    }
+
+    private static IEnumerable<Guid> ReferencedIds(ProjectFile file)
+    {
+        foreach (var track in file.Tracks)
+        {
+            foreach (var c in track.VideoClips) yield return c.Id;
+            foreach (var c in track.AudioClips) yield return c.Id;
+            foreach (var c in track.ImageClips) yield return c.Id;
+            foreach (var c in track.CalloutClips) yield return c.Id;
+        }
+
+        foreach (var c in file.Bin.VideoClips) yield return c.Id;
+        foreach (var c in file.Bin.AudioClips) yield return c.Id;
+        foreach (var c in file.Bin.ImageClips) yield return c.Id;
+    }
+
     // ── Autosave ──────────────────────────────────────────────────────────────
 
     /// <summary>How long the editing has to stop before the project is written.</summary>
@@ -125,6 +239,7 @@ public sealed class ProjectStore : IAsyncDisposable
     private CancellationTokenSource? _autosaveCts;
     private bool _autosaveEnabled;
     private bool _restoring;
+    private bool _indexWasRead;
 
     /// <summary>True while an autosave is scheduled and has not run.</summary>
     /// <remarks>Read by the unload guard: work that has not reached storage is worth stopping for.</remarks>
@@ -208,6 +323,12 @@ public sealed class ProjectStore : IAsyncDisposable
             var json = await (await StorageAsync()).InvokeAsync<string?>("getItem", IndexKey);
             if (!string.IsNullOrEmpty(json))
                 Projects = JsonSerializer.Deserialize<List<ProjectSummary>>(json, _jsonOpts) ?? [];
+
+            // Whether the list was actually read, as distinct from what it contained. Housekeeping
+            // refuses to run without this, because a failure to read makes every stored file look
+            // unreferenced — and sweeping on that basis deletes the media for every project the
+            // person has (2026-09-05 audit, media-2).
+            _indexWasRead = true;
         }
         catch (Exception ex)
         {

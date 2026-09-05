@@ -135,6 +135,23 @@ export async function opfsReadAsFile(clipId, ext) {
  * clipId is the filename without extension (the Guid string).
  * @returns {Promise<Array<{clipId: string, ext: string, sizeBytes: number}>>}
  */
+/**
+ * How much of the browser's storage this site is using, and how much it is allowed.
+ *
+ * Nothing read this. Every import writes a copy of the file into that storage, nothing ever freed
+ * one, and the first anybody knew about the quota was a save that failed (2026-09-05 audit,
+ * media-2). Returns nulls where the browser declines to say, which some do.
+ */
+export async function opfsEstimate() {
+    try {
+        if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return { usage: null, quota: null };
+        const { usage, quota } = await navigator.storage.estimate();
+        return { usage: usage ?? null, quota: quota ?? null };
+    } catch {
+        return { usage: null, quota: null };
+    }
+}
+
 export async function opfsListClips() {
     try {
         const dir = await getClipsDir();

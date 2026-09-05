@@ -16,6 +16,13 @@
     {
         <div class="bv-browser__header">
             <span class="bv-browser__title">Media Library</span>
+            @* How much of the browser's storage the imported media is taking. Nothing showed this,
+               so the first anybody knew about the quota was a save that failed (2026-09-05 audit,
+               media-2). *@
+            @if (_storageUsed is not null)
+            {
+                <span class="bv-browser__storage" title="@_storageTitle">@_storageLabel</span>
+            }
             <div class="bv-browser__header-actions">
                 <TelerikButton OnClick="PickFilesAsync"
                                Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
@@ -272,6 +279,45 @@
     // ── Pin state ─────────────────────────────────────────────────────────────
     private bool _isPinned;
     private const string PinStateKey = "bv-browser-pinned";
+
+    // ── Storage in use ────────────────────────────────────────────────────────
+
+    private long?  _storageUsed;
+    private long?  _storageQuota;
+    private string _storageLabel = string.Empty;
+    private string _storageTitle = string.Empty;
+
+    /// <summary>
+    /// Reads how much of the browser's storage is in use, for the header.
+    /// </summary>
+    /// <remarks>
+    /// Refreshed after an import, because that is when it changes by an amount worth noticing.
+    /// </remarks>
+    private async Task RefreshStorageUsageAsync()
+    {
+        var (usage, quota) = await OPFS.EstimateAsync();
+        _storageUsed  = usage;
+        _storageQuota = quota;
+
+        if (usage is null) return;
+
+        _storageLabel = Bytes(usage.Value);
+        _storageTitle = quota is > 0
+            ? $"Imported media is using {Bytes(usage.Value)} of the "
+              + $"{Bytes(quota.Value)} this browser allows. Media no project uses is cleared "
+              + "when the editor starts."
+            : $"Imported media is using {Bytes(usage.Value)} of this browser's storage.";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string Bytes(long b) => b switch
+    {
+        < 1024          => $"{b} B",
+        < 1_048_576     => $"{b / 1024.0:F0} KB",
+        < 1_073_741_824 => $"{b / 1_048_576.0:F0} MB",
+        _               => $"{b / 1_073_741_824.0:F1} GB",
+    };
 
     // ── Library state ─────────────────────────────────────────────────────────
     private bool                           _libraryLoading;
@@ -1676,6 +1722,8 @@
         // them. Item 94 — a control that goes on showing what was true at its last paint.
         Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
 
+        _ = RefreshStorageUsageAsync();
+
         try
         {
             var stored = await (await StorageAsync()).InvokeAsync<string?>("getItem", PinStateKey);
@@ -1852,6 +1900,7 @@
             }
 
             await (await DomAsync()).InvokeVoidAsync("clearFileInput", "bv-file-input");
+            await RefreshStorageUsageAsync();
         }
         catch (Exception ex) { _errorMessage = ex.Message; ErrorLog.Log("ClipBrowser.OnFilesSelected", ex); }
         finally { _loading = false; StateHasChanged(); }

@@ -92,6 +92,31 @@ public sealed class OPFSService : IAsyncDisposable
     }
 
     /// <summary>
+    /// How much of the browser's storage this site is using, and how much it may use.
+    /// </summary>
+    /// <remarks>
+    /// Nothing read this. Every import writes a copy of the file into that storage, nothing ever
+    /// freed one, and the first anybody knew about the quota was a save that quietly failed
+    /// (2026-09-05 audit, media-2). Both figures are null where the browser declines to say.
+    /// </remarks>
+    public async Task<(long? Usage, long? Quota)> EstimateAsync()
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return (null, null);
+
+        try
+        {
+            var estimate = await _module.InvokeAsync<StorageEstimate>("opfsEstimate");
+            return (estimate.Usage, estimate.Quota);
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("OPFSService.EstimateAsync", ex);
+            return (null, null);
+        }
+    }
+
+    /// <summary>
     /// Lists all files stored in the OPFS bv-clips/ directory.
     /// Returns an empty list when OPFS is unavailable or the directory is empty.
     /// </summary>
@@ -239,6 +264,9 @@ public sealed record OPFSQuota(long UsedBytes, long TotalBytes)
 }
 
 /// <summary>An entry returned by <see cref="OPFSService.ListClipsAsync"/>.</summary>
+/// <summary>What the browser reports about its own storage. Either figure may be absent.</summary>
+public sealed record StorageEstimate(long? Usage, long? Quota);
+
 public sealed record OpfsClipEntry(string ClipId, string Ext, long SizeBytes)
 {
     /// <summary>The OPFS file name: <c>{ClipId}{Ext}</c>.</summary>
