@@ -1279,7 +1279,10 @@
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            // Not ex.Message. On WebAssembly an unreachable server arrives as the browser's own
+            // "TypeError: Failed to fetch", which was shown verbatim (2026-09-05 audit, found on
+            // screen while verifying the refusal state).
+            error = MediaLibraryProblemText.Describe(ex);
             ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex);
         }
 
