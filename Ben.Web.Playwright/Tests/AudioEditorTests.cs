@@ -129,13 +129,18 @@ public class AudioEditorTests : BenTestBase
         var savedClips = Modal.GetByText("Saved Clips", new() { Exact = false }).First;
         var editError  = Modal.Locator(".alert-danger").First;
 
+        // Generous, and it has to be: every test in this fixture uploads its own copy of the
+        // fixture to the same case, so by the last one the Files tab is rendering half a dozen
+        // compact players each decoding 7 MB before this edit gets any attention. Alone this takes
+        // ten seconds; sixth in line it has taken ninety. The subject is whether Silence produces a
+        // clip, not how quickly. (The pile-up itself belongs to phase 6's harness work.)
         try
         {
-            await Expect(savedClips.Or(editError)).ToBeVisibleAsync(new() { Timeout = 90_000 });
+            await Expect(savedClips.Or(editError)).ToBeVisibleAsync(new() { Timeout = 180_000 });
         }
         catch (Exception)
         {
-            Assert.Fail("Silence produced neither a saved clip nor a message within 90 seconds — "
+            Assert.Fail("Silence produced neither a saved clip nor a message within three minutes — "
                       + "the walk's finding E, now with a region a person actually drew.");
             return;
         }
@@ -202,6 +207,78 @@ public class AudioEditorTests : BenTestBase
     private async Task<string> PlayheadTextAsync()
         => (await Modal.GetByRole(AriaRole.Button, new() { Name = "Add Marker at", Exact = false })
                        .First.InnerTextAsync()).Trim();
+
+    /// <summary>
+    /// Exploring a second region plays the second region's audio.
+    /// </summary>
+    /// <remarks>
+    /// <para>The explorer downloads one region's audio and decided whether to do it again by asking
+    /// whether it had ever loaded anything. So the first region a person explored was what they
+    /// heard for every region afterwards, while the title, the notes and the Save button all moved
+    /// on — listen to the second region, save it, and the file is not the sound that was playing
+    /// (2026-09-06 audio walk, finding H). The walk never reached this: the explorer would not stay
+    /// closed long enough to open a second one.</para>
+    ///
+    /// <para>Two regions of deliberately different lengths, and the check is the length of the
+    /// audio the explorer actually loaded.</para>
+    /// </remarks>
+    [Test]
+    public async Task Exploring_a_second_region_plays_that_region()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        var first  = await ExploreAndMeasureAsync(0.20, 0.30);
+        var second = await ExploreAndMeasureAsync(0.55, 0.85);
+
+        TestContext.Out.WriteLine($"waveform fingerprints: {first} then {second}");
+
+        Assert.That(first,  Is.Not.EqualTo("empty"), "the first region never drew a waveform");
+        Assert.That(second, Is.Not.EqualTo("empty"), "the second region never drew a waveform");
+        Assert.That(second, Is.Not.EqualTo(first),
+            "the second region drew the first region's waveform, so it is playing the first "
+            + "region's audio — while the title, the notes and Save have all moved on to the second");
+    }
+
+    /// <summary>
+    /// Draws a region, explores it, and fingerprints the waveform the explorer actually drew.
+    /// </summary>
+    /// <remarks>
+    /// The picture, not the title: the title was never wrong. Two different stretches of a real
+    /// recording draw differently, and a stretch that was never fetched draws exactly what the
+    /// previous one did.
+    /// </remarks>
+    private async Task<string> ExploreAndMeasureAsync(double from, double to)
+    {
+        await DrawRegionAsync(from, to);
+
+        var region = Modal.Locator("[part~='region']").Last;
+        await region.ClickAsync(new() { Button = MouseButton.Right });
+
+        var explore = Page.GetByText("Explore Region", new() { Exact = false }).First;
+        await Expect(explore).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await explore.ClickAsync();
+
+        // The explorer is its own modal, on top of the editor's.
+        var explorer = Page.Locator(".modal.show").Last;
+        var waveform = explorer.Locator("[id^='ws-']").First;
+        await Expect(waveform).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // fetch + decode + draw
+
+        // A picture of the waveform, taken through Playwright because WaveSurfer renders inside a
+        // shadow root that document.querySelector cannot see. Two different stretches of a real
+        // recording look different; a stretch that was never fetched looks exactly like the last one.
+        var image = await waveform.ScreenshotAsync();
+        var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(image))[..16];
+
+        await explorer.Locator(".btn-close").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+
+        return fingerprint;
+    }
 
     /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
     private async Task DrawRegionAsync(double fromFraction, double toFraction)

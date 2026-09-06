@@ -62,7 +62,7 @@ guard test that fails on any picker fed a list of tuples.
 | E | **WITHDRAWN** | The walk clicked the toolbar's silence-DETECTION toggle, not the edit panel's Silence: both are named "Silence" and a name lookup resolves in DOM order. Detection produces no clip and no error, correctly. Silencing a region a person drew produces a saved clip — verified in phase 2, which also gave the eight edit buttons ids so this cannot recur. |
 | F | **OBSERVED** | All seven saved clips carry the badge `0:00.0–0:00.0`. |
 | G | **OBSERVED** | The edit panel's region readout sits beside Gain/Fade/Speed/Pitch, which ignore it. |
-| H | **UNREACHED** | Blocked by I every time: the explorer for the first region came back before a second region could be right-clicked. The code reading stands; re-check after I is fixed. |
+| H | **OBSERVED → FIXED** | Reachable once I was fixed, and it reproduced at once: exploring two different regions in turn drew a byte-identical waveform, so the second was playing the first's audio while Save sent the second's coordinates. Fixed in phase 3. |
 | I | **OBSERVED** (twice) | The Region Explorer's X closed it and the parent brought it back, exactly as A. In run 4 the count was 0 immediately after the X and the explorer was back again by the next region draw — it returns on whatever parent render comes next. |
 | J | **OBSERVED → FIXED** | With a confirmed marker in the list, its ▶ moved nothing. (The stated evidence — "no media element playing" — was not evidence: this player is Web Audio and creates none. The defect was real: a point marker's play only seeked.) Fixed in phase 2; the playhead now advances, and a span plays its own audio. |
 | regions | PASS | One user region at a time, as designed; drawing works even in the keyhole. |
@@ -264,6 +264,36 @@ file-type, marker or saved-clip load says so rather than rendering as an empty r
 half, and O). The two Save-as-clip buttons now share one Normalize default, and the region explorer
 offers the choice it used to decide silently (N). A region's note appears on the clip saved from it,
 through a matching rule both places share (M).
+
+## Phase 3 — the region explorer
+
+**H, and it is the worst shape a bug can take here.** The explorer decided whether to fetch a
+region's audio by asking whether it had ever fetched anything — `if (!Visible || _source is not
+null) return;`. The first region a person explored was therefore what they heard for every region
+afterwards, while the title, the notes panel and the Save button all moved on. Listen to the second
+region, decide it is worth keeping, save it, and the file that arrives is not the sound that was
+playing.
+
+The walk recorded H as UNREACHED because finding I blocked it every time. With I fixed in phase 1a
+this was the first run that could open a second region, and it reproduced immediately: exploring two
+regions in turn drew a **byte-identical** waveform both times.
+
+The reload decision is now a comparison of file, start and end in `RegionExplorerKey`, with a
+ten-millisecond tolerance so floating-point drift does not re-download the same audio on every
+render. Everything the panel shows or writes describes the range that is loaded rather than the
+parameter as it stands — the title, both time readouts, the notes it filters, the range a new note
+is filed against, and what Save sends. The old audio is cleared before the fetch, so there is no
+moment where one stretch is playing and another would be saved.
+
+**The explorer was still in the keyhole.** Its modal was `Size="sm"` — the same 300 pixels the main
+editor was rescued from in phase 1a, holding a waveform, a transport, a notes list and a save form
+side by side. Phase 1a fixed the editor and missed this one. It is fullscreen now.
+
+**A harness observation for phase 6.** Every test in `AudioEditorTests` uploads its own copy of the
+7 MB fixture to the same case, so by the sixth the Files tab is rendering half a dozen compact
+players all decoding before the test's own edit gets any attention: a Silence that takes ten seconds
+alone took ninety-four sixth in line and timed out. The waits account for it; the pile-up itself is
+worth removing when phase 6 does the harness work.
 
 ## What this changes in the plan
 
