@@ -15,6 +15,10 @@ arrives, and it stays yours until you delete it.
 
 Each row can be downloaded, shared, replaced or deleted.
 
+An audio file also has a player. Right-click it and choose **Open Full View** for the editor:
+regions, a spectrogram, EVP scanning, and clips saved from what you find. See
+[Using the Audio Editor](/help/using-the-audio-editor).
+
 ## Sharing
 
 **Share** offers a file to a group, at one of three levels — the group's administrators only,

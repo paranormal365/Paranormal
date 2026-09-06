@@ -349,6 +349,34 @@ so a bad request was indistinguishable from a refusal. Found by sending the same
 the API had already been proved to accept a PUT from the same person on the same file. The save
 supplies the record's own defaults now and reports the server's sentence when there is one.
 
+## Phase 7 — the help
+
+The audio editor had **no help article at all**, and `your-files.md` never mentioned audio.
+Somebody who opened a recording found a spectrogram, three sensitivities of EVP scan and eight
+destructive edits with nothing anywhere saying what they were for — or the thing that matters most,
+that nothing here ever changes the recording. Ben's standing rule is that a user-visible feature is
+not done until the help is updated, so phases 2 through 5 were not done.
+
+`using-the-audio-editor.md` covers selecting a stretch, what the spectrogram's three controls trade
+against each other, what the scan is and is not, making a clip, each of the eight edits, the
+half-hour ceiling and why it exists, the region explorer and the case mixer. Four screenshots,
+captured on a clean isolated database. Help links from the editor's toolbar and the mixer's heading,
+and a pointer from Your Files.
+
+**U (NEW, L). The editor's toolbar bar leaves bands of empty space.** It wraps onto two lines in a
+fullscreen modal, and a wrapped flex container spreads its lines through whatever height it has —
+so the file's details sat at the top, the toolbar in the middle, and a couple of hundred pixels of
+nothing between them. `align-content: flex-start` fixes the ordinary case, and the screenshots
+confirm it. **With several panels open the gap returns**, so something else contributes; measured,
+the column's three children come to 484 px in an 807 px column, which does not by itself explain
+where the space goes. Worth one pass with the layout inspector rather than another guess.
+
+**A caption that described something the picture did not show.** The first spectrogram capture used
+Jet on a linear axis, which puts a quiet recording's whole voice band in one dark strip, while the
+caption confidently described bands in it. The capture uses Viridis and the mel scale now, and the
+caption says what is in the picture. Worth remembering: a screenshot is evidence, and a caption is a
+claim about it.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with
