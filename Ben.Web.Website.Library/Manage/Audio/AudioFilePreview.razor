@@ -1,4 +1,4 @@
-@*
+﻿@*
   AudioFilePreview.razor
   ──────────────────────
   Compact waveform player used in the Files tab of AdminUserDetail.
@@ -80,7 +80,13 @@ else
 </BenContextMenu>
 
 @* ── Full-view window ────────────────────────────────────────────────────── *@
-<BenModal Visible="@_showModal" Title="@FileName" Size="sm">
+@* The editor gets the room again. It opened as a 92vw x 92vh window until the Manage-area
+   restyle (bde4e03f, 2026-08-18) swapped that for a modal and chose the SMALLEST size — 300px,
+   with the toolbar scrolling sideways, the waveform a 270px strip and every panel below the fold.
+   The same commit dropped VisibleChanged, which is why closing it did not stick and why
+   OnModalVisibleChanged became dead code. Both halves are restored here (2026-09-06 audio walk,
+   findings P and A). *@
+<BenModal Visible="@_showModal" VisibleChanged="@OnModalVisibleChanged" Title="@FileName" Size="fullscreen">
     <ChildContent>
         @if (_showModal && _source is not null)
         {
@@ -111,7 +117,7 @@ else
                         {
                             <BenSelect Class="form-select-sm" Data="@_resolutionOptions" Value="@_spectrogramFftSamples" ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))" TextField="@nameof(SpectrogramResolutionOption.Label)" ValueField="@nameof(SpectrogramResolutionOption.Value)" Width="155px" Enabled="@_modalReady" />
                             @* Colormap selector *@
-                            <BenSelect Class="form-select-sm" Data="@_colormapOptions" @bind-Value="_colormap" TextField="Label" ValueField="Value" Width="115px" Enabled="@_modalReady" OnChange="@((string? value) => { _ = OnColormapChangedAsync(); })" />
+                            <BenSelect Class="form-select-sm" Data="@_colormapOptions" @bind-Value="_colormap" TextField="@nameof(ColormapOption.Label)" ValueField="@nameof(ColormapOption.Value)" Width="115px" Enabled="@_modalReady" OnChange="@((string? value) => { _ = OnColormapChangedAsync(); })" />
                             @* Mel-scale toggle *@
                             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleMelScaleAsync" disabled="@(!(_modalReady))">
                                 🎵 Mel Scale
@@ -1356,7 +1362,9 @@ else
         {
             _timelineEnabled    = true;
             _spectrogramEnabled = false;
-            _spectrogramLabels  = false;
+            // Matches the field's own default (:825). Resetting it to false meant reopening the
+            // editor drew a spectrogram with no axis labels, once, for no stated reason.
+            _spectrogramLabels  = true;
             _modalReady         = false;
             _showMarkers        = false;
             _showVoiceBand      = false;
@@ -1450,14 +1458,15 @@ else
     {
         _spectrogramEnabled = !_spectrogramEnabled;
         if (_modalPlayer is null) return;
-        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples);
+        await _modalPlayer.ToggleSpectrogramAsync(
+            _spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
     }
 
     private async Task OnSpectrogramResolutionChangedAsync(int fftSamples)
     {
         _spectrogramFftSamples = fftSamples;
         if (_spectrogramEnabled && _modalPlayer is not null)
-            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels);
+            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels, _colormap);
     }
 
     private async Task OnSpectrogramContextMenuFired(WsPointArgs args)
@@ -1579,9 +1588,22 @@ else
     private bool                     _silenceDetectionEnabled;
     private double                   _silenceThresholdDb = -40;
 
-    private static readonly List<(string Value, string Label)> _colormapOptions =
+    /// <summary>
+    /// A record, not a value tuple.
+    /// </summary>
+    /// <remarks>
+    /// These were <c>(string Value, string Label)</c>, and a tuple's element names exist only at
+    /// compile time — at runtime it has fields <c>Item1</c>/<c>Item2</c> and no properties at all,
+    /// so <c>SelectValue.GetMember(item, "Label")</c> found nothing and fell back to the item
+    /// itself. The picker rendered every option as "(viridis, Viridis)" and, because the value
+    /// never matched the selected string either, showed blank until something was chosen. The
+    /// resolution picker beside it always worked because it uses a record
+    /// (2026-09-06 audio walk, finding T).
+    /// </remarks>
+    private record ColormapOption(string Value, string Label);
+    private static readonly List<ColormapOption> _colormapOptions =
     [
-        ("jet","Jet"), ("viridis","Viridis"), ("inferno","Inferno"), ("grayscale","Grayscale"),
+        new("jet", "Jet"), new("viridis", "Viridis"), new("inferno", "Inferno"), new("grayscale", "Grayscale"),
     ];
 
     // ── Phase D: EVP markers state ─────────────────────────────────────────────

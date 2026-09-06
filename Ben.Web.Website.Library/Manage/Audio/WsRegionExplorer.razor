@@ -1,4 +1,4 @@
-@*
+﻿@*
   WsRegionExplorer.razor
   ──────────────────────
   Full-featured explorer window for a selected WaveSurfer region.
@@ -19,7 +19,10 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
-<BenModal @bind-Visible="@Visible" Title="@RegionTitle" Size="sm">
+@* Visible + VisibleChanged, not @bind-Visible: binding to the component's OWN parameter writes
+   the field and never tells the parent, so AudioFilePreview kept thinking the explorer was open
+   and put it straight back on its next render (2026-09-06 audio walk, finding I). *@
+<BenModal Visible="@Visible" VisibleChanged="@(v => VisibleChanged.InvokeAsync(v))" Title="@RegionTitle" Size="sm">
     <ChildContent>
         @if (_loading)
         {
@@ -260,7 +263,11 @@
                       ContentType="@ContentType"
                       FileSize="@FileSize"
                       Region="@_subRegion"
-                      @bind-Visible="@_showSubExplorer" />
+                      @bind-Visible="@_showSubExplorer"
+                      @* A clip saved from a sub-region reached nothing: the callback stopped here,
+                         so the saved-clip list two levels up never learned about it
+                         (2026-09-06 audio walk, finding I). *@
+                      OnClipSaved="@OnClipSaved" />
 }
 
 @code {

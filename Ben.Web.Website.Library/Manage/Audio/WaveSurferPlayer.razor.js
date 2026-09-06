@@ -664,7 +664,7 @@ export function getEnvelopePoints(containerId)          { return instances.get(c
  * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
  * @param {DotNetObjectReference} dotnetRef   Used to fire progress/ready/menu callbacks
  */
-export async function toggleSpectrogram(containerId, enable, showLabels, fftSamples, dotnetRef) {
+export async function toggleSpectrogram(containerId, enable, showLabels, fftSamples, dotnetRef, colormap, melScale) {
   const instance = instances.get(containerId)
   if (!instance) return
 
@@ -714,6 +714,8 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
   if (instance.spectrogramData) {
     _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
     instance.spectrogramMeta.showLabels = showLabels
+    if (colormap !== undefined) instance.spectrogramMeta.colormap = colormap
+    if (melScale !== undefined) instance.spectrogramMeta.melScale = melScale
     _hideSpectrogramLoading(canvasId)
     if (!instance._prerenderCanvas) _startSpectrogramPrerender(containerId)  // restart pre-render
     _redrawSpectrogramViewport(containerId)
@@ -736,7 +738,17 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels, colormap: 'jet' }
+
+  // The caller's own state, not a hard-coded default: hiding the spectrogram tears this object
+  // down, so showing it again used to come back as jet with the mel scale off however the
+  // toolbar was set (2026-09-06 audio walk, finding C).
+  instance.spectrogramMeta = {
+    sampleRate: audioBuffer.sampleRate,
+    fftSamples,
+    showLabels,
+    colormap: colormap ?? 'jet',
+    melScale: melScale ?? false,
+  }
 
   const safe = (fn) => fn.catch(() => {})
 
@@ -819,7 +831,18 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels, colormap: colormap ?? 'jet' }
+
+  // MERGED, not replaced. Rebuilding this object from scratch dropped every setting the caller
+  // did not happen to pass: changing the FFT size reverted the colormap to jet and switched the
+  // mel scale off, while the toolbar still showed both as they were. Anything not being changed
+  // here keeps its current value (2026-09-06 audio walk, finding C).
+  instance.spectrogramMeta = {
+    ...instance.spectrogramMeta,
+    sampleRate: audioBuffer.sampleRate,
+    fftSamples,
+    showLabels,
+    colormap: colormap ?? instance.spectrogramMeta?.colormap ?? 'jet',
+  }
 
   worker.onmessage = (e) => {
     if (e.data.type === 'progress') {

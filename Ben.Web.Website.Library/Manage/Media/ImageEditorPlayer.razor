@@ -1,4 +1,4 @@
-@*
+﻿@*
   ImageEditorPlayer.razor
   ────────────────────────
   Full-featured image editor backed by Fabric.js v6 (CDN).
@@ -67,7 +67,7 @@
                     @* Filter presets *@
                     <BenPanel Title="Filter" Collapsed="true" Class="mb-2">
                             <div class="pt-1">
-                                <BenSelect Data="@_presets" @bind-Value="_preset" TextField="Label" ValueField="Value" OnChange="@((string? _) => ApplyPreset())" />
+                                <BenSelect Data="@_presets" @bind-Value="_preset" TextField="@nameof(PresetOption.Label)" ValueField="@nameof(PresetOption.Value)" OnChange="@((string? _) => ApplyPreset())" />
                             </div>
                         </BenPanel>
 
@@ -215,11 +215,18 @@
     // Layers
     private List<LayerItem> _layers = [];
 
-    private static readonly List<(string Value, string Label)> _presets =
+    /// <summary>
+    /// A record, not a value tuple — see <c>SelectOptionsAreNotValueTuplesTests</c>. A tuple's
+    /// element names exist only at compile time, so the picker rendered every filter as
+    /// "(sepia, Sepia)" and showed blank until one was chosen (found alongside the same bug in the
+    /// audio editor's colormap picker, 2026-09-06).
+    /// </summary>
+    private record PresetOption(string Value, string Label);
+    private static readonly List<PresetOption> _presets =
     [
-        ("none","None"), ("grayscale","Grayscale"), ("sepia","Sepia"),
-        ("invert","Invert"), ("highcontrast","High Contrast"),
-        ("nightvision","Night Vision"), ("heatmap","Heat Map"),
+        new("none", "None"), new("grayscale", "Grayscale"), new("sepia", "Sepia"),
+        new("invert", "Invert"), new("highcontrast", "High Contrast"),
+        new("nightvision", "Night Vision"), new("heatmap", "Heat Map"),
     ];
 
     // ── Public API ────────────────────────────────────────────────────────────

@@ -23,13 +23,41 @@ nothing in the code says "300 px"; it says `sm`. This is the first thing to fix,
 other defect in the full view is being experienced through a keyhole.
 *Screenshots:* `01-fullview-open.png`, `05-saved-clips.png`, `07-after-scan.png`.
 
+## What the full size then showed
+
+With the editor at its proper size (phase 1a), two more defects were visible that the keyhole had
+been hiding.
+
+**S (NEW, S) — FIXED.** **The spectrogram never draws.** "Show Spectrogram" toggles to "Hide Spectrogram",
+the extra controls appear, the waveform is pushed down to make room — and the space above it stays
+empty, at every FFT size and after every colormap change. This is not a colormap problem and not a
+size problem; the canvas has no pixels in it. It is the feature the EVP workflow leans on hardest
+and the plan had it as a working feature with two small defects. Console evidence is captured in
+the dark-mode run.
+*Cause:* the draw worker shipped with a second, older copy of its whole implementation appended
+after the first, carrying that copy's header comment without its opening `/**`. The file threw
+`SyntaxError: Unexpected token '*'` on load, so the worker never ran and the canvas stayed at the
+browser's default 300×150 with nothing in it — since the asset move on 2026-08-23. Removing the
+stale copy also saved the newer implementation from being overwritten by it, which would have lost
+colormaps and the mel scale even had the file parsed. Guarded by `ShippedScriptsParseTests`.
+*Screenshots:* `03-spectrogram-jet.png` (before), `03-spectrogram-viridis.png` (after).
+
+**T (NEW, M).** **The colormap picker cannot read its own options.** They were declared as
+`List<(string Value, string Label)>`, and a value tuple's element names exist only at compile time:
+at runtime it has `Item1`/`Item2` and no properties, so `SelectValue.GetMember(item, "Label")`
+finds nothing and falls back to the item itself. Every option rendered as `(viridis, Viridis)`,
+and because the value never matched the bound string either, the picker showed **blank** until
+something was chosen. The resolution picker beside it always worked because it uses a record.
+**Fixed in phase 1a**, along with the identical bug in the image editor's filter presets, plus a
+guard test that fails on any picker fed a list of tuples.
+
 ## Full view
 
 | id | verdict | what happened |
 |---|---|---|
-| A | **OBSERVED** | The X closed the modal; the next parent render (clicking the compact player) brought it straight back. There is no way to leave the editor except navigating away. |
+| A | **OBSERVED → FIXED** | The X closed the modal; the next parent render (clicking the compact player) brought it straight back. After phase 1a the re-walk records it staying closed and reopening cleanly. |
 | B | **OBSERVED** | With a region drawn at 1:14.6–1:33.2, turning on Silence moved the edit target to 3:00.6–3:06.5 — a machine-found stretch — and the drawn region was gone (`02-silence-on.png` shows no region at all). Cut/Silence now act on detected silence. |
-| C | **UNVERIFIABLE in the keyhole** | Colormap and resolution changes were made, but the spectrogram canvas sits below the fold of the 300 px modal and the three screenshots are identical. Stands as in the plan (code-confirmed); re-check on screen after P. |
+| C | **OBSERVED → FIXED** | With S and T fixed, measured: choosing Viridis repainted the canvas (`71,13,91` against jet's `6,7,145`), and a resolution change reverted it to `6,14,164`. The settings object was rebuilt from scratch on every recompute, so anything the caller did not pass was invented — jet, and mel off. It is merged now, and the editor passes its own colour and mel state on every call. Re-measured: colours survive (`70,21,95`), and the mel scale survives exactly (centroid 0.529 before and after). |
 | D | **CODE** | Four enable checkboxes toggle a bound bool and nothing else; not observable from outside. Stands as in the plan. |
 | E | partly | Seven of the eight edits produced a saved clip. **Silence produced nothing within 60 s and showed no error** (`edit:Silence`). Cause not yet known — the region it would have used was the machine one from B. |
 | F | **OBSERVED** | All seven saved clips carry the badge `0:00.0–0:00.0`. |

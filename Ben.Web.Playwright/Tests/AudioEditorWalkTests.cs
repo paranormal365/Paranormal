@@ -23,6 +23,50 @@ namespace Ben.Web.Playwright.Tests;
 [Explicit("Phase 0 walk — run on the isolated stack with --filter TestCategory=AudioEditorWalk")]
 public class AudioEditorWalkTests : BenTestBase
 {
+    /// <summary>
+    /// Dark, at a desktop size, like every other capture in this repo.
+    /// </summary>
+    /// <remarks>
+    /// The theme is applied synchronously from <c>&lt;head&gt;</c> out of the template's
+    /// <c>layoutSettings</c>, so seeding that from an init script is what makes the first paint
+    /// dark; <c>ColorScheme.Dark</c> covers the parts that read <c>prefers-color-scheme</c>
+    /// instead. Same pair <see cref="Capture.HelpMediaCapture"/> uses, and for the same reason.
+    /// </remarks>
+    public override BrowserNewContextOptions ContextOptions() => new()
+    {
+        ViewportSize = new ViewportSize { Width = 1440, Height = 900 },
+        ColorScheme  = ColorScheme.Dark,
+    };
+
+    private const string DarkModeInitScript = """
+        try {
+            localStorage.setItem('layoutSettings', JSON.stringify({ theme: 'dark' }));
+            localStorage.setItem('ben-theme', 'dark');
+        } catch (e) { /* storage blocked; the shot falls back to the default theme */ }
+        """;
+
+    [SetUp]
+    public async Task GoDarkAndWatchTheConsole()
+    {
+        await Context.AddInitScriptAsync(DarkModeInitScript);
+
+        // A spectrogram that never draws leaves no mark on the page; the reason is in the console.
+        _console.Clear();
+        Page.Console += (_, m) =>
+        {
+            if (m.Type is "error" or "warning") _console.Add($"{m.Type}: {m.Text}");
+        };
+        Page.PageError += (_, e) => _console.Add($"pageerror: {e}");
+    }
+
+    private readonly List<string> _console = [];
+
+    private void RecordConsole(string id)
+    {
+        foreach (var line in _console.Distinct().Take(6)) Record(id, "CONSOLE", line);
+        _console.Clear();
+    }
+
     private static readonly string TestAudioPath =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3");
 
@@ -244,6 +288,25 @@ public class AudioEditorWalkTests : BenTestBase
         var selectCount = await selects.CountAsync();
         Record("C", "NOTE", $"toolbar selects visible with spectrogram on: {selectCount}");
 
+        // Where the bright content sits vertically, 0 = top of the canvas, 1 = bottom. This is what
+        // the mel scale actually changes — it stretches the low frequencies, which live at the
+        // bottom, so the centre of brightness climbs. Average colour cannot see that.
+        async Task<double> CentroidAsync() =>
+            await Page.EvaluateAsync<double>(
+                @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                          const c = cs.sort((a,b) => b.width*b.height - a.width*a.height)[0];
+                          if (!c) return -1;
+                          const ctx = c.getContext('2d', { willReadFrequently: true }); if (!ctx) return -1;
+                          const d = ctx.getImageData(0, 0, c.width, c.height).data;
+                          let weight = 0, sum = 0;
+                          for (let y = 0; y < c.height; y++)
+                            for (let x = 0; x < c.width; x += 4) {
+                              const i = (y * c.width + x) * 4;
+                              const b = d[i] + d[i+1] + d[i+2];
+                              weight += b; sum += b * y;
+                            }
+                          return weight > 0 ? +(sum / weight / c.height).toFixed(3) : -1; }");
+
         async Task<string> SampleAsync() =>
             await Page.EvaluateAsync<string>(
                 @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
@@ -292,13 +355,59 @@ public class AudioEditorWalkTests : BenTestBase
             await SnapAsync("03-spectrogram-after-resolution");
             var reverted = afterResolution == jet || Math.Abs(Delta(afterResolution, jet)) < Math.Abs(Delta(afterResolution, viridis));
             Record("C", reverted ? "FAIL" : "PASS",
-                reverted ? $"resolution change reverted the colormap toward jet: {afterResolution}"
-                         : $"colormap survived the resolution change: {afterResolution}");
+                reverted ? $"resolution change reverted the colormap toward jet: {afterResolution} (jet={jet}, viridis={viridis})"
+                         : $"colormap survived the resolution change: {afterResolution} (jet={jet}, viridis={viridis})");
+
+            // And the mel scale, which the same rebuild also dropped.
+            //
+            // Every reading below is taken at the SAME FFT size. A first attempt compared mel at
+            // one resolution against mel at another and read the difference as "mel was lost" —
+            // the FFT size changes the picture on its own, so that comparison could never mean
+            // anything.
+            await selects.Nth(resolutionIndex).SelectOptionAsync(current!);
+            await Page.WaitForTimeoutAsync(8000);
+            var linearCentroid = await CentroidAsync();
+
+            await Modal.GetByRole(AriaRole.Button, new() { Name = "Mel Scale", Exact = false }).First.ClickAsync();
+            await Page.WaitForTimeoutAsync(5000);
+            var melCentroid = await CentroidAsync();
+            await SnapAsync("03-spectrogram-mel-on");
+
+            // Away and back, so the reading that follows is at the resolution both others used.
+            await selects.Nth(resolutionIndex).SelectOptionAsync(other!);
+            await Page.WaitForTimeoutAsync(8000);
+            await selects.Nth(resolutionIndex).SelectOptionAsync(current!);
+            await Page.WaitForTimeoutAsync(8000);
+            var afterMelResolution = await CentroidAsync();
+            await SnapAsync("03-spectrogram-mel-after-resolution");
+
+            Record("C-mel", "NOTE",
+                $"brightness centroid — linear {linearCentroid}, mel {melCentroid}, "
+                + $"mel after a resolution change {afterMelResolution}");
+
+            // How far mel moves the picture depends entirely on the recording — on broadband music
+            // it is a few thousandths — so its size is reported rather than asserted.
+            Record("C-mel", "NOTE",
+                $"mel moved the centroid by {Math.Abs(melCentroid - linearCentroid):0.000}");
+
+            // What is worth asserting: the setting is still in force afterwards.
+            var keptMel = Math.Abs(afterMelResolution - melCentroid)
+                        <= Math.Abs(afterMelResolution - linearCentroid);
+            Record("C-mel", keptMel ? "PASS" : "FAIL",
+                keptMel ? "the mel scale survived the resolution change"
+                        : "the resolution change reverted the mel scale to linear");
         }
         else
         {
             Record("C", "NOTE", "could not find the colormap select; captured screenshots only");
         }
+
+        // Did it draw at all? A spectrogram with no pixels is not a colormap problem.
+        var drawn = await Page.EvaluateAsync<string>(
+            @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                      return cs.map(c => `${c.width}x${c.height}`).join(' | ') || 'no canvases'; }");
+        Record("S", "NOTE", $"canvases in the modal: {drawn}");
+        RecordConsole("S");
 
         static int Delta(string a, string b)
         {
