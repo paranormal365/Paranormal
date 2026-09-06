@@ -1,3 +1,4 @@
+﻿@using Ben.Video.Core.Services
 @inject ProjectStore Store
 @inject IJSRuntime JS
 
@@ -13,11 +14,11 @@
                    Class="bv-proj-dialog">
         <WindowTitle>Open Project</WindowTitle>
         <WindowContent>
-            @if (_errorMessage is not null)
+            @if (_state.Error is not null)
             {
                 @* Audit #6 — ProjectStore logs to the diagnostics panel, which a user may never
                    open. A failed delete/rename previously looked like nothing happened at all. *@
-                <div class="bv-proj-dialog__error" role="alert">⚠ @_errorMessage</div>
+                <div class="bv-proj-dialog__error" role="alert">⚠ @_state.Error</div>
             }
 
             @if (!Store.Projects.Any())
@@ -41,11 +42,11 @@
                             <Template>
                                 @{
                                     var row = (ProjectSummary)context;
-                                    @if (_editingId == row.Id)
+                                    @if (_state.IsEditing(row.Id))
                                     {
                                         <input class="bv-proj-name-input"
                                                type="text"
-                                               @bind="_editingName"
+                                               @bind="_state.EditingName"
                                                @bind:event="oninput"
                                                @onblur="CommitRename"
                                                @onkeydown="OnRenameKeyDown"
@@ -99,7 +100,7 @@
                                            Inline two-step rather than a nested dialog: item #68
                                            established that a TelerikWindow inside a TelerikWindow
                                            has real footer-positioning quirks here. *@
-                                        @if (_confirmDeleteId == row.Id)
+                                        @if (_state.IsConfirmingDelete(row.Id))
                                         {
                                             <TelerikButton OnClick="() => DeleteProject(row)"
                                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
@@ -107,7 +108,7 @@
                                                            Title="@($"Permanently delete \"{row.Name}\" — this cannot be undone")">
                                                 Delete?
                                             </TelerikButton>
-                                            <TelerikButton OnClick="() => _confirmDeleteId = null"
+                                            <TelerikButton OnClick="_state.CancelDelete"
                                                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                                                            Size="@ThemeConstants.Button.Size.Small"
                                                            Title="Keep this project">
@@ -116,7 +117,7 @@
                                         }
                                         else
                                         {
-                                            <TelerikButton OnClick="() => _confirmDeleteId = row.Id"
+                                            <TelerikButton OnClick="() => _state.AskToDelete(row.Id)"
                                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                                                            Size="@ThemeConstants.Button.Size.Small"
@@ -145,38 +146,62 @@
     [Parameter] public EventCallback<bool>     VisibleChanged   { get; set; }
     [Parameter] public EventCallback<ProjectSummary> OnOpen     { get; set; }
 
-    private Guid?  _editingId;
-    private string _editingName = string.Empty;
-    private Guid?  _confirmDeleteId;
-    private string? _errorMessage;
+    /// <summary>
+    /// Rename, confirm-delete and the error line, as a machine that can be asked whether a delete
+    /// is possible without clicking one (2026-09-05 audit, phase 11).
+    /// </summary>
+    private readonly ProjectsDialogState _state = new();
 
+    private IJSObjectReference? _dom;
+
+    private async Task<IJSObjectReference> DomAsync() =>
+        _dom ??= await JS.InvokeAsync<IJSObjectReference>(
+            "benImportEditorModule", "js/domInterop.js");
+
+    /// <summary>
+    /// Opens the rename box on a row and puts the cursor in it.
+    /// </summary>
+    /// <remarks>
+    /// Double-clicking the name produced a box nothing was focused in, so the first thing typed
+    /// went to the page instead of the field and the Enter that followed did nothing — the rename
+    /// looked broken until you noticed you had to click the box you had just opened. Same
+    /// focus-and-select the marker and track renames have always done.
+    /// </remarks>
     private void StartRename(ProjectSummary row)
     {
-        _editingId   = row.Id;
-        _editingName = row.Name;
+        _state.StartRename(row.Id, row.Name);
+
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            try
+            {
+                await (await DomAsync()).InvokeVoidAsync("focusAndSelect", ".bv-proj-name-input");
+            }
+            catch (JSDisconnectedException) { /* the dialog closed while we were asking */ }
+            catch (ObjectDisposedException) { }
+        });
     }
 
     private async Task CommitRename()
     {
-        if (_editingId.HasValue && !string.IsNullOrWhiteSpace(_editingName))
+        if (_state.CommitRename() is not { } rename) return;
+
+        try
         {
-            try
-            {
-                _errorMessage = null;
-                await Store.RenameAsync(_editingId.Value, _editingName);
-            }
-            catch (Exception ex)
-            {
-                _errorMessage = $"Couldn't rename that project: {ex.Message}";
-            }
+            _state.ClearError();
+            await Store.RenameAsync(rename.Id, rename.Name);
         }
-        _editingId = null;
+        catch (Exception ex)
+        {
+            _state.Failed($"Couldn't rename that project: {ex.Message}");
+        }
     }
 
     private async Task OnRenameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")  await CommitRename();
-        if (e.Key == "Escape") _editingId = null;
+        if (e.Key == "Escape") _state.CancelRename();
     }
 
     private async Task OpenProject(ProjectSummary row)
@@ -187,25 +212,26 @@
 
     private async Task DeleteProject(ProjectSummary row)
     {
-        _confirmDeleteId = null;
+        // Only ever the row that was asked about: deleting a saved project is a localStorage
+        // removeItem, not a ClipStore command, so there is no undo waiting behind a misclick.
+        if (!_state.ConfirmDelete(row.Id)) return;
+
         try
         {
-            _errorMessage = null;
             await Store.DeleteAsync(row.Id);
         }
         catch (Exception ex)
         {
             // Without this the row would simply stay in the list with no explanation — the exact
             // silent-failure shape audit #6 flagged.
-            _errorMessage = $"Couldn't delete \"{row.Name}\": {ex.Message}";
+            _state.Failed($"Couldn't delete \"{row.Name}\": {ex.Message}");
         }
     }
 
     private async Task Close()
     {
         // Don't let a pending "Delete?" or a stale error survive into the next time this opens.
-        _confirmDeleteId = null;
-        _errorMessage    = null;
+        _state.Reset();
         await VisibleChanged.InvokeAsync(false);
     }
 }

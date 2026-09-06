@@ -1,4 +1,5 @@
-﻿@inject ClipStore Clips
+﻿@using Ben.Video.Core.Services
+@inject ClipStore Clips
 @inject IOptions<VideoEditorOptions> EditorOptionsAccessor
 @inject TimelineViewState Timeline
 @inject PlaybackService Playback
@@ -1829,28 +1830,39 @@
                 other.TimelinePosition + other.TrimmedDuration > clip.TimelinePosition);
     }
 
+    /// <summary>Where a new overlay goes — one answer for all three kinds.</summary>
+    /// <remarks>
+    /// See <see cref="OverlayPlacement"/> for why this is not three separate calculations
+    /// (2026-09-05 audit, titles-8, callouts-7 and phase 11).
+    /// </remarks>
+    private OverlayPlacement NewOverlayPlacement() =>
+        OverlayPlacement.AtPlayhead(Playback.State.TimelineTime, Clips.TotalDuration);
+
     private void AddTextOverlay()
     {
-        // At the playhead, the same as Callout — see AddMarkerAtPlayhead for why the old
-        // Progress × TotalDuration was wrong (2026-09-05 audit, titles-8).
-        var position = Playback.State.TimelineTime;
-        var overlay  = new TextOverlay
+        var placement = NewOverlayPlacement();
+        var overlay   = new TextOverlay
         {
             Name             = "New Text",
             Text             = "New Text",
-            TimelinePosition = position,
-            Duration         = Math.Min(5.0, Math.Max(1.0, Clips.TotalDuration)),
+            TimelinePosition = placement.Position,
+            Duration         = placement.Duration,
         };
         Clips.AddTextOverlay(overlay);
     }
 
     private void AddCalloutClip()
     {
-        var clip = new CalloutClip
+        // TimelineTime, not CurrentTime: in clip preview the media clock counts from the selected
+        // clip's own start, so a callout added there landed earlier than the playhead by exactly
+        // that clip's start — right only for a clip beginning at zero, which is why it looked
+        // correct (2026-09-05 audit, phase 11).
+        var placement = NewOverlayPlacement();
+        var clip      = new CalloutClip
         {
             Name             = "New Callout",
-            TimelinePosition = Playback.State.CurrentTime,
-            Duration         = Math.Min(5.0, Math.Max(1.0, Clips.TotalDuration)),
+            TimelinePosition = placement.Position,
+            Duration         = placement.Duration,
         };
         Clips.AddCallout(clip);
     }
@@ -2156,17 +2168,15 @@
                     : null;
             }
 
-            var deltaSec = (e.ClientX - _moveDragStartX) / Timeline.PxPerSecond;
-            var raw      = Math.Max(0, _moveOriginalPosition + deltaSec);
-            var snapped  = EffectiveOptions.Snapping
-                ? SnapEngine.Snap(raw, _moveSnapTargets, EffectiveOptions.SnapThresholdSeconds)
-                : raw;
-            _movingItem.TimelinePosition = snapped;
-            _snapGuidePx = EffectiveOptions.Snapping
-                ? SnapEngine.ActiveSnapTarget(raw, _moveSnapTargets, EffectiveOptions.SnapThresholdSeconds) is { } target
-                    ? target * Timeline.PxPerSecond
-                    : null
-                : null;
+            // Clamp, snap and snap-guide are one calculation, and it lives in TimelineDragSession
+            // so it can be checked without a pointer (2026-09-05 audit, phase 11).
+            var dragged = (_moveSession ?? TimelineDragSession.Begin(
+                    _moveDragStartX, _moveOriginalPosition, Timeline.PxPerSecond))
+                .Move(e.ClientX, _moveSnapTargets, EffectiveOptions.Snapping,
+                      EffectiveOptions.SnapThresholdSeconds);
+
+            _movingItem.TimelinePosition = dragged.Position;
+            _snapGuidePx                 = dragged.SnapGuidePx;
             StateHasChanged();
         }
     }
@@ -2275,6 +2285,7 @@
             Clips.CommitDraggedPosition(_movingItem.Id, _moveOriginalPosition);
         _ = ScrollItemIntoViewAsync(movedItemId); // item #25 — fire-and-forget, purely cosmetic
         _movingItem           = null;
+        _moveSession          = null;
         _moveItemTrackId      = null;
         _moveOriginalTrackId  = null;
         _moveHoverTrackId     = null;
@@ -2288,6 +2299,9 @@
     private TrackItem? _movingItem;
     private double     _moveOriginalPosition;
     private double     _moveDragStartX;
+
+    /// <summary>The live body drag, started at pointerdown; null between gestures.</summary>
+    private TimelineDragSession? _moveSession;
     private bool       _rippleOverride; // initialized from VideoEditorOptions.RippleEdit
     private Guid?       _moveItemTrackId;
     private Guid?       _moveOriginalTrackId;
@@ -2305,6 +2319,7 @@
         _movingItem           = item;
         _moveOriginalPosition = item.TimelinePosition;
         _moveDragStartX       = e.ClientX;
+        _moveSession          = TimelineDragSession.Begin(e.ClientX, item.TimelinePosition, Timeline.PxPerSecond);
         _moveItemTrackId      = track.Id;
         _moveOriginalTrackId  = track.Id;
         _moveSnapTargets      = EffectiveOptions.Snapping

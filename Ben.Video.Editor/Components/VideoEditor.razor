@@ -21,6 +21,7 @@
 @inject RenderWorkerService RenderWorker
 @inject ClipEffectRegistry EffectRegistry
 @inject BlobUrlLifecycle BlobLifecycle
+@using Ben.Video.Core.Services
 @using Ben.Video.Core.SidecarContracts
 @inject MemFsLedger MemFs
 @* Item #70 phase 161 — native preview assembly (sidecar concat) with wasm fallback. *@
@@ -1108,14 +1109,16 @@
 
     public async Task OnEditorKeyDown(string key, bool ctrl, bool shift, bool alt)
     {
-        switch (key)
+        var command = EditorKeyMap.Resolve(key, ctrl, shift, alt);
+
+        switch (command)
         {
-            case " " or "Spacebar":
+            case EditorCommand.TogglePlayPause:
                 if (_preview is not null)
                     await _preview.TogglePlayPauseAsync();
                 break;
 
-            case "Delete" or "Backspace":
+            case EditorCommand.DeleteSelection:
                 // The store refuses to remove anything from a locked track, and silently — so
                 // pressing Delete cleared the selection and left the clip sitting there, which
                 // reads as the key being broken (2026-09-05 audit, timeline-12).
@@ -1178,7 +1181,8 @@
             // TextOverlay only; clip/audio/image selections have no canvas X/Y to nudge). Only
             // fires when one of those three is actually selected — an unmatched arrow key here
             // falls through with no effect, same as today.
-            case "ArrowLeft" or "ArrowRight" or "ArrowUp" or "ArrowDown":
+            case EditorCommand.MoveLeft or EditorCommand.MoveRight
+                 or EditorCommand.MoveUp or EditorCommand.MoveDown:
                 // With a canvas layer selected the arrows nudge it (item #57 P5). With nothing on
                 // the canvas selected they step one frame, which the transport buttons' tooltips
                 // ("Step back one frame (←)") and the shortcut help have always promised and
@@ -1189,20 +1193,20 @@
                 }
                 else if (_preview is not null)
                 {
-                    if (key == "ArrowLeft")  _preview.StepBackAsync();
-                    if (key == "ArrowRight") _preview.StepForwardAsync();
+                    if (command == EditorCommand.MoveLeft)  _preview.StepBackAsync();
+                    if (command == EditorCommand.MoveRight) _preview.StepForwardAsync();
                 }
                 break;
 
-            case "Home" when !ctrl:
+            case EditorCommand.Rewind:
                 if (_preview is not null) await _preview.RewindAsync();
                 break;
 
-            case "End" when !ctrl:
+            case EditorCommand.SeekToEnd:
                 if (_preview is not null) await _preview.SeekToEndAsync();
                 break;
 
-            case "[" when !ctrl:
+            case EditorCommand.NudgeSelectionEarlier:
                 {
                     var nudgeIds = _timeline?.GetMultiSelectedIds();
                     if (nudgeIds is { Count: >= 2 })
@@ -1210,7 +1214,7 @@
                 }
                 break;
 
-            case "]" when !ctrl:
+            case EditorCommand.NudgeSelectionLater:
                 {
                     var nudgeIds = _timeline?.GetMultiSelectedIds();
                     if (nudgeIds is { Count: >= 2 })
@@ -1218,7 +1222,7 @@
                 }
                 break;
 
-            case "s" or "S" when !ctrl:
+            case EditorCommand.SplitAtPlayhead:
                 {
                     // The playhead is a timeline position, and SplitClip takes a position measured
                     // from the clip's own start. Handing it the playhead cut early by exactly the
@@ -1243,7 +1247,7 @@
                 }
                 break;
 
-            case "Escape":
+            case EditorCommand.ClearSelection:
                 // Every selection kind, not the four that happened to be listed: an image, callout
                 // or clip-art selection survived Escape and kept its Properties panel open
                 // (2026-09-05 audit, F10).
@@ -1258,7 +1262,7 @@
                 _timeline?.ClearMultiSelection();
                 break;
 
-            case "d" or "D" when ctrl:
+            case EditorCommand.Duplicate:
                 // Camtasia's shortcut for the thing people do most with an annotation: make
                 // another one just like it. Nothing in the editor had a duplicate shortcut at all
                 // (2026-09-05 audit, callouts-15).
@@ -1272,16 +1276,15 @@
                 }
                 break;
 
-            case "z" or "Z" when ctrl && !shift:
+            case EditorCommand.Undo:
                 Clips.Undo();
                 break;
 
-            case "z" or "Z" when ctrl && shift:
-            case "y" or "Y" when ctrl:
+            case EditorCommand.Redo:
                 Clips.Redo();
                 break;
 
-            case "m" or "M" when !ctrl && !shift && !alt:
+            case EditorCommand.AddMarker:
                 if (EffectiveOptions.Markers)
                 {
                     // Progress × TotalDuration was a fraction of whatever the preview held, scaled
@@ -1291,7 +1294,7 @@
                 }
                 break;
 
-            case "?":
+            case EditorCommand.ToggleHelp:
                 _showHelp = !_showHelp;
                 break;
         }

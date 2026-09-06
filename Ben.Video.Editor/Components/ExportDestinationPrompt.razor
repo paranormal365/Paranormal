@@ -1,3 +1,4 @@
+@using Ben.Video.Core.Services
 @* Phase 176 — where does the finished video go?
 
    Shown once an immediate ("Export Now") render finishes, and ONLY when the host has supplied an
@@ -21,7 +22,7 @@
                    Class="bv-export-destination-prompt">
         <WindowTitle>Export Complete</WindowTitle>
         <WindowContent>
-            @if (_confirmingDiscard)
+            @if (_state.IsConfirmingDiscard)
             {
                 <p class="bv-export-destination-prompt__text" role="alert">
                     Discard <strong>@FileName</strong>? The render is finished, and throwing it
@@ -35,18 +36,18 @@
                     Where should it go?
                 </p>
             }
-            @if (_error is not null)
+            @if (_state.Error is not null)
             {
-                <p class="bv-export-destination-prompt__error" role="alert">@_error</p>
+                <p class="bv-export-destination-prompt__error" role="alert">@_state.Error</p>
             }
 
-            @if (!CanUpload && !_confirmingDiscard)
+            @if (!CanUpload && !_state.IsConfirmingDiscard)
             {
                 <p class="bv-export-destination-prompt__hint">@UploadUnavailableReason</p>
             }
         </WindowContent>
         <WindowFooter>
-            @if (_confirmingDiscard)
+            @if (_state.IsConfirmingDiscard)
             {
                 <TelerikButton OnClick="ConfirmDiscardAsync"
                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
@@ -69,11 +70,11 @@
                exists to answer, and silently omitting the server makes it look as though the
                editor cannot do it at all (2026-09-05 audit, F12). *@
             <TelerikButton OnClick="UploadAsync"
-                           Enabled="@(!_busy && CanUpload)"
+                           Enabled="@(_state.CanAct && CanUpload)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                            Size="@ThemeConstants.Button.Size.Small"
                            Title="@(CanUpload ? "Upload to your media library" : UploadUnavailableReason)">
-                @(_busy ? "Uploading…" : "Upload to server")
+                @(_state.IsBusy ? "Uploading…" : "Upload to server")
             </TelerikButton>
             @if (ShowPostToFeed)
             {
@@ -82,20 +83,20 @@
                    to a refusal. The host's handler owns the confirmation dialog — case lineage
                    and privacy wording are the host's knowledge, not the editor's. *@
                 <TelerikButton OnClick="PostToFeedAsync"
-                               Enabled="@(!_busy)"
+                               Enabled="@(_state.CanAct)"
                                ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
                                Size="@ThemeConstants.Button.Size.Small">
-                    @(_busy ? "Posting…" : "Post to the feed")
+                    @(_state.IsBusy ? "Posting…" : "Post to the feed")
                 </TelerikButton>
             }
             <TelerikButton OnClick="SaveToDeviceAsync"
-                           Enabled="@(!_busy)"
+                           Enabled="@(_state.CanAct)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
                            Size="@ThemeConstants.Button.Size.Small">
                 Save to my machine
             </TelerikButton>
             <TelerikButton OnClick="AskBeforeDiscarding"
-                           Enabled="@(!_busy)"
+                           Enabled="@(_state.CanAct)"
                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                            Size="@ThemeConstants.Button.Size.Small">
                 Discard
@@ -143,8 +144,12 @@
     /// <summary>Why the server destination is unavailable, when it is.</summary>
     [Parameter] public string UploadUnavailableReason { get; set; } = "Sign in to upload.";
 
-    private bool    _busy;
-    private string? _error;
+    /// <summary>
+    /// Busy, error and confirm-discard, as a machine that can be asked questions without a
+    /// browser. Extracted because what this window does wrong loses somebody's render
+    /// (2026-09-05 audit, export-17 and phase 11).
+    /// </summary>
+    private readonly ExportDestinationPromptState _state = new();
 
     private string? SizeLabel => SizeBytes <= 0 ? null : FormatSize(SizeBytes);
 
@@ -156,14 +161,20 @@
         _                      => $"{bytes} B",
     };
 
+    /// <summary>Second and later exports reuse the component, so it opens fresh each time.</summary>
+    protected override void OnParametersSet()
+    {
+        if (Visible && _state.IsClosed) _state.Reopen();
+    }
+
     private async Task UploadAsync()
     {
-        _busy  = true;
-        _error = null;
+        if (!_state.BeginWork()) return;
         StateHasChanged();
         try
         {
             await OnUpload.InvokeAsync();
+            _state.Succeeded();
             await CloseAsync();
         }
         catch (Exception ex)
@@ -171,82 +182,72 @@
             // Stay open. The editor has NOT discarded the render at this point (see
             // VideoEditor.PublishExportAsync), so "Save to my machine" is still a live escape
             // hatch rather than a dead button next to a lost file.
-            _error = $"Upload failed: {ex.Message}. You can still save it to your machine.";
+            _state.Failed($"Upload failed: {ex.Message}. You can still save it to your machine.");
         }
-        finally
-        {
-            _busy = false;
-            StateHasChanged();
-        }
+        StateHasChanged();
     }
 
     private async Task PostToFeedAsync()
     {
-        _busy  = true;
-        _error = null;
+        if (!_state.BeginWork()) return;
         StateHasChanged();
         try
         {
             await OnPostToFeed.InvokeAsync();
+            _state.Succeeded();
             await CloseAsync();
         }
         catch (Exception ex)
         {
             // Same escape hatch as UploadAsync: the render is untouched, the prompt stays.
-            _error = $"{ex.Message} You can still save it to your machine.";
+            _state.Failed($"{ex.Message} You can still save it to your machine.");
         }
-        finally
-        {
-            _busy = false;
-            StateHasChanged();
-        }
+        StateHasChanged();
     }
 
     private async Task SaveToDeviceAsync()
     {
-        _busy = true;
+        if (!_state.BeginWork()) return;
         StateHasChanged();
         try
         {
             await OnSaveToDevice.InvokeAsync();
+            _state.Succeeded();
             await CloseAsync();
         }
-        finally
+        catch (Exception ex)
         {
-            _busy = false;
-            StateHasChanged();
+            _state.Failed($"The download did not start: {ex.Message}");
         }
+        StateHasChanged();
     }
-
-    private bool _confirmingDiscard;
 
     /// <summary>
     /// Turns any attempt to close into a question, rather than a deletion.
     /// </summary>
     private void AskBeforeDiscarding()
     {
-        if (_busy) return;
-        _confirmingDiscard = true;
-        StateHasChanged();
+        if (_state.AskBeforeDiscarding()) StateHasChanged();
     }
 
     private void KeepIt()
     {
-        _confirmingDiscard = false;
+        _state.KeepIt();
         StateHasChanged();
     }
 
     private async Task ConfirmDiscardAsync()
     {
-        _confirmingDiscard = false;
+        // Only ever reached from the confirmation, so nothing can delete a render that nobody was
+        // asked about.
+        if (!_state.ConfirmDiscard()) return;
+
         await OnDiscard.InvokeAsync();
         await CloseAsync();
     }
 
     private async Task CloseAsync()
     {
-        _error = null;
-        _confirmingDiscard = false;
         Visible = false;
         await VisibleChanged.InvokeAsync(false);
     }
