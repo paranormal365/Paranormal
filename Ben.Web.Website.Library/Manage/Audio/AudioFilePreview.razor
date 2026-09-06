@@ -1,4 +1,4 @@
-@*
+﻿@*
   AudioFilePreview.razor
   ──────────────────────
   Compact waveform player used in the Files tab of AdminUserDetail.
@@ -80,7 +80,13 @@ else
 </BenContextMenu>
 
 @* ── Full-view window ────────────────────────────────────────────────────── *@
-<BenModal Visible="@_showModal" Title="@FileName" Size="sm">
+@* The editor gets the room again. It opened as a 92vw x 92vh window until the Manage-area
+   restyle (bde4e03f, 2026-08-18) swapped that for a modal and chose the SMALLEST size — 300px,
+   with the toolbar scrolling sideways, the waveform a 270px strip and every panel below the fold.
+   The same commit dropped VisibleChanged, which is why closing it did not stick and why
+   OnModalVisibleChanged became dead code. Both halves are restored here (2026-09-06 audio walk,
+   findings P and A). *@
+<BenModal Visible="@_showModal" VisibleChanged="@OnModalVisibleChanged" Title="@FileName" Size="fullscreen">
     <ChildContent>
         @if (_showModal && _source is not null)
         {
@@ -1356,7 +1362,9 @@ else
         {
             _timelineEnabled    = true;
             _spectrogramEnabled = false;
-            _spectrogramLabels  = false;
+            // Matches the field's own default (:825). Resetting it to false meant reopening the
+            // editor drew a spectrogram with no axis labels, once, for no stated reason.
+            _spectrogramLabels  = true;
             _modalReady         = false;
             _showMarkers        = false;
             _showVoiceBand      = false;
