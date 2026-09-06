@@ -60,6 +60,19 @@ public static class RateLimiting
     /// </remarks>
     public const string EventAttendancePolicy = "event-attendance";
 
+    /// <summary>
+    /// Audio edit, clip, EVP scan and mix export \u2014 the endpoints that decode a whole recording
+    /// while the caller waits.
+    /// </summary>
+    /// <remarks>
+    /// Each of these holds the decoded recording in memory for the length of the request; a
+    /// 30-minute stereo source is over a gigabyte of it. The global ceiling of 600 a minute is
+    /// about right for pages and far too generous for these, so they get a partition of their own
+    /// sized for a person working through a recording rather than for a browser
+    /// (2026-09-06 audio walk, finding 17).
+    /// </remarks>
+    public const string AudioProcessingPolicy = "audio-processing";
+
     // Defaults, all per caller per minute. A SuperAdmin can override each one from the site
     // settings page; configuration (RateLimits:*) is the fallback, and these are the last resort.
     // See RateLimitSettingsProvider for how the current values reach the partition factory without
@@ -73,6 +86,11 @@ public static class RateLimiting
     /// several sessions running over, and everyone reloading the page while they wait.
     /// </summary>
     internal const int DefaultEventAttendancePerMinute = 300;
+    /// <summary>
+    /// Enough for somebody working steadily \u2014 trying a gain, undoing it, clipping two regions,
+    /// running a scan \u2014 and nowhere near enough to keep a server busy decoding.
+    /// </summary>
+    internal const int DefaultAudioProcessingPerMinute = 12;
 
     public static IServiceCollection AddBenRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
@@ -122,6 +140,7 @@ public static class RateLimiting
             options.AddPolicy(GeocodingPolicy,       context => FixedWindowByClient(context, Limits(context).Geocoding));
             options.AddPolicy(AuthPolicy,            context => FixedWindowByClient(context, Limits(context).Auth));
             options.AddPolicy(EventAttendancePolicy, context => FixedWindowByClient(context, Limits(context).EventAttendance));
+            options.AddPolicy(AudioProcessingPolicy, context => FixedWindowByClient(context, Limits(context).AudioProcessing));
         });
 
         return services;

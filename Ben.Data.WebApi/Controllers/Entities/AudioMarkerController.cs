@@ -97,6 +97,13 @@ public sealed class AudioMarkerController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
+        // The same check Review and Candidates already made. Create and Update did not, so an
+        // inverted span, a negative start or a label past the column's 200 characters went straight
+        // to SaveChanges — the last of which throws rather than answering (2026-09-06 audio walk,
+        // finding 8).
+        if (AudioRequestLimits.MarkerSpanProblem(request.TimeSeconds, request.EndSeconds, request.Label)
+            is { } problem) return BadRequest(problem);
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, ct))
             return NotFound("File not found.");
@@ -129,6 +136,10 @@ public sealed class AudioMarkerController : BenControllerBase
         CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+
+        if (AudioRequestLimits.MarkerSpanProblem(request.TimeSeconds, request.EndSeconds, request.Label)
+            is { } problem) return BadRequest(problem);
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
@@ -273,6 +284,7 @@ public sealed class AudioMarkerController : BenControllerBase
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     [HttpPost("scan")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AudioProcessingPolicy)]
     public async Task<ActionResult<IEnumerable<AudioMarkerRecord>>> Scan(
         Guid fileId,
         [FromQuery] EvpSensitivity sensitivity,
@@ -371,10 +383,8 @@ public sealed class AudioMarkerController : BenControllerBase
 
         var start = request.StartSeconds;
         var end   = request.EndSeconds;
-        if (start is not null && start < 0)
-            return BadRequest("A marker cannot start before the recording does.");
-        if (start is not null && end is not null && end <= start)
-            return BadRequest("A span must end after it starts.");
+        if (AudioRequestLimits.MarkerSpanProblem(start, end, request.Label) is { } spanProblem)
+            return BadRequest(spanProblem);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();

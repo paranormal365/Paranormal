@@ -184,11 +184,19 @@ public sealed partial class BenAdminClientAdapter
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => _api.ClipAudioAsync(fileId, request, token);
 
+    public Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => _api.ClipAudioWithReasonAsync(fileId, request, token);
+
     public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
 
     public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
         => _api.EditAudioAsync(fileId, request, token);
+
+    public Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => _api.EditAudioWithReasonAsync(fileId, request, token);
 
     public Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
         => _api.GetClipPreviewAsync(fileId, start, end, token);

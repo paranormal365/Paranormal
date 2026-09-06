@@ -1051,4 +1051,78 @@ public class AudioMarkerControllerTests
         Assert.Equal(2, all.Count);
         Assert.DoesNotContain(all, m => m.TimeSeconds == 1.0);   // the adjusted one was replaced
     }
+
+    // ── The span checks Create and Update never made (finding 8) ──────────────
+
+    /// <summary>
+    /// Review and Candidates on this same controller already refused an inverted span. Create and
+    /// Update did not, so a marker could be stored that ends before it starts — and every reader of
+    /// it, the waveform included, has to decide for itself what that means.
+    /// </summary>
+    [Fact]
+    public async Task Create_RejectsASpanThatEndsBeforeItStarts()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Create(fileId,
+            new CreateAudioMarkerRequest(12.0, "Whisper?", EvpConfidenceLevel.Possible, null, EndSeconds: 4.0),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.AudioMarkers);
+    }
+
+    [Fact]
+    public async Task Create_RejectsAMarkerBeforeTheRecordingStarts()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Create(fileId,
+            new CreateAudioMarkerRequest(-5.0, "Whisper?", EvpConfidenceLevel.Possible, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The label column holds 200 characters. A longer one threw inside <c>SaveChanges</c>, which
+    /// is a 500 for somebody who pasted a sentence into a text box.
+    /// </summary>
+    [Fact]
+    public async Task Create_RejectsALabelLongerThanTheColumn()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Create(fileId,
+            new CreateAudioMarkerRequest(5.0, new string('x', 400), EvpConfidenceLevel.Possible, null),
+            default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("200", bad.Value?.ToString());
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.AudioMarkers);
+    }
+
+    [Fact]
+    public async Task Update_RejectsASpanThatEndsBeforeItStarts()
+    {
+        var factory  = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, timeSeconds: 5.0, label: "Whisper?");
+        var ctrl     = Build(factory, ownerId);
+
+        var result   = await ctrl.Update(fileId, markerId,
+            new UpdateAudioMarkerRequest(30.0, "Whisper?", EvpConfidenceLevel.Possible, null, EndSeconds: 10.0),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(5.0, (await db.AudioMarkers.FirstAsync(m => m.Id == markerId)).TimeSeconds);
+    }
 }

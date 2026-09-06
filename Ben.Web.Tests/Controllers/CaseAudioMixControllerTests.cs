@@ -266,4 +266,171 @@ public class CaseAudioMixControllerTests
         Assert.True(await db.UploadFiles.AnyAsync(f => f.Id == record.UploadFileId));
         Assert.True(await db.CaseFiles.AnyAsync(f => f.Id == record.Id && f.CaseId == caseId));
     }
+
+    // ── Bounds and fallbacks the mixer was missing (findings 3, 4, 14, 15) ────
+
+    /// <summary>
+    /// Offsets were unbounded, and the mix buffer is sized from the largest of them.
+    /// </summary>
+    /// <remarks>
+    /// One track at ten million seconds is 44.1 kHz × 10,000,000 × 4 bytes of float array, twice,
+    /// before a single sample is mixed. Larger still and the frame count overflows an <c>int</c>
+    /// and the allocation is negative. Both arrive as a 500 (2026-09-06 audio walk, finding 3).
+    /// </remarks>
+    [Fact]
+    public async Task Export_WithAnOffsetPastTheCeiling_IsRefused()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 1));
+        var ctrl = BuildController(factory, userId, store);
+
+        var request = new ExportAudioMixRequest(
+            [new MixTrackExportInput(caseFile.Id, 10_000_000, 0, 0, false, false)]);
+
+        var result = await ctrl.Export(orgId, caseId, request, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("3600", bad.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task Export_WithANaNGain_IsRefused()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 1));
+        var ctrl = BuildController(factory, userId, store);
+
+        var request = new ExportAudioMixRequest(
+            [new MixTrackExportInput(caseFile.Id, 0, double.NaN, 0, false, false)]);
+
+        Assert.IsType<BadRequestObjectResult>((await ctrl.Export(orgId, caseId, request, default)).Result);
+    }
+
+    /// <summary>The mixer offers eight lanes; a ninth was accepted and simply stacked.</summary>
+    [Fact]
+    public async Task Export_WithMoreTracksThanTheMixerHolds_IsRefused()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var tracks = new List<MixTrackExportInput>();
+        for (var i = 0; i < 9; i++)
+        {
+            var file = await SeedCaseFileAsync(factory, caseId, userId, store, $"t{i}.wav", CreateSineWav(440, 1));
+            tracks.Add(new MixTrackExportInput(file.Id, 0, 0, 0, false, false));
+        }
+        var ctrl = BuildController(factory, userId, store);
+
+        var result = await ctrl.Export(orgId, caseId, new ExportAudioMixRequest(tracks), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("8", bad.Value?.ToString());
+    }
+
+    /// <summary>
+    /// Legacy rows keep their bytes in the database and have no storage path at all. The mixer
+    /// dereferenced <c>StoragePath!</c>, so one of them reaching the mixer was a 500 — while the
+    /// edit and clip endpoints had always had the fallback (finding 4).
+    /// </summary>
+    [Fact]
+    public async Task Export_MixesALegacyRowThatHasItsBytesInTheDatabase()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+
+        Guid caseFileId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var uploadFile = new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = userId,
+                FileName = "legacy.wav", StoredFileName = "legacy.wav", ContentType = "audio/wav",
+                FileData = CreateSineWav(440, 1), StoragePath = null,
+                FileSize = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            uploadFile.FileSize = uploadFile.FileData!.Length;
+            db.UploadFiles.Add(uploadFile);
+            var caseFile = new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = uploadFile.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.CaseFiles.Add(caseFile);
+            await db.SaveChangesAsync();
+            caseFileId = caseFile.Id;
+        }
+
+        var ctrl = BuildController(factory, userId, store);
+
+        var result = await ctrl.Export(orgId, caseId, RequestFor((caseFileId, false, false)), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The mix row carries an <c>AppUserId</c>, so an unknown claim failed as a foreign-key
+    /// violation — after the WAV had been rendered and written to storage (finding 14).
+    /// </summary>
+    [Fact]
+    public async Task Export_WithNoUserClaim_WritesNothing()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 1));
+
+        byte[]? written = null;
+        var ctrl = BuildController(factory, Guid.Empty, store, bytes => written = bytes);
+
+        var result = await ctrl.Export(orgId, caseId, RequestFor((caseFile.Id, false, false)), default);
+
+        Assert.IsType<UnauthorizedResult>(result.Result);
+        Assert.Null(written);
+    }
+
+    /// <summary>
+    /// Every other derived audio file records where it came from. A mix recorded none, so a case
+    /// file plainly made of other case files looked like an original upload (finding 15).
+    /// </summary>
+    [Fact]
+    public async Task Export_RecordsWhichRecordingTheMixCameFrom()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var first  = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 1));
+        var second = await SeedCaseFileAsync(factory, caseId, userId, store, "b.wav", CreateSineWav(880, 1));
+        var ctrl = BuildController(factory, userId, store);
+
+        var result = await ctrl.Export(orgId, caseId,
+            RequestFor((first.Id, false, false), (second.Id, false, false)), default);
+
+        var record = Assert.IsType<CaseFileRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        await using var db = await factory.CreateDbContextAsync();
+        var mixFile = await db.UploadFiles.FirstAsync(f => f.Id == record.UploadFileId);
+
+        Assert.Equal(first.UploadFileId, mixFile.ParentFileId);
+    }
+
+    /// <summary>
+    /// The mixer draws each clip's width from its duration, and a mix had none — so a mix dropped
+    /// back into the mixer was drawn at whatever the fallback width is (finding 11).
+    /// </summary>
+    [Fact]
+    public async Task Export_RecordsHowLongTheMixIs()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 2));
+        var ctrl = BuildController(factory, userId, store);
+
+        var result = await ctrl.Export(orgId, caseId, RequestFor((caseFile.Id, false, false)), default);
+
+        var record = Assert.IsType<CaseFileRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        await using var db = await factory.CreateDbContextAsync();
+        var metadata = await db.UploadFileMetadata.FirstOrDefaultAsync(m => m.UploadFileId == record.UploadFileId);
+
+        Assert.NotNull(metadata);
+        Assert.Equal(2.0, metadata!.DurationSeconds!.Value, 1);
+        Assert.Equal(2, metadata.Channels);
+    }
 }

@@ -119,19 +119,20 @@ public class RateLimitSettingsProviderTests
     }
 
     [Fact]
-    public async Task All_three_limits_are_read_independently()
+    public async Task Every_limit_is_read_independently()
     {
         var factory = TestDbFactory.Create();
         await StoreAsync(factory, SiteSettingKeys.RateLimitGeocodingPerMinute, "1");
         await StoreAsync(factory, SiteSettingKeys.RateLimitAuthPerMinute,      "2");
         await StoreAsync(factory, SiteSettingKeys.RateLimitGlobalPerMinute,    "3");
         await StoreAsync(factory, SiteSettingKeys.RateLimitEventAttendancePerMinute, "4");
+        await StoreAsync(factory, SiteSettingKeys.RateLimitAudioProcessingPerMinute, "5");
         var provider = Provider(factory);
 
         var snapshot = await WaitForAsync(
-            provider, s => s is { Geocoding: 1, Auth: 2, Global: 3, EventAttendance: 4 });
+            provider, s => s is { Geocoding: 1, Auth: 2, Global: 3, EventAttendance: 4, AudioProcessing: 5 });
 
-        Assert.Equal(new RateLimitSnapshot(1, 2, 3, 4), snapshot);
+        Assert.Equal(new RateLimitSnapshot(1, 2, 3, 4, 5), snapshot);
     }
 
     [Fact]
@@ -145,5 +146,7 @@ public class RateLimitSettingsProviderTests
         Assert.Contains(SiteSettingKeys.RateLimitGeocodingPerMinute, seeded);
         Assert.Contains(SiteSettingKeys.RateLimitAuthPerMinute,      seeded);
         Assert.Contains(SiteSettingKeys.RateLimitGlobalPerMinute,    seeded);
+        Assert.Contains(SiteSettingKeys.RateLimitEventAttendancePerMinute, seeded);
+        Assert.Contains(SiteSettingKeys.RateLimitAudioProcessingPerMinute, seeded);
     }
 }

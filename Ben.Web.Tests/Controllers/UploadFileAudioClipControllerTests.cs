@@ -121,7 +121,7 @@ public class UploadFileAudioClipControllerTests
 
     private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(
         IDbContextFactory<BenDataContext> factory,
-        byte[]? fileData = null, string contentType = "audio/wav")
+        byte[]? fileData = null, string contentType = "audio/wav", bool isPublic = false)
     {
         var fileId  = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
@@ -131,6 +131,7 @@ public class UploadFileAudioClipControllerTests
             Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
             FileName = "audio.wav", StoredFileName = "s.wav", ContentType = contentType,
             FileSize = fileData?.Length ?? 4, FileData = fileData ?? new byte[4],
+            IsPublic = isPublic,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
@@ -286,11 +287,11 @@ public class UploadFileAudioClipControllerTests
     }
 
     [Fact]
-    public async Task Clip_SetsIsPublic_FromRequest()
+    public async Task Clip_SetsIsPublic_FromRequest_WhenTheRecordingIsAlreadyPublic()
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), isPublic: true);
         var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
@@ -299,6 +300,85 @@ public class UploadFileAudioClipControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var record  = Assert.IsType<UploadFileRecord>(created.Value);
         Assert.True(record.IsPublic);
+    }
+
+    /// <summary>
+    /// A private recording cannot be published by clipping it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Clipping requires only that the caller can SEE the source — which is the point, since
+    /// cutting evidence out of a recording somebody shared with you is the feature. But the clip is
+    /// a brand new file the caller owns, and its <c>IsPublic</c> came straight from the request. So
+    /// anyone a private recording had been shared with could publish it: clip the whole thing, tick
+    /// public, and the result is a public file with someone else's private audio in it
+    /// (2026-09-06 audio walk, finding 6).</para>
+    ///
+    /// <para>The caller here is the owner, deliberately: even they must publish the original rather
+    /// than sidestep it, because the derived row is what a reader sees and it should not be able to
+    /// say something the source does not.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Clip_OfAPrivateRecording_CannotBeMadePublic()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), isPublic: false);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.0, 1.0, null, true, typeId), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("private", bad.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
+    /// <summary>
+    /// A clip that starts past the end used to be a 201 with a 44-byte WAV — a header, no audio —
+    /// and a duration taken from the request rather than from the bytes (finding 10).
+    /// </summary>
+    [Fact]
+    public async Task Clip_StartingPastTheEndOfTheRecording_IsRefused()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(30.0, 35.0, null, false, typeId), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("only 2", bad.Value?.ToString());
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
+    /// <summary>
+    /// A clip whose end runs past the recording is clipped to what is there, and says so: the
+    /// duration recorded is what was taken, not what was asked for (finding 11).
+    /// </summary>
+    [Fact]
+    public async Task Clip_RunningPastTheEnd_RecordsTheLengthItActuallyTook()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(1.0, 9.0, null, false, typeId), default);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<UploadFileRecord>(created.Value);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var metadata = await db.UploadFileMetadata.FirstOrDefaultAsync(m => m.UploadFileId == record.Id);
+        Assert.NotNull(metadata);
+        Assert.Equal(1.0, metadata!.DurationSeconds!.Value, 1);
     }
 
     [Fact]
