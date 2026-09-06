@@ -39,4 +39,17 @@ public interface IProjectServerStore
     /// </remarks>
     Task<(Guid? Id, string? Problem)> SaveAsync(
         ProjectFile file, Guid? existingId, Guid? caseId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Fetches a project the server holds.
+    /// </summary>
+    /// <returns>The project and the name it is stored under, or a reason it could not be had.</returns>
+    /// <remarks>
+    /// The other direction, and for a long time the missing one: a project could be pushed to the
+    /// server and never brought back, so the standalone editor could send work somewhere it could
+    /// not reach again (2026-09-05 audit, F15). Phase 12 needs it for the handoff — a link that
+    /// says which project to open has to be able to open it.
+    /// </remarks>
+    Task<(ProjectFile? File, string? Name, string? Problem)> GetAsync(
+        Guid id, CancellationToken ct = default);
 }

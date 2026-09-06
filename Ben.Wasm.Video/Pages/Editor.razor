@@ -1,10 +1,12 @@
-@page "/"
+﻿@page "/"
 @page "/editor"
 @using Ben.Wasm.Video.Services
 @implements IDisposable
 @inject AccountInfoService Account
 @inject TokenStore Tokens
 @inject WasmVideoExportPublisher Publisher
+@inject EditorHandoffService Handoff
+@inject Ben.Video.Editor.Services.ProjectStore Projects
 @using Ben.Video.Editor.Models
 
 <PageTitle>Video Editor</PageTitle>
@@ -58,6 +60,16 @@
     protected override async Task OnInitializedAsync()
     {
         Tokens.Changed += OnTokensChanged;
+
+        // Before anything asks whether we are signed in. The link the site hands out carries a
+        // one-minute code, and exchanging it here means the editor comes up already signed in
+        // instead of flashing a sign-in prompt at somebody who signed in on the site five seconds
+        // ago (phase 12).
+        //
+        // The project it names is left for the editor to open once it has finished restoring,
+        // because that restore would otherwise replace it. See ProjectStore.PendingServerProjectId.
+        Projects.PendingServerProjectId = await Handoff.ApplyAsync();
+
         await RefreshAsync();
     }
 

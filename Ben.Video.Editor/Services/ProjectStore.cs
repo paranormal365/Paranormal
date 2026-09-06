@@ -91,6 +91,20 @@ public sealed class ProjectStore : IAsyncDisposable
     public Guid? CurrentServerId { get; set; }
 
     /// <summary>
+    /// A server project the host asked for before the editor was up, opened once it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>The standalone editor is reached by a link that can name a project (phase 12), and
+    /// the link is followed long before the editor has restored anything. Loading it there and
+    /// then would be overwritten moments later by <see cref="RestoreLastActiveAsync"/>, which runs
+    /// on first render — so the host leaves the request here and the editor honours it after the
+    /// restore, when it is the last word rather than the first.</para>
+    ///
+    /// <para>Cleared once acted on, so a re-render never opens it twice.</para>
+    /// </remarks>
+    public Guid? PendingServerProjectId { get; set; }
+
+    /// <summary>
     /// <c>true</c> when the editor state has changed since the last save or open.
     /// </summary>
     public bool IsDirty { get; private set; }

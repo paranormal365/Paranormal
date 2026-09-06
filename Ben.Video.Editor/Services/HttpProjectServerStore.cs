@@ -73,6 +73,51 @@ public sealed class HttpProjectServerStore(
         return (existingId, null);
     }
 
+    public async Task<(ProjectFile? File, string? Name, string? Problem)> GetAsync(
+        Guid id, CancellationToken ct = default)
+    {
+        if (_options.DocumentPostUrl is not { Length: > 0 } baseUrl)
+            return (null, null, "This editor is not configured to open projects from a server.");
+
+        var client = httpClientFactory.CreateClient(
+            ServiceCollectionExtensions.ProjectPersistenceHttpClientName);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.GetAsync($"{baseUrl.TrimEnd('/')}/{id}", ct);
+        }
+        catch (HttpRequestException)
+        {
+            return (null, null, "Could not reach the server.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+            return (null, null, Describe(response.StatusCode));
+
+        try
+        {
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+
+            var json = body.TryGetProperty("projectJson", out var stored) ? stored.GetString() : null;
+            var name = body.TryGetProperty("name", out var named) ? named.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(json))
+                return (null, null, "The server returned a project with nothing in it.");
+
+            // ProjectSerializer and not a fresh options object: the editor writes every enum as a
+            // string, and a reader without that converter throws on every project it is given
+            // (2026-09-05 audit, persistence-1).
+            var (file, problem) = ProjectSerializer.Parse(json);
+
+            return problem is not null ? (null, null, problem) : (file, name, null);
+        }
+        catch (JsonException)
+        {
+            return (null, null, "The server's answer could not be read as a project.");
+        }
+    }
+
     private static string Describe(System.Net.HttpStatusCode status) => status switch
     {
         System.Net.HttpStatusCode.Unauthorized =>

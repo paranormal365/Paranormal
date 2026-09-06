@@ -1,4 +1,4 @@
-@inject FfmpegService Ffmpeg
+﻿@inject FfmpegService Ffmpeg
 @inject ExportService Exporter
 @inject ClipStore Clips
 @inject PlaybackService Playback
@@ -785,6 +785,12 @@
             StateHasChanged();
         }
 
+        // A link that names a project opens it — after the first-render restore above, so it is the
+        // last word rather than something the restore quietly replaces. Checked on later renders
+        // too, because the link may have named a project while nobody was signed in yet, and the
+        // sign-in that makes it reachable happens after this (phase 12).
+        await OpenPendingServerProjectAsync();
+
         if (_pendingWorkingWindowRehydrate)
         {
             _pendingWorkingWindowRehydrate = false;
@@ -1104,6 +1110,53 @@
         _isFullscreen = isFullscreen;
         StateHasChanged();
     }
+
+    /// <summary>
+    /// Opens the server project the host asked for, if it asked for one.
+    /// </summary>
+    /// <remarks>
+    /// The standalone editor is reached by a link that can name a project, and the person following
+    /// it has just been signed in by the same link (phase 12). A failure is said out loud rather
+    /// than swallowed: somebody who followed a link to a particular project and silently got an
+    /// empty editor has no way to tell what happened.
+    /// </remarks>
+    private async Task OpenPendingServerProjectAsync()
+    {
+        if (Projects.PendingServerProjectId is not { } id) return;
+
+        // Left pending rather than dropped: a link can name a project while nobody is signed in,
+        // and the sign-in that makes it reachable may be seconds away. Said once, so somebody
+        // looking at an empty editor knows what it is waiting for.
+        if (!ServerProjects.IsAvailable)
+        {
+            if (!_saidProjectNeedsSignIn)
+            {
+                _saidProjectNeedsSignIn = true;
+                _notifications?.Show(
+                    "Sign in to open the project this link named.",
+                    ThemeConstants.Notification.ThemeColor.Info);
+            }
+            return;
+        }
+
+        // Cleared before the fetch, so a failure cannot leave a request that retries every render.
+        Projects.PendingServerProjectId = null;
+
+        var (file, name, problem) = await ServerProjects.GetAsync(id);
+
+        if (problem is not null || file is null)
+        {
+            _notifications?.Show(
+                problem ?? "That project could not be opened.",
+                ThemeConstants.Notification.ThemeColor.Warning);
+            return;
+        }
+
+        await Projects.LoadFromFileAsync(file, name ?? "Project", id);
+    }
+
+    /// <summary>So the sign-in hint above is said once, not on every render.</summary>
+    private bool _saidProjectNeedsSignIn;
 
     // ── Keyboard shortcut dispatch ──────────────────────────────────────────────
 

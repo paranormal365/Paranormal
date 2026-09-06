@@ -1,4 +1,4 @@
-@page "/my-videos"
+﻿@page "/my-videos"
 @using Ben.Web.Website.Library.Feed
 @using Ben.Service.Models.Feed
 @inject IBenAdminClient AdminClient
@@ -49,6 +49,16 @@
             {
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
             }
+
+            @* Phase 12 — the same session, carried to the host that does the work on the person's
+               own machine. Without this the link went to a second sign-in door, which is most of
+               why the standalone editor read as a curiosity rather than as where the work happens. *@
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    disabled="@_openingStandalone"
+                    title="Opens the editor that runs entirely on your computer, already signed in"
+                    @onclick="OpenStandaloneEditorAsync">
+                <BenIcon Name="external-link" Class="me-1" />@(_openingStandalone ? "Opening…" : "Standalone editor")
+            </button>
 
             @if (_saving)
             {
@@ -187,6 +197,51 @@
     {
         _pendingFeedExport = null;
         _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+    }
+
+    // ── "Standalone editor" (phase 12) ────────────────────────────────────────
+
+    private bool _openingStandalone;
+
+    /// <summary>
+    /// Opens <c>/editors/video/</c> already signed in, and on the project that is open here.
+    /// </summary>
+    /// <remarks>
+    /// <para>The code goes in the URL's <b>fragment</b>. Browsers never send a fragment to a
+    /// server, so it stays out of access logs and out of any <c>Referer</c> the next page sends.
+    /// It is good once and for a minute, and it is not this circuit's tokens: those stay on the
+    /// server, which is the whole reason they are kept there.</para>
+    ///
+    /// <para>Same tab rather than a new one. A programmatic <c>window.open</c> after an await has
+    /// lost its user gesture and is what popup blockers exist to stop, and leaving this page is
+    /// already guarded — unsaved editor work raises the browser's own "leave site?" prompt.</para>
+    ///
+    /// <para>A refused code is not a dead end: the editor opens anyway, and asks for a sign-in
+    /// like any other visitor.</para>
+    /// </remarks>
+    private async Task OpenStandaloneEditorAsync()
+    {
+        _openingStandalone = true;
+        StateHasChanged();
+
+        string? code = null;
+        try
+        {
+            code = (await AdminClient.GetEditorHandoffCodeAsync())?.Code;
+        }
+        catch
+        {
+            // Nothing to tell the person here: the editor is still reachable, it will just ask
+            // them to sign in.
+        }
+
+        var fragment = new List<string>();
+        if (!string.IsNullOrWhiteSpace(code))          fragment.Add($"handoff={Uri.EscapeDataString(code)}");
+        if (ProjectStore.CurrentServerId is { } server) fragment.Add($"project={server}");
+
+        var url = "/editors/video/" + (fragment.Count > 0 ? "#" + string.Join("&", fragment) : "");
+
+        NavManager.NavigateTo(url, forceLoad: true);
     }
 
     private async Task LoadProjectListAsync()
