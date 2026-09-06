@@ -159,6 +159,20 @@
 
 .bv-export-form__warnings li + li { margin-top: .25rem; }
 
+/* The export cannot run at all. Red rather than amber: unlike the warnings above it, this is not
+   a note about a render that happened — it is the reason there will not be one until something
+   is fixed. */
+.bv-export-form__blocked {
+    margin: 0 0 .75rem;
+    padding: .5rem .75rem;
+    background: #3b1f1f;
+    color: #e8a0a0;
+    font-size: .78rem;
+    line-height: 1.45;
+    border-radius: 5px;
+    border: 1px solid #6b3232;
+}
+
 .bv-export-form__note {
     font-size: .72rem;
     color: var(--kendo-color-subtle-text, var(--bv-text-muted));

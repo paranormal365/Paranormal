@@ -242,6 +242,14 @@ public sealed class ExportService : IAsyncDisposable
         if (!_clips.HasExportableContent)
             throw new InvalidOperationException("No clips on the timeline to export.");
 
+        // Refused before a frame is rendered. A clip whose file the browser no longer holds used
+        // to be met partway through: the render stopped at that clip's percentage and stayed
+        // there, with no message and nothing to act on. Checked here as well as in the dialog,
+        // because the queue and every other caller reach the pipeline directly
+        // (2026-09-06 large-media walk).
+        if (ExportReadiness.Check(_clips.Tracks) is { CanExport: false } blocked)
+            throw new InvalidOperationException(blocked.Explanation!);
+
         var s         = job.Settings;
         var tempFiles = new List<string>();
 

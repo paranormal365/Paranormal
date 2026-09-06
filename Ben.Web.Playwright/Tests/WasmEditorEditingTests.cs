@@ -396,6 +396,57 @@ public class WasmEditorEditingTests : BenTestBase
     }
 
     /// <summary>Whether a URL leaves this machine.</summary>
+    // ── Missing media (2026-09-06 walk) ───────────────────────────────────────
+
+    /// <summary>
+    /// An export that cannot succeed is refused before it starts, with the reason.
+    /// </summary>
+    /// <remarks>
+    /// It used to begin, reach the clip whose file the browser no longer held, and stop there: the
+    /// progress bar sat at that clip's percentage with no message and nothing to act on, and the
+    /// only way out was Cancel.
+    /// </remarks>
+    [Test]
+    [Description("A clip whose media is gone blocks the export and says why.")]
+    public async Task AnExportIsRefusedWhenAClipsMediaIsGone()
+    {
+        await ReadyWithOneClipAsync();
+        await SaveProjectAsync();
+
+        // The state a project reopened on another machine arrives in: the project is here, the
+        // footage is not.
+        await WipeStoredMediaAsync();
+        await Page.ReloadAsync();
+        await EnsureEngineReadyAsync();
+        await Expect(Page.Locator(".bv-clip-chip--missing")).ToHaveCountAsync(1, new() { Timeout = 60_000 });
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Export" }).First.ClickAsync();
+
+        var blocked = Page.Locator(".bv-export-form__blocked");
+        await Expect(blocked).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(blocked).ToContainTextAsync("Replace Media");
+
+        // And the render cannot be started at all, which is the half that stops the hang.
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Export Now" })).ToBeDisabledAsync();
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Add to Queue" })).ToBeDisabledAsync();
+    }
+
+    /// <summary>Saves the open project, so a reload has something to restore.</summary>
+    private async Task SaveProjectAsync()
+    {
+        await Page.GetByRole(AriaRole.Button, new() { Name = "File" }).First.ClickAsync();
+        await Page.GetByText("Save", new() { Exact = true }).First.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+    }
+
+    /// <summary>Empties the browser's own media store, leaving the project pointing at nothing.</summary>
+    private async Task WipeStoredMediaAsync() =>
+        await Page.EvaluateAsync(
+            "async () => { const root = await navigator.storage.getDirectory();"
+            + " for await (const [name, handle] of root.entries())"
+            + "   if (handle.kind === 'directory')"
+            + "     for await (const [child] of handle.entries()) await handle.removeEntry(child); }");
+
     // ── The live player (phase 12, decision D5) ───────────────────────────────
 
     /// <summary>Switches the preview from the rendered proxy to the sequence player.</summary>

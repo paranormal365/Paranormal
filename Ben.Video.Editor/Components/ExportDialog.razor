@@ -19,6 +19,14 @@
             <div class="bv-export-dialog__body">
             <div class="bv-export-form">
 
+                @* First thing in the window, not last. Put below the settings it was off the
+                   bottom of a scrolling dialog, so the only visible symptom was two dead buttons
+                   and no reason (2026-09-06 walk). *@
+                @if (Readiness.Explanation is { } cannotExport)
+                {
+                    <p class="bv-export-form__blocked" role="alert">⚠ @cannotExport</p>
+                }
+
                 @if (_job is { State: ExportJobState.Running })
                 {
                     <!-- ── Running: show live progress ── -->
@@ -356,13 +364,31 @@
     // Clips.Clips is the primary track's VIDEO clips, so this refused to export an image-only
     // timeline while the toolbar's own Export button was enabled — the dialog opened and its
     // button was dead (2026-09-05 audit, export-20). One predicate now answers for both.
+    /// <summary>
+    /// Whether every clip on the timeline still has the file it is rendered from.
+    /// </summary>
+    /// <remarks>
+    /// Recomputed rather than cached: media can arrive while this window is open — somebody
+    /// reconnects a clip and comes straight back — and a button that stays dead after the problem
+    /// is fixed is its own bug.
+    /// </remarks>
+    private ExportReadiness Readiness => ExportReadiness.Check(Clips.Tracks);
+
+    // Clips.Clips is the primary track's VIDEO clips, so this refused to export an image-only
+    // timeline while the toolbar's own Export button was enabled — the dialog opened and its
+    // button was dead (2026-09-05 audit, export-20). One predicate now answers for both.
+    //
+    // A clip whose media is gone is the other half: the render used to start, reach that clip and
+    // stop there with no message, leaving somebody watching a progress bar that had stopped
+    // meaning anything (2026-09-06 large-media walk).
     private bool CanExport => Clips.HasExportableContent &&
+                              Readiness.CanExport &&
                               Exporter.CurrentJob?.State != ExportJobState.Running;
 
     // Queueing while something is already rendering is the entire point of a queue, and the
     // Export Now gate was being applied to it as well — so the moment one job started, the way to
     // line up the next one was disabled (2026-09-05 audit, export-9).
-    private bool CanQueue => Clips.HasExportableContent;
+    private bool CanQueue => Clips.HasExportableContent && Readiness.CanExport;
 
     private string ClipSummary =>
         $"{Clips.ExportableItemCount} clip(s) · " +
