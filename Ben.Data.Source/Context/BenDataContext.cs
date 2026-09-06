@@ -1098,6 +1098,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.MinimapOptionsJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.SpectrogramOptionsJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.SpectrogramWindowedOptionsJson).HasColumnType("nvarchar(max)");

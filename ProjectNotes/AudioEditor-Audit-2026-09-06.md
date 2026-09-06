@@ -447,6 +447,36 @@ The eighth, `AddingAPieceOfGear_ShowsItInTheListAndOnItsOwnPage`, failed in the 
 both times in isolation — the one that does look like interference. None of these are audio and none
 were investigated here; they are recorded so the next person does not mistake them for fallout.
 
+## Phase 5b — the editor remembers how you listen
+
+**L is closed.** Phase 5a remembered what you *see*, because it fitted a column that already
+existed. The listening chain did not: the equaliser's ten bands, the two filters, the compressor,
+the noise gate and the silence threshold are fourteen numbers with nowhere to live, so every one was
+reset on every open. That is the half that matters most — the settings that let somebody hear a
+voice out of a hiss are the work.
+
+**The migration** is one nullable `EditStateJson` column on `UploadFileAudioConfigs`: `AddColumn` up,
+`DropColumn` down, no rebuild, nothing that can lose data. It has **not** been applied to the live
+database. It was applied to a throwaway one through `scripts/run-e2e.sh` — which uses
+`dotnet ef database update --connection` rather than an environment override — and the sixteen audio
+browser tests passed against it. One JSON column rather than fourteen of their own, because the
+chain will grow and a column each means a migration every time a filter is added.
+
+Three things the shape had to get right, each of which would have been a silent failure:
+
+- **Reading is field by field.** A row written before a setting existed keeps everything it does
+  have; all-or-nothing would mean every addition to the chain quietly reset everybody's filters.
+- **The equaliser is padded or trimmed to ten bands.** The component indexes ten sliders directly,
+  so a nine-band row read back would throw mid-render — a saved setting that breaks the page that
+  saved it.
+- **The chain reaches the Web Audio graph after the graph is built**, not when the controls are
+  restored. The graph is made fresh on every open, so the other order shows a high-pass switched on
+  over audio that has none, which is worse than not remembering it at all: the panel would be lying
+  about what is being heard.
+
+Comparing two views also needed an element-wise equaliser check — a list compares by reference, so
+two identical chains read as different and every control would have sent a save on every touch.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with
