@@ -20,7 +20,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("AudioEditor")]
-public class AudioEditorRefusalTests : BenTestBase
+public class AudioEditorTests : BenTestBase
 {
     private static readonly string TestAudioPath =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3");
@@ -146,6 +146,62 @@ public class AudioEditorRefusalTests : BenTestBase
         await Expect(savedClips).ToBeVisibleAsync();
         TestContext.Out.WriteLine("Silence produced a saved clip.");
     }
+
+    /// <summary>
+    /// A confirmed marker's play button plays.
+    /// </summary>
+    /// <remarks>
+    /// It only seeked: the playhead moved and nothing was heard, on the one button whose entire
+    /// purpose is to let a reviewer hear the thing again — while the identical button on a
+    /// candidate a row above played its audio, because candidates are always spans and went through
+    /// a different path (2026-09-06 audio walk, finding J). A marker added by hand is a point, so
+    /// it is the case that was broken.
+    /// </remarks>
+    [Test]
+    public async Task A_markers_play_button_plays()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false }).First.ClickAsync();
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Add Marker at", Exact = false }).First.ClickAsync();
+
+        // The marker dialog wants a label before it will save.
+        var label = Page.Locator(".modal.show input[type=text]").First;
+        await Expect(label).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await label.FillAsync("says a name");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).Last.ClickAsync();
+
+        var play = Modal.GetByTitle("Play this marker").First;
+        await Expect(play).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        var before = await PlayheadTextAsync();
+
+        await play.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+
+        var during = await PlayheadTextAsync();
+        TestContext.Out.WriteLine($"playhead {before} -> {during}");
+
+        Assert.That(during, Is.Not.EqualTo(before),
+            "the playhead did not move, so nothing was played. A point marker has no span, and "
+            + "playing a zero-length region is a seek and a pause in the same instant.");
+    }
+
+    /// <summary>
+    /// Where the playhead is, read off the panel.
+    /// </summary>
+    /// <remarks>
+    /// Not from a media element: this player runs on Web Audio and creates none, so the walk's
+    /// "no media element playing" was never evidence either way. The Add Marker button carries the
+    /// current time and updates on every timeupdate, which is a thing a person can see.
+    /// </remarks>
+    private async Task<string> PlayheadTextAsync()
+        => (await Modal.GetByRole(AriaRole.Button, new() { Name = "Add Marker at", Exact = false })
+                       .First.InnerTextAsync()).Trim();
 
     /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
     private async Task DrawRegionAsync(double fromFraction, double toFraction)

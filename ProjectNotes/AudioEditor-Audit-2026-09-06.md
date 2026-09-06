@@ -64,7 +64,7 @@ guard test that fails on any picker fed a list of tuples.
 | G | **OBSERVED** | The edit panel's region readout sits beside Gain/Fade/Speed/Pitch, which ignore it. |
 | H | **UNREACHED** | Blocked by I every time: the explorer for the first region came back before a second region could be right-clicked. The code reading stands; re-check after I is fixed. |
 | I | **OBSERVED** (twice) | The Region Explorer's X closed it and the parent brought it back, exactly as A. In run 4 the count was 0 immediately after the X and the explorer was back again by the next region draw — it returns on whatever parent render comes next. |
-| J | **OBSERVED** | With a confirmed marker in the list, its ▶ moved nothing: no media element playing, no Pause button. Candidates' ▶ (a different path) does play. |
+| J | **OBSERVED → FIXED** | With a confirmed marker in the list, its ▶ moved nothing. (The stated evidence — "no media element playing" — was not evidence: this player is Web Audio and creates none. The defect was real: a point marker's play only seeked.) Fixed in phase 2; the playhead now advances, and a span plays its own audio. |
 | regions | PASS | One user region at a time, as designed; drawing works even in the keyhole. |
 | scan | PASS | Medium sensitivity found 21 candidates on the fixture; the message says so plainly. |
 | review | PASS | "Keep it" without a label is refused inline — the walk's first pass misread that validation as a defect. |
@@ -248,6 +248,13 @@ reaching C#, and dragging on the waveform drew a region and selected nothing. Fi
 tests for the new behaviour all passed while the feature was entirely disconnected. It was found by
 opening the page. `WsRegionDataBindingTests` binds the exact payload the module sends so the next
 shadowed property fails there instead.
+
+**J, and a second instrument that measured nothing.** The walk recorded "no media element playing,
+no Pause button" as its evidence that a marker's play button did nothing. This player runs on Web
+Audio and creates no media element at all, so that observation was true of a working button too.
+The defect was real — a point marker's play only seeked — and it is fixed and verified by watching
+the playhead move from 0:00.0 to 0:01.4, which is something a person can see. Reverted to seek-only,
+the playhead stays at 0:00.0.
 
 **The rest.** The four listening-chain checkboxes apply when ticked instead of waiting for a slider
 (D). Gain, Fade, Speed and Pitch stop sending region bounds they ignore, and the region readout is
