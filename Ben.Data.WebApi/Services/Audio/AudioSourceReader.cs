@@ -89,6 +89,40 @@ internal static class AudioSourceReader
     }
 
     /// <summary>
+    /// Whether <paramref name="ex"/> means "these bytes are not the audio they claim to be".
+    /// </summary>
+    /// <remarks>
+    /// <para>Corrupt or mislabelled audio was a 400 on the EVP scan, which catches it, and a 500 on
+    /// edit and clip, which caught only <see cref="NotSupportedException"/> — the same file, the
+    /// same cause, two different answers, one of which reads as "the site is broken" (2026-09-06
+    /// audio walk, finding 5). Every audio endpoint filters on this now.</para>
+    ///
+    /// <para>NAudio reports a bad header as a <see cref="FormatException"/>, a truncated one as an
+    /// <see cref="EndOfStreamException"/>, and an impossible format block as an
+    /// <see cref="ArgumentException"/> — with <see cref="ArgumentNullException"/> excluded, since
+    /// that one is our own mistake and should stay a 500 rather than be blamed on the file.</para>
+    /// </remarks>
+    public static bool IsUndecodable(Exception ex)
+        => ex is FormatException or InvalidDataException or EndOfStreamException or IndexOutOfRangeException
+           || (ex is ArgumentException and not ArgumentNullException)
+           || ex.GetType().Namespace?.StartsWith("NAudio", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// Reads only the header: how long the recording is and what shape it has.
+    /// </summary>
+    /// <remarks>
+    /// For deciding whether a requested region is even inside the recording before spending
+    /// anything on decoding it. A clip asked for wholly past the end used to persist a 44-byte WAV
+    /// with a 201 and a duration it did not have (2026-09-06 audio walk, finding 10).
+    /// </remarks>
+    /// <exception cref="NotSupportedException">The content type isn't a format we decode.</exception>
+    public static (TimeSpan Duration, WaveFormat Format) Probe(Stream stream, string? contentType)
+    {
+        using var waveStream = Open(stream, contentType);
+        return (waveStream.TotalTime, waveStream.WaveFormat);
+    }
+
+    /// <summary>
     /// Decodes the whole recording to interleaved samples in [-1, 1].
     /// </summary>
     /// <exception cref="AudioTooLargeException">

@@ -628,9 +628,21 @@ public sealed class WebApiClient : IWebApiClient
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
 
+    /// <inheritdoc />
+    public Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<ClipAudioRequest, UploadFileRecord>(
+            HttpMethod.Post, $"/api/upload-files/{fileId}/clip", request, token);
+
     // ── Audio Edit (destructive) ─────────────────────────────────────────────
     public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
         => PostAsync<AudioEditRequest, UploadFileRecord>($"/api/upload-files/{fileId}/audio-edit", request, token);
+
+    /// <inheritdoc />
+    public Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<AudioEditRequest, UploadFileRecord>(
+            HttpMethod.Post, $"/api/upload-files/{fileId}/audio-edit", request, token);
 
     public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => GetListAsync<UploadFileRecord>($"/api/upload-files/{fileId}/clips", token);

@@ -212,6 +212,10 @@ public interface IBenMediaClient
     /// </summary>
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
 
+    /// <summary>Saves a clip, and on refusal hands back the server's own sentence.</summary>
+    Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+
     /// <summary>
     /// Returns clipped audio bytes for the given time range WITHOUT saving a new file.
     /// Used by <c>WsRegionExplorer</c> to load only the region's audio.
@@ -229,6 +233,13 @@ public interface IBenMediaClient
     /// <paramref name="fileId"/> and saves the result as a new UploadFile. The source is never modified.
     /// </summary>
     Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Applies an audio edit, and on refusal hands back the server's own sentence rather than the
+    /// one line the editor used to show for every failure whatever its cause.
+    /// </summary>
+    Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // ── Video projects ────────────────────────────────────────────────────────
     Task<LoadResult<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default);

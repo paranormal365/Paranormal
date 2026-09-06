@@ -228,7 +228,7 @@ public class UploadFileAudioEditControllerTests
     /// </summary>
     private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(
         IDbContextFactory<BenDataContext> factory,
-        byte[]? fileData = null, string contentType = "audio/wav")
+        byte[]? fileData = null, string contentType = "audio/wav", bool isPublic = false)
     {
         var fileId  = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
@@ -238,6 +238,7 @@ public class UploadFileAudioEditControllerTests
             Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
             FileName = "audio.wav", StoredFileName = "s.wav", ContentType = contentType,
             FileSize = fileData?.Length ?? 4, FileData = fileData ?? new byte[4],
+            IsPublic = isPublic,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
@@ -248,8 +249,9 @@ public class UploadFileAudioEditControllerTests
         AudioEditOperation op, Guid typeId,
         double? start = null, double? end = null, double? gainDb = null,
         double? fadeIn = null, double? fadeOut = null,
-        double? speedRatio = null, double? pitchSemitones = null)
-        => new(op, start, end, gainDb, fadeIn, fadeOut, null, false, typeId, speedRatio, pitchSemitones);
+        double? speedRatio = null, double? pitchSemitones = null,
+        string? label = null, bool isPublic = false)
+        => new(op, start, end, gainDb, fadeIn, fadeOut, label, isPublic, typeId, speedRatio, pitchSemitones);
 
     // ── Validation ────────────────────────────────────────────────────────────
 
@@ -554,5 +556,262 @@ public class UploadFileAudioEditControllerTests
 
         var freq = EstimateFrequencyHz(samples, sampleRate);
         Assert.InRange(freq, 440.0 * 0.9, 440.0 * 1.1); // pitch preserved despite the speed change
+    }
+
+    // ── Bounds that were missing (2026-09-06 audio walk, findings 2, 13) ──────
+
+    /// <summary>
+    /// <c>SpeedRatio</c> was bounded above at 4 and not at all below.
+    /// </summary>
+    /// <remarks>
+    /// A ratio of 0.001 asks for a thousand times the samples — the resampler allocates that array,
+    /// and then a phase vocoder runs over every one of them to put the pitch back. On a recording
+    /// of any length that is not slow, it is an out-of-memory kill that takes every other request
+    /// with it.
+    /// </remarks>
+    [Fact]
+    public async Task Edit_Speed_BelowTheFloor_IsRefused()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.Edit(Guid.NewGuid(),
+            Request(AudioEditOperation.Speed, Guid.NewGuid(), speedRatio: 0.001), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("0.25", bad.Value?.ToString());
+    }
+
+    /// <summary>
+    /// NaN survives every comparison, so a range check written the obvious way lets it through.
+    /// </summary>
+    /// <remarks>
+    /// It then multiplies every sample into NaN, which writes as zero — a file of pure silence,
+    /// answered 201, indistinguishable from a successful edit until somebody plays it (finding 13).
+    /// </remarks>
+    [Fact]
+    public async Task Edit_Gain_OfNaN_IsRefused()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Gain, typeId, gainDb: double.NaN), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
+    [Fact]
+    public async Task Edit_Gain_BeyondTheRange_IsRefused()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.Edit(Guid.NewGuid(),
+            Request(AudioEditOperation.Gain, Guid.NewGuid(), gainDb: 500), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Edit_Fade_OfNaN_IsRefused()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Fade, typeId, fadeIn: double.NaN, fadeOut: 1.0), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Edit_Fade_OfANegativeLength_IsRefused()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.Edit(Guid.NewGuid(),
+            Request(AudioEditOperation.Fade, Guid.NewGuid(), fadeIn: -3.0), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ── The source's visibility is a ceiling (finding 6) ──────────────────────
+
+    /// <summary>
+    /// Editing requires only that the caller can SEE the source. The result is a new file the
+    /// caller owns, and its <c>IsPublic</c> came straight from the request — so "edit it, then
+    /// publish the edit" published somebody else's private recording.
+    /// </summary>
+    [Fact]
+    public async Task Edit_OfAPrivateRecording_CannotBeMadePublic()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(), isPublic: false);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Normalize, typeId, isPublic: true), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("private", bad.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
+    [Fact]
+    public async Task Edit_OfAPublicRecording_MayStayPublic()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(), isPublic: true);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Normalize, typeId, isPublic: true), default);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.True(Assert.IsType<UploadFileRecord>(created.Value).IsPublic);
+    }
+
+    // ── Nothing is written that cannot be saved (finding 7) ───────────────────
+
+    /// <summary>
+    /// The label becomes the derived file's name, and the name column holds 500 characters.
+    /// </summary>
+    /// <remarks>
+    /// A longer one threw inside <c>SaveChanges</c> — after the WAV had already been written to
+    /// storage — leaving bytes on disk that no row would ever point at, and a 500 for the person
+    /// who typed a long name.
+    /// </remarks>
+    [Fact]
+    public async Task Edit_WithAnOverLongLabel_WritesNothing()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var (ctrl, getBytes)  = BuildCapturing(factory, ownerId);
+
+        var result = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Normalize, typeId, label: new string('x', 600)), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Null(getBytes());
+    }
+
+    // ── Corrupt audio answers the same way everywhere (finding 5) ─────────────
+
+    /// <summary>
+    /// Bytes that are not the audio they claim to be were a 400 on the EVP scan and a 500 on edit
+    /// and clip: the same file, the same cause, and one of the two answers reads as "the site is
+    /// broken".
+    /// </summary>
+    [Fact]
+    public async Task Edit_OfCorruptAudio_IsARefusalAndNotACrash()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var corrupt = "RIFF"u8.ToArray().Concat(new byte[64]).ToArray();
+        var (fileId, ownerId) = await SeedFileAsync(factory, corrupt);
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Normalize, typeId), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("audio", bad.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── What the derived file says about itself (findings 11 and F) ───────────
+
+    /// <summary>
+    /// A Cut records the region it was about; every edited file used to show "0:00–0:00" on its
+    /// Saved Clips card, next to clips that showed their real range (finding F).
+    /// </summary>
+    [Fact]
+    public async Task Edit_Cut_RecordsTheRegionItWasAbout()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 4));
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Cut, typeId, start: 1.0, end: 2.0), default);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<UploadFileRecord>(created.Value);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var derived = await db.UploadFiles.FirstAsync(f => f.Id == record.Id);
+        Assert.Equal(1.0, derived.RegionStart);
+        Assert.Equal(2.0, derived.RegionEnd);
+    }
+
+    /// <summary>Normalize is about the whole recording, so it claims no region.</summary>
+    [Fact]
+    public async Task Edit_Normalize_ClaimsNoRegion()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Normalize, typeId), default);
+
+        var record = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        await using var db = await factory.CreateDbContextAsync();
+        var derived = await db.UploadFiles.FirstAsync(f => f.Id == record.Id);
+        Assert.Null(derived.RegionStart);
+        Assert.Null(derived.RegionEnd);
+    }
+
+    /// <summary>
+    /// Derived audio carried no duration at all: the metadata row is only created when the SOURCE
+    /// has one to inherit, and no audio upload on any path gets one (finding 11). Measuring it off
+    /// the bytes just produced is the part nobody can inherit.
+    /// </summary>
+    [Fact]
+    public async Task Edit_RecordsHowLongTheResultIs()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 3));
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Reverse, typeId), default);
+
+        var record = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        await using var db = await factory.CreateDbContextAsync();
+        var metadata = await db.UploadFileMetadata.FirstOrDefaultAsync(m => m.UploadFileId == record.Id);
+
+        Assert.NotNull(metadata);
+        Assert.Equal(3.0, metadata!.DurationSeconds!.Value, 1);
+        Assert.Equal(8000, metadata.SampleRateHz);
+        Assert.Equal(1, metadata.Channels);
+    }
+
+    /// <summary>A region that begins after the recording ends is a mistake, not an edit.</summary>
+    [Fact]
+    public async Task Edit_Cut_StartingPastTheEnd_IsRefused()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Cut, typeId, start: 60.0, end: 61.0), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("only 2", bad.Value?.ToString());
     }
 }

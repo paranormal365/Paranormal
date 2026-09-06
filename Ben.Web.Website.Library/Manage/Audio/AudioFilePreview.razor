@@ -1308,7 +1308,7 @@ else
 
         try
         {
-            var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
+            var (result, error) = await AdminClient.ClipAudioWithReasonAsync(FileId, new ClipAudioRequest(
                 ClipStart, ClipEnd,
                 string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
                 _saveClipIsPublic, _saveClipTypeId,
@@ -1339,8 +1339,8 @@ else
             }
             else
             {
-                Notify("Save failed — only WAV and MP3 sources can be clipped.", "error");
-                _saveClipError = "Only WAV and MP3 sources can be clipped.";
+                _saveClipError = error ?? "That clip could not be saved.";
+                Notify(_saveClipError, "error");
             }
         }
         catch (Exception ex)
@@ -1960,7 +1960,7 @@ else
 
         try
         {
-            var result = await AdminClient.EditAudioAsync(FileId, new AudioEditRequest(
+            var (result, error) = await AdminClient.EditAudioWithReasonAsync(FileId, new AudioEditRequest(
                 operation,
                 _lastDrawnRegion?.Start,
                 _lastDrawnRegion?.End,
@@ -1980,7 +1980,10 @@ else
             }
             else
             {
-                _editError = "Edit failed — only WAV and MP3 sources can be edited.";
+                // The server's own sentence, whatever it refused for. This line used to say "only
+                // WAV and MP3 sources can be edited" for every failure — true for one of the
+                // reasons and misleading for all the others (2026-09-06 audio walk, phase 1).
+                _editError = error ?? "That edit could not be applied.";
             }
         }
         catch (Exception ex)

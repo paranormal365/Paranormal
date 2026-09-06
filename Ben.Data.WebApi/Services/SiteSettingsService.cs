@@ -60,6 +60,12 @@ public static class SiteSettingKeys
     /// </summary>
     public const string RateLimitEventAttendancePerMinute = "ratelimit.event-attendance-per-minute";
 
+    /// <summary>
+    /// Requests per minute, per caller, allowed against the audio operations that decode a whole
+    /// recording synchronously — edit, clip, EVP scan and mix export.
+    /// </summary>
+    public const string RateLimitAudioProcessingPerMinute = "ratelimit.audio-processing-per-minute";
+
     /// <summary>Largest file one upload may be, in bytes. Unset = the built-in 2 GiB default.</summary>
     public const string UploadMaxFileBytes = "upload.max-file-bytes";
 
@@ -152,6 +158,9 @@ public static class SiteSettingKeys
             "A ceiling on all other requests from one caller each minute, so a runaway client cannot saturate the server. Generous by design — normal use should never reach it. Leave empty for the default."),
         (RateLimitEventAttendancePerMinute, "Rate limit — public event sign-up (per minute)",
             "How many event sign-up requests may come from one address each minute. Deliberately much higher than the others: a tour group of thirty all signing up at the meeting point shares the venue's wifi, so they reach the site as a single caller. Raise this if a busy operator reports guests being turned away; it does not affect how many people may attend. Leave empty for the default."),
+
+        (RateLimitAudioProcessingPerMinute, "Rate limit \u2014 audio processing (per minute)",
+            "How many audio edits, clips, EVP scans or mix exports one caller may ask for each minute. Each of these decodes a whole recording while the request waits, so a handful at once is what a busy person does and a hundred is a script. Low by design; raise it if somebody working through a long recording reports being turned away. Leave empty for the default."),
 
         (FreeAccountStorageMegabytes, "Free account storage (MB)",
             "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),

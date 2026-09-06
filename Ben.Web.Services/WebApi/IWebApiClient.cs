@@ -204,11 +204,30 @@ public interface IWebApiClient
 
     // Upload File — Audio Clip
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+
+    /// <summary>Saves a clip, and on refusal hands back the server's own sentence.</summary>
+    /// <remarks>Same reasoning as <see cref="EditAudioWithReasonAsync"/>.</remarks>
+    Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default);
     Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
     Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
 
     // Upload File — Audio Edit (destructive)
     Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Applies an audio edit, and on refusal hands back the server's own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The audio editor answered every failed edit with one hardcoded line — "only WAV and MP3
+    /// sources can be edited" — because <see cref="EditAudioAsync"/> returns null and drops the
+    /// body. That line was true for exactly one of the reasons the endpoint refuses, and phase 1
+    /// added several more: a private recording that cannot be published, a gain outside the range,
+    /// a region past the end, a recording longer than the edit ceiling. Every one of those would
+    /// have reached the person as a sentence about file formats.
+    /// </remarks>
+    Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // Upload File — Votes
     Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default);

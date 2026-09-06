@@ -10,6 +10,7 @@ using NAudio.Wave;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
 using Ben.Data.WebApi.Services;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -83,16 +84,27 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         {
             return BadRequest(ex.Message);
         }
+        catch (Exception ex) when (AudioSourceReader.IsUndecodable(ex))
+        {
+            return BadRequest($"Couldn't read that audio: {ex.Message}");
+        }
     }
 
     [HttpPost]
+    [EnableRateLimiting(RateLimiting.AudioProcessingPolicy)]
     public async Task<ActionResult<UploadFileRecord>> Clip(
         Guid fileId,
         [FromBody] ClipAudioRequest request,
         CancellationToken ct)
     {
+        if (!AudioRequestLimits.IsFinite(request.Start) || !AudioRequestLimits.IsFinite(request.End))
+            return BadRequest("Start and End must be real numbers of seconds.");
+        if (request.Start < 0)
+            return BadRequest("A clip cannot start before the recording does.");
         if (request.End <= request.Start)
             return BadRequest("End must be greater than Start.");
+        if (AudioRequestLimits.LabelProblem(request.Label) is { } labelProblem)
+            return BadRequest(labelProblem);
 
         var userId = GetCurrentUserIdOrThrow();
 
@@ -105,6 +117,14 @@ public sealed class UploadFileAudioClipController : BenControllerBase
 
         if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
             return BadRequest("Upload file type not found.");
+
+        // The source's visibility is a ceiling: clipping is exactly how a private recording would
+        // otherwise be laundered into a public file the caller owns (finding 6, same as the edit
+        // endpoint).
+        if (request.IsPublic && !source.IsPublic)
+            return BadRequest(
+                "That recording is private, so a clip of it cannot be made public here. Ask "
+                + "whoever owns it to publish the original first.");
 
         // Resolved before any work: cutting a clip "from" a marker that isn't on this file would
         // produce a link that misrepresents where the evidence came from.
@@ -120,8 +140,25 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         byte[] clippedBytes;
         string outContentType;
         string outExtension;
+        double clippedSeconds;
         try
         {
+            // Header only. A clip asked for wholly past the end used to write a 44-byte WAV — a
+            // header and no audio — persist it with a 201, and record the requested length as its
+            // duration (2026-09-06 audio walk, finding 10).
+            TimeSpan sourceDuration;
+            await using (var probeStream = await OpenSourceStreamAsync(source, ct))
+                sourceDuration = AudioSourceReader.Probe(probeStream, source.ContentType).Duration;
+
+            if (request.Start >= sourceDuration.TotalSeconds)
+                return BadRequest(
+                    $"That clip starts at {request.Start:0.##}s, and the recording is only "
+                    + $"{sourceDuration.TotalSeconds:0.##}s long.");
+
+            // What was actually taken, once the range is clamped to the recording — which is what
+            // the duration should say, rather than what was asked for.
+            clippedSeconds = Math.Min(request.End, sourceDuration.TotalSeconds) - request.Start;
+
             Stream sourceStream = await OpenSourceStreamAsync(source, ct);
             await using (sourceStream)
             {
@@ -133,6 +170,10 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         catch (NotSupportedException ex)
         {
             return BadRequest(ex.Message);
+        }
+        catch (Exception ex) when (AudioSourceReader.IsUndecodable(ex))
+        {
+            return BadRequest($"Couldn't read that audio: {ex.Message}");
         }
 
         var baseName = System.IO.Path.GetFileNameWithoutExtension(source.FileName);
@@ -176,11 +217,9 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         // EXIF, so without carrying it forward the choice would be to lose where the audio was
         // captured or to imply the clip was measured there — the row says it was inherited, and
         // the duration comes from the clip's own bytes rather than the source's.
-        if (await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct) is { } derived)
-        {
-            derived.DurationSeconds = request.End - request.Start;
-            db.UploadFileMetadata.Add(derived);
-        }
+        var inherited = await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct);
+        if (DerivedAudioMetadata.For(entity.Id, clippedBytes, inherited, clippedSeconds) is { } metadata)
+            db.UploadFileMetadata.Add(metadata);
 
         // Saved together with the file: a marker pointing at a clip row that failed to insert would
         // be a dangling reference the UI renders as a broken link.
@@ -191,7 +230,17 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             sourceMarker.UpdatedByAppUserId     = userId;
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Bytes on disk with no row pointing at them (finding 7).
+            try { await _fileStorage.DeleteAsync(relativePath, CancellationToken.None); } catch { /* the insert's failure is the one to report */ }
+            throw;
+        }
+
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },

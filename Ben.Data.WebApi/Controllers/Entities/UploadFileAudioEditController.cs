@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
 using Ben.Data.WebApi.Services;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -49,6 +50,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
     }
 
     [HttpPost]
+    [EnableRateLimiting(RateLimiting.AudioProcessingPolicy)]
     public async Task<ActionResult<UploadFileRecord>> Edit(
         Guid fileId,
         [FromBody] AudioEditRequest request,
@@ -57,20 +59,9 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
-        if ((request.Operation is AudioEditOperation.Cut or AudioEditOperation.Silence) &&
-            (request.Start is null || request.End is null || request.End <= request.Start))
-            return BadRequest("Start and End are required for Cut/Silence, and End must be greater than Start.");
-
-        if (request.Operation == AudioEditOperation.Gain && request.GainDb is null)
-            return BadRequest("GainDb is required for Gain.");
-
-        if (request.Operation == AudioEditOperation.Speed &&
-            (request.SpeedRatio is null || request.SpeedRatio is <= 0 or > 4))
-            return BadRequest("SpeedRatio is required for Speed and must be between 0 (exclusive) and 4.");
-
-        if (request.Operation == AudioEditOperation.Pitch &&
-            (request.PitchSemitones is null || request.PitchSemitones is < -24 or > 24))
-            return BadRequest("PitchSemitones is required for Pitch and must be between -24 and 24.");
+        // Every bound in one place, shared with the mixer — see AudioRequestLimits for what each
+        // one is for and which of them a slider can reach on its own.
+        if (AudioRequestLimits.EditProblem(request) is { } problem) return BadRequest(problem);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
@@ -82,11 +73,31 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
             return BadRequest("Upload file type not found.");
 
+        // The source's visibility is a ceiling, not a suggestion. Anyone who can SEE a private
+        // recording can derive a copy from it — that is the point of the feature — and the derived
+        // copy's IsPublic came straight from the request, so "edit it, then publish the edit" was a
+        // way to publish somebody else's private audio (2026-09-06 audio walk, finding 6).
+        if (request.IsPublic && !source.IsPublic)
+            return BadRequest(
+                "That recording is private, so an edit of it cannot be made public here. Ask "
+                + "whoever owns it to publish the original first.");
+
         byte[] editedBytes;
         string outContentType;
         string outExtension;
         try
         {
+            // Header only, so an impossible region costs nothing to refuse.
+            TimeSpan sourceDuration;
+            await using (var probeStream = await OpenSourceStreamAsync(source, ct))
+                sourceDuration = AudioSourceReader.Probe(probeStream, source.ContentType).Duration;
+
+            if (request.Operation is AudioEditOperation.Cut or AudioEditOperation.Silence
+                && request.Start >= sourceDuration.TotalSeconds)
+                return BadRequest(
+                    $"That region starts at {request.Start:0.##}s, and the recording is only "
+                    + $"{sourceDuration.TotalSeconds:0.##}s long.");
+
             Stream sourceStream = await OpenSourceStreamAsync(source, ct);
             await using (sourceStream)
             {
@@ -108,11 +119,19 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         {
             return BadRequest(ex.Message);
         }
+        catch (Exception ex) when (AudioSourceReader.IsUndecodable(ex))
+        {
+            // Same answer the EVP scan already gave for the same file: a 400 that says the bytes
+            // could not be read, rather than a 500 that reads as "the site is broken" (finding 5).
+            return BadRequest($"Couldn't read that audio: {ex.Message}");
+        }
 
         var baseName = System.IO.Path.GetFileNameWithoutExtension(source.FileName);
         var newName  = string.IsNullOrWhiteSpace(request.Label)
             ? $"{baseName}_{request.Operation.ToString().ToLowerInvariant()}{outExtension}"
             : $"{request.Label}{outExtension}";
+
+        var isRegionEdit = request.Operation is AudioEditOperation.Cut or AudioEditOperation.Silence;
 
         var entity = new UploadFile
         {
@@ -130,6 +149,13 @@ public sealed class UploadFileAudioEditController : BenControllerBase
             IsPublic           = request.IsPublic,
             SortOrder          = 0,
             ParentFileId       = fileId,
+
+            // Which part of the recording this edit was about. Without it every edited file showed
+            // "0:00–0:00" on its Saved Clips card, next to clips that showed their real range
+            // (2026-09-06 audio walk, finding F). Only the region operations have one to state.
+            RegionStart        = isRegionEdit ? request.Start : null,
+            RegionEnd          = isRegionEdit ? request.End   : null,
+
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -141,17 +167,37 @@ public sealed class UploadFileAudioEditController : BenControllerBase
 
         db.UploadFiles.Add(entity);
 
-        // An edited copy was recorded in the same place as its source (Ben's rule, 2026-08-24).
-        // Duration is left as the source's: noise reduction and normalisation do not change it,
-        // and the operations that would (trim) go through the clip endpoint, which sets its own.
-        if (await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct) is { } derived)
-            db.UploadFileMetadata.Add(derived);
+        // An edited copy was recorded in the same place as its source (Ben's rule, 2026-08-24), and
+        // now also carries how long it is and what shape it is — measured off the bytes just
+        // produced rather than inherited, because no audio upload has a metadata row to inherit
+        // from (finding 11).
+        var inherited = await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct);
+        if (DerivedAudioMetadata.For(entity.Id, editedBytes, inherited) is { } metadata)
+            db.UploadFileMetadata.Add(metadata);
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // The bytes are on disk and the row is not, so nothing will ever point at them. Take
+            // them back rather than leaving an orphan for a cleanup job to guess about (finding 7).
+            await TryDeleteAsync(relativePath);
+            throw;
+        }
+
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
             _mapper.Map<UploadFileRecord>(entity));
+    }
+
+    /// <summary>Removes a written file, never throwing over the failure that led here.</summary>
+    private async Task TryDeleteAsync(string relativePath)
+    {
+        try { await _fileStorage.DeleteAsync(relativePath, CancellationToken.None); }
+        catch { /* the insert already failed; a failed cleanup must not replace that error */ }
     }
 
     private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)

@@ -301,6 +301,15 @@ public class UploadFileControllerTests
             new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
 
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, ownerId.ToString())], "Bearer"))
+            }
+        };
+
         var result = await ctrl.GetChildClips(sourceId, default);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
@@ -308,6 +317,60 @@ public class UploadFileControllerTests
         var clipList = clips.ToList();
         Assert.Single(clipList);
         Assert.Equal(realClipId, clipList[0].Id);
+    }
+
+    /// <summary>
+    /// The clip list is a list of a private recording's contents.
+    /// </summary>
+    /// <remarks>
+    /// This endpoint had no check of any kind: hand it any file id and it answered with the names,
+    /// descriptions, ids and region ranges of every clip cut from that file, whoever cut them and
+    /// whoever owns the recording. The names are the interesting part — people label a clip with
+    /// what they think they heard on it (2026-09-06 audio walk, finding 16).
+    /// </remarks>
+    [Fact]
+    public async Task GetChildClips_IsRefused_ToSomeoneWhoCannotSeeTheRecording()
+    {
+        var factory  = CreateFactory();
+        var ownerId  = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = sourceId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg",
+                FileSize = 1, IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "says my name.wav", StoredFileName = "c.wav", ContentType = "audio/wav",
+                FileSize = 1, ParentFileId = sourceId, RegionStart = 12, RegionEnd = 14,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object,
+            new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Mock<IAuditLogService>().Object,
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"))
+            }
+        };
+
+        var result = await ctrl.GetChildClips(sourceId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
     // ── Replace (item #6 phase 3) ────────────────────────────────────────────────

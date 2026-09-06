@@ -161,6 +161,63 @@ Every other enum the API takes over JSON accepts its name. Anything not generate
 client — a script, a future WASM host, anyone reading the record definition — sends the name and
 gets a 400 that reads like a missing field ("The request field is required").
 
+## Phase 1 — what shipped, and two claims it disproved
+
+Findings 2–17, F and R are fixed (branch `feature/audio-editor-phase-1-server-safety`). The two
+security ones first:
+
+- **6, privacy laundering.** A viewer of a private recording could publish it by deriving a copy;
+  the derived file's `IsPublic` came straight from the request. The source's visibility is a ceiling
+  now on both the edit and the clip endpoint, and the refusal names the recording as private and
+  says to publish the original instead.
+- **9, config auth.** PUT and DELETE asked only whether the caller could *view* the file, so anyone
+  it had been shared with could overwrite the owner's saved player settings; GET had no per-file
+  check at all. Verified live against the running API: another signed-in member gets 403 on read,
+  on write and on delete, and the owner gets 204/200.
+
+The rest of the bounds now live in one `AudioRequestLimits` both the edit endpoint and the mixer
+share, so they cannot drift. Probed live on the isolated stack, each answering in a sentence:
+
+| asked for | answered |
+|---|---|
+| `{"operation":"Normalize"}` — the name, not the number | **201** (was a 400 that read as a missing field) |
+| publish an edit of a private recording | 400 — "That recording is private, so an edit of it cannot be made public here…" |
+| `speedRatio: 0.001` | 400 — "SpeedRatio must be between 0.25 and 4." |
+| `gainDb: 500` | 400 — "GainDb must be between -60 and 24 dB." |
+| cut a region starting at 60s of a 3s recording | 400 — "That region starts at 60s, and the recording is only 3s long." |
+| a 600-character name | 400 — "A name may be at most 200 characters; this one is 600." |
+| cut 1s–2s, which is legitimate | 201, and the derived row records **region 1–2** (finding F) |
+
+And the derived files now say how long they are (finding 11): the 3-second source produced a
+3-second Normalize and a 2-second Cut, each with its sample rate and channel count, measured off the
+bytes that were produced rather than inherited.
+
+**A refusal nobody can read is worse than no refusal.** The editor answered *every* failed edit with
+one hardcoded line — "only WAV and MP3 sources can be edited" — because the client returns null on
+failure and drops the body. So every refusal above would have reached the screen as a message about
+file formats. The client now carries the server's sentence, and two browser tests
+(`AudioEditorRefusalTests`) hold it there; run against the un-fixed component on the isolated stack,
+both showed the old catch-all for a fade problem and for the privacy refusal.
+
+### Two things this audit got wrong
+
+- **R's premise.** The note said "every other enum the API takes over JSON accepts its name." It does
+  not. This API configures no `JsonStringEnumConverter` anywhere, deliberately — several enums carry
+  comments warning that they cross as integers and must not be renumbered. `AudioEditOperation` was
+  not the odd one out; it was the only enum a person writes by hand. The fix stands, and is narrower
+  than the finding implied: a converter on that one enum, accepting names *and* integers, so no
+  existing caller changes.
+- **11 was too broad.** "No audio upload gets a duration on any path" was drawn from the 908 MB
+  probe file. A short WAV through the same chunked endpoint comes back with 3 s, 8000 Hz, 1 channel.
+  What was true is the narrower claim: *derived* audio had no duration, because the metadata row is
+  only created when the source has one to inherit. Whether long or unusual uploads lose theirs is a
+  separate question this has not answered.
+
+### Still open from this phase's neighbourhood
+
+Finding Q (the 128 MB multipart ceiling on the classic upload endpoint) is untouched — it is not
+audio, and it also stops the WASM editor publishing a render over 128 MB, so it wants its own fix.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with

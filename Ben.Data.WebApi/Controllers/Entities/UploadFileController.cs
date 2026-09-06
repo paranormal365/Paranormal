@@ -752,10 +752,22 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     /// <summary>Returns all child clip files that were derived from this file via the region-clip workflow.</summary>
+    /// <remarks>
+    /// Gated on the PARENT, which had no check at all: any authenticated caller could hand over any
+    /// file id and read back the names, descriptions and ids of every clip cut from it, whoever cut
+    /// them (2026-09-06 audio walk, finding 16). The children are not gated individually on purpose
+    /// — a clip is audio taken out of a recording the caller can already hear, so the parent's
+    /// visibility is the honest boundary, and checking each child would be a per-clip round trip
+    /// down a list the Saved Clips panel loads on every open.
+    /// </remarks>
     [HttpGet("{id:guid}/clips")]
     public async Task<ActionResult<IEnumerable<UploadFileRecord>>> GetChildClips(Guid id, CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserId();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await db.UploadFiles.AnyAsync(f => f.Id == id, cancellationToken)) return NotFound();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, id, userId, cancellationToken)) return Forbid();
+
         var clips = await db.UploadFiles.AsNoTracking()
             .Where(f => f.ParentFileId == id)
             .OrderBy(f => f.RegionStart)

@@ -486,7 +486,7 @@
 
         try
         {
-            var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
+            var (result, error) = await AdminClient.ClipAudioWithReasonAsync(FileId, new ClipAudioRequest(
                 Region.Start, Region.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
                 _clipIsPublic, _clipFileTypeId));
 
@@ -496,7 +496,8 @@
                 await OnClipSaved.InvokeAsync(result);
             }
             else
-                _clipError = "Clip failed. WAV and MP3 sources are supported.";
+                // Whatever the server refused for, in its own words (2026-09-06 audio walk, phase 1).
+                _clipError = error ?? "That clip could not be saved.";
         }
         catch (Exception ex)
         {
