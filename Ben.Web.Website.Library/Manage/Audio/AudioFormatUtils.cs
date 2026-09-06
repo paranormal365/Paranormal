@@ -59,3 +59,26 @@ public static class AudioFormatUtils
         return $"{bytes} B";
     }
 }
+
+/// <summary>
+/// Defaults the two places that save a clip must agree on.
+/// </summary>
+/// <remarks>
+/// A clip can be saved from the editor's Save-as-clip dialog or from inside the region explorer,
+/// and the two disagreed about whether to normalize: the dialog started with it on and explained
+/// why, the explorer never offered it and never sent it. So the same region saved from two places
+/// two clicks apart produced audibly different files, and only one of them was the one the copy
+/// described (2026-09-06 audio walk, finding N).
+/// </remarks>
+public static class AudioClipDefaults
+{
+    /// <summary>
+    /// Whether a clip is normalized unless somebody says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// On, because of what these clips are for: an EVP is usually far quieter than everything
+    /// around it, so a clip cut at the recording's own level is often close to inaudible. The
+    /// original is never touched, and the box can always be cleared.
+    /// </remarks>
+    public const bool Normalize = true;
+}

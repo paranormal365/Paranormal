@@ -448,11 +448,16 @@ public class AudioEditorWalkTests : BenTestBase
         await ToolbarButton("Edit").ClickAsync();
         await Page.WaitForTimeoutAsync(400);
 
-        var ops = new[] { "Cut", "Silence", "Normalize", "Reverse", "Apply Gain", "Apply Fade", "Apply Speed", "Apply Pitch" };
+        // By id, not by name. "Silence" is the name of TWO buttons — the toolbar's silence-detection
+        // toggle and the edit panel's Silence operation — and a name lookup resolves in DOM order,
+        // so this loop clicked detection and recorded "Silence produced nothing and showed no
+        // error" against the edit. That was finding E, and it was this locator, not the editor
+        // (2026-09-06 audio audit, phase 2).
+        var ops = new[] { "cut", "silence", "normalize", "reverse", "gain", "fade", "speed", "pitch" };
         var made = 0;
         foreach (var op in ops)
         {
-            var button = Modal.GetByRole(AriaRole.Button, new() { Name = op, Exact = false }).First;
+            var button = Modal.Locator($"#edit-op-{op}");
             if (!await button.IsEnabledAsync())
             {
                 Record("E", "FAIL", $"{op} button disabled with a region drawn");

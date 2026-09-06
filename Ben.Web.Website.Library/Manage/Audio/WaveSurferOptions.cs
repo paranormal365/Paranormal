@@ -443,6 +443,41 @@ public class WsRegionData
 
     [JsonPropertyName("label")]
     public string? Label { get; set; }
+
+    /// <summary>
+    /// What put this region on the waveform. See <see cref="RegionKind"/>.
+    /// </summary>
+    /// <remarks>
+    /// Sent as a string by the player, which records it when the region is created. Anything it was
+    /// not told about arrives as <c>"user"</c>, because a region nobody registered is one somebody
+    /// dragged — the one case where guessing wrong destroys work (2026-09-06 audio walk, finding B).
+    /// </remarks>
+    [JsonPropertyName("kind")]
+    public string? KindName { get; set; }
+
+    /// <summary>
+    /// <see cref="KindName"/> as the enum, defaulting to <see cref="RegionKind.User"/> for a name
+    /// this build does not recognise — a newer player that grows a kind must not have its regions
+    /// silently reclassified as something an edit will act on.
+    /// </summary>
+    /// <remarks>
+    /// <b><see cref="JsonIgnoreAttribute"/> is load-bearing.</b> Without it this property claims the
+    /// JSON name <c>kind</c> under the web naming policy, the same name <see cref="KindName"/> is
+    /// annotated with, and a name collision makes the serializer throw for the WHOLE TYPE on every
+    /// deserialization. Because JS interop rejections are swallowed by the player's <c>safe()</c>
+    /// wrapper, the symptom was not an error anywhere: <c>region-created</c> simply stopped reaching
+    /// C#, so dragging a region on the waveform drew one and selected nothing. Guarded by
+    /// <c>WsRegionDataBindingTests</c>.
+    /// </remarks>
+    [JsonIgnore]
+    public RegionKind Kind => KindName?.ToLowerInvariant() switch
+    {
+        "silence" => RegionKind.Silence,
+        "marker"  => RegionKind.Marker,
+        "clip"    => RegionKind.Clip,
+        "overlay" => RegionKind.Overlay,
+        _         => RegionKind.User,
+    };
 }
 
 /// <summary>Payload delivered when the user right-clicks a WaveSurfer region.</summary>
@@ -490,6 +525,14 @@ public class WsRegionParams
 
     [JsonPropertyName("content")]
     public string? Content { get; set; }
+
+    /// <summary>
+    /// What this region is, so the player can report it back and so
+    /// <c>clearUserRegions</c> knows to leave it alone. Omitted means
+    /// <see cref="RegionKind.Overlay"/> — drawn by the editor, never an edit target.
+    /// </summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
 
     [JsonPropertyName("minLength")]
     public double? MinLength { get; set; }
