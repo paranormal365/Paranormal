@@ -178,6 +178,10 @@ public interface IWebApiClient
     // Upload File — Audio Config
     Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+
+    /// <summary>Saves a file's audio config, and on refusal hands back the server's own sentence.</summary>
+    Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 
     // Upload File — Region Notes

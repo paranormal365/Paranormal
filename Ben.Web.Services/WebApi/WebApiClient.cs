@@ -545,6 +545,12 @@ public sealed class WebApiClient : IWebApiClient
     public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
         => PutAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", request, token);
 
+    /// <inheritdoc />
+    public Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>(
+            HttpMethod.Put, $"/api/upload-files/{fileId}/audio-config", request, token);
+
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
 
