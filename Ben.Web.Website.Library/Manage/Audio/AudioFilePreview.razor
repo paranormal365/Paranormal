@@ -461,25 +461,25 @@ else
                         <div class="d-flex gap-3 flex-wrap">
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
                                 <strong class="small">Region</strong>
-                                <span class="text-muted small">
+                                <span class="text-muted small" id="edit-region-readout">
                                     @(_regionSelection.Target is not { } sel ? "Draw a region on the waveform first" : $"{FormatTime(sel.Start)}–{FormatTime(sel.End)}")
                                 </span>
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Cut))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">✂ Cut</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Silence))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">🔇 Silence</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-cut" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Cut))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">✂ Cut</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-silence" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Silence))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">🔇 Silence</button>
                                 </div>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:160px;">
                                 <strong class="small">Whole File</strong>
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Normalize))" disabled="@(!(CanApplyEdit()))">📶 Normalize</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Reverse))" disabled="@(!(CanApplyEdit()))">⏪ Reverse</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-normalize" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Normalize))" disabled="@(!(CanApplyEdit()))">📶 Normalize</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-reverse" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Reverse))" disabled="@(!(CanApplyEdit()))">⏪ Reverse</button>
                                 </div>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
                                 <strong class="small">Gain @(_editGainDb > 0 ? "+" : "")@_editGainDb dB</strong>
                                 <input type="range" class="form-range" min="-24" max="24" step="1" @bind="_editGainDb" @bind:event="oninput" />
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Gain))" disabled="@(!(CanApplyEdit()))">Apply Gain</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="edit-op-gain" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Gain))" disabled="@(!(CanApplyEdit()))">Apply Gain</button>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:200px;">
                                 <strong class="small">Fade In / Out (seconds)</strong>
@@ -487,17 +487,17 @@ else
                                     <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:80px;" @bind="_editFadeIn" @bind:event="oninput" />
                                     <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:80px;" @bind="_editFadeOut" @bind:event="oninput" />
                                 </div>
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Fade))" disabled="@(!(CanApplyEdit()))">Apply Fade</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="edit-op-fade" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Fade))" disabled="@(!(CanApplyEdit()))">Apply Fade</button>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
                                 <strong class="small">Speed @_editSpeedRatio.ToString("0.0#")×</strong>
                                 <input type="range" class="form-range" min="0.25" max="4" step="0.05" @bind="_editSpeedRatio" @bind:event="oninput" />
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Speed))" disabled="@(!(CanApplyEdit()))">Apply Speed</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="edit-op-speed" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Speed))" disabled="@(!(CanApplyEdit()))">Apply Speed</button>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
                                 <strong class="small">Pitch @(_editPitchSemitones > 0 ? "+" : "")@_editPitchSemitones st</strong>
                                 <input type="range" class="form-range" min="-12" max="12" step="1" @bind="_editPitchSemitones" @bind:event="oninput" />
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Pitch))" disabled="@(!(CanApplyEdit()))">Apply Pitch</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="edit-op-pitch" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Pitch))" disabled="@(!(CanApplyEdit()))">Apply Pitch</button>
                             </div>
                         </div>
                         @if (_editError is not null)

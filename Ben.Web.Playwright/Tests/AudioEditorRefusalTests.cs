@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace Ben.Web.Playwright.Tests;
 
 /// <summary>
-/// When the server refuses an audio edit, does the person find out why?
+/// Does the editor act on what the person asked for, and say so when it will not?
 /// </summary>
 /// <remarks>
 /// <para>The audio editor answered every failed edit with one hardcoded line — "only WAV and MP3
@@ -48,6 +48,117 @@ public class AudioEditorRefusalTests : BenTestBase
         await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
             .ToBeEnabledAsync(new() { Timeout = 90_000 });
         return true;
+    }
+
+    /// <summary>
+    /// Turning on silence detection must not take the selection away.
+    /// </summary>
+    /// <remarks>
+    /// <para>The walk drew a region at 1:14.6–1:33.2, turned silence detection on, and the edit
+    /// panel then read 3:00.6–3:06.5 — a stretch the machine had found — with the drawn region gone
+    /// from the waveform. Cut and Silence would have destroyed audio nobody chose
+    /// (2026-09-06 audio walk, finding B).</para>
+    ///
+    /// <para>Read off the panel rather than from any internal state, because the panel is what
+    /// somebody about to click Cut is looking at.</para>
+    /// </remarks>
+    [Test]
+    public async Task Silence_detection_does_not_steal_the_region_you_drew()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        await DrawRegionAsync(0.20, 0.40);
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        var readout = Modal.Locator("#edit-region-readout").First;
+        await Expect(readout).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        var before = (await readout.InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"the panel showed: {before}");
+        Assert.That(before, Does.Not.Contain("Draw a region"),
+            "the drag did not produce a selection, so this test cannot say anything about B");
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Silence", Exact = false }).First.ClickAsync();
+        await Page.WaitForTimeoutAsync(2_000);   // detection walks the whole decoded buffer
+
+        var after = (await readout.InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"after silence detection: {after}");
+
+        Assert.That(after, Is.EqualTo(before),
+            "silence detection moved the edit target: Cut would now destroy a stretch the machine "
+            + "chose rather than the one the person drew");
+    }
+
+    /// <summary>
+    /// Silence, applied to a region a person drew, produces a file and says it did.
+    /// </summary>
+    /// <remarks>
+    /// The walk found that seven of the eight edits produced a saved clip and Silence produced
+    /// nothing within sixty seconds and showed no error. The region it would have used was a
+    /// machine one, from finding B — so this reruns it against a region somebody actually drew,
+    /// which is the only way to tell a Silence bug from B's consequences.
+    /// </remarks>
+    [Test]
+    public async Task Silencing_a_region_you_drew_produces_a_clip()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        await DrawRegionAsync(0.20, 0.40);
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+
+        var readout = Modal.Locator("#edit-region-readout").First;
+        await Expect(readout).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        Assert.That((await readout.InnerTextAsync()).Trim(), Does.Not.Contain("Draw a region"),
+            "no selection to silence, so this says nothing about the edit");
+
+        // By id, not by name: the toolbar's silence-DETECTION toggle is also called "Silence" and
+        // comes first in the DOM, so a name lookup lands on it. That is what the walk hit, which is
+        // why finding E read as "Silence produced nothing and said nothing" — detection produces no
+        // clip and no error, correctly.
+        await Modal.Locator("#edit-op-silence").ClickAsync();
+
+        // Either a saved clip appears or the panel explains itself. Silence did neither.
+        var savedClips = Modal.GetByText("Saved Clips", new() { Exact = false }).First;
+        var editError  = Modal.Locator(".alert-danger").First;
+
+        try
+        {
+            await Expect(savedClips.Or(editError)).ToBeVisibleAsync(new() { Timeout = 90_000 });
+        }
+        catch (Exception)
+        {
+            Assert.Fail("Silence produced neither a saved clip nor a message within 90 seconds — "
+                      + "the walk's finding E, now with a region a person actually drew.");
+            return;
+        }
+
+        if (await editError.CountAsync() > 0 && await editError.IsVisibleAsync())
+            Assert.Fail($"Silence was refused: {(await editError.InnerTextAsync()).Trim()}");
+
+        await Expect(savedClips).ToBeVisibleAsync();
+        TestContext.Out.WriteLine("Silence produced a saved clip.");
+    }
+
+    /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
+    private async Task DrawRegionAsync(double fromFraction, double toFraction)
+    {
+        var box = await Modal.Locator("[id^='ws-']").First.BoundingBoxAsync();
+        Assert.That(box, Is.Not.Null, "the modal waveform has no box");
+        var y = box!.Y + box.Height / 2;
+        await Page.Mouse.MoveAsync((float)(box.X + box.Width * fromFraction), y);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync((float)(box.X + box.Width * ((fromFraction + toFraction) / 2)), y, new() { Steps = 8 });
+        await Page.Mouse.MoveAsync((float)(box.X + box.Width * toFraction), y, new() { Steps = 8 });
+        await Page.Mouse.UpAsync();
+        await Page.WaitForTimeoutAsync(600);
     }
 
     /// <summary>

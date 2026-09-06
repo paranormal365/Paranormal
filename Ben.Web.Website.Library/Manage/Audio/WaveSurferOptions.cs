@@ -460,6 +460,16 @@ public class WsRegionData
     /// this build does not recognise — a newer player that grows a kind must not have its regions
     /// silently reclassified as something an edit will act on.
     /// </summary>
+    /// <remarks>
+    /// <b><see cref="JsonIgnoreAttribute"/> is load-bearing.</b> Without it this property claims the
+    /// JSON name <c>kind</c> under the web naming policy, the same name <see cref="KindName"/> is
+    /// annotated with, and a name collision makes the serializer throw for the WHOLE TYPE on every
+    /// deserialization. Because JS interop rejections are swallowed by the player's <c>safe()</c>
+    /// wrapper, the symptom was not an error anywhere: <c>region-created</c> simply stopped reaching
+    /// C#, so dragging a region on the waveform drew one and selected nothing. Guarded by
+    /// <c>WsRegionDataBindingTests</c>.
+    /// </remarks>
+    [JsonIgnore]
     public RegionKind Kind => KindName?.ToLowerInvariant() switch
     {
         "silence" => RegionKind.Silence,

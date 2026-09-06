@@ -56,10 +56,10 @@ guard test that fails on any picker fed a list of tuples.
 | id | verdict | what happened |
 |---|---|---|
 | A | **OBSERVED → FIXED** | The X closed the modal; the next parent render (clicking the compact player) brought it straight back. After phase 1a the re-walk records it staying closed and reopening cleanly. |
-| B | **OBSERVED** | With a region drawn at 1:14.6–1:33.2, turning on Silence moved the edit target to 3:00.6–3:06.5 — a machine-found stretch — and the drawn region was gone (`02-silence-on.png` shows no region at all). Cut/Silence now act on detected silence. |
+| B | **OBSERVED → FIXED** | With a region drawn at 1:14.6–1:33.2, turning on Silence moved the edit target to 3:00.6–3:06.5 — a machine-found stretch — and the drawn region was gone (`02-silence-on.png` shows no region at all). Fixed in phase 2: the region's kind travels with it, and a drawn region at 0:37.2–1:14.5 now survives detection unchanged. |
 | C | **OBSERVED → FIXED** | With S and T fixed, measured: choosing Viridis repainted the canvas (`71,13,91` against jet's `6,7,145`), and a resolution change reverted it to `6,14,164`. The settings object was rebuilt from scratch on every recompute, so anything the caller did not pass was invented — jet, and mel off. It is merged now, and the editor passes its own colour and mel state on every call. Re-measured: colours survive (`70,21,95`), and the mel scale survives exactly (centroid 0.529 before and after). |
 | D | **CODE** | Four enable checkboxes toggle a bound bool and nothing else; not observable from outside. Stands as in the plan. |
-| E | partly | Seven of the eight edits produced a saved clip. **Silence produced nothing within 60 s and showed no error** (`edit:Silence`). Cause not yet known — the region it would have used was the machine one from B. |
+| E | **WITHDRAWN** | The walk clicked the toolbar's silence-DETECTION toggle, not the edit panel's Silence: both are named "Silence" and a name lookup resolves in DOM order. Detection produces no clip and no error, correctly. Silencing a region a person drew produces a saved clip — verified in phase 2, which also gave the eight edit buttons ids so this cannot recur. |
 | F | **OBSERVED** | All seven saved clips carry the badge `0:00.0–0:00.0`. |
 | G | **OBSERVED** | The edit panel's region readout sits beside Gain/Fade/Speed/Pitch, which ignore it. |
 | H | **UNREACHED** | Blocked by I every time: the explorer for the first region came back before a second region could be right-clicked. The code reading stands; re-check after I is fixed. |
@@ -217,6 +217,46 @@ both showed the old catch-all for a fade problem and for the privacy refusal.
 
 Finding Q (the 128 MB multipart ceiling on the classic upload endpoint) is untouched — it is not
 audio, and it also stops the WASM editor publishing a render over 128 MB, so it wants its own fix.
+
+## Phase 2 — the full-view editor
+
+Findings B, D, G, J, M, N and O are fixed, and E turned out not to be a finding at all.
+
+**B, verified on screen.** A region drawn at 0:37.2–1:14.5 now reads 0:37.2–1:14.5 after silence
+detection, where before it was replaced by a machine stretch. The cause was that "not user-drawn"
+was tracked as a set of ids the component had added itself, which covered the overlays it drew and
+missed every region JavaScript drew — silence detection adds its own inside `detectSilence`, so
+each arrived looking like a drag, each cleared the others, and the last became the edit target. The
+kind travels with the region now, and `clearUserRegions` clears by kind rather than by "everything
+except this list". The decision moved into `RegionSelection`, a plain class with tests; the browser
+test was run against take-everything behaviour and reported the selection gone.
+
+**E is withdrawn.** The walk clicked the wrong button. Two buttons are named "Silence" — the
+toolbar's silence-DETECTION toggle and the edit panel's Silence operation — and the walk located
+them by accessible name, which resolves in DOM order, so it toggled detection and recorded
+"produced nothing within 60 s and showed no error" against the edit. Detection produces no clip and
+no error, correctly. The eight edit buttons now carry ids (`#edit-op-cut` and so on), the walk uses
+them, and a browser test confirms that silencing a region a person drew produces a saved clip.
+
+**A mistake of my own, and the most instructive thing in this phase.** The kind was added to
+`WsRegionData` as a string plus a computed `Kind` property. Under the web naming policy that
+computed property claims the JSON name `kind` — the same name the string is annotated with — and a
+collision makes `System.Text.Json` throw for the *whole type* on every deserialization. The player
+wraps its interop calls in a `safe()` helper that swallows rejections, so there was no error in the
+browser console, none on the server, and no failing unit test: `region-created` simply stopped
+reaching C#, and dragging on the waveform drew a region and selected nothing. Fifteen new unit
+tests for the new behaviour all passed while the feature was entirely disconnected. It was found by
+opening the page. `WsRegionDataBindingTests` binds the exact payload the module sends so the next
+shadowed property fails there instead.
+
+**The rest.** The four listening-chain checkboxes apply when ticked instead of waiting for a slider
+(D). Gain, Fade, Speed and Pitch stop sending region bounds they ignore, and the region readout is
+now grouped with the two operations that use it (G). A confirmed marker's play button plays, with
+two seconds of context either side for a point marker that has no span of its own (J). A failed
+file-type, marker or saved-clip load says so rather than rendering as an empty recording (E's other
+half, and O). The two Save-as-clip buttons now share one Normalize default, and the region explorer
+offers the choice it used to decide silently (N). A region's note appears on the clip saved from it,
+through a matching rule both places share (M).
 
 ## What this changes in the plan
 
