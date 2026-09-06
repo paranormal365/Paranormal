@@ -492,7 +492,13 @@ For either of those, right-click the clip and choose **Replace Media…** to poi
 yourself. The replacement is kept, so it is still there the next time you open the project.
 
 A clip whose footage is missing stays on the timeline with all its trims, titles and edits intact,
-and is left out of any render until its file is back.
+marked with a warning triangle.
+
+**It also stops the export**, and says so. Open the export window and the reason is the first thing
+in it, naming the clips: the editor will not render a video with a hole where that footage should
+be, so Export Now and Add to Queue stay switched off until you reconnect the clip or remove it.
+That is deliberate — an export that started anyway would reach the missing clip partway through and
+stall there, with a progress bar that had stopped meaning anything.
 
 ## Working signed out
 

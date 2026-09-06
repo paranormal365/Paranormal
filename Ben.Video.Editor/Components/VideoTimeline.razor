@@ -559,7 +559,8 @@
 
                                 @if (item.IsMediaMissing)
                                 {
-                                    <span class="bv-clip-chip__missing" title="Media missing — re-link via Add button">⚠</span>
+                                    <span class="bv-clip-chip__missing"
+                                          title="This clip's media is not on this computer. Right-click it and choose Replace Media. Until then the timeline cannot be exported.">⚠</span>
                                 }
 
                                 <span class="bv-clip-chip__icon">@ItemIcon(item)</span>
@@ -753,7 +754,8 @@
 
                                 @if (item.IsMediaMissing)
                                 {
-                                    <span class="bv-clip-chip__missing" title="Media missing — re-link via Add button">⚠</span>
+                                    <span class="bv-clip-chip__missing"
+                                          title="This clip's media is not on this computer. Right-click it and choose Replace Media. Until then the timeline cannot be exported.">⚠</span>
                                 }
 
                                 <span class="bv-clip-chip__label">@ShortName(ItemTitle(item))</span>
