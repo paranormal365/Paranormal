@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Redaction;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -636,7 +637,16 @@ public sealed class CaseController : BenControllerBase
                  + "public web address. Give it a name that doesn't identify the property — "
                  + "\"The Mill House Investigation\", for instance — before publishing it.";
 
-        var candidate = UrlSlug.From(entity.Title)
+        // The slug is built from the PUBLIC title, not the private one. The public page already
+        // replaces the client's name with their alias or the pseudonym (CaseProseRedactor), but
+        // the address was sliced from the raw title — so "Evaluator, Nashville TN" published as
+        // "the-westside-family-nashville-tn" on the page and /cases/evaluator-nashville-tn in
+        // the URL, carrying the surname the pseudonym exists to hide (2026-09-06 evaluation,
+        // finding W-P1). Redact first; a title that is nothing but the name falls back to the
+        // reference, which is what the seeded cases use.
+        var roster      = await CaseRedactionRoster.ForCaseAsync(db, entity.Id, ct) ?? RedactionRoster.Empty;
+        var publicTitle = CaseProseRedactor.Redact(entity.Title, roster);
+        var candidate   = UrlSlug.From(publicTitle)
                         ?? $"case-{entity.CaseYear}-{entity.OrgCaseNumber:D3}";
 
         entity.UrlName = await UrlSlug.MakeUniqueAsync(candidate, async slug =>

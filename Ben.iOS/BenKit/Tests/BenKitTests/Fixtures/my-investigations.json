@@ -1,1 +1,40 @@
-[{"attendeeId": "ec6922e6-97d0-4219-9c9f-cc821aeee8af", "investigationId": "ace0a41a-f378-42fe-8b26-9bc9732ffad2", "caseId": "0918d9a6-f8e2-4c15-b758-db9b69d0756c", "caseReference": "#2026-001", "caseTitle": "Abandoned Springfield Farmhouse", "orgId": "881ea0f6-8c0d-475e-9065-c6ed15e3302f", "orgName": "Tennessee Ghost Hunters", "orgUrlName": "tgh", "title": "Initial Night Investigation", "scheduledDateTime": "2026-03-22T20:00:00", "endDateTime": "2026-03-23T02:00:00", "location": "Springfield Farmhouse \u2014 Barn + East Wing", "status": 2, "assignedRole": "EMF Specialist", "rsvp": 0, "didAttend": true, "evidenceDueDate": null}]
+[
+  {
+    "attendeeId": "ec6922e6-97d0-4219-9c9f-cc821aeee8af",
+    "investigationId": "ace0a41a-f378-42fe-8b26-9bc9732ffad2",
+    "caseId": "0918d9a6-f8e2-4c15-b758-db9b69d0756c",
+    "caseReference": "#2026-001",
+    "caseTitle": "Abandoned Springfield Farmhouse",
+    "orgId": "881ea0f6-8c0d-475e-9065-c6ed15e3302f",
+    "orgName": "Tennessee Ghost Hunters",
+    "orgUrlName": "tgh",
+    "title": "Initial Night Investigation",
+    "scheduledDateTime": "2026-03-22T20:00:00",
+    "endDateTime": "2026-03-23T02:00:00",
+    "location": "Springfield Farmhouse \u2014 Barn + East Wing",
+    "status": 2,
+    "assignedRole": "EMF Specialist",
+    "rsvp": 0,
+    "didAttend": true,
+    "evidenceDueDate": null
+  },
+  {
+    "attendeeId": "b839a73e-40b3-4e14-9932-d64c8bd46c3f",
+    "investigationId": "265d6849-35a0-418b-a1b4-116518c5c13e",
+    "caseId": "0918d9a6-f8e2-4c15-b758-db9b69d0756c",
+    "caseReference": "#2026-005",
+    "caseTitle": "Evaluator, Nashville TN",
+    "orgId": "881ea0f6-8c0d-475e-9065-c6ed15e3302f",
+    "orgName": "Tennessee Ghost Hunters",
+    "orgUrlName": "tgh",
+    "title": "Initial walkthrough and baseline readings",
+    "scheduledDateTime": "2026-09-13T18:40:33.306705",
+    "endDateTime": null,
+    "location": "Springfield Farmhouse \u2014 Barn + East Wing",
+    "status": 0,
+    "assignedRole": "Lead Investigator",
+    "rsvp": 1,
+    "didAttend": null,
+    "evidenceDueDate": null
+  }
+]

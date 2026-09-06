@@ -65,6 +65,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
             _logger.LogError(
                 "No confirmation message was sent to {Recipient}: SMTP is not configured, so the "
               + "account cannot be completed by its owner.", email);
+            // The same fallback SendAsync applies when a configured server refuses: the link goes
+            // to the console at Warning, below the database sink, so a local sign-up can still be
+            // finished. The configuration comment promised this and the early return above had
+            // been skipping it — the 2026-09-04 walkthrough's gap #1, still open on 2026-09-06.
+            _logger.LogWarning(
+                "Could not send the confirmation message to {Recipient}. Use this instead: {Link}",
+                email, confirmationLink);
             return false;
         }
 

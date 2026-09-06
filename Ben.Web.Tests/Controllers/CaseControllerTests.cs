@@ -962,4 +962,50 @@ public class CaseControllerTests
         Assert.Equal(2, slugs.Count);
         Assert.Equal(2, slugs.Distinct().Count());
     }
+
+    /// <summary>
+    /// The public address is cut from the PUBLIC title. A case whose private title carries the
+    /// client's surname — the accept dialog builds exactly that by default — used to publish with
+    /// the pseudonym on the page and the surname in the URL (2026-09-06 evaluation, W-P1).
+    /// </summary>
+    [Fact]
+    public async Task Publishing_never_puts_the_clients_name_in_the_address()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = Guid.NewGuid(); var clientId = Guid.NewGuid(); var requestId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = clientId, UserName = "c@t.com", NormalizedUserName = "C@T.COM", Email = "c@t.com", NormalizedEmail = "C@T.COM",
+                FirstName = "Casey", LastName = "Evaluator", DisplayName = "Casey Evaluator", DateCreated = DateTime.UtcNow,
+            });
+            db.ClientRequests.Add(new ClientRequest
+            {
+                Id = requestId, AppUserId = clientId, Status = ClientRequestStatus.Assigned,
+                City = "Nashville", State = "TN", ZipCode = "37203",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = orgId, Title = "Evaluator, Nashville TN",
+                CaseYear = 2026, OrgCaseNumber = 5, ClientRequestId = requestId, IsPrivateEngagement = true,
+                StreetAddress1 = "2500 West End Ave", City = "Nashville", State = "TN", ZipCode = "37203", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId, isAdmin: true).Update(
+            orgId, caseId,
+            new UpdateCaseRequest("Evaluator, Nashville TN", null, CaseStatus.Public, "The Westside Family", true, null),
+            default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db2 = await factory.CreateDbContextAsync();
+        var saved = await db2.Cases.AsNoTracking().SingleAsync(c => c.Id == caseId);
+        Assert.NotNull(saved.UrlName);
+        Assert.DoesNotContain("evaluator", saved.UrlName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("casey", saved.UrlName, StringComparison.OrdinalIgnoreCase);
+    }
 }
