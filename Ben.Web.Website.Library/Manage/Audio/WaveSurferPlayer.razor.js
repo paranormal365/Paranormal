@@ -264,7 +264,12 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
-    const rd = (r) => ({ id: r.id, start: r.start, end: r.end, color: r.color, label: r.content ?? null })
+    const rd = (r) => ({
+      id: r.id, start: r.start, end: r.end, color: r.color, label: r.content ?? null,
+      // What put this region here. Anything nobody registered was dragged by a person — see
+      // _regionKind for why that default is the load-bearing part.
+      kind: _regionKind(containerId, r.id),
+    })
     regionsPlugin.on('region-created', (r)  => {
       safe(dotnetRef.invokeMethodAsync('OnWsRegionCreated', rd(r)))
       // Attach right-click (contextmenu) listener so the host can show a context menu
@@ -278,7 +283,10 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
       }
     })
     regionsPlugin.on('region-updated', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionUpdated', rd(r))))
-    regionsPlugin.on('region-removed', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionRemoved', r.id)))
+    regionsPlugin.on('region-removed', (r)  => {
+      instances.get(containerId)?._regionKinds?.delete(r.id)
+      safe(dotnetRef.invokeMethodAsync('OnWsRegionRemoved', r.id))
+    })
     regionsPlugin.on('region-clicked', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionClicked', r.id)))
     regionsPlugin.on('region-in',      (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionIn',      r.id)))
     regionsPlugin.on('region-out',     (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionOut',     r.id)))
@@ -511,9 +519,44 @@ export function getVolume(containerId)    { return instances.get(containerId)?.w
 
 // ── Regions API ───────────────────────────────────────────────────────────────
 
+/**
+ * Remembers what a region is, so it can be reported back and so clearing by kind is possible.
+ *
+ * Registration happens BEFORE addRegion, because the plugin fires `region-created`
+ * synchronously from inside it — register afterwards and the event has already gone out
+ * describing the region as user-drawn.
+ */
+function _rememberRegionKind(containerId, id, kind) {
+  const instance = instances.get(containerId)
+  if (!instance || !id) return
+  instance._regionKinds ??= new Map()
+  instance._regionKinds.set(id, kind)
+}
+
+/**
+ * What put this region on the waveform, defaulting to 'user'.
+ *
+ * The default is the whole point. Regions arrive from four places — a person's drag, silence
+ * detection, marker overlays and saved-clip overlays — and only the drag is a selection an edit
+ * may act on. The editor used to infer this from a set of ids it had added itself, which missed
+ * every region JavaScript created: silence detection adds its own inside `detectSilence`, so all
+ * of them looked user-drawn, each one wiped the others and the person's selection, and the last
+ * became what Cut and Silence would destroy (2026-09-06 audio walk, finding B).
+ *
+ * Unregistered means dragged, never the reverse: guessing "user" for an overlay shows a spurious
+ * selection, and guessing "overlay" for a drag silently drops what somebody asked for.
+ */
+function _regionKind(containerId, id) {
+  return instances.get(containerId)?._regionKinds?.get(id) ?? 'user'
+}
+
 export function addRegion(containerId, params) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
   if (!regionsPlugin) return null
+
+  // Anything added through here is the editor drawing, not a person selecting.
+  _rememberRegionKind(containerId, params.id, params.kind ?? 'overlay')
+
   const r = regionsPlugin.addRegion({
     id:        params.id,
     start:     params.start,
@@ -525,6 +568,10 @@ export function addRegion(containerId, params) {
     minLength: params.minLength,
     maxLength: params.maxLength,
   })
+
+  // The plugin assigns an id when none was given; the registration above missed that case.
+  if (!params.id) _rememberRegionKind(containerId, r.id, params.kind ?? 'overlay')
+
   return r.id
 }
 
@@ -534,19 +581,29 @@ export function removeRegion(containerId, regionId) {
 }
 
 export function clearRegions(containerId) {
-  instances.get(containerId)?.regionsPlugin?.clearRegions()
+  const instance = instances.get(containerId)
+  instance?._regionKinds?.clear()
+  instance?.regionsPlugin?.clearRegions()
 }
 
 /**
- * Removes all regions except those whose IDs are in keepIds.
- * Used to clear only user-drawn regions while preserving saved-clip overlays.
+ * Removes the regions a person drew, and only those.
+ *
+ * This used to take a list of ids to KEEP and remove everything else, which made it correct only
+ * as long as the caller knew about every region on the waveform. It did not: silence detection
+ * adds its regions in this file, so a caller passing "keep my overlays" swept away twenty silence
+ * regions and the person's own selection along with them (2026-09-06 audio walk, finding B).
+ * Clearing by kind cannot go wrong that way — a region that is not a drag is left alone whether or
+ * not the caller has heard of it.
+ *
+ * `exceptId` keeps one drawn region, which is how "only one selection at a time" is enforced:
+ * the newest survives and the previous ones go.
  */
-export function clearUserRegions(containerId, keepIds) {
-  const { regionsPlugin } = instances.get(containerId) ?? {}
-  if (!regionsPlugin) return
-  const keep = new Set(keepIds ?? [])
-  regionsPlugin.getRegions()
-    .filter(r => !keep.has(r.id))
+export function clearUserRegions(containerId, exceptId) {
+  const instance = instances.get(containerId)
+  if (!instance?.regionsPlugin) return
+  instance.regionsPlugin.getRegions()
+    .filter(r => r.id !== exceptId && _regionKind(containerId, r.id) === 'user')
     .forEach(r => r.remove())
 }
 
@@ -625,6 +682,58 @@ export function playRegion(containerId, regionId) {
   // Clean up if the user manually pauses or the track finishes naturally.
   // Note: ws.seekTo() above fires a 'seeking' event asynchronously; skipNextSeek
   // absorbs that first event so it does NOT tear down the region-end monitor.
+  let skipNextSeek = true
+  unsubs.push(ws.on('pause',  stopAndClean))
+  unsubs.push(ws.on('finish', stopAndClean))
+  unsubs.push(ws.on('seeking', () => {
+    if (skipNextSeek) { skipNextSeek = false; return }
+    stopAndClean()
+  }))
+
+  instance._regionPlayCleanup = stopAndClean
+}
+
+/**
+ * Plays a stretch of the recording between two times, then stops.
+ *
+ * The counterpart to {@link playRegion} for a marker that has no region worth playing. A point
+ * marker is drawn with start === end, so playRegion on it seeks and pauses in the same instant —
+ * which is why a confirmed marker's play button appeared to do nothing at all (2026-09-06 audio
+ * walk, finding J). The caller decides how much context a point marker gets; this just plays what
+ * it is given.
+ *
+ * The stop rules are playRegion's, minus the live re-read of the region bounds: a manual pause,
+ * the end of the track, or a seek all cancel it, and the first seek — the one this function
+ * performs itself — is absorbed.
+ */
+export function playRange(containerId, startSeconds, endSeconds) {
+  const instance = instances.get(containerId)
+  if (!instance?.ws) return
+  const { ws } = instance
+
+  const duration = ws.getDuration()
+  if (!duration) return
+
+  const start = Math.max(0, Math.min(startSeconds ?? 0, duration))
+  const end   = Math.min(Math.max(start + 0.05, endSeconds ?? duration), duration)
+
+  instance._regionPlayCleanup?.()
+  instance._regionPlayCleanup = null
+
+  ws.seekTo(start / duration)
+  ws.play()
+
+  let unsubs = []
+  const stopAndClean = () => {
+    unsubs.forEach(u => u?.())
+    unsubs = []
+    if (instance._regionPlayCleanup === stopAndClean) instance._regionPlayCleanup = null
+  }
+
+  unsubs.push(ws.on('timeupdate', () => {
+    if (ws.getCurrentTime() >= end) { stopAndClean(); ws.pause() }
+  }))
+
   let skipNextSeek = true
   unsubs.push(ws.on('pause',  stopAndClean))
   unsubs.push(ws.on('finish', stopAndClean))
@@ -1386,6 +1495,8 @@ export function detectSilence(containerId, thresholdDb, windowSeconds) {
     runStart = null
     if (endTime - startTime < 0.1) return  // skip tiny blips
     const id = `silence-${Math.round(startTime * 1000)}`
+    // Before addRegion: the plugin fires region-created synchronously from inside it.
+    _rememberRegionKind(containerId, id, 'silence')
     instance.regionsPlugin.addRegion({
       id, start: startTime, end: endTime,
       color: 'rgba(148,163,184,0.22)',

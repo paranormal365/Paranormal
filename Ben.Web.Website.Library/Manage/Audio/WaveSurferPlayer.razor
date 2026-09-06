@@ -397,14 +397,32 @@
     public async Task RemoveRegionAsync(string id)    => await Invoke("removeRegion", id);
     public async Task ClearRegionsAsync()             => await Invoke("clearRegions");
 
-    /// <summary>Removes all user-drawn regions, keeping the specified IDs (e.g. saved-clip overlays).</summary>
-    public async Task ClearUserRegionsAsync(IEnumerable<string> keepIds)
+    /// <summary>
+    /// Removes the regions a person drew, leaving every overlay and every detected silence alone.
+    /// </summary>
+    /// <param name="exceptId">
+    /// A drawn region to keep — how "one selection at a time" is enforced when a new one appears.
+    /// </param>
+    /// <remarks>
+    /// This used to take the ids to KEEP and remove everything else, which was correct only while
+    /// the caller knew about every region on the waveform. Silence detection adds its regions in
+    /// JavaScript, so the caller did not, and turning it on wiped both the silence shading and the
+    /// person's own selection (2026-09-06 audio walk, finding B).
+    /// </remarks>
+    public async Task ClearUserRegionsAsync(string? exceptId = null)
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("clearUserRegions", _containerId, keepIds.ToArray());
+        await _module.InvokeVoidAsync("clearUserRegions", _containerId, exceptId);
     }
 
     public async Task PlayRegionAsync(string id)      => await Invoke("playRegion", id);
+
+    /// <summary>Plays the recording between two times and then stops.</summary>
+    /// <remarks>
+    /// For a marker that has no span of its own to play. See <c>playRange</c> in the module.
+    /// </remarks>
+    public async Task PlayRangeAsync(double startSeconds, double endSeconds)
+        => await Invoke("playRange", startSeconds, endSeconds);
 
     /// <summary>
     /// Makes one region editable and locks the rest; pass null to lock everything. Returns the

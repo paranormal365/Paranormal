@@ -116,6 +116,14 @@
                                 <input type="checkbox" class="form-check-input" id="clip-pub" @bind="@_clipIsPublic" />
                                 <label for="clip-pub" class="form-label form-label-sm mb-0">Public</label>
                             </div>
+                            @* The same choice, and the same default, as the editor's Save-as-clip
+                               dialog. This panel used to send neither, so the identical region saved
+                               from here came out audibly quieter than one saved two clicks away. *@
+                            <div class="col-auto d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="clip-normalize" @bind="@_clipNormalize" />
+                                <label for="clip-normalize" class="form-label form-label-sm mb-0"
+                                       title="Raises the clip's loudest point to just under maximum. An EVP is usually far quieter than the rest of the recording. The original is never modified.">Boost volume</label>
+                            </div>
                             <div class="col-auto">
                                 <button type="button" class="btn btn-success" @onclick="SaveClipAsync" disabled="@(!(!_isClipping && _clipFileTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
                                     @(_isClipping ? "Saving…" : "Save as WAV")
@@ -322,6 +330,7 @@
     private string? _clipSuccess;
     private string  _clipLabel      = string.Empty;
     private bool    _clipIsPublic;
+    private bool    _clipNormalize = AudioClipDefaults.Normalize;
     private Guid    _clipFileTypeId;
     private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
 
@@ -411,15 +420,9 @@
     private IReadOnlyList<UploadFileRegionNoteRecord> FilterNotesForRegion(
         IReadOnlyList<UploadFileRegionNoteRecord> all)
     {
-        if (Region is null) return [];
-        return all.Where(n =>
-            // Exact region match
-            (Math.Abs(n.RegionStart - Region.Start) < 0.05 && Math.Abs(n.RegionEnd - Region.End) < 0.05)
-            // Point-in-time note whose absolute offset falls within this region
-            || (n.TimeOffset.HasValue
-                && n.TimeOffset.Value >= Region.Start
-                && n.TimeOffset.Value <= Region.End)
-        ).ToList();
+        // The rule lives in RegionNoteMatching so the Saved Clips list can ask the same question
+        // and get the same answer — a note used to be visible only in the panel it was typed in.
+        return Region is null ? [] : RegionNoteMatching.For(all, Region.Start, Region.End);
     }
 
     private async Task ReloadNotesAsync()
@@ -488,7 +491,7 @@
         {
             var (result, error) = await AdminClient.ClipAudioWithReasonAsync(FileId, new ClipAudioRequest(
                 Region.Start, Region.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
-                _clipIsPublic, _clipFileTypeId));
+                _clipIsPublic, _clipFileTypeId, _clipNormalize));
 
             if (result is not null)
             {
