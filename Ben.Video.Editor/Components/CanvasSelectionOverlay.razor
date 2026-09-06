@@ -176,7 +176,10 @@
 
     private void Rebuild()
     {
-        _active = Clips.PrimaryVideoTrack.Items
+        // Every video track, not just the first — an overlay on a second track was drawn nowhere
+        // and could not be clicked, so it could be neither moved nor deleted from the canvas
+        // (2026-09-05 audit, motion-11).
+        _active = Clips.VideoTracks.SelectMany(t => t.Items)
             .Where(i => i is CalloutClip or ClipArtClip or TextOverlay)
             .Where(i => CurrentTime >= i.TimelinePosition && CurrentTime < i.TimelinePosition + i.Duration)
             .OrderByDescending(i => i.LayerIndex)

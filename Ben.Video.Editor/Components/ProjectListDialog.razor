@@ -62,12 +62,25 @@
                                 }
                             </Template>
                         </GridColumn>
-                        <GridColumn Field="@nameof(ProjectSummary.FormattedDate)"
+                        @* Bound to the real date and the real byte count, displayed through a
+                           template. Bound to the formatted strings, the grid sorted them as text:
+                           "9 Jan" came after "10 Feb", and 9 KB came after 10 MB — so the sort
+                           controls were there and gave the wrong order (2026-09-05 audit,
+                           persistence-20). *@
+                        <GridColumn Field="@nameof(ProjectSummary.UpdatedAt)"
                                     Title="Saved"
-                                    Width="160px" />
-                        <GridColumn Field="@nameof(ProjectSummary.FormattedSize)"
+                                    Width="160px">
+                            <Template>
+                                @((context as ProjectSummary)?.FormattedDate)
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(ProjectSummary.SizeBytes)"
                                     Title="Size"
-                                    Width="90px" />
+                                    Width="90px">
+                            <Template>
+                                @((context as ProjectSummary)?.FormattedSize)
+                            </Template>
+                        </GridColumn>
                         <GridColumn Title="" Width="130px">
                             <Template>
                                 @{

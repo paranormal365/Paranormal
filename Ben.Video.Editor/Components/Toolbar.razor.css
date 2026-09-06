@@ -84,6 +84,14 @@
     font-weight: 500;
     background: transparent;
     border: 1px solid transparent;
+    /* Capped so a long error message cannot push the action buttons out of the bar. The chip lives
+       in a ToolBarTemplateItem, which never collapses into the "…" popup, so whatever width it
+       takes is taken from the buttons beside it — that is how "Error: RuntimeError: memory access
+       out of bounds" managed to squeeze the primary row (2026-09-05 audit, F1). The full text
+       stays available in the title attribute. */
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bv-status--idle        { color: var(--bv-text-muted); border-color: var(--bv-border); }
@@ -94,6 +102,16 @@
 }
 .bv-status--ready       { color: #4caf89; border-color: #4caf89; }
 .bv-status--error       { color: #e06c75; border-color: #e06c75; }
+
+/* A stuck engine used to be visible only on the diagnostics chip, which most people never see, so
+   it looked exactly like a slow one — forever (2026-09-05 audit, F7). Filled and still, not
+   pulsing: a pulse says "working on it", which is the opposite of what this means. */
+.bv-status--wedged {
+    color: var(--kendo-color-warning, #d3b04c);
+    border-color: var(--kendo-color-warning, #d3b04c);
+    background: color-mix(in srgb, var(--kendo-color-warning, #d3b04c) 20%, transparent);
+    font-weight: 600;
+}
 
 /* Item #71 — both busy shapes (a real Processing exec, and a lighter worker call caught by
    FfmpegStatusPresentation.IsBusyButNotProcessing) collapse to this single "busy" modifier so they
@@ -117,7 +135,9 @@
 
 /* ── Progress bar ───────────────────────────────────────────────────────── */
 .bv-toolbar__progress {
-    width: 120px;
+    /* Same reasoning as the status chip's max-width: this bar appears only while work is running,
+       which is exactly when the toolbar was collapsing. 80px still reads as a progress bar. */
+    width: 80px;
     height: 6px;
 }
 
@@ -226,8 +246,8 @@
 }
 
 /* ── Icon-only in the bar, labelled in the menu ──────────────────────────────
-   Undo, Redo and Save to server are the only toolbar buttons that may collapse into the "…" menu
-   — every other icon button sets Overflow="Never" and stays put. In the menu they rendered as
+   The Assets toggle and Save to server are the only toolbar buttons that may collapse into the
+   "…" menu — every other button sets Overflow="Never" and stays put (2026-09-05 audit, F1). In the menu they rendered as
    bare icons, which is a list of guesses; a tooltip does not help there, because a menu is read
    rather than hovered.
 
@@ -240,4 +260,14 @@
    silently matches nothing. */
 .bv-toolbar ::deep .bv-icon-only .k-button-text {
     display: none;
+}
+
+/* The unsaved mark, beside the name rather than inside it. As part of the input's value it became
+   part of the name the moment anybody renamed the project (2026-09-05 audit, persistence-5). */
+.bv-toolbar__proj-dirty {
+    margin-left: .15rem;
+    color: var(--kendo-color-warning, #d3b04c);
+    font-weight: 700;
+    line-height: 1;
+    cursor: default;
 }

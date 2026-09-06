@@ -226,13 +226,31 @@ public abstract class BenTestBase : PageTest
         return $"T!{random}9";   // satisfies Identity's upper/lower/digit/symbol rules
     }
 
+    /// <summary>
+    /// A seeded password from the environment, or a skip.
+    /// </summary>
+    /// <remarks>
+    /// <para>Skips rather than throws. A password this machine was never given is a missing
+    /// precondition, exactly like a feature being switched off or a host not running — and a run
+    /// that reports failures for it buries the tests that found something. Ignore says plainly
+    /// which tests did not run and why (2026-09-05 audit, F19).</para>
+    ///
+    /// <para><c>Assert.Ignore</c> throws, so the signature and every call site are unchanged; the
+    /// declared return type is what keeps the compiler happy on the branch that never returns.</para>
+    /// </remarks>
     protected static string RequiredSecret(string variable)
         => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
             ? value
-            : throw new InvalidOperationException(
-                $"{variable} is not set. The seeded passwords are no longer compiled into this "
-                + "file; export the variable (see appsettings.Development.json, which is "
-                + "gitignored) before running the suite.");
+            : throw AssertIgnoreMissingSecret(variable);
+
+    private static Exception AssertIgnoreMissingSecret(string variable)
+    {
+        Assert.Ignore(
+            $"{variable} is not set, so the tests that sign in cannot run. The seeded passwords "
+            + "are not compiled into this file; export the variable (see "
+            + "appsettings.Development.json, which is gitignored) before running the suite.");
+        return new InvalidOperationException("unreachable — Assert.Ignore throws");
+    }
 
     /// <summary>Runs the site. Passes every permission check by role, everywhere.</summary>
     protected static string SuperAdminEmail    => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_EMAIL")    ?? "haveben@msn.com";

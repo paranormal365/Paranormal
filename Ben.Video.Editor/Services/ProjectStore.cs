@@ -36,6 +36,7 @@ public sealed class ProjectStore : IAsyncDisposable
     private readonly SourceMounter  _mounter;
     private readonly IJSRuntime     _js;
     private readonly ErrorLogService _errorLog;
+    private readonly MotionKeyframeService _motion;
 
     // Audit #4 — typed localStorage access instead of interpolated eval strings. Imported lazily
     // and cached: ProjectStore is constructed during DI setup, long before JS interop is legal.
@@ -49,13 +50,8 @@ public sealed class ProjectStore : IAsyncDisposable
     private const string EntryPrefix = "bv-proj-";
     private const string ActiveKey  = "bv-proj-active";
 
-    private static readonly JsonSerializerOptions _jsonOpts = new()
-    {
-        WriteIndented               = true,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
-        Converters                  = { new JsonStringEnumConverter() },
-    };
+    // See ProjectSerializer: one settings object for everything that reads or writes a project.
+    private static JsonSerializerOptions _jsonOpts => ProjectSerializer.Options;
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -85,23 +81,236 @@ public sealed class ProjectStore : IAsyncDisposable
 
     public ProjectStore(ClipStore clips, ProjectService projectService,
         OPFSService opfs, FfmpegService ffmpeg, SourceMounter mounter,
-        IJSRuntime js, ErrorLogService errorLog)
+        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog)
     {
         _clips          = clips;
         _projectService = projectService;
         _opfs           = opfs;
         _ffmpeg         = ffmpeg;
         _mounter        = mounter;
+        _motion         = motion;
         _js             = js;
         _errorLog       = errorLog;
 
         _clips.OnChange += OnClipsChanged;
+
+        // Animating a layer is editing the project. Motion paths live in their own service, and
+        // nothing connected its changes to the dirty flag — so an afternoon spent on keyframes and
+        // nothing else left the project looking saved, with no prompt on the way out and nothing
+        // for autosave to write (2026-09-05 audit, persistence-11).
+        _motion.OnChanged += OnClipsChanged;
     }
 
     private void OnClipsChanged()
     {
+        // Restoring a project is not editing it: the store raises change events as it rebuilds the
+        // timeline, and treating those as edits would mark a freshly-opened project dirty and set
+        // autosave writing it straight back.
+        if (_restoring) return;
+
         IsDirty = true;
         OnChanged?.Invoke();
+        ScheduleAutosave();
+    }
+
+    // ── Housekeeping ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Deletes stored media that no saved project, and nothing currently open, refers to.
+    /// </summary>
+    /// <returns>How many files were removed, and how many bytes that freed.</returns>
+    /// <remarks>
+    /// <para>Nothing ever freed a source. Every import writes a copy of the file into the browser's
+    /// own storage so the project can be reopened, and removing the clip, deleting the project, or
+    /// simply closing the tab left that copy behind forever. A few sessions with large footage fill
+    /// the quota, at which point saving starts failing (2026-09-05 audit, media-2 and
+    /// persistence-12).</para>
+    ///
+    /// <para>Reconciles against every saved project rather than counting references, and refuses to
+    /// run at all when the project list could not be read — see
+    /// <see cref="OpfsGarbageCollector.CanSweep"/>, because a failure to read the index makes every
+    /// file look unreferenced.</para>
+    /// </remarks>
+    public async Task<(int Files, long Bytes)> SweepUnusedMediaAsync()
+    {
+        var stored = await _opfs.ListClipsAsync();
+        if (stored.Count == 0) return (0, 0);
+
+        if (!OpfsGarbageCollector.CanSweep(_indexWasRead, Projects.Count, stored.Count))
+        {
+            _errorLog.Log("ProjectStore.SweepUnusedMediaAsync",
+                $"Refused to sweep: {stored.Count} stored file(s) with "
+                + $"{Projects.Count} known project(s) and index read = {_indexWasRead}.");
+            return (0, 0);
+        }
+
+        var referenced = await CollectReferencedClipIdsAsync();
+
+        var byId = stored
+            .Where(e => Guid.TryParse(e.ClipId, out _))
+            .ToDictionary(e => Guid.Parse(e.ClipId));
+
+        var orphans = OpfsGarbageCollector.FindOrphans(byId.Keys, referenced);
+
+        var files = 0;
+        long bytes = 0;
+
+        foreach (var id in orphans)
+        {
+            var entry = byId[id];
+            try
+            {
+                await _opfs.DeleteAsync(id, entry.Ext);
+                files++;
+                bytes += entry.SizeBytes;
+            }
+            catch (Exception ex)
+            {
+                _errorLog.Log("ProjectStore.SweepUnusedMediaAsync", ex);
+            }
+        }
+
+        return (files, bytes);
+    }
+
+    /// <summary>
+    /// Every clip id mentioned by a saved project, by what is open now, or by the media bin.
+    /// </summary>
+    /// <remarks>
+    /// The bin matters as much as the timeline: media imported and not yet placed is media somebody
+    /// intends to use, and sweeping it would delete a file out from under the panel showing it.
+    /// </remarks>
+    private async Task<HashSet<Guid>> CollectReferencedClipIdsAsync()
+    {
+        var referenced = new HashSet<Guid>();
+
+        foreach (var item in _clips.Tracks.SelectMany(t => t.Items)) referenced.Add(item.Id);
+        foreach (var item in _clips.MediaBin) referenced.Add(item.Id);
+
+        foreach (var summary in Projects.ToList())
+        {
+            try
+            {
+                var json = await (await StorageAsync())
+                    .InvokeAsync<string?>("getItem", $"{EntryPrefix}{summary.Id}");
+                if (string.IsNullOrEmpty(json)) continue;
+
+                var (file, _) = ProjectSerializer.Parse(json);
+                if (file is null) continue;
+
+                foreach (var id in ReferencedIds(file)) referenced.Add(id);
+            }
+            catch (Exception ex)
+            {
+                // A project that cannot be read has to be assumed to reference everything, so the
+                // sweep is abandoned rather than run on partial information.
+                _errorLog.Log("ProjectStore.CollectReferencedClipIdsAsync", ex);
+                throw;
+            }
+        }
+
+        return referenced;
+    }
+
+    private static IEnumerable<Guid> ReferencedIds(ProjectFile file)
+    {
+        foreach (var track in file.Tracks)
+        {
+            foreach (var c in track.VideoClips) yield return c.Id;
+            foreach (var c in track.AudioClips) yield return c.Id;
+            foreach (var c in track.ImageClips) yield return c.Id;
+            foreach (var c in track.CalloutClips) yield return c.Id;
+        }
+
+        foreach (var c in file.Bin.VideoClips) yield return c.Id;
+        foreach (var c in file.Bin.AudioClips) yield return c.Id;
+        foreach (var c in file.Bin.ImageClips) yield return c.Id;
+    }
+
+    // ── Autosave ──────────────────────────────────────────────────────────────
+
+    /// <summary>How long the editing has to stop before the project is written.</summary>
+    /// <remarks>
+    /// Long enough that a drag or a burst of typing writes once at the end rather than continually,
+    /// short enough that walking away from the machine has already saved.
+    /// </remarks>
+    public static readonly TimeSpan AutosaveIdle = TimeSpan.FromSeconds(2);
+
+    private CancellationTokenSource? _autosaveCts;
+    private bool _autosaveEnabled;
+    private bool _restoring;
+    private bool _indexWasRead;
+
+    /// <summary>True while an autosave is scheduled and has not run.</summary>
+    /// <remarks>Read by the unload guard: work that has not reached storage is worth stopping for.</remarks>
+    public bool AutosavePending => _autosaveCts is { IsCancellationRequested: false };
+
+    /// <summary>When the project was last written, for the "Saved ·" hint.</summary>
+    public DateTime? LastSavedAt { get; private set; }
+
+    /// <summary>
+    /// Starts writing the project a couple of seconds after editing stops.
+    /// </summary>
+    /// <remarks>
+    /// <para>Nothing wrote anything unless somebody chose Save. A reload, a crashed tab or a closed
+    /// window took the whole session with it, and the editor is exactly the kind of place people
+    /// work for an hour without thinking about files (2026-09-05 audit, F9).</para>
+    ///
+    /// <para>A project that has never been saved gets a name of its own rather than being skipped,
+    /// because an unnamed project is precisely the one most likely to be lost.</para>
+    /// </remarks>
+    public void EnableAutosave() => _autosaveEnabled = true;
+
+    private void ScheduleAutosave()
+    {
+        if (!_autosaveEnabled) return;
+
+        _autosaveCts?.Cancel();
+        _autosaveCts?.Dispose();
+        _autosaveCts = new CancellationTokenSource();
+
+        _ = AutosaveAfterIdleAsync(_autosaveCts.Token);
+    }
+
+    private async Task AutosaveAfterIdleAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(AutosaveIdle, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return; // superseded by a later edit
+        }
+
+        await FlushAutosaveAsync();
+    }
+
+    /// <summary>
+    /// Writes the project now, if there is anything to write.
+    /// </summary>
+    /// <remarks>
+    /// Also called as the page is hidden, which is the last chance a tab gets and the one path that
+    /// fires on every way out, including switching apps on a phone.
+    /// </remarks>
+    public async Task FlushAutosaveAsync()
+    {
+        if (!_autosaveEnabled || !IsDirty) return;
+
+        try
+        {
+            await SaveAsync(CurrentProjectName);
+        }
+        catch (ProjectStorageException)
+        {
+            // Storage refused. SaveAsync has already left the project dirty and logged it; an
+            // autosave is not the place to interrupt somebody, and the unload guard will still
+            // stop them leaving with the work unsaved.
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("ProjectStore.FlushAutosaveAsync", ex);
+        }
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────
@@ -114,6 +323,12 @@ public sealed class ProjectStore : IAsyncDisposable
             var json = await (await StorageAsync()).InvokeAsync<string?>("getItem", IndexKey);
             if (!string.IsNullOrEmpty(json))
                 Projects = JsonSerializer.Deserialize<List<ProjectSummary>>(json, _jsonOpts) ?? [];
+
+            // Whether the list was actually read, as distinct from what it contained. Housekeeping
+            // refuses to run without this, because a failure to read makes every stored file look
+            // unreferenced — and sweeping on that basis deletes the media for every project the
+            // person has (2026-09-05 audit, media-2).
+            _indexWasRead = true;
         }
         catch (Exception ex)
         {
@@ -134,7 +349,11 @@ public sealed class ProjectStore : IAsyncDisposable
     public async Task LoadFromFileAsync(ProjectFile file, string name, Guid? serverId = null)
     {
         await _ready.Task; // wait for InitAsync if called before the editor finishes startup
-        _projectService.RestoreAsync(file);
+
+        _restoring = true;
+        try { _projectService.RestoreAsync(file); }
+        finally { _restoring = false; }
+
         CurrentProjectName = name;
         CurrentProjectId   = serverId;
         IsDirty            = false;
@@ -165,7 +384,11 @@ public sealed class ProjectStore : IAsyncDisposable
             var sizeBytes = Encoding.UTF8.GetByteCount(json);
 
             // Store to localStorage
-            await (await StorageAsync()).InvokeVoidAsync("setItem", $"{EntryPrefix}{id}", json);
+            // The result is the point: the browser reports a refused write rather than throwing,
+            // and this used to discard it and report success over the top (2026-09-05 audit,
+            // persistence-9).
+            var stored = await (await StorageAsync()).InvokeAsync<bool>("setItem", $"{EntryPrefix}{id}", json);
+            if (!stored) throw ProjectStorageException.WriteRefused($"“{projectName}”");
 
             // Update index
             var existing = Projects.FirstOrDefault(p => p.Id == id);
@@ -189,7 +412,11 @@ public sealed class ProjectStore : IAsyncDisposable
 
             await PersistIndexAsync();
             await PersistActiveIdAsync(id);
-            IsDirty = false;
+            IsDirty     = false;
+            LastSavedAt = DateTime.Now;
+
+            // A save is a save, however it was triggered — nothing is pending any more.
+            _autosaveCts?.Cancel();
             OnChanged?.Invoke();
         }
         catch (Exception ex)
@@ -213,10 +440,16 @@ public sealed class ProjectStore : IAsyncDisposable
             var json = await (await StorageAsync()).InvokeAsync<string?>("getItem", $"{EntryPrefix}{id}");
             if (string.IsNullOrEmpty(json)) return;
 
-            var file = JsonSerializer.Deserialize<ProjectFile>(json, _jsonOpts);
-            if (file is null) return;
+            var (file, problem) = ProjectSerializer.Parse(json);
+            if (file is null)
+            {
+                _errorLog.Log("ProjectStore.OpenAsync", problem ?? "Stored project could not be read.");
+                return;
+            }
 
-            _projectService.RestoreAsync(file);
+            _restoring = true;
+            try { _projectService.RestoreAsync(file); }
+            finally { _restoring = false; }
 
             var summary = Projects.FirstOrDefault(p => p.Id == id);
             CurrentProjectName = summary?.Name ?? file.ProjectName ?? DefaultName();
@@ -346,7 +579,26 @@ public sealed class ProjectStore : IAsyncDisposable
         // clip's media (nor MEMFS content) was ever actually restored, only its metadata.
         await _opfs.EnsureInitAsync();
         if (!_opfs.IsAvailable) return;
-        // Wait for ffmpeg to be ready before writing to MEMFS
+
+        // Nothing to restore, so nothing to start an engine for.
+        if (!file.Tracks.Any(t => t.VideoClips.Count > 0 || t.AudioClips.Count > 0
+                               || t.ImageClips.Count > 0)
+            && file.Bin.IsEmpty)
+            return;
+
+        // The engine has to be running before anything can be written into its filesystem, and on
+        // a reload it is not: the project came back with every clip marked missing and the media
+        // sitting right there in storage, waiting for somebody to press Initialize — which nothing
+        // asked them to do (2026-09-05 audit, persistence-16). A project with clips in it is
+        // reason enough to start the engine.
+        if (_ffmpeg.State is FfmpegState.Idle)
+        {
+            try { await _ffmpeg.LoadAsync(); }
+            catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfsFilesAsync", ex); }
+        }
+
+        // Still waited for, because loading takes a moment and another caller may already have
+        // started it. The bound is what stops a wedged engine holding this forever.
         var waited = 0;
         while (_ffmpeg.State != FfmpegState.Ready && waited < 30_000)
         {
@@ -372,7 +624,7 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllVideoClips.FirstOrDefault(c => c.Id == vc.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(vc.Id, vc.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(vc.Id, vc.SourceBinId, vc.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
@@ -386,7 +638,7 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllAudioClips.FirstOrDefault(c => c.Id == ac.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(ac.Id, ac.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(ac.Id, ac.SourceBinId, ac.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
@@ -400,13 +652,43 @@ public sealed class ProjectStore : IAsyncDisposable
                 {
                     var clip = _clips.AllImageClips.FirstOrDefault(c => c.Id == ic.Id);
                     if (clip is null) continue;
-                    var memFsName = await RestoreOneAsync(ic.Id, ic.OpfsExt!);
+                    var memFsName = await RestoreOneAsync(ic.Id, ic.SourceBinId, ic.OpfsExt!);
                     if (memFsName is null) continue;
                     clip.MemFsName      = memFsName;
                     clip.IsMediaMissing = false;
                 }
                 catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfs(image)", ex); }
             }
+        }
+
+        // The media bin too. Its entries are what a placed clip's media is actually filed under,
+        // and they are also placeable in their own right — a bin left unmounted shows cards that
+        // cannot be added to the timeline.
+        foreach (var (id, ext) in file.Bin.VideoClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!))
+                     .Concat(file.Bin.AudioClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!)))
+                     .Concat(file.Bin.ImageClips.Where(c => c.OpfsExt is not null)
+                                          .Select(c => (c.Id, c.OpfsExt!))))
+        {
+            try
+            {
+                var entry = _clips.MediaBin.FirstOrDefault(i => i.Id == id);
+                if (entry is null) continue;
+
+                var memFsName = await RestoreFromAsync(id, ext);
+                if (memFsName is null) continue;
+
+                switch (entry)
+                {
+                    case VideoClip v: v.MemFsName = memFsName; break;
+                    case AudioClip a: a.MemFsName = memFsName; break;
+                    case ImageClip i: i.MemFsName = memFsName; break;
+                }
+
+                entry.IsMediaMissing = false;
+            }
+            catch (Exception ex) { _errorLog.Log("ProjectStore.RestoreOpfs(bin)", ex); }
         }
 
         // Pre-existing gap, surfaced by item #69's fix: nothing above notifies the ClipStore
@@ -425,14 +707,38 @@ public sealed class ProjectStore : IAsyncDisposable
     /// mechanics), so a project always finishes restoring even on a browser where mounting isn't
     /// available — just without the memory win.
     /// </summary>
-    private async Task<string?> RestoreOneAsync(Guid clipId, string opfsExt)
+    /// <param name="sourceBinId">
+    /// The media-bin entry this clip was placed from, when it was.
+    /// </param>
+    /// <remarks>
+    /// <para>The stored file is named after whichever clip first imported it, and placing from the
+    /// bin makes a copy with an id of its own. So a placed clip's media is filed under its bin
+    /// entry's id, not its own — and looking only under its own id found nothing, which meant that
+    /// since the media bin was introduced, no placed clip's media had ever come back after a
+    /// reload. The project restored, the file was sitting right there, and every clip said
+    /// "missing" (found on screen while verifying phase 5 of the 2026-09-05 audit).</para>
+    ///
+    /// <para>Its own id is still tried first, because a clip imported straight onto the timeline
+    /// before the bin existed is filed under that.</para>
+    /// </remarks>
+    private async Task<string?> RestoreOneAsync(Guid clipId, Guid? sourceBinId, string opfsExt)
     {
-        var mounted = await _mounter.MountAsync(clipId, opfsExt);
+        var restored = await RestoreFromAsync(clipId, opfsExt);
+        if (restored is not null) return restored;
+
+        return sourceBinId is { } binId && binId != clipId
+            ? await RestoreFromAsync(binId, opfsExt)
+            : null;
+    }
+
+    private async Task<string?> RestoreFromAsync(Guid storedId, string opfsExt)
+    {
+        var mounted = await _mounter.MountAsync(storedId, opfsExt);
         if (mounted is not null) return mounted;
 
-        var jsFile = await _opfs.ReadAsJSFileAsync(clipId, opfsExt);
+        var jsFile = await _opfs.ReadAsJSFileAsync(storedId, opfsExt);
         if (jsFile is null) return null;
-        var memFsName = $"{clipId}{opfsExt}";
+        var memFsName = $"{storedId}{opfsExt}";
         await _ffmpeg.WriteFileAsync(memFsName, jsFile);
         return memFsName;
     }
@@ -445,7 +751,8 @@ public sealed class ProjectStore : IAsyncDisposable
         // happens to contain quotes/backslashes (project names are user-typed) can't reshape a
         // script string, because there is no script string.
         var json = JsonSerializer.Serialize(Projects, _jsonOpts);
-        await (await StorageAsync()).InvokeVoidAsync("setItem", IndexKey, json);
+        var stored = await (await StorageAsync()).InvokeAsync<bool>("setItem", IndexKey, json);
+        if (!stored) throw ProjectStorageException.WriteRefused("the list of projects");
     }
 
     /// <summary>Item #69 fix — records (or clears) which project id <see cref="RestoreLastActiveAsync"/>
@@ -453,7 +760,9 @@ public sealed class ProjectStore : IAsyncDisposable
     private async Task PersistActiveIdAsync(Guid? id)
     {
         if (id is { } value)
-            await (await StorageAsync()).InvokeVoidAsync("setItem", ActiveKey, value.ToString());
+            // Not fatal: this only records which project to reopen, so a refusal costs the
+            // convenience and not the work.
+            await (await StorageAsync()).InvokeAsync<bool>("setItem", ActiveKey, value.ToString());
         else
             await (await StorageAsync()).InvokeVoidAsync("removeItem", ActiveKey);
     }

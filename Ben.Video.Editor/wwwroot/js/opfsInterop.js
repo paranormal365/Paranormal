@@ -33,9 +33,44 @@ async function getExportsDir() {
 
 /** Returns true when OPFS is available in this browser. */
 export async function opfsIsAvailable() {
-    return typeof navigator !== 'undefined'
-        && 'storage' in navigator
-        && typeof navigator.storage.getDirectory === 'function';
+    if (typeof navigator === 'undefined'
+        || !('storage' in navigator)
+        || typeof navigator.storage.getDirectory !== 'function') {
+        return false;
+    }
+
+    // Having the storage is not the same as being able to write to it. Every write here goes
+    // through createWritable(), which Safari did not implement on the main thread until version
+    // 26 — so this check said yes, each write then threw, and the person's media was never
+    // persisted. Nothing surfaced that: the editor worked until the page was reloaded, at which
+    // point every clip came back missing (2026-09-05 audit, the completeness critic's browser-
+    // support item).
+    //
+    // Probed once rather than asserted from a feature list, because the prototype exists in some
+    // builds where the call still fails.
+    if (_writableProbe === null) _writableProbe = probeWritable();
+    return await _writableProbe;
+}
+
+let _writableProbe = null;
+
+async function probeWritable() {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const name = `.bv-write-probe-${Math.random().toString(36).slice(2)}`;
+        const fh   = await root.getFileHandle(name, { create: true });
+
+        try {
+            const wr = await fh.createWritable();
+            await wr.close();
+            return true;
+        } finally {
+            try { await root.removeEntry(name); } catch { /* nothing to tidy */ }
+        }
+    } catch (err) {
+        console.warn('[opfs] storage is present but not writable here:', err);
+        return false;
+    }
 }
 
 /**
@@ -100,6 +135,23 @@ export async function opfsReadAsFile(clipId, ext) {
  * clipId is the filename without extension (the Guid string).
  * @returns {Promise<Array<{clipId: string, ext: string, sizeBytes: number}>>}
  */
+/**
+ * How much of the browser's storage this site is using, and how much it is allowed.
+ *
+ * Nothing read this. Every import writes a copy of the file into that storage, nothing ever freed
+ * one, and the first anybody knew about the quota was a save that failed (2026-09-05 audit,
+ * media-2). Returns nulls where the browser declines to say, which some do.
+ */
+export async function opfsEstimate() {
+    try {
+        if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return { usage: null, quota: null };
+        const { usage, quota } = await navigator.storage.estimate();
+        return { usage: usage ?? null, quota: quota ?? null };
+    } catch {
+        return { usage: null, quota: null };
+    }
+}
+
 export async function opfsListClips() {
     try {
         const dir = await getClipsDir();

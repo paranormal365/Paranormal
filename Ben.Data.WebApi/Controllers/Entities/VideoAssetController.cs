@@ -45,12 +45,53 @@ public sealed class VideoAssetController : BenControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
+        // Watermarks are not timeline assets — the export pipeline composites them, and the enum
+        // says so. Listing them put "add this to your video" cards in the Assets tab for artwork
+        // that is meant to be applied automatically (2026-09-05 audit, callouts-23).
         var assets = await db.VideoAssets.AsNoTracking()
-            .Where(a => a.IsActive)
+            .Where(a => a.IsActive && a.Type != VideoAssetType.Watermark)
             .OrderBy(a => a.SortOrder).ThenBy(a => a.Name)
             .ToListAsync(ct);
 
         return Ok(assets.Select(ToCatalogItem));
+    }
+
+    /// <summary>
+    /// Whether exports carry a watermark, and which one.
+    /// </summary>
+    /// <remarks>
+    /// <para>The editor asks for this before every render (<c>WatermarkService.GetConfigAsync</c>,
+    /// via <c>ExportService.RunPipelineAsync</c>). Nothing served it, so the request 404'd, the
+    /// editor's catch swallowed it and the answer was always "no watermark" — a feature with an
+    /// admin upload screen, a client-side compositor and an export phase that could never turn on
+    /// (2026-09-05 audit, F16).</para>
+    ///
+    /// <para>Always 200, because "no watermark configured" is an answer rather than an error, and
+    /// a 404 here is indistinguishable from a misrouted request. The active watermark asset with
+    /// the lowest sort order wins; there is deliberately no admin screen for choosing between
+    /// several, so retiring one is how you switch.</para>
+    /// </remarks>
+    [HttpGet("watermark-config")]
+    public async Task<ActionResult<VideoWatermarkConfigRecord>> GetWatermarkConfig(CancellationToken ct)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+
+        var watermark = await db.VideoAssets.AsNoTracking()
+            .Where(a => a.IsActive && a.Type == VideoAssetType.Watermark)
+            .OrderBy(a => a.SortOrder).ThenBy(a => a.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (watermark is null)
+            return Ok(new VideoWatermarkConfigRecord { Enabled = false });
+
+        return Ok(new VideoWatermarkConfigRecord
+        {
+            Enabled = true,
+            // Absolute for the same reason the catalog's thumbnails are: the editor may be served
+            // from another origin and hands this straight to fetch.
+            FileUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/video-assets/{watermark.Id}/file",
+            Version = watermark.ContentHash,
+        });
     }
 
     /// <summary>The asset binary. The editor caches this in OPFS keyed by the catalog Version.</summary>

@@ -142,3 +142,16 @@ label > .sa-icon,
     font-style: normal;
     color: var(--bs-secondary-color);
 }
+
+/* ── A page that hosts the video editor ─────────────────────────────────────
+   The editor fills its container, so the container needs a real height. Both editor pages worked
+   this out separately and disagreed: My Videos used 100vh, which ignores the site's app bar above
+   <main> and pushed the transport controls below the fold, while the case page had already
+   discovered that and hard-coded "calc(100vh - 58px)" with a comment explaining why. One rule,
+   one number, so the next change to the app bar is made once (2026-09-05 audit, site-8). */
+.ben-editor-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--ben-appbar-h, 58px));
+    overflow: hidden;
+}

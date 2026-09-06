@@ -126,6 +126,45 @@ public sealed class ClipStore
     /// reorder, split, duplicate) are silently ignored. Pushes a <see cref="LockTrackCommand"/>
     /// for undo/redo support.
     /// </summary>
+    /// <summary>
+    /// Mutes or unmutes a track.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TimelineTrack.IsMuted"/> is documented as "audio suppressed during playback and
+    /// export", and nothing read it: the menu item flipped the flag straight on the model and a
+    /// muted track was mixed into the render exactly like any other. It was not undoable either
+    /// (2026-09-05 audit, audio-5 and timeline-11).
+    /// </remarks>
+    public void MuteTrack(Guid trackId, bool muted)
+    {
+        var track = RequireTrack(trackId);
+        if (track.IsMuted == muted) return;
+        PushCommand(new MuteTrackCommand(track, muted));
+        track.IsMuted = muted;
+        Notify();
+    }
+
+    /// <summary>
+    /// Whether this item's sound should be heard at all — its own mute, or its track's.
+    /// </summary>
+    /// <remarks>
+    /// The one place to ask, so preview and export cannot disagree. A muted video track silences
+    /// its clips' own audio; a muted audio track drops out of the mix entirely.
+    /// </remarks>
+    public bool IsAudible(TrackItem item)
+    {
+        var track = FindTrackOf(item.Id);
+        if (track is { IsMuted: true }) return false;
+
+        return item is not VideoClip { MuteAudio: true };
+    }
+
+    /// <summary>Audio clips that should actually be mixed, in the order they play.</summary>
+    public IEnumerable<AudioClip> AudibleAudioClips =>
+        AudioTracks.Where(t => !t.IsMuted)
+                   .SelectMany(t => t.AudioClips)
+                   .OrderBy(a => a.TimelinePosition);
+
     public void LockTrack(Guid trackId, bool locked)
     {
         var track = RequireTrack(trackId);
@@ -269,6 +308,7 @@ public sealed class ClipStore
             var clip = track.Items[idx];
             track.Items.RemoveAt(idx);
             RenumberItems(track);
+            ItemRemoved?.Invoke(clipId);
             PushCommand(new RemoveClipCommand(track, clip, idx));
             Notify();
             return;
@@ -337,6 +377,7 @@ public sealed class ClipStore
             var clip = track.Items[idx];
             track.Items.RemoveAt(idx);
             RenumberItems(track);
+            ItemRemoved?.Invoke(clipId);
             PushCommand(new RemoveClipCommand(track, clip, idx));
             Notify();
             return;
@@ -494,14 +535,33 @@ public sealed class ClipStore
     }
 
     /// <summary>Add any TrackItem to the specified track.</summary>
+    /// <summary>
+    /// Adds an item to a track, after whatever is already there.
+    /// </summary>
+    /// <remarks>
+    /// <para>It never set a position. Every clip added this way therefore sat at zero, so a second
+    /// import landed exactly on top of the first — the model had them stacked while the lane drew
+    /// them politely side by side (2026-09-05 audit, F5 and media-panel-4). The method has always
+    /// been documented as "append"; this makes it true in time as well as in list order.</para>
+    ///
+    /// <para>A position the caller has already chosen is respected: the Server tab places at the
+    /// playhead, and restoring a project sets every position from the file. Only the default of
+    /// zero is treated as "wherever it fits".</para>
+    /// </remarks>
     public void AddClipToTrack(Guid trackId, TrackItem item)
     {
         var track = RequireTrack(trackId);
         if (track.IsLocked) return;
+
+        if (item.TimelinePosition <= TrackLayout.Tolerance && TrackLayout.IsSequential(item))
+            item.TimelinePosition = TrackLayout.EndOf(track);
+
         var index = track.Items.Count;
         item.Order = index;
         track.Items.Add(item);
         PushCommand(new AddClipCommand(track, item, index));
+        ResortSequential(track);
+        AssertLaidOut(track);
         Notify();
     }
 
@@ -562,18 +622,35 @@ public sealed class ClipStore
 
             if (Math.Abs(delta) < 0.001) { Notify(); return; }
 
-            // Ripple: shift items that are at or after the clip's new position
-            var boundary = Math.Min(originalPosition, finalPos);
-            var shifted  = track.Items
-                .Where(i => i.Id != itemId && i.TimelinePosition >= boundary)
+            // A ripple move is a lift and an insert, and it used to be neither: every item after
+            // the lower of the two positions was shifted by the DRAG DISTANCE. Dragging a clip
+            // eighteen seconds earlier therefore moved the clips behind it eighteen seconds
+            // earlier too — straight through zero and into negative time (found by the new
+            // no-overlap assertion, 2026-09-05).
+            //
+            // Lift: the clips that were after this one close up by its own length, not by how far
+            // it travelled.
+            var length = item.EffectiveLength;
+            var shifted = TrackLayout.SequentialItems(track)
+                .Where(i => i.Id != itemId
+                         && i.TimelinePosition >= originalPosition - TrackLayout.Tolerance)
                 .ToList();
 
             // Reset to original so Execute() can apply cleanly
             item.TimelinePosition = originalPosition;
 
-            var cmd = new RippleCommitDraggedCommand(item, originalPosition, finalPos, shifted, delta);
+            var cmd = new RippleCommitDraggedCommand(item, originalPosition, finalPos, shifted, -length);
             PushCommand(cmd);
             cmd.Execute();
+
+            // Insert: whatever is where it landed moves on to make room. Ripple already means
+            // "close the gaps"; this is the other half of the same idea, and without it a backwards
+            // drag simply left the two clips overlapping (2026-09-05 audit, F5).
+            MakeRoomFor(track, item);
+
+            ReconcileTransitions(track);
+            ResortSequential(track);
+            AssertLaidOut(track);
             Notify();
             return;
         }
@@ -748,6 +825,7 @@ public sealed class ClipStore
             if (track.IsLocked) return;
             var item = track.Items[idx];
             track.Items.RemoveAt(idx);
+            ItemRemoved?.Invoke(itemId);
             RenumberItems(track);
             PushCommand(new RemoveClipCommand(track, item, idx));
             Notify();
@@ -1318,10 +1396,19 @@ public sealed class ClipStore
                 Notify();
                 return;
             }
-            var finalPos = Math.Max(0, item.TimelinePosition);
+            // Where the pointer left it, then out of anything it landed on. A drop onto an
+            // occupied spot used to be written verbatim, so two clips sat on top of each other in
+            // the model while the lane drew them politely side by side (2026-09-05 audit, F5).
+            var finalPos = ResolveDropPosition(track, item, Math.Max(0, item.TimelinePosition));
             item.TimelinePosition = finalPos;
+
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
+
+            AnnounceShift(item, originalPosition, finalPos);
+            ReconcileTransitions(track);
+            ResortSequential(track);
+            AssertLaidOut(track);
             Notify();
             return;
         }
@@ -1364,13 +1451,17 @@ public sealed class ClipStore
             return;
         }
 
-        var finalPos = Math.Max(0, item.TimelinePosition);
+        var finalPos = ResolveDropPosition(toTrack, item, Math.Max(0, item.TimelinePosition));
         item.TimelinePosition = finalPos;
 
         if (toTrack.Id == fromTrack.Id)
         {
             if (Math.Abs(finalPos - originalPosition) >= 0.001)
                 PushCommand(new SetClipPositionCommand(item, originalPosition, finalPos));
+
+            AnnounceShift(item, originalPosition, finalPos);
+            ResortSequential(toTrack);
+            AssertLaidOut(toTrack);
             Notify();
             return;
         }
@@ -1378,6 +1469,11 @@ public sealed class ClipStore
         fromTrack.Items.Remove(item);
         toTrack.Items.Add(item);
         PushCommand(new MoveClipToTrackCommand(fromTrack, toTrack, item, originalPosition, finalPos));
+        AnnounceShift(item, originalPosition, finalPos);
+        ResortSequential(fromTrack);
+        ResortSequential(toTrack);
+        AssertLaidOut(fromTrack);
+        AssertLaidOut(toTrack);
         Notify();
     }
 
@@ -1389,6 +1485,35 @@ public sealed class ClipStore
     /// Throws <see cref="ArgumentException"/> if the item is not found, is not a splittable
     /// type, or the split point is outside its range. Undoable.
     /// </summary>
+    /// <summary>
+    /// Splits the item under an <b>absolute timeline position</b>, in seconds from the start of the
+    /// project.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="SplitClip"/> takes a position measured from the clip's own start, and every
+    /// caller in the editor handed it the playhead instead — an absolute time. For the first clip
+    /// on a track the two happen to be equal, which is why it looked right; for anything after it
+    /// the cut landed early by exactly the clip's start position, and for a clip whose start is
+    /// past the playhead it threw and was swallowed (2026-09-05 audit, timeline-1 and audio-9).</para>
+    ///
+    /// <para>Returns false rather than throwing when the playhead is not inside the item, because
+    /// that is an ordinary thing for a person to do — press the key with the playhead somewhere
+    /// else — and the caller wants to say so, not to catch.</para>
+    /// </remarks>
+    public bool SplitClipAtTimelineTime(Guid itemId, double timelineSeconds)
+    {
+        var item = _tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == itemId);
+        if (item is null) return false;
+
+        var offset = timelineSeconds - item.TimelinePosition;
+
+        // Strictly inside: a cut exactly on either edge produces a zero-length piece.
+        if (offset <= 0 || offset >= item.EffectiveLength) return false;
+
+        SplitClip(itemId, offset);
+        return true;
+    }
+
     public void SplitClip(Guid itemId, double splitAt)
     {
         foreach (var track in _tracks)
@@ -1411,6 +1536,8 @@ public sealed class ClipStore
             track.Items.Insert(idx + 1, second);
             RenumberItems(track);
             PushCommand(new SplitClipCommand(track, original, first, second, idx));
+            ReconcileTransitions(track);
+            ResortSequential(track);
             Notify();
             return;
         }
@@ -1573,6 +1700,69 @@ public sealed class ClipStore
 
     // â”€â”€ Transition management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+    // ── Media bin ─────────────────────────────────────────────────────────────
+
+    private readonly List<TrackItem> _mediaBin = [];
+
+    /// <summary>
+    /// The media you have brought in, whether or not any of it is on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// <para>There was no such thing. The Media panel's three tabs listed the timeline's own items,
+    /// so "your media" and "your edit" were one list: declining the insert prompt left the clip
+    /// nowhere, removing it from the timeline meant importing the file again, and using one source
+    /// twice was only possible by finding a copy of it already placed (2026-09-05 audit,
+    /// media-panel-3 and F8).</para>
+    ///
+    /// <para>Entries are ordinary clips that happen to live outside any track. Placing one puts a
+    /// copy on the timeline, so the same source can be used as often as you like and trimming one
+    /// placement leaves the others alone.</para>
+    /// </remarks>
+    public IReadOnlyList<TrackItem> MediaBin => _mediaBin;
+
+    /// <summary>Adds a source to the bin. Undoable.</summary>
+    public void AddToBin(TrackItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (_mediaBin.Any(i => i.Id == item.Id)) return;
+
+        PushCommand(new AddToBinCommand(_mediaBin, item, _mediaBin.Count));
+        _mediaBin.Add(item);
+        Notify();
+    }
+
+    /// <summary>
+    /// Takes a source out of the bin.
+    /// </summary>
+    /// <remarks>
+    /// Clips already placed from it stay exactly as they are: each holds its own copy of the
+    /// arrangement and points at the same file, so removing the card removes a card rather than
+    /// pulling footage out from under an edit.
+    /// </remarks>
+    public void RemoveFromBin(Guid binItemId)
+    {
+        var index = _mediaBin.FindIndex(i => i.Id == binItemId);
+        if (index < 0) return;
+
+        var item = _mediaBin[index];
+        PushCommand(new RemoveFromBinCommand(_mediaBin, item, index));
+        _mediaBin.RemoveAt(index);
+        Notify();
+    }
+
+    /// <summary>How many times this source has been placed on the timeline.</summary>
+    public int TimesOnTimeline(Guid binItemId) =>
+        _tracks.SelectMany(t => t.Items).Count(i => i.SourceBinId == binItemId);
+
+    /// <summary>The bin's video sources, in the order they were brought in.</summary>
+    public IEnumerable<VideoClip> BinVideoClips => _mediaBin.OfType<VideoClip>();
+
+    /// <summary>The bin's audio sources.</summary>
+    public IEnumerable<AudioClip> BinAudioClips => _mediaBin.OfType<AudioClip>();
+
+    /// <summary>The bin's pictures.</summary>
+    public IEnumerable<ImageClip> BinImageClips => _mediaBin.OfType<ImageClip>();
+
     /// <summary>
     /// Insert a transition between two adjacent clips on the same track.
     /// Requires Transitions feature flag.
@@ -1586,20 +1776,29 @@ public sealed class ClipStore
         var to    = track.Items.FirstOrDefault(i => i.Id == toClipId)
                     ?? throw new ArgumentException("toClipId not found on track.");
 
-        // Use TrimmedDuration (not the raw, untrimmed source Duration) for VideoClip —
-        // otherwise a transition placed after a split/trimmed piece lands far past
-        // where that piece actually ends on the timeline (same pitfall as
-        // TimelineTrack.TotalDuration).
-        var fromEndSeconds = from.TimelinePosition + (from is VideoClip fromVc ? fromVc.TrimmedDuration : from.Duration);
+        // Never longer than the clips it joins can spare — a two-second crossfade between
+        // one-second clips renders as something ffmpeg has to invent (2026-09-05 audit,
+        // transitions-7). The 1.0s the callers hard-code is a request, not a promise.
+        durationSeconds = TransitionDurationClamp.Clamp(
+            durationSeconds, from.EffectiveLength, to.EffectiveLength);
+
+        var fromEndSeconds = from.TimelinePosition + from.EffectiveLength;
         var transition = new Transition
         {
             Name             = $"{style}",
             Style            = style,
             FromClipId       = fromClipId,
             ToClipId         = toClipId,
-            TimelinePosition = fromEndSeconds - (durationSeconds / 2),
+            TimelinePosition = fromEndSeconds - durationSeconds,
             Duration         = durationSeconds,
         };
+
+        // The two clips genuinely play at once for the length of the crossfade, so the second one
+        // moves back to meet the first and everything after it follows. Without this the timeline
+        // claimed a length the render never produced: ffmpeg's xfade output is A + B − d, so every
+        // marker, overlay and audio clip after the junction drifted later than what it lined up
+        // with on screen (2026-09-05 audit, transitions-3).
+        ShiftFrom(track, to, -durationSeconds, transition.Id);
         // Insert right before `to` (not appended last) — Order must reflect chronological
         // position, not insertion order: the timeline UI walks Items sorted by Order to
         // compute each chip's rendered gap from the previous chip's end, so an
@@ -1614,61 +1813,20 @@ public sealed class ClipStore
     }
 
     /// <summary>
-    /// Insert a crossfade transition between two <see cref="VideoClip"/>s that live on
-    /// <em>different</em> video tracks and overlap in time (e.g. a clip on a higher track
-    /// dropped on top of part of a clip on a lower track). The overlap window itself becomes
-    /// the transition's duration and position — unlike <see cref="AddTransition"/>, the caller
-    /// does not choose a duration. "From"/"to" is determined by track <see cref="TimelineTrack.Order"/>
-    /// (lower Order = from, higher Order = to), not by argument order, so it always reads as
-    /// "the lower track's clip transitions into the higher track's clip" regardless of which
-    /// clip id is passed first.
-    /// Requires the Transitions feature flag.
+    /// Cross-track crossfades are not offered any more.
     /// </summary>
-    public void AddCrossTrackTransition(Guid clipAId, Guid clipBId, TransitionStyle style = TransitionStyle.Fade)
-    {
-        var trackA = FindTrackOf(clipAId) ?? throw new ArgumentException("clipAId not found on any track.");
-        var trackB = FindTrackOf(clipBId) ?? throw new ArgumentException("clipBId not found on any track.");
+    /// <remarks>
+    /// <para><c>AddCrossTrackTransition</c> stood here. What it produced could not be rendered
+    /// correctly: the export replaced the first clip's segment with a merged one whose length is
+    /// fromDur + toDur − overlap, while every later offset was still measured against the original
+    /// length, so everything after the junction drifted — and the preview never showed it at all
+    /// (2026-09-05 audit, transitions-9).</para>
+    ///
+    /// <para>Fading a clip up from black or down to it is the honest version of the same idea, and
+    /// it already existed: <c>ClipEffects.FadeInSeconds</c> and <c>FadeOutSeconds</c>, which the
+    /// export renders and a project file saves. The clip's right-click menu offers both.</para>
+    /// </remarks>
 
-        if (trackA.Id == trackB.Id)
-            throw new InvalidOperationException(
-                "Both clips are on the same track — use AddTransition for same-track transitions.");
-
-        var clipA = trackA.Items.First(i => i.Id == clipAId) as VideoClip
-                    ?? throw new ArgumentException("clipAId must be a VideoClip.");
-        var clipB = trackB.Items.First(i => i.Id == clipBId) as VideoClip
-                    ?? throw new ArgumentException("clipBId must be a VideoClip.");
-
-        // Sort by track Order so "from"/"to" reflects "lower track to higher track" regardless
-        // of which clip the caller happened to pass first.
-        var (fromTrack, fromClip, toTrack, toClip) = trackA.Order < trackB.Order
-            ? (trackA, clipA, trackB, clipB)
-            : (trackB, clipB, trackA, clipA);
-
-        var fromEnd = fromClip.TimelinePosition + fromClip.TrimmedDuration;
-        var toEnd   = toClip.TimelinePosition + toClip.TrimmedDuration;
-        var overlapStart = Math.Max(fromClip.TimelinePosition, toClip.TimelinePosition);
-        var overlapEnd   = Math.Min(fromEnd, toEnd);
-        if (overlapEnd <= overlapStart)
-            throw new ArgumentException("Clips do not overlap in time.");
-
-        var transition = new Transition
-        {
-            Name             = $"{style}",
-            Style            = style,
-            FromClipId       = fromClip.Id,
-            ToClipId         = toClip.Id,
-            TimelinePosition = overlapStart,
-            Duration         = overlapEnd - overlapStart,
-        };
-        // Same chronological-insertion-index pattern as AddTransition/AddTextOverlay/AddCallout —
-        // lives on the "to" (higher) track since that's the track it visually hands off to.
-        var index = toTrack.Items.Count(i => i.TimelinePosition <= transition.TimelinePosition);
-        transition.Order = index;
-        toTrack.Items.Insert(index, transition);
-        RenumberItems(toTrack);
-        PushCommand(new AddClipCommand(toTrack, transition, index));
-        Notify();
-    }
 
     /// <summary>
     /// Update the style and/or duration of an existing transition.
@@ -1695,8 +1853,25 @@ public sealed class ClipStore
         if (transition is null)
             throw new ArgumentException("Transition not found.", nameof(transitionId));
 
+        var owningTrack = _tracks.First(t => t.Items.Contains(transition));
+        var toItem      = owningTrack.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+
+        if (fromItem is not null && toItem is not null)
+            durationSeconds = TransitionDurationClamp.Clamp(
+                durationSeconds, fromItem.EffectiveLength, toItem.EffectiveLength);
+
+        // Lengthening the crossfade pulls the second clip further back, shortening it lets it out
+        // again — the overlap and the duration are the same number seen twice.
+        var delta = durationSeconds - transition.Duration;
+
         var command = BuildTransitionStyleUpdate(transition, fromItem, style, durationSeconds);
         PushCommand(command);
+
+        if (toItem is not null && !owningTrack.IsLocked)
+            ShiftFrom(owningTrack, toItem, -delta, transition.Id);
+
+        ResortSequential(owningTrack);
+        AssertLaidOut(owningTrack);
         Notify();
     }
 
@@ -1721,6 +1896,33 @@ public sealed class ClipStore
     }
 
     /// <summary>
+    /// Commits a transition's edge-drag resize, given what its duration was before the drag.
+    /// </summary>
+    /// <remarks>
+    /// The drag mutates the transition live for a smooth preview, and the commit then called
+    /// <see cref="UpdateTransition"/> with the duration it had just finished writing — so the undo
+    /// step recorded "from 2s to 2s" and undoing did nothing at all (2026-09-05 audit,
+    /// transitions-6). Passing the original in is the whole fix.
+    /// </remarks>
+    public void CommitTransitionResize(Guid transitionId, double originalDuration)
+    {
+        var track      = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == transitionId));
+        var transition = track?.Items.OfType<Transition>().FirstOrDefault(t => t.Id == transitionId);
+        if (track is null || transition is null) return;
+
+        var requested = transition.Duration;
+        if (Math.Abs(requested - originalDuration) < TrackLayout.Tolerance) return;
+
+        // Put it back so UpdateTransition sees the real before-value and can record it.
+        transition.Duration = originalDuration;
+        var toItem = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+        if (toItem is not null)
+            transition.TimelinePosition += originalDuration - requested;
+
+        UpdateTransition(transitionId, transition.Style, requested);
+    }
+
+    /// <summary>
     /// Shared mutation behind <see cref="UpdateTransition"/> and
     /// <see cref="ApplyStyleToAllTransitions"/> — applies the new style/duration to
     /// <paramref name="transition"/>, recentres it on <paramref name="fromItem"/>'s end (if
@@ -1741,8 +1943,10 @@ public sealed class ClipStore
 
         if (fromItem is not null)
         {
-            var fromEndSeconds = fromItem.TimelinePosition + (fromItem is VideoClip fromVc ? fromVc.TrimmedDuration : fromItem.Duration);
-            transition.TimelinePosition = fromEndSeconds - (durationSeconds / 2);
+            // The transition covers the stretch where both clips play, which starts where the
+            // first clip ends less the crossfade — not centred on the junction. See AddTransition.
+            var fromEndSeconds = fromItem.TimelinePosition + fromItem.EffectiveLength;
+            transition.TimelinePosition = fromEndSeconds - durationSeconds;
         }
 
         return new UpdateTransitionCommand(
@@ -1752,7 +1956,34 @@ public sealed class ClipStore
     }
 
     /// <summary>Remove a transition by id.</summary>
-    public void RemoveTransition(Guid transitionId) => RemoveClip(transitionId);
+    /// <summary>
+    /// Removes a transition and gives back the time it was borrowing.
+    /// </summary>
+    /// <remarks>
+    /// Adding one pulled the second clip back to overlap the first for its duration; removing it
+    /// has to push that clip and everything after it forward again, or the two stay overlapping
+    /// with nothing to justify it (2026-09-05 audit, transitions-3).
+    /// </remarks>
+    public void RemoveTransition(Guid transitionId)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == transitionId));
+        var transition = track?.Items.OfType<Transition>().FirstOrDefault(t => t.Id == transitionId);
+
+        if (track is null || transition is null) { RemoveClip(transitionId); return; }
+
+        var to = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+        var duration = transition.Duration;
+
+        using (BeginBatch())
+        {
+            RemoveClip(transitionId);
+            if (to is not null && !track.IsLocked) ShiftFrom(track, to, duration);
+        }
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
 
     // â”€â”€ Text overlay management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1853,6 +2084,30 @@ public sealed class ClipStore
     public IEnumerable<ClipArtClip> AllClipArtClips =>
         VideoTracks.SelectMany(t => t.ClipArtClips);
 
+    /// <summary>
+    /// Whether there is anything worth saving.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately wider than <see cref="HasExportableContent"/>. A project can be worth keeping
+    /// without a video clip in it — a set of markers, a title, an audio track, media sitting in the
+    /// bin — and gating Save on video content meant Save was disabled over work that was plainly
+    /// there (2026-09-05 audit, persistence-4).
+    /// </remarks>
+    public bool HasSaveableContent =>
+        _tracks.Any(t => t.Items.Count > 0) || _markers.Count > 0 || _mediaBin.Count > 0;
+
+    /// <summary>Whether there is anything for an export to render.</summary>
+    /// <remarks>
+    /// The toolbar asked one question and the export dialog asked another: the dialog counted only
+    /// the primary track's video clips, so an image-only timeline opened a dialog whose Export
+    /// button was permanently disabled (2026-09-05 audit, export-20). One answer for both, and for
+    /// the pipeline's own "nothing to export" check.
+    /// </remarks>
+    public bool HasExportableContent => AllVideoClips.Any() || AllImageClips.Any();
+
+    /// <summary>How many clips an export would render, for the dialog's summary line.</summary>
+    public int ExportableItemCount => AllVideoClips.Count() + AllImageClips.Count();
+
     /// <summary>All video tracks ordered by track.Order.</summary>
     public IEnumerable<TimelineTrack> VideoTracks =>
         _tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order);
@@ -1899,6 +2154,325 @@ public sealed class ClipStore
     /// why the pre-existing undo test passed (it asserted on the caller's own now-orphaned
     /// reference rather than through the track).</para>
     /// </summary>
+    /// <summary>
+    /// Puts a track's sequential items back in playing order and renumbers <c>Order</c> to match.
+    /// </summary>
+    /// <remarks>
+    /// A drag changed only <see cref="TrackItem.TimelinePosition"/>. <c>Order</c> was left as it
+    /// was, and export sequences by <c>Order</c> — so dragging the second clip in front of the
+    /// first left a timeline that showed one arrangement and rendered another (2026-09-05 audit,
+    /// timeline-10). Overlays and transitions keep their own relative order: <c>LayerIndex</c>, not
+    /// position, is what decides which of them is drawn on top.
+    /// </remarks>
+    /// <summary>
+    /// The nearest position at or after <paramref name="preferred"/> where this item fits without
+    /// landing on anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule a person expects from a timeline: a clip dropped onto an occupied spot goes
+    /// after what is there rather than into it. It is deliberately the last line of defence — the
+    /// timeline offers Insert or Overwrite before it gets here, and this is what happens when
+    /// nobody chose (a drop with ripple off, an import, a restored project).</para>
+    ///
+    /// <para>Overlays and transitions are not resolved: they are supposed to sit over the picture.</para>
+    /// </remarks>
+    private static double ResolveDropPosition(TimelineTrack track, TrackItem item, double preferred)
+    {
+        if (!TrackLayout.IsSequential(item)) return preferred;
+
+        var length = item.EffectiveLength;
+        if (length <= 0) return preferred;
+
+        var position = preferred;
+
+        // Walk forward past whatever is in the way. Each step lands on the far edge of the blocker,
+        // so this terminates: there are finitely many items and each is passed at most once.
+        while (TrackLayout.FirstOverlapping(track, position, length, item.Id) is { } blocker)
+            position = blocker.TimelinePosition + blocker.EffectiveLength;
+
+        return position;
+    }
+
+    /// <summary>
+    /// Moves an item to <paramref name="position"/> and pushes whatever is there out of the way.
+    /// </summary>
+    /// <remarks>
+    /// The "Insert" answer to a drop onto an occupied spot. One undo step covers the move and the
+    /// room made for it, so undoing puts the whole track back.
+    /// </remarks>
+    public void MoveWithInsert(Guid itemId, Guid trackId, double position, double originalPosition)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Id == trackId);
+        var item  = track?.Items.FirstOrDefault(i => i.Id == itemId)
+                 ?? _tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == itemId);
+        if (track is null || item is null || track.IsLocked) return;
+
+        var finalPos = Math.Max(0, position);
+
+        var steps = new List<IEditorCommand>
+        {
+            new SetClipPositionCommand(item, originalPosition, finalPos),
+        };
+
+        item.TimelinePosition = finalPos;
+
+        var length  = item.EffectiveLength;
+        var blocker = TrackLayout.FirstOverlapping(track, finalPos, length, item.Id);
+        if (blocker is not null)
+        {
+            var shiftBy = finalPos + length - blocker.TimelinePosition;
+            steps.AddRange(TrackLayout.SequentialItems(track)
+                .Where(i => i.Id != item.Id
+                         && i.TimelinePosition >= blocker.TimelinePosition - TrackLayout.Tolerance)
+                .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                    i, i.TimelinePosition, i.TimelinePosition + shiftBy)));
+        }
+
+        item.TimelinePosition = originalPosition;   // so Execute applies cleanly
+
+        var command = new CompositeCommand("Insert clip", steps);
+        PushCommand(command);
+        command.Execute();
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
+
+    /// <summary>
+    /// Moves an item to <paramref name="position"/>, replacing whatever it lands on.
+    /// </summary>
+    /// <remarks>
+    /// The "Overwrite" answer. What is underneath is trimmed back, split around, or removed —
+    /// <see cref="OverwriteInsert"/> already does exactly that for a newly added clip, so this
+    /// lifts the item out of the track first and then re-adds it through that path, which keeps one
+    /// implementation of the hard part.
+    /// </remarks>
+    public void MoveWithOverwrite(Guid itemId, Guid trackId, double position, double originalPosition)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Id == trackId);
+        if (track is null || track.IsLocked) return;
+
+        var sourceTrack = _tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == itemId));
+        var item = sourceTrack?.Items.FirstOrDefault(i => i.Id == itemId);
+        if (sourceTrack is null || item is null || sourceTrack.IsLocked) return;
+
+        // Overwrite is only defined for video clips today (see OverwriteInsert). Anything else
+        // falls back to insert, which is lossless — better than an edit nobody can undo into.
+        if (item is not VideoClip clip)
+        {
+            MoveWithInsert(itemId, trackId, position, originalPosition);
+            return;
+        }
+
+        // One notification for the pair. They are still two undo steps — lifting the clip out and
+        // putting it back over what was there — which reads correctly when undone one at a time.
+        using (BeginBatch())
+        {
+            RemoveClip(itemId);
+            clip.TimelinePosition = Math.Max(0, position);
+            OverwriteInsert(trackId, clip, Math.Max(0, position));
+        }
+
+        ResortSequential(track);
+        AssertLaidOut(track);
+        Notify();
+    }
+
+    /// <summary>
+    /// Pushes whatever <paramref name="item"/> has landed on later, so it fits exactly where it was
+    /// dropped.
+    /// </summary>
+    /// <remarks>
+    /// The insert half of an insert-or-overwrite drop. Everything from the first blocker onwards
+    /// moves by the same amount, so their spacing is preserved rather than collapsed, and the shift
+    /// is pushed as its own undo step beside the move — undoing the drop puts the whole track back.
+    /// </remarks>
+    private void MakeRoomFor(TimelineTrack track, TrackItem item)
+    {
+        if (!TrackLayout.IsSequential(item)) return;
+
+        var length = item.EffectiveLength;
+        if (length <= 0) return;
+
+        var blocker = TrackLayout.FirstOverlapping(track, item.TimelinePosition, length, item.Id);
+        if (blocker is null) return;
+
+        var neededAt = item.TimelinePosition + length;
+        var shiftBy  = neededAt - blocker.TimelinePosition;
+        if (shiftBy <= 0) return;
+
+        var toShift = TrackLayout.SequentialItems(track)
+            .Where(i => i.Id != item.Id && i.TimelinePosition >= blocker.TimelinePosition - TrackLayout.Tolerance)
+            .ToList();
+
+        var shifts = toShift
+            .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                i, i.TimelinePosition, i.TimelinePosition + shiftBy))
+            .ToList();
+
+        if (shifts.Count == 0) return;
+
+        var command = new CompositeCommand("Make room", shifts);
+        PushCommand(command);
+        command.Execute();
+
+        foreach (var moved in toShift)
+            ItemTimeShifted?.Invoke(moved.Id, shiftBy);
+    }
+
+    /// <summary>
+    /// Moves <paramref name="anchor"/> and everything after it on the track by
+    /// <paramref name="seconds"/>.
+    /// </summary>
+    /// <remarks>
+    /// Used to open and close the overlap a transition needs. The shift is pushed as its own undo
+    /// step so removing a transition can put the clips back exactly.
+    /// </remarks>
+    private void ShiftFrom(TimelineTrack track, TrackItem anchor, double seconds, Guid? exceptId = null)
+    {
+        if (Math.Abs(seconds) < TrackLayout.Tolerance) return;
+
+        var affected = TrackLayout.SequentialItems(track)
+            .Where(i => i.Id != exceptId
+                     && i.TimelinePosition >= anchor.TimelinePosition - TrackLayout.Tolerance)
+            .ToList();
+
+        if (affected.Count == 0) return;
+
+        var steps = affected
+            .Select(i => (IEditorCommand)new SetClipPositionCommand(
+                i, i.TimelinePosition, Math.Max(0, i.TimelinePosition + seconds)))
+            .ToList();
+
+        var command = new CompositeCommand(seconds < 0 ? "Close for transition" : "Reopen after transition", steps);
+        PushCommand(command);
+        command.Execute();
+
+        foreach (var moved in affected)
+            ItemTimeShifted?.Invoke(moved.Id, seconds);
+    }
+
+    /// <summary>
+    /// Drops transitions whose clips are no longer where they were.
+    /// </summary>
+    /// <remarks>
+    /// <para>A transition names two clips and sits on the junction between them. Nothing checked
+    /// that the junction still existed: removing, splitting, trimming or moving either clip left
+    /// the transition behind, pointing at a clip that was gone or no longer adjacent, and the
+    /// export then matched transitions to junctions by position and applied it to whichever pair
+    /// happened to be there (2026-09-05 audit, transitions-5).</para>
+    ///
+    /// <para>Called after every edit that can move a clip. Silent by design — a transition whose
+    /// junction a person has just deleted is not news.</para>
+    /// </remarks>
+    /// <summary>
+    /// Pushes apart any clips that overlap without a transition to justify it.
+    /// </summary>
+    /// <remarks>
+    /// The repair half of the invariant. Every edit that can create an overlap resolves it up
+    /// front, so this is normally a no-op; what it exists for is the case where the justification
+    /// disappears rather than the overlap appearing — a transition dropped because its junction is
+    /// gone leaves the two clips still sitting on top of each other.
+    /// </remarks>
+    private void CloseUnjustifiedOverlaps(TimelineTrack track)
+    {
+        if (track.IsLocked) return;
+
+        // Front to back, so closing one overlap cannot leave a later one measured against a
+        // position that is about to change.
+        for (var guard = 0; guard < 100; guard++)
+        {
+            var items = TrackLayout.SequentialItems(track);
+            var moved = false;
+
+            for (var i = 1; i < items.Count; i++)
+            {
+                var previous = items[i - 1];
+                var item     = items[i];
+
+                var allowed = TrackLayout.AllowedOverlap(track, previous, item);
+                var overlap = previous.TimelinePosition + previous.EffectiveLength
+                            - item.TimelinePosition - allowed;
+
+                if (overlap <= TrackLayout.Tolerance) continue;
+
+                ShiftFrom(track, item, overlap);
+                moved = true;
+                break;
+            }
+
+            if (!moved) return;
+        }
+    }
+
+    private void ReconcileTransitions(TimelineTrack track)
+    {
+        var stale = track.Items.OfType<Transition>().Where(t =>
+        {
+            var from = track.Items.FirstOrDefault(i => i.Id == t.FromClipId);
+            var to   = track.Items.FirstOrDefault(i => i.Id == t.ToClipId);
+
+            if (from is null || to is null) return true;
+
+            // Still adjacent? The junction is where the first one ends, less the overlap the
+            // transition itself opened.
+            var junction = from.TimelinePosition + from.EffectiveLength - t.Duration;
+            return Math.Abs(to.TimelinePosition - junction) > 0.05;
+        }).ToList();
+
+        if (stale.Count == 0) return;
+
+        foreach (var transition in stale)
+            track.Items.Remove(transition);
+
+        RenumberItems(track);
+
+        // The overlap only existed because the transition did. Close whatever is left over — by
+        // position, not by clip id, because the clip a transition pointed at may well have been
+        // replaced by the very edit that stranded it (splitting one produces two new items).
+        CloseUnjustifiedOverlaps(track);
+    }
+
+    private static void ResortSequential(TimelineTrack track)
+    {
+        var sequential = track.Items.Where(TrackLayout.IsSequential)
+                                    .OrderBy(i => i.TimelinePosition)
+                                    .ToList();
+        if (sequential.Count == 0) return;
+
+        var others = track.Items.Where(i => !TrackLayout.IsSequential(i)).ToList();
+
+        track.Items.Clear();
+        track.Items.AddRange(sequential);
+        track.Items.AddRange(others);
+
+        RenumberItems(track);
+    }
+
+    /// <summary>
+    /// Asserts the no-overlap invariant in debug builds.
+    /// </summary>
+    /// <remarks>
+    /// Debug only, and deliberately loud there: an overlap is a bug in whichever edit produced it,
+    /// and the failing assertion names the track and the two clips. Release builds carry on — a
+    /// person mid-edit is not helped by a crash.
+    /// </remarks>
+    [System.Diagnostics.Conditional("DEBUG")]
+    private static void AssertLaidOut(TimelineTrack track)
+    {
+        var problem = TrackLayout.Validate(track);
+        System.Diagnostics.Debug.Assert(problem is null, $"Track '{track.Label}': {problem}");
+    }
+
+    /// <summary>
+    /// Checks every track. Public so tests can hold the whole store to the invariant after an edit.
+    /// </summary>
+    /// <returns>The first problem found, or null when every track is laid out properly.</returns>
+    public string? ValidateAll() =>
+        _tracks.Select(t => TrackLayout.Validate(t) is { } p ? $"Track '{t.Label}': {p}" : null)
+               .FirstOrDefault(p => p is not null);
+
     private static void RenumberItems(TimelineTrack track)
     {
         for (var i = 0; i < track.Items.Count; i++)
@@ -1918,6 +2492,25 @@ public sealed class ClipStore
     {
         if (_suppressNotify) { _pendingNotify = true; return; }
         OnChange?.Invoke();
+    }
+
+    /// <summary>
+    /// Raised when an item's position on the timeline changes, with how far it moved.
+    /// </summary>
+    /// <remarks>
+    /// Motion keyframes are stored in project seconds, so a layer that moves has to take its
+    /// animation with it. The store does not know about the keyframe service — the editor
+    /// subscribes and forwards (2026-09-05 audit, motion-3).
+    /// </remarks>
+    public event Action<Guid, double>? ItemTimeShifted;
+
+    /// <summary>Raised when an item is removed, so anything hanging off it can be cleaned up.</summary>
+    public event Action<Guid>? ItemRemoved;
+
+    private void AnnounceShift(TrackItem item, double from, double to)
+    {
+        if (Math.Abs(to - from) < TrackLayout.Tolerance) return;
+        ItemTimeShifted?.Invoke(item.Id, to - from);
     }
 
     /// <summary>Explicitly raise OnChange â€” for external callers that mutate track state directly (e.g. IsMuted toggle).</summary>
@@ -2066,6 +2659,7 @@ public sealed class ClipStore
     {
         _tracks.Clear();
         _markers.Clear();
+        _mediaBin.Clear();
         _undoStack.Clear();
         _redoStack.Clear();
         // Re-add the mandatory primary video track
@@ -2089,6 +2683,7 @@ public sealed class ClipStore
     {
         _tracks.Clear();
         _markers.Clear();
+        _mediaBin.Clear();
         _undoStack.Clear();
         _redoStack.Clear();
 
@@ -2131,6 +2726,8 @@ public sealed class ClipStore
         foreach (var m in project.Markers)
             _markers.Add(m);
 
+        RestoreBin(project);
+
         NormalizeLayerIndices();
         Notify();
     }
@@ -2156,9 +2753,78 @@ public sealed class ClipStore
             overlays[i].LayerIndex = i;
     }
 
+    /// <summary>
+    /// Fills the media bin from a project file.
+    /// </summary>
+    /// <remarks>
+    /// <para>A file written before the bin existed has no <c>Bin</c> section, and opening it to an
+    /// empty Media panel would read as having lost the footage. So for those, the bin is seeded
+    /// from what is on the timeline — one entry per distinct source, which is what the panel used
+    /// to show anyway.</para>
+    ///
+    /// <para>Seeded entries get their own ids and are linked to the clips they were derived from,
+    /// so the "on timeline" count is right immediately and re-saving writes a real bin.</para>
+    /// </remarks>
+    private void RestoreBin(ProjectFile project)
+    {
+        if (!project.Bin.IsEmpty)
+        {
+            foreach (var pv in project.Bin.VideoClips) _mediaBin.Add(RestoreVideoClip(pv));
+            foreach (var pa in project.Bin.AudioClips) _mediaBin.Add(RestoreAudioClip(pa));
+            foreach (var pi in project.Bin.ImageClips) _mediaBin.Add(RestoreImageClip(pi));
+            return;
+        }
+
+        // An older project: one bin entry per source already on the timeline.
+        foreach (var group in _tracks.SelectMany(t => t.Items)
+                                     .Where(TrackLayout.IsSequential)
+                                     .GroupBy(SourceKeyOf))
+        {
+            var first = group.First();
+            var entry = CloneForBin(first);
+            if (entry is null) continue;
+
+            _mediaBin.Add(entry);
+
+            foreach (var placed in group)
+                placed.SourceBinId = entry.Id;
+        }
+    }
+
+    /// <summary>
+    /// What makes two placed clips the same source: the file they came from, or failing that their
+    /// name.
+    /// </summary>
+    private static string SourceKeyOf(TrackItem item) =>
+        item.OriginalFileName
+        ?? (item as VideoClip)?.MemFsName
+        ?? (item as AudioClip)?.BlobUrl
+        ?? (item as ImageClip)?.MemFsName
+        ?? item.Name;
+
+    /// <summary>A bin entry made from a placed clip: same media, its own identity, untrimmed.</summary>
+    private static TrackItem? CloneForBin(TrackItem item) => item switch
+    {
+        VideoClip v => v with
+        {
+            Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0,
+            ThumbnailUrls = [.. v.ThumbnailUrls],
+            VolumeAutomation = [.. v.VolumeAutomation],
+            AppliedEffects = [.. v.AppliedEffects],
+        },
+        AudioClip a => a with
+        {
+            Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0,
+            VolumeAutomation = [.. a.VolumeAutomation],
+        },
+        ImageClip i => i with { Id = Guid.NewGuid(), SourceBinId = null, TimelinePosition = 0, Order = 0 },
+        _ => null,
+    };
+
     private static VideoClip RestoreVideoClip(ProjectVideoClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,
@@ -2170,6 +2836,9 @@ public sealed class ClipStore
         Height           = p.Height,
         Volume           = p.Volume,
         VolumeAutomation = p.VolumeAutomation,
+        MuteAudio        = p.MuteAudio,
+        HasAudio         = p.HasAudio,
+        LinkedClipId     = p.LinkedClipId,
         Effects          = p.Effects,
         AppliedEffects   = p.AppliedEffects.Select(e => new AppliedEffect
         {
@@ -2184,6 +2853,7 @@ public sealed class ClipStore
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,
@@ -2196,6 +2866,7 @@ public sealed class ClipStore
         VolumeAutomation = p.VolumeAutomation,
         LeftVolume       = p.LeftVolume,
         RightVolume      = p.RightVolume,
+        LinkedClipId     = p.LinkedClipId,
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
@@ -2259,6 +2930,7 @@ public sealed class ClipStore
     private static ImageClip RestoreImageClip(ProjectImageClip p) => new()
     {
         Id               = p.Id,
+        SourceBinId      = p.SourceBinId,
         Name             = p.Name,
         TimelinePosition = p.TimelinePosition,
         Duration         = p.Duration,
@@ -2305,6 +2977,11 @@ public sealed class ClipStore
         FontBold         = p.FontBold,
         FontUnderline    = p.FontUnderline,
         Runs             = p.Runs?.Select(RestoreTextRun).ToList(),
+        TextAlign         = p.TextAlign,
+        TextVerticalAlign = p.TextVerticalAlign,
+        TextWrap          = p.TextWrap,
+        TextShadow        = p.TextShadow,
+        TextPadding       = p.TextPadding,
         FadeInSeconds    = p.FadeInSeconds,
         FadeOutSeconds   = p.FadeOutSeconds,
         OpfsAssetName    = p.OpfsAssetName,

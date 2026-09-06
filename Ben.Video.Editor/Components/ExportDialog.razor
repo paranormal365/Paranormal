@@ -228,9 +228,28 @@
 
                 @if (_job is { State: ExportJobState.Completed })
                 {
+                    @* The rendered length beside the timeline's own, because "the export is as
+                       long as the timeline" is the thing several of this pass's fixes were
+                       about, and it should be checkable without opening the file. *@
                     <div class="bv-export-form__success">
-                        ✓ Export complete in @_job.Elapsed.TotalSeconds.ToString("F1")s (@FormatBytes(_job.OutputSizeBytes))
+                        ✓ Export complete in @_job.Elapsed.TotalSeconds.ToString("F1")s
+                        (@FormatBytes(_job.OutputSizeBytes)@(_job.Duration > 0
+                            ? " · " + TimeSpan.FromSeconds(_job.Duration).ToString(@"m\:ss\.f")
+                            : ""))
                     </div>
+                }
+
+                @* Something on the timeline did not make it into the file. The export succeeded,
+                   so this is not an error — but it used to be silent, and the only way to find
+                   out was to watch the result (2026-09-05 audit, audio-1 class). *@
+                @if (_job is not null && _job.Warnings.Count > 0)
+                {
+                    <ul class="bv-export-form__warnings">
+                        @foreach (var warning in _job.Warnings)
+                        {
+                            <li>⚠ @warning</li>
+                        }
+                    </ul>
                 }
 
             </div>
@@ -241,7 +260,7 @@
                     <TelerikButton OnClick="AddToQueueAsync"
                                    ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
                                    Icon="@SvgIcon.Plus"
-                                   Enabled="@CanExport"
+                                   Enabled="@CanQueue"
                                    Title="Add this export to the queue without blocking">
                         Add to Queue
                     </TelerikButton>
@@ -325,17 +344,28 @@
         _      => ["libx264", "libx265", "libaom-av1"]
     };
 
+    // Opus is offered for WebM only. MP4 and MOV can technically hold it, but ffmpeg refuses
+    // without -strict -2, so choosing it in the dialog produced an export that failed at the last
+    // step with a message about experimental codecs (2026-09-05 audit, export-14).
     private IEnumerable<string> AudioCodecs => _settings.OutputFormat switch
     {
         "webm" => ["libopus", "libvorbis"],
-        _      => ["aac", "mp3", "libopus"]
+        _      => ["aac", "mp3"]
     };
 
-    private bool CanExport => Clips.Clips.Any() &&
+    // Clips.Clips is the primary track's VIDEO clips, so this refused to export an image-only
+    // timeline while the toolbar's own Export button was enabled — the dialog opened and its
+    // button was dead (2026-09-05 audit, export-20). One predicate now answers for both.
+    private bool CanExport => Clips.HasExportableContent &&
                               Exporter.CurrentJob?.State != ExportJobState.Running;
 
+    // Queueing while something is already rendering is the entire point of a queue, and the
+    // Export Now gate was being applied to it as well — so the moment one job started, the way to
+    // line up the next one was disabled (2026-09-05 audit, export-9).
+    private bool CanQueue => Clips.HasExportableContent;
+
     private string ClipSummary =>
-        $"{Clips.Clips.Count()} clip(s) · " +
+        $"{Clips.ExportableItemCount} clip(s) · " +
         $"{TimeSpan.FromSeconds(Clips.TotalDuration):m\\:ss\\.f} total";
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -343,9 +373,27 @@
     public void Open()
     {
         _visible = true;
-        _job     = null;
+
+        // Re-attach to a job that is still going. Closing the dialog on a running export and
+        // opening it again used to show the settings form with a dead Export button and no sign of
+        // the job at all, so the only way back to the progress bar was the queue panel
+        // (2026-09-05 audit, export-11).
+        Attach(Exporter.CurrentJob is { State: ExportJobState.Running } running ? running : null);
+
         ResolutionService.SetResolution(_settings.Resolution);
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Follows one job's progress, and stops following whatever it was watching before.
+    /// </summary>
+    private void Attach(ExportJob? job)
+    {
+        if (ReferenceEquals(_job, job)) return;
+
+        if (_job is not null) _job.OnProgress -= OnJobProgress;
+        _job = job;
+        if (_job is not null) _job.OnProgress += OnJobProgress;
     }
 
     private void OnResolutionChanged(string value)
@@ -367,8 +415,7 @@
         if (!CanExport) return;
 
         var exportTask = Exporter.ExportAsync(_settings, downloadToDisk: !DeferDelivery);
-        _job = Exporter.CurrentJob!;
-        _job.OnProgress += OnJobProgress;
+        Attach(Exporter.CurrentJob!);
         StateHasChanged();
 
         await exportTask;
@@ -379,7 +426,7 @@
 
     private async Task AddToQueueAsync()
     {
-        if (!CanExport) return;
+        if (!CanQueue) return;
         // Copy settings to give the queue entry a stable snapshot
         var snapshot = new ExportSettings
         {

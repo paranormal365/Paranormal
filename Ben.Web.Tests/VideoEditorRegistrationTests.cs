@@ -44,21 +44,24 @@ public class VideoEditorRegistrationTests
         Assert.Equal(0.5, opts.SnapThresholdSeconds);
     }
 
+    /// <summary>
+    /// The platform's own configuration, not a hand-written copy of it.
+    /// </summary>
+    /// <remarks>
+    /// This test used to list the flags it expected a host to set, and the list went stale: it was
+    /// missing BackgroundRendering and NativeSidecar, both of which the site had been setting for
+    /// months, and it asserted nothing about either real host. It now exercises the shared
+    /// definition both hosts call. The completeness of that definition is held by
+    /// Ben.Video.Tests' VideoEditorHostDefaultsTests, and the hosts' use of it by
+    /// HostsUseTheSharedDefaultsTests (2026-09-05 audit, F2).
+    /// </remarks>
     [Fact]
     public void Options_PlatformConfiguration_EnablesAllFeatures()
     {
         var sp = BuildProvider(o =>
         {
-            o.MultiTrack       = true;
-            o.AudioTracks      = true;
-            o.Transitions      = true;
-            o.TextOverlays     = true;
-            o.VideoEffects     = true;
-            o.MediaLibrary     = true;
-            o.ProjectPersistence = true;
-            o.ErrorLog         = true;
-            o.RippleEdit       = true;
-            o.MediaLibraryBaseUrl = "http://localhost:5252";
+            VideoEditorHostDefaults.ApplyEditingDefaults(o);
+            VideoEditorHostDefaults.ApplyServerIntegration(o, "http://localhost:5252");
         });
         var opts = sp.GetRequiredService<IOptions<VideoEditorOptions>>().Value;
 
@@ -71,7 +74,10 @@ public class VideoEditorRegistrationTests
         Assert.True(opts.ProjectPersistence);
         Assert.True(opts.ErrorLog);
         Assert.True(opts.RippleEdit);
+        Assert.True(opts.BackgroundRendering);
+        Assert.True(opts.NativeSidecar);
         Assert.Equal("http://localhost:5252", opts.MediaLibraryBaseUrl);
+        Assert.Equal("http://localhost:5252/api/video-projects", opts.DocumentPostUrl);
     }
 
     [Fact]

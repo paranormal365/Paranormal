@@ -115,6 +115,17 @@
                     Marker
                 </TelerikButton>
             }
+            @if (OnSaveFrame.HasDelegate)
+            {
+                <TelerikButton OnClick="SaveFrameAtPlayhead"
+                               Icon="@SvgIcon.Image"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Class="btn-sm text-nowrap"
+                               Title="Save the frame at the playhead as a picture">
+                    Save Frame
+                </TelerikButton>
+            }
         </div>
     </div>
 
@@ -341,13 +352,11 @@
                         <div class="bv-snap-guide" style="left: @(_snapGuidePx!.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))px"></div>
                     }
                     @{
-                        // Overlay items (Callout/Text/ClipArt) are rendered in their own
-                        // absolutely-positioned row below, not in this sequential flex row — see
-                        // .bv-track__overlays. They're excluded here entirely; the sequential
-                        // gap-margin layout below (runningEndSeconds) assumes non-overlapping
-                        // items packed front-to-back, which overlay items — meant to coexist with
-                        // video content at the same time, not compete for space after it —
-                        // fundamentally violate (backlog item #39).
+                        // Overlay items (Callout/Text/ClipArt) are rendered in their own row below,
+                        // not in this one — see .bv-track__overlays. They are excluded here because
+                        // this lane holds the items that own a place in time, one at a time, while
+                        // an overlay is meant to sit over whatever is beneath it (backlog item #39;
+                        // the same distinction TrackLayout.IsSequential draws).
                         //
                         // Transitions (item #57 T1) are excluded here for the same class of
                         // reason, but the opposite direction: a transition doesn't sit *after* its
@@ -371,13 +380,14 @@
                         var trackTransitions = track.Items.OfType<Transition>().ToList();
                         // Build a set of FromClipIds that already have a transition on this track
                         var coveredFromIds = trackTransitions.Select(t => t.FromClipId).ToHashSet();
-                        // Chips render in flex flow (Order), not absolutely positioned — a
-                        // moved-off-of-flow-position clip (e.g. after a middle-drag, or a
-                        // ripple-off drop that intentionally leaves a gap) needs that gap
-                        // rendered as leading margin, or it silently snaps back to looking
-                        // adjacent to the previous clip while TimelinePosition (the real,
-                        // exported arrangement) has already moved on.
-                        double runningEndSeconds = 0;
+                        // Chips are positioned absolutely, at the time they actually start.
+                        //
+                        // They used to render in flex flow with the gap to the previous chip as a
+                        // leading margin, clamped at zero — so a clip whose position was BEFORE the
+                        // previous clip's end (an overlap) was drawn politely after it instead. The
+                        // picture disagreed with the model, the ruler and the export dialog, and
+                        // the one arrangement nobody could see was the broken one (2026-09-05
+                        // audit, F5).
                     }
 
                     @for (var idx = 0; idx < orderedItems.Count; idx++)
@@ -385,16 +395,9 @@
                         var item     = orderedItems[idx];
                         var captured = item;
 
-                        // Gap (in px) between where flex-flow would naturally place this chip
-                        // (right after the previous one) and where TimelinePosition says it
-                        // actually starts. Zero for normally-adjacent items. Transitions no longer
-                        // appear in this loop at all (see above), so two clips with a transition
-                        // between them are correctly treated as directly adjacent here — exactly
-                        // right, since AddTransition never moves either clip; it only overlays the
-                        // shared boundary.
-                        var gapPx = Math.Max(0, (item.TimelinePosition - runningEndSeconds) * Timeline.PxPerSecond);
-                        var gapPxStr = gapPx.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
-                        runningEndSeconds = item.TimelinePosition + ItemDuration(item);
+                        // Where it starts, in pixels from the start of the timeline.
+                        var leftPxStr = (item.TimelinePosition * Timeline.PxPerSecond)
+                            .ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
 
                         {
                             var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip && !track.IsLocked;
@@ -408,7 +411,7 @@
                             var moveCls = movingThis ? "bv-clip-chip--moving" : "";
                             <div @key="item.Id"
                                  class="bv-clip-chip bv-clip-chip--@ChipType(item) @(_selectedItemId == item.Id ? "bv-clip-chip--selected" : "") @(IsMultiSelected(item.Id) ? "bv-clip-chip--multi-selected" : "") @(_draggingId == item.Id ? "bv-clip-chip--dragging" : "") @trimCls @moveCls @(item.IsMediaMissing ? "bv-clip-chip--missing" : "") @(item.LinkedClipId is not null ? "bv-clip-chip--linked" : "")"
-                                 style="width: @chipWpx; min-width: @chipWpx; max-width: none; margin-left: @gapPxStr"
+                                 style="position: absolute; left: @leftPxStr; width: @chipWpx; min-width: @chipWpx; max-width: none"
                                  data-item-id="@item.Id"
                                  draggable="@(track.IsLocked || _trimmingClip != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
                                  @onpointerdown="e => OnChipPointerDown(e, captured, track)"
@@ -453,7 +456,7 @@
                                 @if (item is AudioClip ac && ac.BlobUrl is not null)
                                 {
                                     @* Compute playhead position within the full audio file, accounting for StartTrim *@
-                                    var t          = Playback.State.CurrentTime;
+                                    var t          = Playback.State.TimelineTime;
                                     var clipStart  = ac.TimelinePosition;
                                     var clipEnd    = ac.TimelinePosition + ac.Duration - ac.StartTrim -
                                                      (ac.EndTrim > 0 ? ac.Duration - ac.EndTrim : 0);
@@ -760,7 +763,7 @@
         <!-- Playhead inside tracks — aligned with clip area, contained by isolation:isolate -->
         @if (Clips.TotalDuration > 0)
         {
-            var phPx = 120 + Playback.State.CurrentTime * Timeline.PxPerSecond;
+            var phPx = 120 + Playback.State.TimelineTime * Timeline.PxPerSecond;
             <div class="bv-timeline__playhead" style="left: @phPx.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)px">
                 <div class="bv-timeline__playhead-line"></div>
                 <div class="bv-timeline__playhead-head"></div>
@@ -850,18 +853,42 @@
     private List<BvMenuItem> _markerMenuItems     = [];
     private List<BvMenuItem> _transitionMenuItems = [];
 
+    /// <summary>
+    /// Fades a clip up from black at its start, or down to black at its end.
+    /// </summary>
+    /// <remarks>
+    /// The honest replacement for the cross-track crossfade: it is the clip's own property, the
+    /// export already renders it, and it survives a save. One second, or a quarter of the clip if
+    /// that is shorter.
+    /// </remarks>
+    private void FadeClip(TrackItem item, bool fadeIn)
+    {
+        if (item is not VideoClip clip) return;
+
+        var seconds = Math.Min(1.0, clip.EffectiveLength / 4);
+        if (seconds <= 0) return;
+
+        Clips.UpdateClipEffects(clip.Id, fadeIn
+            ? clip.Effects with { FadeInSeconds  = seconds }
+            : clip.Effects with { FadeOutSeconds = seconds });
+    }
+
     private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
     {
         await SelectItem(item);
+        // Inside this clip's own span on the timeline, not "between zero and its length" —
+        // which was only the same question for a clip starting at zero.
+        var playhead  = Playback.State.TimelineTime;
         var canSplit  = item is VideoClip vc2 &&
-                        Playback.State.CurrentTime > 0 &&
-                        Playback.State.CurrentTime < vc2.TrimmedDuration;
+                        playhead > vc2.TimelinePosition &&
+                        playhead < vc2.TimelinePosition + vc2.TrimmedDuration;
+        // A locked track refuses every mutation in the store, silently — which from the menu looked
+        // like a broken editor: Duplicate, Split, Separate Audio, Speed, Replace, Remove and Ripple
+        // Delete all stayed enabled and all did nothing (2026-09-05 audit, timeline-12).
+        var locked    = Clips.FindTrackOf(item.Id)?.IsLocked == true;
         var isMedia   = item is VideoClip or AudioClip;
         var isRemovable = item is not Transition;
         var canSeparateAudio = item is VideoClip vcAudio && vcAudio.MemFsName is not null && !vcAudio.MuteAudio;
-        var crossTrackTarget = EffectiveOptions.Transitions && EffectiveOptions.MultiTrack && item is VideoClip vcOverlap
-            ? FindCrossTrackOverlapCandidate(vcOverlap)
-            : null;
 
         _clipMenuItems =
         [
@@ -869,37 +896,44 @@
                     Action = () => Task.CompletedTask /* properties panel already opened by SelectItem */ },
             new() { Text = "Duplicate",  Icon = SvgIcon.Copy,
                     Action = () => { Clips.DuplicateClip(item.Id); return Task.CompletedTask; },
-                    IsDisabled = !isMedia },
+                    IsDisabled = locked || !isMedia },
             new() { IsSeparator = true },
             new() { Text = "Split at Playhead", Icon = SvgIcon.Cut,
                     Action = () =>
                     {
                         if (item is VideoClip vc3)
-                            try { Clips.SplitClip(vc3.Id, Playback.State.CurrentTime); } catch { }
+                            // Absolute playhead → the clip's own offset; see
+                            // ClipStore.SplitClipAtTimelineTime.
+                            Clips.SplitClipAtTimelineTime(vc3.Id, Playback.State.TimelineTime);
                         return Task.CompletedTask;
-                    }, IsDisabled = !canSplit },
+                    }, IsDisabled = locked || !canSplit },
             new() { Text = "Separate Audio", Icon = SvgIcon.VolumeUp,
                     Action = async () =>
                     {
                         if (item is VideoClip vc4)
                             await SeparateAudioAsync(vc4);
-                    }, IsDisabled = !canSeparateAudio },
-            new() { Text = "Add Crossfade to Overlapping Clip",
-                    Action = () =>
-                    {
-                        if (crossTrackTarget is not null)
-                            try { Clips.AddCrossTrackTransition(item.Id, crossTrackTarget.Id); } catch { }
-                        return Task.CompletedTask;
-                    }, IsDisabled = crossTrackTarget is null },
+                    }, IsDisabled = locked || !canSeparateAudio },
+            @* "Add Crossfade to Overlapping Clip" stood here. It built a cross-track transition,
+               which the export turned into a segment longer than the two clips it replaced while
+               leaving every later offset measured against the old length — a corrupt render — and
+               which the preview never showed at all. A clip's own fade in and out does the same
+               job honestly, and both are already persisted and exported (2026-09-05 audit,
+               transitions-9). *@
+            new() { Text = "Fade In", Icon = SvgIcon.BrightnessContrast,
+                    Action = () => { FadeClip(item, fadeIn: true); return Task.CompletedTask; },
+                    IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Fade Out", Icon = SvgIcon.BrightnessContrast,
+                    Action = () => { FadeClip(item, fadeIn: false); return Task.CompletedTask; },
+                    IsDisabled = locked || item is not VideoClip },
             new() { IsSeparator = true },
-            new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
-            new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
-            new() { Text = "Speed: 2×",   Action = () => { SetSpeed(item, 2.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
+            new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
+            new() { Text = "Speed: 2×",   Action = () => { SetSpeed(item, 2.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
             new() { IsSeparator = true },
             new() { Text = item.IsMediaMissing ? "Replace Media…" : "Replace Source…",
                     Icon = SvgIcon.Link,
                     Action = async () => await OnRelinkRequested.InvokeAsync(item.Id),
-                    IsDisabled = !isMedia },
+                    IsDisabled = locked || !isMedia },
             new() { IsSeparator = true },
             new() { Text = "Remove",        Icon = SvgIcon.Trash,
                     Action = async () =>
@@ -914,7 +948,7 @@
                         if (_selectedItemId == item.Id) _selectedItemId = null;
                         _multiSelectedIds.Remove(item.Id);
                         await OnItemRemoved.InvokeAsync(item.Id);
-                    }, IsDisabled = !isRemovable },
+                    }, IsDisabled = locked || !isRemovable },
             new() { Text = "Ripple Delete", Icon = SvgIcon.Minus,
                     Action = async () =>
                     {
@@ -922,7 +956,7 @@
                         if (_selectedItemId == item.Id) _selectedItemId = null;
                         _multiSelectedIds.Remove(item.Id);
                         await OnItemRemoved.InvokeAsync(item.Id);
-                    }, IsDisabled = !isMedia },
+                    }, IsDisabled = locked || !isMedia },
         ];
 
         if (_clipMenu is not null)
@@ -1059,6 +1093,11 @@
         RenderStatus.OnChanged   += OnClipsChanged;
         Timeline.ZoomScale   = EffectiveOptions.DefaultTimelineZoom;
         Timeline.DisplayMode = EffectiveOptions.TimelineDisplayMode;
+
+        // The ruler counts in the session's own frames. It used to use a constant 30, so at any
+        // other frame rate it numbered frames that did not exist and stepping the preview by one
+        // did not move it by one (2026-09-05 audit, timeline-17).
+        Timeline.Fps = Playback.SessionFps;
         _rippleOverride      = EffectiveOptions.RippleEdit;
     }
 
@@ -1237,7 +1276,12 @@
         catch { /* cosmetic only — JS interop unavailable is not worth surfacing */ }
     }
 
-    private void OnPlaybackChanged() => InvokeAsync(StateHasChanged);
+    private void OnPlaybackChanged()
+    {
+        // Changing the frame rate has to move the ruler with it, not just the preview's stepping.
+        Timeline.Fps = Playback.SessionFps;
+        InvokeAsync(StateHasChanged);
+    }
 
     private async Task FitToViewAsync()
     {
@@ -1413,13 +1457,21 @@
 
  // --- Marker actions ---
 
+    /// <summary>
+    /// Raised with the playhead's timeline position when someone asks for the frame there.
+    /// </summary>
+    /// <remarks>
+    /// The timeline knows where the playhead is; the editor owns the export service that can
+    /// render a frame, so the button asks rather than doing it itself.
+    /// </remarks>
+    [Parameter] public EventCallback<double> OnSaveFrame { get; set; }
+
+    private Task SaveFrameAtPlayhead() => OnSaveFrame.InvokeAsync(Playback.State.TimelineTime);
+
     private void AddMarkerAtPlayhead()
-    {
-        var t = Clips.TotalDuration > 0
-            ? Playback.State.Progress * Clips.TotalDuration
-            : 0;
-        Clips.AddMarker(t);
-    }
+        // Progress is a fraction of whatever the preview holds; multiplying it by the timeline's
+        // length mixed two clocks and put the marker somewhere unrelated (2026-09-05 audit, F6).
+        => Clips.AddMarker(Playback.State.TimelineTime);
 
     private void RemoveMarker(Guid markerId) => Clips.RemoveMarker(markerId);
 
@@ -1486,10 +1538,9 @@
     }
 
     private void ToggleMute(TimelineTrack track)
-    {
-        track.IsMuted = !track.IsMuted;
-        Clips.NotifyChanged();
-    }
+        // Through the store, so it is undoable and so export and preview see it — the flag used to
+        // be flipped straight on the model and read by nothing (2026-09-05 audit, timeline-11).
+        => Clips.MuteTrack(track.Id, !track.IsMuted);
 
     // ── Resizable / collapsible track row height (item #44) ─────────────────────
     // Purely visual, UI-only state — doesn't touch track/clip data, doesn't persist
@@ -1597,6 +1648,39 @@
         await OnItemRemoved.InvokeAsync(item.Id);
     }
 
+    /// <summary>
+    /// The height this timeline would like: its chrome plus a row per track, plus the overlay lanes
+    /// each track is carrying.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read by <c>VideoEditor</c> so a project with one track does not reserve the space a
+    /// project with six needs, and a project with six is not squeezed into the space one needs. The
+    /// person's own drag always wins — see <c>LayoutService.AutoFitTimeline</c>.</para>
+    ///
+    /// <para>The numbers match the stylesheet: <c>.bv-timeline__header</c> and the ruler are fixed
+    /// chrome, <c>.bv-track</c> has a 56px floor, and each overlay lane is an inline 40px row
+    /// (<c>overlayItems.Count * 40</c> in the markup above). They are approximate on purpose —
+    /// this only decides a starting size, and being a row out is invisible.</para>
+    /// </remarks>
+    public int PreferredHeightPx
+    {
+        get
+        {
+            const int Chrome     = 34 + 26;  // header + ruler
+            const int TrackRow   = 56;
+            const int OverlayRow = 40;
+            const int MarkerRuler = 22;
+
+            var tracks = Clips.Tracks.Count;
+            var overlayRows = Clips.Tracks.Sum(t => t.Items.Count(
+                i => i is CalloutClip or TextOverlay or ClipArtClip));
+
+            var markers = EffectiveOptions.Markers && Clips.Markers.Count > 0 ? MarkerRuler : 0;
+
+            return Chrome + markers + (tracks * TrackRow) + (overlayRows * OverlayRow);
+        }
+    }
+
  // --- Multi-select bulk operations ---
 
     public IReadOnlyList<Guid> GetMultiSelectedIds() => _multiSelectedIds.ToList();
@@ -1667,9 +1751,9 @@
 
     private void AddTextOverlay()
     {
-        var position = Clips.TotalDuration > 0
-            ? Playback.State.Progress * Clips.TotalDuration
-            : 0;
+        // At the playhead, the same as Callout — see AddMarkerAtPlayhead for why the old
+        // Progress × TotalDuration was wrong (2026-09-05 audit, titles-8).
+        var position = Playback.State.TimelineTime;
         var overlay  = new TextOverlay
         {
             Name             = "New Text",
@@ -1863,7 +1947,7 @@
             var newDuration = TransitionDurationClamp.Clamp(requested, _transitionResizeFromDur, _transitionResizeToDur);
 
             _resizingTransition.Duration         = newDuration;
-            _resizingTransition.TimelinePosition = _transitionResizeFromEndSeconds - newDuration / 2;
+            _resizingTransition.TimelinePosition = _transitionResizeFromEndSeconds - newDuration;
             StateHasChanged();
             return;
         }
@@ -2006,12 +2090,29 @@
         {
             var transition = _resizingTransition;
             _resizingTransition = null;
-            try { Clips.UpdateTransition(transition.Id, transition.Style, transition.Duration); }
+            // The original duration, not the one the live drag just wrote — otherwise the undo step
+            // records no change at all and undoing a resize does nothing (2026-09-05 audit,
+            // transitions-6).
+            try { Clips.CommitTransitionResize(transition.Id, _transitionResizeOriginalDuration); }
             catch { /* transition or track vanished mid-drag — nothing to commit */ }
         }
 
         FinalizeMove();
     }
+
+    /// <summary>
+    /// A drag that ended on top of another clip, with ripple off — the host asks what to do.
+    /// </summary>
+    /// <param name="Item">The clip that was dragged.</param>
+    /// <param name="TrackId">The track it was dropped on.</param>
+    /// <param name="Position">Where it was dropped.</param>
+    /// <param name="OriginalPosition">Where it started, to put it back on Cancel.</param>
+    /// <param name="OriginalTrackId">The track it came from, when the drop crossed tracks.</param>
+    public sealed record DropConflict(
+        TrackItem Item, Guid TrackId, double Position, double OriginalPosition, Guid? OriginalTrackId);
+
+    /// <summary>Raised when a drop lands on an occupied spot and nobody has said what that means.</summary>
+    [Parameter] public EventCallback<DropConflict> OnDropConflict { get; set; }
 
     /// <summary>Commits (or no-ops, if it never actually moved) and clears an in-progress
     /// body-drag. Called from the normal pointerup path, and also as a fallback from
@@ -2026,7 +2127,28 @@
         var targetTrackId = _moveHoverTrackId is { } hovered && hovered != _moveOriginalTrackId
             ? hovered
             : (Guid?)null;
-        if (targetTrackId.HasValue && _moveOriginalTrackId.HasValue)
+        // A drop onto occupied ground is a decision, and with ripple off it is the person's to
+        // make: Insert pushes what is there, Overwrite replaces it. With ripple on they have
+        // already said "close the gaps", so the drop inserts without asking. Nothing overlaps
+        // either way — the store refuses to write one (2026-09-05 audit, F5).
+        var landingTrack = Clips.Tracks.FirstOrDefault(t => t.Id == (targetTrackId ?? _moveItemTrackId));
+        var conflicted   = !_rippleOverride
+                        && landingTrack is not null
+                        && TrackLayout.IsSequential(_movingItem)
+                        && TrackLayout.Overlaps(landingTrack, _movingItem.TimelinePosition,
+                                                _movingItem.EffectiveLength, _movingItem.Id);
+
+        if (conflicted && OnDropConflict.HasDelegate)
+        {
+            var conflict = new DropConflict(
+                _movingItem, landingTrack!.Id, _movingItem.TimelinePosition,
+                _moveOriginalPosition, _moveOriginalTrackId);
+
+            // Put it back until they answer; the handler applies whichever they choose.
+            _movingItem.TimelinePosition = _moveOriginalPosition;
+            _ = OnDropConflict.InvokeAsync(conflict);
+        }
+        else if (targetTrackId.HasValue && _moveOriginalTrackId.HasValue)
             Clips.CommitDraggedPositionAndTrack(_movingItem.Id, _moveOriginalTrackId.Value, _moveOriginalPosition, targetTrackId);
         else if (_rippleOverride)
             Clips.RippleCommitDraggedPosition(_movingItem.Id, _moveOriginalPosition);

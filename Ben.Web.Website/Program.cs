@@ -36,30 +36,15 @@ builder.Host.UseSerilog();
 builder.Services.AddTelerikBlazor();
 builder.Services.AddBenVideoEditor(options =>
 {
-    options.MultiTrack      = true;
-    options.AudioTracks     = true;
-    options.Transitions     = true;
-    options.TextOverlays    = true;
-    options.VideoEffects    = true;
-    options.MediaLibrary    = true;
-    options.ProjectPersistence = true;
-    options.ErrorLog        = true;
-    options.RippleEdit      = true;
-    // Item #36 phase E rollout: background render worker + rough/fine two-pass preview.
-    options.BackgroundRendering = true;
-    // Item #70 phase 173: show the "Native acceleration" panel so a user who has installed the
-    // sidecar can pair with it. Opt-in twice over — this only makes the editor probe the user's
-    // own loopback ports and render the pairing panel; nothing is routed anywhere until they
-    // paste that sidecar's one-time code. With no sidecar installed the probe finds nothing and
-    // every path stays on ffmpeg.wasm exactly as before.
-    options.NativeSidecar   = true;
-    options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
-    // Turns on SharedCatalogAssetProvider, which has existed in the editor since phase 49 but
-    // stayed dark because nothing served GET /api/video-assets. That endpoint is now real, so
-    // the shared clipart library shows up in the editor's asset browser. The catalog's read
-    // endpoints are anonymous by design — this named HttpClient carries no auth handler.
-    options.AssetCatalogUrl = builder.Configuration["WebApi:BaseUrl"];
-    options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
+    // The same editor the standalone host offers — one list, in VideoEditorHostDefaults, so the
+    // two hosts cannot drift again. Includes the native sidecar panel: it only makes the editor
+    // probe the user's own loopback ports, and nothing is routed there until they paste that
+    // sidecar's one-time pairing code.
+    VideoEditorHostDefaults.ApplyEditingDefaults(options);
+
+    // Media library, shared asset catalog and Save-to-server. The catalog's read endpoints are
+    // anonymous by design, so its named HttpClient carries no auth handler.
+    VideoEditorHostDefaults.ApplyServerIntegration(options, builder.Configuration["WebApi:BaseUrl"]);
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();

@@ -4,6 +4,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+
+    <!--
+      The editor writes ffmpeg filter graphs by formatting numbers into strings. Under a French or
+      German browser locale the current culture writes 2.5 as "2,5", and a comma inside a filter
+      argument is something ffmpeg cannot parse — so exports with an animated title or callout
+      failed for anyone whose browser was not set to English, with an error that named the filter
+      rather than the cause (2026-09-05 audit, titles-10). Individual call sites are now explicit
+      about InvariantCulture; this closes the whole class rather than the instances found.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

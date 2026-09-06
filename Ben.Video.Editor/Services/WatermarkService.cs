@@ -113,6 +113,7 @@ public sealed class WatermarkService
         var (overlayX, overlayY) = ComputePosition(config, videoWidth, videoHeight, wmWidth);
         var opacity = config.Opacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
 
+
         // scale + colorchannelmixer for opacity → [wm], overlay [wm] over [0:v]
         return $"[1:v]scale={wmWidth}:{wmHeight},colorchannelmixer=aa={opacity}[wm];" +
                $"[0:v][wm]overlay={overlayX}:{overlayY}[out]";
@@ -120,7 +121,22 @@ public sealed class WatermarkService
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static (int x, int y) ComputePosition(
+    /// <summary>
+    /// The overlay's x and y, as ffmpeg expressions rather than pixels.
+    /// </summary>
+    /// <remarks>
+    /// <para>This used to compute integers, which meant guessing the watermark's height —
+    /// <c>wmWidth / 2</c>, "approximate 50% of width for a typical logo". A square logo at the
+    /// default 15% of a 1080p frame is 162px tall against a guess of 81, so a bottom-aligned
+    /// watermark hung 81px below the frame and a middle-aligned one sat low (2026-09-05 audit,
+    /// export-7).</para>
+    ///
+    /// <para>ffmpeg's overlay filter evaluates <c>W</c>/<c>H</c> (the frame) and <c>w</c>/<c>h</c>
+    /// (the scaled overlay) itself, so handing it the expression removes the guess entirely — and
+    /// the height is only known after the scale filter runs, which is exactly why it could not be
+    /// computed here.</para>
+    /// </remarks>
+    private static (string x, string y) ComputePosition(
         VideoWatermarkConfig config,
         int videoWidth, int videoHeight,
         int wmWidth)
@@ -128,37 +144,33 @@ public sealed class WatermarkService
         var mx = config.MarginX;
         var my = config.MarginY;
 
-        // Estimate watermark height for bottom/middle calculations
-        // (aspect ratio unknown, approximate 50% of width for a typical logo)
-        var estimatedH = wmWidth / 2;
-
         var x = config.Position switch
         {
             WatermarkPosition.TopLeft    or
             WatermarkPosition.MiddleLeft or
-            WatermarkPosition.BottomLeft  => mx,
+            WatermarkPosition.BottomLeft  => $"{mx}",
 
             WatermarkPosition.TopCenter   or
             WatermarkPosition.Center      or
-            WatermarkPosition.BottomCenter => (videoWidth - wmWidth) / 2,
+            WatermarkPosition.BottomCenter => "(W-w)/2",
 
-            _ => videoWidth - wmWidth - mx,   // Right-aligned
+            _ => $"W-w-{mx}",   // Right-aligned
         };
 
         var y = config.Position switch
         {
             WatermarkPosition.TopLeft    or
             WatermarkPosition.TopCenter  or
-            WatermarkPosition.TopRight    => my,
+            WatermarkPosition.TopRight    => $"{my}",
 
             WatermarkPosition.MiddleLeft or
             WatermarkPosition.Center     or
-            WatermarkPosition.MiddleRight => (videoHeight - estimatedH) / 2,
+            WatermarkPosition.MiddleRight => "(H-h)/2",
 
-            _ => videoHeight - estimatedH - my,  // Bottom-aligned
+            _ => $"H-h-{my}",  // Bottom-aligned
         };
 
-        return (Math.Max(0, x), Math.Max(0, y));
+        return (x, y);
     }
 
     private static string GetExtension(string url)

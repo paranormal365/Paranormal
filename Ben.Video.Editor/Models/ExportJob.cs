@@ -25,6 +25,17 @@ public sealed class ExportJob
     /// <summary>Pipeline phases that have completed.</summary>
     public List<string> CompletedPhases { get; } = [];
 
+    /// <summary>
+    /// Things the export did differently from what the timeline asked for, and finished anyway.
+    /// </summary>
+    /// <remarks>
+    /// A clip whose media had gone missing, or a step that could not run, used to be skipped in
+    /// silence: the export reported success and the person had to notice the difference by
+    /// watching the result. A warning here says what was left out while still handing over the
+    /// file, which is almost always more use than failing the whole render.
+    /// </remarks>
+    public List<string> Warnings { get; } = [];
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     public ExportJobState State { get; internal set; } = ExportJobState.Pending;

@@ -4,8 +4,19 @@
 <div @ref="_el" class="bv-divider bv-divider--@Direction"></div>
 
 @code {
-    /// <summary>"horizontal" resizes the width of the preceding sibling; "vertical" resizes its height.</summary>
+    /// <summary>"horizontal" resizes a sibling's width; "vertical" resizes its height.</summary>
     [Parameter, EditorRequired] public string Direction  { get; set; } = "horizontal";
+
+    /// <summary>
+    /// Which neighbour the drag resizes: <c>"previous"</c> (the default, and what every existing
+    /// caller means) or <c>"next"</c>.
+    /// </summary>
+    /// <remarks>
+    /// The editor's main seam sits above the timeline and below the preview, and it is the timeline
+    /// that has a height worth setting — the preview should simply take whatever is left. Dragging
+    /// the seam upward has to grow the element after it, which is the case this parameter adds.
+    /// </remarks>
+    [Parameter] public string Target { get; set; } = "previous";
 
     /// <summary>Raised with the raw pixel size suggested by the drag. Parent clamps and applies it.</summary>
     [Parameter] public EventCallback<int> OnResize { get; set; }
@@ -20,7 +31,7 @@
         _module  = await JS.InvokeAsync<IJSObjectReference>(
             "benImportEditorModule", "Components/ResizableDivider.razor.js");
         _selfRef = DotNetObjectReference.Create(this);
-        await _module.InvokeVoidAsync("initDivider", _el, _selfRef, Direction);
+        await _module.InvokeVoidAsync("initDivider", _el, _selfRef, Direction, Target);
     }
 
     [JSInvokable]

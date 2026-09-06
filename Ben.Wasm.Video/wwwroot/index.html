@@ -35,7 +35,14 @@
         var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
         root.setAttribute('data-bs-theme', next);
         try {
-          localStorage.setItem('layoutSettings', JSON.stringify({ theme: next }));
+          /* Read-modify-write. Writing a fresh object here threw away every other key the site
+             keeps in layoutSettings (htmlRoot, themeStyle — see ben-boot.js), so toggling the
+             theme in the editor silently reset the site's other layout choices for anyone who
+             uses both (2026-09-05 audit, wasm-13). */
+          var settings = {};
+          try { settings = JSON.parse(localStorage.getItem('layoutSettings') || '{}') || {}; } catch (e) { settings = {}; }
+          settings.theme = next;
+          localStorage.setItem('layoutSettings', JSON.stringify(settings));
           localStorage.setItem('ben-theme', next);
         } catch (e) { /* storage blocked — the choice lasts for this page only */ }
       }

@@ -1,5 +1,6 @@
 @using Ben.Video.Editor.Models.Assets
 @implements IAsyncDisposable
+@inject PlaybackService Playback
 @inject VideoAssetCatalogService AssetCatalog
 @inject ClipStore Clips
 @inject ErrorLogService ErrorLog
@@ -238,7 +239,10 @@
             {
                 Name             = item.Name,
                 Duration         = 5.0,
-                TimelinePosition = Clips.TotalDuration,
+                // At the playhead, like every other way of adding an overlay. TotalDuration put it
+                // after the end of everything — including after other overlays, so a second one
+                // landed five seconds beyond the first (2026-09-05 audit, callouts-7).
+                TimelinePosition = Playback.State.TimelineTime,
                 Shape            = def.ShapeType,
             };
             // Pre-populate control points from server-defined defaults
@@ -261,7 +265,7 @@
                 Settings         = item.Settings,
                 ControlPoints    = item.ControlPoints,
                 Duration         = 5.0,
-                TimelinePosition = Clips.TotalDuration,
+                TimelinePosition = Playback.State.TimelineTime,
                 OpfsExt          = "." + FormatExt(item.Format),
             };
             Clips.AddClipArtClip(clip);

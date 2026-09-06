@@ -363,18 +363,46 @@ export async function extractThumbnails(inputName, count, duration, timeoutMs) {
     // -ss/-frames:v/output groups after a single -i, reusing the same already-open input and
     // decoder across all of them — one exec, N output files, same per-frame timestamps as before
     // (t = interval * i), zero change to what the thumbnails actually show.
+    //
+    // Phase 4 of the 2026-09-05 audit (media-1) — those -ss values came AFTER -i, which makes
+    // them output-side seeks: ffmpeg decodes the stream from the beginning and throws frames away
+    // until it reaches the timestamp. With one input and N of them, importing a half-hour clip
+    // decoded that half hour once per thumbnail, for eight small pictures nobody has asked to be
+    // frame-accurate. It was the heaviest thing the import did and the likeliest cause of the
+    // out-of-bounds trap that killed the engine mid-import.
+    //
+    // Each frame gets its own input with the seek BEFORE it, so ffmpeg jumps straight there, and
+    // -skip_frame nokey means only keyframes are decoded on the way. The frames land on the
+    // nearest keyframe rather than the exact timestamp, which for a filmstrip is a difference
+    // nobody can see. An explicit -map per output is required once there are several inputs:
+    // without one, every output would take its picture from input 0.
     const interval = duration / (count + 1);
     const base = crypto.randomUUID();
     const outNames = [];
-    const args = ['-i', inputName];
+    const inputs = [];
+    const outputs = [];
+
     for (let i = 1; i <= count; i++) {
         const t = (interval * i).toFixed(2);
         const outName = `thumb_${base}_${i}.webp`;
         outNames.push(outName);
-        args.push('-ss', t, '-frames:v', '1', '-vf', 'scale=160:-1', outName);
+        inputs.push('-skip_frame', 'nokey', '-ss', t, '-i', inputName);
+        outputs.push('-map', `${i - 1}:v:0`, '-frames:v', '1', '-vf', 'scale=160:-1', outName);
     }
+
+    const args = [...inputs, ...outputs];
     console.log('[ffmpeg-exec]', args.join(' '));
-    await _ffmpeg.exec(args, timeoutMs ?? -1);
+
+    // The exit code was discarded, so a failed extraction produced no thumbnails and no error —
+    // the filmstrip was simply empty and nothing said why (2026-09-05 audit, media-1).
+    const code = await _ffmpeg.exec(args, timeoutMs ?? -1);
+    if (code !== 0) {
+        console.warn('[ffmpeg] thumbnail extraction exited with', code);
+        for (const outName of outNames) {
+            try { await deleteFile(outName); } catch { /* never written */ }
+        }
+        return [];
+    }
 
     const urls = [];
     for (const outName of outNames) {

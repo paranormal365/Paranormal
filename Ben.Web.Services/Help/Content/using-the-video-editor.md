@@ -11,7 +11,13 @@ your footage is downloaded to your own machine, edited there, and rendered there
 video goes back to the server, and only if you ask it to.
 
 ![The video editor, open and empty](/help/media/using-the-video-editor/editor-overview.png)
-*The editor: preview at the top, timeline below, media and properties in the panel on the right.*
+*The editor: the picture at the top, the timeline below it, and media and properties in the panel
+on the right.*
+
+The three parts are yours to size. Drag the seam above the timeline to give the timeline more room
+or hand it back to the picture; drag the panel's left edge to widen it; collapse the panel with the
+button in its header and bring it back from the toolbar. The editor remembers all of it for next
+time.
 
 ## Where to find it
 
@@ -19,8 +25,12 @@ video goes back to the server, and only if you ask it to.
 - **A case's Video tab** — the same editor, opened against that case, for work your group will
   attach to it.
 
-There is also a standalone editor that runs on its own. It behaves identically, with one
-difference worth knowing: see [Working signed out](#working-signed-out) below.
+There is also a standalone editor that runs on its own, at
+[ishaunted.com/editors/video](https://ishaunted.com/editors/video/). It is the same editor with the
+same features — multiple tracks, titles, transitions, effects, saved projects and all — and it
+keeps your footage even further from the server: media goes straight from the site to your machine
+without passing through the web server at all. The one difference worth knowing is what happens
+before you sign in: see [Working signed out](#working-signed-out) below.
 
 ## Start the engine
 
@@ -37,6 +47,17 @@ where pressing it again is the right move.
 
 ## Bringing in footage
 
+Everything you bring in lands in the **Media** panel first. That is your material for this project,
+and it is not the same thing as your edit: a clip sits there whether or not it is on the timeline,
+and the card tells you which — *on timeline*, or *on timeline ×2* if you have used it twice.
+
+Press **+** on a card to place it at the playhead. The same source can be placed as many times as
+you like, and trimming one placement leaves the others alone. **Remove from media** takes the card
+away; anything already on the timeline stays exactly as it is.
+
+The one shortcut: the first thing you bring into an empty project is placed for you, because nobody
+picks a video and then wants to look at an empty timeline.
+
 There are two ways in.
 
 **From your machine** — the **Open** button takes files straight off your disk. Nothing about them
@@ -47,6 +68,8 @@ uploads, and anything shared with you through a group or a case.
 
 ![The Server tab listing media held on the site](/help/media/using-the-video-editor/media-library.png)
 *Everything you can reach, with its size. Clicking a file downloads it to this browser.*
+
+Importing shows a row per file, and each row can be cancelled while it is still working.
 
 ### Finding the right file
 
@@ -103,10 +126,40 @@ shifts later. **Overwrite** is what you want when you are deliberately replacing
 - **Ripple** decides what happens to everything downstream when you trim or delete: with it on, the
   gap closes and later clips move back; with it off, the gap stays.
 
+### Keyboard
+
+Most of the timeline can be driven from the keyboard, and the full list is in the editor itself:
+**File → Keyboard shortcuts**, or press <kbd>?</kbd>.
+
+The ones worth knowing straight away:
+
+| Key | Does |
+|---|---|
+| <kbd>Space</kbd> | Play or pause |
+| <kbd>←</kbd> / <kbd>→</kbd> | Step one frame back or forward |
+| <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the start or the end |
+| <kbd>S</kbd> | Split the selected clip at the playhead |
+| <kbd>M</kbd> | Drop a marker at the playhead |
+| <kbd>Delete</kbd> | Remove what is selected |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> | Undo (<kbd>Shift</kbd> as well to redo) |
+| <kbd>Escape</kbd> | Clear the selection |
+
+On a Mac, <kbd>⌘</kbd> works everywhere <kbd>Ctrl</kbd> does.
+
+With a title, callout or piece of clip art selected, the arrow keys nudge it around the frame
+instead of stepping frames.
+
 ### Marking a moment
 
 **Marker** drops a labelled point at the playhead. Markers are for you and anyone reviewing with
 you — a way to say "here" without cutting anything. They travel with the project.
+
+### Saving a single frame
+
+**Save Frame** writes the picture under the playhead to your machine as a PNG. It comes from the
+clip's own footage at full resolution rather than from the preview, so it is as sharp as the source
+allows — and it does not carry your titles or callouts, which is usually what you want from a frame
+you are going to share as evidence.
 
 ## Working on a clip
 
@@ -120,9 +173,22 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Apply Speed** slows a moment down or runs a long stretch faster.
 - **Apply Volume** sets the clip's level; audio clips also carry a draggable volume envelope on the
   timeline itself, for fading within a single clip.
+- **Set In** and **Set Out** trim the clip to where the playhead is, so you can trim to what you
+  are actually watching instead of typing a timecode. Both are available while the playhead is over
+  the clip.
 - **Split** cuts the clip in two at the playhead.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
+
+## Layers above the picture
+
+The timeline can hold more than one video track. A clip on a track above the first plays over the
+one beneath it for as long as it runs, and everything on the timeline — the gaps included — keeps
+its place in the finished file. If you leave a gap between two clips, the export holds on black for
+exactly that long, the same as the timeline shows.
+
+Titles, callouts and clip art stack in the order you added them, whatever kind each one is: the
+newest sits on top, and that is how it renders.
 
 ## Titles and callouts
 
@@ -144,22 +210,54 @@ frame while they are on screen.
 ## Preview and export
 
 **Preview** renders the real thing at full quality in a separate window, so you can check the
-finished result before committing to it. Meanwhile the editor keeps its own rough preview up to
-date in the background as you work — which is why the status chip sometimes says it is busy shortly
-after an edit.
+finished result before committing to it. It can be stopped at any point, and if it stops reporting
+progress the window says so and offers to restart the video engine.
+
+Meanwhile the editor keeps its own rough preview up to date in the background as you work — which
+is why the status chip sometimes says it is busy shortly after an edit. That preview keeps your
+place: it carries on from where you were rather than jumping back to the start after every change,
+and it plays your audio tracks, so you can hear how the music sits against the picture while you
+are still editing.
+
+### If the engine stops
+
+The video engine runs inside the browser and can occasionally stop — most often on a very large
+file. When it does, the status chip says so and a **Restart engine** button appears beside it. Your
+project is untouched; only the step that was in progress is lost. The editor usually restarts it
+for you.
+
+If the message says the file is more than the browser can hold, restarting will not help: that is a
+limit of the browser itself. Use a shorter selection, a smaller export resolution, or the native
+helper described below, which does not have the limit.
 
 ![The Render and Export dialog](/help/media/using-the-video-editor/export-dialog.png)
 *Presets for the common cases, and every setting underneath them if you want it.*
 
 **Export** renders the final video. Start from a preset — Web HD, High Quality, 720p, Mobile or
 WebM — and adjust only what you care about: format, codec, quality, resolution and frame rate.
-**Export Now** renders immediately; **Add to Queue** lines it up so you can keep working.
+**Export Now** renders immediately; **Add to Queue** lines it up so you can keep working, including
+while another export is already running.
+
+A few of those settings are worth knowing:
+
+- **Source resolution** keeps the size of your first clip instead of resizing anything. Choose it
+  when you are cutting 4K or phone footage and want the export to be what the camera recorded.
+- **Frame rate** defaults to 30. Lower it only if you need a smaller file.
+- The codecs on offer change with the format, because not every codec fits in every container. Pick
+  the format first.
+
+If something on the timeline could not be included — a clip whose media is not loaded, a piece of
+artwork that could not be read — the export still finishes and tells you what it left out. Read
+that list before you share the file.
 
 You choose where the result goes:
 
 - **To your machine** — the file is saved locally and never leaves it.
 - **To the server** — the finished video is uploaded and becomes an ordinary file in your media
   library, ready to attach to a case or publish.
+
+Closing that question without answering it asks whether you meant to throw the render away. Nothing
+is deleted unless you say so.
 
 Rendering is real work. A short project finishes quickly; a long one with overlays takes minutes,
 and both are faster with the native helper below.
@@ -203,11 +301,29 @@ site by a different address, means pairing once more.
 
 ## Saving your work
 
+The editor saves the project for you, a couple of seconds after you stop editing. You do not have
+to think about it, and the name at the top of the toolbar carries a `*` while there is anything not
+yet written. If you close the tab with unsaved work, or with a render still going, the browser asks
+before letting you.
+
 **Save to Server** stores the project — the arrangement, the trims, the titles, all of it — under
 your account, so you can pick it up on another machine. **Saved Projects** lists what you have.
 
 A project is not the video. It is the recipe: which clips, in what order, cut where. The video
 itself only exists once you export.
+
+### Where your footage lives
+
+Everything you import is copied into the browser's own storage, which is what lets you reopen a
+project and find the clips still there. The media panel shows how much of that storage is in use.
+
+When the editor starts it clears out any footage no project is using any more, so deleting a
+project eventually gives the space back. It only does this once it can see the full list of
+projects, so nothing is removed on a guess.
+
+If a project is opened somewhere the footage was never imported — another machine, another
+browser — the clips show as missing, and the timeline, titles and edits are all still there waiting
+for the files.
 
 ## Working signed out
 

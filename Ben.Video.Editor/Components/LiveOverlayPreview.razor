@@ -81,7 +81,10 @@
 
     private void RecomputeMarkups()
     {
-        var active = Clips.PrimaryVideoTrack.Items
+        // Every video track, not just the first. A callout dropped on a second track was
+        // exported but never drawn in the preview, so the only way to find out it existed was to
+        // render the file (2026-09-05 audit, motion-11).
+        var active = Clips.VideoTracks.SelectMany(t => t.Items)
             .Where(i => CurrentTime >= i.TimelinePosition && CurrentTime < i.TimelinePosition + i.Duration)
             .OrderBy(i => i.LayerIndex)
             .ToList();

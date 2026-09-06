@@ -33,6 +33,10 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     public double TrimmedDuration =>
         EndTrim > StartTrim ? EndTrim - StartTrim : Duration;
 
+    /// <inheritdoc />
+    public override double EffectiveLength => TrimmedDuration;
+
+
     /// <summary>
     /// Playback speed multiplier applied during export.
     /// 1.0 = normal speed, 2.0 = double speed, 0.5 = half speed.

@@ -31,6 +31,28 @@ public abstract record TrackItem
     /// <summary>Duration of this item on the timeline in seconds.</summary>
     public double Duration { get; set; }
 
+    /// <summary>
+    /// The media-bin entry this was placed from, when it was.
+    /// </summary>
+    /// <remarks>
+    /// One source can be placed on the timeline as many times as you like, so the bin needs to know
+    /// how many of its own entries are in use — the "on timeline ×2" a card shows. Null for
+    /// anything that predates the bin, and for the bin entries themselves.
+    /// </remarks>
+    public Guid? SourceBinId { get; set; }
+
+    /// <summary>
+    /// How much of the timeline this item occupies, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// The one place to ask. Video and audio clips answer with their trimmed length and everything
+    /// else with its plain duration; before this, each caller special-cased <c>VideoClip</c> and
+    /// quietly used the untrimmed <see cref="Duration"/> for audio (2026-09-05 audit, audio-11).
+    /// Speed is deliberately not applied here — that changes how long the render is, not how much
+    /// room the item takes on the timeline.
+    /// </remarks>
+    public virtual double EffectiveLength => Duration;
+
     /// <summary>Sort order within the track — kept in sync with <see cref="TimelinePosition"/> so
     /// the sequential (video/audio/transition) row's flex layout renders chips in the right
     /// order. NOT used for overlay stacking — see <see cref="LayerIndex"/>.</summary>

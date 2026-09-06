@@ -11,6 +11,7 @@
 @inject LayoutService Layout
 @inject ExportResolutionService ExportRes
 @inject PreviewQualityService PreviewQuality
+@inject OPFSService Opfs
 @inject PreviewFreshnessService PreviewFreshness
 @inject RenderStatusService RenderStatus
 @inject PreviewSegmentCache SegmentCache
@@ -31,14 +32,19 @@
 @implements IAsyncDisposable
 @implements IKeyboardCommandTarget
 
-<div class="bv-editor" @ref="_editorRoot" style="--bv-preview-h: @(Layout.PreviewHeight)px">
+<div class="bv-editor" @ref="_editorRoot" style="--bv-timeline-h: @(Layout.TimelineHeight)px; --bv-panel-w: @(Layout.PanelWidth)px; --bv-canvas-aspect: @CanvasAspect">
 
     <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
-    @* Preview/Export need video OR image content (matches ExportService.RunPipelineAsync's
-       own "no clips" check) — checking only Clips.Clips (video-only) left both buttons
-       permanently disabled for an image-only timeline, even though both Preview and
-       Export otherwise fully support image clips. *@
-    <Toolbar HasClips="@(Clips.AllVideoClips.Any() || Clips.AllImageClips.Any())"
+    @* One predicate, shared with the export dialog and the pipeline's own "nothing to export"
+       check, so the button and the dialog can never disagree about whether there is anything
+       to render (2026-09-05 audit, export-20).
+
+       ProjectName is the bare name. The unsaved asterisk used to be part of the value in the
+       toolbar's text box, so renaming a project with unsaved changes saved it as "My Project *" —
+       the marker became part of the name and stayed there (2026-09-05 audit, persistence-5). The
+       toolbar draws that mark from IsDirty beside the box instead. *@
+    <Toolbar HasClips="@Clips.HasExportableContent"
+             CanSave="@(Clips.HasSaveableContent || Projects.IsDirty)"
              ShowMultiTrack="@EffectiveOptions.MultiTrack"
              ShowAudioTracks="@EffectiveOptions.AudioTracks"
              ShowTransitions="@EffectiveOptions.Transitions"
@@ -49,12 +55,13 @@
              RedoDescription="@Clips.RedoDescription"
              ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
              ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
-             ProjectName="@(Projects.CurrentProjectName + (Projects.IsDirty ? " *" : ""))"
+             ProjectName="@Projects.CurrentProjectName"
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"
              ShowNativeSidecar="@EffectiveOptions.NativeSidecar"
              ShowDiagnostics="@EffectiveOptions.ShowDiagnostics"
              OnInitialize="LoadCoreAsync"
+             OnResetEngine="ResetEngineAsync"
              OnOpen="OpenFilesAsync"
              OnPreview="RenderFullQualityPreviewAsync"
              OnExport="OpenExportDialog"
@@ -76,8 +83,8 @@
              OnToggleQueue="() => _showQueuePanel = !_showQueuePanel"
              ShowAssetBrowser="@_showAssetBrowser"
              OnToggleAssetBrowser="() => _showAssetBrowser = !_showAssetBrowser"
-             ShowPanel="@(!_panelVisible)"
-             OnTogglePanel="() => { _panelVisible = true; _panelState = WindowState.Default; }"
+             ShowPanel="@Layout.PanelCollapsed"
+             OnTogglePanel="@(() => Layout.SetPanelCollapsed(false))"
              IsFullscreen="@_isFullscreen"
              OnToggleFullscreen="ToggleFullscreenAsync"
              HasSubtitles="@Clips.AllTextOverlays.Any()"
@@ -88,162 +95,183 @@
     <ProjectListDialog @bind-Visible="_showProjectList"
                        OnOpen="OnProjectListOpenAsync" />
 
-    <!-- ── Floating Media & Properties panel ───────────────────────────── -->
-    <TelerikWindow @bind-Visible="_panelVisible"
-                   @bind-State="_panelState"
-                   Draggable="true"
-                   Resizable="true"
-                   PersistContent="true"
-                   ContainmentSelector=".bv-editor"
-                   @bind-Width="_panelWidth"
-                   @bind-Height="_panelHeight"
-                   MinWidth="240px"
-                   MinHeight="200px"
-                   @bind-Top="_panelTop"
-                   @bind-Left="_panelLeft"
-                   Class="bv-media-panel-window">
-        <WindowTitle>
-            <span class="bv-media-panel-title">Media &amp; Properties</span>
-        </WindowTitle>
-        <WindowActions>
-            <WindowAction Name="Minimize" />
-            <WindowAction Name="Close" />
-        </WindowActions>
-        <WindowContent>
-            <TelerikTabStrip @bind-ActiveTabId="_panelTab"
-                             Size="@ThemeConstants.TabStrip.Size.Small"
-                             PersistTabContent="true"
-                             Class="bv-media-panel-tabs">
+    @* Shown only under 900px, by a container query — see the stylesheet. Rendered always so the
+       editor never has to guess at a viewport it cannot measure from C#. *@
+    <div class="bv-editor__too-narrow">
+        <span class="bv-editor__too-narrow-title">This editor needs a wider window</span>
+        <span class="bv-editor__too-narrow-body">
+            Editing video means a timeline, a picture and a properties panel side by side. Open this
+            on a desktop or laptop, or widen this window, and it will come back.
+        </span>
+    </div>
 
-                <TabStripTab Title="📁 Media" Id="media">
-                    <ClipBrowser @ref="_browser"
-                                 EditorOptions="EffectiveOptions"
-                                 OnClipSelected="OnClipSelectedAsync"
-                                 OnAddToTimeline="AddClipToTimeline"
-                                 OnAudioClipAdded="OnAudioClipAdded" />
-                </TabStripTab>
+    <!-- ── Workspace: the picture, and the panel beside it ──────────────── -->
+    @* The Media & Properties panel used to be a floating TelerikWindow parked at the right edge,
+       where it covered the timeline's own Ripple, Callout and Marker buttons at any width, forgot
+       where it had been put on every reload, and gave Properties 320x420 to show a form twice that
+       tall. It is a docked column now: nothing overlaps, the form gets the full height of the
+       editor, and the width is remembered (2026-09-05 audit, F3). *@
+    <div class="bv-workspace">
 
-                @if (_showAssetBrowser)
+        <div class="bv-workspace__stage">
+            <!-- ── Preview ──────────────────────────────────────────────── -->
+            <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
+                @if (!_isPoppedOut)
                 {
-                    <TabStripTab Title="🖼 Assets" Id="assets">
-                        <AssetBrowser />
-                    </TabStripTab>
+                    <VideoPreview @ref="_preview"
+                                  OwnerLabel="WorkingWindow"
+                                  OnTimeUpdate="OnPreviewTimeUpdate"
+                                  MotionLayerId="@_motionLayerId"
+                                  OnMotionKeyframeSelected="OnMotionKeyframeSelected"
+                                  OnAddKeyframeAt="AddKeyframeAt"
+                                  ActiveCallout="@_selectedCallout"
+                                  ActiveClipArt="@_selectedClipArt"
+                                  ActiveTextOverlay="@_selectedTextOverlay"
+                                  OnCanvasItemSelected="OnCanvasItemSelected"
+                                  OnPopoutRequested="OpenPopoutAsync"
+                                  SnappingEnabled="@EffectiveOptions.Snapping"
+                                  SelectedCanvasItem="@SelectedCanvasItem"
+                                  OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
                 }
+            </div>
 
-                <TabStripTab Title="⚙ Properties" Id="props">
-                    <div class="bv-props-tab">
-                        @if (_selectedClip is not null)
-                        {
-                            <ClipEditor Clip="@_selectedClip"
-                                        EditorOptions="EffectiveOptions"
-                                        OnClose="ClearSelectedClip"
-                                        OnTrimApplied="OnTrimApplied"
-                                        OnClipSplit="OnClipSplit"
-                                        OnClipDeleted="OnClipDeleted" />
-                        }
-                        else if (_selectedAudioClip is not null)
-                        {
-                            <AudioClipEditor Clip="@_selectedAudioClip"
-                                             OnClose="ClearSelectedAudioClip"
-                                             OnClipDeleted="OnAudioClipDeleted"
-                                             OnClipSplit="OnAudioClipSplit" />
-                        }
-                        else if (_selectedImageClip is not null)
-                        {
-                            <ImageClipEditor Clip="@_selectedImageClip"
-                                             OnClose="ClearSelectedImageClip"
-                                             OnRemove="OnImageClipRemoved"
-                                             OnClipSplit="OnImageClipSplit" />
-                        }
-                        else if (_selectedCallout is not null)
-                        {
-                            <CalloutEditor Clip="@_selectedCallout"
-                                           OnClose="@(() => _selectedCallout = null)"
-                                           OnRemove="@(() => { Clips.RemoveCallout(_selectedCallout!.Id); _selectedCallout = null; })"
-                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else if (_selectedClipArt is not null)
-                        {
-                            <ClipArtEditor Clip="@_selectedClipArt"
-                                           OnClose="@(() => _selectedClipArt = null)"
-                                           OnRemove="@(() => { Clips.RemoveClipArtClip(_selectedClipArt!.Id); _selectedClipArt = null; })"
-                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else if (_motionLayerId.HasValue)
-                        {
-                            <MotionKeyframeEditor LayerId="@_motionLayerId"
-                                                  LayerType="@_motionLayerType"
-                                                  KeyframeIndex="@_motionKeyframeIndex"
-                                                  OnClose="@(() => { _motionLayerId = null; _motionLayerType = null; })" />
-                        }
-                        else if (_selectedTransition is not null)
-                        {
-                            <TransitionEditor Transition="@_selectedTransition"
-                                              OnClose="ClearSelectedTransition"
-                                              OnRemoved="ClearSelectedTransition" />
-                        }
-                        else if (_selectedTextOverlay is not null)
-                        {
-                            <TextOverlayEditor Overlay="@_selectedTextOverlay"
-                                               OnClose="ClearSelectedTextOverlay"
-                                               OnRemoved="ClearSelectedTextOverlay"
-                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
-                        }
-                        else
-                        {
-                            <div class="bv-props-empty">Select a clip on the timeline to edit its properties.</div>
-                        }
-                    </div>
-                </TabStripTab>
-
-            </TelerikTabStrip>
-        </WindowContent>
-    </TelerikWindow>
-
-    <!-- ── Preview (above timeline) ─────────────────────────────────────── -->
-    <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
-        @if (!_isPoppedOut)
+        @if (!_isPoppedOut && Playback.State.Mode == PlaybackMode.Clip && _previewedLibraryClip is not null)
         {
-            <VideoPreview @ref="_preview"
-                          OwnerLabel="WorkingWindow"
-                          OnTimeUpdate="OnPreviewTimeUpdate"
-                          MotionLayerId="@_motionLayerId"
-                          OnMotionKeyframeSelected="OnMotionKeyframeSelected"
-                          OnAddKeyframeAt="AddKeyframeAt"
-                          ActiveCallout="@_selectedCallout"
-                          ActiveClipArt="@_selectedClipArt"
-                          ActiveTextOverlay="@_selectedTextOverlay"
-                          OnCanvasItemSelected="OnCanvasItemSelected"
-                          OnPopoutRequested="OpenPopoutAsync"
-                          SnappingEnabled="@EffectiveOptions.Snapping"
-                          SelectedCanvasItem="@SelectedCanvasItem"
-                          OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+            <!-- ── Three-point editing marks (item #51) ─────────────────────────── -->
+            <div class="bv-mark-inout">
+                <TelerikButton OnClick="MarkIn" Size="@ThemeConstants.Button.Size.Small" Title="Mark in-point at the current preview position">
+                    Mark In
+                </TelerikButton>
+                <TelerikButton OnClick="MarkOut" Size="@ThemeConstants.Button.Size.Small" Title="Mark out-point at the current preview position">
+                    Mark Out
+                </TelerikButton>
+                @if (_markedIn.HasValue || _markedOut.HasValue)
+                {
+                    <span class="bv-mark-inout__summary">
+                        @(_markedIn.HasValue ? PlaybackService.FormatTime(_markedIn.Value) : "—") → @(_markedOut.HasValue ? PlaybackService.FormatTime(_markedOut.Value) : "—")
+                        (next "Add to Timeline" uses this range)
+                    </span>
+                    <TelerikButton OnClick="ClearMarks" Size="@ThemeConstants.Button.Size.Small" FillMode="@ThemeConstants.Button.FillMode.Flat" Title="Clear marks">
+                        Clear
+                    </TelerikButton>
+                }
+            </div>
+        }
+        </div>
+
+        @if (!Layout.PanelCollapsed)
+        {
+            <ResizableDivider Direction="horizontal" Target="next"
+                              OnResize="@(px => Layout.SetPanelWidth(px))" />
+
+            <aside class="bv-side-panel">
+                <div class="bv-side-panel__header">
+                    <span class="bv-side-panel__title">Media &amp; Properties</span>
+                    <TelerikButton OnClick="@(() => Layout.TogglePanel())"
+                                   Icon="@SvgIcon.WindowMinimize"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   Title="Collapse this panel" />
+                </div>
+                <TelerikTabStrip ActiveTabId="@Layout.PanelTab"
+                                 ActiveTabIdChanged="@(id => Layout.SetPanelTab(id))"
+                                 Size="@ThemeConstants.TabStrip.Size.Small"
+                                 PersistTabContent="true"
+                                 Class="bv-side-panel__tabs">
+
+                    <TabStripTab Title="📁 Media" Id="media">
+                        <ClipBrowser @ref="_browser"
+                                     EditorOptions="EffectiveOptions"
+                                     OnClipSelected="OnClipSelectedAsync"
+                                     OnAddToTimeline="AddClipToTimeline"
+                                     OnAudioClipAdded="OnAudioClipAdded"
+                                     OnAddImageToTimeline="AddImageToTimeline"
+                                     OnAddAudioToTimeline="AddAudioToTimeline" />
+                    </TabStripTab>
+
+                    @if (_showAssetBrowser)
+                    {
+                        <TabStripTab Title="🖼 Assets" Id="assets">
+                            <AssetBrowser />
+                        </TabStripTab>
+                    }
+
+                    <TabStripTab Title="⚙ Properties" Id="props">
+                        <div class="bv-props-tab">
+                            @if (_selectedClip is not null)
+                            {
+                                <ClipEditor Clip="@_selectedClip"
+                                            EditorOptions="EffectiveOptions"
+                                            OnClose="ClearSelectedClip"
+                                            OnTrimApplied="OnTrimApplied"
+                                            OnClipSplit="OnClipSplit"
+                                            OnClipDeleted="OnClipDeleted" />
+                            }
+                            else if (_selectedAudioClip is not null)
+                            {
+                                <AudioClipEditor Clip="@_selectedAudioClip"
+                                                 OnClose="ClearSelectedAudioClip"
+                                                 OnClipDeleted="OnAudioClipDeleted"
+                                                 OnClipSplit="OnAudioClipSplit" />
+                            }
+                            else if (_selectedImageClip is not null)
+                            {
+                                <ImageClipEditor Clip="@_selectedImageClip"
+                                                 OnClose="ClearSelectedImageClip"
+                                                 OnRemove="OnImageClipRemoved"
+                                                 OnClipSplit="OnImageClipSplit" />
+                            }
+                            else if (_selectedCallout is not null)
+                            {
+                                <CalloutEditor Clip="@_selectedCallout"
+                                               OnClose="@(() => _selectedCallout = null)"
+                                               OnRemove="@(() => { Clips.RemoveCallout(_selectedCallout!.Id); _selectedCallout = null; })"
+                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else if (_selectedClipArt is not null)
+                            {
+                                <ClipArtEditor Clip="@_selectedClipArt"
+                                               OnClose="@(() => _selectedClipArt = null)"
+                                               OnRemove="@(() => { Clips.RemoveClipArtClip(_selectedClipArt!.Id); _selectedClipArt = null; })"
+                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else if (_motionLayerId.HasValue)
+                            {
+                                <MotionKeyframeEditor LayerId="@_motionLayerId"
+                                                      LayerType="@_motionLayerType"
+                                                      KeyframeIndex="@_motionKeyframeIndex"
+                                                      OnClose="@(() => { _motionLayerId = null; _motionLayerType = null; })" />
+                            }
+                            else if (_selectedTransition is not null)
+                            {
+                                <TransitionEditor Transition="@_selectedTransition"
+                                                  OnClose="ClearSelectedTransition"
+                                                  OnRemoved="ClearSelectedTransition" />
+                            }
+                            else if (_selectedTextOverlay is not null)
+                            {
+                                <TextOverlayEditor Overlay="@_selectedTextOverlay"
+                                                   OnClose="ClearSelectedTextOverlay"
+                                                   OnRemoved="ClearSelectedTextOverlay"
+                                                   OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                            }
+                            else
+                            {
+                                <div class="bv-props-empty">Select a clip on the timeline to edit its properties.</div>
+                            }
+                        </div>
+                    </TabStripTab>
+
+                </TelerikTabStrip>
+            </aside>
         }
     </div>
 
-    @if (!_isPoppedOut && Playback.State.Mode == PlaybackMode.Clip && _previewedLibraryClip is not null)
-    {
-        <!-- ── Three-point editing marks (item #51) ─────────────────────────── -->
-        <div class="bv-mark-inout">
-            <TelerikButton OnClick="MarkIn" Size="@ThemeConstants.Button.Size.Small" Title="Mark in-point at the current preview position">
-                Mark In
-            </TelerikButton>
-            <TelerikButton OnClick="MarkOut" Size="@ThemeConstants.Button.Size.Small" Title="Mark out-point at the current preview position">
-                Mark Out
-            </TelerikButton>
-            @if (_markedIn.HasValue || _markedOut.HasValue)
-            {
-                <span class="bv-mark-inout__summary">
-                    @(_markedIn.HasValue ? PlaybackService.FormatTime(_markedIn.Value) : "—") → @(_markedOut.HasValue ? PlaybackService.FormatTime(_markedOut.Value) : "—")
-                    (next "Add to Timeline" uses this range)
-                </span>
-                <TelerikButton OnClick="ClearMarks" Size="@ThemeConstants.Button.Size.Small" FillMode="@ThemeConstants.Button.FillMode.Flat" Title="Clear marks">
-                    Clear
-                </TelerikButton>
-            }
-        </div>
-    }
-    <ResizableDivider Direction="vertical" OnResize="@(px => Layout.SetPreviewHeight(px))" />
+    @* The seam. Target="next" so dragging it upward grows the timeline; the preview simply takes
+       what is left, which is why it no longer needs a height of its own. *@
+    <ResizableDivider Direction="vertical" Target="next"
+                      OnResize="@(px => Layout.SetTimelineHeight(px))" />
+
 
     @if (_isPoppedOut)
     {
@@ -307,28 +335,66 @@
                 @if (_fullQualityRendering)
                 {
                     <div class="bv-fullquality-preview__status">
-                        Rendering full-quality preview&hellip; @_fullQualityPercent%
+                        <div>Rendering full-quality preview&hellip; @_fullQualityPercent%</div>
+
+                        @* A render that stops reporting progress used to be indistinguishable from
+                           a slow one, with nothing to press either way (2026-09-05 audit, F7). *@
+                        @if (_fullQualityStalled)
+                        {
+                            <p class="bv-fullquality-preview__stalled" role="alert">
+                                No progress for @PreviewStallSeconds seconds. The video engine may
+                                be stuck. Your project is untouched either way.
+                            </p>
+                        }
+
+                        <div class="bv-fullquality-preview__actions">
+                            <TelerikButton OnClick="CancelFullQualityPreview"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                           Class="btn-sm text-nowrap">
+                                Stop
+                            </TelerikButton>
+                            @if (_fullQualityStalled)
+                            {
+                                <TelerikButton OnClick="ResetFromStalledPreviewAsync"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                               Class="btn-sm text-nowrap">
+                                    Stop and restart the engine
+                                </TelerikButton>
+                            }
+                        </div>
                     </div>
                 }
                 else
                 {
-                    <VideoPreview @ref="_fullQualityPreview" OwnerLabel="FullQualityPreview" ShowWorkingWindowControls="false" />
+                    <VideoPreview @ref="_fullQualityPreview"
+                                  OwnerLabel="FullQualityPreview"
+                                  ShowWorkingWindowControls="false"
+                                  Standalone="true" />
                 }
             </WindowContent>
         </TelerikWindow>
     }
 
     <!-- ── Timeline ─────────────────────────────────────────────────────── -->
-    <VideoTimeline @ref="_timeline"
-                   MultiTrack="@EffectiveOptions.MultiTrack"
-                   AudioTracks="@EffectiveOptions.AudioTracks"
-                   EditorOptions="EffectiveOptions"
-                   OnItemSelected="OnTimelineItemSelected"
-                   OnItemRemoved="OnTimelineItemRemoved"
-                   OnRelinkRequested="OnRelinkRequestedAsync"
-                   OnBulkDelete="OnBulkDeleteAsync"
-                   OnBulkMove="OnBulkMoveAsync"
-                   OnTimelineKeyframeSelected="OnTimelineKeyframeSelected" />
+    @* Wrapped, and the wrapper is what carries the height. The timeline's own root asks for
+       height:100%, which as a bare flex child of .bv-editor made its flex-basis the whole editor
+       and squeezed the preview to a strip (2026-09-05 audit, F4). *@
+    <div class="bv-timeline-row">
+        <VideoTimeline @ref="_timeline"
+                       MultiTrack="@EffectiveOptions.MultiTrack"
+                       AudioTracks="@EffectiveOptions.AudioTracks"
+                       EditorOptions="EffectiveOptions"
+                       OnItemSelected="OnTimelineItemSelected"
+                       OnItemRemoved="OnTimelineItemRemoved"
+                       OnRelinkRequested="OnRelinkRequestedAsync"
+                       OnBulkDelete="OnBulkDeleteAsync"
+                       OnBulkMove="OnBulkMoveAsync"
+                       OnTimelineKeyframeSelected="OnTimelineKeyframeSelected"
+                       OnDropConflict="OnDropConflictAsync"
+                       OnSaveFrame="OnSaveFrameAsync" />
+    </div>
 
     <!-- ── Export Dialog ───────────────────────────────────────────────────────── -->
     <ExportDialog @ref="_exportDialog"
@@ -359,7 +425,7 @@
 
     <!-- ── "Not enough room" insert/overwrite confirmation (items #25, #49) ───────── -->
     <RippleInsertPrompt Visible="_rippleInsertPromptVisible"
-                        ClipName="@(_pendingRippleClip?.Name ?? "this clip")"
+                        ClipName="@(_pendingDrop?.Item.Name ?? _pendingRippleClip?.Name ?? "this clip")"
                         OnConfirm="ConfirmRippleInsert"
                         OnOverwrite="ConfirmOverwriteInsert"
                         OnCancel="CancelRippleInsert" />
@@ -381,13 +447,14 @@
                         <tr><td><kbd>Space</kbd></td><td>Play / Pause preview</td></tr>
                         <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selected clip(s)</td></tr>
                         <tr><td><kbd>S</kbd></td><td>Split selected video clip at playhead</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Click</kbd></td><td>Multi-select clips on timeline</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Click</kbd></td><td>Multi-select clips on timeline</td></tr>
                         <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Nudge selected clips ±1 s</td></tr>
                         <tr><td><kbd>Escape</kbd></td><td>Close editor panel / clear selection</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
-                        <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> / <kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
                         <tr><td><kbd>M</kbd></td><td>Add marker at playhead</td></tr>
-                        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame in preview</td></tr>
+                        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame (nudge, with a layer selected)</td></tr>
+                        <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>Jump to the start / end</td></tr>
                         <tr><td><kbd>Fit</kbd> button</td><td>Zoom timeline to fit all clips in view</td></tr>
                         <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
                     </tbody>
@@ -460,34 +527,20 @@
     private bool                   _showQueuePanel;
     private bool                   _showExportSavePrompt;
     private bool                   _rippleInsertPromptVisible;
+    /// <summary>A drag that landed on an occupied spot and is waiting for Insert or Overwrite.</summary>
+    private VideoTimeline.DropConflict? _pendingDrop;
     private VideoClip?             _pendingRippleClip;
     private double                 _pendingRipplePosition;
     private VideoClip?             _previewedLibraryClip;
     private double?                _markedIn;
     private double?                _markedOut;
     private bool                   _showAssetBrowser;
-    // Item #65 — defaults shared between the field initializers below and both
-    // OnAfterRenderAsync self-heal blocks (item #53/phase 114's TelerikWindow
-    // ContainmentSelector-clamp fix) so all three stay in lock-step by construction instead of
-    // needing the same literals kept in sync by hand across three spots.
-    private const string DefaultPanelTop    = "68px";  // clears the toolbar row (.bv-toolbar, ~61px tall)
-    private const string DefaultPanelLeft   = "calc(100% - 328px)"; // docked right: width + 8px margin
-    private const string DefaultPanelWidth  = "320px";
-    private const string DefaultPanelHeight = "420px";
+    // The panel's position, size and window state used to live here as four strings kept in
+    // lock-step with two self-heal blocks, because a floating TelerikWindow clamped against
+    // .bv-editor could measure a mid-layout container and overwrite its own defaults. A docked
+    // column has no position to lose, so all of that is gone; what remains is in LayoutService,
+    // which also persists it (2026-09-05 audit, F3).
 
-    private bool                   _panelVisible  = true;
-    // Item #65, revised by the user 2026-08-13 after living with it: starts OPEN, positioned at
-    // the right edge (DefaultPanelLeft below) rather than minimized. The original ask was "not on
-    // the left" — minimizing was one way to satisfy that, but having the panel simply sit on the
-    // right is the behaviour actually wanted. Note this panel is a floating TelerikWindow with no
-    // true dock-into-layout mode, so "pinned right" here means positioned at the right edge, not
-    // reflowing the editor around it.
-    private WindowState            _panelState    = WindowState.Default;
-    private string                 _panelTab      = "media";
-    private string                 _panelTop      = DefaultPanelTop;
-    private string                 _panelLeft     = DefaultPanelLeft;
-    private string                 _panelWidth    = DefaultPanelWidth;
-    private string                 _panelHeight   = DefaultPanelHeight;
     private TelerikNotification?   _notifications;
 
     // Audit #4 — typed DOM helpers instead of eval'd source strings; every lookup is null-guarded
@@ -515,6 +568,12 @@
     /// the HUD keeps tracking a layer through <see cref="ActivateMotionPath"/>, which clears all
     /// three (see that method's own comment for why) — without this fallback, clicking the HUD's
     /// own "⏱ Animate" button would make the HUD itself vanish.</summary>
+    /// <summary>Whatever is selected on the timeline, of any kind.</summary>
+    private TrackItem? SelectedTimelineItem =>
+        (TrackItem?)_selectedClip ?? (TrackItem?)_selectedAudioClip ?? (TrackItem?)_selectedImageClip
+        ?? (TrackItem?)_selectedCallout ?? (TrackItem?)_selectedClipArt
+        ?? (TrackItem?)_selectedTextOverlay ?? _selectedTransition;
+
     private TrackItem? SelectedCanvasItem =>
         (TrackItem?)_selectedCallout ?? _selectedClipArt ?? _selectedTextOverlay
         ?? (_motionLayerId.HasValue
@@ -582,7 +641,14 @@
     protected override void OnInitialized()
     {
         Ffmpeg.OnStateChanged   += OnFfmpegStateChanged;
+        Ffmpeg.OnWorkerCrashed  += OnFfmpegWorkerCrashed;
+        PreviewQuality.OnChanged += OnPreviewQualityChanged;
         Clips.OnChange          += OnClipsChanged;
+        // A layer that moves takes its animation with it, and a layer that is removed does not
+        // leave one behind (2026-09-05 audit, motion-3 and motion-18). The store has no idea the
+        // keyframe service exists; this is the join.
+        Clips.ItemTimeShifted   += OnItemTimeShifted;
+        Clips.ItemRemoved       += OnItemRemovedFromStore;
         Playback.OnStateChanged += OnPlaybackStateChanged;
         Layout.OnChanged        += OnLayoutChanged;
         Projects.OnChanged      += OnProjectStoreChanged;
@@ -622,45 +688,44 @@
         if (firstRender)
         {
             await Keyboard.RegisterAsync(this);
+
+            // Before the project loads, so the editor paints once at the size it will keep rather
+            // than snapping from the defaults after the first frame.
+            await RestoreLayoutAsync();
+
+            await WarnIfMediaCannotBeStoredAsync();
+
             await Projects.InitAsync();  // load project index from localStorage
 
             // Item #69 fix — restore whichever project was last active, if this host opts into
             // ProjectPersistence. Previously nothing ever called this: File > Save could report
             // "Project saved." and a reload would still silently discard everything.
             if (EffectiveOptions.ProjectPersistence)
+            {
                 await Projects.RestoreLastActiveAsync();
+
+                // Only once the restore has finished, so opening a project cannot immediately
+                // schedule a write of what was just read.
+                Projects.EnableAutosave();
+
+                // pagehide is the one event that fires on every way out — a closed tab, a followed
+                // link, and on a phone a switch to another app, where beforeunload often does not
+                // fire at all (2026-09-05 audit, F9).
+                _unloadSelfRef = DotNetObjectReference.Create(this);
+                await (await DomAsync()).InvokeVoidAsync(
+                    "flushOnPageHide", _unloadSelfRef, nameof(OnPageHiding));
+
+                // Housekeeping, once the project list and the open project are both known. Nothing
+                // ever freed a source, so every import a person had ever made was still taking up
+                // room in the browser's storage (2026-09-05 audit, media-2). Deliberately not
+                // awaited: it reads every saved project, and the editor should not wait on it.
+                _ = SweepUnusedMediaAsync();
+            }
 
             _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", FullscreenModulePath);
             _fullscreenSelfRef = DotNetObjectReference.Create(this);
             await _fullscreenModule.InvokeVoidAsync("addChangeListener", _fullscreenSelfRef);
 
-            // Backlog #53: TelerikWindow's ContainmentSelector-driven clamp runs its own
-            // mount-time measurement of .bv-editor, and on first paint that container can still
-            // be mid-layout (worst case, momentarily 0×0) — the bad clamp result then flows back
-            // through @bind-Top/@bind-Left/@bind-Width/@bind-Height and overwrites our own
-            // known-good defaults before the user ever sees or touches the panel. There is by
-            // definition no legitimate prior drag/resize to preserve at this exact point, so it's
-            // always safe to unconditionally reassert the intended defaults here — a no-op when
-            // Telerik behaved, a fix when it didn't.
-            _panelTop    = DefaultPanelTop;
-            _panelLeft   = DefaultPanelLeft;
-            _panelWidth  = DefaultPanelWidth;
-            _panelHeight = DefaultPanelHeight;
-            StateHasChanged();
-        }
-
-        // Same root cause as above, but for the rarer case reported after first paint: some
-        // later re-clamp (e.g. a ResizeObserver tick during a minimize/restore or tab-switch
-        // animation) corrupts the panel again after the user already positioned it. "0px" is
-        // never a legitimate resting width/height (MinWidth/MinHeight are 240px/200px, well
-        // above anything a real drag/resize could produce), so it's an unambiguous signal to
-        // self-heal without needing to guess at timing or risk fighting a deliberate user drag.
-        if (_panelWidth == "0px" || _panelHeight == "0px")
-        {
-            _panelTop    = DefaultPanelTop;
-            _panelLeft   = DefaultPanelLeft;
-            _panelWidth  = DefaultPanelWidth;
-            _panelHeight = DefaultPanelHeight;
             StateHasChanged();
         }
 
@@ -787,6 +852,8 @@
         _fullQualityPreviewUrl = null;
         _fullQualityRendering = true;
         _fullQualityPercent   = 0;
+        _fullQualityLastTick  = DateTimeOffset.UtcNow;
+        StartStallWatch();
         StateHasChanged();
 
         // Same resolution the user has actually configured for Export (ExportResolutionService is
@@ -805,6 +872,13 @@
         // subscribing to OnProgress actually see ticks during the render instead of only after.
         var exportTask = Exporter.ExportAsync(settings, downloadToDisk: false);
         var job = Exporter.CurrentJob!;
+
+        // Held so the window's Cancel — and closing the window at all — can reach it. Without
+        // this the render had no handle anywhere: a preview that stalled could not be stopped,
+        // could not be closed out of, and left the engine occupied for everything else
+        // (2026-09-05 audit, F7).
+        _fullQualityJob      = job;
+        _fullQualityLastTick = DateTimeOffset.UtcNow;
         job.OnProgress += OnFullQualityProgress;
 
         try
@@ -815,6 +889,14 @@
         {
             job.OnProgress -= OnFullQualityProgress;
             _fullQualityRendering = false;
+            _fullQualityJob       = null;
+            StopStallWatch();
+        }
+
+        if (job.State == ExportJobState.Cancelled)
+        {
+            StateHasChanged();
+            return;
         }
 
         if (job.State != ExportJobState.Completed || job.PreviewBlobUrl is null)
@@ -842,9 +924,68 @@
 
     private void OnFullQualityProgress() => InvokeAsync(() =>
     {
-        _fullQualityPercent = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
+        _ = UpdateUnloadGuardAsync();
+        _fullQualityPercent  = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
+        _fullQualityLastTick = DateTimeOffset.UtcNow;
+        _fullQualityStalled  = false;
         StateHasChanged();
     });
+
+    /// <summary>The render behind the preview window, while one is running.</summary>
+    private ExportJob?       _fullQualityJob;
+    private DateTimeOffset   _fullQualityLastTick;
+    private bool             _fullQualityStalled;
+    private Timer?           _stallWatch;
+
+    /// <summary>How long without a progress tick before the window says so and offers a reset.</summary>
+    private const int PreviewStallSeconds = 10;
+
+    /// <summary>
+    /// Watches for a render that has stopped reporting progress.
+    /// </summary>
+    /// <remarks>
+    /// The window showed "Rendering… N%" and nothing else, so a stalled render and a slow one
+    /// looked identical for as long as anyone was willing to wait. Ten seconds of silence is not
+    /// proof of a wedge, but it is enough to stop pretending progress is being made and to put the
+    /// two ways out — stop, or restart the engine — in front of the person (2026-09-05 audit, F7).
+    /// </remarks>
+    private void StartStallWatch()
+    {
+        StopStallWatch();
+        _stallWatch = new Timer(_ => InvokeAsync(() =>
+        {
+            if (!_fullQualityRendering) return;
+
+            var stalled = (DateTimeOffset.UtcNow - _fullQualityLastTick).TotalSeconds >= PreviewStallSeconds;
+            if (stalled == _fullQualityStalled) return;
+
+            _fullQualityStalled = stalled;
+            StateHasChanged();
+        }), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private void StopStallWatch()
+    {
+        _stallWatch?.Dispose();
+        _stallWatch = null;
+        _fullQualityStalled = false;
+    }
+
+    /// <summary>Stops the render behind the preview window.</summary>
+    private void CancelFullQualityPreview()
+    {
+        _fullQualityJob?.Cancel();
+        _notifications?.Show("Preview stopped.", ThemeConstants.Notification.ThemeColor.Info);
+    }
+
+    /// <summary>Stops the render and restarts the engine underneath it.</summary>
+    private async Task ResetFromStalledPreviewAsync()
+    {
+        _fullQualityJob?.Cancel();
+        _showFullQualityPreview = false;
+        StopStallWatch();
+        await ResetEngineAsync();
+    }
 
     private async Task OpenFullQualityWindowAsync()
     {
@@ -863,6 +1004,11 @@
 
     private void OnCloseFullQualityPreview()
     {
+        // Closing used to leave the render going, holding the engine for a result nothing would
+        // ever show (2026-09-05 audit, F7).
+        _fullQualityJob?.Cancel();
+        StopStallWatch();
+
         _showFullQualityPreview = false;
         // Item #59-#65 flakiness investigation, phase 144 — closing this window unmounts the
         // whole @if (_showFullQualityPreview) block, so Blazor disposes _fullQualityPreview right
@@ -915,6 +1061,17 @@
                 break;
 
             case "Delete" or "Backspace":
+                // The store refuses to remove anything from a locked track, and silently — so
+                // pressing Delete cleared the selection and left the clip sitting there, which
+                // reads as the key being broken (2026-09-05 audit, timeline-12).
+                if (SelectedTimelineItem is { } toDelete && Clips.FindTrackOf(toDelete.Id) is { IsLocked: true })
+                {
+                    _notifications?.Show(
+                        "That track is locked. Unlock it from the track menu to change it.",
+                        ThemeConstants.Notification.ThemeColor.Info);
+                    break;
+                }
+
                 // Bulk delete if timeline has a multi-selection
                 var multiIds = _timeline?.GetMultiSelectedIds();
                 if (multiIds is { Count: >= 2 })
@@ -947,6 +1104,19 @@
                     Clips.RemoveClipArtClip(_selectedClipArt.Id);
                     _selectedClipArt = null;
                 }
+                // Titles and transitions were the two selectable things Delete ignored, though the
+                // shortcut table promises it removes "the selected clip" and both have a Properties
+                // panel with a Remove button (2026-09-05 audit, titles-7 and transitions-10).
+                else if (_selectedTextOverlay is not null)
+                {
+                    Clips.RemoveTextOverlay(_selectedTextOverlay.Id);
+                    _selectedTextOverlay = null;
+                }
+                else if (_selectedTransition is not null)
+                {
+                    Clips.RemoveTransition(_selectedTransition.Id);
+                    _selectedTransition = null;
+                }
                 break;
 
             // Item #57 P5 — arrow-key nudge for the selected canvas layer (Callout/ClipArt/
@@ -954,7 +1124,27 @@
             // fires when one of those three is actually selected — an unmatched arrow key here
             // falls through with no effect, same as today.
             case "ArrowLeft" or "ArrowRight" or "ArrowUp" or "ArrowDown":
-                NudgeSelectedCanvasItem(key, shift);
+                // With a canvas layer selected the arrows nudge it (item #57 P5). With nothing on
+                // the canvas selected they step one frame, which the transport buttons' tooltips
+                // ("Step back one frame (←)") and the shortcut help have always promised and
+                // nothing implemented (2026-09-05 audit, preview-6).
+                if (SelectedCanvasItem is not null)
+                {
+                    NudgeSelectedCanvasItem(key, shift);
+                }
+                else if (_preview is not null)
+                {
+                    if (key == "ArrowLeft")  _preview.StepBackAsync();
+                    if (key == "ArrowRight") _preview.StepForwardAsync();
+                }
+                break;
+
+            case "Home" when !ctrl:
+                if (_preview is not null) await _preview.RewindAsync();
+                break;
+
+            case "End" when !ctrl:
+                if (_preview is not null) await _preview.SeekToEndAsync();
                 break;
 
             case "[" when !ctrl:
@@ -974,44 +1164,39 @@
                 break;
 
             case "s" or "S" when !ctrl:
-                if (_selectedClip is not null)
                 {
-                    var splitAt = Playback.State.CurrentTime;
-                    if (splitAt > 0 && splitAt < _selectedClip.TrimmedDuration)
+                    // The playhead is a timeline position, and SplitClip takes a position measured
+                    // from the clip's own start. Handing it the playhead cut early by exactly the
+                    // clip's start — right only for a clip beginning at zero, which is why it
+                    // looked correct (2026-09-05 audit, timeline-1).
+                    var selected = (TrackItem?)_selectedClip ?? (TrackItem?)_selectedAudioClip ?? _selectedImageClip;
+                    if (selected is not null)
                     {
-                        try { Clips.SplitClip(_selectedClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedClip = null;
-                    }
-                }
-                else if (_selectedAudioClip is not null)
-                {
-                    var splitAt = Playback.State.CurrentTime;
-                    var trimmedDuration = _selectedAudioClip.EndTrim > _selectedAudioClip.StartTrim
-                        ? _selectedAudioClip.EndTrim - _selectedAudioClip.StartTrim
-                        : _selectedAudioClip.Duration;
-                    if (splitAt > 0 && splitAt < trimmedDuration)
-                    {
-                        try { Clips.SplitClip(_selectedAudioClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedAudioClip = null;
-                    }
-                }
-                else if (_selectedImageClip is not null)
-                {
-                    var splitAt = Playback.State.CurrentTime;
-                    if (splitAt > 0 && splitAt < _selectedImageClip.Duration)
-                    {
-                        try { Clips.SplitClip(_selectedImageClip.Id, splitAt); }
-                        catch { /* split point out of range */ }
-                        _selectedImageClip = null;
+                        if (Clips.SplitClipAtTimelineTime(selected.Id, Playback.State.TimelineTime))
+                        {
+                            _selectedClip      = null;
+                            _selectedAudioClip = null;
+                            _selectedImageClip = null;
+                        }
+                        else
+                        {
+                            _notifications?.Show(
+                                "Put the playhead inside the clip to split it.",
+                                ThemeConstants.Notification.ThemeColor.Info);
+                        }
                     }
                 }
                 break;
 
             case "Escape":
+                // Every selection kind, not the four that happened to be listed: an image, callout
+                // or clip-art selection survived Escape and kept its Properties panel open
+                // (2026-09-05 audit, F10).
                 _selectedClip        = null;
                 _selectedAudioClip   = null;
+                _selectedImageClip   = null;
+                _selectedCallout     = null;
+                _selectedClipArt     = null;
                 _selectedTransition  = null;
                 _selectedTextOverlay = null;
                 _showHelp            = false;
@@ -1030,10 +1215,10 @@
             case "m" or "M" when !ctrl && !shift && !alt:
                 if (EffectiveOptions.Markers)
                 {
-                    var t = Clips.TotalDuration > 0
-                        ? Playback.State.Progress * Clips.TotalDuration
-                        : 0;
-                    Clips.AddMarker(t);
+                    // Progress × TotalDuration was a fraction of whatever the preview held, scaled
+                    // by the timeline's length — two different clocks multiplied together. With a
+                    // clip loaded it put the marker somewhere unrelated to the playhead.
+                    Clips.AddMarker(Playback.State.TimelineTime);
                 }
                 break;
 
@@ -1094,6 +1279,90 @@
     }
 
     /// <summary>
+    /// Says up front when this browser cannot keep the media between visits.
+    /// </summary>
+    /// <remarks>
+    /// The editor writes every imported file to the browser's own storage so a project can be
+    /// reopened. Where that storage cannot be written — Safari before version 26 has the storage
+    /// but not the call used to write to it — every write failed and was swallowed as non-fatal,
+    /// so the editor worked perfectly until the page was reloaded and then every clip came back
+    /// missing. Losing an afternoon's work is not something to find out about afterwards
+    /// (2026-09-05 audit, the completeness critic's browser-support item).
+    /// </remarks>
+    private async Task WarnIfMediaCannotBeStoredAsync()
+    {
+        await Opfs.EnsureInitAsync();
+        if (Opfs.IsAvailable) return;
+
+        _notifications?.Show(
+            "This browser will not let the editor keep your media between visits, so a project "
+            + "reopened here will have missing clips. Editing and export work as normal — save "
+            + "the finished video before you leave. Chrome or Edge do not have this limit.",
+            ThemeConstants.Notification.ThemeColor.Warning);
+    }
+
+    /// <summary>
+    /// Restarts the video engine after it has wedged or crashed, and puts the preview back.
+    /// </summary>
+    private async Task ResetEngineAsync()
+    {
+        await Ffmpeg.ResetWorkerAsync();
+        await LoadCoreAsync();
+
+        _notifications?.Show("Video engine restarted.", ThemeConstants.Notification.ThemeColor.Success);
+        ScheduleAutoPreview();
+        StateHasChanged();
+    }
+
+    /// <summary>When the editor last restarted the engine by itself.</summary>
+    private DateTimeOffset? _lastAutoEngineRestart;
+
+    /// <summary>
+    /// The engine trapped. Restart it without being asked, and say what happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>A crash used to leave the editor quietly broken: the preview stopped refreshing,
+    /// every export refused to start, and the only clue was a status chip most people never look
+    /// at (2026-09-05 audit, F7).</para>
+    ///
+    /// <para>The restart is rate limited, because whatever crashed the engine is usually still on
+    /// the timeline — restarting and immediately re-rendering would crash it again, and a tight
+    /// loop is worse than staying broken. Running out of memory is never restarted for: a fresh
+    /// engine has exactly as much memory as the one that just filled up, so the honest answer is
+    /// to say the work is too big for a browser tab and point at the helper that has no such
+    /// limit.</para>
+    /// </remarks>
+    private void OnFfmpegWorkerCrashed(WorkerFailureKind kind)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            _notifications?.Show(
+                WorkerFailureClassifier.Explain(kind, EffectiveOptions.NativeSidecar),
+                kind == WorkerFailureKind.OutOfMemory
+                    ? ThemeConstants.Notification.ThemeColor.Warning
+                    : ThemeConstants.Notification.ThemeColor.Error);
+
+            if (!FfmpegCrashRecoveryPolicy.ShouldRestart(kind, _lastAutoEngineRestart, now))
+            {
+                if (kind == WorkerFailureKind.Crashed)
+                    _notifications?.Show(
+                        FfmpegCrashRecoveryPolicy.DeclinedMessage(_lastAutoEngineRestart, now),
+                        ThemeConstants.Notification.ThemeColor.Warning);
+
+                StateHasChanged();
+                return;
+            }
+
+            _lastAutoEngineRestart = now;
+            await LoadCoreAsync();
+            ScheduleAutoPreview();
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>
     /// Audit #7 — the toolbar's Open (file picker) crashed the whole circuit when the Media &amp;
     /// Properties panel was closed: <c>ClipBrowser</c> (and with it the hidden
     /// <c>#bv-file-input</c>) unmounts with that panel, so the picker's
@@ -1104,9 +1373,8 @@
     /// </summary>
     private async Task OpenFilesAsync()
     {
-        _panelVisible = true;
-        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
-        _panelTab = "media";
+        Layout.SetPanelCollapsed(false);
+        Layout.SetPanelTab("media");
         StateHasChanged();
 
         // Let the panel (and therefore ClipBrowser's file input) actually render before the picker
@@ -1177,7 +1445,11 @@
     /// </summary>
     private void AddClipToTimeline(VideoClip clip)
     {
-        var wasAlreadyPlaced = Clips.AllVideoClips.Any(c => c.Id == clip.Id);
+        // Placing from the media bin always makes a copy: the bin entry stays as the source, and
+        // the same source can be placed as often as you like without one placement's trims and
+        // effects following the others (2026-09-05 audit, plan D3).
+        var fromBin = Clips.MediaBin.Any(i => i.Id == clip.Id);
+        var wasAlreadyPlaced = fromBin || Clips.AllVideoClips.Any(c => c.Id == clip.Id);
 
         // Item #51 — three-point editing: if this is the clip currently marked in the preview,
         // capture that before the item #48 clone below replaces clip's identity.
@@ -1195,6 +1467,7 @@
             clip = clip with
             {
                 Id               = Guid.NewGuid(),
+                SourceBinId      = fromBin ? clip.Id : clip.SourceBinId,
                 ThumbnailUrls    = [.. clip.ThumbnailUrls],
                 VolumeAutomation = [.. clip.VolumeAutomation],
                 AppliedEffects   = [.. clip.AppliedEffects],
@@ -1213,7 +1486,9 @@
 
         var track    = Clips.PrimaryVideoTrack;
         var existing = track.VideoClips.Select(c => (c.TimelinePosition, c.TrimmedDuration)).ToList();
-        var playhead = Clips.TotalDuration > 0 ? Playback.State.Progress * Clips.TotalDuration : 0;
+        // The playhead is a timeline position; Progress × TotalDuration mixed the media clock with
+        // the timeline's length (2026-09-05 audit, F6).
+        var playhead = Playback.State.TimelineTime;
         var position = TimelineDropCalculator.ResolvePlayheadAnchoredPosition(
             playhead, clip.TrimmedDuration, existing);
 
@@ -1229,10 +1504,56 @@
         Clips.AddClipToTrack(track.Id, clip);
     }
 
+    /// <summary>Places a picture from the media bin at the playhead.</summary>
+    private void AddImageToTimeline(ImageClip source)
+    {
+        var track = Clips.PrimaryVideoTrack;
+        var copy  = source with { Id = Guid.NewGuid(), SourceBinId = source.Id };
+
+        copy.TimelinePosition = ResolvePlacementPosition(track, copy.EffectiveLength);
+        Clips.AddClipToTrack(track.Id, copy);
+    }
+
+    /// <summary>Places an audio source from the media bin on an audio track.</summary>
+    private void AddAudioToTimeline(AudioClip source)
+    {
+        var track = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
+        var copy  = source with
+        {
+            Id = Guid.NewGuid(),
+            SourceBinId = source.Id,
+            VolumeAutomation = [.. source.VolumeAutomation],
+        };
+
+        copy.TimelinePosition = ResolvePlacementPosition(track, copy.EffectiveLength);
+        Clips.AddClipToTrack(track.Id, copy);
+    }
+
+    /// <summary>
+    /// Where a newly placed item goes: at the playhead when there is room, otherwise after
+    /// whatever is in the way.
+    /// </summary>
+    /// <remarks>
+    /// Pictures and audio used to be appended to the end of the track no matter where the playhead
+    /// was, which is not where anybody is looking (2026-09-05 audit, F8).
+    /// </remarks>
+    private double ResolvePlacementPosition(TimelineTrack track, double length)
+    {
+        var playhead = Playback.State.TimelineTime;
+
+        return TrackLayout.Overlaps(track, playhead, length)
+            ? TrackLayout.EndOf(track)
+            : playhead;
+    }
+
     private void ConfirmRippleInsert()
     {
-        if (_pendingRippleClip is not null)
+        if (_pendingDrop is { } drop)
+            Clips.MoveWithInsert(drop.Item.Id, drop.TrackId, drop.Position, drop.OriginalPosition);
+        else if (_pendingRippleClip is not null)
             Clips.InsertClipWithRipple(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
     }
@@ -1241,17 +1562,57 @@
     /// pending clip would land on top of instead of shifting subsequent clips later.</summary>
     private void ConfirmOverwriteInsert()
     {
-        if (_pendingRippleClip is not null)
+        if (_pendingDrop is { } drop)
+            Clips.MoveWithOverwrite(drop.Item.Id, drop.TrackId, drop.Position, drop.OriginalPosition);
+        else if (_pendingRippleClip is not null)
             Clips.OverwriteInsert(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
+    }
+
+    /// <summary>
+    /// A clip was dragged onto an occupied spot with ripple off. Ask, rather than decide.
+    /// </summary>
+    /// <remarks>
+    /// The alternative to asking is picking one silently: sliding the clip past what it landed on
+    /// (surprising — it is not where they dropped it) or replacing what was underneath (destructive
+    /// after a fumbled drag). The prompt already existed for "Add to Timeline"; this is the same
+    /// question arriving from a drag (2026-09-05 audit, F5).
+    /// </remarks>
+    /// <summary>
+    /// Saves the frame under the playhead as a picture on the person's machine.
+    /// </summary>
+    /// <remarks>
+    /// For an evidence site the frame where something appears is the artefact people share most,
+    /// and until now the editor could only produce video (2026-09-05 audit, the completeness
+    /// critic's list).
+    /// </remarks>
+    private async Task OnSaveFrameAsync(double timelineSeconds)
+    {
+        var (fileName, problem) = await Exporter.SaveFrameAsync(timelineSeconds);
+
+        _notifications?.Show(
+            problem ?? $"Saved {fileName}.",
+            problem is null
+                ? ThemeConstants.Notification.ThemeColor.Success
+                : ThemeConstants.Notification.ThemeColor.Error);
+    }
+
+    private Task OnDropConflictAsync(VideoTimeline.DropConflict conflict)
+    {
+        _pendingDrop = conflict;
+        _rippleInsertPromptVisible = true;
+        return InvokeAsync(StateHasChanged);
     }
 
     private void CancelRippleInsert()
     {
         // Declining leaves the clip unplaced — it stays in the library for the user to add again
         // (e.g. by dragging it to a spot they pick themselves) rather than silently placing it
-        // somewhere they didn't ask for.
+        // somewhere they didn't ask for. A dragged clip has already been put back by the timeline.
+        _pendingDrop               = null;
         _pendingRippleClip         = null;
         _rippleInsertPromptVisible = false;
     }
@@ -1260,22 +1621,29 @@
 
     private async Task OnTimelineItemSelected(TrackItem item)
     {
-        // Auto-switch to Properties tab and ensure window is visible
-        _panelTab     = "props";
-        _panelVisible = true;
-        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
+        // Auto-switch to Properties and make sure the panel is showing.
+        Layout.SetPanelTab("props");
+        Layout.SetPanelCollapsed(false);
 
         // Selecting any other layer exits an active motion-path edit — mirrors the fix already
         // applied in the other direction by ActivateMotionPath (which clears the selections below).
         _motionLayerId   = null;
         _motionLayerType = null;
 
+        // Selecting on the timeline moves the timeline's playhead to the clip's start; it does not
+        // load that clip's raw source into the Working Window. It used to, which swapped the window
+        // into a single-clip preview with its own clock starting at zero and no way back except
+        // making an edit — and every subsequent split, marker or title placement then read that
+        // clock as if it were the timeline's (2026-09-05 audit, F6 and timeline-3). Previewing one
+        // clip on its own is still what clicking a card in the Media tab does.
+        Playback.SetTimelineTime(item.TimelinePosition);
+
         if (item is VideoClip clip)
         {
             _selectedAudioClip  = null;
             _selectedTransition = null;
             _selectedClip = clip;
-            await OnClipSelectedAsync(clip);
+            StateHasChanged();
         }
         else if (item is AudioClip audio)
         {
@@ -1496,7 +1864,14 @@
                               .Where(c => c.MemFsName is not null)
                               .ToList();
 
-        if (videoClips.Count == 0 && imageClips.Count == 0) return;
+        // Nothing left to show. This used to return and leave the last render playing, so
+        // deleting every clip gave you an empty timeline above a preview still happily playing the
+        // footage you had just removed (2026-09-05 audit, preview-19).
+        if (videoClips.Count == 0 && imageClips.Count == 0)
+        {
+            await ClearWorkingWindowAsync();
+            return;
+        }
 
         // Item #59-#65 flakiness investigation, phase 144 (symptom S4) — this used to revoke the
         // OLD url right here, before the re-encode below even starts. That re-encode (trim
@@ -1546,7 +1921,11 @@
                 var end     = vid.EndTrim > vid.StartTrim ? vid.EndTrim : vid.Duration;
                 var effectiveDuration = vid.EffectiveDuration > 0 ? vid.EffectiveDuration : vid.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(vid, effectiveDuration);
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(vid.AppliedEffects, EffectRegistry, effectiveDuration, vid.Speed);
+                // The preview encodes each clip at its own native size, so that is the canvas an
+                // effect runs against here.
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    vid.AppliedEffects, EffectRegistry, effectiveDuration, vid.Speed,
+                    vid.Width, vid.Height);
                 var args = ExportArgBuilders.BuildTrimArgs(
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
@@ -1584,7 +1963,8 @@
 
                 var segName = $"preview_img_{Guid.NewGuid():N}.mp4";
                 var duration = img.Duration > 0 ? img.Duration : 5.0;
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(img.AppliedEffects, EffectRegistry, duration);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    img.AppliedEffects, EffectRegistry, duration, 1.0, img.Width, img.Height);
                 var args = ExportArgBuilders.BuildImageSegmentArgs(
                     img.MemFsName!, segName, duration, previewSettings,
                     outputWidth: img.Width, outputHeight: img.Height,
@@ -1600,22 +1980,44 @@
             // Merge video and image segments in timeline order. Durations travel alongside —
             // item #57 T2 needs each segment's real length for xfade junction offset math
             // (mirrors ExportService.RunPipelineAsync's orderedSegments), not just concat order.
-            var orderedSegments = videoClips
-                .Select((c, i) => (pos: c.TimelinePosition, name: videoSegmentNames[i],
-                                    dur: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
-                .Concat(imageClips.Select((c, i) => (pos: c.TimelinePosition, name: imageSegmentNames[i],
-                                                      dur: c.Duration > 0 ? c.Duration : 5.0)))
-                .OrderBy(x => x.pos)
+            var placed = videoClips
+                .Select((c, i) => (Segment: videoSegmentNames[i], ClipId: c.Id, Start: c.TimelinePosition,
+                                   Duration: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
+                .Concat(imageClips.Select((c, i) => (Segment: imageSegmentNames[i], ClipId: c.Id,
+                                                     Start: c.TimelinePosition,
+                                                     Duration: c.Duration > 0 ? c.Duration : 5.0)))
                 .ToList();
-            var orderedNames     = orderedSegments.Select(x => x.name).ToArray();
-            var orderedDurations = orderedSegments.Select(x => x.dur).ToList();
+
+            // The same plan Export builds, so the Working Window shows the gaps rather than
+            // closing them — a preview that silently omitted them disagreed with both the timeline
+            // above it and the file Export produced (2026-09-05 audit, preview-3 and export-2).
+            var plan = ExportSegmentPlanner.Plan(placed).ToList();
+
+            // Gap fillers are encoded at the preview's own canvas so the re-encoding concat below
+            // does not have to letterbox them differently from everything else.
+            var gapCanvas = PreviewScaleTarget();
+            for (var i = 0; i < plan.Count; i++)
+            {
+                if (plan[i].Kind != ExportSegmentKind.Filler) continue;
+
+                var gapName = $"preview_gap_{Guid.NewGuid():N}.mp4";
+                await Ffmpeg.ExecAsync(ExportArgBuilders.BuildFillerSegmentArgs(
+                    gapName, plan[i].Duration, previewSettings,
+                    gapCanvas?.Width ?? 0, gapCanvas?.Height ?? 0));
+                MemFs.Track(gapName, 0, "preview-segment");
+                plan[i] = plan[i] with { Segment = gapName };
+            }
+
+            var orderedNames     = plan.Select(x => x.Segment).ToArray();
+            var orderedDurations = plan.Select(x => x.Duration).ToList();
 
             // Item #57 T2 — WYSIWYG preview: same-track transitions get a real xfade blend at
             // the junction instead of a hard cut, exactly like Export (reuses the same, T0-fixed,
             // BuildXfadeFilterComplex offset math). Cross-track transitions are out of scope here
             // — this preview only ever assembles PrimaryVideoTrack, same as before this phase.
-            var transitions   = Clips.AllTransitions.Where(t => !IsCrossTrackTransition(t)).OrderBy(t => t.Order).ToList();
-            var hasTransitions = EffectiveOptions.Transitions && transitions.Count > 0 && orderedNames.Length > 1;
+            var junctions = ExportSegmentPlanner.MatchTransitions(
+                plan, Clips.AllTransitions.Where(t => !IsCrossTrackTransition(t)));
+            var hasTransitions = junctions.Any(t => t is not null);
             var scaleTo = PreviewScaleTarget();
 
             // Item #36's core promise: only re-render where changes occurred — never re-encode at
@@ -1656,26 +2058,40 @@
             else
             {
                 if (hasTransitions)
-                    await ApplyPreviewXfadeTransitionsAsync(orderedNames, orderedDurations, transitions, previewSettings, scaleTo, outName);
+                    await ApplyPreviewXfadeTransitionsAsync(orderedNames, orderedDurations, junctions, previewSettings, scaleTo, outName);
                 else if (allPinned)
                     await Ffmpeg.ConcatCopyAsync(orderedNames, outName);
                 else
                     await Ffmpeg.ConcatClipsAsync(orderedNames, outName, scaleTo);
 
-                _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(outName);
+                // The soundtrack, in the window you actually edit in. Audio tracks were mixed
+                // only by the full-quality Preview, which re-renders the whole timeline — so
+                // while editing, a separate audio track was silent, and the only way to hear
+                // whether the music sat right against the picture was to wait for a full render
+                // (2026-09-05 audit, audio-6).
+                var mixed = await MixPreviewAudioAsync(outName, previewSettings);
+
+                _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(mixed);
+
+                if (mixed != outName)
+                {
+                    try { await Ffmpeg.DeleteFileAsync(mixed); } catch { }
+                }
             }
             BlobLifecycle.Created(_timelinePreviewUrl, "VideoEditor.timelinePreview");
-            var totalDuration   = videoClips.Sum(c => c.TrimmedDuration)
-                                 + imageClips.Sum(c => c.Duration > 0 ? c.Duration : 5.0);
+            // Gaps included, and shorter by each blended junction's overlap — the same arithmetic
+            // Export uses, so the scrubber's range is the length of the file actually loaded.
+            //
+            // A music track that runs past the last clip counts too: the mix keeps the longer of
+            // the two, so a scrubber measured on the picture alone would stop short of the file it
+            // is scrubbing (2026-09-05 audit, preview-18).
+            var audioEnd = Clips.AudibleAudioClips
+                .Select(a => a.TimelinePosition + a.EffectiveLength)
+                .DefaultIfEmpty(0)
+                .Max();
 
-            // Item #57 T2 — the xfade pass above physically shortens the assembled output by each
-            // blended junction's overlap (mirrors BuildXfadeFilterComplex's own offset recurrence:
-            // every junction gets an xfade once hasTransitions is true, using transitions[i] or a
-            // default Fade/1.0s for any junction without an explicit one). Without this, the
-            // Working Window's scrubber range would run ~1s past the real loaded video's end.
-            if (hasTransitions)
-                for (var i = 0; i < orderedNames.Length - 1; i++)
-                    totalDuration -= i < transitions.Count ? transitions[i].Duration : 1.0;
+            var totalDuration = Math.Max(
+                ExportSegmentPlanner.TotalDuration(plan, junctions), audioEnd);
 
             _timelinePreviewDuration = totalDuration;
             // VideoPreview.LoadUrlAsync does its own swap-then-revoke of whatever _preview is
@@ -1683,7 +2099,11 @@
             // selection happened in between). Capture that before the call so the check below
             // doesn't double-revoke the same string a second time.
             var previewWasShowing = _preview.CurrentUrl;
-            await _preview.LoadUrlAsync(_timelinePreviewUrl, totalDuration, PlaybackMode.Timeline);
+            // An auto-refresh keeps the playhead and carries on playing. Every rebuild used to
+            // start over, so editing anything past the first few seconds meant scrubbing back to
+            // where you were, every time (2026-09-05 audit, preview-2).
+            await _preview.LoadUrlAsync(
+                _timelinePreviewUrl, totalDuration, PlaybackMode.Timeline, preserveTime: true);
             PreviewFreshness.MarkFresh();
             RenderStatus.MarkAllCurrentRendered();
 
@@ -1711,6 +2131,24 @@
                 try { await Ffmpeg.DeleteFileAsync(orphan); } catch { }
             }
         }
+        catch (Exception ex)
+        {
+            // Anything that goes wrong assembling the Working Window used to escape into a
+            // fire-and-forget task and disappear: no message, no log entry, and the preview simply
+            // stopped updating while still showing an older assembly. That is the shape of the
+            // whole F7 report — the editor looked fine and had quietly stopped keeping up
+            // (2026-09-05 audit, F7). The last good preview is deliberately left on screen, being
+            // more use than a blank frame, and the person is told it is behind.
+            ErrorLog.Log("VideoEditor.RefreshWorkingWindowAsync", ex);
+            PreviewFreshness.MarkStale();
+
+            _notifications?.Show(
+                "The preview could not be rebuilt, so it is showing an earlier version. "
+                + WorkerFailureClassifier.Explain(Ffmpeg.LastFailureKind, EffectiveOptions.NativeSidecar),
+                ThemeConstants.Notification.ThemeColor.Warning);
+
+            await InvokeAsync(StateHasChanged);
+        }
         finally
         {
             // Only the final assembled output is scratch — per-clip segments are now cached in
@@ -1720,6 +2158,82 @@
             try { await Ffmpeg.DeleteFileAsync(outName); } catch { }
             await BackgroundRender.EndDeletionHoldAsync();
         }
+    }
+
+    /// <summary>
+    /// Mixes the project's audio tracks into the assembled preview.
+    /// </summary>
+    /// <returns>
+    /// The mixed file, or <paramref name="assembled"/> unchanged when there is nothing to mix or
+    /// the mix could not be made.
+    /// </returns>
+    /// <remarks>
+    /// <para>Uses <see cref="AudioMixPlanner"/>, the same trim, position and filter arithmetic the
+    /// export uses, so the preview and the file agree about what the soundtrack sounds like.</para>
+    ///
+    /// <para>A failure here returns the silent assembly rather than throwing: a preview with no
+    /// music is worth having, and a preview that vanished because the music could not be mixed is
+    /// not.</para>
+    /// </remarks>
+    private async Task<string> MixPreviewAudioAsync(string assembled, ExportSettings previewSettings)
+    {
+        var plan = AudioMixPlanner.Plan(Clips.AudibleAudioClips);
+        if (plan.Count == 0) return assembled;
+
+        var segments = new List<string>(plan.Count);
+
+        try
+        {
+            for (var i = 0; i < plan.Count; i++)
+            {
+                var (source, start, end, filter) = plan[i];
+
+                var segName = $"preview_audio_{i:D3}_{Guid.NewGuid():N}.wav";
+                await Ffmpeg.ExecAsync(ExportArgBuilders.BuildAudioClipTrimArgs(
+                    source, segName, start, end, filter, previewSettings, lossless: true));
+                MemFs.Track(segName, 0, "preview-segment");
+                segments.Add(segName);
+            }
+
+            var mixedName = $"preview_mixed_{Guid.NewGuid():N}.mp4";
+            await Ffmpeg.ExecAsync(ExportArgBuilders.BuildAmixArgs(
+                assembled, segments, mixedName, previewSettings));
+            MemFs.Track(mixedName, 0, "preview-segment");
+
+            return mixedName;
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("VideoEditor.MixPreviewAudioAsync", ex);
+            return assembled;
+        }
+        finally
+        {
+            foreach (var segment in segments)
+            {
+                try { await Ffmpeg.DeleteFileAsync(segment); } catch { }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Empties the Working Window when the timeline has nothing left on it.
+    /// </summary>
+    private async Task ClearWorkingWindowAsync()
+    {
+        var stale = _timelinePreviewUrl;
+        _timelinePreviewUrl      = null;
+        _timelinePreviewDuration = 0;
+
+        if (_preview is not null) await _preview.ClearAsync();
+
+        if (stale is not null)
+        {
+            BlobLifecycle.Revoking(stale, "VideoEditor.timelinePreview");
+            try { await PreviewRevoker.RevokeAsync(stale); } catch { }
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -1735,15 +2249,17 @@
     /// fragile combined one.
     /// </summary>
     private async Task ApplyPreviewXfadeTransitionsAsync(
-        string[] orderedNames, List<double> orderedDurations, List<Transition> transitions,
+        string[] orderedNames, List<double> orderedDurations, IReadOnlyList<Transition?> junctions,
         ExportSettings previewSettings, (int Width, int Height)? scaleTo, string outName)
     {
-        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(orderedNames.ToList(), orderedDurations, transitions);
+        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(
+            orderedNames, orderedDurations, junctions, withAudio: previewSettings.IncludeAudio);
         var blendedName = scaleTo is null ? outName : $"xfade_blend_{Guid.NewGuid():N}.mp4";
 
         var args = new List<string>();
         foreach (var n in orderedNames) { args.Add("-i"); args.Add(n); }
         args.AddRange(["-filter_complex", filterArgs, "-map", "[vout]"]);
+        if (previewSettings.IncludeAudio) args.AddRange(["-map", "[aout]"]);
         args.AddRange(ExportArgBuilders.AudioOutputArgs(previewSettings));
         args.AddRange(ExportArgBuilders.QualityArgs(previewSettings));
         args.AddRange(["-pix_fmt", previewSettings.PixelFormat, blendedName]);
@@ -1854,6 +2370,8 @@
 
     private void OnExportComplete()
     {
+        _ = UpdateUnloadGuardAsync();
+
         // ExportDialog invokes this both when a job is queued (AddToQueueAsync, fired at enqueue
         // time — not when the queued render actually finishes) and when an immediate export
         // genuinely completes (StartExportAsync, after the render). ActiveCount > 0 only ever
@@ -1952,6 +2470,12 @@
             await Projects.SaveAsync(Projects.CurrentProjectName);
             _notifications?.Show("Project saved.", ThemeConstants.Notification.ThemeColor.Success);
         }
+        catch (ProjectStorageException ex)
+        {
+            // Storage said no, which is a different thing from a bug and has something the person
+            // can do about it. The message already says what (2026-09-05 audit, persistence-9).
+            _notifications?.Show(ex.Message, ThemeConstants.Notification.ThemeColor.Error);
+        }
         catch (Exception ex)
         {
             _notifications?.Show($"Save failed: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
@@ -2013,15 +2537,27 @@
 
     private bool _showProjectList;
 
+    /// <summary>
+    /// Asks before throwing away unsaved work, and says no on the person's behalf if they decline.
+    /// </summary>
+    /// <remarks>
+    /// New asked; Open and Import JSON did not, and both replace the whole timeline. An afternoon's
+    /// editing could be gone by picking the wrong entry from a list (2026-09-05 audit,
+    /// persistence-6). One place asks, so a new way of replacing the project cannot forget.
+    /// </remarks>
+    private async Task<bool> ConfirmDiscardIfDirtyAsync(string what)
+    {
+        if (!Projects.IsDirty) return true;
+
+        return await JS.InvokeAsync<bool>("confirm",
+            $"“{Projects.CurrentProjectName}” has unsaved changes, and {what} will replace it. "
+            + "Continue?");
+    }
+
     private async Task NewProjectAsync()
     {
-        if (Projects.IsDirty)
-        {
-            // Simple JS confirm — a proper TelerikDialog would be Phase 39+ polish
-            var ok = await JS.InvokeAsync<bool>("confirm",
-                "Unsaved changes will be lost. Continue?");
-            if (!ok) return;
-        }
+        if (!await ConfirmDiscardIfDirtyAsync("starting a new project")) return;
+
         Clips.Reset();
         await Projects.NewProjectAsync();
         _selectedClip        = null;
@@ -2036,6 +2572,8 @@
 
     private async Task OnProjectListOpenAsync(ProjectSummary summary)
     {
+        if (!await ConfirmDiscardIfDirtyAsync($"opening “{summary.Name}”")) return;
+
         _selectedClip        = null;
         _selectedAudioClip   = null;
         _selectedTransition  = null;
@@ -2050,15 +2588,33 @@
 
     private async Task ImportProjectJsonAsync(ElementReference fileInput)
     {
-        var file = await Project.LoadAsync(fileInput);
+        if (!await ConfirmDiscardIfDirtyAsync("opening a project file")) return;
+
+        var (file, problem) = await Project.LoadWithReasonAsync(fileInput);
+
+        if (problem is not null)
+        {
+            // A file that is not a project used to be opened anyway: it deserialised into an empty
+            // project, so the timeline was replaced with a blank one and nothing said why
+            // (2026-09-05 audit, persistence-8).
+            _notifications?.Show(problem, ThemeConstants.Notification.ThemeColor.Error);
+            return;
+        }
+
         if (file is null) return;
+
         Projects.CurrentProjectName = file.ProjectName ?? Projects.CurrentProjectName;
         _selectedClip        = null;
         _selectedAudioClip   = null;
         _selectedTransition  = null;
         _selectedTextOverlay = null;
         _selectedImageClip   = null;
-        Project.RestoreAsync(file);
+
+        // Through the store, not straight into ClipStore: this is what remounts the media from
+        // browser storage. Restoring directly left every clip marked missing even when its source
+        // was sitting right there, so a same-browser round trip looked like lost media
+        // (2026-09-05 audit, persistence-7).
+        await Projects.LoadFromFileAsync(file, Projects.CurrentProjectName);
     }
 
     private void ToggleHelp() => _showHelp = !_showHelp;
@@ -2174,13 +2730,117 @@
 
     private void OnClipsChanged()
     {
+        // Adding a track or an overlay lane changes how much room the timeline wants. Courtesy
+        // only: it stops as soon as the person drags the seam themselves.
+        AutoFitTimeline();
         InvokeAsync(StateHasChanged);
         PreviewFreshness.MarkStale();
         ScheduleAutoPreview();
     }
 
-    private void OnProjectStoreChanged()   => InvokeAsync(StateHasChanged);
-    private void OnQueueChanged()          => InvokeAsync(StateHasChanged);
+    /// <summary>
+    /// Changing the preview's render quality rebuilds it.
+    /// </summary>
+    /// <remarks>
+    /// The dropdown set a number that only the next rebuild would read, and a rebuild only happens
+    /// when the timeline changes — so choosing a different quality appeared to do nothing until
+    /// some unrelated edit happened to trigger one (2026-09-05 audit, preview-8).
+    /// </remarks>
+    private void OnPreviewQualityChanged()
+    {
+        SegmentCache.Clear();
+        PreviewFreshness.MarkStale();
+        ScheduleAutoPreview();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private DotNetObjectReference<VideoEditor>? _unloadSelfRef;
+    private bool _unloadGuardOn;
+
+    /// <summary>
+    /// Frees stored media that no project refers to, and says so when it found some.
+    /// </summary>
+    /// <remarks>
+    /// Quiet when there was nothing to do, which is the usual case. Worth a word when it was not,
+    /// because "where did my disk space go" is a question this answers.
+    /// </remarks>
+    private async Task SweepUnusedMediaAsync()
+    {
+        try
+        {
+            var (files, bytes) = await Projects.SweepUnusedMediaAsync();
+            if (files == 0) return;
+
+            _notifications?.Show(
+                $"Freed {FormatBytes(bytes)} of storage from {files} file(s) no project was using.",
+                ThemeConstants.Notification.ThemeColor.Info);
+        }
+        catch (Exception ex)
+        {
+            // Housekeeping failing is not worth interrupting anybody over.
+            ErrorLog.Log("VideoEditor.SweepUnusedMediaAsync", ex);
+        }
+    }
+
+    private static string FormatBytes(long b) => b switch
+    {
+        < 1024        => $"{b} B",
+        < 1_048_576   => $"{b / 1024.0:F1} KB",
+        < 1_073_741_824 => $"{b / 1_048_576.0:F1} MB",
+        _             => $"{b / 1_073_741_824.0:F2} GB",
+    };
+
+    /// <summary>
+    /// The last chance to write the project, as the page goes away.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnPageHiding() => await Projects.FlushAutosaveAsync();
+
+    private void OnProjectStoreChanged()
+    {
+        _ = UpdateUnloadGuardAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Turns the browser's "leave site?" prompt on and off as there becomes, or stops being,
+    /// something worth losing.
+    /// </summary>
+    /// <remarks>
+    /// Nothing asked before this: closing the tab took whatever was unsaved with it, and a render
+    /// in progress with it — a render lives entirely in the tab, so leaving does not background it,
+    /// it destroys it (2026-09-05 audit, F9). The handler is removed when there is nothing to
+    /// protect, both because a page that always warns gets its warning ignored and because a
+    /// registered beforeunload disables the browser's back/forward cache.
+    /// </remarks>
+    private async Task UpdateUnloadGuardAsync()
+    {
+        var renderRunning = Exporter.CurrentJob is { State: ExportJobState.Running };
+
+        var shouldGuard = UnloadGuardPolicy.ShouldGuard(
+            Projects.IsDirty, Projects.AutosavePending, renderRunning);
+
+        if (shouldGuard == _unloadGuardOn) return;
+        _unloadGuardOn = shouldGuard;
+
+        try
+        {
+            await (await DomAsync()).InvokeVoidAsync(
+                "setUnloadGuard", shouldGuard,
+                UnloadGuardPolicy.Reason(Projects.IsDirty, renderRunning));
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("VideoEditor.UpdateUnloadGuardAsync", ex);
+        }
+    }
+    private void OnQueueChanged()
+    {
+        // A render running in this tab is worth stopping somebody from leaving over, so the guard
+        // follows the queue as well as the dirty flag.
+        _ = UpdateUnloadGuardAsync();
+        InvokeAsync(StateHasChanged);
+    }
 
     // ── Working Window auto-refresh (item #11, fulfilled unconditionally as of
     // item #36 phase 84) ────────────────────────────────────────────────────────
@@ -2211,22 +2871,28 @@
         {
             await Task.Delay(AutoPreviewDebounceMs, token);
 
-            // Wait out a busy main instance instead of letting RefreshWorkingWindowAsync's Ready guard
-            // silently drop this refresh — an auto-preview (or a rough→fine sharpen refresh) that
-            // fires while the previous assembly is still running used to just vanish, leaving the
-            // Working Window stale (or stuck at rough quality) until the next unrelated edit.
+            // Wait out a busy main instance instead of letting RefreshWorkingWindowAsync's Ready
+            // guard silently drop this refresh — an auto-preview (or a rough→fine sharpen refresh)
+            // that fires while the previous assembly is still running used to just vanish, leaving
+            // the Working Window stale (or stuck at rough quality) until the next unrelated edit.
             //
-            // Phase 143: this used to be a genuinely unbounded loop — if the worker ended up in
-            // Error (or wedged) with no further edit to supersede/cancel this token, it polled
-            // every 250ms forever for nothing. Now it gives up after a bounded wait, and reacts to
-            // Error immediately rather than waiting the whole budget only to still fail.
+            // AutoPreviewGate owns the actual decision (pure, unit-tested). The condition it adds
+            // is the export: a rebuild used to take its turn on the same engine mid-render,
+            // interleaving its encodes with the export's and making a render somebody is waiting
+            // on take longer, for a preview they are not watching (2026-09-05 audit, preview-20).
             var waitedMs = 0;
-            const int maxWaitMs = 60_000;
-            while (Ffmpeg.State != FfmpegState.Ready)
+            while (true)
             {
-                if (Ffmpeg.State == FfmpegState.Error || waitedMs >= maxWaitMs) return;
+                var exportRunning = Exporter.CurrentJob is { State: ExportJobState.Running };
+                var decision = AutoPreviewGate.Decide(Ffmpeg.State, exportRunning, waitedMs);
+
+                if (decision == AutoPreviewDecision.Run)     break;
+                if (decision == AutoPreviewDecision.Abandon) return;
+
                 await Task.Delay(250, token);
-                waitedMs += 250;
+
+                // An export is not a stall, so waiting for one does not count against the budget.
+                if (!exportRunning) waitedMs += 250;
             }
         }
         catch (TaskCanceledException)
@@ -2396,13 +3062,104 @@
         Motion.UpsertKeyframe(_motionLayerId.Value, _motionLayerType, kf);
         StateHasChanged();
     }
+    private void OnItemTimeShifted(Guid itemId, double deltaSeconds)
+        => Motion.ShiftKeyframes(itemId, deltaSeconds);
+
+    private void OnItemRemovedFromStore(Guid itemId)
+        => Motion.RemovePath(itemId);
+
     private void OnPlaybackStateChanged()   => InvokeAsync(StateHasChanged);
-    private void OnLayoutChanged()          => InvokeAsync(StateHasChanged);
 
-    // ── Layout resize callbacks ────────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Re-renders for a layout change, and remembers it.
+    /// </summary>
+    /// <remarks>
+    /// Debounced because a drag raises this on every pointermove: without it a single resize would
+    /// write to localStorage a hundred times. The write is fire-and-forget — a browser that refuses
+    /// to store (private mode, quota) still gets a working editor for this session, which is what
+    /// <c>storageInterop.setItem</c>'s own false return is for.
+    /// </remarks>
+    private void OnLayoutChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        ScheduleLayoutSave();
+    }
 
-    private void OnBrowserResized(int px)  => Layout.SetBrowserWidth(px);
-    private void OnTimelineResized(int px) => Layout.SetTimelineHeight(px);
+    private CancellationTokenSource? _layoutSaveCts;
+
+    private void ScheduleLayoutSave()
+    {
+        _layoutSaveCts?.Cancel();
+        _layoutSaveCts?.Dispose();
+        _layoutSaveCts = new CancellationTokenSource();
+        var token = _layoutSaveCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(300, token);
+                var storage = await StorageAsync();
+                await storage.InvokeAsync<bool>("setItem", LayoutService.StorageKey, Layout.Serialise());
+            }
+            catch (OperationCanceledException) { /* superseded by a later change */ }
+            catch (Exception ex) { ErrorLog.Log("VideoEditor.SaveLayout", ex); }
+        });
+    }
+
+    private IJSObjectReference? _storage;
+
+    private async Task<IJSObjectReference> StorageAsync() =>
+        _storage ??= await JS.InvokeAsync<IJSObjectReference>(
+            "benImportEditorModule", "js/storageInterop.js");
+
+    /// <summary>Restores the remembered panel width, timeline height and tab.</summary>
+    private async Task RestoreLayoutAsync()
+    {
+        try
+        {
+            var storage = await StorageAsync();
+            var stored  = await storage.InvokeAsync<string?>("getItem", LayoutService.StorageKey);
+            Layout.Apply(LayoutService.Deserialise(stored));
+        }
+        catch (Exception ex)
+        {
+            // A layout preference is never worth failing to open the editor over.
+            ErrorLog.Log("VideoEditor.RestoreLayout", ex);
+        }
+    }
+
+    // ── Layout ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The composition's shape, as an <c>aspect-ratio</c> value for the preview stage.
+    /// </summary>
+    /// <remarks>
+    /// The black stage used to be whatever box the flexbox left over, with the video letterboxed
+    /// inside it by <c>object-fit: contain</c>. That is fine for the picture and wrong for
+    /// everything drawn on top of it: the callout, title and control-point overlays are positioned
+    /// against the stage's own box, so they drifted away from the frame whenever the two shapes
+    /// disagreed. Giving the stage the composition's aspect ratio makes the two the same box
+    /// (2026-09-05 audit, F4).
+    /// </remarks>
+    private string CanvasAspect
+    {
+        get
+        {
+            var w = ExportRes.Width  > 0 ? ExportRes.Width  : 1920;
+            var h = ExportRes.Height > 0 ? ExportRes.Height : 1080;
+            return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{w} / {h}");
+        }
+    }
+
+    /// <summary>
+    /// Sizes the timeline to the tracks it holds, until the person sizes it themselves.
+    /// </summary>
+    private void AutoFitTimeline()
+    {
+        if (_timeline is null) return;
+        Layout.AutoFitTimeline(_timeline.PreferredHeightPx);
+    }
 
     // ── Multi-select bulk handlers ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -2456,10 +3213,18 @@
         }
 
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+        Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
+        PreviewQuality.OnChanged -= OnPreviewQualityChanged;
+        StopStallWatch();
+        _unloadSelfRef?.Dispose();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
         BackgroundRender.OnLoopError -= OnBackgroundRenderLoopError;
+        _layoutSaveCts?.Cancel();
+        _layoutSaveCts?.Dispose();
         Clips.OnChange          -= OnClipsChanged;
+        Clips.ItemTimeShifted   -= OnItemTimeShifted;
+        Clips.ItemRemoved       -= OnItemRemovedFromStore;
         Playback.OnStateChanged -= OnPlaybackStateChanged;
         Layout.OnChanged        -= OnLayoutChanged;
         Projects.OnChanged      -= OnProjectStoreChanged;

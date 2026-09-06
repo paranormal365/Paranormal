@@ -29,7 +29,8 @@ public sealed class KenBurnsEffect : IClipEffect
     };
 
     public string BuildFilterFragment(
-        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0)
+        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         var ic  = System.Globalization.CultureInfo.InvariantCulture;
         var d   = Math.Min(p.GetValueOrDefault("duration", 5.0), clipDuration);
@@ -37,12 +38,11 @@ public sealed class KenBurnsEffect : IClipEffect
         var dir = (int)Math.Round(p.GetValueOrDefault("direction", 0));
         if (d <= 0 || z <= 1.0) return string.Empty;
 
-        var fps    = 25;
-        var frames = (int)Math.Ceiling(d * fps);
-        var zStr   = z.ToString("F3", ic);
+        var zStr = z.ToString("F3", ic);
 
-        // progress t/d (using 'on' = output frame number)
-        var prog = $"on/fps/{d.ToString("F3", ic)}";
+        // Progress through the pan, from zoompan's own output clock in seconds. It used to be
+        // written as on/fps, and fps is not a variable zoompan defines — see ZoompanFragment.
+        var prog = $"min({ZoompanFragment.TimeVariable}/{d.ToString("F3", ic)},1)";
         // zoom: starts at z and stays (or starts at 1 and moves to z — both common)
         var zExpr = zStr;
 
@@ -76,6 +76,6 @@ public sealed class KenBurnsEffect : IClipEffect
                 break;
         }
 
-        return $"zoompan=z='{zExpr}':x='{xExpr}':y='{yExpr}':d={frames}:s=iw+\"x\"+ih";
+        return ZoompanFragment.Build(zExpr, xExpr, yExpr, canvasWidth, canvasHeight);
     }
 }

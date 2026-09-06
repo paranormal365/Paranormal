@@ -163,11 +163,18 @@ public sealed class ProjectServiceTests
 
     // ── Schema ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A new file is stamped with the format this editor writes, whatever that number is.
+    /// </summary>
+    /// <remarks>
+    /// Asserting the literal 1 was a test of the number rather than of the rule; version 2 added
+    /// the media bin and the assertion had to be edited to say the same thing again.
+    /// </remarks>
     [Fact]
-    public void ProjectFile_DefaultSchemaVersion_Is1()
+    public void ProjectFile_DefaultSchemaVersion_IsTheCurrentOne()
     {
         var file = new ProjectFile();
-        Assert.Equal(1, file.SchemaVersion);
+        Assert.Equal(ProjectFile.CurrentSchemaVersion, file.SchemaVersion);
     }
 
     [Fact]
@@ -185,7 +192,7 @@ public sealed class ProjectServiceTests
         var original = new ProjectFile { ProjectName = "MyProject" };
         var restored = RoundTrip(original);
 
-        Assert.Equal(1, restored.SchemaVersion);
+        Assert.Equal(ProjectFile.CurrentSchemaVersion, restored.SchemaVersion);
         Assert.Equal("MyProject", restored.ProjectName);
         Assert.Empty(restored.Tracks);
         Assert.Empty(restored.Markers);

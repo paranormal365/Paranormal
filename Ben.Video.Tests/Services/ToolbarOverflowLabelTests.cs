@@ -62,6 +62,53 @@ public sealed class ToolbarOverflowLabelTests
         Assert.Contains("<ToolBarButton", markup, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The actions a person came to the editor for stay in the bar.
+    /// </summary>
+    /// <remarks>
+    /// <para>Initialize, Open, Preview, Export, Undo and Redo carried no Overflow attribute, so
+    /// they took Telerik's default of Auto and were the only things that could collapse. As soon
+    /// as the status chip grew a progress bar, the whole primary row moved into "…" — including
+    /// Initialize, which the help calls the first thing to press (2026-09-05 audit, F1).</para>
+    ///
+    /// <para>Matching on the handler name rather than the label so a reworded button still
+    /// counts.</para>
+    /// </remarks>
+    [Fact]
+    public void The_Primary_Actions_Never_Collapse_Into_The_Overflow_Menu()
+    {
+        var markup = File.ReadAllText(
+            Path.Combine(EditorRoot().FullName, "Components", "Toolbar.razor"));
+
+        string[] primary =
+        [
+            "OnInitializeClicked", "OnOpenClicked", "OnPreviewClicked",
+            "OnExportClicked", "OnUndoClicked", "OnRedoClicked",
+        ];
+
+        var collapsible = new List<string>();
+        foreach (var handler in primary)
+        {
+            var button = Regex.Match(
+                markup,
+                @"<ToolBarButton\b(?:(?!</ToolBarButton>|/>).)*?OnClick=""" + handler + @"""(?:(?!</ToolBarButton>|/>).)*?(?:</ToolBarButton>|/>)",
+                RegexOptions.Singleline);
+
+            if (!button.Success)
+            {
+                collapsible.Add($"{handler} (no button found — was it renamed?)");
+                continue;
+            }
+
+            if (!button.Value.Contains("ToolBarItemOverflow.Never", StringComparison.Ordinal))
+                collapsible.Add(handler);
+        }
+
+        Assert.True(collapsible.Count == 0,
+            "These are the editor's primary actions and must stay visible in the toolbar. Set "
+            + "Overflow=\"@ToolBarItemOverflow.Never\" on each:\n  " + string.Join("\n  ", collapsible));
+    }
+
     [Fact]
     public void The_Overflow_Menu_Sits_Above_Kendo_Windows()
     {

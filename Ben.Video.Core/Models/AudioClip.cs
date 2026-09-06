@@ -13,6 +13,23 @@ public sealed record AudioClip : TrackItem, IHasVolumeAutomation
     public double EndTrim { get; set; }
 
     /// <summary>
+    /// How long this clip actually occupies on the timeline, once its trims are taken into account.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="VideoClip"/> has had this since the beginning; audio did not, so every shared
+    /// path — track length, ripple delete, where the next import lands, splitting at the playhead —
+    /// silently fell back to <see cref="TrackItem.Duration"/>, the length of the whole source file.
+    /// A trimmed thirty-second track therefore still reserved three minutes (2026-09-05 audit,
+    /// audio-11).
+    /// </remarks>
+    public double TrimmedDuration =>
+        EndTrim > StartTrim ? EndTrim - StartTrim : Duration;
+
+    /// <inheritdoc />
+    public override double EffectiveLength => TrimmedDuration;
+
+
+    /// <summary>
     /// Scalar gain fallback (0.0 = silence, 1.0 = unity, 2.0 ≈ +6 dB).
     /// Used when VolumeAutomation has fewer than 2 keyframes.
     /// </summary>

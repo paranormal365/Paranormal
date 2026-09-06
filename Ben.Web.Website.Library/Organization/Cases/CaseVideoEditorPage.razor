@@ -28,10 +28,7 @@
         return;
     }
 
-    @* 100vh alone ignores the site's TelerikAppBar (58px) sitting above <main>, which has no
-       explicit height of its own for a height:100% chain to resolve against — the 58px
-       overshoot pushed the video editor's transport controls below the visible viewport. *@
-    <div class="d-flex flex-column" style="height:calc(100vh - 58px); overflow:hidden;">
+    <div class="ben-editor-page">
 
         @* ── Header bar ──────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
@@ -262,9 +259,19 @@
         _showProjectList = false;
         try
         {
-            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
-                record.ProjectJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // ProjectSerializer, not a fresh options object. This used to build its own with only
+            // case-insensitive names and no string-enum converter — and the editor writes every
+            // enum as a string, so opening a server project here always threw and was swallowed by
+            // the catch below, which is why it looked like nothing happened (2026-09-05 audit,
+            // persistence-1).
+            var (file, problem) = Ben.Video.Editor.Services.ProjectSerializer.Parse(record.ProjectJson);
+            if (problem is not null)
+            {
+                // Said out loud rather than swallowed: a project that will not open is worth a
+                // reason, not a shrug.
+                Toasts.Error(problem);
+                return;
+            }
             if (file is not null)
                 await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
         }

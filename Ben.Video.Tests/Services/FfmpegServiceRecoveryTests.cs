@@ -106,6 +106,99 @@ public sealed class FfmpegServiceRecoveryTests
         Assert.NotEqual(FfmpegState.Processing, svc.State);
     }
 
+    // ── A crashed engine has to announce itself ──────────────────────────────
+    // 2026-09-05 audit, F7. Every failure went to Error and stayed there until somebody pressed
+    // Initialize again, and nothing said so — the preview stopped refreshing, exports refused to
+    // start, and the only clue was a status chip most people never look at. A trap and a bad
+    // command are not the same thing, and the difference decides whether the editor can put itself
+    // right.
+
+    private sealed class ThrowingModule : IJSObjectReference
+    {
+        public required Exception Failure { get; init; }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            if (identifier == "exec") throw Failure;
+            return ValueTask.FromResult(default(TValue)!);
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SingleModuleJsRuntime(IJSObjectReference module) : IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+            => ValueTask.FromResult((TValue)module);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+    }
+
+    private static async Task<(FfmpegService Service, List<WorkerFailureKind> Crashes)>
+        RunFailingExecAsync(Exception failure)
+    {
+        var js  = new SingleModuleJsRuntime(new ThrowingModule { Failure = failure });
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        var crashes = new List<WorkerFailureKind>();
+        svc.OnWorkerCrashed += kind => crashes.Add(kind);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ExecAsync(["-i", "in.mp4", "out.mp4"]));
+        return (svc, crashes);
+    }
+
+    [Fact]
+    public async Task RecordFailure_WasmRuntimeError_RaisesOnWorkerCrashed()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("RuntimeError: memory access out of bounds"));
+
+        Assert.Equal(WorkerFailureKind.Crashed, svc.LastFailureKind);
+        Assert.Equal([WorkerFailureKind.Crashed], crashes);
+    }
+
+    [Fact]
+    public async Task RecordFailure_OutOfMemory_IsToldApartFromATrap()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("Aborted(). Cannot enlarge memory arrays"));
+
+        Assert.Equal(WorkerFailureKind.OutOfMemory, svc.LastFailureKind);
+        Assert.Equal([WorkerFailureKind.OutOfMemory], crashes);
+    }
+
+    /// <summary>
+    /// An ordinary failure must not set off a restart. Restarting the engine every time a filter
+    /// argument is wrong would be its own kind of broken.
+    /// </summary>
+    [Fact]
+    public async Task RecordFailure_AnOrdinaryError_RaisesNothing()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("No such file or directory"));
+
+        Assert.Equal(WorkerFailureKind.Recoverable, svc.LastFailureKind);
+        Assert.Empty(crashes);
+    }
+
+    [Fact]
+    public async Task ResetWorkerAsync_ClearsTheFailureAndTheWedge()
+    {
+        var (svc, _) = await RunFailingExecAsync(
+            new InvalidOperationException("RuntimeError: unreachable"));
+
+        await svc.ResetWorkerAsync();
+
+        Assert.Equal(WorkerFailureKind.Recoverable, svc.LastFailureKind);
+        Assert.False(svc.IsWorkerWedged);
+        Assert.Equal(FfmpegState.Idle, svc.State);
+    }
+
     // ── ExtractAudioAsync nested-state bug ───────────────────────────────────
 
     [Fact]

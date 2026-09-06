@@ -4,6 +4,7 @@ using Ben.Video.Editor.Models.Assets;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Ben.Video.Core.SidecarContracts;
+using System.Globalization;
 
 namespace Ben.Video.Editor.Services;
 
@@ -114,11 +115,25 @@ public sealed class ExportService : IAsyncDisposable
         {
             await RunPipelineAsync(job, downloadToDisk);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (job.CancelRequested)
         {
             job.State        = ExportJobState.Cancelled;
             job.FinishedAt   = DateTimeOffset.UtcNow;
             job.PhaseLabel   = "Cancelled.";
+            job.NotifyProgress();
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled is what the person did, not what happened to them. A timeout inside a
+            // wedged ffmpeg worker also arrives here, and reporting it as "Cancelled." told
+            // somebody who had cancelled nothing that they had — so the export looked like their
+            // own doing and there was nothing to report (2026-09-05 audit, export-12).
+            job.State        = ExportJobState.Failed;
+            job.ErrorMessage = "The video engine stopped responding and the export was abandoned. "
+                             + "Reload the engine from the toolbar and try again; if it keeps "
+                             + "happening, the file may be too large for the browser to handle.";
+            job.FinishedAt   = DateTimeOffset.UtcNow;
+            job.PhaseLabel   = "Failed: the video engine stopped responding.";
             job.NotifyProgress();
         }
         catch (Exception ex)
@@ -140,20 +155,91 @@ public sealed class ExportService : IAsyncDisposable
         return job;
     }
 
+    // ── Still frame ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Saves the frame at <paramref name="timelineSeconds"/> as a PNG on the person's machine.
+    /// </summary>
+    /// <returns>The suggested filename, or null with a reason when there is no frame there.</returns>
+    /// <remarks>
+    /// <para>For a site whose members are cutting evidence reels, the single frame where something
+    /// appears is what actually gets shared, and the editor could only produce video (2026-09-05
+    /// audit, the completeness critic's list).</para>
+    ///
+    /// <para>The frame comes from the clip's own source at its full resolution, not from the
+    /// preview: the preview is a scaled proxy, and a still taken from it would be softer than the
+    /// footage it came from — which is exactly the wrong trade for a frame someone is going to
+    /// look closely at. Overlays are therefore not on it, which is also the right answer for a
+    /// frame offered as evidence.</para>
+    /// </remarks>
+    public async Task<(string? FileName, string? Problem)> SaveFrameAsync(double timelineSeconds)
+    {
+        var item = TrackLayout.SequentialItems(_clips.PrimaryVideoTrack)
+            .FirstOrDefault(i => timelineSeconds >= i.TimelinePosition
+                              && timelineSeconds < i.TimelinePosition + i.EffectiveLength);
+
+        var (source, sourceSeconds) = item switch
+        {
+            // Timeline time back to the clip's own: subtract where it starts, add what was
+            // trimmed off its head, and undo the speed change.
+            VideoClip v when v.MemFsName is not null =>
+                (v.MemFsName, v.StartTrim + (timelineSeconds - v.TimelinePosition) * v.Speed),
+            ImageClip i when i.MemFsName is not null => (i.MemFsName, 0.0),
+            _ => (null, 0.0),
+        };
+
+        if (source is null)
+            return (null, "There is no clip at the playhead to take a frame from.");
+
+        var output = $"frame_{Guid.NewGuid():N}.png";
+
+        try
+        {
+            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildStillFrameArgs(source, output, sourceSeconds));
+
+            var name    = $"frame-{FormatTimecode(timelineSeconds)}.png";
+            var blobUrl = await _ffmpeg.CreatePreviewUrlAsync(output, "image/png");
+            await _ffmpeg.DownloadBlobUrlAsync(blobUrl, name);
+            return (name, null);
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("ExportService.SaveFrameAsync", $"Could not save the frame: {ex.Message}", ex.ToString());
+            return (null, $"Could not save the frame: {ex.Message}");
+        }
+        finally
+        {
+            try { await _ffmpeg.DeleteFileAsync(output); } catch { }
+        }
+    }
+
+    /// <summary>A filename-safe timecode, so two frames from one project never collide.</summary>
+    private static string FormatTimecode(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return $"{(int)t.TotalMinutes:D2}m{t.Seconds:D2}s{t.Milliseconds:D3}";
+    }
+
     // â”€â”€ Pipeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task RunPipelineAsync(ExportJob job, bool downloadToDisk = true)
     {
         job.State = ExportJobState.Running;
 
-        var videoClips = _clips.PrimaryVideoTrack.VideoClips
-                               .OrderBy(c => c.Order)
-                               .ToList();
-        var imageClips = _clips.AllImageClips
+        // The primary track is the sequence; everything above it is composited over that sequence
+        // by ComposeVideoLayersAsync. Images used to be gathered from EVERY video track and folded
+        // into this one list, which flattened a picture placed on track 2 into the main sequence
+        // and pushed the rest of the timeline along by its length.
+        var primary    = _clips.PrimaryVideoTrack;
+        var videoClips = primary.VideoClips
                                .OrderBy(c => c.TimelinePosition)
                                .ToList();
+        var imageClips = primary.ImageClips
+                               .OrderBy(c => c.TimelinePosition)
+                               .ToList();
+        var extraVideoTracks = _clips.VideoTracks.Where(t => t.Id != primary.Id).ToList();
 
-        if (videoClips.Count == 0 && imageClips.Count == 0)
+        if (!_clips.HasExportableContent)
             throw new InvalidOperationException("No clips on the timeline to export.");
 
         var s         = job.Settings;
@@ -161,16 +247,13 @@ public sealed class ExportService : IAsyncDisposable
 
         try
         {
-            // ── Phase 0: Cross-track transitions — pre-render the merged crossfade
-            // segment for each one BEFORE the normal per-clip trim pass, so the "from"
-            // clip's own segment (produced by TrimSegmentsAsync below) is transparently
-            // replaced by the merged one. This is also how a secondary video track's
-            // clip becomes part of the export output at all — see ApplyCrossTrackTransitionsAsync.
-            var crossTrackOverrides = await ApplyCrossTrackTransitionsAsync(job, s, tempFiles);
-            ThrowIfCancelled(job);
-
             // ── Phase 1: Render all timeline segments (video + image) in order ─
-            var videoSegments = await TrimSegmentsAsync(job, videoClips, s, tempFiles, crossTrackOverrides);
+            // A cross-track transition pass used to run before this one, replacing the first
+            // clip's segment with a merged crossfade. It produced a segment longer than the two it
+            // replaced while every later offset stayed measured against the old length, so
+            // everything after the junction drifted — see IsCrossTrack (2026-09-05 audit,
+            // transitions-9).
+            var videoSegments = await TrimSegmentsAsync(job, videoClips, s, tempFiles, []);
             ThrowIfCancelled(job);
 
             List<string> imageSegments = [];
@@ -186,15 +269,31 @@ public sealed class ExportService : IAsyncDisposable
             // chained xfade offsets. VideoClip uses EffectiveDuration (trim ÷ speed — the real
             // wall-clock length of the encoded segment); ImageClip mirrors the same
             // "> 0 ? : 5.0" fallback RenderImageSegmentsAsync uses when writing that segment.
-            var orderedSegments = videoClips
-                .Select((c, i) => (pos: c.TimelinePosition, seg: videoSegments[i],
-                                    dur: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
-                .Concat(imageClips.Select((c, i) => (pos: c.TimelinePosition, seg: imageSegments[i],
-                                                      dur: c.Duration > 0 ? c.Duration : 5.0)))
-                .OrderBy(x => x.pos)
+            var placed = videoClips
+                .Select((c, i) => (Segment: videoSegments[i], ClipId: c.Id, Start: c.TimelinePosition,
+                                   Duration: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
+                .Concat(imageClips.Select((c, i) => (Segment: imageSegments[i], ClipId: c.Id,
+                                                     Start: c.TimelinePosition,
+                                                     Duration: c.Duration > 0 ? c.Duration : 5.0)))
                 .ToList();
-            var allSegments         = orderedSegments.Select(x => x.seg).ToList();
-            var allSegmentDurations = orderedSegments.Select(x => x.dur).ToList();
+
+            // The plan is where the gaps become real. Everything downstream — the audio mix, the
+            // overlays, the chapter marks — is positioned in timeline time, so an export that
+            // closed its gaps put all of them against the wrong picture from the first gap onward
+            // (2026-09-05 audit, export-2).
+            var plan = ExportSegmentPlanner.Plan(placed);
+            ThrowIfCancelled(job);
+
+            plan = await RenderFillerSegmentsAsync(job, plan, s, tempFiles);
+
+            var allSegments         = plan.Select(x => x.Segment).ToList();
+            var allSegmentDurations = plan.Select(x => x.Duration).ToList();
+
+            // Which transition belongs to which junction, decided by the clips it names rather
+            // than by its position in the list. Matching by index meant one transition anywhere on
+            // the track gave every other junction an unrequested one-second fade (transitions-2).
+            var junctions = ExportSegmentPlanner.MatchTransitions(
+                plan, _clips.AllTransitions.Where(t => !IsCrossTrack(t)));
 
             // ── Phase 2: Build output via filtergraph or simple concat ───────
             // Same-track transitions only — cross-track ones were already baked into
@@ -202,7 +301,11 @@ public sealed class ExportService : IAsyncDisposable
             // matched here (BuildXfadeFilterComplex assumes transitions[i] pairs with
             // segments[i], which a mixed-in cross-track transition would misalign).
             string composited;
-            var hasXfadeTransitions = _options.Transitions && _clips.AllTransitions.Any(t => !IsCrossTrack(t));
+            // Not gated on _options.Transitions: the flag decides whether a person can ADD a
+            // transition on this host, and a project carries its own. Gating the render here meant
+            // a project made on the site, opened on a host with the flag off, silently exported
+            // hard cuts (2026-09-05 audit, transitions-15).
+            var hasXfadeTransitions = junctions.Any(t => t is not null);
 
             // Item #70 phase 162 — try to run concat AND the audio mix as one sidecar job. When it
             // engages, the audio mix moves EARLIER than its usual position in this pipeline; that
@@ -219,7 +322,8 @@ public sealed class ExportService : IAsyncDisposable
             }
             else if (hasXfadeTransitions)
             {
-                composited = await ApplyTransitionsAsync(job, allSegments, allSegmentDurations, s, tempFiles);
+                composited = await ApplyTransitionsAsync(
+                    job, allSegments, allSegmentDurations, junctions, s, tempFiles);
                 ThrowIfCancelled(job);
             }
             else
@@ -228,32 +332,31 @@ public sealed class ExportService : IAsyncDisposable
                 ThrowIfCancelled(job);
             }
 
-            // â”€â”€ Phase 3: Text overlays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            if (_options.TextOverlays && _clips.AllTextOverlays.Any())
+            // ── Phase 2b: Tracks above the primary one ───────────────────────
+            // Composited before the overlays so a title or callout still draws on top of
+            // everything, which is what the timeline's own row order means.
+            if (extraVideoTracks.Count > 0)
             {
-                composited = await ApplyTextOverlaysAsync(job, composited, s, tempFiles);
+                composited = await ComposeVideoLayersAsync(job, composited, extraVideoTracks, s, tempFiles);
                 ThrowIfCancelled(job);
             }
 
-            // ── Phase 3b: Callout clips (always applied, independent of TextOverlays flag) ───
-            if (_clips.AllCalloutClips.Any())
-            {
-                composited = await ApplyCalloutsAsync(job, composited, s, tempFiles);
-                ThrowIfCancelled(job);
-            }
+            // ── Phase 3: Titles, callouts and clip art ───────────────────────
+            // One pass, bottom layer first, across all three kinds. A project's overlays are
+            // rendered whatever this host lets people create: gating the render on the host flag
+            // meant a title made on the site silently vanished from an export run anywhere else
+            // (2026-09-05 audit, titles-11).
+            composited = await ApplyOverlaysAsync(job, composited, s, tempFiles);
+            ThrowIfCancelled(job);
 
-            // ── Phase 3c: ClipArt overlay clips ────────────────────────────────
-            if (_clips.AllClipArtClips.Any())
-            {
-                composited = await ApplyClipArtClipsAsync(job, composited, s, tempFiles);
-                ThrowIfCancelled(job);
-            }
 
             // â”€â”€ Phase 4: Audio mix â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // Skipped when the native assemble already mixed audio (item #70 phase 162) —
             // re-running it here would amix the standalone clips a SECOND time on top of the
             // already-mixed track, audibly doubling them.
-            if (_options.AudioTracks && _clips.AudioTracks.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
+            // The project's audio tracks are mixed whether or not this host offers the button
+            // that creates them (2026-09-05 audit, F2/titles-11 class).
+            if (_clips.AudibleAudioClips.Any() && s.IncludeAudio && !_nativeAssembleMixedAudio)
             {
                 composited = await MixAudioTracksAsync(job, composited, s, tempFiles);
                 ThrowIfCancelled(job);
@@ -261,9 +364,10 @@ public sealed class ExportService : IAsyncDisposable
 
             // â”€â”€ Phase 5: Download â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // â”€â”€ Phase 5: Embed chapters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // s.EmbedChapters is the person's own choice in the export dialog, and the markers are
+            // in the project; the host flag only decides whether this host can add one.
             var markers = _clips.Markers;
             if (s.EmbedChapters
-                && _options.Markers
                 && markers.Count > 0
                 && s.OutputFormat != "webm")
             {
@@ -281,6 +385,10 @@ public sealed class ExportService : IAsyncDisposable
                 outputName = await ApplyWatermarkAsync(job, outputName, wmConfig, s, tempFiles);
                 ThrowIfCancelled(job);
             }
+
+            // ── Phase 4.6: The container the person chose ─────────────────────
+            outputName = await FinaliseContainerAsync(job, outputName, s, tempFiles);
+            ThrowIfCancelled(job);
 
             // Final sanity probe (backlog #29): a mid-pipeline pass that silently dropped the
             // video stream (e.g. an explicit -map that deselected it) exits 0, and every later
@@ -329,10 +437,16 @@ public sealed class ExportService : IAsyncDisposable
                 else
                 {
                     Advance(job, 95, "Preparing preview…");
-                    // Deliberately NOT deleted here — the full-quality preview popout keeps
-                    // playing this blob URL and explicitly revokes it later via
-                    // RevokePreviewUrlAsync (VideoEditor.razor, unchanged by this phase).
                     job.PreviewBlobUrl = await _opfs.ReadExportAsBlobUrlAsync(job.Id, ext);
+
+                    // Deleted, like the download path's copy. This used to be kept on the grounds
+                    // that the preview window was still playing it, which stopped being true when
+                    // the blob URL became an in-memory Blob rather than a live handle on the file
+                    // (phase 144). So every full-quality preview left a full-size render in
+                    // browser storage that nothing would ever read or clean up — checking a
+                    // ten-minute project a few times could quietly cost gigabytes (2026-09-05
+                    // audit, preview-4).
+                    await _opfs.DeleteExportAsync(job.Id, ext);
                 }
             }
             else
@@ -402,6 +516,9 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.MemFsName is null)
                 throw new InvalidOperationException($"Clip '{clip.Name}' has no MEMFS source. Re-import the clip.");
 
+            // The canvas every segment lands on, whichever engine renders it.
+            var (fxW, fxH) = ResolveCanvas(s);
+
             // Item #38 phase 124 — offload this one clip's trim/encode to the native sidecar
             // when it's connected, via the exact same ExportArgBuilders.BuildTrimArgs the wasm
             // path below calls, so the resulting segment is structurally identical either way.
@@ -410,7 +527,8 @@ public sealed class ExportService : IAsyncDisposable
             // this one clip renders in the browser instead, the export itself never fails or
             // reruns because of it.
             var nativeBytes = _nativeSidecar.IsConnected
-                ? await _nativeClipEncoder.TryEncodeVideoSegmentAsync(clip, s, job.CancellationToken)
+                ? await _nativeClipEncoder.TryEncodeVideoSegmentAsync(
+                    clip, s, job.CancellationToken, fxW, fxH)
                 : null;
 
             if (nativeBytes is not null)
@@ -438,8 +556,12 @@ public sealed class ExportService : IAsyncDisposable
                 // Build trim args â€” use selected codec, CRF or bitrate, per-clip speed, volume and effects
                 var effectiveDuration = clip.EffectiveDuration > 0 ? clip.EffectiveDuration : clip.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed);
-                var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, clip.MuteAudio,
+                // fxW/fxH is also the canvas an effect runs against: zoompan needs a literal
+                // size and cannot be told one as an expression (see ZoompanFragment).
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed, fxW, fxH);
+                // Muting the video track silences its clips, the same as muting each of them.
+                var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, !_clips.IsAudible(clip),
                     sourceHasAudio: clip.HasAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
@@ -464,77 +586,20 @@ public sealed class ExportService : IAsyncDisposable
     /// documented/common case); a cross-track transition whose lower-track clip is itself on
     /// a secondary track is skipped.
     /// </summary>
-    private async Task<Dictionary<Guid, string>> ApplyCrossTrackTransitionsAsync(
-        ExportJob job, ExportSettings s, List<string> tempFiles)
-    {
-        var overrides = new Dictionary<Guid, string>();
-        if (!_options.Transitions) return overrides;
-
-        var crossTrack = _clips.AllTransitions.Where(IsCrossTrack).ToList();
-        if (crossTrack.Count == 0) return overrides;
-
-        Advance(job, 46, $"Applying {crossTrack.Count} cross-track transition(s)…");
-
-        foreach (var transition in crossTrack)
-        {
-            var fromTrack = _clips.FindTrackOf(transition.FromClipId);
-            var toTrack   = _clips.FindTrackOf(transition.ToClipId);
-            if (fromTrack is null || toTrack is null) continue;
-            if (fromTrack.Id != _clips.PrimaryVideoTrack.Id) continue;
-
-            var fromClip = fromTrack.Items.OfType<VideoClip>().FirstOrDefault(c => c.Id == transition.FromClipId);
-            var toClip   = toTrack.Items.OfType<VideoClip>().FirstOrDefault(c => c.Id == transition.ToClipId);
-            if (fromClip?.MemFsName is null || toClip?.MemFsName is null) continue;
-
-            var fromSeg = $"xfrom_{transition.Id:N}.mp4";
-            var toSeg   = $"xto_{transition.Id:N}.mp4";
-            tempFiles.Add(fromSeg);
-            tempFiles.Add(toSeg);
-
-            var (xvw, xvh) = ParseResolution(s.Resolution);
-
-            var fromStart = fromClip.StartTrim;
-            var fromEnd   = fromClip.EndTrim > fromClip.StartTrim ? fromClip.EndTrim : fromClip.Duration;
-            var fromVol   = ExportArgBuilders.BuildVolumeAutomationFilter(fromClip, fromEnd - fromStart);
-            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
-                fromClip.MemFsName, fromSeg, fromStart, fromEnd, fromClip.Speed, s,
-                fromVol, fromClip.Effects, fromClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh,
-                sourceHasAudio: fromClip.HasAudio), job.CancellationToken);
-
-            var toStart = toClip.StartTrim;
-            var toEnd   = toClip.EndTrim > toClip.StartTrim ? toClip.EndTrim : toClip.Duration;
-            var toVol   = ExportArgBuilders.BuildVolumeAutomationFilter(toClip, toEnd - toStart);
-            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
-                toClip.MemFsName, toSeg, toStart, toEnd, toClip.Speed, s,
-                toVol, toClip.Effects, toClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh,
-                sourceHasAudio: toClip.HasAudio), job.CancellationToken);
-
-            var mergedName = $"xmerged_{transition.Id:N}.mp4";
-            tempFiles.Add(mergedName);
-
-            // Where, within fromClip's own rendered/trimmed segment, the overlap begins.
-            var offset = transition.TimelinePosition - fromClip.TimelinePosition;
-            var filter = ExportArgBuilders.BuildCrossTrackXfadeFilter(transition.Style, transition.Duration, offset);
-
-            var args = new List<string> { "-i", fromSeg, "-i", toSeg, "-filter_complex", filter, "-map", "[vout]" };
-            args.AddRange(AudioOutputArgs(s));
-            args.AddRange(QualityArgs(s));
-            args.AddRange(["-pix_fmt", s.PixelFormat, mergedName]);
-            await _ffmpeg.ExecAsync([.. args], job.CancellationToken);
-
-            // Item #38 phase D — fromSeg/toSeg are fully consumed now.
-            if (tempFiles.Remove(fromSeg)) await _ffmpeg.DeleteFileAsync(fromSeg);
-            if (tempFiles.Remove(toSeg)) await _ffmpeg.DeleteFileAsync(toSeg);
-
-            overrides[fromClip.Id] = mergedName;
-        }
-
-        job.CompletedPhases.Add($"Cross-track transitions applied ({overrides.Count})");
-        return overrides;
-    }
-
+    /// <summary>
+    /// Transitions that span two tracks are ignored.
+    /// </summary>
+    /// <remarks>
+    /// <para>There used to be a pass here that rendered them. It replaced the first clip's segment
+    /// with a merged one whose length is fromDur + toDur − overlap, while every later offset was
+    /// still measured against the original length — so everything after the junction drifted, and
+    /// the preview never showed any of it. The way to fade a clip in or out is the clip's own
+    /// FadeInSeconds/FadeOutSeconds, which this pipeline already renders and a project already
+    /// saves (2026-09-05 audit, transitions-9).</para>
+    ///
+    /// <para>A project made before this can still hold one. It is skipped rather than rendered
+    /// wrongly, which is why <see cref="IsCrossTrack"/> stays.</para>
+    /// </remarks>
     private bool IsCrossTrack(Transition t) =>
         _clips.FindTrackOf(t.FromClipId)?.Id != _clips.FindTrackOf(t.ToClipId)?.Id;
 
@@ -558,10 +623,13 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.MemFsName is null)
                 throw new InvalidOperationException($"Image clip '{clip.Name}' has no MEMFS source. Re-import the file.");
 
+            var (fxImgW, fxImgH) = ResolveCanvas(s);
+
             // Item #38 phase 124 — same native offload as TrimSegmentsAsync above, for image
             // clips. See that method's comment for the fall-through contract.
             var nativeBytes = _nativeSidecar.IsConnected
-                ? await _nativeClipEncoder.TryEncodeImageSegmentAsync(clip, s, job.CancellationToken)
+                ? await _nativeClipEncoder.TryEncodeImageSegmentAsync(
+                    clip, s, job.CancellationToken, fxImgW, fxImgH)
                 : null;
 
             if (nativeBytes is not null)
@@ -573,14 +641,14 @@ public sealed class ExportService : IAsyncDisposable
             {
                 var duration = clip.Duration > 0 ? clip.Duration : 5.0;
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
-                    clip.AppliedEffects, _effectRegistry, duration);
+                    clip.AppliedEffects, _effectRegistry, duration, 1.0, fxImgW, fxImgH);
                 // Item #9 — scale/pad to the PROJECT's output resolution, not the image's own
                 // source size. Passing clip.Width/clip.Height made the filter
                 // "scale={imgW}:{imgH},pad={imgW}:{imgH}" — a no-op that left every image segment
                 // at its native resolution, which is exactly the reported symptom. Every other
-                // segment path in this file already derives its canvas from ParseResolution(s.Resolution);
+                // segment path in this file already derives its canvas from the export settings;
                 // this was the one that didn't.
-                var (imgW, imgH) = ParseResolution(s.Resolution);
+                var (imgW, imgH) = ResolveCanvas(s);
                 var args     = ExportArgBuilders.BuildImageSegmentArgs(
                     clip.MemFsName, segName, duration, s,
                     outputWidth: imgW, outputHeight: imgH,
@@ -613,8 +681,8 @@ public sealed class ExportService : IAsyncDisposable
     {
         _nativeAssembleMixedAudio = false;
 
-        var audioClips = (_options.AudioTracks && s.IncludeAudio)
-            ? _clips.AudioTracks.SelectMany(t => t.AudioClips).OrderBy(a => a.TimelinePosition).ToList()
+        var audioClips = s.IncludeAudio
+            ? _clips.AudibleAudioClips.ToList()
             : [];
 
         _remoteSegments.SyncInstance(_nativeSidecar.InstanceId);
@@ -688,25 +756,98 @@ public sealed class ExportService : IAsyncDisposable
         return outputName;
     }
 
+    /// <summary>
+    /// Rewrites the finished render into the chosen container, with the flags that container wants.
+    /// </summary>
+    /// <remarks>
+    /// A stream copy, so nothing is re-encoded. Everything upstream works in mp4 intermediates and
+    /// the last step used to be a rename, which meant a WebM export was an MP4 file with a .webm
+    /// name (2026-09-05 audit, export-14). A failure here leaves the previous file in place: the
+    /// render is finished and correct, and the wrong extension is better than no export.
+    /// </remarks>
+    private async Task<string> FinaliseContainerAsync(
+        ExportJob job, string input, ExportSettings s, List<string> tempFiles)
+    {
+        Advance(job, 92, "Writing the file…");
+
+        var remuxed = $"container_{job.Id:N}.{s.OutputFormat}";
+
+        try
+        {
+            await _ffmpeg.ExecAsync(
+                ExportArgBuilders.BuildContainerArgs(input, remuxed, s), job.CancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            job.Warnings.Add($"Could not rewrite the file as {s.OutputFormat.ToUpperInvariant()}: {ex.Message}");
+            return input;
+        }
+
+        var final = $"{SanitiseFilename(s.OutputFilename)}.{s.OutputFormat}";
+        if (tempFiles.Remove(input)) await _ffmpeg.DeleteFileAsync(input);
+        else await _ffmpeg.DeleteFileAsync(input);
+
+        await RenameAsync(remuxed, final);
+        job.CompletedPhases.Add($"Written as {s.OutputFormat.ToUpperInvariant()}");
+        return final;
+    }
+
+    /// <summary>
+    /// Renders the gaps the plan asked for, so the returned plan is all real files.
+    /// </summary>
+    private async Task<IReadOnlyList<ExportSegment>> RenderFillerSegmentsAsync(
+        ExportJob job, IReadOnlyList<ExportSegment> plan, ExportSettings s, List<string> tempFiles)
+    {
+        if (!plan.Any(p => p.Kind == ExportSegmentKind.Filler)) return plan;
+
+        var (vw, vh) = ResolveCanvas(s);
+        var filled   = new List<ExportSegment>(plan.Count);
+        var index    = 0;
+
+        foreach (var segment in plan)
+        {
+            if (segment.Kind != ExportSegmentKind.Filler)
+            {
+                filled.Add(segment);
+                continue;
+            }
+
+            var name = $"gap_{job.Id:N}_{index++:D3}.mp4";
+            tempFiles.Add(name);
+
+            await _ffmpeg.ExecAsync(
+                ExportArgBuilders.BuildFillerSegmentArgs(name, segment.Duration, s, vw, vh),
+                job.CancellationToken);
+
+            filled.Add(segment with { Segment = name });
+        }
+
+        job.CompletedPhases.Add($"Rendered {index} gap(s)");
+        return filled;
+    }
+
     private async Task<string> ApplyTransitionsAsync(
-        ExportJob job, List<string> segments, List<double> segmentDurations, ExportSettings s, List<string> tempFiles)
+        ExportJob job, List<string> segments, List<double> segmentDurations,
+        IReadOnlyList<Transition?> junctions, ExportSettings s, List<string> tempFiles)
     {
         Advance(job, 50, "Applying transitions…");
 
-        // Build xfade filter_complex for consecutive segment pairs. Cross-track transitions
-        // are excluded — they were already baked into their "from" clip's segment by
-        // ApplyCrossTrackTransitionsAsync, and BuildXfadeFilterComplex's positional
-        // transitions[i]<->segments[i] pairing would misalign if one were mixed in here.
-        var transitions = _clips.AllTransitions.Where(t => !IsCrossTrack(t)).OrderBy(t => t.Order).ToList();
-        var outputName  = $"transitioned_{job.Id:N}.mp4";
+        var outputName = $"transitioned_{job.Id:N}.mp4";
         tempFiles.Add(outputName);
 
-        // Build the filter_complex string
-        var filterArgs = BuildXfadeFilterComplex(segments, segmentDurations, transitions);
+        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(
+            segments, segmentDurations, junctions, withAudio: s.IncludeAudio);
 
         // Inputs
         var inputArgs = segments.SelectMany(s2 => new[] { "-i", s2 }).ToList();
         inputArgs.AddRange(["-filter_complex", filterArgs, "-map", "[vout]"]);
+
+        // Mapping the picture and nothing else is what made every export with a transition come
+        // out silent: the audio codec arguments below were applied to a stream that was never
+        // selected (2026-09-05 audit, transitions-1).
+        if (s.IncludeAudio) inputArgs.AddRange(["-map", "[aout]"]);
+
         inputArgs.AddRange(AudioOutputArgs(s));
         inputArgs.AddRange(QualityArgs(s));
         inputArgs.AddRange(["-pix_fmt", s.PixelFormat, outputName]);
@@ -733,21 +874,86 @@ public sealed class ExportService : IAsyncDisposable
     // core memory pressure behind backlog #29's ffmpeg.wasm OOM crash. Only animated (motion-path)
     // overlays genuinely need per-frame PNGs, and their frames + the consumed intermediate video are
     // deleted from MEMFS immediately after each compositing pass instead of at end of export.
-    private async Task<string> ApplyTextOverlaysAsync(
+    /// <summary>
+    /// Counter behind the temporary filenames the overlay passes generate, kept across the runs of
+    /// one dispatch so two kinds never claim the same name.
+    /// </summary>
+    private int _overlayPassIndex;
+
+    /// <summary>
+    /// Draws every title, callout and piece of clip art over the picture, bottom layer first.
+    /// </summary>
+    /// <remarks>
+    /// <para>The pipeline used to run three passes in a fixed order — all titles, then all
+    /// callouts, then all clip art — so the stacking in the file was decided by what kind of thing
+    /// each overlay was, not by the order they were added. The canvas stacks them by
+    /// <c>LayerIndex</c> across all three kinds, so a title placed on top of a callout previewed on
+    /// top and exported underneath (2026-09-05 audit, titles-9).</para>
+    ///
+    /// <para>Consecutive overlays of the same kind are handed to their pass together, because each
+    /// pass already composites its list in order and each ffmpeg call costs a full re-encode of the
+    /// whole video. Grouping runs rather than dispatching one at a time keeps the number of passes
+    /// the same as before for the common case where overlays of a kind were added together.</para>
+    /// </remarks>
+    private async Task<string> ApplyOverlaysAsync(
         ExportJob job, string inputName, ExportSettings s, List<string> tempFiles)
     {
-        // LayerIndex (backlog #39), not TimelinePosition — matches the timeline UI's overlay
-        // stacking ("everything added gets its own layer, each layer higher than any added
-        // before it") within this type's own compositing pass. Cross-type ordering (text always
-        // composites before callouts, before clip art — see the phase order in RunPipelineAsync)
-        // is a separate, pre-existing pipeline characteristic not addressed by this ordering key.
-        var overlays   = _clips.AllTextOverlays.OrderBy(o => o.LayerIndex).ToList();
+        var overlays = _clips.VideoTracks
+            .SelectMany(t => t.Items)
+            .Where(i => i is TextOverlay or CalloutClip or ClipArtClip)
+            .OrderBy(i => i.LayerIndex)
+            .ToList();
+
+        if (overlays.Count == 0) return inputName;
+
+        Advance(job, 68, $"Applying {overlays.Count} overlay(s)…");
+        _overlayPassIndex = 0;
+
         var composited = inputName;
-        var (vw, vh)   = ParseResolution(s.Resolution);
+        var index      = 0;
 
-        Advance(job, 68, $"Applying {overlays.Count} text overlay(s)...");
+        while (index < overlays.Count)
+        {
+            var kind = overlays[index].GetType();
+            var run  = new List<TrackItem>();
 
-        var overlayIdx = 0;
+            while (index < overlays.Count && overlays[index].GetType() == kind)
+                run.Add(overlays[index++]);
+
+            composited = run[0] switch
+            {
+                TextOverlay => await ApplyTextOverlaysAsync(
+                    job, composited, s, tempFiles, [.. run.Cast<TextOverlay>()]),
+                CalloutClip => await ApplyCalloutsAsync(
+                    job, composited, s, tempFiles, [.. run.Cast<CalloutClip>()]),
+                _           => await ApplyClipArtClipsAsync(
+                    job, composited, s, tempFiles, [.. run.Cast<ClipArtClip>()]),
+            };
+
+            ThrowIfCancelled(job);
+            Advance(job, ProgressInRange(index * 100 / overlays.Count, 100, 68, 80), "Applying overlays…");
+        }
+
+        job.CompletedPhases.Add($"Overlays applied ({overlays.Count})");
+        Advance(job, 80, "Overlays applied.");
+        return composited;
+    }
+
+    /// <summary>
+    /// Composites a run of titles, in the order given.
+    /// </summary>
+    /// <remarks>
+    /// The caller decides the order across all three overlay kinds; see
+    /// <see cref="ApplyOverlaysAsync"/> for why that used to be decided by the pipeline instead.
+    /// </remarks>
+    private async Task<string> ApplyTextOverlaysAsync(
+        ExportJob job, string inputName, ExportSettings s, List<string> tempFiles,
+        IReadOnlyList<TextOverlay> overlays)
+    {
+        var composited = inputName;
+        var (vw, vh)   = ResolveCanvas(s);
+
+        var overlayIdx = _overlayPassIndex;
         foreach (var overlay in overlays)
         {
             overlayIdx++;
@@ -777,7 +983,7 @@ public sealed class ExportService : IAsyncDisposable
                 [
                     "-i", composited,
                     "-loop", "1",
-                    "-framerate", s.Fps.ToString("F2"),
+                    "-framerate", s.Fps.ToString("F2", CultureInfo.InvariantCulture),
                     "-t", endT.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
                     "-i", png,
                     "-filter_complex", filter,
@@ -812,12 +1018,18 @@ public sealed class ExportService : IAsyncDisposable
                     frameNames.Add(fname);
                 }
 
-                var filter = $"[1:v]scale={vw}:{vh}[ov];[0:v][ov]overlay=0:0:enable='between(t,{startT:F3},{endT:F3})'[out]";
+                // InvariantCulture, not the browser's. A French or German locale formats 2.5 as
+                // "2,5", and a comma inside enable='between(t,…)' is a filter ffmpeg cannot parse
+                // — so animated overlays failed the export outright for anyone whose browser was
+                // not set to English (2026-09-05 audit, titles-10).
+                var filter = $"[1:v]scale={vw}:{vh}[ov];[0:v][ov]overlay=0:0:"
+                           + $"enable='between(t,{startT.ToString("F3", CultureInfo.InvariantCulture)},"
+                           + $"{endT.ToString("F3", CultureInfo.InvariantCulture)})'[out]";
 
                 await _ffmpeg.ExecAsync(
                 [
                     "-i", composited,
-                    "-framerate", s.Fps.ToString("F2"),
+                    "-framerate", s.Fps.ToString("F2", CultureInfo.InvariantCulture),
                     "-i", $"{prefix}_%04d.png",
                     "-filter_complex", filter,
                     "-map", "[out]",
@@ -836,50 +1048,32 @@ public sealed class ExportService : IAsyncDisposable
             composited = outputName;
         }
 
-        job.CompletedPhases.Add($"Text overlays applied ({overlays.Count})");
-        Advance(job, 78, "Text overlays applied.");
+        _overlayPassIndex = overlayIdx;
         return composited;
     }
 
+    /// <summary>
+    /// Composites a run of callouts, in the order given.
+    /// </summary>
+    /// <remarks>
+    /// Every shape goes through the SVG renderer — the same code that draws it on the canvas.
+    /// Rectangles and ellipses used to take an ffmpeg <c>drawbox</c> path instead, which cannot
+    /// round a corner, cannot draw an ellipse at all and does not know what the preview's border
+    /// or shadow look like, so the two most ordinary shapes were the two that came out wrong
+    /// (2026-09-05 audit, callouts-2).
+    /// </remarks>
     private async Task<string> ApplyCalloutsAsync(
-        ExportJob job, string inputName, ExportSettings s, List<string> tempFiles)
+        ExportJob job, string inputName, ExportSettings s, List<string> tempFiles,
+        IReadOnlyList<CalloutClip> svgShapes)
     {
-        // LayerIndex, not TimelinePosition — see ApplyTextOverlaysAsync's remarks (backlog #39).
-        var callouts = _clips.AllCalloutClips.OrderBy(c => c.LayerIndex).ToList();
-        Advance(job, 72, $"Applying {callouts.Count} callout shape(s)…");
-
-        // Separate SVG-rendered shapes from ffmpeg-native shapes
-        var svgShapes     = callouts.Where(NeedsSvgRenderer).ToList();
-        var nativeShapes  = callouts.Where(c => !NeedsSvgRenderer(c)).ToList();
         var composited    = inputName;
-        var (vw, vh)      = ParseResolution(s.Resolution);
-
-        // ── Native ffmpeg shapes (Rectangle, Ellipse via drawbox) ────────────
-        if (nativeShapes.Count > 0)
-        {
-            var outputName = $"callout_native_{job.Id:N}.mp4";
-            tempFiles.Add(outputName);
-            var fragments = nativeShapes
-                .Select(c => ExportArgBuilders.BuildCalloutFilter(c, s))
-                .Where(f => !string.IsNullOrEmpty(f));
-            var vfChain = string.Join(",", fragments);
-            if (!string.IsNullOrEmpty(vfChain))
-            {
-                // Filter chain + explicit video map. The old "-vf chain" + AudioPassthroughArgs
-                // combination mapped ONLY audio (explicit -map disables default stream
-                // selection), producing an audio-only file that exited 0 — the silent
-                // video-less export at the heart of backlog #29.
-                await _ffmpeg.ExecAsync(
-                    ExportArgBuilders.BuildFilteredVideoArgs(composited, vfChain, s, outputName), job.CancellationToken);
-                composited = outputName;
-            }
-        }
+        var (vw, vh)      = ResolveCanvas(s);
 
         // ── SVG-rendered shapes (via SvgFrameRendererService) ────────────────
         // Static shapes composite ONE PNG via a looped input (fades as alpha-fade filters);
         // only animated (motion-path) callouts render per-frame PNG sequences — see the
         // matching note on ApplyTextOverlaysAsync (backlog #29 memory fix).
-        var clipIdx = 0;
+        var clipIdx = _overlayPassIndex;
         foreach (var callout in svgShapes)
         {
             clipIdx++;
@@ -909,7 +1103,7 @@ public sealed class ExportService : IAsyncDisposable
                 [
                     "-i", composited,
                     "-loop", "1",
-                    "-framerate", s.Fps.ToString("F2"),
+                    "-framerate", s.Fps.ToString("F2", CultureInfo.InvariantCulture),
                     "-t", endT.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
                     "-i", png,
                     "-filter_complex", filter,
@@ -943,12 +1137,18 @@ public sealed class ExportService : IAsyncDisposable
                     frameNames.Add(fname);
                 }
 
-                var filter = $"[1:v]scale={vw}:{vh}[ov];[0:v][ov]overlay=0:0:enable='between(t,{startT:F3},{endT:F3})'[out]";
+                // InvariantCulture, not the browser's. A French or German locale formats 2.5 as
+                // "2,5", and a comma inside enable='between(t,…)' is a filter ffmpeg cannot parse
+                // — so animated overlays failed the export outright for anyone whose browser was
+                // not set to English (2026-09-05 audit, titles-10).
+                var filter = $"[1:v]scale={vw}:{vh}[ov];[0:v][ov]overlay=0:0:"
+                           + $"enable='between(t,{startT.ToString("F3", CultureInfo.InvariantCulture)},"
+                           + $"{endT.ToString("F3", CultureInfo.InvariantCulture)})'[out]";
 
                 await _ffmpeg.ExecAsync(
                 [
                     "-i", composited,
-                    "-framerate", s.Fps.ToString("F2"),
+                    "-framerate", s.Fps.ToString("F2", CultureInfo.InvariantCulture),
                     "-i", $"{prefix}_%04d.png",
                     "-filter_complex", filter,
                     "-map", "[out]",
@@ -965,25 +1165,9 @@ public sealed class ExportService : IAsyncDisposable
             composited = outputName;
         }
 
-        job.CompletedPhases.Add($"Callout shapes applied ({callouts.Count})");
-        Advance(job, 75, "Callout shapes applied.");
+        _overlayPassIndex = clipIdx;
         return composited;
     }
-
-    /// <summary>
-    /// True when the callout shape needs SVG frame rendering (not ffmpeg-native filters) — either because
-    /// the shape itself requires it (Arrow/Line/Star), because it has a motion path (animated callouts
-    /// always render through the per-frame SVG pipeline, regardless of shape, since that's the only path
-    /// that can express a changing position/size/opacity per frame — native <c>drawbox</c> can't animate
-    /// alpha at all), because it has a text label (the native <c>drawbox</c> fast path has no text
-    /// rendering at all — <see cref="CalloutShapeRenderer.Render"/> already draws it), or because it has
-    /// a fade (expressed as alpha-fade filters on the SVG overlay input; <c>drawbox</c> can't fade).
-    /// </summary>
-    private bool NeedsSvgRenderer(CalloutClip c) =>
-        c.Shape is ShapeType.Arrow or ShapeType.Line or ShapeType.Star
-        || _motion.HasPath(c.Id)
-        || !string.IsNullOrEmpty(c.Text)
-        || c.FadeInSeconds > 0 || c.FadeOutSeconds > 0;
 
     /// <summary>
     /// Phase 3c: composite all <see cref="ClipArtClip"/> layers over the current video.
@@ -992,14 +1176,11 @@ public sealed class ExportService : IAsyncDisposable
     /// a PNG frame sequence then composites it via the overlay filter.
     /// </summary>
     private async Task<string> ApplyClipArtClipsAsync(
-        ExportJob job, string inputName, ExportSettings s, List<string> tempFiles)
+        ExportJob job, string inputName, ExportSettings s, List<string> tempFiles,
+        IReadOnlyList<ClipArtClip> clips)
     {
-        // LayerIndex, not TimelinePosition — see ApplyTextOverlaysAsync's remarks (backlog #39).
-        var clips = _clips.AllClipArtClips.OrderBy(c => c.LayerIndex).ToList();
-        Advance(job, 76, $"Applying {clips.Count} clipart layer(s)…");
-
         var composited = inputName;
-        var clipIdx    = 0;
+        var clipIdx    = _overlayPassIndex;
 
         foreach (var clip in clips)
         {
@@ -1010,13 +1191,14 @@ public sealed class ExportService : IAsyncDisposable
             if (clip.AssetFormat == VideoAssetFormat.Svg && clip.ControlPoints is { Count: > 0 })
             {
                 // SVG with control points — render frame-by-frame via SvgAnimationExporter
-                var (width, height) = ParseResolution(s.Resolution);
+                var (width, height) = ResolveCanvas(s);
                 var (args, writtenFiles) = await _svgExporter.RenderAsync(
                     clip, composited, s.Fps, width, height, tempFiles);
 
                 if (args.Length == 0)
                 {
-                    // Could not read SVG — skip this clip
+                    // The asset could not be read. Saying so beats a render that quietly lacks it.
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
                     continue;
                 }
 
@@ -1041,16 +1223,24 @@ public sealed class ExportService : IAsyncDisposable
                 // re-drawing it per frame at the already-interpolated geometry) instead of trying
                 // to replicate MotionKeyframeService's easing/bezier math as ffmpeg expressions.
                 var animated = await ApplyAnimatedClipArtAsync(clip, composited, s, outputName, tempFiles, job.CancellationToken);
-                if (animated is null) continue;
+                if (animated is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
+                    continue;
+                }
             }
             else
             {
                 // Raster (or simple SVG without animated control points) — static overlay
                 var overlayFile = await WriteClipArtToMemFsAsync(clip);
-                if (overlayFile is null) continue;
+                if (overlayFile is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its artwork could not be read.");
+                    continue;
+                }
                 tempFiles.Add(overlayFile);
 
-                var (vw, vh) = ParseResolution(s.Resolution);
+                var (vw, vh) = ResolveCanvas(s);
                 var filter = ExportArgBuilders.BuildClipArtStaticOverlayFilter(clip, vw, vh);
 
                 await _ffmpeg.ExecAsync(
@@ -1073,8 +1263,7 @@ public sealed class ExportService : IAsyncDisposable
             composited = outputName;
         }
 
-        job.CompletedPhases.Add($"ClipArt overlays applied ({clipIdx})");
-        Advance(job, 80, "ClipArt overlays applied.");
+        _overlayPassIndex = clipIdx;
         return composited;
     }
 
@@ -1105,7 +1294,7 @@ public sealed class ExportService : IAsyncDisposable
         var sourceFile = await _opfs.ReadAsJSFileAsync(guid, $".{ext}");
         if (sourceFile is null) return null;
 
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         var frameCount = Math.Max(1, (int)Math.Round(clip.Duration * s.Fps));
         var startT = clip.TimelinePosition;
         var endT   = clip.TimelinePosition + clip.Duration;
@@ -1225,7 +1414,7 @@ public sealed class ExportService : IAsyncDisposable
             await _ffmpeg.ExecAsync(
             [
                 "-i", baseSliceName,
-                "-framerate", s.Fps.ToString("F2"),
+                "-framerate", s.Fps.ToString("F2", CultureInfo.InvariantCulture),
                 "-i", $"{prefix}_%04d.png",
                 "-filter_complex", filter,
                 "-map", "[out]",
@@ -1322,10 +1511,10 @@ public sealed class ExportService : IAsyncDisposable
     private async Task<string> MixAudioTracksAsync(
         ExportJob job, string videoInput, ExportSettings s, List<string> tempFiles)
     {
-        var audioClips = _clips.AudioTracks
-                               .SelectMany(t => t.AudioClips)
-                               .OrderBy(a => a.TimelinePosition)
-                               .ToList();
+        // A muted track is not mixed. The flag has always been documented as "audio suppressed
+        // during playback and export"; nothing read it, so muting a track changed the icon and
+        // nothing else (2026-09-05 audit, audio-5).
+        var audioClips = _clips.AudibleAudioClips.ToList();
 
         if (audioClips.Count == 0) return videoInput;
 
@@ -1338,24 +1527,22 @@ public sealed class ExportService : IAsyncDisposable
         // implementing backlog #10 — per-channel volume would have been equally inert bolted onto
         // the same broken path). Each per-clip segment below is a normal audio-only ffmpeg output,
         // already positioned; amix combines them with no further position/offset math needed.
+        // AudioMixPlanner owns the trim/position/filter arithmetic, so the Working Window can mix
+        // the same way this does rather than having no sound at all (2026-09-05 audit, audio-6).
+        var plan = AudioMixPlanner.Plan(audioClips);
+
         var segmentNames = new List<string>();
-        for (var i = 0; i < audioClips.Count; i++)
+        for (var i = 0; i < plan.Count; i++)
         {
-            var ac = audioClips[i];
-            if (ac.MemFsName is null) continue;
+            var (source, start, end, fullFilter) = plan[i];
 
-            var start = ac.StartTrim;
-            var end   = ac.EndTrim > ac.StartTrim ? ac.EndTrim : ac.Duration;
-            var clipDuration = end - start;
-            if (clipDuration <= 0) continue;
-
-            var filterChain = ExportArgBuilders.BuildAudioClipFilterChain(ac, clipDuration);
-            var delayMs     = (int)Math.Round(Math.Max(0, ac.TimelinePosition) * 1000.0);
-            var fullFilter  = delayMs > 0 ? $"{filterChain},adelay={delayMs}:all=1" : filterChain;
-
-            var segName = $"audio_seg_{i:D3}_{job.Id:N}.mp4";
+            // PCM, not the export's own codec: these exist only to be mixed, and the mix encodes
+            // the result. Compressing them first put every audio clip through a lossy codec twice
+            // (2026-09-05 audit, audio-24).
+            var segName = $"audio_seg_{i:D3}_{job.Id:N}.wav";
             tempFiles.Add(segName);
-            var segArgs = ExportArgBuilders.BuildAudioClipTrimArgs(ac.MemFsName, segName, start, end, fullFilter, s);
+            var segArgs = ExportArgBuilders.BuildAudioClipTrimArgs(
+                source, segName, start, end, fullFilter, s, lossless: true);
             await _ffmpeg.ExecAsync(segArgs, job.CancellationToken);
             segmentNames.Add(segName);
         }
@@ -1382,6 +1569,16 @@ public sealed class ExportService : IAsyncDisposable
         return outputName;
     }
 
+    /// <summary>
+    /// Lays every track above the primary one over the picture, each clip at its own place on the
+    /// timeline.
+    /// </summary>
+    /// <remarks>
+    /// Nothing called the composite this replaces, so a clip on a second video track was visible on
+    /// the timeline, visible in the properties panel, and absent from the file (2026-09-05 audit,
+    /// export-1). Lower tracks are composited first so the topmost one ends up on top, matching the
+    /// order the timeline draws them in.
+    /// </remarks>
     private async Task<string> ComposeVideoLayersAsync(
         ExportJob              job,
         string                 baseLayer,
@@ -1389,87 +1586,106 @@ public sealed class ExportService : IAsyncDisposable
         ExportSettings         s,
         List<string>           tempFiles)
     {
-        Advance(job, 67, $"Compositing {extraTracks.Count + 1} video layer(s)…");
+        var layers = extraTracks
+            .SelectMany(t => TrackLayout.SequentialItems(t)
+                .Where(i => i is VideoClip or ImageClip)
+                .Select(i => (Track: t, Item: i)))
+            .ToList();
 
-        // Render each extra track's clips into a temporary file
-        var layerFiles = new List<string> { baseLayer };
+        if (layers.Count == 0) return baseLayer;
 
-        for (var i = 0; i < extraTracks.Count; i++)
+        Advance(job, 67, $"Compositing {layers.Count} clip(s) from {extraTracks.Count} track(s)…");
+
+        var (vw, vh)   = ResolveCanvas(s);
+        var composited = baseLayer;
+        var index      = 0;
+
+        foreach (var (track, item) in layers)
         {
-            var track      = extraTracks[i];
-            var trackClips = track.VideoClips.OrderBy(c => c.Order).ToList();
-            if (trackClips.Count == 0) continue;
+            ThrowIfCancelled(job);
 
-            var layerSegs   = new List<string>();
-            for (var j = 0; j < trackClips.Count; j++)
+            var segName     = $"layer_{index:D3}_{job.Id:N}.mp4";
+            var segHasAudio = false;
+
+            if (item is VideoClip clip)
             {
-                var clip    = trackClips[j];
-                if (clip.MemFsName is null) continue;
+                if (clip.MemFsName is null)
+                {
+                    job.Warnings.Add($"'{clip.Name}' was left out: its media is not loaded.");
+                    continue;
+                }
 
-                var segName = $"layer{i}_seg{j}_{job.Id:N}.mp4";
+                var trimStart = clip.StartTrim;
+                var trimEnd   = clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration;
+
+                // A muted track means muted here as everywhere else.
+                var muted   = track.IsMuted || clip.MuteAudio;
+                segHasAudio = s.IncludeAudio && !muted && clip.HasAudio;
+
                 tempFiles.Add(segName);
-
-                var start = clip.StartTrim;
-                var end   = clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration;
-                var volFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, end - start);
-                var (lvw, lvh) = ParseResolution(s.Resolution);
-
-                var trimArgs = ExportArgBuilders.BuildTrimArgs(
-                    clip.MemFsName, segName, start, end, clip.Speed, s,
-                    volFilter, clip.Effects, outputWidth: lvw, outputHeight: lvh,
-                    sourceHasAudio: clip.HasAudio);
-                await _ffmpeg.ExecAsync(trimArgs, job.CancellationToken);
-                layerSegs.Add(segName);
-            }
-
-            if (layerSegs.Count == 0) continue;
-
-            string layerOutput;
-            if (layerSegs.Count == 1)
-            {
-                layerOutput = layerSegs[0];
+                await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
+                    clip.MemFsName, segName, trimStart, trimEnd, clip.Speed, s,
+                    ExportArgBuilders.BuildVolumeAutomationFilter(clip, trimEnd - trimStart),
+                    clip.Effects, muteAudio: muted,
+                    outputWidth: vw, outputHeight: vh, sourceHasAudio: clip.HasAudio),
+                    job.CancellationToken);
             }
             else
             {
-                layerOutput = $"layer{i}_concat_{job.Id:N}.mp4";
-                tempFiles.Add(layerOutput);
-                await _ffmpeg.ConcatClipsAsync([.. layerSegs], layerOutput);
+                var image = (ImageClip)item;
+                if (image.MemFsName is null)
+                {
+                    job.Warnings.Add($"'{image.Name}' was left out: its media is not loaded.");
+                    continue;
+                }
+
+                tempFiles.Add(segName);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    image.AppliedEffects, _effectRegistry, item.EffectiveLength, 1.0, vw, vh);
+
+                await _ffmpeg.ExecAsync(ExportArgBuilders.BuildImageSegmentArgs(
+                    image.MemFsName, segName, item.EffectiveLength, s,
+                    outputWidth: vw, outputHeight: vh, effects: image.Effects,
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf),
+                    job.CancellationToken);
             }
 
-            layerFiles.Add(layerOutput);
+            var next = $"composite_{index:D3}_{job.Id:N}.mp4";
+            tempFiles.Add(next);
+
+            await _ffmpeg.ExecAsync(ExportArgBuilders.BuildLayerCompositeArgs(
+                composited, segName, next, item.TimelinePosition, item.EffectiveLength, s,
+                layerHasAudio: segHasAudio),
+                job.CancellationToken);
+
+            if (tempFiles.Remove(segName)) await _ffmpeg.DeleteFileAsync(segName);
+            if (composited != baseLayer && tempFiles.Remove(composited))
+                await _ffmpeg.DeleteFileAsync(composited);
+
+            composited = next;
+            index++;
         }
 
-        if (layerFiles.Count < 2) return baseLayer;
+        if (index == 0) return baseLayer;
 
-        var compositeOutput = $"composite_{job.Id:N}.mp4";
-        tempFiles.Add(compositeOutput);
-
-        // layerFiles[0] = bottom (primary), layerFiles[^1] = top (lowest Order)
-        var overlayArgs = ExportArgBuilders.BuildOverlayFilterComplex(
-            layerFiles, compositeOutput, _options.AlphaCompositing, s);
-        await _ffmpeg.ExecAsync(overlayArgs, job.CancellationToken);
-
-        job.CompletedPhases.Add($"Video layers composited ({layerFiles.Count})");
+        job.CompletedPhases.Add($"Video layers composited ({index} clip(s))");
         Advance(job, 75, "Layer compositing complete.");
-        return compositeOutput;
+        return composited;
     }
+
 
     // â”€â”€ ffmpeg arg builders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private static string[] BuildTrimArgs(
+    private string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
         string? extraVf = null, bool sourceHasAudio = true)
     {
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         return ExportArgBuilders.BuildTrimArgs(
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
             outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
     }
-
-    private static string BuildXfadeFilterComplex(
-        List<string> segments, List<double> segmentDurations, List<Transition> transitions)
-        => ExportArgBuilders.BuildXfadeFilterComplex(segments, segmentDurations, transitions);
 
     private static IEnumerable<string> QualityArgs(ExportSettings s)
         => ExportArgBuilders.QualityArgs(s);
@@ -1496,9 +1712,20 @@ public sealed class ExportService : IAsyncDisposable
             throw new OperationCanceledException("Export cancelled by user.");
     }
 
+    /// <summary>
+    /// Moves the progress bar, never backwards.
+    /// </summary>
+    /// <remarks>
+    /// The phases each announce a percentage of their own, and several of them start lower than
+    /// the one before ended — the bar visibly ran backwards several times in a single job, which
+    /// reads as the export restarting (2026-09-05 audit, export-8). A phase that would go
+    /// backwards keeps the number and changes only the label, so the words still say what is
+    /// happening. Reaching 100 is the exception: the end of the job is allowed to say so however
+    /// it arrives.
+    /// </remarks>
     private static void Advance(ExportJob job, int pct, string label)
     {
-        job.OverallPercent = pct;
+        job.OverallPercent = pct >= 100 ? 100 : Math.Max(job.OverallPercent, pct);
         job.PhaseLabel     = label;
         job.NotifyProgress();
     }
@@ -1609,17 +1836,36 @@ public sealed class ExportService : IAsyncDisposable
     }
 
     /// <summary>Parse a "WxH" resolution string into (width, height). Defaults to 1920×1080.</summary>
+    /// <summary>
+    /// The canvas for a settings object with no clips to consult.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the instance <see cref="ResolveCanvas"/>, which can answer "source resolution"
+    /// honestly. This overload keeps the old behaviour for callers that have no timeline.
+    /// </remarks>
     internal static (int w, int h) ParseResolution(string resolution)
+        => ExportCanvas.Resolve(resolution);
+
+    /// <summary>
+    /// The canvas this export renders at, resolving "source resolution" against the first clip on
+    /// the timeline rather than quietly rescaling everything to Full HD (2026-09-05 audit,
+    /// export-5).
+    /// </summary>
+    private (int w, int h) ResolveCanvas(ExportSettings s)
     {
-        if (!string.IsNullOrEmpty(resolution))
-        {
-            var parts = resolution.Split('x');
-            if (parts.Length == 2
-                && int.TryParse(parts[0], out var w)
-                && int.TryParse(parts[1], out var h))
-                return (w, h);
-        }
-        return (1920, 1080);
+        if (!string.IsNullOrWhiteSpace(s.Resolution))
+            return ExportCanvas.Resolve(s.Resolution);
+
+        var first = TrackLayout.SequentialItems(_clips.PrimaryVideoTrack)
+            .Select(i => i switch
+            {
+                VideoClip v => (v.Width, v.Height),
+                ImageClip i2 => (i2.Width, i2.Height),
+                _ => (0, 0),
+            })
+            .FirstOrDefault(d => d.Item1 > 0 && d.Item2 > 0);
+
+        return ExportCanvas.Resolve(s.Resolution, first.Item1, first.Item2);
     }
 
     /// <summary>
@@ -1651,7 +1897,7 @@ public sealed class ExportService : IAsyncDisposable
         await _ffmpeg.WriteFileAsync(wmMemFs, wmRef);
         tempFiles.Add(wmMemFs);
 
-        var (vw, vh) = ParseResolution(s.Resolution);
+        var (vw, vh) = ResolveCanvas(s);
         var filter   = WatermarkService.BuildOverlayFilter(config, wmMemFs, vw, vh);
 
         var outputName = $"wm_{job.Id:N}.{s.OutputFormat}";
@@ -1678,9 +1924,19 @@ public sealed class ExportService : IAsyncDisposable
         await _ffmpeg.DeleteFileAsync(inputName);
         if (tempFiles.Remove(wmMemFs)) await _ffmpeg.DeleteFileAsync(wmMemFs);
 
+
+        // Back to the name the person chose. The watermark pass writes to wm_<jobid>.<fmt>, and
+        // returning that made it the download's filename — a watermarked export arrived as
+        // wm_9f3c….mp4 while an unwatermarked one kept "my-video.mp4" (2026-09-05 audit,
+        // export-6). Renaming here keeps the caller's single outputName true for the probe, the
+        // OPFS move and the browser download alike.
+        var finalName = inputName;
+        await RenameAsync(outputName, finalName);
+        tempFiles.Remove(outputName);
+
         job.CompletedPhases.Add("Watermark applied");
         Advance(job, 93, "Watermark applied.");
-        return outputName;
+        return finalName;
     }
 
     // â”€â”€ Chapter embed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

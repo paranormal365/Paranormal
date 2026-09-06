@@ -8,8 +8,19 @@ namespace Ben.Video.Editor.Models;
 /// </summary>
 public sealed class ProjectFile
 {
+    /// <summary>
+    /// The format this editor writes.
+    /// </summary>
+    /// <remarks>
+    /// Version 2 added the media bin. A file's own version is what
+    /// <see cref="Ben.Video.Editor.Services.ProjectFileMigrations"/> reads to decide what it needs,
+    /// and what tells a reader that a file came from a newer editor than itself — which used to
+    /// open silently and half-work.
+    /// </remarks>
+    public const int CurrentSchemaVersion = 2;
+
     /// <summary>Format version — bump when breaking changes are made to this schema.</summary>
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     /// <summary>UTC timestamp when the project was first created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -32,6 +43,31 @@ public sealed class ProjectFile
     /// <summary>Named cue points on the timeline ruler.</summary>
     public List<TimelineMarker>    Markers      { get; set; } = [];
     public List<ProjectMotionPath> MotionPaths  { get; set; } = [];
+
+    /// <summary>
+    /// The media brought into this project, whether or not any of it is on the timeline.
+    /// </summary>
+    /// <remarks>
+    /// Absent from files written before the media bin existed, which is why it defaults to empty
+    /// rather than being required: an older project simply has nothing unplaced, and opening it
+    /// fills the bin from what is on its timeline.
+    /// </remarks>
+    public ProjectMediaBin Bin { get; set; } = new();
+}
+
+/// <summary>The media bin's contents, by kind.</summary>
+/// <remarks>
+/// Three lists rather than one polymorphic one: System.Text.Json needs a discriminator to round-trip
+/// a mixed list, and the rest of this file already keeps clips apart by kind for the same reason.
+/// </remarks>
+public sealed class ProjectMediaBin
+{
+    public List<ProjectVideoClip> VideoClips { get; set; } = [];
+    public List<ProjectAudioClip> AudioClips { get; set; } = [];
+    public List<ProjectImageClip> ImageClips { get; set; } = [];
+
+    /// <summary>True when there is nothing to restore — an older file, or an empty project.</summary>
+    public bool IsEmpty => VideoClips.Count == 0 && AudioClips.Count == 0 && ImageClips.Count == 0;
 }
 
 /// <summary>
@@ -76,6 +112,9 @@ public sealed class ProjectTrack
 public sealed class ProjectVideoClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }
@@ -93,6 +132,20 @@ public sealed class ProjectVideoClip
     // Audio
     public double Volume           { get; set; } = 1.0;
     public List<VolumeKeyframe> VolumeAutomation { get; set; } = [];
+
+    /// <summary>
+    /// Whether this clip's own sound is silenced, and whether it has any.
+    /// </summary>
+    /// <remarks>
+    /// Neither was saved, so "Separate Audio" — which mutes the clip and puts its sound on its own
+    /// track — came back with the picture unmuted and the audio track playing as well, doubling
+    /// every word (2026-09-05 audit, audio-7).
+    /// </remarks>
+    public bool   MuteAudio        { get; set; }
+    public bool   HasAudio         { get; set; } = true;
+
+    /// <summary>The clip this one is tied to, so moving one moves the other.</summary>
+    public Guid?  LinkedClipId     { get; set; }
 
     // Effects
     public ClipEffects Effects     { get; set; } = new();
@@ -115,6 +168,9 @@ public sealed class ProjectVideoClip
 public sealed class ProjectAudioClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }
@@ -128,6 +184,9 @@ public sealed class ProjectAudioClip
     public List<VolumeKeyframe> VolumeAutomation { get; set; } = [];
     public double LeftVolume       { get; set; } = 1.0;
     public double RightVolume      { get; set; } = 1.0;
+
+    /// <summary>The picture this sound belongs with. The other half of the link.</summary>
+    public Guid?  LinkedClipId     { get; set; }
 
     public bool   IsMediaMissing   { get; set; } = true;
     public string? OriginalFileName { get; set; }
@@ -202,6 +261,9 @@ public sealed class ProjectTextOverlay
 public sealed class ProjectImageClip
 {
     public Guid   Id               { get; set; }
+
+    /// <summary>The media-bin entry this was placed from, when it was.</summary>
+    public Guid?  SourceBinId      { get; set; }
     public string Name             { get; set; } = string.Empty;
     public double TimelinePosition { get; set; }
     public double Duration         { get; set; }
@@ -228,6 +290,20 @@ public sealed class ProjectKeyframe
     public double  X          { get; set; } = 0.5;
     public double  Y          { get; set; } = 0.5;
     public double  Scale      { get; set; } = 1.0;
+
+    /// <summary>
+    /// Per-axis scale, and rotation. Null means "whatever <see cref="Scale"/> says", which is how
+    /// a keyframe written before these existed reads.
+    /// </summary>
+    /// <remarks>
+    /// These were on the keyframe and not in this DTO, so stretching a layer on one axis or
+    /// rotating it looked right until the project was saved and opened again, at which point the
+    /// animation came back uniform and upright (2026-09-05 audit, motion-1).
+    /// </remarks>
+    public double? ScaleX     { get; set; }
+    public double? ScaleY     { get; set; }
+    public double? Rotation   { get; set; }
+
     public double  Alpha      { get; set; } = 1.0;
     public string  Easing     { get; set; } = "Linear";
     public double? HandleOutX { get; set; }
@@ -296,6 +372,21 @@ public sealed class ProjectCalloutClip
     public bool     FontBold       { get; set; }
     public bool     FontUnderline  { get; set; }
     public List<ProjectTextRun>? Runs { get; set; }
+
+    /// <summary>
+    /// How the label sits inside the shape: its alignment, whether it wraps, whether it has a
+    /// shadow of its own, and how far it stands off the edge.
+    /// </summary>
+    /// <remarks>
+    /// None of it was saved. A callout laid out carefully came back centred, unwrapped and with
+    /// default padding — the shape survived and everything about the words in it did not
+    /// (2026-09-05 audit, callouts-1).
+    /// </remarks>
+    public TextHorizontalAlign TextAlign         { get; set; } = TextHorizontalAlign.Center;
+    public TextVerticalAlign   TextVerticalAlign { get; set; } = TextVerticalAlign.Middle;
+    public bool                TextWrap          { get; set; }
+    public bool                TextShadow        { get; set; }
+    public double              TextPadding       { get; set; } = 8.0;
 
     // Fade
     public double   FadeInSeconds  { get; set; }

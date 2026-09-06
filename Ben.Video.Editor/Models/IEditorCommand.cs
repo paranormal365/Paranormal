@@ -1126,6 +1126,72 @@ internal sealed class UpdateEffectParameterCommand : IEditorCommand
 
 // ── Phase 36: Track locking ───────────────────────────────────────────────────
 
+/// <summary>Bringing a source into the media bin.</summary>
+internal sealed class AddToBinCommand : IEditorCommand
+{
+    private readonly List<TrackItem> _bin;
+    private readonly TrackItem       _item;
+    private readonly int             _index;
+
+    public string Description => "Import media";
+
+    public AddToBinCommand(List<TrackItem> bin, TrackItem item, int index)
+    {
+        _bin   = bin;
+        _item  = item;
+        _index = index;
+    }
+
+    public void Execute()
+    {
+        if (!_bin.Contains(_item)) _bin.Insert(Math.Min(_index, _bin.Count), _item);
+    }
+
+    public void Undo() => _bin.Remove(_item);
+}
+
+/// <summary>Taking a source out of the media bin, and putting it back where it was on undo.</summary>
+internal sealed class RemoveFromBinCommand : IEditorCommand
+{
+    private readonly List<TrackItem> _bin;
+    private readonly TrackItem       _item;
+    private readonly int             _index;
+
+    public string Description => "Remove from media";
+
+    public RemoveFromBinCommand(List<TrackItem> bin, TrackItem item, int index)
+    {
+        _bin   = bin;
+        _item  = item;
+        _index = index;
+    }
+
+    public void Execute() => _bin.Remove(_item);
+
+    public void Undo()
+    {
+        if (!_bin.Contains(_item)) _bin.Insert(Math.Min(_index, _bin.Count), _item);
+    }
+}
+
+/// <summary>Muting or unmuting a track, so it can be undone like any other edit.</summary>
+internal sealed class MuteTrackCommand : IEditorCommand
+{
+    private readonly TimelineTrack _track;
+    private readonly bool          _muted;
+
+    public string Description => _muted ? "Mute track" : "Unmute track";
+
+    public MuteTrackCommand(TimelineTrack track, bool muted)
+    {
+        _track = track;
+        _muted = muted;
+    }
+
+    public void Execute() => _track.IsMuted = _muted;
+    public void Undo()    => _track.IsMuted = !_muted;
+}
+
 /// <summary>Undo/redo for locking or unlocking a <see cref="TimelineTrack"/>.</summary>
 internal sealed class LockTrackCommand : IEditorCommand
 {
