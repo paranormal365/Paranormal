@@ -403,4 +403,22 @@ public class UploadFileAudioConfigControllerTests
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    // ── The race two saves a second apart create (2026-09-06 audio audit, phase 6) ──
+    //
+    // The editor saves the view automatically as controls are used, and the colour-ramp picker
+    // does it without being awaited — so toggling the spectrogram and then choosing a ramp puts
+    // two requests in the air at once. On a recording with no saved row yet both found nothing,
+    // both inserted, and the second hit the one-to-one unique index and came back as an unhandled
+    // 500 that the editor reported as "this recording isn't yours to change".
+    //
+    // THERE IS NO UNIT TEST HERE, deliberately. Reproducing the interleave needs one request to
+    // read after another has read and before it has written, and a controller test can only call
+    // Upsert start-to-finish: a sequential pair simply updates, and passes against the broken code
+    // just as happily. A test that cannot fail is worse than none.
+    //
+    // What is covered instead: AudioFilePreview serialises its saves so two are never in flight
+    // (the actual prevention), and the browser test that found this — How_you_set_the_editor_up —
+    // exercises exactly the two-controls-in-a-row gesture that produced it. The server's recovery
+    // is defence in depth for any other client.
 }

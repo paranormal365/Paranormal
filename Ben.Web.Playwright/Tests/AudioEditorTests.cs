@@ -27,37 +27,99 @@ public class AudioEditorTests : BenTestBase
 
     private ILocator Modal => Page.Locator(".modal.show").First;
 
+
     /// <summary>
-    /// Signs in, uploads the fixture to the seeded case, and opens the full-view editor on it.
+    /// Signs in, puts a recording in Sarah's own library, and opens the full-view editor on it.
     /// </summary>
     /// <remarks>
-    /// <para><b>A fresh upload per test, deliberately.</b> Phase 3 noted that this makes the
-    /// fixture slow — by the last test the Files tab is rendering half a dozen compact players all
-    /// decoding 7 MB — and phase 6 tried sharing one recording across the class instead. That does
-    /// not work: a saved clip draws an overlay on the waveform where it came from, so the second
-    /// test to drag across that stretch grabs the overlay rather than drawing anything, and the
-    /// edit panel says "draw a region first". Four tests failed that way, in an order-dependent
-    /// pattern that would have been maddening to diagnose later.</para>
+    /// <para><b>Her own library, not a case's Files tab.</b> These tests are about the editor, and
+    /// the case tab was the wrong place to reach it from for two reasons that only showed up under
+    /// load. It draws a waveform for every audio file on the case, so after a few runs — or after
+    /// the other fixtures in a full suite have uploaded to the same case — the page is decoding a
+    /// dozen recordings before the test's own file appears; eleven files was enough to push the
+    /// twelfth past a minute. And the file a test then picked up was not necessarily its own,
+    /// which surfaced as the editor refusing to save settings for a recording somebody else
+    /// owned (2026-09-06 audio audit, phase 6).</para>
     ///
-    /// <para>Independence is worth more than the minute this costs. What phase 6 did keep is the
-    /// change that made the slowness matter less: no test waits on the mere presence of something
-    /// an earlier one could have left behind.</para>
+    /// <para>The library draws waveforms on demand instead, one tap at a time, and everything here
+    /// belongs to the seat running the test.</para>
     /// </remarks>
     private async Task<bool> ReadyInFullViewAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
 
-        // The upload input is display:none behind its label, so waiting for IT to be visible times
-        // out on a tab that opened perfectly.
-        await OpenTabAsync("Files", Main.GetByText("Upload File", new() { Exact = false }).First);
-        await Expect(Page.Locator("#case-file-upload")).ToBeAttachedAsync(new() { Timeout = 15_000 });
+        await Page.GotoAsync($"{BaseUrl}/upload-files");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        await Page.Locator("#case-file-upload").SetInputFilesAsync(TestAudioPath);
-        try { await Expect(Page.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 }); }
-        catch { return false; }
+        // The panel is behind its own button, and the file input does not exist until it opens.
+        var openPanel = Page.GetByRole(AriaRole.Button, new() { Name = "Upload New File" });
+        try { await Expect(openPanel).ToBeVisibleAsync(new() { Timeout = 30_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: /upload-files did not render"); return false; }
+        await openPanel.ClickAsync();
 
-        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        // A file type is required before anything will send.
+        var fileType = Page.Locator("select").First;
+        try { await Expect(fileType).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: no file-type picker on /upload-files"); return false; }
+        await fileType.SelectOptionAsync(new SelectOptionValue { Label = "Audio" });
+
+        var input = Page.Locator("#chunked-upload-input-7f31");
+        try { await Expect(input).ToBeAttachedAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: no upload input on /upload-files"); return false; }
+
+        // A name of its own, for two reasons: the library shows every recording this seat can SEE,
+        // including seeded ones owned by other people, so "the first card" is not necessarily ours
+        // — and the editor will not save settings for a file that is not. A unique name also walks
+        // past the same-name dialog rather than having to answer it.
+        var uploadedName = $"editor-test-{Guid.NewGuid():N}.mp3";
+        await input.SetInputFilesAsync(new FilePayload
+        {
+            Name      = uploadedName,
+            MimeType  = "audio/mpeg",
+            Buffer    = await File.ReadAllBytesAsync(TestAudioPath),
+        });
+
+        // The bytes go through page JavaScript in chunks, started by an explicit button.
+        var upload = Page.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true });
+        try { await Expect(upload).ToBeEnabledAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: the Upload button never enabled — a file type may be needed"); return false; }
+        await upload.ClickAsync();
+
+        // The page asks before making a second file of the same name, and the upload sits at
+        // "Waiting" behind that dialog. The unique name above should mean it never appears, but
+        // answering it costs nothing and a silent three-minute wait costs a lot.
+        var keepBoth = Page.GetByRole(AriaRole.Button, new() { Name = "Keep Both" });
+        await Page.WaitForTimeoutAsync(800);
+        if (await keepBoth.CountAsync() > 0 && await keepBoth.IsVisibleAsync())
+            await keepBoth.ClickAsync();
+
+        // Waiting on the library rather than on a word in the panel: the progress row is replaced
+        // when the upload finishes, so "Done is visible" was a race against the page tidying up.
+        // The library is where the recording has to appear for any of this to matter anyway.
+        await Page.GotoAsync($"{BaseUrl}/media-library");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // On demand, one waveform: the grid does not draw them until asked, which is the whole
+        // reason this fixture moved here.
+        // The card for OUR recording, found by the name it was given.
+        var ourCard = Page.Locator(".card").Filter(new() { HasTextString = uploadedName }).First;
+        try { await Expect(ourCard).ToBeVisibleAsync(new() { Timeout = 180_000 }); }
+        catch
+        {
+            TestContext.Out.WriteLine($"gave up: {uploadedName} never reached the library");
+            return false;
+        }
+
+        var waveformButton = ourCard.GetByTestId("show-waveform").First;
+        try { await Expect(waveformButton).ToBeVisibleAsync(new() { Timeout = 30_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: our card has no Waveform button"); return false; }
+        await waveformButton.ClickAsync();
+
+        try { await Expect(ourCard.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: the waveform never drew"); return false; }
+
+        await ourCard.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+
         await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
         await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
@@ -331,6 +393,14 @@ public class AudioEditorTests : BenTestBase
         // for it here would test the pause rather than the product, and the change was lost every
         // time on a page busy enough that the request had not finished by the time the modal shut.
         await Page.WaitForTimeoutAsync(300);   // the save is a round trip
+
+        // If the editor said it could not save, that is the answer — and a far more useful failure
+        // than "it came back on jet". The notice appears when the server refuses the write, which
+        // on a shared database usually means this seat does not own the file the test picked.
+        var notSaved = Modal.GetByText("aren't saved", new() { Exact = false })
+                            .Or(Modal.GetByText("couldn't be saved", new() { Exact = false }));
+        if (await notSaved.CountAsync() > 0)
+            Assert.Fail($"the editor refused to save: {(await notSaved.First.InnerTextAsync()).Trim()}");
 
         // Close the editor and open it again on the same recording.
         await Modal.Locator(".btn-close").First.ClickAsync();

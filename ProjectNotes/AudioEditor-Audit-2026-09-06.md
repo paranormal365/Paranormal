@@ -406,11 +406,26 @@ those fields — so a save landing after the reset wrote the *defaults* over wha
 looked reliable because a hand-run test paused between the two; on a clean database with the fixture
 running in order it lost the change every time. The close handler awaits the save before resetting.
 
-**One thing tried and abandoned.** Phase 3 noted the per-test 7 MB upload makes this fixture slow.
-Sharing one recording across the class does not work: a saved clip draws an overlay where it came
-from, so the next test to drag across that stretch grabs the overlay instead of drawing. Four tests
-failed in an order-dependent pattern. The upload stays per test; what was kept is that no test now
-waits on the mere presence of something an earlier one could have left behind.
+**W (NEW, M) — FIXED. Two saves a second apart crashed the config endpoint.** The editor saves the
+view as controls are used, and the colour-ramp picker does it without being awaited, so toggling the
+spectrogram and then choosing a ramp puts two requests in the air. On a recording with no saved row
+both found nothing, both inserted, and the second hit the one-to-one unique index —
+`Cannot insert duplicate key row in object 'dbo.UploadFileAudioConfigs'`. The component serialises
+its saves now, and the server recovers by re-reading and updating.
+
+**And the message was asserting a cause it did not know.** "These settings aren't saved for this
+recording — it isn't yours to change" was the fallback whenever the server sent nothing readable,
+which covers a 400 and a 500 as much as a 403. It sent me looking at permissions for a duplicate-key
+crash, on a file the person plainly owned. It says what it knows now.
+
+**The browser fixture moved out of the case.** Phase 3 noted the per-test 7 MB upload makes this
+fixture slow. Sharing one recording across the class does not work — a saved clip draws an overlay
+where it came from, so the next test to drag across that stretch grabs the overlay instead of
+drawing, and four tests failed in an order-dependent pattern. What works is leaving the case behind:
+the case Files tab draws a waveform for every audio file on the case (eleven was enough to push the
+twelfth past a minute) while the media library draws them on demand. Each test now uploads under a
+name of its own to Sarah's own library and opens the editor from that card, so it always works on a
+recording it owns. Ninety seconds to forty-six, and no more picking up somebody else's file.
 
 ## What this changes in the plan
 

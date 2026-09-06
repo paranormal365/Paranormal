@@ -1604,13 +1604,19 @@ else
     private AudioViewState _savedView = AudioViewState.Default;
 
     /// <summary>
-    /// Set once the server refuses to save, so the editor stops asking.
+    /// Why the last save did not land, or null when the last one did.
     /// </summary>
     /// <remarks>
-    /// Saving the view needs the same grant as changing the file, so somebody a recording was
+    /// <para>Saving the view needs the same grant as changing the file, so somebody a recording was
     /// shared with can set the spectrogram up for themselves without it sticking. That is not an
-    /// error — they did not ask to save anything — but it should not be a secret either, so the
-    /// panel says it once and then stops trying.
+    /// error — they did not ask to save anything — but it should not be a secret either.</para>
+    ///
+    /// <para><b>This does not stop the editor trying again.</b> It used to: the first failure
+    /// switched persistence off for the rest of the session, so one refused request — a rate limit,
+    /// a dropped connection, a restarted API — silently turned the feature off, and every setting
+    /// changed afterwards was lost with no further sign. A refusal that will not change and one
+    /// that is over in a second look identical from here, and only the second is worth giving up
+    /// on (2026-09-06 audio audit, phase 6).</para>
     /// </remarks>
     private string? _viewNotSavedReason;
 
@@ -1664,13 +1670,32 @@ else
     /// <remarks>
     /// Called after every control that changes it. Cheap, because an unchanged view sends nothing.
     /// </remarks>
+    /// <summary>The save in flight, so two never overlap.</summary>
+    /// <remarks>
+    /// Several controls save, and the colour-ramp picker does it without being awaited, so two
+    /// changes a second apart put two requests in the air at once. On a recording with no saved
+    /// row yet, both found nothing, both inserted, and the second hit the one-to-one unique index
+    /// and came back a 500 — reported in the panel as "this isn't yours to change", which was not
+    /// true and not helpful (2026-09-06 audio audit, phase 6). The server survives the race now
+    /// too; this stops it happening.
+    /// </remarks>
+    private Task _viewSave = Task.CompletedTask;
+
     private async Task SaveViewAsync()
     {
-        if (_viewNotSavedReason is not null) return;
+        // Let whatever is already going finish, so the second save sees the first one's row.
+        try { await _viewSave; } catch { /* its own caller reported it */ }
 
         var view = CurrentView;
         if (view.SameAs(_savedView)) return;
 
+        var save = SendViewAsync(view);
+        _viewSave = save;
+        await save;
+    }
+
+    private async Task SendViewAsync(AudioViewState view)
+    {
         try
         {
             var (saved, error) = await AdminClient.UpsertAudioConfigWithReasonAsync(
@@ -1678,15 +1703,20 @@ else
 
             if (saved is null)
             {
+                // Say what is known. This used to assert "it isn't yours to change" whenever the
+                // server sent nothing readable — which covers a validation failure and a server
+                // error just as much as a refusal, and sent somebody looking at permissions while
+                // the real answer was a duplicate-key crash (finding W).
                 _viewNotSavedReason = error is null
-                    ? "These settings aren't saved for this recording — it isn't yours to change."
+                    ? "These settings couldn't be saved. If this recording isn't yours, that is why."
                     : $"These settings aren't saved: {error}";
                 StateHasChanged();
                 return;
             }
 
-            _savedConfig = saved;
-            _savedView   = view;
+            _savedConfig        = saved;
+            _savedView          = view;
+            _viewNotSavedReason = null;   // it landed; whatever went wrong before is over
         }
         catch
         {

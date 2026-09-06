@@ -83,7 +83,33 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         }
 
         Apply(request, existing);
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (existingBefore is null)
+        {
+            // Two saves raced and both found no row, so both inserted; one hit the one-to-one
+            // unique index and came back as a 500. The editor saves the view automatically as
+            // controls are used, so two changes a second apart are ordinary — this is not a
+            // contended endpoint, it is a normal one (2026-09-06 audio audit, phase 6).
+            //
+            // The other insert won and its row is the one to update. Re-read on a clean context:
+            // this one is holding a failed insert it would try again.
+            db.ChangeTracker.Clear();
+
+            var winner = await db.UploadFileAudioConfigs
+                .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
+            if (winner is null) throw;   // not the race after all
+
+            winner.DateUpdated        = DateTime.UtcNow;
+            winner.UpdatedByAppUserId = userId;
+            Apply(request, winner);
+            await db.SaveChangesAsync();
+
+            return Ok(mapper.Map<UploadFileAudioConfigRecord>(winner));
+        }
 
         if (existingBefore is null)
             _ = TryAuditAsync(auditLog.LogCreateAsync(nameof(UploadFileAudioConfig), existing.Id, existing, userId, AppSources.WebApi));

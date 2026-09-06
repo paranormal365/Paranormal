@@ -35,14 +35,37 @@ request had landed — so a save that arrived late wrote the **defaults** over w
 It only ever looked reliable because a hand-run test paused between the two. The close handler
 awaits the save before resetting now.
 
-## One thing tried and abandoned
+## The fixture moved out of the case
 
 Phase 3 noted that every test in `AudioEditorTests` uploads its own 7 MB recording to the same case,
-which makes the last tests slow. Sharing one recording across the class does not work: a saved clip
-draws an overlay on the waveform where it came from, so the next test to drag across that stretch
-grabs the overlay instead of drawing, and four tests failed in an order-dependent pattern. The
-upload stays per test. What was kept is the change that made the slowness matter less — no test
-waits on the mere presence of something an earlier one could have left behind.
+which makes the later ones slow. Sharing one recording across the class was tried first and does not
+work: a saved clip draws an overlay on the waveform where it came from, so the next test to drag
+across that stretch grabs the overlay instead of drawing. Four tests failed in an order-dependent
+pattern.
+
+What does work — Ben's suggestion — is to leave the case behind. The tests are about the editor, and
+the case Files tab draws a waveform for **every** audio file on the case: eleven files was enough to
+push the twelfth past a minute. The media library draws them on demand, one tap at a time. Each test
+now uploads under a name of its own to Sarah's library and opens the editor from that card, so it is
+always working on a recording it owns. The fixture went from ninety seconds to forty-six on a case
+that already held eleven recordings, and from "one of these will be somebody else's file" to never.
+
+Getting there needed three things the old helper hid: the upload panel is behind its own button, a
+file type has to be chosen, and the page asks before making a second file of the same name — the
+upload sits at "Waiting" behind that dialog for ever, which is what a silent three-minute timeout
+had been.
+
+## A second defect, found by the move
+
+Once the tests were working on a file Sarah definitely owned, the save was **still** refused — and
+the panel still said "this recording isn't yours to change". It was a 500: two saves a second apart
+both found no row and both inserted, and the second hit the one-to-one unique index.
+
+Three fixes. The component serialises its saves so two are never in flight, which is the actual
+prevention. The server recovers from the duplicate by re-reading and updating, for any other client.
+And the message stops asserting a cause it does not know: when the server sends nothing readable —
+which covers a validation failure and a server error as much as a refusal — it says the save did not
+happen and offers ownership as a possibility rather than a diagnosis.
 
 ## Verification
 
