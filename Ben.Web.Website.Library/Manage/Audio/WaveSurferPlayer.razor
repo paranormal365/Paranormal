@@ -1,4 +1,4 @@
-@*
+﻿@*
   WaveSurferPlayer.razor
   ─────────────────────
   A Blazor wrapper around WaveSurfer.js v7.12.11.
@@ -321,17 +321,30 @@
     // ── Spectrogram ──────────────────────────────────────────────────────
 
     /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
-    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels, int fftSamples = 512)
+    /// <remarks>
+    /// The colour scheme and mel scale are passed every time, because hiding the spectrogram tears
+    /// down the state that holds them: without this, showing it again came back as jet with the
+    /// mel scale off however the toolbar was set (2026-09-06 audio walk, finding C).
+    /// </remarks>
+    public async Task ToggleSpectrogramAsync(
+        bool enable, bool showLabels, int fftSamples = 512, string? colormap = null, bool melScale = false)
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, fftSamples, _dotnetRef);
+        await _module.InvokeVoidAsync(
+            "toggleSpectrogram", _containerId, enable, showLabels, fftSamples, _dotnetRef, colormap, melScale);
     }
 
     /// <summary>Re-computes the spectrogram at a different FFT window size. Only effective when the spectrogram is currently visible.</summary>
-    public async Task SetSpectrogramResolutionAsync(int fftSamples, bool showLabels)
+    /// <remarks>
+    /// <paramref name="colormap"/> travels with the change for the same reason: the recompute used
+    /// to rebuild its settings from scratch, so choosing a different resolution reverted the
+    /// colours while the picker still showed the old choice.
+    /// </remarks>
+    public async Task SetSpectrogramResolutionAsync(int fftSamples, bool showLabels, string? colormap = null)
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef);
+        await _module.InvokeVoidAsync(
+            "setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef, colormap);
     }
 
     /// <summary>Re-renders the spectrogram with a different colormap preset.</summary>

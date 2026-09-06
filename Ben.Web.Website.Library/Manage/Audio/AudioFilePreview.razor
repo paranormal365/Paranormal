@@ -1458,14 +1458,15 @@ else
     {
         _spectrogramEnabled = !_spectrogramEnabled;
         if (_modalPlayer is null) return;
-        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples);
+        await _modalPlayer.ToggleSpectrogramAsync(
+            _spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
     }
 
     private async Task OnSpectrogramResolutionChangedAsync(int fftSamples)
     {
         _spectrogramFftSamples = fftSamples;
         if (_spectrogramEnabled && _modalPlayer is not null)
-            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels);
+            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels, _colormap);
     }
 
     private async Task OnSpectrogramContextMenuFired(WsPointArgs args)

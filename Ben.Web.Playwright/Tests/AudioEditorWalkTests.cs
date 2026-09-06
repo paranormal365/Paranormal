@@ -288,6 +288,25 @@ public class AudioEditorWalkTests : BenTestBase
         var selectCount = await selects.CountAsync();
         Record("C", "NOTE", $"toolbar selects visible with spectrogram on: {selectCount}");
 
+        // Where the bright content sits vertically, 0 = top of the canvas, 1 = bottom. This is what
+        // the mel scale actually changes — it stretches the low frequencies, which live at the
+        // bottom, so the centre of brightness climbs. Average colour cannot see that.
+        async Task<double> CentroidAsync() =>
+            await Page.EvaluateAsync<double>(
+                @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                          const c = cs.sort((a,b) => b.width*b.height - a.width*a.height)[0];
+                          if (!c) return -1;
+                          const ctx = c.getContext('2d', { willReadFrequently: true }); if (!ctx) return -1;
+                          const d = ctx.getImageData(0, 0, c.width, c.height).data;
+                          let weight = 0, sum = 0;
+                          for (let y = 0; y < c.height; y++)
+                            for (let x = 0; x < c.width; x += 4) {
+                              const i = (y * c.width + x) * 4;
+                              const b = d[i] + d[i+1] + d[i+2];
+                              weight += b; sum += b * y;
+                            }
+                          return weight > 0 ? +(sum / weight / c.height).toFixed(3) : -1; }");
+
         async Task<string> SampleAsync() =>
             await Page.EvaluateAsync<string>(
                 @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
@@ -336,8 +355,47 @@ public class AudioEditorWalkTests : BenTestBase
             await SnapAsync("03-spectrogram-after-resolution");
             var reverted = afterResolution == jet || Math.Abs(Delta(afterResolution, jet)) < Math.Abs(Delta(afterResolution, viridis));
             Record("C", reverted ? "FAIL" : "PASS",
-                reverted ? $"resolution change reverted the colormap toward jet: {afterResolution}"
-                         : $"colormap survived the resolution change: {afterResolution}");
+                reverted ? $"resolution change reverted the colormap toward jet: {afterResolution} (jet={jet}, viridis={viridis})"
+                         : $"colormap survived the resolution change: {afterResolution} (jet={jet}, viridis={viridis})");
+
+            // And the mel scale, which the same rebuild also dropped.
+            //
+            // Every reading below is taken at the SAME FFT size. A first attempt compared mel at
+            // one resolution against mel at another and read the difference as "mel was lost" —
+            // the FFT size changes the picture on its own, so that comparison could never mean
+            // anything.
+            await selects.Nth(resolutionIndex).SelectOptionAsync(current!);
+            await Page.WaitForTimeoutAsync(8000);
+            var linearCentroid = await CentroidAsync();
+
+            await Modal.GetByRole(AriaRole.Button, new() { Name = "Mel Scale", Exact = false }).First.ClickAsync();
+            await Page.WaitForTimeoutAsync(5000);
+            var melCentroid = await CentroidAsync();
+            await SnapAsync("03-spectrogram-mel-on");
+
+            // Away and back, so the reading that follows is at the resolution both others used.
+            await selects.Nth(resolutionIndex).SelectOptionAsync(other!);
+            await Page.WaitForTimeoutAsync(8000);
+            await selects.Nth(resolutionIndex).SelectOptionAsync(current!);
+            await Page.WaitForTimeoutAsync(8000);
+            var afterMelResolution = await CentroidAsync();
+            await SnapAsync("03-spectrogram-mel-after-resolution");
+
+            Record("C-mel", "NOTE",
+                $"brightness centroid — linear {linearCentroid}, mel {melCentroid}, "
+                + $"mel after a resolution change {afterMelResolution}");
+
+            // How far mel moves the picture depends entirely on the recording — on broadband music
+            // it is a few thousandths — so its size is reported rather than asserted.
+            Record("C-mel", "NOTE",
+                $"mel moved the centroid by {Math.Abs(melCentroid - linearCentroid):0.000}");
+
+            // What is worth asserting: the setting is still in force afterwards.
+            var keptMel = Math.Abs(afterMelResolution - melCentroid)
+                        <= Math.Abs(afterMelResolution - linearCentroid);
+            Record("C-mel", keptMel ? "PASS" : "FAIL",
+                keptMel ? "the mel scale survived the resolution change"
+                        : "the resolution change reverted the mel scale to linear");
         }
         else
         {
