@@ -122,6 +122,17 @@ internal static class DevelopmentDataSeeder
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, tgh.Id, owner.Id);
             // creation-time; the repair below covers groups that predate it
             Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id);
+            // A group nobody can find is not a group a client can hire. The public search needs
+            // IsAcceptingClients AND an area of operation; the seeders set the first and never the
+            // second, so on a fresh database every seeded group wore the "Accepting new cases"
+            // badge and answered no client search at all (2026-09-06 evaluation, W-V5).
+            db.OrganizationAreaOfOperations.Add(new OrganizationAreaOfOperation
+            {
+                Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+                CenterLatitude = 36.1627m, CenterLongitude = -86.7816m, RadiusMiles = 30,
+                DisplayLabel = "Within 30 miles of Nashville, TN",
+                DateCreated = now, CreatedByAppUserId = owner.Id,
+            });
             await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
         }
@@ -164,6 +175,17 @@ internal static class DevelopmentDataSeeder
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, nps.Id, owner.Id);
             // creation-time; the repair below covers groups that predate it
             Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id);
+            // A group nobody can find is not a group a client can hire. The public search needs
+            // IsAcceptingClients AND an area of operation; the seeders set the first and never the
+            // second, so on a fresh database every seeded group wore the "Accepting new cases"
+            // badge and answered no client search at all (2026-09-06 evaluation, W-V5).
+            db.OrganizationAreaOfOperations.Add(new OrganizationAreaOfOperation
+            {
+                Id = Guid.NewGuid(), OrganizationId = nps.Id,
+                CenterLatitude = 36.1627m, CenterLongitude = -86.7816m, RadiusMiles = 30,
+                DisplayLabel = "Within 30 miles of Nashville, TN",
+                DateCreated = now, CreatedByAppUserId = owner.Id,
+            });
             await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Nashville Paranormal Society");
         }

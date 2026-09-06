@@ -22,9 +22,21 @@ struct InvestigationsTests {
         #expect(first.title == "Initial Night Investigation")
         #expect(first.orgName == "Tennessee Ghost Hunters")
         #expect(first.assignedRole == "EMF Specialist")
-        #expect(first.didAttend)
+        #expect(first.didAttend == true)
         // No answer recorded — the roster's job is to make that visible, not to guess.
         #expect(first.rsvp == .noAnswer)
+    }
+
+    /// Captured live on 2026-09-06: a roster entry the organiser has not marked either way comes
+    /// back with `didAttend: null`, and a non-optional Bool made the WHOLE roster fail to decode —
+    /// "Couldn't load your investigations" on both devices, and the Send screen could not offer
+    /// the visit. The fixture carries that record now, so this cannot drift back.
+    @Test func aRosterEntryNobodyHasMarkedYetStillDecodes() throws {
+        let data = try Fixtures.data("my-investigations", in: Bundle.module)
+        let items = try BenJSON.decoder.decode([MyInvestigation].self, from: data)
+        let unmarked = try #require(items.first { $0.didAttend == nil })
+        #expect(unmarked.title == "Initial walkthrough and baseline readings")
+        #expect(unmarked.scheduledDateTime != nil)   // 7-digit fraction, no offset — the C# shape
     }
 
     @Test func theAttendedFixtureDecodesIncludingItsMissingCoordinates() throws {

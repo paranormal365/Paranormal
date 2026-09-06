@@ -24,6 +24,21 @@
     return;
 }
 
+@* A 403 or 404 comes back as null, and a null used to render nothing at all — a member whose
+   role does not include reading cases got a blank page under a "Case" title, from a desk that
+   had listed the case as a link (2026-09-06 evaluation, W-M1). Say what happened instead. *@
+@if (_loaded && _case is null)
+{
+    <div class="container py-3">
+        <div class="alert alert-warning" id="case-not-available">
+            <strong>This case isn't available to you.</strong>
+            It may belong to a group you're not in, or your role in the group may not include reading
+            cases — an administrator can give you a role that does.
+        </div>
+    </div>
+    return;
+}
+
 @if (_case is not null)
 {
     <div class="container-fluid py-3" style="max-width:1000px;">

@@ -44,7 +44,10 @@ public struct MyInvestigation: Sendable, Codable, Equatable, Identifiable {
     /// What they are there to do — "EMF Specialist" and the like. Null when unassigned.
     public var assignedRole: String?
     public var rsvp: InvestigationRsvp
-    public var didAttend: Bool
+    /// Nil until somebody records attendance — the API sends null for a roster entry that has
+    /// not been marked either way, and a non-optional Bool made the whole roster fail to decode
+    /// (2026-09-06 evaluation, iOS-3).
+    public var didAttend: Bool?
     /// When evidence from this investigation is due, for anyone who owes some.
     public var evidenceDueDate: Date?
 

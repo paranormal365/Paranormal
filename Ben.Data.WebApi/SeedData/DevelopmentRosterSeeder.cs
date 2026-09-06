@@ -148,6 +148,17 @@ internal static class DevelopmentRosterSeeder
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, mcss.Id, emma.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, mcss.Id, emma.Id);
             Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, mcss.Id, emma.Id);
+            // A group nobody can find is not a group a client can hire. The public search needs
+            // IsAcceptingClients AND an area of operation; the seeders set the first and never the
+            // second, so on a fresh database every seeded group wore the "Accepting new cases"
+            // badge and answered no client search at all (2026-09-06 evaluation, W-V5).
+            db.OrganizationAreaOfOperations.Add(new OrganizationAreaOfOperation
+            {
+                Id = Guid.NewGuid(), OrganizationId = mcss.Id,
+                CenterLatitude = 36.1627m, CenterLongitude = -86.7816m, RadiusMiles = 30,
+                DisplayLabel = "Within 30 miles of Nashville, TN",
+                DateCreated = now, CreatedByAppUserId = emma.Id,
+            });
             await db.SaveChangesAsync();
             Console.WriteLine("[RosterSeeder] Created organization: Music City Spirit Seekers (owner: Emma).");
         }

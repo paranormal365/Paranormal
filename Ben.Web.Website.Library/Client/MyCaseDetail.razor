@@ -237,10 +237,16 @@
                                             }
                                         </div>
                                     </div>
+                                    @* Only the client's own reports can be changed here — the server refuses the rest (MyCaseController updates
+                                       and deletes filter on EntryType == ClientReport). Offering the buttons on an investigators'
+                                       entry was a dead-end click, and the edit dialog showed the entry's raw HTML (2026-09-06 evaluation, W-CL1). *@
+                                    @if (!o.FromInvestigators)
+                                    {
                                     <div class="d-flex gap-1 ms-2">
                                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(o))"><BenIcon Name="edit-2" /></button>
                                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(o))"><BenIcon Name="trash-2" /></button>
                                     </div>
+                                    }
                                 </div>
                             </div>
                         }
