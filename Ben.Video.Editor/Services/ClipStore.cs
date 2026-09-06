@@ -175,6 +175,20 @@ public sealed class ClipStore
                    .Where(a => !a.MuteAudio)
                    .OrderBy(a => a.TimelinePosition);
 
+    /// <summary>
+    /// Makes every other sound drop in level while this track is playing, or stops it.
+    /// </summary>
+    public void SetTrackDucking(Guid trackId, bool ducks)
+    {
+        var track = RequireTrack(trackId);
+        if (track.DucksOthers == ducks) return;
+
+        var command = new SetTrackDuckingCommand(track, ducks);
+        command.Execute();
+        PushCommand(command);
+        Notify();
+    }
+
     public void LockTrack(Guid trackId, bool locked)
     {
         var track = RequireTrack(trackId);
@@ -1060,6 +1074,36 @@ public sealed class ClipStore
     /// <paramref name="start"/> and <paramref name="end"/> are seconds within the source file.
     /// Clamps both values to [0, clip.Duration] and ensures start &lt; end.
     /// </summary>
+    /// <summary>
+    /// Sets a clip's noise reduction and levelling, undoably.
+    /// </summary>
+    /// <remarks>
+    /// Both at once, because they are one decision — "make this recording easier to listen to" —
+    /// and separate undo steps for the two halves of it would be noise of a different kind.
+    /// </remarks>
+    public void SetAudioCleanup(Guid itemId, double noiseReduction, bool normalise)
+    {
+        noiseReduction = Math.Clamp(noiseReduction, 0.0, 1.0);
+
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is not AudioClip clip) continue;
+            if (track.IsLocked) return;
+
+            if (Math.Abs(clip.NoiseReduction - noiseReduction) < 1e-6 && clip.Normalise == normalise)
+                return;
+
+            var command = new SetAudioCleanupCommand(
+                clip, noiseReduction, normalise, clip.NoiseReduction, clip.Normalise);
+
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
     /// <summary>
     /// Silences one clip, or lets it be heard again.
     /// </summary>
@@ -3020,6 +3064,7 @@ public sealed class ClipStore
                 Order    = pt.Order,
                 IsMuted  = pt.IsMuted,
                 IsLocked = pt.IsLocked,
+                DucksOthers = pt.DucksOthers,
             };
 
             foreach (var pv in pt.VideoClips.OrderBy(c => c.Order))
@@ -3195,6 +3240,8 @@ public sealed class ClipStore
         LeftVolume       = p.LeftVolume,
         RightVolume      = p.RightVolume,
         MuteAudio        = p.MuteAudio,
+        NoiseReduction   = p.NoiseReduction,
+        Normalise        = p.Normalise,
         LinkedClipId     = p.LinkedClipId,
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,

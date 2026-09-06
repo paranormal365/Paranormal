@@ -76,6 +76,8 @@ internal static class Fixtures
         LeftVolume       = 0.8,
         RightVolume      = 0.3,
         MuteAudio        = true,
+        NoiseReduction   = 0.65,
+        Normalise        = true,
         VolumeAutomation = [new VolumeKeyframe { Position = 0.5, Volume = 0.9 }],
     };
 

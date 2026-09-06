@@ -194,6 +194,47 @@ internal sealed class ReorderClipCommand : IEditorCommand
 }
 
 /// <summary>Undo/redo for updating a video clip's in/out trim points.</summary>
+/// <summary>Undo/redo for a clip's noise reduction and levelling.</summary>
+internal sealed class SetAudioCleanupCommand : IEditorCommand
+{
+    private readonly AudioClip _clip;
+    private readonly double    _newNoise, _oldNoise;
+    private readonly bool      _newNormalise, _oldNormalise;
+
+    public string Description => $"Clean up \"{_clip.Name}\"";
+
+    public SetAudioCleanupCommand(
+        AudioClip clip, double newNoise, bool newNormalise, double oldNoise, bool oldNormalise)
+    {
+        _clip         = clip;
+        _newNoise     = newNoise;     _newNormalise = newNormalise;
+        _oldNoise     = oldNoise;     _oldNormalise = oldNormalise;
+    }
+
+    public void Execute() { _clip.NoiseReduction = _newNoise; _clip.Normalise = _newNormalise; }
+    public void Undo()    { _clip.NoiseReduction = _oldNoise; _clip.Normalise = _oldNormalise; }
+}
+
+/// <summary>Undo/redo for a track ducking everything else.</summary>
+internal sealed class SetTrackDuckingCommand : IEditorCommand
+{
+    private readonly TimelineTrack _track;
+    private readonly bool          _ducks;
+
+    public string Description => _ducks
+        ? $"\"{_track.Label}\" ducks the others"
+        : $"\"{_track.Label}\" stops ducking";
+
+    public SetTrackDuckingCommand(TimelineTrack track, bool ducks)
+    {
+        _track = track;
+        _ducks = ducks;
+    }
+
+    public void Execute() => _track.DucksOthers = _ducks;
+    public void Undo()    => _track.DucksOthers = !_ducks;
+}
+
 /// <summary>Undo/redo for silencing one clip.</summary>
 internal sealed class SetClipMutedCommand : IEditorCommand
 {

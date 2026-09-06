@@ -1602,7 +1602,19 @@ public sealed class ExportService : IAsyncDisposable
         // pinned by AmixArgBuilderTests, whose expectations were transcribed from this code
         // BEFORE the move.
         var n = segmentNames.Count;
-        await _ffmpeg.ExecAsync(ExportArgBuilders.BuildAmixArgs(videoInput, segmentNames, outputName, s), job.CancellationToken);
+
+        // Which segments everything else drops under. The plan keeps the clip order, so a
+        // segment's index is its clip's index (2026-09-05 audit, the critic's ducking item).
+        var ducking = audioClips
+            .Select((clip, index) => (clip, index))
+            .Where(x => _clips.FindTrackOf(x.clip.Id) is { DucksOthers: true })
+            .Select(x => x.index)
+            .ToList();
+
+        await _ffmpeg.ExecAsync(
+            ExportArgBuilders.BuildAmixArgs(
+                videoInput, segmentNames, outputName, s, duckingSegments: ducking),
+            job.CancellationToken);
 
         // Item #38 phase D — the pre-mix video and every per-clip audio segment are consumed now.
         if (tempFiles.Remove(videoInput)) await _ffmpeg.DeleteFileAsync(videoInput);

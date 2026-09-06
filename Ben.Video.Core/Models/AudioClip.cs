@@ -63,6 +63,29 @@ public sealed record AudioClip : TrackItem, IHasVolumeAutomation
     /// <summary>Right-channel gain multiplier — see <see cref="LeftVolume"/>.</summary>
     public double RightVolume { get; set; } = 1.0;
 
+    /// <summary>
+    /// How hard to pull hiss and hum out of the recording, from 0 (leave it alone) to 1.
+    /// </summary>
+    /// <remarks>
+    /// <para>The editor had no audio effects at all. Field recordings from a house at two in the
+    /// morning are mostly room tone, fridge hum and the recorder's own noise floor, and the thing
+    /// members most want to do to one is make the voice on it easier to hear (2026-09-05 audit,
+    /// audio-25).</para>
+    ///
+    /// <para>A dial rather than a filter's own parameter: the underlying reduction is measured in
+    /// decibels over a range nobody should have to know, and pushing it too far turns speech into
+    /// a warble.</para>
+    /// </remarks>
+    public double NoiseReduction { get; set; }
+
+    /// <summary>Whether to even out the loudness of this clip.</summary>
+    /// <remarks>
+    /// A recorder held at arm's length across a room produces one clip that is barely audible and
+    /// the next that clips. Levelling brings them to a common loudness so a reel cut from several
+    /// does not need the volume changing between clips.
+    /// </remarks>
+    public bool Normalise { get; set; }
+
     /// <summary>MEMFS filename of the source audio file (set after the file is written to ffmpeg MEMFS).</summary>
     public string? MemFsName { get; set; }
 

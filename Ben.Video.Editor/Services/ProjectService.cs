@@ -316,6 +316,7 @@ public sealed class ProjectService
         Order    = t.Order,
         IsMuted  = t.IsMuted,
         IsLocked = t.IsLocked,
+        DucksOthers = t.DucksOthers,
 
         VideoClips   = t.VideoClips.Select(MapVideoClip).ToList(),
         AudioClips   = t.AudioClips.Select(MapAudioClip).ToList(),
@@ -383,6 +384,8 @@ public sealed class ProjectService
         LeftVolume       = c.LeftVolume,
         RightVolume      = c.RightVolume,
         MuteAudio        = c.MuteAudio,
+        NoiseReduction   = c.NoiseReduction,
+        Normalise        = c.Normalise,
         LinkedClipId     = c.LinkedClipId,
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,

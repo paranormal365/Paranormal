@@ -319,6 +319,16 @@
                                                    OnClick="() => ToggleLock(track)">
                                     @(track.IsLocked ? "Unlock" : "Lock")
                                 </DropDownButtonItem>
+                                @if (track.Type == TrackType.Audio)
+                                {
+                                    @* Everything else drops while this track is playing — what a
+                                       narration track needs, instead of drawing a volume envelope
+                                       around every line by hand (2026-09-05 audit). *@
+                                    <DropDownButtonItem Icon="@SvgIcon.SortDesc"
+                                                       OnClick="() => ToggleDucking(track)">
+                                        @(track.DucksOthers ? "Stop ducking others" : "Duck others under this")
+                                    </DropDownButtonItem>
+                                }
                                 <DropDownButtonItem Icon="@SvgIcon.Pencil"
                                                    OnClick="() => StartEditTrackName(track)">
                                     Rename
@@ -1138,6 +1148,9 @@
         AudioClip a => a.MuteAudio,
         _           => false,
     };
+
+    private void ToggleDucking(TimelineTrack track)
+        => Clips.SetTrackDucking(track.Id, !track.DucksOthers);
 
     private void ToggleLock(TimelineTrack track)
     {

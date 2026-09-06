@@ -54,9 +54,12 @@ internal static class ExportArgBuilders
     /// when it does not is a graph ffmpeg refuses to build, which is what made "Separate Audio" on
     /// the only clip, and any slideshow with music, fail outright (2026-09-05 audit, audio-1).
     /// </param>
+    /// <param name="duckingSegments">
+    /// Which of <paramref name="audioSegments"/> everything else should drop under, by index.
+    /// </param>
     internal static string[] BuildAmixArgs(
         string videoInput, IReadOnlyList<string> audioSegments, string output, ExportSettings s,
-        bool videoHasAudio = true)
+        bool videoHasAudio = true, IReadOnlyCollection<int>? duckingSegments = null)
     {
         var args = new List<string> { "-i", videoInput };
         var labels = new List<string>();
@@ -65,6 +68,25 @@ internal static class ExportArgBuilders
             args.Add("-i");
             args.Add(segment);
             labels.Add($"[{labels.Count + 1}:a]");
+        }
+
+        // A narration track that everything else drops under. Without it the usual remedy is a
+        // volume envelope drawn by hand around every line and redrawn whenever the timing moves
+        // (2026-09-05 audit, the completeness critic's ducking item).
+        if (duckingSegments is { Count: > 0 })
+        {
+            var keys = duckingSegments
+                .Where(i => i >= 0 && i < labels.Count)
+                .Select(i => labels[i])
+                .ToList();
+
+            var others = labels.Where(l => !keys.Contains(l)).ToList();
+            if (videoHasAudio) others.Insert(0, "[0:a]");
+
+            // Nothing to duck: everything audible is the narration itself, so the ordinary mix is
+            // the right answer.
+            if (keys.Count > 0 && others.Count > 0)
+                return BuildDuckedMixArgs(args, keys, others, output, s);
         }
 
         var inputs = labels.Count + (videoHasAudio ? 1 : 0);
@@ -84,6 +106,52 @@ internal static class ExportArgBuilders
 
         args.AddRange([
             "-filter_complex", filter,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", s.AudioCodec,
+            "-b:a", $"{s.AudioBitrate}k",
+            output,
+        ]);
+        return [.. args];
+    }
+
+    /// <summary>
+    /// The mix with everything dropping under the narration.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three steps. Sum the narration, sum everything else, then run the second through a
+    /// compressor keyed off the first — so the music comes down while somebody is speaking and
+    /// returns when they stop, at whatever level it was already set to.</para>
+    ///
+    /// <para>The release is deliberately slow. A fast one pumps audibly between words, which is
+    /// more distracting than the loud music it was meant to fix.</para>
+    /// </remarks>
+    private static string[] BuildDuckedMixArgs(
+        List<string> args, List<string> keys, List<string> others, string output, ExportSettings s)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        if (keys.Count > 1)
+            sb.Append(string.Join("", keys))
+              .Append($"amix=inputs={keys.Count}:duration=longest:normalize=0:dropout_transition=0[key];");
+
+        if (others.Count > 1)
+            sb.Append(string.Join("", others))
+              .Append($"amix=inputs={others.Count}:duration=longest:normalize=0:dropout_transition=0[bed];");
+
+        var key = keys.Count > 1   ? "[key]" : keys[0];
+        var bed = others.Count > 1 ? "[bed]" : others[0];
+
+        // The key is needed twice — once to duck against and once in the finished mix — and a
+        // filter input can only be consumed once.
+        sb.Append($"{key}asplit=2[keymix][keyside];");
+        sb.Append($"{bed}[keyside]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=600[ducked];");
+        sb.Append("[ducked][keymix]amix=inputs=2:duration=longest:normalize=0:dropout_transition=0[amixed];");
+        sb.Append("[amixed]alimiter=limit=0.95[aout]");
+
+        args.AddRange([
+            "-filter_complex", sb.ToString(),
             "-map", "0:v",
             "-map", "[aout]",
             "-c:v", "copy",
@@ -783,6 +851,12 @@ internal static class ExportArgBuilders
     internal static string BuildAudioClipFilterChain(AudioClip clip, double clipDurationSeconds)
     {
         var parts = new List<string> { BuildVolumeAutomationFilter(clip, clipDurationSeconds) };
+
+        // Cleanup before anything that shapes the level. Levelling measures how loud the material
+        // is, and measuring before the hiss comes out means levelling to the hiss
+        // (2026-09-05 audit, audio-25).
+        var cleanup = AudioCleanupFilter.Build(clip.NoiseReduction, clip.Normalise);
+        if (cleanup is not null) parts.Add(cleanup);
 
         var channelFilter = BuildChannelBalanceFilter(clip.LeftVolume, clip.RightVolume);
         if (channelFilter is not null) parts.Add(channelFilter);

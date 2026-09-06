@@ -99,6 +99,9 @@ public sealed class ProjectTrack
     public bool      IsMuted  { get; set; }
     public bool      IsLocked { get; set; }
 
+    /// <summary>Whether everything else drops in level while this track plays.</summary>
+    public bool      DucksOthers { get; set; }
+
     public List<ProjectVideoClip>    VideoClips    { get; set; } = [];
     public List<ProjectAudioClip>    AudioClips    { get; set; } = [];
     public List<ProjectImageClip>    ImageClips    { get; set; } = [];
@@ -205,6 +208,12 @@ public sealed class ProjectAudioClip
 
     /// <summary>Whether this clip is silenced.</summary>
     public bool   MuteAudio        { get; set; }
+
+    /// <summary>How hard to pull hiss out of the recording, 0 to 1.</summary>
+    public double NoiseReduction   { get; set; }
+
+    /// <summary>Whether to even out this clip's loudness.</summary>
+    public bool   Normalise        { get; set; }
 
     /// <summary>The picture this sound belongs with. The other half of the link.</summary>
     public Guid?  LinkedClipId     { get; set; }
