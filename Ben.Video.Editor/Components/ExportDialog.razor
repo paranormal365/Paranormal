@@ -1,4 +1,4 @@
-@inject ExportService Exporter
+﻿@inject ExportService Exporter
 @inject ClipStore Clips
 @inject PlaybackService Playback
 @inject ExportQueueService ExportQueue
@@ -420,7 +420,12 @@
 
         await exportTask;
 
-        await OnExportComplete.InvokeAsync();
+        // Only a render that actually finished. Cancelling used to run the same path, so pressing
+        // Cancel answered with "Export Complete" and a prompt asking whether to save the project —
+        // the editor reporting success for the thing somebody had just stopped (phase 12 walk).
+        if (Exporter.CurrentJob?.State is ExportJobState.Completed)
+            await OnExportComplete.InvokeAsync();
+
         StateHasChanged();
     }
 

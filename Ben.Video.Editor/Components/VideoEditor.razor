@@ -2619,6 +2619,15 @@
     {
         _ = UpdateUnloadGuardAsync();
 
+        // Defensive twin of the guard in ExportDialog.StartExportAsync: nothing downstream of here
+        // is true of a render that was cancelled or failed, and the save prompt in particular reads
+        // as a report of success.
+        if (Exporter.CurrentJob is { State: ExportJobState.Cancelled or ExportJobState.Failed })
+        {
+            StateHasChanged();
+            return;
+        }
+
         // ExportDialog invokes this both when a job is queued (AddToQueueAsync, fired at enqueue
         // time — not when the queued render actually finishes) and when an immediate export
         // genuinely completes (StartExportAsync, after the render). ActiveCount > 0 only ever

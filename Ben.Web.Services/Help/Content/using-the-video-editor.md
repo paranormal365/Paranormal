@@ -115,6 +115,39 @@ decisions. You can pull several files down while you think, and place them later
 ![The import summary, listing what came in](/help/media/using-the-video-editor/import-complete.png)
 *Each import reports what it found — length and frame size — and waits for you to dismiss it.*
 
+### How much footage the editor can take
+
+The editor keeps your footage in the browser's own storage, and everything it does to your video it
+does on your own machine. Both have limits, and they are worth knowing before you plan a long edit.
+
+Measured on a 2026 MacBook Pro in Chrome, on a timeline of a few clips:
+
+| | What happened |
+|---|---|
+| Storage the browser offered | About 6 GB |
+| A 284 MB clip | Imported in about 50 seconds, stored at its original size |
+| A 348 MB clip | Imported in about a minute, stored at its original size |
+| Rebuilding the preview after adding one | About a minute |
+| Switching that timeline to **Live** | About 3 seconds |
+
+Three things follow from this.
+
+**Footage is stored at full size.** A file you import takes as much room as the file itself, so the
+6 GB figure is roughly how much footage a project can hold before the browser starts refusing.
+The Media panel shows what you have used.
+
+**Waiting is proportional to what you feed it.** Each edit rebuilds the rendered preview, and at a
+few hundred megabytes that is around a minute. This is what **Live** is for while you are cutting:
+it plays your footage directly and is ready in seconds regardless of file size.
+
+**Beyond this, use the sidecar.** The browser's video engine works in a memory space of its own,
+and very large or very long material is where it gives out. The
+[native helper](#the-native-helper-sidecar) runs the same work outside the browser, with your
+machine's full memory and all of its cores.
+
+If a file is simply too big to bring in, trimming it first in any tool that can cut without
+re-encoding will get you the part you want at a fraction of the size.
+
 ### Landing on an occupied spot
 
 If a clip would land where something already sits, the editor asks rather than guessing:
