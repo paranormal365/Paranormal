@@ -75,6 +75,7 @@ internal static class Fixtures
         FadeOutSeconds   = 2.5,
         LeftVolume       = 0.8,
         RightVolume      = 0.3,
+        MuteAudio        = true,
         VolumeAutomation = [new VolumeKeyframe { Position = 0.5, Volume = 0.9 }],
     };
 

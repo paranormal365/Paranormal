@@ -194,24 +194,65 @@ internal sealed class ReorderClipCommand : IEditorCommand
 }
 
 /// <summary>Undo/redo for updating a video clip's in/out trim points.</summary>
+/// <summary>Undo/redo for silencing one clip.</summary>
+internal sealed class SetClipMutedCommand : IEditorCommand
+{
+    private readonly TrackItem _item;
+    private readonly bool      _muted;
+
+    public string Description => _muted ? $"Mute \"{_item.Name}\"" : $"Unmute \"{_item.Name}\"";
+
+    public SetClipMutedCommand(TrackItem item, bool muted)
+    {
+        _item  = item;
+        _muted = muted;
+    }
+
+    public void Execute() => Set(_muted);
+    public void Undo()    => Set(!_muted);
+
+    private void Set(bool muted)
+    {
+        switch (_item)
+        {
+            case VideoClip v: v.MuteAudio = muted; break;
+            case AudioClip a: a.MuteAudio = muted; break;
+        }
+    }
+}
+
 internal sealed class UpdateTrimCommand : IEditorCommand
 {
-    private readonly VideoClip _clip;
+    private readonly TrackItem _item;
     private readonly double    _oldStart, _oldEnd;
     private readonly double    _newStart, _newEnd;
 
     public string Description => "Trim clip";
 
-    public UpdateTrimCommand(VideoClip clip, double oldStart, double oldEnd,
-                                              double newStart, double newEnd)
+    /// <remarks>
+    /// Takes a <see cref="TrackItem"/> rather than a <see cref="VideoClip"/> because audio can be
+    /// trimmed by its edges now too — it had no handles at all, while help said every clip trims
+    /// that way (2026-09-05 audit, audio-12).
+    /// </remarks>
+    public UpdateTrimCommand(TrackItem item, double oldStart, double oldEnd,
+                                             double newStart, double newEnd)
     {
-        _clip     = clip;
+        _item     = item;
         _oldStart = oldStart; _oldEnd = oldEnd;
         _newStart = newStart; _newEnd = newEnd;
     }
 
-    public void Execute() { _clip.StartTrim = _newStart; _clip.EndTrim = _newEnd; }
-    public void Undo()    { _clip.StartTrim = _oldStart; _clip.EndTrim = _oldEnd; }
+    public void Execute() => Set(_newStart, _newEnd);
+    public void Undo()    => Set(_oldStart, _oldEnd);
+
+    private void Set(double start, double end)
+    {
+        switch (_item)
+        {
+            case VideoClip v: v.StartTrim = start; v.EndTrim = end; break;
+            case AudioClip a: a.StartTrim = start; a.EndTrim = end; break;
+        }
+    }
 }
 
 /// <summary>

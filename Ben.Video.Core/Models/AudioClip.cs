@@ -38,6 +38,15 @@ public sealed record AudioClip : TrackItem, IHasVolumeAutomation
     /// <summary>Ordered automation keyframes (sorted by Position ascending).</summary>
     public List<VolumeKeyframe> VolumeAutomation { get; set; } = [];
 
+    /// <summary>Whether this clip is silenced.</summary>
+    /// <remarks>
+    /// A track could be muted and a video clip's own sound could be muted by separating it, but a
+    /// single audio clip could only be silenced by dragging its volume to zero — which loses the
+    /// level it was at, so putting it back means remembering the number (2026-09-05 audit,
+    /// audio-19).
+    /// </remarks>
+    public bool MuteAudio { get; set; }
+
     /// <summary>Fade-in duration in seconds (0 = no fade).</summary>
     public double FadeInSeconds { get; set; }
 

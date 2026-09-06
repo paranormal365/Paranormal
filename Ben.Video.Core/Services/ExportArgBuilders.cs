@@ -742,7 +742,12 @@ internal static class ExportArgBuilders
             return null;
 
         var ic = System.Globalization.CultureInfo.InvariantCulture;
-        return $"pan=stereo|c0={leftVolume.ToString("F6", ic)}*c0|c1={rightVolume.ToString("F6", ic)}*c1";
+
+        // Made stereo first. pan reads c1 from the input, and a mono recording has no c1 — so on
+        // a mono file, which is what most handheld recorders produce, the right channel came out
+        // silent the moment anybody touched the balance (2026-09-05 audit, audio-15).
+        return "aformat=channel_layouts=stereo,"
+             + $"pan=stereo|c0={leftVolume.ToString("F6", ic)}*c0|c1={rightVolume.ToString("F6", ic)}*c1";
     }
 
     /// <summary>

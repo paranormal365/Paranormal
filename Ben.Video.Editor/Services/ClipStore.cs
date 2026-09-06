@@ -156,13 +156,23 @@ public sealed class ClipStore
         var track = FindTrackOf(item.Id);
         if (track is { IsMuted: true }) return false;
 
-        return item is not VideoClip { MuteAudio: true };
+        return item switch
+        {
+            VideoClip { MuteAudio: true } => false,
+            AudioClip { MuteAudio: true } => false,
+            _                             => true,
+        };
     }
 
     /// <summary>Audio clips that should actually be mixed, in the order they play.</summary>
+    /// <remarks>
+    /// A muted clip is left out here as well as a muted track, so silencing one sound behaves the
+    /// same way as silencing all of them (2026-09-05 audit, audio-19).
+    /// </remarks>
     public IEnumerable<AudioClip> AudibleAudioClips =>
         AudioTracks.Where(t => !t.IsMuted)
                    .SelectMany(t => t.AudioClips)
+                   .Where(a => !a.MuteAudio)
                    .OrderBy(a => a.TimelinePosition);
 
     public void LockTrack(Guid trackId, bool locked)
@@ -1050,6 +1060,134 @@ public sealed class ClipStore
     /// <paramref name="start"/> and <paramref name="end"/> are seconds within the source file.
     /// Clamps both values to [0, clip.Duration] and ensures start &lt; end.
     /// </summary>
+    /// <summary>
+    /// Silences one clip, or lets it be heard again.
+    /// </summary>
+    /// <remarks>
+    /// <para>A track could be muted and a video clip's own sound could be muted by separating it,
+    /// but a single audio clip could only be silenced by dragging its volume to zero — which loses
+    /// the level it was at, so putting it back means remembering the number (2026-09-05 audit,
+    /// audio-19).</para>
+    ///
+    /// <para>Reuses <c>MuteAudio</c>, which every clip already carries and the mix already reads,
+    /// so nothing downstream needs to learn about this.</para>
+    /// </remarks>
+    public void SetClipMuted(Guid itemId, bool muted)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            var wasMuted = item switch
+            {
+                VideoClip v => v.MuteAudio,
+                AudioClip a => a.MuteAudio,
+                _           => (bool?)null,
+            };
+
+            if (wasMuted is null || wasMuted == muted) return;
+
+            var command = new SetClipMutedCommand(item, muted);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Sets a clip's trim without recording it, for use during a drag.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dragging a trim handle fires a pointermove per frame, and every one of them used to
+    /// push its own undo entry — so a two-second drag left dozens of steps on the stack and
+    /// undoing a trim meant pressing Ctrl+Z until something changed (2026-09-05 audit,
+    /// timeline-6).</para>
+    ///
+    /// <para>The drag mutates through this; <see cref="CommitTrim"/> records the whole gesture once
+    /// when the pointer comes up. Same shape as the transition resize already uses.</para>
+    /// </remarks>
+    public void SetTrimLive(Guid itemId, double start, double end)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            switch (item)
+            {
+                case VideoClip clip:
+                {
+                    var (s, e) = ClampTrim(start, end, clip.Duration);
+                    if (s is null) return;
+                    clip.StartTrim = s.Value; clip.EndTrim = e;
+                    break;
+                }
+                case AudioClip clip:
+                {
+                    var (s, e) = ClampTrim(start, end, clip.Duration);
+                    if (s is null) return;
+                    clip.StartTrim = s.Value; clip.EndTrim = e;
+                    break;
+                }
+                default: return;
+            }
+
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Records one trim gesture, from where it started to where it is now.
+    /// </summary>
+    /// <param name="originalStart">The trim before the drag began.</param>
+    /// <param name="originalEnd">The same.</param>
+    public void CommitTrim(Guid itemId, double originalStart, double originalEnd)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            var (nowStart, nowEnd) = item switch
+            {
+                VideoClip v => (v.StartTrim, v.EndTrim),
+                AudioClip a => (a.StartTrim, a.EndTrim),
+                _           => (double.NaN, double.NaN),
+            };
+
+            if (double.IsNaN(nowStart)) return;
+
+            // A click that never became a drag changes nothing and deserves no undo step.
+            if (Math.Abs(nowStart - originalStart) < 1e-6 && Math.Abs(nowEnd - originalEnd) < 1e-6)
+                return;
+
+            // Each kind keeps its own command, because an audio trim's undo also has to put back
+            // whatever else that command already restores.
+            PushCommand(item switch
+            {
+                AudioClip a => new UpdateAudioTrimCommand(a, originalStart, originalEnd, nowStart, nowEnd),
+                _           => new UpdateTrimCommand(item, originalStart, originalEnd, nowStart, nowEnd),
+            });
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>The trim, kept inside the source and the right way round.</summary>
+    private static (double? Start, double End) ClampTrim(double start, double end, double duration)
+    {
+        start = Math.Clamp(start, 0, duration);
+        end   = Math.Clamp(end,   0, duration);
+
+        return start >= end ? (null, end) : (start, end);
+    }
+
     public void UpdateTrim(Guid itemId, double start, double end)
     {
         foreach (var track in _tracks)
@@ -1209,8 +1347,15 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not AudioClip clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
-            var maxFade = clip.Duration / 2.0;
+            // Against the trimmed length, not the source's. A ten-second excerpt of a three-minute
+            // recording accepted a ninety-second fade, which the render then had to apply to ten
+            // seconds of sound (2026-09-05 audit, audio-16).
+            var maxFade = clip.TrimmedDuration / 2.0;
             fadeInSeconds  = Math.Clamp(fadeInSeconds,  0, maxFade);
             fadeOutSeconds = Math.Clamp(fadeOutSeconds, 0, maxFade);
 
@@ -1350,6 +1495,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             var oldVol = clip.Volume;
             clip.Volume = volume;
@@ -1374,6 +1523,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not AudioClip clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             var oldLeft  = clip.LeftVolume;
             var oldRight = clip.RightVolume;
@@ -1400,7 +1553,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            // Replace any existing keyframe at the same position
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ // Replace any existing keyframe at the same position
             var existing = clip.VolumeAutomation.FirstOrDefault(k => Math.Abs(k.Position - position) < 1e-6);
             if (existing is not null)
             {
@@ -1436,7 +1590,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
             if (kf is null) return;
 
             PushCommand(new UpdateVolumeKeyframeCommand(kf, kf.Position, kf.Volume, position, volume));
@@ -1459,7 +1614,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
             if (kf is not null)
             {
                 PushCommand(new RemoveVolumeKeyframeCommand(clip, kf));
@@ -1479,6 +1635,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             if (clip.VolumeAutomation.Count > 0)
             {
@@ -3034,6 +3194,7 @@ public sealed class ClipStore
         VolumeAutomation = p.VolumeAutomation,
         LeftVolume       = p.LeftVolume,
         RightVolume      = p.RightVolume,
+        MuteAudio        = p.MuteAudio,
         LinkedClipId     = p.LinkedClipId,
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,

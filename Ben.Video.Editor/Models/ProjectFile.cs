@@ -203,6 +203,9 @@ public sealed class ProjectAudioClip
     public double LeftVolume       { get; set; } = 1.0;
     public double RightVolume      { get; set; } = 1.0;
 
+    /// <summary>Whether this clip is silenced.</summary>
+    public bool   MuteAudio        { get; set; }
+
     /// <summary>The picture this sound belongs with. The other half of the link.</summary>
     public Guid?  LinkedClipId     { get; set; }
 

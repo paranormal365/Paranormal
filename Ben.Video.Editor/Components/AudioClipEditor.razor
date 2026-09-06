@@ -247,14 +247,33 @@
     // ── Derived ─────────────────────────────────────────────────────────────
 
     private double TrimmedDuration => _trimEnd - _trimStart;
-    private double MaxFade         => Clip is not null ? Math.Max(0.1, Clip.Duration / 2.0) : 30.0;
+
+    /// <summary>The longest fade this clip can take.</summary>
+    /// <remarks>
+    /// Half the clip's own length, not half the source's. A ten-second excerpt of a three-minute
+    /// recording offered a ninety-second fade (2026-09-05 audit, audio-16).
+    /// </remarks>
+    private double MaxFade => Clip is not null ? Math.Max(0.1, Clip.TrimmedDuration / 2.0) : 30.0;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The clip currently loaded into the fields below, so a re-render does not overwrite them.
+    /// </summary>
+    /// <remarks>
+    /// This panel holds edited-but-not-yet-applied values, and it re-renders whenever its parent
+    /// does — which during playback is several times a second. Reloading unconditionally meant a
+    /// slider dragged while anything was playing snapped straight back (2026-09-05 audit,
+    /// audio-14). The same fix the title panel got, for the same reason.
+    /// </remarks>
+    private Guid? _loadedClipId;
+
     protected override void OnParametersSet()
     {
-        if (Clip is null) return;
+        if (Clip is null) { _loadedClipId = null; return; }
+        if (Clip.Id == _loadedClipId) return;
 
+        _loadedClipId = Clip.Id;
         _trimStart    = Clip.StartTrim;
         _trimEnd      = Clip.EndTrim > Clip.StartTrim ? Clip.EndTrim : Clip.Duration;
         _volume       = Clip.Volume;

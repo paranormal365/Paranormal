@@ -575,14 +575,47 @@ public sealed class FfmpegService : IAsyncDisposable
     /// The output file is written to MEMFS and can be read back with <see cref="ReadFileAsync"/>.
     /// Uses <c>-vn -acodec copy</c> for a fast lossless copy when the source already has a compatible audio stream.
     /// </summary>
-    public Task ExtractAudioAsync(string inputName, string outputName) => WithLockAsync(requireReady: true, async () =>
+    /// <param name="start">Where in the source to start, in seconds. Null takes it from the top.</param>
+    /// <param name="end">Where to stop. Null runs to the end of the file.</param>
+    /// <param name="speed">
+    /// The picture's speed multiplier, so detached sound stays with the pictures it came from.
+    /// </param>
+    /// <remarks>
+    /// The trim and the speed used to be ignored: "Separate Audio" pulled the whole source stream
+    /// out and gave the new clip the trimmed length, so a head-trimmed clip's sound was out of step
+    /// with its own picture from the first frame, and a slowed clip's sound played at the original
+    /// speed underneath it (2026-09-05 audit, audio-8).
+    /// </remarks>
+    public Task ExtractAudioAsync(
+        string inputName, string outputName,
+        double? start = null, double? end = null, double speed = 1.0) =>
+        WithLockAsync(requireReady: true, async () =>
     {
         SetState(FfmpegState.Processing);
         try
         {
+            var ic   = System.Globalization.CultureInfo.InvariantCulture;
+            var args = new List<string>();
+
+            // Before -i, so the decoder skips rather than the filter graph seeing the discarded
+            // head — the same rule the export's own trim follows.
+            if (start is > 0)          args.AddRange(["-ss", start.Value.ToString("F3", ic)]);
+            if (end is { } e && e > (start ?? 0)) args.AddRange(["-to", e.ToString("F3", ic)]);
+
+            args.AddRange(["-i", inputName, "-vn"]);
+
+            // Changing the speed means re-encoding; leaving it alone means a lossless copy, which
+            // is what this has always done and is much faster.
+            if (Math.Abs(speed - 1.0) > 0.001)
+                args.AddRange(["-filter:a", ExportArgBuilders.BuildAtempoChain(speed), "-c:a", "aac"]);
+            else
+                args.AddRange(["-acodec", "copy"]);
+
+            args.AddRange(["-y", outputName]);
+
             // ExecCoreAsync, not the public ExecAsync — this method already holds _workerLock,
             // which is non-reentrant; calling the public ExecAsync here would deadlock forever.
-            await ExecCoreAsync(["-i", inputName, "-vn", "-acodec", "copy", "-y", outputName]);
+            await ExecCoreAsync([.. args]);
             SetState(FfmpegState.Ready);
         }
         catch (Exception ex)

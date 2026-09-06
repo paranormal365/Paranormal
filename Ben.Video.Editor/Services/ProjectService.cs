@@ -382,6 +382,7 @@ public sealed class ProjectService
         VolumeAutomation = c.VolumeAutomation.ToList(),
         LeftVolume       = c.LeftVolume,
         RightVolume      = c.RightVolume,
+        MuteAudio        = c.MuteAudio,
         LinkedClipId     = c.LinkedClipId,
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,
