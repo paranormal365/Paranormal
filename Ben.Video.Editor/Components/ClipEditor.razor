@@ -257,11 +257,11 @@
                         Across @((t.Width * 100).ToString("F0"))% from @((t.X * 100).ToString("F0"))%
                     </label>
                     <TelerikSlider Value="@t.X" ValueChanged="@((double v) => UpdateTransform(x => x.X = v))"
-                                   ValueExpression="@(() => t.X)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.X)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@t.Width" ValueChanged="@((double v) => UpdateTransform(x => x.Width = v))"
-                                   ValueExpression="@(() => t.Width)" Min="0.05" Max="1.0" SmallStep="0.01" LargeStep="0.1"
-                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.05, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                                   ValueExpression="@(() => t.Width)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
                 </div>
 
                 <div class="bv-clip-editor__field">
@@ -269,11 +269,11 @@
                         Down @((t.Height * 100).ToString("F0"))% from @((t.Y * 100).ToString("F0"))%
                     </label>
                     <TelerikSlider Value="@t.Y" ValueChanged="@((double v) => UpdateTransform(x => x.Y = v))"
-                                   ValueExpression="@(() => t.Y)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.Y)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@t.Height" ValueChanged="@((double v) => UpdateTransform(x => x.Height = v))"
-                                   ValueExpression="@(() => t.Height)" Min="0.05" Max="1.0" SmallStep="0.01" LargeStep="0.1"
-                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.05, 1.0, 0.25)" Class="bv-clip-editor__slider" />
+                                   ValueExpression="@(() => t.Height)" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" Class="bv-clip-editor__slider" />
                 </div>
 
                 <div class="bv-clip-editor__field">
@@ -296,10 +296,10 @@
                         Left @((t.CropLeft * 100).ToString("F0"))% · right @((t.CropRight * 100).ToString("F0"))%
                     </label>
                     <TelerikSlider Value="@t.CropLeft" ValueChanged="@((double v) => UpdateTransform(x => x.CropLeft = v))"
-                                   ValueExpression="@(() => t.CropLeft)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.CropLeft)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.15"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@t.CropRight" ValueChanged="@((double v) => UpdateTransform(x => x.CropRight = v))"
-                                   ValueExpression="@(() => t.CropRight)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.CropRight)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.15"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
                 </div>
                 <div class="bv-clip-editor__field">
@@ -307,10 +307,10 @@
                         Top @((t.CropTop * 100).ToString("F0"))% · bottom @((t.CropBottom * 100).ToString("F0"))%
                     </label>
                     <TelerikSlider Value="@t.CropTop" ValueChanged="@((double v) => UpdateTransform(x => x.CropTop = v))"
-                                   ValueExpression="@(() => t.CropTop)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.CropTop)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.15"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@t.CropBottom" ValueChanged="@((double v) => UpdateTransform(x => x.CropBottom = v))"
-                                   ValueExpression="@(() => t.CropBottom)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.1"
+                                   ValueExpression="@(() => t.CropBottom)" Min="0.0" Max="0.45" SmallStep="0.01" LargeStep="0.15"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 0.45, 0.15)" Class="bv-clip-editor__slider" />
                 </div>
             </div>
@@ -371,13 +371,13 @@
                     </label>
                     <TelerikSlider Value="@r.X" ValueChanged="@((double v) => UpdateRedaction(r, x => x.X = v))"
                                    ValueExpression="@(() => r.X)"
-                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
                                    Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@r.Width" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Width = v))"
                                    ValueExpression="@(() => r.Width)"
-                                   Min="0.02" Max="1.0" SmallStep="0.01" LargeStep="0.1"
-                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.02, 1.0, 0.25)"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
                                    Class="bv-clip-editor__slider" />
                 </div>
 
@@ -387,13 +387,13 @@
                     </label>
                     <TelerikSlider Value="@r.Y" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Y = v))"
                                    ValueExpression="@(() => r.Y)"
-                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
                                    LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
                                    Class="bv-clip-editor__slider" />
                     <TelerikSlider Value="@r.Height" ValueChanged="@((double v) => UpdateRedaction(r, x => x.Height = v))"
                                    ValueExpression="@(() => r.Height)"
-                                   Min="0.02" Max="1.0" SmallStep="0.01" LargeStep="0.1"
-                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.02, 1.0, 0.25)"
+                                   Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.25"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
                                    Class="bv-clip-editor__slider" />
                 </div>
             </div>

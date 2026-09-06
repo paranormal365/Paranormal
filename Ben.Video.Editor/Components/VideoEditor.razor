@@ -1999,7 +1999,12 @@
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
-                    sourceHasAudio: vid.HasAudio);
+                    sourceHasAudio: vid.HasAudio,
+                    // The preview shows the clip as the render will: cropped and turned. Without
+                    // this the Working Window drew a clip at full frame while the export cut its
+                    // edges off, which is the kind of disagreement this preview exists to prevent
+                    // (found on screen while verifying phase 8).
+                    transform: vid.Transform);
                 await Ffmpeg.ExecAsync(args);
                 // Item #59-#65 flakiness investigation, phase 146 — size unknown (produced by an
                 // ffmpeg exec, not a C#-side byte array), so this is a 0-byte lower-bound entry

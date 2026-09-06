@@ -143,3 +143,65 @@ public sealed class ClipTransformFilterTests
         Assert.Equal(0, scale[1] % 2);
     }
 }
+
+/// <summary>
+/// The preview's segment cache notices a changed placement.
+/// </summary>
+/// <remarks>
+/// The preview encodes the crop and the turn into the segment it caches. With the placement left
+/// out of the cache key, changing a crop handed back the segment encoded before it — so the
+/// preview kept showing the uncropped picture however often it was refreshed (found on screen
+/// while verifying phase 8).
+/// </remarks>
+public sealed class ClipTransformSignatureTests
+{
+    private static VideoClip Clip() => new() { Name = "clip", MemFsName = "a.mp4", Duration = 5 };
+
+    [Fact]
+    public void Placing_a_clip_changes_its_signature()
+    {
+        var before = RenderSignatureBuilder.ForVideoClip(Clip(), 1280, 720);
+
+        var placed = Clip();
+        placed.Transform = new ClipTransform { CropTop = 0.1 };
+
+        Assert.NotEqual(before, RenderSignatureBuilder.ForVideoClip(placed, 1280, 720));
+    }
+
+    [Fact]
+    public void And_so_does_changing_the_placement()
+    {
+        var a = Clip(); a.Transform = new ClipTransform { CropTop = 0.1 };
+        var b = Clip(); b.Transform = new ClipTransform { CropTop = 0.2 };
+
+        Assert.NotEqual(
+            RenderSignatureBuilder.ForVideoClip(a, 1280, 720),
+            RenderSignatureBuilder.ForVideoClip(b, 1280, 720));
+    }
+
+    [Fact]
+    public void The_same_placement_keeps_the_same_signature()
+    {
+        var a = Clip(); a.Transform = new ClipTransform { CropTop = 0.1, Rotation = 90 };
+        var b = Clip(); b.Transform = new ClipTransform { CropTop = 0.1, Rotation = 90 };
+
+        Assert.Equal(
+            RenderSignatureBuilder.ForVideoClip(a, 1280, 720),
+            RenderSignatureBuilder.ForVideoClip(b, 1280, 720));
+    }
+
+    [Fact]
+    public void An_image_placement_counts_too()
+    {
+        var before = RenderSignatureBuilder.ForImageClip(
+            new ImageClip { Name = "i", MemFsName = "a.png", Duration = 5 }, 1280, 720);
+
+        var placed = new ImageClip
+        {
+            Name = "i", MemFsName = "a.png", Duration = 5,
+            Transform = new ClipTransform { Width = 0.5 },
+        };
+
+        Assert.NotEqual(before, RenderSignatureBuilder.ForImageClip(placed, 1280, 720));
+    }
+}

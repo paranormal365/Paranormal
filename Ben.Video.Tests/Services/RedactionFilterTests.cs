@@ -17,6 +17,23 @@ public sealed class RedactionFilterTests
         RedactionStyle style = RedactionStyle.Blur, double strength = 6) =>
         new() { X = x, Y = y, Width = w, Height = h, Style = style, Strength = strength };
 
+    /// <summary>
+    /// One audio stream, not two.
+    /// </summary>
+    /// <remarks>
+    /// The pass mapped the sound itself and then called the passthrough helper, which maps it
+    /// again — so the finished segment carried the same audio twice (found on screen while
+    /// verifying phase 8).
+    /// </remarks>
+    [Fact]
+    public void The_pass_maps_the_sound_once()
+    {
+        var args = Ben.Video.Editor.Services.ExportArgBuilders.BuildRedactionArgs(
+            "in.mp4", "out.mp4", [Region()], 1000, 1000, new ExportSettings { IncludeAudio = true })!;
+
+        Assert.Equal(1, args.Count(a => a == "0:a?"));
+    }
+
     [Fact]
     public void Nothing_to_redact_is_no_filter_at_all()
         => Assert.Null(RedactionFilter.Build([], 1920, 1080));

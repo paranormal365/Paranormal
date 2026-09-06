@@ -1311,9 +1311,9 @@ internal static class ExportArgBuilders
         };
 
         // The sound is untouched and has to survive: mapping only the picture is how an earlier
-        // pass in this pipeline used to strip the audio out of a whole export.
-        if (s.IncludeAudio) args.AddRange(["-map", "0:a?"]);
-
+        // pass in this pipeline used to strip the audio out of a whole export. AudioPassthroughArgs
+        // does the mapping as well as the codec, so adding one here too put two copies of the same
+        // audio stream in the output (found on screen while verifying phase 8).
         args.AddRange(AudioPassthroughArgs(s));
         args.AddRange(QualityArgs(s));
         args.AddRange(["-pix_fmt", s.PixelFormat, output]);
