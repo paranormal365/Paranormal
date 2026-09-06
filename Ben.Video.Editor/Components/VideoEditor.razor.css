@@ -146,6 +146,8 @@
     min-height: 220px;
     overflow: hidden;
     display: flex;
+    /* So the Live/Rendered switch can sit over the corner of the picture. */
+    position: relative;
 }
 
 /* ── Three-point editing marks (item #51) ──────────────────────────────────── */
@@ -342,4 +344,20 @@ kbd {
     gap: .4rem;
     margin-top: .75rem;
     justify-content: center;
+}
+
+/* ── Live / Rendered switch (phase 12, decision D5) ──────────────────────────
+   Floated over the top-right corner of the picture rather than placed in the row: the row is a
+   flex container holding one player that fills it, and adding a sibling to it put the switch down
+   the left-hand edge as a second column. */
+.bv-preview-mode {
+    position: absolute;
+    top: .35rem;
+    right: .5rem;
+    z-index: 3;
+    opacity: .85;
+}
+
+.bv-preview-mode:hover {
+    opacity: 1;
 }

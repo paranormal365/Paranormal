@@ -1,4 +1,4 @@
-@inject FfmpegService Ffmpeg
+﻿@inject FfmpegService Ffmpeg
 @inject PreviewUrlRevoker PreviewRevoker
 @inject PlaybackService SharedPlayback
 @inject ClipStore Clips
@@ -666,6 +666,21 @@
 
     /// <summary>Toggle play/pause from outside the component (e.g. keyboard shortcut).</summary>
     public Task TogglePlayPauseAsync() => TogglePlayAsync();
+
+    /// <summary>
+    /// Stops playback, whatever kind is running.
+    /// </summary>
+    /// <remarks>
+    /// Called when the preview is about to be replaced by the live player: a player nobody can see
+    /// carrying on is a second sound and a second clock (phase 12).
+    /// </remarks>
+    public async Task PauseAsync()
+    {
+        _imagePlayCts?.Cancel();
+
+        if (_playing && _hasPreview && _module is not null)
+            await _module.InvokeVoidAsync("pause", _videoElementId);
+    }
 
     private async Task TogglePlayAsync()
     {

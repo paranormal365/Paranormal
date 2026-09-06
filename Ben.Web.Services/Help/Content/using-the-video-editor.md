@@ -36,6 +36,12 @@ it lists your uploaded media, saves projects to the server and publishes finishe
 the site does. The one difference worth knowing is what happens before you sign in: see
 [Working signed out](#working-signed-out) below.
 
+**Standalone editor** on the My Videos page takes you there without signing in again. The link
+carries a one-use pass that is good for a minute and never leaves your browser's address bar, and
+the editor spends it as it opens. If the project you had open was saved to the server, it opens
+there too. Nothing else travels: the standalone editor gets a sign-in of its own rather than a copy
+of the one you are using here.
+
 ## Start the engine
 
 The first thing to press is **Initialize**. The editor does its video work with a copy of ffmpeg
@@ -310,6 +316,24 @@ is why the status chip sometimes says it is busy shortly after an edit. That pre
 place: it carries on from where you were rather than jumping back to the start after every change,
 and it plays your audio tracks, so you can hear how the music sits against the picture while you
 are still editing.
+
+### Live and Rendered
+
+Above the picture is a choice between two ways of watching your timeline, and they answer different
+questions.
+
+**Rendered** is that background preview: the editor makes a small video of your whole timeline and
+plays it. It shows everything — transitions, effects, titles, callouts — because it is made the
+same way the export is. It takes a moment to catch up after each edit, and on a long timeline that
+moment gets longer.
+
+**Live** plays your footage itself, cutting between the original files as the playhead crosses
+them. A cut you just made is there immediately, with nothing to wait for, which is what you want
+while you are actually cutting. It plays the picture and the sound and nothing else: transitions
+appear as plain cuts, and effects, titles and callouts are not drawn. A clip whose media is not on
+this computer plays as black, and the player says how many.
+
+Use Live to cut, and Rendered to check. Export always matches Rendered.
 
 ### If the engine stops
 

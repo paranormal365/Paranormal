@@ -924,12 +924,14 @@ public sealed class ProjectStore : IAsyncDisposable
     /// </remarks>
     private async Task<string?> RestoreOneAsync(Guid clipId, Guid? sourceBinId, string opfsExt)
     {
-        var restored = await RestoreFromAsync(clipId, opfsExt);
-        if (restored is not null) return restored;
+        // The same two places the live player looks, and for the same reason — see MediaStorage.
+        foreach (var id in MediaStorage.CandidateIds(clipId, sourceBinId))
+        {
+            var restored = await RestoreFromAsync(id, opfsExt);
+            if (restored is not null) return restored;
+        }
 
-        return sourceBinId is { } binId && binId != clipId
-            ? await RestoreFromAsync(binId, opfsExt)
-            : null;
+        return null;
     }
 
     private async Task<string?> RestoreFromAsync(Guid storedId, string opfsExt)
