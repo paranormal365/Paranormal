@@ -119,6 +119,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
         => _api.UpsertAudioConfigAsync(fileId, request, token);
 
+    public Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => _api.UpsertAudioConfigWithReasonAsync(fileId, request, token);
+
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => _api.DeleteAudioConfigAsync(fileId, token);
 

@@ -113,6 +113,10 @@ else
                             📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </button>
                         @* Spectrogram resolution — only shown when spectrogram is active *@
+                        @if (_viewNotSavedReason is not null)
+                        {
+                            <span class="small text-secondary" title="Only the owner of a recording can save how it is set up">@_viewNotSavedReason</span>
+                        }
                         @if (_spectrogramEnabled)
                         {
                             <BenSelect Class="form-select-sm" Data="@_resolutionOptions" Value="@_spectrogramFftSamples" ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))" TextField="@nameof(SpectrogramResolutionOption.Label)" ValueField="@nameof(SpectrogramResolutionOption.Value)" Width="155px" Enabled="@_modalReady" />
@@ -1072,6 +1076,8 @@ else
         if (_modalPlayer is not null)
             await _modalPlayer.SetDragModeAsync(_regionDrawMode);
 
+        await RestoreSavedViewAsync();
+
         // Far from non-critical: every one of the eight edit buttons and both Save-as-clip buttons
         // are disabled while there is no file type to save into, so a failed load here turns the
         // whole panel off with nothing said and no way to tell it from a slow one
@@ -1570,11 +1576,112 @@ else
         StateHasChanged();
     }
 
+    // ── Remembering how you look at this recording ────────────────────────────
+
+    /// <summary>The saved row, kept so a save can leave every other setting on it alone.</summary>
+    private UploadFileAudioConfigRecord? _savedConfig;
+
+    /// <summary>What was on screen when the view was last saved, so an unchanged view is not re-sent.</summary>
+    private AudioViewState _savedView = AudioViewState.Default;
+
+    /// <summary>
+    /// Set once the server refuses to save, so the editor stops asking.
+    /// </summary>
+    /// <remarks>
+    /// Saving the view needs the same grant as changing the file, so somebody a recording was
+    /// shared with can set the spectrogram up for themselves without it sticking. That is not an
+    /// error — they did not ask to save anything — but it should not be a secret either, so the
+    /// panel says it once and then stops trying.
+    /// </remarks>
+    private string? _viewNotSavedReason;
+
+    /// <summary>The view as it stands on screen.</summary>
+    private AudioViewState CurrentView => new()
+    {
+        SpectrogramVisible = _spectrogramEnabled,
+        SpectrogramLabels  = _spectrogramLabels,
+        FftSamples         = _spectrogramFftSamples,
+        Colormap           = _colormap,
+        MelScale           = _melScale,
+        TimelineVisible    = _timelineEnabled,
+    };
+
+    /// <summary>
+    /// Puts the editor back the way this recording was left.
+    /// </summary>
+    /// <remarks>
+    /// The table this reads has existed since 2026-07-18 and nothing had ever read or written it,
+    /// so every setting was reset on every open — for somebody working through a long recording,
+    /// several times an hour (2026-09-06 audio walk, finding L).
+    /// </remarks>
+    private async Task RestoreSavedViewAsync()
+    {
+        try { _savedConfig = await AdminClient.GetAudioConfigAsync(FileId); }
+        catch { return; }   // a view that could not be loaded is not worth a message
+
+        var view = AudioViewState.From(_savedConfig);
+        _savedView = view;
+
+        _timelineEnabled       = view.TimelineVisible;
+        _spectrogramEnabled    = view.SpectrogramVisible;
+        _spectrogramLabels     = view.SpectrogramLabels;
+        _spectrogramFftSamples = view.FftSamples;
+        _colormap              = view.Colormap;
+        _melScale              = view.MelScale;
+
+        if (_modalPlayer is null) return;
+
+        await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
+        if (_spectrogramEnabled)
+            await _modalPlayer.ToggleSpectrogramAsync(
+                true, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Saves the view, if it has changed and if this caller is allowed to.
+    /// </summary>
+    /// <remarks>
+    /// Called after every control that changes it. Cheap, because an unchanged view sends nothing.
+    /// </remarks>
+    private async Task SaveViewAsync()
+    {
+        if (_viewNotSavedReason is not null) return;
+
+        var view = CurrentView;
+        if (view.SameAs(_savedView)) return;
+
+        try
+        {
+            var (saved, error) = await AdminClient.UpsertAudioConfigWithReasonAsync(
+                FileId, view.ToRequest(_savedConfig));
+
+            if (saved is null)
+            {
+                _viewNotSavedReason = error is null
+                    ? "These settings aren't saved for this recording — it isn't yours to change."
+                    : $"These settings aren't saved: {error}";
+                StateHasChanged();
+                return;
+            }
+
+            _savedConfig = saved;
+            _savedView   = view;
+        }
+        catch
+        {
+            _viewNotSavedReason = "These settings couldn't be saved just now.";
+            StateHasChanged();
+        }
+    }
+
     private async Task ToggleTimelineAsync()
     {
         _timelineEnabled = !_timelineEnabled;
         if (_modalPlayer is null) return;
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
+        await SaveViewAsync();
     }
 
     private async Task ToggleDragModeAsync()
@@ -1590,6 +1697,7 @@ else
         if (_modalPlayer is null) return;
         await _modalPlayer.ToggleSpectrogramAsync(
             _spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
+        await SaveViewAsync();
     }
 
     private async Task OnSpectrogramResolutionChangedAsync(int fftSamples)
@@ -1597,6 +1705,7 @@ else
         _spectrogramFftSamples = fftSamples;
         if (_spectrogramEnabled && _modalPlayer is not null)
             await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels, _colormap);
+        await SaveViewAsync();
     }
 
     private async Task OnSpectrogramContextMenuFired(WsPointArgs args)
@@ -1612,6 +1721,7 @@ else
             _spectrogramLabels = !_spectrogramLabels;
             if (_modalPlayer is not null)
                 await _modalPlayer.UpdateSpectrogramLabelsAsync(_spectrogramLabels);
+            await SaveViewAsync();
         }
     }
 
@@ -2170,6 +2280,7 @@ else
     {
         if (_modalPlayer is not null && _spectrogramEnabled)
             await _modalPlayer.SetSpectrogramColormapAsync(_colormap, _spectrogramLabels, _spectrogramFftSamples);
+        await SaveViewAsync();
     }
 
     private async Task ToggleMelScaleAsync()
@@ -2177,6 +2288,7 @@ else
         _melScale = !_melScale;
         if (_modalPlayer is not null && _spectrogramEnabled)
             await _modalPlayer.SetSpectrogramMelScaleAsync(_melScale);
+        await SaveViewAsync();
     }
 
     private async Task ToggleVoiceBandAsync()

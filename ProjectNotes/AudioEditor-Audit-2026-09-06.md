@@ -323,6 +323,32 @@ Everything else the walk saw here is fixed:
 both branches, which `PlaywrightTestsCanFailTests` refused: a browser test that cannot fail reports
 coverage that is not there. It asserts both seats outright now.
 
+## Phase 5a — the editor remembers how you look at a recording
+
+**L is fixed for the view, and open for the listening chain.** `UploadFileAudioConfig` — the table,
+the controller, the client and the mapper — has existed since 2026-07-18 and nothing had ever read
+or written it, so the spectrogram, its colour ramp, its resolution, the mel scale and the timeline
+were reset on every open. Somebody working through a two-hour recording sets those up several times
+an hour.
+
+The view rides in the config row's existing spectrogram-options column, so this needed **no schema
+change**: `WsSpectrogramOptions` grew a colormap and a mel flag, both absent in an older row, which
+reads as "never chosen". `AudioViewState` holds the round trip and the merge as a plain record, and
+carries every setting on the row it does not own — the upsert replaces the whole row, so anything
+not carried would be silently wiped.
+
+**Not in this slice:** EQ, the filters, the compressor and the noise gate have no column to live in.
+That is the `EditStateJson` half, it needs a migration, and a migration reaches the live database
+only at deploy — Ben runs that.
+
+**A validation failure reported as a permission failure.** The first version of the save did
+nothing, and the editor said "these settings aren't yours to change". The real cause was that
+`UpsertAudioConfigRequest`'s three height fields are not nullable, a null fails model binding, and
+the 400 comes back as a `ProblemDetails` blob that the client correctly refuses to show as prose —
+so a bad request was indistinguishable from a refusal. Found by sending the same body by hand, after
+the API had already been proved to accept a PUT from the same person on the same file. The save
+supplies the record's own defaults now and reports the server's sentence when there is one.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with

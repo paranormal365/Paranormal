@@ -334,6 +334,23 @@ public class WsSpectrogramOptions
 
     [JsonPropertyName("frequencyMax")]
     public double? FrequencyMax { get; set; }
+
+    /// <summary>
+    /// Which colour ramp the spectrogram is drawn with — "jet", "viridis", "magma", "grayscale".
+    /// </summary>
+    /// <remarks>
+    /// The editor draws its own spectrogram on a canvas rather than using the bundled plugin, so
+    /// these last two describe that canvas. They live here because this is the object the saved
+    /// audio config already serialises, which means the editor's view can be remembered without a
+    /// schema change (2026-09-06 audio audit, phase 5). Absent in an older row, which reads as
+    /// "never chosen" and falls back to the component's default.
+    /// </remarks>
+    [JsonPropertyName("colormap")]
+    public string? Colormap { get; set; }
+
+    /// <summary>Whether the frequency axis is mel-scaled — speech spread out, hiss compressed.</summary>
+    [JsonPropertyName("melScale")]
+    public bool? MelScale { get; set; }
 }
 
 public class WsEnvelopeOptions
@@ -707,4 +724,17 @@ public static class UploadFileAudioConfigExtensions
         try { return System.Text.Json.JsonSerializer.Deserialize<T>(json); }
         catch { return null; }
     }
+
+    /// <summary>Reads the spectrogram options out of a saved config's JSON column.</summary>
+    /// <remarks>Null for a row that has none, and for one whose JSON cannot be read.</remarks>
+    public static WsSpectrogramOptions? DeserializeSpectrogramOptions(string? json)
+        => Deserialize<WsSpectrogramOptions>(json);
+
+    /// <summary>Writes spectrogram options back, in the shape the column already holds.</summary>
+    public static string SerializeSpectrogramOptions(WsSpectrogramOptions options)
+        => System.Text.Json.JsonSerializer.Serialize(options,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            });
 }

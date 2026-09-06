@@ -280,6 +280,57 @@ public class AudioEditorTests : BenTestBase
         return fingerprint;
     }
 
+    /// <summary>
+    /// How the editor was set up for a recording is still that way when it is reopened.
+    /// </summary>
+    /// <remarks>
+    /// <c>UploadFileAudioConfig</c> — the table, the controller, the client and the mapper — has
+    /// existed since 2026-07-18 and nothing had ever read or written it, so the spectrogram and
+    /// everything about it were reset on every open. For somebody working through a long recording
+    /// that is several times an hour (2026-09-06 audio walk, finding L).
+    /// </remarks>
+    [Test]
+    public async Task How_you_set_the_editor_up_survives_closing_it()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        // Turn the spectrogram on and pick a colour ramp that is not the default.
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false })
+                   .First.ClickAsync();
+
+        var colormap = Modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
+        await Expect(colormap).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await colormap.SelectOptionAsync(new SelectOptionValue { Label = "Viridis" });
+        await Page.WaitForTimeoutAsync(1_500);   // the save is a round trip
+
+        // Close the editor and open it again on the same recording.
+        await Modal.Locator(".btn-close").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+
+        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
+            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        await Page.WaitForTimeoutAsync(1_500);
+
+        // The spectrogram is on again, and on the ramp that was chosen.
+        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Hide Spectrogram", Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var reopened = Modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
+        var chosen   = await reopened.InputValueAsync();
+        TestContext.Out.WriteLine($"colormap after reopening: {chosen}");
+
+        Assert.That(chosen, Is.EqualTo("viridis"),
+            "the editor came back on its default colour ramp, so nothing about how this recording "
+            + "was being looked at was remembered");
+    }
+
     /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
     private async Task DrawRegionAsync(double fromFraction, double toFraction)
     {

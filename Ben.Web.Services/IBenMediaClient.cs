@@ -132,6 +132,14 @@ public interface IBenMediaClient
     /// <summary>Creates or fully replaces the WaveSurfer config for an audio UploadFile.</summary>
     Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
 
+    /// <summary>Saves a file's audio config, and on refusal hands back the server's own sentence.</summary>
+    /// <remarks>
+    /// The editor saves the view automatically, so a silent null tells somebody nothing about why
+    /// their settings did not stick.
+    /// </remarks>
+    Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+
     /// <summary>Removes the saved WaveSurfer config; the player will use theme-derived defaults on next render.</summary>
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 
