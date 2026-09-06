@@ -479,6 +479,88 @@ public class AudioEditorTests : BenTestBase
             "the region did not grow, so the edge drag was swallowed before the regions plugin saw it");
     }
 
+    /// <summary>
+    /// The listening chain is still set up the way it was left.
+    /// </summary>
+    /// <remarks>
+    /// <para>The equaliser, the filters, the compressor and the noise gate are what somebody sets
+    /// up to <i>hear</i> a recording, and none of it had anywhere to live — so every one of the
+    /// fourteen settings was reset on every open. Find a filter that lets you hear a whisper, close
+    /// the editor to look at something else, and find it again from scratch (2026-09-06 audio walk,
+    /// finding L; the half phase 5a could not do without a column).</para>
+    ///
+    /// <para>Checked on the control AND on what it is doing to the sound: restoring the checkbox
+    /// without rebuilding the filter would show a high-pass switched on over audio that had none,
+    /// which is worse than not remembering it at all.</para>
+    /// </remarks>
+    [Test]
+    public async Task The_listening_chain_survives_closing_the_editor()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("the seeded seat could not reach the editor; seed data may differ.");
+            return;
+        }
+
+        await OpenEqPanelAsync();
+
+        var highPass = Modal.Locator("#chain-highpass");
+        await Expect(highPass).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        Assert.That(await highPass.IsCheckedAsync(), Is.False, "the high-pass should start off");
+
+        await highPass.CheckAsync();
+
+        // And move it off its default, so the test is about the numbers and not only the switch.
+        var frequency = Modal.Locator("input[type=range][min='20'][max='500']").First;
+        await frequency.FillAsync("240");
+        await frequency.DispatchEventAsync("change");
+        await Page.WaitForTimeoutAsync(800);
+
+        var notSaved = Modal.GetByText("aren't saved", new() { Exact = false })
+                            .Or(Modal.GetByText("couldn't be saved", new() { Exact = false }));
+        if (await notSaved.CountAsync() > 0)
+            Assert.Fail($"the editor refused to save: {(await notSaved.First.InnerTextAsync()).Trim()}");
+
+        await Modal.Locator(".btn-close").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+
+        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
+            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        await Page.WaitForTimeoutAsync(1_000);
+
+        await OpenEqPanelAsync();
+
+        var reopened = Modal.Locator("#chain-highpass");
+        await Expect(reopened).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        Assert.That(await reopened.IsCheckedAsync(), Is.True,
+            "the high-pass came back switched off, so nothing about how this recording was being "
+            + "listened to was remembered");
+
+        // The frequency came back too, which is the setting that took the finding to arrive at.
+        Assert.That(await Modal.GetByText("High-pass 240 Hz", new() { Exact = false }).CountAsync(),
+            Is.GreaterThan(0),
+            "the high-pass is on but back at its default frequency, so only half of it was kept");
+    }
+
+    /// <summary>
+    /// Opens the EQ and filters panel, whichever way its toggle is currently pointing.
+    /// </summary>
+    /// <remarks>
+    /// The toolbar button reads "EQ / Filters" when the panel is closed and "Hide EQ" when it is
+    /// open, so looking it up by name works exactly once.
+    /// </remarks>
+    private async Task OpenEqPanelAsync()
+    {
+        if (await Modal.Locator("#chain-highpass").CountAsync() > 0) return;
+
+        await Modal.Locator("#toolbar-eq").ClickAsync();
+        await Expect(Modal.Locator("#chain-highpass")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+    }
+
     /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
     private async Task DrawRegionAsync(double fromFraction, double toFraction)
     {

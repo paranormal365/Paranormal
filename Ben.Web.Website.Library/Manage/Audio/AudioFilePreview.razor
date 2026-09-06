@@ -141,7 +141,7 @@ else
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleDragModeAsync" disabled="@(!(_modalReady))" title="@(_regionDrawMode ? "Create Region" : "Scrub Playhead")"><BenIcon Name="crop" />
                         </button>
                         @* EQ toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showEq = !_showEq)" disabled="@(!(_modalReady))">
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" id="toolbar-eq" @onclick="@(() => _showEq = !_showEq)" disabled="@(!(_modalReady))">
                             🎚 @(_showEq ? "Hide EQ" : "EQ / Filters")
                         </button>
                         @* EVP Markers toggle *@
@@ -199,12 +199,12 @@ else
                             <div class="d-flex flex-column gap-1" style="min-width:160px;">
                                 <strong class="small">Filters</strong>
                                 <div class="d-flex align-items-center gap-1">
-                                    <input type="checkbox" class="form-check-input" @bind="_hpEnabled" @bind:after="ApplyHighPassAsync" />
+                                    <input type="checkbox" class="form-check-input" id="chain-highpass" @bind="_hpEnabled" @bind:after="ApplyHighPassAsync" />
                                     <span class="small">High-pass @_hpFreq Hz</span>
                                 </div>
                                 <input type="range" class="form-range" min="20" max="500" step="10" @bind="_hpFreq" @bind:event="oninput" @onchange="@(()=>_ = ApplyHighPassAsync())" />
                                 <div class="d-flex align-items-center gap-1 mt-2">
-                                    <input type="checkbox" class="form-check-input" @bind="_lpEnabled" @bind:after="ApplyLowPassAsync" />
+                                    <input type="checkbox" class="form-check-input" id="chain-lowpass" @bind="_lpEnabled" @bind:after="ApplyLowPassAsync" />
                                     <span class="small">Low-pass @_lpFreq Hz</span>
                                 </div>
                                 <input type="range" class="form-range" min="1000" max="20000" step="500" @bind="_lpFreq" @bind:event="oninput" @onchange="@(()=>_ = ApplyLowPassAsync())" />
@@ -213,7 +213,7 @@ else
                             @* Compressor *@
                             <div class="d-flex flex-column gap-1" style="min-width:160px;">
                                 <div class="d-flex align-items-center gap-1">
-                                    <input type="checkbox" class="form-check-input" @bind="_compEnabled" @bind:after="ApplyCompressorAsync" />
+                                    <input type="checkbox" class="form-check-input" id="chain-compressor" @bind="_compEnabled" @bind:after="ApplyCompressorAsync" />
                                     <strong class="small">Compressor</strong>
                                 </div>
                                 <span class="small text-muted">Threshold @_compThreshold dB</span>
@@ -225,7 +225,7 @@ else
                             @* Noise Gate *@
                             <div class="d-flex flex-column gap-1" style="min-width:160px;">
                                 <div class="d-flex align-items-center gap-1">
-                                    <input type="checkbox" class="form-check-input" @bind="_noiseGateEnabled" @bind:after="ApplyNoiseGateAsync" />
+                                    <input type="checkbox" class="form-check-input" id="chain-noisegate" @bind="_noiseGateEnabled" @bind:after="ApplyNoiseGateAsync" />
                                     <strong class="small">Noise Gate</strong>
                                 </div>
                                 <span class="small text-muted">Threshold @_noiseGateThreshold dB</span>
@@ -1107,7 +1107,14 @@ else
 
         // Init Web Audio processing chain after player is ready
         if (_modalPlayer is not null)
+        {
             await _modalPlayer.InitAudioProcessingAsync();
+
+            // And only now the saved chain: the graph is built fresh on every open, so applying it
+            // any earlier sets filters on nodes that do not exist yet and the panel would claim a
+            // high-pass over audio that had none (2026-09-06 audio audit, phase 5b).
+            await ApplyChainToPlayerAsync();
+        }
     }
 
     private async Task OverlayChildClipRegionsAsync()
@@ -1518,6 +1525,10 @@ else
         _showVoiceBand      = false;
         _silenceDetectionEnabled = false;
         _regionDrawMode     = true;
+
+        // The chain too, so opening a second recording does not inherit the first one's filters
+        // on the one path where the reload cannot reach — a config that failed to load.
+        ApplyChainToControls(AudioListeningChain.Default);
     }
 
     // ── Waveform click → toggle play/pause ────────────────────────────────────
@@ -1629,6 +1640,27 @@ else
         Colormap           = _colormap,
         MelScale           = _melScale,
         TimelineVisible    = _timelineEnabled,
+        Chain              = CurrentChain,
+    };
+
+    /// <summary>The listening chain as the controls stand.</summary>
+    private AudioListeningChain CurrentChain => new()
+    {
+        EqGains               = [.. _eqGains],
+        HighPassOn            = _hpEnabled,
+        HighPassHz            = _hpFreq,
+        LowPassOn             = _lpEnabled,
+        LowPassHz             = _lpFreq,
+        CompressorOn          = _compEnabled,
+        CompressorThresholdDb = _compThreshold,
+        CompressorRatio       = _compRatio,
+        CompressorAttack      = _compAttack,
+        CompressorRelease     = _compRelease,
+        NoiseGateOn           = _noiseGateEnabled,
+        NoiseGateThresholdDb  = _noiseGateThreshold,
+        NoiseGateAttack       = _noiseGateAttack,
+        NoiseGateRelease      = _noiseGateRelease,
+        SilenceThresholdDb    = _silenceThresholdDb,
     };
 
     /// <summary>
@@ -1654,12 +1686,16 @@ else
         _colormap              = view.Colormap;
         _melScale              = view.MelScale;
 
+        ApplyChainToControls(view.Chain);
+
         if (_modalPlayer is null) return;
 
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
         if (_spectrogramEnabled)
             await _modalPlayer.ToggleSpectrogramAsync(
                 true, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
+
+        await ApplyChainToPlayerAsync();
 
         StateHasChanged();
     }
@@ -1680,6 +1716,47 @@ else
     /// too; this stops it happening.
     /// </remarks>
     private Task _viewSave = Task.CompletedTask;
+
+    /// <summary>Puts the saved chain back on the controls.</summary>
+    private void ApplyChainToControls(AudioListeningChain chain)
+    {
+        for (var band = 0; band < _eqGains.Length && band < chain.EqGains.Count; band++)
+            _eqGains[band] = chain.EqGains[band];
+
+        _hpEnabled          = chain.HighPassOn;
+        _hpFreq             = chain.HighPassHz;
+        _lpEnabled          = chain.LowPassOn;
+        _lpFreq             = chain.LowPassHz;
+        _compEnabled        = chain.CompressorOn;
+        _compThreshold      = chain.CompressorThresholdDb;
+        _compRatio          = chain.CompressorRatio;
+        _compAttack         = chain.CompressorAttack;
+        _compRelease        = chain.CompressorRelease;
+        _noiseGateEnabled   = chain.NoiseGateOn;
+        _noiseGateThreshold = chain.NoiseGateThresholdDb;
+        _noiseGateAttack    = chain.NoiseGateAttack;
+        _noiseGateRelease   = chain.NoiseGateRelease;
+        _silenceThresholdDb = chain.SilenceThresholdDb;
+    }
+
+    /// <summary>
+    /// Puts the chain back into the Web Audio graph, so it is heard and not just displayed.
+    /// </summary>
+    /// <remarks>
+    /// The graph is built fresh on every open, so restoring the controls without this would show
+    /// a high-pass filter switched on over audio that had none — the worst of both, because the
+    /// person would trust what the panel says about what they are hearing.
+    /// </remarks>
+    private async Task ApplyChainToPlayerAsync()
+    {
+        if (_modalPlayer is null) return;
+
+        await _modalPlayer.SetAllEqBandsAsync(_eqGains);
+        await _modalPlayer.SetHighPassAsync(_hpFreq, _hpEnabled);
+        await _modalPlayer.SetLowPassAsync(_lpFreq, _lpEnabled);
+        await _modalPlayer.SetCompressorAsync(_compEnabled, _compThreshold, _compRatio, _compAttack, _compRelease);
+        await _modalPlayer.SetNoiseGateAsync(_noiseGateEnabled, _noiseGateThreshold, _noiseGateAttack, _noiseGateRelease);
+    }
 
     private async Task SaveViewAsync()
     {
@@ -2301,28 +2378,33 @@ else
     {
         _eqGains[band] = db;
         if (_modalPlayer is not null) await _modalPlayer.SetEqBandAsync(band, db);
+        await SaveViewAsync();
     }
 
     private async Task ResetEqAsync()
     {
         Array.Clear(_eqGains);
         if (_modalPlayer is not null) await _modalPlayer.SetAllEqBandsAsync(_eqGains);
+        await SaveViewAsync();
     }
 
     private async Task ApplyHighPassAsync()
     {
         if (_modalPlayer is not null) await _modalPlayer.SetHighPassAsync(_hpFreq, _hpEnabled);
+        await SaveViewAsync();
     }
 
     private async Task ApplyLowPassAsync()
     {
         if (_modalPlayer is not null) await _modalPlayer.SetLowPassAsync(_lpFreq, _lpEnabled);
+        await SaveViewAsync();
     }
 
     private async Task ApplyCompressorAsync()
     {
         if (_modalPlayer is not null)
             await _modalPlayer.SetCompressorAsync(_compEnabled, _compThreshold, _compRatio, _compAttack, _compRelease);
+        await SaveViewAsync();
     }
 
     private async Task OnColormapChangedAsync()
@@ -2361,11 +2443,13 @@ else
     {
         if (_modalPlayer is not null && _silenceDetectionEnabled)
             await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
+        await SaveViewAsync();
     }
 
     private async Task ApplyNoiseGateAsync()
     {
         if (_modalPlayer is not null)
             await _modalPlayer.SetNoiseGateAsync(_noiseGateEnabled, _noiseGateThreshold, _noiseGateAttack, _noiseGateRelease);
+        await SaveViewAsync();
     }
 }

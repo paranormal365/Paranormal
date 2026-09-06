@@ -188,6 +188,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         entity.SpectrogramOptionsJson       = req.SpectrogramOptionsJson;
         entity.SpectrogramWindowedOptionsJson = req.SpectrogramWindowedOptionsJson;
         entity.EnvelopeOptionsJson          = req.EnvelopeOptionsJson;
+        entity.EditStateJson                = req.EditStateJson;
         entity.InitialHeight                = req.InitialHeight;
         entity.MinHeight                    = req.MinHeight;
         entity.MaxHeight                    = req.MaxHeight;

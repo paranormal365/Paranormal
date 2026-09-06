@@ -23,8 +23,12 @@ each one saying which part of the original it came from.
 
 **The listening tools change what you hear, not the file.** The equaliser, the high-pass and
 low-pass filters, the compressor and the noise gate all work on the sound coming out of your
-speakers this moment. Turn them on to hear a whisper more clearly; nothing is written anywhere.
+speakers this moment. Turn them on to hear a whisper more clearly; the recording is not touched.
 The edits are the other panel, and those are the ones that produce a file.
+
+How you set those tools up *is* remembered, per recording. Find the filter that lifts a voice out
+of a hiss and it will still be there when you come back to that file — which also means that what
+you are hearing on reopening is not the recording as it was captured. The panel shows what is on.
 
 ## Selecting a stretch
 
@@ -62,9 +66,10 @@ Three controls sit beside it:
 Right-click the spectrogram to turn the frequency labels on and off.
 
 The site remembers all of this for each recording — the spectrogram, its resolution, its colours,
-the mel scale and the timeline. Open that file again next week and it looks the way you left it.
-Settings are only saved for recordings that are yours; on somebody else's file you can set the view
-up however you like, and the editor will say plainly that it is not keeping it.
+the mel scale, the timeline, and the whole listening chain below. Open that file again next week and
+it looks and sounds the way you left it. Settings are only saved for recordings that are yours; on
+somebody else's file you can set things up however you like, and the editor will say plainly that it
+is not keeping them.
 
 ## Silence detection
 
@@ -162,5 +167,5 @@ the Mixer button only appears if you have it.
   own visibility.
 - **Markers, notes and the record of what you dismissed** belong to the recording, so anybody who
   can see the recording sees them.
-- **How you have set the editor up** belongs to the recording too, and is saved only if the
-  recording is yours.
+- **How you have set the editor up** belongs to the recording too — the spectrogram, its settings,
+  and the whole listening chain — and is saved only if the recording is yours.

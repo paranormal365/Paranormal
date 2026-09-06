@@ -25,6 +25,16 @@ public sealed record AudioViewState
     public bool   MelScale           { get; init; }
     public bool   TimelineVisible    { get; init; } = true;
 
+    /// <summary>
+    /// The listening chain — equaliser, filters, compressor, noise gate.
+    /// </summary>
+    /// <remarks>
+    /// Carried here so there is one save path and one place that decides whether anything changed.
+    /// It rides in its own column rather than the spectrogram's, because it is about what you hear
+    /// rather than what you see (2026-09-06 audio audit, phase 5b).
+    /// </remarks>
+    public AudioListeningChain Chain { get; init; } = AudioListeningChain.Default;
+
     /// <summary>What a recording nobody has set up yet looks like.</summary>
     public static AudioViewState Default { get; } = new();
 
@@ -49,6 +59,7 @@ public sealed record AudioViewState
             FftSamples         = spectrogram?.FftSamples ?? Default.FftSamples,
             Colormap           = spectrogram?.Colormap   ?? Default.Colormap,
             MelScale           = spectrogram?.MelScale   ?? Default.MelScale,
+            Chain              = AudioListeningChain.FromJson(record.EditStateJson),
         };
     }
 
@@ -63,6 +74,8 @@ public sealed record AudioViewState
         {
             EnableSpectrogram = SpectrogramVisible,
             EnableTimeline    = TimelineVisible,
+            EditStateJson = Chain.ToJson(),
+
             SpectrogramOptionsJson = UploadFileAudioConfigExtensions.SerializeSpectrogramOptions(new WsSpectrogramOptions
             {
                 Labels     = SpectrogramLabels,
@@ -110,6 +123,19 @@ public sealed record AudioViewState
             MaxZoom        = existing?.MaxZoom ?? 1000,
         };
 
-    /// <summary>Whether anything a person would notice differs between two views.</summary>
-    public bool SameAs(AudioViewState other) => this == other;
+    /// <summary>
+    /// Whether anything a person would notice differs between two views.
+    /// </summary>
+    /// <remarks>
+    /// Record equality reaches <see cref="Chain"/> as well, but its equaliser is a list — and a
+    /// list compares by reference, so two identical chains would read as different and every
+    /// control would send a save. Compared element by element here.
+    /// </remarks>
+    public bool SameAs(AudioViewState other)
+        => this with { Chain = AudioListeningChain.Default } == other with { Chain = AudioListeningChain.Default }
+        && ChainsMatch(Chain, other.Chain);
+
+    private static bool ChainsMatch(AudioListeningChain a, AudioListeningChain b)
+        => a with { EqGains = [] } == b with { EqGains = [] }
+        && a.EqGains.SequenceEqual(b.EqGains);
 }

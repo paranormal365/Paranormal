@@ -179,4 +179,87 @@ public sealed class AudioViewStateTests
             SpectrogramOptionsJson = request.SpectrogramOptionsJson,
         };
     }
+
+    // ── The listening chain rides with the view (phase 5b) ────────────────────
+
+    [Fact]
+    public void The_listening_chain_survives_the_round_trip()
+    {
+        var view = new AudioViewState
+        {
+            SpectrogramVisible = true,
+            Chain = AudioListeningChain.Default with
+            {
+                HighPassOn = true, HighPassHz = 300,
+                NoiseGateOn = true, NoiseGateThresholdDb = -55,
+                EqGains = [0, 0, 6, 0, 0, 0, 0, 0, 0, 0],
+            },
+        };
+
+        var record = new UploadFileAudioConfigRecord
+        {
+            EnableSpectrogram      = view.SpectrogramVisible,
+            EnableTimeline         = view.TimelineVisible,
+            SpectrogramOptionsJson = view.ToRequest(null).SpectrogramOptionsJson,
+            EditStateJson          = view.ToRequest(null).EditStateJson,
+        };
+
+        var round = AudioViewState.From(record);
+
+        Assert.True(round.Chain.HighPassOn);
+        Assert.Equal(300, round.Chain.HighPassHz);
+        Assert.Equal(-55, round.Chain.NoiseGateThresholdDb);
+        Assert.Equal(6, round.Chain.EqGains[2]);
+    }
+
+    /// <summary>
+    /// Two views with equal chains are the same view.
+    /// </summary>
+    /// <remarks>
+    /// The equaliser is a list, and a list compares by reference — so without comparing element by
+    /// element, two identical chains read as different and every control would send a save on
+    /// every touch (2026-09-06 audio audit, phase 5b).
+    /// </remarks>
+    [Fact]
+    public void Two_views_with_equal_chains_are_the_same_view()
+    {
+        var a = new AudioViewState { Chain = AudioListeningChain.Default with { EqGains = [1, 2, 3, 0, 0, 0, 0, 0, 0, 0] } };
+        var b = new AudioViewState { Chain = AudioListeningChain.Default with { EqGains = [1, 2, 3, 0, 0, 0, 0, 0, 0, 0] } };
+
+        Assert.True(a.SameAs(b));
+    }
+
+    [Fact]
+    public void A_view_whose_chain_differs_is_a_different_view()
+    {
+        var a = new AudioViewState();
+        var b = new AudioViewState { Chain = AudioListeningChain.Default with { HighPassOn = true } };
+
+        Assert.False(a.SameAs(b));
+    }
+
+    [Fact]
+    public void A_view_whose_equaliser_moved_is_a_different_view()
+    {
+        var a = new AudioViewState();
+        var b = new AudioViewState { Chain = AudioListeningChain.Default with { EqGains = [0, 0, 6, 0, 0, 0, 0, 0, 0, 0] } };
+
+        Assert.False(a.SameAs(b));
+    }
+
+    [Fact]
+    public void Saving_carries_the_chain_into_its_own_column()
+    {
+        var request = new AudioViewState
+        {
+            Chain = AudioListeningChain.Default with { LowPassOn = true, LowPassHz = 4_000 },
+        }.ToRequest(null);
+
+        Assert.NotNull(request.EditStateJson);
+        Assert.Contains("lowPassOn", request.EditStateJson);
+        Assert.Contains("4000", request.EditStateJson);
+
+        // And not into the spectrogram's column, which is about what you SEE.
+        Assert.DoesNotContain("lowPass", request.SpectrogramOptionsJson ?? "");
+    }
 }
