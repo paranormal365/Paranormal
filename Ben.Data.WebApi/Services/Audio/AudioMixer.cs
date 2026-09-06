@@ -98,24 +98,17 @@ internal static class AudioMixer
         return result;
     }
 
+    /// <summary>
+    /// Decodes one track.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="AudioSourceReader"/>, which allocates one buffer from the header and
+    /// enforces the same length ceiling every other edit obeys. This mattered most here: a mix
+    /// holds every track at once, so the old grow-and-copy read was three copies per track and up
+    /// to eight tracks (2026-09-06 audio walk, finding 1).
+    /// </remarks>
     private static (float[] Samples, WaveFormat Format) ReadSamples(Stream sourceStream, string sourceContentType)
-    {
-        using var waveStream = OpenWaveStream(sourceStream, sourceContentType);
-        var provider = waveStream.ToSampleProvider();
-        var format = provider.WaveFormat;
-
-        var all = new List<float>();
-        var buffer = new float[4096];
-        int read;
-        while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
-            all.AddRange(new ArraySegment<float>(buffer, 0, read));
-
-        return (all.ToArray(), format);
-    }
-
-    // See AudioSourceReader: the default NAudio MP3 reader is Windows-only.
-    private static WaveStream OpenWaveStream(Stream sourceStream, string sourceContentType)
-        => AudioSourceReader.Open(sourceStream, sourceContentType);
+        => AudioSourceReader.ReadAll(sourceStream, sourceContentType);
 
     private static (byte[] Bytes, string ContentType, string Extension) WriteWav(float[] interleavedStereo, int sampleRate, int channels)
     {

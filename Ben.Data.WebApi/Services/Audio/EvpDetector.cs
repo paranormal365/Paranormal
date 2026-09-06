@@ -325,31 +325,21 @@ internal static class EvpDetector
 
     // ── Decoding ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Decodes the recording as mono at the detection rate.
+    /// </summary>
+    /// <remarks>
+    /// <para>The mixdown and the rate change happen while the stream is read, so the recording is
+    /// never held at its own rate. It used to be: a <c>List&lt;float&gt;</c> was grown a second at
+    /// a time — allocating a fresh array for every one of those seconds — then copied again to
+    /// average the channels. One scan of a 90-minute recording took the API from 1.5 GB to 5.1 GB
+    /// and left it there (2026-09-06 audio walk, finding 1).</para>
+    ///
+    /// <para>Reading at 16 kHz loses the detector nothing: it band-passes 300–3400 Hz and looks
+    /// above that band only to compare against it.</para>
+    /// </remarks>
     private static (float[] Mono, int SampleRate) ReadMono(Stream sourceStream, string contentType)
-    {
-        using var reader = AudioSourceReader.Open(sourceStream, contentType);
-        var provider = reader.ToSampleProvider();
-        var format = reader.WaveFormat;
-
-        var buffer = new List<float>();
-        var chunk = new float[format.SampleRate * format.Channels];
-        int read;
-        while ((read = provider.Read(chunk, 0, chunk.Length)) > 0)
-            buffer.AddRange(chunk.AsSpan(0, read).ToArray());
-
-        var channels = Math.Max(1, format.Channels);
-        if (channels == 1) return ([.. buffer], format.SampleRate);
-
-        var frames = buffer.Count / channels;
-        var mono = new float[frames];
-        for (var i = 0; i < frames; i++)
-        {
-            double sum = 0;
-            for (var c = 0; c < channels; c++) sum += buffer[i * channels + c];
-            mono[i] = (float)(sum / channels);
-        }
-        return (mono, format.SampleRate);
-    }
+        => AudioSourceReader.ReadMonoAt(sourceStream, contentType);
 
 
 

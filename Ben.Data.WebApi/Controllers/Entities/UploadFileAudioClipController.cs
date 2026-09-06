@@ -283,24 +283,33 @@ internal static class AudioClipper
         using var reader = new WaveFileReader(input);
         var provider = reader.ToSampleProvider();
 
-        var samples = new List<float>();
-        var buffer  = new float[reader.WaveFormat.SampleRate * reader.WaveFormat.Channels];
-        int read;
-        while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
-            samples.AddRange(buffer.AsSpan(0, read).ToArray());
+        // One buffer, sized from the header, rather than a List grown a second at a time with a
+        // fresh array allocated for each one and a full copy at the end. A clip is short by
+        // definition, so this was never the worst offender — but it is the same mistake, and
+        // leaving one copy of it around is how it comes back (2026-09-06 audio walk, finding 1).
+        var total   = (int)(reader.Length / Math.Max(1, reader.WaveFormat.BitsPerSample / 8));
+        var samples = new float[Math.Max(total, 1)];
+        var count   = 0;
+
+        while (count < samples.Length)
+        {
+            var read = provider.Read(samples, count, samples.Length - count);
+            if (read == 0) break;
+            count += read;
+        }
 
         var peak = 0f;
-        foreach (var s in samples) peak = Math.Max(peak, Math.Abs(s));
+        for (var i = 0; i < count; i++) peak = Math.Max(peak, Math.Abs(samples[i]));
         if (peak <= 0.0001f) return wavBytes;
 
         var scale = NormalizeTargetPeak / peak;
 
-        using var output = new MemoryStream();
+        using var output = new MemoryStream(wavBytes.Length);
         using (var writer = new WaveFileWriter(
             output, new WaveFormat(reader.WaveFormat.SampleRate, 16, reader.WaveFormat.Channels)))
         {
-            foreach (var s in samples)
-                writer.WriteSample(Math.Clamp(s * scale, -1f, 1f));
+            for (var i = 0; i < count; i++)
+                writer.WriteSample(Math.Clamp(samples[i] * scale, -1f, 1f));
             writer.Flush();
         }
         return output.ToArray();

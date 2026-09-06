@@ -123,6 +123,38 @@ dead API rather than as a refusal.
 *(A second scan on the already-swollen process peaked at 6414 MB and stayed there; the figures
 are cumulative because nothing is released, not because the second call was cheaper.)*
 
+### Both fixed, and re-measured
+
+Same 90-minute recording, same machine, through the same probe.
+
+| Request | Before | After |
+|---|---|---|
+| Normalize | HTTP 201 in 8 s, peak **8629 MB** | HTTP 400 in 0 s, peak **724 MB** — refused with a sentence |
+| EVP scan | HTTP 200 in 7 s, peak **5057 MB** (+3530 over baseline) | HTTP 200 in 6 s, peak **1748 MB** (+1023 over baseline) |
+
+Three things were wrong, and all three are in `AudioSourceReader` now:
+
+1. **Every reader grew a `List<float>` and then called `ToArray` on it** — the list's doubling
+   buffer and a full copy alive at once, three times the recording before the operation began.
+   `AudioEditor`, `AudioMixer`, `EvpDetector` and the clip normaliser each had their own copy of
+   that loop. They all read through one place now, which allocates one buffer from the length the
+   header already states; for WAV that is exact, so nothing is copied at all.
+2. **The detector decoded at full rate and in stereo**, then averaged — five and a half times the
+   memory for information it discards, since it band-passes 300–3400 Hz. It reads mono at 16 kHz
+   now, mixed down and resampled as the stream is read, so the recording is never held at its own
+   rate. 90 minutes costs 329 MB instead of 1.9 GB, and the scan keeps no length limit: long
+   recordings are its whole purpose.
+3. **Edits have a stated ceiling** of 30 minutes, checked from the header before a byte is
+   decoded, refused as a 400 through the `NotSupportedException` path the endpoints already
+   answer. The message says what to do instead.
+
+*One mistake of my own, worth recording:* the first version of the new reader asked the provider
+for the whole remaining array in one call. Every stage in front of it sizes its scratch buffer
+from what it is asked for, so the mixdown allocated an interleaved copy of the entire recording
+and the resampler did the same — 5.2 GB of allocation to return 329 MB. Reading in quarter-million
+sample chunks brought that to 674 MB. It is invisible from the outside, so a test measures the
+marginal allocation of a longer recording and fails against the un-chunked version.
+
 **R (NEW, M).** `AudioEditRequest.Operation` only binds from a **number**, not the enum's name:
 `{"operation":"Normalize"}` is refused with `$.operation: The JSON value could not be converted`.
 Every other enum the API takes over JSON accepts its name. Anything not generated from the C#

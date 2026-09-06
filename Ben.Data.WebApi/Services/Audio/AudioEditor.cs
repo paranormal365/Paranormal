@@ -178,25 +178,14 @@ internal static class AudioEditor
     }
 
     /// <summary>Decodes the full source stream into normalized [-1, 1] float samples (interleaved by channel).</summary>
+    /// <remarks>
+    /// One buffer, sized from the header, and a stated ceiling — see <see cref="AudioSourceReader"/>.
+    /// This used to grow a <c>List&lt;float&gt;</c> and then call <c>ToArray</c> on it, holding
+    /// three copies of the recording before the edit had begun: one Normalize of a 90-minute file
+    /// peaked at 8.6 GB (2026-09-06 audio walk, finding 1b).
+    /// </remarks>
     private static (float[] Samples, WaveFormat Format) ReadSamples(Stream sourceStream, string sourceContentType)
-    {
-        using var waveStream = OpenWaveStream(sourceStream, sourceContentType);
-        var provider = waveStream.ToSampleProvider();
-        var format = provider.WaveFormat;
-
-        var all = new List<float>();
-        var buffer = new float[4096];
-        int read;
-        while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
-            all.AddRange(new ArraySegment<float>(buffer, 0, read));
-
-        return (all.ToArray(), format);
-    }
-
-    // Goes through AudioSourceReader so MP3 uses the managed decoder — the default NAudio path is
-    // Windows-only and threw DllNotFoundException on macOS/Linux for every MP3 edit.
-    private static WaveStream OpenWaveStream(Stream sourceStream, string sourceContentType)
-        => AudioSourceReader.Open(sourceStream, sourceContentType);
+        => AudioSourceReader.ReadAll(sourceStream, sourceContentType);
 
     private static (byte[] Bytes, string ContentType, string Extension) WriteWav(float[] samples, WaveFormat sourceFormat)
     {
