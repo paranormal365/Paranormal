@@ -21,9 +21,24 @@ namespace Ben.Video.Editor.Models;
 /// <param name="SizeBytes">Size of the rendered output, known without reading it.</param>
 /// <param name="DurationSeconds">Duration of the rendered output, from the pipeline's own final probe.</param>
 /// <param name="ReadBytesAsync">Materializes the body. Returns <c>null</c> if the export is already gone.</param>
+/// <param name="BlobUrl">
+/// Where the render sits in the browser, so a host can hand it straight to a server without it
+/// passing through .NET at all.
+/// </param>
+/// <remarks>
+/// <para><see cref="BlobUrl"/> is the one a Blazor Server host wants. Reading the bytes there means
+/// returning them over the circuit as a JS-interop value, which Blazor caps at 32 KB by default —
+/// so publishing a real render from the site could not work, at any size worth calling a video
+/// (2026-09-05 audit, site-1). With the URL, the browser posts the file itself and the server
+/// process never sees it.</para>
+///
+/// <para>Valid for exactly as long as the rest of this record: the editor revokes it as soon as
+/// the callback returns.</para>
+/// </remarks>
 public sealed record ExportedVideo(
     string FileName,
     string ContentType,
     long SizeBytes,
     double DurationSeconds,
-    Func<Task<byte[]?>> ReadBytesAsync);
+    Func<Task<byte[]?>> ReadBytesAsync,
+    string? BlobUrl = null);

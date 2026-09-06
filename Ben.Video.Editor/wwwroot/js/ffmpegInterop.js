@@ -4,19 +4,24 @@
  * Central JS module for all ffmpeg.wasm interactions in Ben.Video.Editor.
  * Served at: /_content/Ben.Video.Editor/js/ffmpegInterop.js
  *
- * Requires the following UMD script to be loaded in the host index.html BEFORE Blazor:
- *   <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
+ * Requires the wrapper library to be loaded by the host page BEFORE Blazor:
+ *   <script src="_content/Ben.Video.Editor/js/ffmpeg.umd.js"></script>
  *
- * CDN bases:
- *   @ffmpeg/core (ST)  — https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/
- *   @ffmpeg/core-mt    — https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd/
+ * Nothing here reaches a CDN. The wrapper and both cores ship with this library:
+ *   js/ffmpeg.umd.js                 @ffmpeg/ffmpeg 0.12.15
+ *   js/ffmpeg-core/st/               @ffmpeg/core 0.12.10        (single-thread)
+ *   js/ffmpeg-core/mt/               @ffmpeg/core-mt 0.12.10     (multi-thread)
+ *
+ * The cores were fetched from cdn.jsdelivr.net at every load until 2026-09-05 — thirty megabytes
+ * of WebAssembly from a third party, with a retry loop around it because it failed often enough to
+ * need one. See the note above coreBase for why that is now vendored instead.
  *
  * Why blob: URLs?
- *   Web Workers can only be created from same-origin URLs. The CDN files are
- *   cross-origin, so we fetch them (browser caches the HTTP response), wrap
- *   them in blob: URLs (same-origin), and pass those to ffmpeg.load().
- *   WASM compilation takes ~5-30 s on first load; subsequent loads use the
- *   HTTP-cached files but still recompile (blob: URLs bypass the WASM JIT cache).
+ *   Web Workers can only be created from same-origin URLs. That was the original reason — the CDN
+ *   files were cross-origin — and it no longer applies, but the wrapping is kept because
+ *   ffmpeg.load() takes URLs and blob: URLs are what it has been given and tested with here.
+ *   WASM compilation takes ~5-30 s on first load; later loads read the HTTP-cached files and still
+ *   recompile, because a blob: URL bypasses the WASM JIT cache.
  */
 
 import { opfsExportsWriteBytes } from './opfsInterop.js';
@@ -38,26 +43,12 @@ const { FFmpeg } = FFmpegWASM;
 // the connection or the transfer gave way. That surfaced as an editor stuck on "Error: Failed to
 // fetch" — recurring, never reproducible on demand, and hit once in a 401-test run on 2026-08-27.
 //
-// A transfer this size deserves the same courtesy any large download gets: try again. Three
-// attempts with a widening pause covers a transient far more often than it prolongs a real
-// outage, and an HTTP status is NOT retried — a 404 is an answer, and asking twice will not
-// change it.
+// No retry loop any more. There were three attempts with a widening pause, and they existed
+// because the core came from a CDN that failed often enough to need them. It is served by this app
+// now, from the same origin as everything else: either the file is there or the deployment is
+// broken, and asking a second time will not change which (2026-09-05 audit, media-13).
 async function toBlobURL(url, mimeType, label) {
-    let lastError;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            return await fetchAsBlobURL(url, mimeType, label, attempt);
-        } catch (err) {
-            if (err && err.httpStatus) throw err;      // the server answered; retrying is pointless
-            lastError = err;
-            if (attempt < 3) {
-                const pause = attempt * 750;
-                console.warn(`[ffmpeg] ${label}: ${err}. Retrying in ${pause}ms (${attempt}/2)…`);
-                await new Promise(r => setTimeout(r, pause));
-            }
-        }
-    }
-    throw new Error(`[ffmpeg] ${label}: failed after 3 attempts — ${lastError}`);
+    return fetchAsBlobURL(url, mimeType, label, 1);
 }
 
 async function fetchAsBlobURL(url, mimeType, label, attempt) {
@@ -107,8 +98,22 @@ async function fetchFile(source) {
     return new Uint8Array(await resp.arrayBuffer());
 }
 
-const CORE_BASE    = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
-const CORE_MT_BASE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
+// The ffmpeg core, served by this app rather than fetched from a CDN.
+//
+// It used to come from cdn.jsdelivr.net at every load: thirty megabytes of WebAssembly from a
+// third party, undocumented anywhere, with a retry loop around it because it failed often enough
+// to need one. So the editor could not start at all if that CDN was slow, blocked or down, and a
+// person with no network had no editor even though every other thing it does is local
+// (2026-09-05 audit, media-13 and wasm-6). Vendoring is 62 MB in the repository and it buys an
+// editor that starts from its own origin, offline included.
+//
+// Resolved against document.baseURI for the same reason moduleLoader.js does it: the production
+// editor is served from a sub-path, where a root-absolute path asks the site root for a file that
+// lives under /editors/video.
+const coreBase = (variant) =>
+    // No trailing slash: callers append "/ffmpeg-core.js", and two slashes in a row is a different
+    // path to some servers even where it happens to work on others.
+    new URL(`_content/Ben.Video.Editor/js/ffmpeg-core/${variant}`, document.baseURI).href;
 
 // Singleton FFmpeg instance
 let _ffmpeg = null;
@@ -169,15 +174,18 @@ export async function loadCore(dotnetRef, multiThread) {
         console.log('[ffmpeg] ffmpeg.load() complete ✓');
     };
 
-    const base = multiThread ? CORE_MT_BASE : CORE_BASE;
     const mode = multiThread ? 'multi-thread' : 'single-thread';
 
     try {
-        await loadFrom(base, mode);
+        await loadFrom(coreBase(multiThread ? 'mt' : 'st'), mode);
     } catch (err) {
+        // The multi-thread core needs the page to be cross-origin isolated and the browser to
+        // allow SharedArrayBuffer. isMultiThreadSupported checks both, but a header can be
+        // stripped by something in front of the site, so the single-thread core stays the
+        // fallback rather than the load simply failing.
         if (multiThread) {
             console.warn('[ffmpeg] Multi-thread failed, retrying single-thread:', err);
-            await loadFrom(CORE_BASE, 'single-thread');
+            await loadFrom(coreBase('st'), 'single-thread');
         } else {
             throw err;
         }

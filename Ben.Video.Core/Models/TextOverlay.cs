@@ -85,6 +85,21 @@ public sealed record TextOverlay : TrackItem
     /// <summary>Fade-out duration in seconds (0 = instant disappear).</summary>
     public double FadeOutSeconds { get; set; } = 0.3;
 
+    /// <summary>
+    /// The widest the title may draw, as a fraction of the canvas. Null means no limit.
+    /// </summary>
+    /// <remarks>
+    /// <para>Titles never wrapped. A sentence of any length drew as one line and ran straight off
+    /// both sides of the frame, with the only remedy being to type the line breaks yourself
+    /// (2026-09-05 audit, titles-6). Callouts have wrapped for a while; the wrapping code is
+    /// shared, and only titles had no way to ask for it.</para>
+    ///
+    /// <para>A fraction rather than pixels so it survives a change of canvas size, which is the
+    /// same reason positions are fractions. Null rather than 1.0 as the default so nothing about
+    /// an existing project's titles changes until somebody sets a width.</para>
+    /// </remarks>
+    public double? MaxWidth { get; set; }
+
     /// <summary>Opacity/alpha (0.0 = transparent, 1.0 = fully opaque). Multiplies with the fade-in/out envelope.</summary>
     public double Opacity { get; set; } = 1.0;
 

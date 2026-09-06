@@ -42,6 +42,10 @@ builder.Services.AddBenVideoEditor(options =>
     // sidecar's one-time pairing code.
     VideoEditorHostDefaults.ApplyEditingDefaults(options);
 
+    // Site-absolute: the downloads page lives under the standalone editor, and the site's own
+    // editor pages are elsewhere entirely (2026-09-05 audit, F17).
+    options.SidecarDownloadUrl = "/editors/video/downloads/";
+
     // Media library, shared asset catalog and Save-to-server. The catalog's read endpoints are
     // anonymous by design, so its named HttpClient carries no auth handler.
     VideoEditorHostDefaults.ApplyServerIntegration(options, builder.Configuration["WebApi:BaseUrl"]);
@@ -74,7 +78,25 @@ builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<Ben.Web.Website.Services.BrowserTicketStore>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
+
+// Points the video editor's Server tab at the media relay above, so a clip streams from the API
+// to the browser instead of through this process (2026-09-05 audit, site-2).
+builder.Services.AddScoped<Ben.Web.Services.IMediaTicketMinter,
+                           Ben.Web.Website.Services.SiteMediaTicketMinter>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
+
+// The video editor's publish path. Registered so VideoExportPublisher prefers it over reading the
+// render back through the circuit, which Blazor caps at 32 KB and which therefore could not
+// publish a real video at all (2026-09-05 audit, site-1).
+builder.Services.AddScoped<Ben.Web.Services.IVideoUploadRelay,
+                           Ben.Web.Website.Services.BrowserVideoUploadRelay>();
+
+// Save to Server, through the client this host already authenticates. The editor's default store
+// posts over a named HttpClient, and the bearer token here lives in the circuit where a
+// root-registered message handler cannot reach it — so that button answered 401, always
+// (2026-09-05 audit, F13).
+builder.Services.AddScoped<Ben.Video.Editor.Services.IProjectServerStore,
+                           Ben.Web.Services.BenProjectServerStore>();
 builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
 // ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
 // leading slash, which BaseAddress treats as root-relative and so discards the base path - see the
@@ -548,6 +570,41 @@ app.MapPost("/uploads/classic/{nonce:guid}", async (
 
     using var request = new HttpRequestMessage(
         HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/upload-files");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// The video editor's finished render, straight from the browser to the API.
+//
+// Publishing used to pull the whole file back into the circuit as one JS-interop byte[] return —
+// which Blazor Server caps at 32 KB by default, and which nothing here raises. A render is
+// megabytes at the very least, so a real one could not be published from the site at all
+// (2026-09-05 audit, site-1). The render lives in the browser's own storage; this hands it to the
+// API without it ever entering this process's memory, exactly as the other upload relays do.
+//
+// The ticket is bound to the project id, so a ticket minted for one publish cannot be replayed
+// against another project.
+app.MapPost("/uploads/video-project/{projectId:guid}", async (
+    Guid projectId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(projectId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // a long render on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/video-projects/{projectId}/publish");
     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
     request.Content = new StreamContent(ctx.Request.Body);
     if (ctx.Request.ContentType is { } contentType)

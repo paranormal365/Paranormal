@@ -60,8 +60,19 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibr
         var url     = $"{baseUrl}/api/media-library/files?contentTypePrefixes=video/,audio/,image/"
                     + ScopeQuery(scope);
 
-        var records = await _http.GetFromJsonAsync<List<UploadFileDto>>(
-            url, _jsonOptions, cancellationToken) ?? [];
+        // Read the response rather than letting GetFromJsonAsync throw: a 401 here is somebody
+        // needing to sign in, and its raw exception message was what the panel used to show
+        // (2026-09-05 audit, F11).
+        var response = await _http.GetAsync(url, cancellationToken);
+
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized
+                                or System.Net.HttpStatusCode.Forbidden)
+            throw new MediaLibraryUnauthorizedException();
+
+        response.EnsureSuccessStatusCode();
+
+        var records = await response.Content.ReadFromJsonAsync<List<UploadFileDto>>(
+            _jsonOptions, cancellationToken) ?? [];
 
         return records
             // Images included, matching the site host. The editor places stills as overlays, and
@@ -91,8 +102,8 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibr
         var url     = $"{baseUrl}/api/upload-files/{fileId}/download";
 
         // Phase 150 — stream with progress reporting (best-effort: only when the response reports
-        // Content-Length) instead of ReadAsByteArrayAsync, matching DemoMediaLibraryProvider so
-        // real hosts get the same per-file progress UI on the Server tab.
+        // Content-Length) instead of ReadAsByteArrayAsync, so the Server tab can show per-file
+        // progress rather than an unmoving spinner.
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
         var totalBytes = response.Content.Headers.ContentLength;

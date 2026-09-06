@@ -39,6 +39,11 @@
             {
                 <p class="bv-export-destination-prompt__error" role="alert">@_error</p>
             }
+
+            @if (!CanUpload && !_confirmingDiscard)
+            {
+                <p class="bv-export-destination-prompt__hint">@UploadUnavailableReason</p>
+            }
         </WindowContent>
         <WindowFooter>
             @if (_confirmingDiscard)
@@ -59,10 +64,15 @@
             @* Busy state is on the whole footer, not just the clicked button: publishing a large
                render is slow enough that a second click on the OTHER button would otherwise start
                a download of a file publish is midway through consuming. *@
+            @* Offered only when the host says this person can actually upload. Shown disabled
+               with a reason rather than hidden: "where can this go" is the question the prompt
+               exists to answer, and silently omitting the server makes it look as though the
+               editor cannot do it at all (2026-09-05 audit, F12). *@
             <TelerikButton OnClick="UploadAsync"
-                           Enabled="@(!_busy)"
+                           Enabled="@(!_busy && CanUpload)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                           Size="@ThemeConstants.Button.Size.Small">
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="@(CanUpload ? "Upload to your media library" : UploadUnavailableReason)">
                 @(_busy ? "Uploading…" : "Upload to server")
             </TelerikButton>
             @if (ShowPostToFeed)
@@ -119,6 +129,19 @@
 
     /// <summary>Host's call, from the server's own CanPost — the editor never guesses.</summary>
     [Parameter] public bool ShowPostToFeed { get; set; }
+
+    /// <summary>
+    /// Whether the server destination is actually available to this person right now.
+    /// </summary>
+    /// <remarks>
+    /// The standalone host passes the signed-in state. Signed out, the button stays visible and
+    /// disabled with a reason, because the alternative — no server option at all — reads as the
+    /// editor being unable to publish rather than the person needing to sign in.
+    /// </remarks>
+    [Parameter] public bool CanUpload { get; set; } = true;
+
+    /// <summary>Why the server destination is unavailable, when it is.</summary>
+    [Parameter] public string UploadUnavailableReason { get; set; } = "Sign in to upload.";
 
     private bool    _busy;
     private string? _error;

@@ -83,6 +83,41 @@ public sealed class OPFSService : IAsyncDisposable
     }
 
     /// <summary>Write raw bytes (e.g. downloaded from a web API) to OPFS.</summary>
+    /// <summary>
+    /// Streams a URL straight into storage, without the bytes passing through .NET.
+    /// </summary>
+    /// <returns>Bytes written, or -1 when it could not be done — the caller falls back.</returns>
+    /// <remarks>
+    /// The point is what it avoids under Blazor Server: fetching the file into the server's
+    /// memory, copying it again, and shipping it over the circuit (2026-09-05 audit, site-2).
+    /// </remarks>
+    public async Task<long> DownloadToClipAsync(
+        string url, Guid clipId, string ext,
+        DotNetObjectReference<object>? progressTarget = null, string? progressMethod = null)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return -1;
+
+        try
+        {
+            var result = await _module.InvokeAsync<DownloadResult>(
+                "opfsDownloadToClip", url, clipId.ToString(), ext, progressTarget, progressMethod);
+
+            if (result.Error is not null)
+                _errorLog.Log("OPFSService.DownloadToClipAsync", result.Error);
+
+            return result.Bytes;
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("OPFSService.DownloadToClipAsync", ex);
+            return -1;
+        }
+    }
+
+    /// <summary>What the browser's own streaming download reported.</summary>
+    private sealed record DownloadResult(long Bytes, string? Error);
+
     public async Task WriteFromBytesAsync(Guid clipId, string ext, byte[] bytes)
     {
         await EnsureInitAsync();
@@ -103,6 +138,38 @@ public sealed class OPFSService : IAsyncDisposable
         if (!IsAvailable || _module is null) return false;
         try { return await _module.InvokeAsync<bool>("opfsExists", clipId.ToString(), ext); }
         catch (Exception ex) { _errorLog.Log("OPFSService.ExistsAsync", $"OPFS existence check failed for {clipId}{ext}: {ex.Message}", ex.ToString()); return false; }
+    }
+
+    /// <summary>
+    /// The size, and where it is cheap enough a SHA-256, of a clip already in storage.
+    /// </summary>
+    /// <remarks>
+    /// What a portable project records so a re-fetch on another machine can be checked against it
+    /// (2026-09-05 audit, F14). Null when there is no such file, or when storage is unavailable —
+    /// both mean "nothing to record", which is a state the callers already handle. A null hash
+    /// inside a non-null result means the file was above
+    /// <see cref="MediaFingerprint.MaximumHashableBytes"/>, never that it failed to match.
+    /// </remarks>
+    public async Task<(long Size, string? Hash)?> FingerprintAsync(Guid clipId, string ext)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return null;
+
+        try
+        {
+            var result = await _module.InvokeAsync<OpfsFingerprint?>(
+                "opfsFingerprint", clipId.ToString(), ext, MediaFingerprint.MaximumHashableBytes);
+
+            return result is null ? null : (result.Size, result.Hash);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort by design: without a fingerprint the clip simply cannot be verified on
+            // another machine, which is exactly where it was before this existed.
+            _errorLog.Log("OPFSService.FingerprintAsync",
+                $"Could not fingerprint {clipId}{ext}: {ex.Message}", ex.ToString());
+            return null;
+        }
     }
 
     /// <summary>
@@ -286,3 +353,10 @@ public sealed record OpfsClipEntry(string ClipId, string Ext, long SizeBytes)
     /// <summary>The OPFS file name: <c>{ClipId}{Ext}</c>.</summary>
     public string FileName => $"{ClipId}{Ext}";
 }
+
+/// <summary>What <c>opfsFingerprint</c> reports about a stored clip.</summary>
+/// <remarks>
+/// A null <see cref="Hash"/> means the file was too large to hash, not that hashing failed — see
+/// <see cref="MediaFingerprint.MaximumHashableBytes"/>.
+/// </remarks>
+public sealed record OpfsFingerprint(long Size, string? Hash);

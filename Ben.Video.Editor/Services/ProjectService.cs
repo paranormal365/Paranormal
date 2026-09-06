@@ -316,6 +316,7 @@ public sealed class ProjectService
         Order    = t.Order,
         IsMuted  = t.IsMuted,
         IsLocked = t.IsLocked,
+        DucksOthers = t.DucksOthers,
 
         VideoClips   = t.VideoClips.Select(MapVideoClip).ToList(),
         AudioClips   = t.AudioClips.Select(MapAudioClip).ToList(),
@@ -357,6 +358,13 @@ public sealed class ProjectService
         // Falls back to the clip's name, which is what the file was called when it was imported.
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,       // OPFS extension for auto-restore
+        // The three that make a project portable: which server file the media came from, and
+        // enough to tell whether a re-fetch brought back the same thing (2026-09-05 audit, F14).
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
+        Transform         = c.Transform is null ? null : c.Transform with { },
     };
 
     private static ProjectAudioClip MapAudioClip(AudioClip c) => new()
@@ -375,10 +383,16 @@ public sealed class ProjectService
         VolumeAutomation = c.VolumeAutomation.ToList(),
         LeftVolume       = c.LeftVolume,
         RightVolume      = c.RightVolume,
+        MuteAudio        = c.MuteAudio,
+        NoiseReduction   = c.NoiseReduction,
+        Normalise        = c.Normalise,
         LinkedClipId     = c.LinkedClipId,
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
     };
 
     private static ProjectTransition MapTransition(Transition t) => new()
@@ -420,6 +434,7 @@ public sealed class ProjectService
         FadeInSeconds    = o.FadeInSeconds,
         FadeOutSeconds   = o.FadeOutSeconds,
         Opacity          = o.Opacity,
+        MaxWidth         = o.MaxWidth,
         ShadowColor      = o.ShadowColor,
         ShadowOffsetX    = o.ShadowOffsetX,
         ShadowOffsetY    = o.ShadowOffsetY,
@@ -445,6 +460,11 @@ public sealed class ProjectService
         IsMediaMissing   = false,
         OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
+        Transform         = c.Transform is null ? null : c.Transform with { },
     };
 
     private static ProjectCalloutClip MapCalloutClip(CalloutClip c) => new()
@@ -514,6 +534,8 @@ public sealed class ProjectService
         Width            = c.Width,
         Height           = c.Height,
         Rotation         = c.Rotation,
+        NativeWidth      = c.NativeWidth,
+        NativeHeight     = c.NativeHeight,
         Opacity          = c.Opacity,
         TintColor        = c.TintColor,
         ControlPointValues = new Dictionary<string, double>(c.ControlPointValues),

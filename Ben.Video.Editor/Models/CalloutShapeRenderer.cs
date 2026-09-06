@@ -179,13 +179,21 @@ public static class CalloutShapeRenderer
     {
         var cpv = clip.ControlPointValues;
 
+        // Control points are fractions of the callout's own box, not of the canvas. As canvas
+        // fractions they had no relationship to the shape they belonged to, so moving, resizing or
+        // animating a callout left its arrow behind (2026-09-05 audit, callouts-3).
+        double PxX(string key, double fallback) =>
+            cpv.TryGetValue(key, out var f) ? pxX + f * pxW : fallback;
+        double PxY(string key, double fallback) =>
+            cpv.TryGetValue(key, out var f) ? pxY + f * pxH : fallback;
+
         // Default: horizontal arrow across the bounding box
-        var x1 = cpv.TryGetValue(CalloutControlPoints.StartX, out var v) ? v * canvasW : pxX;
-        var y1 = cpv.TryGetValue(CalloutControlPoints.StartY, out v)     ? v * canvasH : pxY + pxH / 2;
-        var x2 = cpv.TryGetValue(CalloutControlPoints.EndX,   out v)     ? v * canvasW : pxX + pxW;
-        var y2 = cpv.TryGetValue(CalloutControlPoints.EndY,   out v)     ? v * canvasH : pxY + pxH / 2;
-        var mx = cpv.TryGetValue(CalloutControlPoints.MidX,   out v)     ? v * canvasW : (x1 + x2) / 2;
-        var my = cpv.TryGetValue(CalloutControlPoints.MidY,   out v)     ? v * canvasH : (y1 + y2) / 2;
+        var x1 = PxX(CalloutControlPoints.StartX, pxX);
+        var y1 = PxY(CalloutControlPoints.StartY, pxY + pxH / 2);
+        var x2 = PxX(CalloutControlPoints.EndX,   pxX + pxW);
+        var y2 = PxY(CalloutControlPoints.EndY,   pxY + pxH / 2);
+        var mx = PxX(CalloutControlPoints.MidX,   (x1 + x2) / 2);
+        var my = PxY(CalloutControlPoints.MidY,   (y1 + y2) / 2);
 
         // Arrow head size proportional to stroke width
         var headSize = Math.Max(sw * 4, 12.0);
@@ -236,12 +244,19 @@ public static class CalloutShapeRenderer
         string stroke, double sw)
     {
         var cpv = clip.ControlPointValues;
-        var x1 = cpv.TryGetValue(CalloutControlPoints.StartX, out var v) ? v * canvasW : pxX;
-        var y1 = cpv.TryGetValue(CalloutControlPoints.StartY, out v)     ? v * canvasH : pxY + pxH / 2;
-        var x2 = cpv.TryGetValue(CalloutControlPoints.EndX,   out v)     ? v * canvasW : pxX + pxW;
-        var y2 = cpv.TryGetValue(CalloutControlPoints.EndY,   out v)     ? v * canvasH : pxY + pxH / 2;
-        var mx = cpv.TryGetValue(CalloutControlPoints.MidX,   out v)     ? v * canvasW : (x1 + x2) / 2;
-        var my = cpv.TryGetValue(CalloutControlPoints.MidY,   out v)     ? v * canvasH : (y1 + y2) / 2;
+
+        // Box fractions, as for the arrow above — see RenderArrow.
+        double PxX(string key, double fallback) =>
+            cpv.TryGetValue(key, out var f) ? pxX + f * pxW : fallback;
+        double PxY(string key, double fallback) =>
+            cpv.TryGetValue(key, out var f) ? pxY + f * pxH : fallback;
+
+        var x1 = PxX(CalloutControlPoints.StartX, pxX);
+        var y1 = PxY(CalloutControlPoints.StartY, pxY + pxH / 2);
+        var x2 = PxX(CalloutControlPoints.EndX,   pxX + pxW);
+        var y2 = PxY(CalloutControlPoints.EndY,   pxY + pxH / 2);
+        var mx = PxX(CalloutControlPoints.MidX,   (x1 + x2) / 2);
+        var my = PxY(CalloutControlPoints.MidY,   (y1 + y2) / 2);
 
         var shadow = clip.ShadowBlur > 0 ? " filter=\"url(#bv-shadow)\"" : string.Empty;
         return $"""
@@ -326,12 +341,15 @@ public static class CalloutShapeRenderer
         {
             case ShapeType.Arrow:
             case ShapeType.Line:
-                clip.ControlPointValues[CalloutControlPoints.StartX] = clip.X;
-                clip.ControlPointValues[CalloutControlPoints.StartY] = clip.Y + clip.Height / 2;
-                clip.ControlPointValues[CalloutControlPoints.EndX]   = clip.X + clip.Width;
-                clip.ControlPointValues[CalloutControlPoints.EndY]   = clip.Y + clip.Height / 2;
-                clip.ControlPointValues[CalloutControlPoints.MidX]   = clip.X + clip.Width / 2;
-                clip.ControlPointValues[CalloutControlPoints.MidY]   = clip.Y + clip.Height / 2;
+                // Fractions of the callout's own box: left edge to right edge, halfway down.
+                // These used to be canvas fractions derived from the box's position, which is
+                // what made a moved callout leave its arrow behind (2026-09-05 audit, callouts-3).
+                clip.ControlPointValues[CalloutControlPoints.StartX] = 0.0;
+                clip.ControlPointValues[CalloutControlPoints.StartY] = 0.5;
+                clip.ControlPointValues[CalloutControlPoints.EndX]   = 1.0;
+                clip.ControlPointValues[CalloutControlPoints.EndY]   = 0.5;
+                clip.ControlPointValues[CalloutControlPoints.MidX]   = 0.5;
+                clip.ControlPointValues[CalloutControlPoints.MidY]   = 0.5;
                 break;
             case ShapeType.Star:
                 clip.ControlPointValues[CalloutControlPoints.OuterRadius] = 0.9;
@@ -346,6 +364,27 @@ public static class CalloutShapeRenderer
             case ShapeType.Custom:
                 break;
         }
+    }
+
+    /// <summary>
+    /// Replaces the control points with the ones the current shape needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>Changing a callout's shape left the old shape's control points in place and the new
+    /// shape's absent. Turning a rectangle into a star gave a star with no radii and a stray corner
+    /// radius; turning an arrow into a rectangle kept the arrow's path points, which then came back
+    /// if it was ever turned into an arrow again, pointing wherever the old one had
+    /// (2026-09-05 audit, callouts-12).</para>
+    ///
+    /// <para>Clearing first is the point. <see cref="SetDefaults"/> only adds, which is right when
+    /// a callout is created and wrong when its shape changes underneath the values.</para>
+    /// </remarks>
+    public static void ReseedForShape(CalloutClip clip)
+    {
+        ArgumentNullException.ThrowIfNull(clip);
+
+        clip.ControlPointValues.Clear();
+        SetDefaults(clip);
     }
 
     /// <summary>Escapes text for safe inclusion as SVG/XML element content or attribute values.</summary>

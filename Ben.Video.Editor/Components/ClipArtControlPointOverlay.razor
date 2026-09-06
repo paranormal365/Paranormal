@@ -83,7 +83,9 @@
     /// pixel-aspect data available here to derive a real value, so the overlay falls back to a square
     /// box for display/first-touch purposes. The moment any resize handle is dragged, ApplyResize
     /// computes a real height and it's written back, replacing the sentinel from then on.</summary>
-    private double EffectiveHeight => Clip is { Height: > 0 } ? Clip.Height : Clip?.Width ?? 0;
+    private double EffectiveHeight => Clip is null
+        ? 0
+        : MotionEffectiveGeometry.EffectiveClipArtHeight(Clip, CanvasWidth, CanvasHeight);
 
     // Item #73 — while a drag is in flight the box must track the running drag state (which is
     // ahead of Clip's own fields whenever the layer is animated, per the note on _dragX above);
@@ -100,7 +102,7 @@
         {
             if (Clip is null) return default;
             var eff = MotionEffectiveGeometry.Effective(Motion, Clip, CurrentTime);
-            return (eff.X, eff.Y, eff.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(eff));
+            return (eff.X, eff.Y, eff.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(eff, CanvasWidth, CanvasHeight));
         }
     }
 
@@ -151,7 +153,7 @@
         (_dragX, _dragY, _dragW, _dragH) = eff;
         _origBounds = eff;
         _baseW = Clip?.Width ?? 0;
-        _baseH = Clip is null ? 0 : MotionEffectiveGeometry.EffectiveClipArtHeight(Clip);
+        _baseH = Clip is null ? 0 : MotionEffectiveGeometry.EffectiveClipArtHeight(Clip, CanvasWidth, CanvasHeight);
         _dragOrigKeyframe = Clip is null ? null
             : Motion.GetPath(Clip.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
 

@@ -23,14 +23,18 @@ time.
 
 - **My Videos** — your own workspace, for anything not tied to a case.
 - **A case's Video tab** — the same editor, opened against that case, for work your group will
-  attach to it.
+  attach to it. Projects saved there belong to the case: everybody who can open the case sees the
+  whole list and can open any of them. Only the person who saved a project can overwrite, publish
+  or delete it, so the list says who made each one.
 
 There is also a standalone editor that runs on its own, at
 [ishaunted.com/editors/video](https://ishaunted.com/editors/video/). It is the same editor with the
 same features — multiple tracks, titles, transitions, effects, saved projects and all — and it
 keeps your footage even further from the server: media goes straight from the site to your machine
-without passing through the web server at all. The one difference worth knowing is what happens
-before you sign in: see [Working signed out](#working-signed-out) below.
+without passing through the web server at all. Sign in there, from the button in its toolbar, and
+it lists your uploaded media, saves projects to the server and publishes finished renders just as
+the site does. The one difference worth knowing is what happens before you sign in: see
+[Working signed out](#working-signed-out) below.
 
 ## Start the engine
 
@@ -88,6 +92,10 @@ to see all of it.
 The scope only ever narrows what you could already see. It is not a way of reaching somebody
 else's footage, and choosing a case you have no part in shows nothing rather than refusing.
 
+The list is fetched once. If you upload something elsewhere while the editor is open, press the
+**refresh** button beside the scope lists to fetch it again. A render you publish from here
+refreshes the list on its own.
+
 Bringing a file over is deliberately **two clicks**:
 
 1. **Click the file once.** It downloads to your browser and is kept there. A tick appears on the
@@ -140,6 +148,7 @@ The ones worth knowing straight away:
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the start or the end |
 | <kbd>S</kbd> | Split the selected clip at the playhead |
 | <kbd>M</kbd> | Drop a marker at the playhead |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>D</kbd> | Duplicate what is selected, clips and annotations alike |
 | <kbd>Delete</kbd> | Remove what is selected |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> | Undo (<kbd>Shift</kbd> as well to redo) |
 | <kbd>Escape</kbd> | Clear the selection |
@@ -179,6 +188,80 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Split** cuts the clip in two at the playhead.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
+- **Mute** on the right-click menu silences a clip's own sound without changing its level.
+
+### Hiding part of the picture
+
+A clip often has one thing in it that cannot go out: a face, a number plate, the house number by
+the door. **Hide an area** covers a rectangle of the picture with a blur or a mosaic, so the rest
+of the clip can still be used.
+
+Areas are drawn on the clip, so they travel with it if you move or trim it, and the preview shows
+each one where the finished video will obscure it. The marker in the preview has a dashed edge to
+say it is an editing marker: the browser's blur is not the one the render uses, and the render's is
+stronger.
+
+An area is measured as a share of the frame rather than in pixels, so it still covers the same
+thing if you export at a different resolution. If an area is somehow too small to render, the
+export says so in its warnings rather than quietly leaving it out — check the picture before
+sharing it.
+
+### Putting a clip somewhere other than the whole frame
+
+By default a clip fills the frame. **Place this clip** lets you say otherwise:
+
+- **Two cameras at once.** Put a clip on a second video track and place it in a corner, or place
+  both at half width for a side-by-side.
+- **Footage shot sideways.** **Turn upright** rotates a phone clip a quarter turn.
+- **Something at the edge you do not want.** **Cut off the edges** trims a share off any side,
+  which is how a recorder's timestamp bar or the neighbour's window comes out of shot. Cutting
+  removes it from the file completely, unlike hiding an area, which covers it.
+
+The picture keeps its own proportions inside whatever box you give it, so placing a clip never
+stretches it.
+
+## Sound
+
+Audio clips sit on their own tracks below the picture and behave like everything else on the
+timeline: drag one to move it, drag its edges to trim it, and the shape drawn on the chip is the
+part of the recording that clip actually plays.
+
+Select a sound and the **Properties** tab offers:
+
+- **Volume**, and a draggable envelope on the chip itself for fading within a single clip.
+- **Left** and **Right** separately, for a recording where one channel is hotter than the other.
+- **Fade in** and **fade out**, limited to half the clip.
+- **Mute this clip**, which silences it without losing the level it is set to.
+
+### Cleaning up a recording
+
+A recording made in a house at two in the morning is mostly room tone, fridge hum and the
+recorder's own noise floor.
+
+- **Reduce hiss** lifts a voice out of that. It goes further as you turn it up, and past about
+  three-quarters it starts to make speech sound watery — so turn it up until the noise stops
+  bothering you and no further.
+- **Even out the level** brings the clip to a common loudness. Worth switching on for every clip in
+  a reel cut from several recordings, so the volume does not need changing between them.
+
+Both are applied when the video is rendered, not to the file you imported, so nothing is lost and
+you can change your mind.
+
+### Music under a voice
+
+Music and room tone are usually set at a level chosen for the stretches with nobody talking, and
+the moment a voice comes in they are too loud.
+
+Open an audio track's menu and choose **Duck others under this**. Everything else — including the
+picture's own sound — drops in level whenever that track is playing and returns when it stops. It
+is the alternative to drawing a volume envelope around every line by hand and redrawing it whenever
+the timing moves.
+
+### Separating a clip's own sound
+
+Right-click a video clip and choose **Separate Audio** to put its sound on its own track, where it
+can be trimmed and moved independently. The new clip carries the trim, the speed and the level the
+picture had, so it starts out lined up exactly as it was.
 
 ## Layers above the picture
 
@@ -205,11 +288,20 @@ Callouts can be moved, resized and rotated, and their movement can be animated o
 *Callouts are for drawing attention to a spot in the picture.*
 
 Both take colour, font and border settings from the properties panel, and both can move across the
-frame while they are on screen.
+frame while they are on screen. Every change is made as you make it and every one can be undone,
+including the words themselves — there is no separate Apply step.
+
+A title runs on one line unless you tell it not to. **Wrap long lines** breaks it at a width you
+choose, which is easier than typing the breaks yourself and survives a change of font size.
+
+Right-click any clip, title, callout or piece of artwork and choose **Duplicate**, or press
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>D</kbd>, to make another one just like it. The copy lands just
+after the original and is entirely separate, so editing one leaves the other alone — which is how
+you make three matching callouts without building each from scratch.
 
 ## Preview and export
 
-**Preview** renders the real thing at full quality in a separate window, so you can check the
+**Preview** renders the real thing at full quality in a window of its own on the page, so you can check the
 finished result before committing to it. It can be stopped at any point, and if it stops reporting
 progress the window says so and offers to restart the video engine.
 
@@ -254,7 +346,9 @@ You choose where the result goes:
 
 - **To your machine** — the file is saved locally and never leaves it.
 - **To the server** — the finished video is uploaded and becomes an ordinary file in your media
-  library, ready to attach to a case or publish.
+  library, ready to attach to a case or publish. Publishing a case project's render also puts it on
+  that case's Files tab, so the rest of the group can find it without going through the editor.
+  Publishing again replaces it rather than leaving both.
 
 Closing that question without answering it asks whether you meant to throw the render away. Nothing
 is deleted unless you say so.
@@ -264,14 +358,18 @@ and both are faster with the native helper below.
 
 ## The native helper (Sidecar)
 
-Everything above runs inside the browser's sandbox, which is safe but slow: the browser will not
-use your machine's video hardware, and it works with one hand tied behind its back on long
-projects.
+Everything above runs inside the browser's sandbox, which is safe but slow: it renders on one
+processor core and inside a memory ceiling the browser sets, which is what makes a long project
+crawl.
 
-The **Sidecar** is a small application you install on your own computer to lift that limit. When it
-is running, the editor hands the heavy work — decoding, rendering, exporting — to it instead of
-doing it in the browser tab. The result is the same video, produced considerably faster, and long
-projects stop straining the browser's memory.
+The **Sidecar** is a small application you install on your own computer to lift both limits. When
+it is running, the editor hands the heavy work — decoding, rendering, exporting — to it instead of
+doing it in the browser tab, where it can use all of your processor's cores and is not bound by the
+browser's memory ceiling. The result is the same video, produced considerably faster.
+
+Titles, callouts, artwork, transitions and hidden areas are still drawn in the browser even with a
+sidecar running. Those are quick; it is the decoding and encoding that is slow, and that is what
+moves across.
 
 ![The native acceleration panel](/help/media/using-the-video-editor/sidecar-panel.png)
 *The panel behind the toolbar chip: whether a helper is installed, and whether this browser is
@@ -321,9 +419,23 @@ When the editor starts it clears out any footage no project is using any more, s
 project eventually gives the space back. It only does this once it can see the full list of
 projects, so nothing is removed on a guess.
 
-If a project is opened somewhere the footage was never imported — another machine, another
-browser — the clips show as missing, and the timeline, titles and edits are all still there waiting
-for the files.
+### Opening a project somewhere else
+
+A clip you brought over from the **Server** tab remembers which file it came from, so opening that
+project on another machine, or in another browser, fetches the footage back on its own. Small
+downloads just happen. Anything larger than about 50 MB asks first, and **Later** is a real answer:
+the project still opens, and the clips wait.
+
+Two things it will not do. A clip you imported straight off your own machine cannot be fetched
+back, because that file only exists where you put it. And if the file on the server has been
+replaced since you saved the project, the clip stays missing rather than being quietly relinked to
+different footage — editing against the wrong material is worse than a clip that says it has none.
+
+For either of those, right-click the clip and choose **Replace Media…** to point it at the file
+yourself. The replacement is kept, so it is still there the next time you open the project.
+
+A clip whose footage is missing stays on the timeline with all its trims, titles and edits intact,
+and is left out of any render until its file is back.
 
 ## Working signed out
 
@@ -331,14 +443,18 @@ The standalone editor can be used without signing in, and quite a lot works that
 from your machine, edit them, render the result and save it back to your machine. All of that is
 local.
 
-Signing in is what connects it to the site. Until you do:
+Signing in is what connects it to the site. The button is in the toolbar, at the right-hand end.
+Until you use it:
 
-- the **Server** tab has nothing to list, because listing your media is a request the site must be
-  able to attribute to you;
-- **Save to Server** and publishing a finished render have nowhere to go, for the same reason.
+- the **Server** tab says so and offers the same button, rather than showing an empty list — an
+  empty list would mean you had uploaded nothing, which is a different thing;
+- **Save to Server** is not offered, because it has nowhere to go;
+- after an export, the destination prompt still shows the server option, greyed out, so you can
+  see it exists and what it needs.
 
 So: edit locally as much as you like, sign in when you want your own footage or want to keep the
-result somewhere other than this computer.
+result somewhere other than this computer. If your sign-in expires part-way through, the editor
+says so and keeps the render — signing in again and uploading once more is the whole fix.
 
 ## When something looks wrong
 

@@ -37,6 +37,11 @@ builder.Services.AddBenVideoEditor(options =>
     // project restored on reload (2026-09-05 audit, F2).
     VideoEditorHostDefaults.ApplyEditingDefaults(options);
 
+    // Relative to this app's own <base>, which under production is /editors/video/ — so the panel
+    // asking somebody to install the sidecar can hand them the page that offers it, instead of
+    // telling them to go and find it (2026-09-05 audit, F17).
+    options.SidecarDownloadUrl = "downloads/";
+
     // The media library, the shared asset catalog and Save-to-server — the only things that need
     // a server. No-op when nothing is configured.
     VideoEditorHostDefaults.ApplyServerIntegration(options, apiBaseUrl);
@@ -70,6 +75,16 @@ builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.AccountInfoService(
     sp.GetRequiredService<IHttpClientFactory>(),
     sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>(),
     apiBaseUrl));
+
+// The publish destination. Without this registration — and the OnPublishExport the editor page
+// now passes — the editor offered no server destination at all, so every render went straight to
+// the downloads folder (2026-09-05 audit, F12).
+builder.Services.AddScoped<Ben.Wasm.Video.Services.WasmVideoExportPublisher>();
+
+// Lets the editor gate server-backed actions on being signed in rather than on a URL being
+// configured — the difference between a button that works and one that answers 401.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IEditorSignInState,
+                           Ben.Wasm.Video.Services.WasmSignInState>();
 
 // Records a successful sidecar pairing against the signed-in account, so the site can tell who is
 // running a native sidecar and which build. Optional by design — the editor calls it only if a

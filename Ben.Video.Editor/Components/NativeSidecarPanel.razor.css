@@ -42,3 +42,14 @@
     color: var(--kendo-color-subtle-text, var(--bv-text-muted));
     font-variant-numeric: tabular-nums;
 }
+
+/* The way out of "install the sidecar" — the panel used to ask for it and offer
+   nothing to click (2026-09-05 audit, F17). */
+.bv-sidecar-panel__download {
+    font-weight: 600;
+}
+
+.bv-sidecar-panel__hint {
+    font-size: 0.85em;
+    opacity: 0.85;
+}

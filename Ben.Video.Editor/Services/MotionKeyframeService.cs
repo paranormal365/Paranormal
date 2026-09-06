@@ -100,7 +100,23 @@ public sealed class MotionKeyframeService
     public void RemoveKeyframe(Guid layerId, double time)
     {
         if (!_paths.TryGetValue(layerId, out var path)) return;
-        var idx = path.Keyframes.FindIndex(k => Math.Abs(k.Time - time) < 0.1);
+
+        // The nearest one within reach, not the first one in the list that happens to be within
+        // reach. With two keyframes closer together than the tolerance — which is ordinary on a
+        // short animation — asking to remove the second removed the first (2026-09-05 audit,
+        // motion-2).
+        const double reach = 0.1;
+        var idx = -1;
+        var best = double.MaxValue;
+
+        for (var i = 0; i < path.Keyframes.Count; i++)
+        {
+            var distance = Math.Abs(path.Keyframes[i].Time - time);
+            if (distance >= reach || distance >= best) continue;
+            best = distance;
+            idx  = i;
+        }
+
         if (idx < 0) return;
         path.Keyframes.RemoveAt(idx);
         if (path.Keyframes.Count == 0) _paths.Remove(layerId);
@@ -205,6 +221,13 @@ public sealed class MotionKeyframeService
         X                  = frame.X,
         Y                  = frame.Y,
         Scale              = frame.Scale,
+        // Per-axis scale and rotation used to be dropped here, so adding a keyframe part-way
+        // through an animation that stretched or turned a layer silently flattened it from that
+        // point on — the new keyframe said "uniform, upright" because nothing had told it
+        // otherwise (2026-09-05 audit, motion-4).
+        ScaleX             = frame.ScaleX,
+        ScaleY             = frame.ScaleY,
+        Rotation           = frame.Rotation,
         Alpha              = frame.Alpha,
         FillColor          = frame.FillColor,
         StrokeColor        = frame.StrokeColor,

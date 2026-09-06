@@ -66,7 +66,7 @@ public sealed class AdminVideoAssetController : BenControllerBase
         // than here where it can be refused.
         var format = DetectFormat(file.FileName, file.ContentType);
         if (format is null)
-            return BadRequest($"'{Path.GetExtension(file.FileName)}' isn't a supported asset format. Use SVG, PNG, WebP, AVIF, GIF or Lottie JSON.");
+            return BadRequest($"'{Path.GetExtension(file.FileName)}' isn't a supported asset format. Use SVG, PNG, WebP, AVIF or GIF.");
 
         var (hash, size) = await HashAsync(file, ct);
         if (hash is null) return BadRequest("That file has no readable content.");
@@ -203,7 +203,10 @@ public sealed class AdminVideoAssetController : BenControllerBase
             ".webp" => VideoAssetFormat.WebP,
             ".avif" => VideoAssetFormat.Avif,
             ".gif"  => VideoAssetFormat.Gif,
-            ".json" => VideoAssetFormat.Lottie,
+            // Lottie is deliberately not here. Nothing in the editor renders it: an asset
+            // published as Lottie appears in the catalogue, can be placed on the timeline, and
+            // then draws nothing in the preview and nothing in the export (2026-09-05 audit,
+            // callouts-9). Refusing the upload is the honest answer until there is a renderer.
             _       => (VideoAssetFormat?)null,
         };
         if (byExtension is not null) return byExtension;

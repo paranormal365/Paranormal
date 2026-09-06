@@ -23,6 +23,19 @@ internal static class Fixtures
         LayerIndex       = 0,
         OriginalFileName = "porch.mp4",
         OpfsExt          = ".mp4",
+        SourceFileId      = Guid.NewGuid(),
+        SourceFileSize    = 48900846,
+        SourceContentHash = "a1b2c3",
+        Transform         = new ClipTransform
+        {
+            X = 0.55, Y = 0.6, Width = 0.4, Height = 0.35, Rotation = 12.5,
+            CropLeft = 0.05, CropTop = 0.06, CropRight = 0.07, CropBottom = 0.08, Opacity = 0.85,
+        },
+        Redactions        = [new RedactionRegion
+        {
+            X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,
+            Style = RedactionStyle.Pixelate, Strength = 8.5,
+        }],
         SourceBinId      = Guid.NewGuid(),
         LinkedClipId     = Guid.NewGuid(),
         StartTrim        = 1.5,
@@ -50,6 +63,9 @@ internal static class Fixtures
         Order            = 1,
         OriginalFileName = "evp.m4a",
         OpfsExt          = ".m4a",
+        SourceFileId      = Guid.NewGuid(),
+        SourceFileSize    = 7462660,
+        SourceContentHash = "d4e5f6",
         SourceBinId      = Guid.NewGuid(),
         LinkedClipId     = Guid.NewGuid(),
         StartTrim        = 12.0,
@@ -59,6 +75,9 @@ internal static class Fixtures
         FadeOutSeconds   = 2.5,
         LeftVolume       = 0.8,
         RightVolume      = 0.3,
+        MuteAudio        = true,
+        NoiseReduction   = 0.65,
+        Normalise        = true,
         VolumeAutomation = [new VolumeKeyframe { Position = 0.5, Volume = 0.9 }],
     };
 
@@ -70,6 +89,19 @@ internal static class Fixtures
         Order            = 3,
         OriginalFileName = "site.jpg",
         OpfsExt          = ".jpg",
+        SourceFileId      = Guid.NewGuid(),
+        SourceFileSize    = 16161,
+        SourceContentHash = "091a2b",
+        Transform         = new ClipTransform
+        {
+            X = 0.55, Y = 0.6, Width = 0.4, Height = 0.35, Rotation = 12.5,
+            CropLeft = 0.05, CropTop = 0.06, CropRight = 0.07, CropBottom = 0.08, Opacity = 0.85,
+        },
+        Redactions        = [new RedactionRegion
+        {
+            X = 0.11, Y = 0.22, Width = 0.33, Height = 0.44,
+            Style = RedactionStyle.Pixelate, Strength = 8.5,
+        }],
         SourceBinId      = Guid.NewGuid(),
         Width            = 1007,
         Height           = 675,
@@ -145,6 +177,7 @@ internal static class Fixtures
         FadeInSeconds    = 0.9,
         FadeOutSeconds   = 1.1,
         Opacity          = 0.83,
+        MaxWidth          = 0.6,
         ShadowColor      = ColorHelper.Pack(40, 50, 60, 130),
         ShadowOffsetX    = 8.0,
         ShadowOffsetY    = 2.0,
@@ -166,6 +199,8 @@ internal static class Fixtures
         Width            = 0.33,
         Height           = 0.27,
         Rotation         = 45.5,
+        NativeWidth       = 512,
+        NativeHeight      = 256,
         Opacity          = 0.66,
         TintColor        = ColorHelper.Pack(200, 100, 50, 255),
         ControlPointValues = new Dictionary<string, double> { ["thickness"] = 0.8 },

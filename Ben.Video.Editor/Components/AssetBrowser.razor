@@ -10,12 +10,20 @@
 
     <!-- Search + filter bar -->
     <div class="bv-asset-browser__toolbar">
-        <TelerikTextBox @bind-Value="_search"
+        @* Both re-run the filter. They were two-way bound to fields nothing read again, so the
+           box took what you typed, the dropdown took your choice, and the grid below never
+           changed (2026-09-05 audit, callouts-4). *@
+        <TelerikTextBox Value="@_search"
+                        ValueChanged="@((string v) => { _search = v ?? string.Empty; ApplyFilter(); })"
+                        ValueExpression="@(() => _search)"
+                        DebounceDelay="200"
                         Placeholder="Search assets…"
                         Class="bv-asset-browser__search" />
 
         <TelerikDropDownList Data="@_typeOptions"
-                             @bind-Value="_typeFilter"
+                             Value="@_typeFilter"
+                             ValueChanged="@((VideoAssetType? v) => { _typeFilter = v; ApplyFilter(); })"
+                             ValueExpression="@(() => _typeFilter)"
                              TextField="@nameof(TypeOption.Label)"
                              ValueField="@nameof(TypeOption.Value)"
                              Width="130px" />
@@ -267,6 +275,11 @@
                 Duration         = 5.0,
                 TimelinePosition = Playback.State.TimelineTime,
                 OpfsExt          = "." + FormatExt(item.Format),
+                // The artwork's own proportions, so "preserve aspect ratio" has a ratio to
+                // preserve rather than three components each guessing (2026-09-05 audit,
+                // callouts-10). Null where the catalogue does not say.
+                NativeWidth      = item.NativeWidth,
+                NativeHeight     = item.NativeHeight,
             };
             Clips.AddClipArtClip(clip);
         }

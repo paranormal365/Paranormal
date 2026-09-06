@@ -24,7 +24,8 @@ namespace Ben.Web.Services;
 public sealed class VideoExportPublisher(
     IBenAdminClient adminClient,
     ProjectService projects,
-    ProjectStore projectStore)
+    ProjectStore projectStore,
+    IVideoUploadRelay? uploadRelay = null)
 {
     /// <summary>
     /// Publishes <paramref name="exported"/> against the project currently open in the editor,
@@ -39,11 +40,14 @@ public sealed class VideoExportPublisher(
     public async Task<PublishResult> PublishAsync(
         ExportedVideo exported, Guid? caseId, Guid? knownProjectId, CancellationToken ct = default)
     {
-        // ProjectStore.CurrentProjectId is the SERVER id whenever the project was opened from the
-        // server (LoadFromFileAsync stores it); it's null for a project that only ever existed in
-        // this browser. knownProjectId covers the in-between case — created by an earlier publish
-        // in this same session, so ProjectStore doesn't know about it either.
-        var projectId = knownProjectId ?? projectStore.CurrentProjectId;
+        // The open project first, the session's own id second. It used to be the other way round,
+        // so a stale id from an earlier publish outranked the project actually on screen — and a
+        // later export attached itself to whichever project had been published first that session
+        // (2026-09-05 audit, site-4).
+        //
+        // CurrentServerId is the server's row, now a separate field from the browser's own storage
+        // key; it is null for a project that has only ever existed in this browser.
+        var projectId = projectStore.CurrentServerId ?? knownProjectId;
 
         if (projectId is null)
         {
@@ -54,8 +58,32 @@ public sealed class VideoExportPublisher(
             projectId = saved.Id;
         }
 
-        // The one place the render actually lands on the .NET heap — deliberately not read until
-        // we know we have somewhere to put it (see ExportedVideo's own remarks).
+        // Remembered on the store, so the next publish in this session updates the same project
+        // rather than depending on the caller having threaded the id back through.
+        projectStore.CurrentServerId = projectId;
+
+        // The browser posts the file itself when it can. Reading it here means returning it over
+        // the circuit as a JS-interop value, which Blazor caps at 32 KB by default — so this path
+        // could not publish a real render at all (2026-09-05 audit, site-1).
+        if (uploadRelay is not null && exported.BlobUrl is { } blobUrl)
+        {
+            var problem = await uploadRelay.PublishAsync(
+                projectId.Value, blobUrl, exported.FileName, exported.ContentType, ct);
+
+            if (problem is not null) throw new InvalidOperationException(problem);
+
+            // Read back rather than parsing a shape the relay never inspected: the publish
+            // response travels through the browser, and the record is what the caller shows.
+            var record = await adminClient.GetMyVideoProjectAsync(projectId.Value, ct)
+                ?? throw new InvalidOperationException(
+                    "The video uploaded, but the project could not be read back.");
+
+            return new PublishResult(projectId.Value, record);
+        }
+
+        // No relay registered, or no blob URL: fall back to the bytes. Correct for anything small
+        // and for a host with no JS of its own, and the reason a missing relay degrades rather
+        // than breaks.
         var bytes = await exported.ReadBytesAsync()
             ?? throw new InvalidOperationException("Couldn't read the rendered file back from the browser.");
 

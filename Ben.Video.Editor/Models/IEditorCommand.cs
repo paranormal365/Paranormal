@@ -194,24 +194,106 @@ internal sealed class ReorderClipCommand : IEditorCommand
 }
 
 /// <summary>Undo/redo for updating a video clip's in/out trim points.</summary>
+/// <summary>Undo/redo for a clip's noise reduction and levelling.</summary>
+internal sealed class SetAudioCleanupCommand : IEditorCommand
+{
+    private readonly AudioClip _clip;
+    private readonly double    _newNoise, _oldNoise;
+    private readonly bool      _newNormalise, _oldNormalise;
+
+    public string Description => $"Clean up \"{_clip.Name}\"";
+
+    public SetAudioCleanupCommand(
+        AudioClip clip, double newNoise, bool newNormalise, double oldNoise, bool oldNormalise)
+    {
+        _clip         = clip;
+        _newNoise     = newNoise;     _newNormalise = newNormalise;
+        _oldNoise     = oldNoise;     _oldNormalise = oldNormalise;
+    }
+
+    public void Execute() { _clip.NoiseReduction = _newNoise; _clip.Normalise = _newNormalise; }
+    public void Undo()    { _clip.NoiseReduction = _oldNoise; _clip.Normalise = _oldNormalise; }
+}
+
+/// <summary>Undo/redo for a track ducking everything else.</summary>
+internal sealed class SetTrackDuckingCommand : IEditorCommand
+{
+    private readonly TimelineTrack _track;
+    private readonly bool          _ducks;
+
+    public string Description => _ducks
+        ? $"\"{_track.Label}\" ducks the others"
+        : $"\"{_track.Label}\" stops ducking";
+
+    public SetTrackDuckingCommand(TimelineTrack track, bool ducks)
+    {
+        _track = track;
+        _ducks = ducks;
+    }
+
+    public void Execute() => _track.DucksOthers = _ducks;
+    public void Undo()    => _track.DucksOthers = !_ducks;
+}
+
+/// <summary>Undo/redo for silencing one clip.</summary>
+internal sealed class SetClipMutedCommand : IEditorCommand
+{
+    private readonly TrackItem _item;
+    private readonly bool      _muted;
+
+    public string Description => _muted ? $"Mute \"{_item.Name}\"" : $"Unmute \"{_item.Name}\"";
+
+    public SetClipMutedCommand(TrackItem item, bool muted)
+    {
+        _item  = item;
+        _muted = muted;
+    }
+
+    public void Execute() => Set(_muted);
+    public void Undo()    => Set(!_muted);
+
+    private void Set(bool muted)
+    {
+        switch (_item)
+        {
+            case VideoClip v: v.MuteAudio = muted; break;
+            case AudioClip a: a.MuteAudio = muted; break;
+        }
+    }
+}
+
 internal sealed class UpdateTrimCommand : IEditorCommand
 {
-    private readonly VideoClip _clip;
+    private readonly TrackItem _item;
     private readonly double    _oldStart, _oldEnd;
     private readonly double    _newStart, _newEnd;
 
     public string Description => "Trim clip";
 
-    public UpdateTrimCommand(VideoClip clip, double oldStart, double oldEnd,
-                                              double newStart, double newEnd)
+    /// <remarks>
+    /// Takes a <see cref="TrackItem"/> rather than a <see cref="VideoClip"/> because audio can be
+    /// trimmed by its edges now too — it had no handles at all, while help said every clip trims
+    /// that way (2026-09-05 audit, audio-12).
+    /// </remarks>
+    public UpdateTrimCommand(TrackItem item, double oldStart, double oldEnd,
+                                             double newStart, double newEnd)
     {
-        _clip     = clip;
+        _item     = item;
         _oldStart = oldStart; _oldEnd = oldEnd;
         _newStart = newStart; _newEnd = newEnd;
     }
 
-    public void Execute() { _clip.StartTrim = _newStart; _clip.EndTrim = _newEnd; }
-    public void Undo()    { _clip.StartTrim = _oldStart; _clip.EndTrim = _oldEnd; }
+    public void Execute() => Set(_newStart, _newEnd);
+    public void Undo()    => Set(_oldStart, _oldEnd);
+
+    private void Set(double start, double end)
+    {
+        switch (_item)
+        {
+            case VideoClip v: v.StartTrim = start; v.EndTrim = end; break;
+            case AudioClip a: a.StartTrim = start; a.EndTrim = end; break;
+        }
+    }
 }
 
 /// <summary>
@@ -482,27 +564,63 @@ internal sealed class RelinkClipCommand : IEditorCommand
     private readonly TrackItem _item;
     private readonly string?   _oldMemFs, _newMemFs;
 
+    // Where the media is stored and where it came from, both sides of the edit.
+    //
+    // Re-linking used to write the browser's session filesystem and nothing else, so a re-linked
+    // clip was missing again the moment the project was reopened — the one repair the editor
+    // offered did not survive being used (2026-09-05 audit, F14). Persisting it means undo has to
+    // put all of it back, not just the session path.
+    private readonly string? _oldExt,  _newExt;
+    private readonly Guid?   _oldFileId,   _newFileId;
+    private readonly long?   _oldFileSize, _newFileSize;
+    private readonly string? _oldFileHash, _newFileHash;
+
     public string Description => $"Re-link \"{_item.Name}\"";
 
-    public RelinkClipCommand(TrackItem item, string? oldMemFs, string newMemFs)
+    public RelinkClipCommand(
+        TrackItem item, string? oldMemFs, string newMemFs,
+        string? newExt = null, Guid? newFileId = null,
+        long? newFileSize = null, string? newFileHash = null)
     {
         _item      = item;
         _oldMemFs  = oldMemFs;
         _newMemFs  = newMemFs;
+
+        _oldExt      = item.OpfsExt;
+        _oldFileId   = item.SourceFileId;
+        _oldFileSize = item.SourceFileSize;
+        _oldFileHash = item.SourceContentHash;
+
+        _newExt      = newExt ?? item.OpfsExt;
+        _newFileId   = newFileId;
+        _newFileSize = newFileSize;
+        _newFileHash = newFileHash;
     }
 
     public void Execute()
     {
         if (_item is VideoClip vc) vc.MemFsName = _newMemFs;
         else if (_item is AudioClip ac) ac.MemFsName = _newMemFs;
-        _item.IsMediaMissing = false;
+        else if (_item is ImageClip ic) ic.MemFsName = _newMemFs;
+
+        _item.OpfsExt           = _newExt;
+        _item.SourceFileId      = _newFileId;
+        _item.SourceFileSize    = _newFileSize;
+        _item.SourceContentHash = _newFileHash;
+        _item.IsMediaMissing    = false;
     }
 
     public void Undo()
     {
         if (_item is VideoClip vc) vc.MemFsName = _oldMemFs;
         else if (_item is AudioClip ac) ac.MemFsName = _oldMemFs;
-        _item.IsMediaMissing = _oldMemFs is null;
+        else if (_item is ImageClip ic) ic.MemFsName = _oldMemFs;
+
+        _item.OpfsExt           = _oldExt;
+        _item.SourceFileId      = _oldFileId;
+        _item.SourceFileSize    = _oldFileSize;
+        _item.SourceContentHash = _oldFileHash;
+        _item.IsMediaMissing    = _oldMemFs is null;
     }
 }
 
@@ -1299,6 +1417,90 @@ internal sealed class CommitCalloutPropertyCommand : IEditorCommand
 
     public void Execute() => _apply(_clip);
     public void Undo()    => _revert(_clip);
+}
+
+/// <summary>Undo/redo for where a clip's picture sits in the frame.</summary>
+internal sealed class SetClipTransformCommand : IEditorCommand
+{
+    private readonly Action<ClipTransform?> _set;
+    private readonly ClipTransform? _after, _before;
+    private readonly string _clipName;
+
+    public string Description => $"Placement of \"{_clipName}\"";
+
+    public SetClipTransformCommand(
+        Action<ClipTransform?> set, ClipTransform? after, ClipTransform? before, string clipName)
+    {
+        _set      = set;
+        _after    = after;
+        _before   = before;
+        _clipName = clipName;
+    }
+
+    // Copies, so redoing after further edits still restores the values this command recorded.
+    public void Execute() => _set(_after is null ? null : _after with { });
+    public void Undo()    => _set(_before is null ? null : _before with { });
+}
+
+/// <summary>Undo/redo for the set of areas hidden on a clip.</summary>
+/// <remarks>
+/// Holds both lists outright rather than a closure that rebuilds one. Getting undo wrong here
+/// means somebody exports a face they believe they covered.
+/// </remarks>
+internal sealed class SetRedactionsCommand : IEditorCommand
+{
+    private readonly Action<List<RedactionRegion>> _set;
+    private readonly List<RedactionRegion> _after, _before;
+    private readonly string _clipName;
+
+    public string Description => $"Hidden areas on \"{_clipName}\"";
+
+    public SetRedactionsCommand(
+        Action<List<RedactionRegion>> set,
+        List<RedactionRegion> after, List<RedactionRegion> before, string clipName)
+    {
+        _set      = set;
+        _after    = after;
+        _before   = before;
+        _clipName = clipName;
+    }
+
+    // Fresh copies each time: the same command can be undone and redone repeatedly, and handing
+    // out the stored list would let the panel edit the history.
+    public void Execute() => _set([.. _after.Select(r => r with { })]);
+    public void Undo()    => _set([.. _before.Select(r => r with { })]);
+}
+
+/// <summary>Undo/redo for a committed <see cref="TextOverlay"/> property change.</summary>
+/// <remarks>
+/// Titles were the one thing on the timeline whose edits could not be undone. Changing a font,
+/// a colour, an alignment or the words themselves went straight into the model with nothing pushed
+/// onto the stack, so Ctrl+Z after a title edit undid whatever had happened before it instead —
+/// which is worse than doing nothing (2026-09-05 audit, titles-4).
+/// </remarks>
+internal sealed class CommitTextOverlayPropertyCommand : IEditorCommand
+{
+    private readonly TextOverlay _overlay;
+    private readonly string      _propertyPath;
+    private readonly Action<TextOverlay> _apply;
+    private readonly Action<TextOverlay> _revert;
+
+    public string Description => $"Edit title {_propertyPath}";
+
+    public CommitTextOverlayPropertyCommand(
+        TextOverlay overlay,
+        string      propertyPath,
+        Action<TextOverlay> apply,
+        Action<TextOverlay> revert)
+    {
+        _overlay      = overlay;
+        _propertyPath = propertyPath;
+        _apply        = apply;
+        _revert       = revert;
+    }
+
+    public void Execute() => _apply(_overlay);
+    public void Undo()    => _revert(_overlay);
 }
 
 /// <summary>Undo/redo for a committed <see cref="ClipArtClip"/> property change — mirrors

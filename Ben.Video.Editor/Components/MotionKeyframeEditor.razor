@@ -72,8 +72,11 @@
         <!-- Alpha -->
         <div class="bv-mkf-editor__field">
             <label class="bv-mkf-editor__label">Opacity @_alpha.ToString("P0")</label>
+            @* The template is told the slider's own step. Given a different one it labels every
+               tick whose value plus that step runs past the maximum, so several labels pile up at
+               the right-hand end (2026-09-05 audit, found on screen while verifying phase 8). *@
             <TelerikSlider @bind-Value="_alpha" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25"
-                           Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+                           Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" OnChange="Apply" />
         </div>
 
         @{ var callout = ResolveCallout(); }

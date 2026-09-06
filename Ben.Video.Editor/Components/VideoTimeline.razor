@@ -319,6 +319,16 @@
                                                    OnClick="() => ToggleLock(track)">
                                     @(track.IsLocked ? "Unlock" : "Lock")
                                 </DropDownButtonItem>
+                                @if (track.Type == TrackType.Audio)
+                                {
+                                    @* Everything else drops while this track is playing — what a
+                                       narration track needs, instead of drawing a volume envelope
+                                       around every line by hand (2026-09-05 audit). *@
+                                    <DropDownButtonItem Icon="@SvgIcon.SortDesc"
+                                                       OnClick="() => ToggleDucking(track)">
+                                        @(track.DucksOthers ? "Stop ducking others" : "Duck others under this")
+                                    </DropDownButtonItem>
+                                }
                                 <DropDownButtonItem Icon="@SvgIcon.Pencil"
                                                    OnClick="() => StartEditTrackName(track)">
                                     Rename
@@ -400,20 +410,27 @@
                             .ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
 
                         {
-                            var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip && !track.IsLocked;
+                            // Audio joins the list. Its chips had no handles at all, so the only way to
+                            // shorten a sound was to type numbers into the properties panel — while help
+                            // said every clip trims by its edges (2026-09-05 audit, audio-12).
+                            var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip or AudioClip && !track.IsLocked;
                             var chipWpx = (ItemDuration(item) * Timeline.PxPerSecond).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
-                            var trimmingThis = _trimmingClip?.Id == item.Id;
+                            var trimmingThis = _trimmingClip?.Id == item.Id || _trimmingAudio?.Id == item.Id;
                             var movingThis   = _movingItem?.Id   == item.Id;
                             var trimCls = trimmingThis
                                 ? (_trimmingSide == TrimSide.Start ? "bv-clip-chip--trimming bv-clip-chip--trimming-start"
                                                                     : "bv-clip-chip--trimming bv-clip-chip--trimming-end")
                                 : "";
                             var moveCls = movingThis ? "bv-clip-chip--moving" : "";
+                            @* draggable lists every in-progress drag: while one is running the
+                               chip must not also be natively draggable, because the browser then
+                               suppresses pointerup delivery entirely and the drag never ends (see
+                               FinalizeMove's note on #27). An audio trim is one of them. *@
                             <div @key="item.Id"
                                  class="bv-clip-chip bv-clip-chip--@ChipType(item) @(_selectedItemId == item.Id ? "bv-clip-chip--selected" : "") @(IsMultiSelected(item.Id) ? "bv-clip-chip--multi-selected" : "") @(_draggingId == item.Id ? "bv-clip-chip--dragging" : "") @trimCls @moveCls @(item.IsMediaMissing ? "bv-clip-chip--missing" : "") @(item.LinkedClipId is not null ? "bv-clip-chip--linked" : "")"
                                  style="position: absolute; left: @leftPxStr; width: @chipWpx; min-width: @chipWpx; max-width: none"
                                  data-item-id="@item.Id"
-                                 draggable="@(track.IsLocked || _trimmingClip != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
+                                 draggable="@(track.IsLocked || _trimmingClip != null || _trimmingAudio != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
                                  @onpointerdown="e => OnChipPointerDown(e, captured, track)"
                                  @onclick="e => SelectItemWithModifier(captured, e.CtrlKey || e.MetaKey)"
                                  @ondragstart="() => OnDragStart(captured)"
@@ -455,17 +472,26 @@
 
                                 @if (item is AudioClip ac && ac.BlobUrl is not null)
                                 {
-                                    @* Compute playhead position within the full audio file, accounting for StartTrim *@
-                                    var t          = Playback.State.TimelineTime;
-                                    var clipStart  = ac.TimelinePosition;
-                                    var clipEnd    = ac.TimelinePosition + ac.Duration - ac.StartTrim -
-                                                     (ac.EndTrim > 0 ? ac.Duration - ac.EndTrim : 0);
-                                    var syncProg   = (t >= clipStart && t <= clipEnd && ac.Duration > 0)
-                                                     ? Math.Clamp((t - clipStart + ac.StartTrim) / ac.Duration, 0.0, 1.0)
-                                                     : -1.0;
+                                    @* The chip draws the part of the recording this clip plays.
+                                       It used to draw all of it however the clip was trimmed, so a
+                                       thirty-second excerpt from a three-minute recording showed
+                                       the whole three minutes squeezed into its chip, and the two
+                                       halves of a split showed the same picture as each other
+                                       (2026-09-05 audit, audio-13 and media-11). *@
+                                    var chipPeaks = WaveformPeakSlicer.Slice(
+                                        ac.WaveformPeaks, ac.Duration, ac.StartTrim, ac.EndTrim);
+
+                                    @* The playhead against the trimmed clip, not against the whole
+                                       source, so it lines up with the shape now being drawn. *@
+                                    var t         = Playback.State.TimelineTime;
+                                    var clipStart = ac.TimelinePosition;
+                                    var clipEnd   = ac.TimelinePosition + ac.TrimmedDuration;
+                                    var syncProg  = (t >= clipStart && t <= clipEnd && ac.TrimmedDuration > 0)
+                                                    ? Math.Clamp((t - clipStart) / ac.TrimmedDuration, 0.0, 1.0)
+                                                    : -1.0;
                                     <div class="bv-clip-chip__waveform">
                                         <AudioWaveform BlobUrl="@ac.BlobUrl"
-                                                       Peaks="@ac.WaveformPeaks"
+                                                       Peaks="@chipPeaks"
                                                        Height="0"
                                                        ShowControls="false"
                                                        SyncProgress="@syncProg"
@@ -494,6 +520,23 @@
                                         <div class="bv-trim-handle bv-trim-handle--end"
                                              title="Drag to trim end"
                                              @onpointerdown="e => OnTrimHandlePointerDown(e, chipVc, TrimSide.End)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                    }
+                                    else if (item is AudioClip chipAudio)
+                                    {
+                                        @* Audio had no handles at all, so the only way to shorten a
+                                           sound was to type numbers into the properties panel —
+                                           while help said every clip trims by its edges
+                                           (2026-09-05 audit, audio-12 and timeline-15). *@
+                                        <div class="bv-trim-handle bv-trim-handle--start"
+                                             title="Drag to trim start"
+                                             @onpointerdown="e => OnAudioTrimHandlePointerDown(e, chipAudio, TrimSide.Start)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                        <div class="bv-trim-handle bv-trim-handle--end"
+                                             title="Drag to trim end"
+                                             @onpointerdown="e => OnAudioTrimHandlePointerDown(e, chipAudio, TrimSide.End)"
                                              @onpointerdown:stopPropagation="true"
                                              @onclick:stopPropagation="true" />
                                     }
@@ -677,7 +720,9 @@
                             // Drag-to-extend start/end trim (item #28) — Callout/TextOverlay only,
                             // mirroring ImageClip's trim handles: no source in/out points, just a
                             // TimelinePosition + Duration on the timeline.
-                            var overlayTrimOn = EffectiveOptions.InlineTrimming && item is CalloutClip or TextOverlay && !track.IsLocked;
+                            // Clip art is an overlay like the others and had no handles, so a piece of artwork could
+                            // only be timed from the properties panel (2026-09-05 audit, audio-12's sibling).
+                            var overlayTrimOn = EffectiveOptions.InlineTrimming && item is CalloutClip or TextOverlay or ClipArtClip && !track.IsLocked;
                             var trimmingThisOverlay = _trimmingOverlay?.Id == item.Id || _overlayStartTrimClip?.Id == item.Id;
                             var overlayTrimCls = trimmingThisOverlay
                                 ? (_overlayStartTrimClip?.Id == item.Id ? "bv-clip-chip--trimming bv-clip-chip--trimming-start"
@@ -887,6 +932,10 @@
         // Delete all stayed enabled and all did nothing (2026-09-05 audit, timeline-12).
         var locked    = Clips.FindTrackOf(item.Id)?.IsLocked == true;
         var isMedia   = item is VideoClip or AudioClip;
+        // Overlays duplicate now too. Making three matching callouts used to mean building each
+        // from scratch (2026-09-05 audit, callouts-15). A transition belongs to the junction
+        // between two clips, so a second copy of one has nowhere to be.
+        var canDuplicate = item is not Transition;
         var isRemovable = item is not Transition;
         var canSeparateAudio = item is VideoClip vcAudio && vcAudio.MemFsName is not null && !vcAudio.MuteAudio;
 
@@ -894,9 +943,16 @@
         [
             new() { Text = "Edit Properties", Icon = SvgIcon.Pencil,
                     Action = () => Task.CompletedTask /* properties panel already opened by SelectItem */ },
+            @* One sound can be silenced without losing the level it was at. Dragging its volume
+               to zero was the only way, and putting it back meant remembering the number
+               (2026-09-05 audit, audio-19). *@
+            new() { Text = ClipIsMuted(item) ? "Unmute" : "Mute",
+                    Icon = ClipIsMuted(item) ? SvgIcon.VolumeUp : SvgIcon.VolumeMute,
+                    Action = () => { Clips.SetClipMuted(item.Id, !ClipIsMuted(item)); return Task.CompletedTask; },
+                    IsDisabled = locked || item is not (VideoClip or AudioClip) },
             new() { Text = "Duplicate",  Icon = SvgIcon.Copy,
                     Action = () => { Clips.DuplicateClip(item.Id); return Task.CompletedTask; },
-                    IsDisabled = locked || !isMedia },
+                    IsDisabled = locked || !canDuplicate },
             new() { IsSeparator = true },
             new() { Text = "Split at Playhead", Icon = SvgIcon.Cut,
                     Action = () =>
@@ -1058,9 +1114,17 @@
         var audioTrack = Clips.Tracks.FirstOrDefault(t => t.Type == TrackType.Audio)
                          ?? Clips.AddAudioTrack();
 
-        // Extract the audio stream to a new MEMFS file
+        // The clip's own stretch of sound, at the clip's own speed. Both used to be ignored: the
+        // whole source stream came out and the new clip was given the trimmed length, so a
+        // head-trimmed clip's sound was out of step with its picture from the first frame, and a
+        // slowed clip's sound ran at the original speed underneath it (2026-09-05 audit, audio-8).
+        var trimStart = clip.StartTrim;
+        var trimEnd   = clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration;
+
+        // The speed change is baked in, so the audio clip is at natural speed from here on and
+        // trimming or moving it behaves like any other sound on the timeline.
         var audioMemFs = $"detached_{clip.Id:N}.aac";
-        await Ffmpeg.ExtractAudioAsync(clip.MemFsName, audioMemFs);
+        await Ffmpeg.ExtractAudioAsync(clip.MemFsName, audioMemFs, trimStart, trimEnd, clip.Speed);
 
         // Create a blob URL so WaveSurfer can render the waveform
         var blobUrl = await Ffmpeg.CreatePreviewUrlAsync(audioMemFs, "audio/aac");
@@ -1074,11 +1138,26 @@
             MemFsName        = audioMemFs,
             BlobUrl          = blobUrl,
             OriginalFileName = clip.OriginalFileName,
+            // The level the picture was playing at. Separating sound from a clip whose volume had
+            // been set put it back at full, which is a change nobody asked for.
+            Volume           = clip.Volume,
+            VolumeAutomation = [.. clip.VolumeAutomation],
         };
 
         // Apply mutation + push undo command
         Clips.DetachAudio(clip.Id, audioClip, audioTrack.Id);
     }
+
+    /// <summary>Whether this clip's own sound is silenced.</summary>
+    private static bool ClipIsMuted(TrackItem item) => item switch
+    {
+        VideoClip v => v.MuteAudio,
+        AudioClip a => a.MuteAudio,
+        _           => false,
+    };
+
+    private void ToggleDucking(TimelineTrack track)
+        => Clips.SetTrackDucking(track.Id, !track.DucksOthers);
 
     private void ToggleLock(TimelineTrack track)
     {
@@ -1377,6 +1456,7 @@
     private enum TrimSide { Start, End }
 
     private VideoClip? _trimmingClip;
+    private AudioClip? _trimmingAudio;
     private TrimSide   _trimmingSide;
     private double     _trimDragStartX;    // clientX at pointerdown
     private double     _trimChipWidthPx;   // chip pixel width measured at drag start
@@ -1911,6 +1991,17 @@
         await CapturePointerAsync(e);
     }
 
+    /// <summary>Starts an edge-drag trim of an audio chip.</summary>
+    private async Task OnAudioTrimHandlePointerDown(PointerEventArgs e, AudioClip clip, TrimSide side)
+    {
+        _trimmingAudio     = clip;
+        _trimmingSide      = side;
+        _trimDragStartX    = e.ClientX;
+        _trimOriginalStart = clip.StartTrim;
+        _trimOriginalEnd   = clip.EndTrim > 0 ? clip.EndTrim : clip.Duration;
+        await CapturePointerAsync(e);
+    }
+
     /// <summary>Item #57 T4 — starts an edge-drag resize of a transition chip's Duration. Caches
     /// the two adjacent clips' own durations up front so <see cref="OnTrimPointerMove"/> can
     /// clamp locally every frame without re-walking the track on each pointermove.</summary>
@@ -1965,7 +2056,27 @@
                 newStart = Math.Clamp(_trimOriginalStart + deltaSec, 0, newEnd - 0.1);
             else
                 newEnd   = Math.Clamp(_trimOriginalEnd + deltaSec, newStart + 0.1, _trimmingClip.Duration);
-            Clips.UpdateTrim(_trimmingClip.Id, newStart, newEnd);
+            // Live only. One undo entry per pointermove made a two-second drag leave dozens of
+            // steps on the stack, so undoing a trim meant pressing Ctrl+Z until something moved
+            // (2026-09-05 audit, timeline-6). CommitTrim records the gesture once at pointerup.
+            Clips.SetTrimLive(_trimmingClip.Id, newStart, newEnd);
+            return;
+        }
+
+        // Audio clip trim — the same gesture as a video clip's, against its own source length.
+        if (_trimmingAudio is not null)
+        {
+            var deltaX   = e.ClientX - _trimDragStartX;
+            var duration = _trimOriginalEnd - _trimOriginalStart;
+            if (duration <= 0) return;
+            var deltaSec = deltaX / Timeline.PxPerSecond;
+            double newStart = _trimOriginalStart;
+            double newEnd   = _trimOriginalEnd;
+            if (_trimmingSide == TrimSide.Start)
+                newStart = Math.Clamp(_trimOriginalStart + deltaSec, 0, newEnd - 0.1);
+            else
+                newEnd   = Math.Clamp(_trimOriginalEnd + deltaSec, newStart + 0.1, _trimmingAudio.Duration);
+            Clips.SetTrimLive(_trimmingAudio.Id, newStart, newEnd);
             return;
         }
 
@@ -2062,7 +2173,15 @@
 
     private void OnTrimPointerUp(PointerEventArgs e)
     {
+        // One undo entry for the whole gesture, recorded from where the drag started. Every
+        // pointermove used to push its own (2026-09-05 audit, timeline-6).
+        if (_trimmingClip is { } trimmed)
+            Clips.CommitTrim(trimmed.Id, _trimOriginalStart, _trimOriginalEnd);
+        else if (_trimmingAudio is { } trimmedAudio)
+            Clips.CommitTrim(trimmedAudio.Id, _trimOriginalStart, _trimOriginalEnd);
+
         _trimmingClip        = null;
+        _trimmingAudio       = null;
         _trimmingImageClip   = null;
         _imageStartTrimClip  = null;
         _trimmingOverlay     = null;
@@ -2291,6 +2410,9 @@
             case TextOverlay to:
                 Clips.UpdateTextOverlay(to with { Duration = duration });
                 break;
+            case ClipArtClip:
+                Clips.UpdateClipArtClip(item.Id, c => c.Duration = duration);
+                break;
         }
     }
 
@@ -2411,11 +2533,15 @@
         _            => "Layer"
     };
 
-    private static double ItemDuration(TrackItem item) => item switch
-    {
-        VideoClip vc => vc.TrimmedDuration,
-        _            => item.Duration
-    };
+    /// <summary>How much of the timeline a chip covers.</summary>
+    /// <remarks>
+    /// <see cref="TrackItem.EffectiveLength"/> is the one place that answers this, and every item
+    /// type answers it correctly. Special-casing video here meant a trimmed audio chip kept the
+    /// full source's width and label however short it had been made, so trimming a sound by its
+    /// edges appeared to do nothing at all (2026-09-05 audit, audio-11's other half, found on
+    /// screen while verifying phase 9).
+    /// </remarks>
+    private static double ItemDuration(TrackItem item) => item.EffectiveLength;
 
     private static string TrackIcon(TrackType type) => type switch
     {

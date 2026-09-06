@@ -30,6 +30,23 @@ public interface IMediaLibraryProvider
     /// that can't report real progress (unknown content length, etc.) may simply not call it —
     /// callers must treat a caller-side progress bar as best-effort, not a guarantee.</param>
     Task<byte[]> DownloadFileAsync(Guid fileId, CancellationToken cancellationToken = default, IProgress<double>? progress = null);
+
+    /// <summary>
+    /// A URL the browser itself can fetch this file from, or null when the host has none.
+    /// </summary>
+    /// <remarks>
+    /// <para>The way to avoid <see cref="DownloadFileAsync"/> entirely. Under Blazor Server that
+    /// method runs on the server: the file is pulled into the server's memory, copied again into a
+    /// byte array, and then shipped to the browser over the circuit — three copies of a file that
+    /// was already reachable from the browser, with a 2 GB ceiling from an int cast along the way
+    /// (2026-09-05 audit, site-2 and media-6).</para>
+    ///
+    /// <para>A host that returns a URL here lets the browser stream the file straight into its own
+    /// storage. Returning null is not a failure: the standalone host already fetches from the
+    /// browser, so it has nothing to gain, and callers fall back to the byte path.</para>
+    /// </remarks>
+    Task<string?> GetDownloadUrlAsync(Guid fileId, CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 }
 
 /// <summary>

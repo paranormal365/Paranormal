@@ -57,7 +57,7 @@ internal static class RichTextTspanBuilder
     /// wrapped as one unit — splitting it would silently change the rendered text's line structure
     /// mid-word purely because of a formatting change.</para>
     /// </summary>
-    internal static List<List<Fragment>> WrapLines(List<List<Fragment>> lines, double maxWidthPx, double fontSize)
+    public static List<List<Fragment>> WrapLines(List<List<Fragment>> lines, double maxWidthPx, double fontSize)
     {
         if (maxWidthPx <= 0 || fontSize <= 0) return lines;
 

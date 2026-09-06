@@ -720,19 +720,36 @@ public sealed class ExportArgBuildersTests
         Assert.Null(ExportArgBuilders.BuildChannelBalanceFilter(1.0, 1.0));
     }
 
+    /// <summary>
+    /// The balance is applied to a stereo signal, whatever the source was.
+    /// </summary>
+    /// <remarks>
+    /// These two used to expect a bare pan. pan reads c1 from the input and a mono recording has
+    /// no c1, so on a mono file — which is what most handheld recorders produce — the right channel
+    /// came out silent the moment anybody touched the balance (2026-09-05 audit, audio-15).
+    /// </remarks>
     [Fact]
-    public void BuildChannelBalanceFilter_LeftReduced_ReturnsPanFilter()
+    public void BuildChannelBalanceFilter_LeftReduced_MakesStereoFirst()
     {
         var filter = ExportArgBuilders.BuildChannelBalanceFilter(0.5, 1.0);
-        Assert.Equal("pan=stereo|c0=0.500000*c0|c1=1.000000*c1", filter);
+        Assert.Equal(
+            "aformat=channel_layouts=stereo,pan=stereo|c0=0.500000*c0|c1=1.000000*c1", filter);
     }
 
     [Fact]
-    public void BuildChannelBalanceFilter_RightMuted_ReturnsPanFilter()
+    public void BuildChannelBalanceFilter_RightMuted_MakesStereoFirst()
     {
         var filter = ExportArgBuilders.BuildChannelBalanceFilter(1.0, 0.0);
-        Assert.Equal("pan=stereo|c0=1.000000*c0|c1=0.000000*c1", filter);
+        Assert.Equal(
+            "aformat=channel_layouts=stereo,pan=stereo|c0=1.000000*c0|c1=0.000000*c1", filter);
     }
+
+    /// <summary>
+    /// A mono source keeps both channels once the balance is left alone or applied.
+    /// </summary>
+    [Fact]
+    public void BuildChannelBalanceFilter_Unbalanced_AddsNothingAtAll()
+        => Assert.Null(ExportArgBuilders.BuildChannelBalanceFilter(1.0, 1.0));
 
     [Fact]
     public void BuildAudioFadeFilter_BothZero_ReturnsNull()
@@ -782,7 +799,8 @@ public sealed class ExportArgBuildersTests
         };
         var chain = ExportArgBuilders.BuildAudioClipFilterChain(clip, 10.0);
         Assert.Equal(
-            "volume=0.800000,pan=stereo|c0=0.500000*c0|c1=1.000000*c1,afade=t=in:st=0:d=1.000",
+            "volume=0.800000,aformat=channel_layouts=stereo,"
+            + "pan=stereo|c0=0.500000*c0|c1=1.000000*c1,afade=t=in:st=0:d=1.000",
             chain);
     }
 

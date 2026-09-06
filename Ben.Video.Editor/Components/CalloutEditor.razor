@@ -91,7 +91,7 @@
                     <span class="bv-callout-editor__live-badge">● Live</span>
                 }
             </label>
-            <TelerikSlider @bind-Value="_opacity" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+            <TelerikSlider @bind-Value="_opacity" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)" OnChange="Apply" />
         </div>
 
         <!-- Fade -->
@@ -455,10 +455,16 @@
         var runs = await RunParser.HtmlToRunsAsync(_richTextHtml);
         _text = string.Concat(runs.Select(r => r.Text));
 
+        // A different shape needs its own control points; the old shape's mean nothing to it
+        // (2026-09-05 audit, callouts-12).
+        var shapeChanged = Clip.Shape != _shape;
+        var previousPoints = new Dictionary<string, double>(Clip.ControlPointValues);
+
         Clips.CommitCalloutUpdate(Clip.Id, "properties",
             c =>
             {
                 c.Shape         = _shape;
+                if (shapeChanged) Models.CalloutShapeRenderer.ReseedForShape(c);
                 c.Duration      = _duration;
                 c.X             = _x;
                 c.Y             = _y;
@@ -489,6 +495,13 @@
             c =>
             {
                 c.Shape         = before.Shape;
+                if (shapeChanged)
+                {
+                    // Undo has to put the old shape's own control points back, not leave the new
+                    // shape's behind on it.
+                    c.ControlPointValues.Clear();
+                    foreach (var kv in previousPoints) c.ControlPointValues[kv.Key] = kv.Value;
+                }
                 c.Duration      = before.Duration;
                 c.X             = before.X;
                 c.Y             = before.Y;

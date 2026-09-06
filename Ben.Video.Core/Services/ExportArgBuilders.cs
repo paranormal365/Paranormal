@@ -54,9 +54,12 @@ internal static class ExportArgBuilders
     /// when it does not is a graph ffmpeg refuses to build, which is what made "Separate Audio" on
     /// the only clip, and any slideshow with music, fail outright (2026-09-05 audit, audio-1).
     /// </param>
+    /// <param name="duckingSegments">
+    /// Which of <paramref name="audioSegments"/> everything else should drop under, by index.
+    /// </param>
     internal static string[] BuildAmixArgs(
         string videoInput, IReadOnlyList<string> audioSegments, string output, ExportSettings s,
-        bool videoHasAudio = true)
+        bool videoHasAudio = true, IReadOnlyCollection<int>? duckingSegments = null)
     {
         var args = new List<string> { "-i", videoInput };
         var labels = new List<string>();
@@ -65,6 +68,25 @@ internal static class ExportArgBuilders
             args.Add("-i");
             args.Add(segment);
             labels.Add($"[{labels.Count + 1}:a]");
+        }
+
+        // A narration track that everything else drops under. Without it the usual remedy is a
+        // volume envelope drawn by hand around every line and redrawn whenever the timing moves
+        // (2026-09-05 audit, the completeness critic's ducking item).
+        if (duckingSegments is { Count: > 0 })
+        {
+            var keys = duckingSegments
+                .Where(i => i >= 0 && i < labels.Count)
+                .Select(i => labels[i])
+                .ToList();
+
+            var others = labels.Where(l => !keys.Contains(l)).ToList();
+            if (videoHasAudio) others.Insert(0, "[0:a]");
+
+            // Nothing to duck: everything audible is the narration itself, so the ordinary mix is
+            // the right answer.
+            if (keys.Count > 0 && others.Count > 0)
+                return BuildDuckedMixArgs(args, keys, others, output, s);
         }
 
         var inputs = labels.Count + (videoHasAudio ? 1 : 0);
@@ -84,6 +106,52 @@ internal static class ExportArgBuilders
 
         args.AddRange([
             "-filter_complex", filter,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", s.AudioCodec,
+            "-b:a", $"{s.AudioBitrate}k",
+            output,
+        ]);
+        return [.. args];
+    }
+
+    /// <summary>
+    /// The mix with everything dropping under the narration.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three steps. Sum the narration, sum everything else, then run the second through a
+    /// compressor keyed off the first — so the music comes down while somebody is speaking and
+    /// returns when they stop, at whatever level it was already set to.</para>
+    ///
+    /// <para>The release is deliberately slow. A fast one pumps audibly between words, which is
+    /// more distracting than the loud music it was meant to fix.</para>
+    /// </remarks>
+    private static string[] BuildDuckedMixArgs(
+        List<string> args, List<string> keys, List<string> others, string output, ExportSettings s)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        if (keys.Count > 1)
+            sb.Append(string.Join("", keys))
+              .Append($"amix=inputs={keys.Count}:duration=longest:normalize=0:dropout_transition=0[key];");
+
+        if (others.Count > 1)
+            sb.Append(string.Join("", others))
+              .Append($"amix=inputs={others.Count}:duration=longest:normalize=0:dropout_transition=0[bed];");
+
+        var key = keys.Count > 1   ? "[key]" : keys[0];
+        var bed = others.Count > 1 ? "[bed]" : others[0];
+
+        // The key is needed twice — once to duck against and once in the finished mix — and a
+        // filter input can only be consumed once.
+        sb.Append($"{key}asplit=2[keymix][keyside];");
+        sb.Append($"{bed}[keyside]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=600[ducked];");
+        sb.Append("[ducked][keymix]amix=inputs=2:duration=longest:normalize=0:dropout_transition=0[amixed];");
+        sb.Append("[amixed]alimiter=limit=0.95[aout]");
+
+        args.AddRange([
+            "-filter_complex", sb.ToString(),
             "-map", "0:v",
             "-map", "[aout]",
             "-c:v", "copy",
@@ -299,7 +367,7 @@ internal static class ExportArgBuilders
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
         string? extraVf = null, int outputWidth = 0, int outputHeight = 0,
-        bool sourceHasAudio = true)
+        bool sourceHasAudio = true, ClipTransform? transform = null)
     {
         // Every segment carries an audio stream when the export includes audio — a real one, or
         // silence. Mixed stream layouts are what broke concat: an image or a muted clip was written
@@ -335,6 +403,29 @@ internal static class ExportArgBuilders
         // BuildImageSegmentArgs' existing scale+pad so every segment kind lands on the same
         // canvas before compositing.
         (outputWidth, outputHeight) = EvenCanvas(outputWidth, outputHeight);
+
+        // Cropping and turning come before the scale to the canvas, so what fills the frame is the
+        // part being kept, at its own proportions. Cutting a DVR's bars off after the picture had
+        // already been letterboxed into the canvas would work and would throw away resolution
+        // doing it (2026-09-05 audit, the completeness critic's crop/rotate item).
+        if (transform is not null && !transform.IsIdentity)
+        {
+            var keepW = Math.Max(0.02, 1.0 - Math.Clamp(transform.CropLeft, 0, 1) - Math.Clamp(transform.CropRight, 0, 1));
+            var keepH = Math.Max(0.02, 1.0 - Math.Clamp(transform.CropTop, 0, 1) - Math.Clamp(transform.CropBottom, 0, 1));
+            var ic    = System.Globalization.CultureInfo.InvariantCulture;
+
+            if (keepW < 1.0 || keepH < 1.0)
+                videoFilters.Add(
+                    $"crop=iw*{keepW.ToString("F6", ic)}:ih*{keepH.ToString("F6", ic)}"
+                    + $":iw*{Math.Clamp(transform.CropLeft, 0, 0.98).ToString("F6", ic)}"
+                    + $":ih*{Math.Clamp(transform.CropTop, 0, 0.98).ToString("F6", ic)}");
+
+            if (Math.Abs(transform.Rotation) > 0.001)
+            {
+                var radians = (transform.Rotation * Math.PI / 180.0).ToString("F6", ic);
+                videoFilters.Add($"rotate={radians}:ow=rotw({radians}):oh=roth({radians})");
+            }
+        }
 
         if (outputWidth > 0 && outputHeight > 0)
         {
@@ -719,7 +810,12 @@ internal static class ExportArgBuilders
             return null;
 
         var ic = System.Globalization.CultureInfo.InvariantCulture;
-        return $"pan=stereo|c0={leftVolume.ToString("F6", ic)}*c0|c1={rightVolume.ToString("F6", ic)}*c1";
+
+        // Made stereo first. pan reads c1 from the input, and a mono recording has no c1 — so on
+        // a mono file, which is what most handheld recorders produce, the right channel came out
+        // silent the moment anybody touched the balance (2026-09-05 audit, audio-15).
+        return "aformat=channel_layouts=stereo,"
+             + $"pan=stereo|c0={leftVolume.ToString("F6", ic)}*c0|c1={rightVolume.ToString("F6", ic)}*c1";
     }
 
     /// <summary>
@@ -755,6 +851,12 @@ internal static class ExportArgBuilders
     internal static string BuildAudioClipFilterChain(AudioClip clip, double clipDurationSeconds)
     {
         var parts = new List<string> { BuildVolumeAutomationFilter(clip, clipDurationSeconds) };
+
+        // Cleanup before anything that shapes the level. Levelling measures how loud the material
+        // is, and measuring before the hiss comes out means levelling to the hiss
+        // (2026-09-05 audit, audio-25).
+        var cleanup = AudioCleanupFilter.Build(clip.NoiseReduction, clip.Normalise);
+        if (cleanup is not null) parts.Add(cleanup);
 
         var channelFilter = BuildChannelBalanceFilter(clip.LeftVolume, clip.RightVolume);
         if (channelFilter is not null) parts.Add(channelFilter);
@@ -1261,9 +1363,46 @@ internal static class ExportArgBuilders
     /// on an upper track covers the frame for as long as it runs, which is what the preview shows
     /// too.</para>
     /// </remarks>
+    /// <summary>
+    /// A pass over one already-rendered segment that obscures its redacted regions.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own pass rather than a fragment in the segment's filter chain, because hiding
+    /// part of a picture means splitting the frame, cropping, blurring and laying the piece back —
+    /// a graph, not a chain. Everything in it is a core filter, so it runs in the browser engine
+    /// and the native sidecar alike.</para>
+    ///
+    /// <para>Returns null when there is nothing to hide, and the caller keeps the segment it
+    /// already has.</para>
+    /// </remarks>
+    internal static string[]? BuildRedactionArgs(
+        string input, string output,
+        IReadOnlyList<RedactionRegion> regions, int frameWidth, int frameHeight, ExportSettings s)
+    {
+        var graph = RedactionFilter.Build(regions, frameWidth, frameHeight);
+        if (graph is null) return null;
+
+        var args = new List<string>
+        {
+            "-i", input,
+            "-filter_complex", graph,
+            "-map", "[vout]",
+        };
+
+        // The sound is untouched and has to survive: mapping only the picture is how an earlier
+        // pass in this pipeline used to strip the audio out of a whole export. AudioPassthroughArgs
+        // does the mapping as well as the codec, so adding one here too put two copies of the same
+        // audio stream in the output (found on screen while verifying phase 8).
+        args.AddRange(AudioPassthroughArgs(s));
+        args.AddRange(QualityArgs(s));
+        args.AddRange(["-pix_fmt", s.PixelFormat, output]);
+        return [.. args];
+    }
+
     internal static string[] BuildLayerCompositeArgs(
         string baseFile, string layerFile, string output,
-        double start, double duration, ExportSettings s, bool layerHasAudio)
+        double start, double duration, ExportSettings s, bool layerHasAudio,
+        ClipTransform? transform = null, int frameWidth = 0, int frameHeight = 0)
     {
         var ic    = System.Globalization.CultureInfo.InvariantCulture;
         var from  = start.ToString("F3", ic);
@@ -1272,11 +1411,22 @@ internal static class ExportArgBuilders
 
         var sb = new System.Text.StringBuilder();
 
+        // Where the layer goes. Without a transform it covers the whole frame at 0,0, which is
+        // what a second video track could only ever do before — replace the picture underneath
+        // rather than sit beside it or in a corner of it (2026-09-05 audit).
+        var placement = ClipTransformFilter.BuildSourceChain(transform, frameWidth, frameHeight);
+        var (px, py)  = placement is null
+            ? (0, 0)
+            : ClipTransformFilter.Offset(transform, frameWidth, frameHeight);
+
         // setpts moves the layer to its own start; enable keeps it off screen everywhere else; and
         // eof_action=pass hands the picture back to the layer underneath once the clip ends,
         // rather than repeating its final frame to the end of the export.
-        sb.Append($"[1:v]setpts=PTS-STARTPTS+{from}/TB[ov];");
-        sb.Append($"[0:v][ov]overlay=enable='between(t,{from},{to})':eof_action=pass[vout]");
+        sb.Append("[1:v]setpts=PTS-STARTPTS+").Append(from).Append("/TB");
+        if (placement is not null) sb.Append(',').Append(placement);
+        sb.Append("[ov];");
+
+        sb.Append($"[0:v][ov]overlay={px}:{py}:enable='between(t,{from},{to})':eof_action=pass[vout]");
 
         var withAudio = s.IncludeAudio && layerHasAudio;
         if (withAudio)
@@ -1465,7 +1615,10 @@ internal static class ExportArgBuilders
         var ic = System.Globalization.CultureInfo.InvariantCulture;
 
         var ow = Math.Max(1, (int)(clip.Width * vw));
-        var oh = clip.Height > 0 ? Math.Max(1, (int)(clip.Height * vh)) : ow;
+        // One resolver, shared with the preview and the selection box. Each of the three used to
+        // decide for itself what a missing height meant, and they disagreed (2026-09-05 audit,
+        // callouts-10).
+        var oh = Math.Max(1, (int)(ClipArtGeometry.HeightFraction(clip, vw, vh) * vh));
         var px = (int)(clip.X * vw);
         var py = (int)(clip.Y * vh);
 

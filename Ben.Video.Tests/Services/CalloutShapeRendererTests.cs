@@ -120,16 +120,46 @@ public sealed class CalloutShapeRendererTests
         Assert.Equal(4.0, clip.ControlPointValues[CalloutControlPoints.CornerRadius]);
     }
 
+    /// <summary>
+    /// SetDefaults is unconditional — it always sets every key for the shape. The guard (do not
+    /// call it when values already exist) lives in <c>ClipStore.AddCallout</c>, not here.
+    /// </summary>
+    /// <remarks>
+    /// The expected value used to be the clip's own X, because path points were canvas fractions
+    /// derived from the box's position. They are fractions of the box itself now, so a start point
+    /// at the box's left edge is 0 whatever the box's position (2026-09-05 audit, callouts-3).
+    /// </remarks>
     [Fact]
     public void SetDefaults_AlwaysOverwrites_ExistingValues()
     {
-        // SetDefaults is unconditional — it always sets all keys for the shape.
-        // The guard (don't call when Count > 0) lives in ClipStore.AddCallout, not here.
         var clip = MakeClip(ShapeType.Arrow);
         clip.ControlPointValues[CalloutControlPoints.StartX] = 0.5;
+
         CalloutShapeRenderer.SetDefaults(clip);
-        // StartX is now reset to clip.X (= 0.1 from MakeClip)
-        Assert.Equal(clip.X, clip.ControlPointValues[CalloutControlPoints.StartX]);
+
+        Assert.Equal(0.0, clip.ControlPointValues[CalloutControlPoints.StartX]);
+    }
+
+    /// <summary>
+    /// Changing shape replaces the control points rather than layering the new shape's on top of
+    /// the old shape's.
+    /// </summary>
+    /// <remarks>
+    /// Turning a rectangle into a star gave a star with no radii and a stray corner radius; turning
+    /// an arrow into a rectangle kept the arrow's path points, which came back pointing wherever
+    /// the old arrow had if it was ever turned back (2026-09-05 audit, callouts-12).
+    /// </remarks>
+    [Fact]
+    public void ReseedForShape_ReplacesTheOldShapes_Points()
+    {
+        var clip = MakeClip(ShapeType.Arrow);
+        CalloutShapeRenderer.SetDefaults(clip);
+        clip.Shape = ShapeType.Star;
+
+        CalloutShapeRenderer.ReseedForShape(clip);
+
+        Assert.False(clip.ControlPointValues.ContainsKey(CalloutControlPoints.StartX));
+        Assert.True(clip.ControlPointValues.ContainsKey(CalloutControlPoints.OuterRadius));
     }
 
     // ── SVG canvas dimensions ─────────────────────────────────────────────────

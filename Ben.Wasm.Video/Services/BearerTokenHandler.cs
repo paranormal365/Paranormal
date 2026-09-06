@@ -14,6 +14,16 @@ namespace Ben.Wasm.Video.Services;
 /// </remarks>
 public sealed class BearerTokenHandler : DelegatingHandler
 {
+    /// <summary>
+    /// The largest body this will hold a second copy of in order to retry, in bytes.
+    /// </summary>
+    /// <remarks>
+    /// Eight megabytes: comfortably above every JSON body these clients send, and far below a
+    /// finished render. Above it a 401 is returned rather than the tab being asked for a second
+    /// copy of something that may be hundreds of megabytes.
+    /// </remarks>
+    public const long MaximumRetryableBody = 8L * 1024 * 1024;
+
     private readonly TokenStore _tokens;
     private readonly AuthService _auth;
 
@@ -26,12 +36,25 @@ public sealed class BearerTokenHandler : DelegatingHandler
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken ct)
     {
+        // Refresh before sending, not after being told. The store already knew the token had
+        // expired, so every call after expiry went out with a dead one, collected a 401, refreshed
+        // and went again — two round trips where one would do (2026-09-05 audit, wasm-15).
+        if (await _tokens.IsAccessTokenExpiredAsync())
+            await _auth.TryRefreshAsync(ct);
+
         var token = await _tokens.GetAccessTokenAsync();
         if (token is not null)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await base.SendAsync(request, ct);
         if (response.StatusCode != HttpStatusCode.Unauthorized) return response;
+
+        // A body too large to hold twice is not retried. The retry needs a copy, and copying means
+        // the whole thing in memory a second time — which for a finished render is hundreds of
+        // megabytes inside a browser tab. The 401 is returned instead, and the caller can act on
+        // it (2026-09-05 audit, wasm-15).
+        if (request.Content?.Headers.ContentLength is { } length && length > MaximumRetryableBody)
+            return response;
 
         // One refresh, one retry. A second 401 means the session is genuinely over — surface it
         // rather than looping against an endpoint that has already said no twice.
@@ -47,10 +70,13 @@ public sealed class BearerTokenHandler : DelegatingHandler
     }
 
     /// <summary>
-    /// An HttpRequestMessage can only be sent once, so the retry needs a copy. Content is buffered
-    /// into memory — fine for the JSON bodies these clients send; large uploads (the final render)
-    /// go up once with a fresh token rather than through this retry path.
+    /// An HttpRequestMessage can only be sent once, so the retry needs a copy.
     /// </summary>
+    /// <remarks>
+    /// Content is buffered into memory, which is why <see cref="MaximumRetryableBody"/> gates
+    /// reaching here at all. That gate is the enforcement of what this comment used to merely
+    /// assert.
+    /// </remarks>
     private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var clone = new HttpRequestMessage(request.Method, request.RequestUri);

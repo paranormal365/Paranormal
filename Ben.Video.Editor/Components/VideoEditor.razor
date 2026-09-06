@@ -5,6 +5,7 @@
 @inject KeyboardShortcutService Keyboard
 @inject ProjectService Project
 @inject ProjectStore Projects
+@inject IProjectServerStore ServerProjects
 @inject ErrorLogService ErrorLog
 @inject ExportQueueService ExportQueue
 @inject MotionKeyframeService Motion
@@ -39,6 +40,10 @@
        check, so the button and the dialog can never disagree about whether there is anything
        to render (2026-09-05 audit, export-20).
 
+       ShowSaveToServer is the store's own answer, not a configured URL. A URL being set says the
+       server exists, not that this person can reach it — and on the site it was set while every
+       save answered 401 (2026-09-05 audit, F13).
+
        ProjectName is the bare name. The unsaved asterisk used to be part of the value in the
        toolbar's text box, so renaming a project with unsaved changes saved it as "My Project *" —
        the marker became part of the name and stayed there (2026-09-05 audit, persistence-5). The
@@ -54,7 +59,7 @@
              UndoDescription="@Clips.UndoDescription"
              RedoDescription="@Clips.RedoDescription"
              ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
-             ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+             ShowSaveToServer="@ServerProjects.IsAvailable"
              ProjectName="@Projects.CurrentProjectName"
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"
@@ -62,6 +67,7 @@
              ShowDiagnostics="@EffectiveOptions.ShowDiagnostics"
              OnInitialize="LoadCoreAsync"
              OnResetEngine="ResetEngineAsync"
+             HostStatusContent="@HostStatusContent"
              OnOpen="OpenFilesAsync"
              OnPreview="RenderFullQualityPreviewAsync"
              OnExport="OpenExportDialog"
@@ -186,7 +192,8 @@
                                      OnAddToTimeline="AddClipToTimeline"
                                      OnAudioClipAdded="OnAudioClipAdded"
                                      OnAddImageToTimeline="AddImageToTimeline"
-                                     OnAddAudioToTimeline="AddAudioToTimeline" />
+                                     OnAddAudioToTimeline="AddAudioToTimeline"
+                                     HostStatusContent="@HostStatusContent" />
                     </TabStripTab>
 
                     @if (_showAssetBrowser)
@@ -414,14 +421,21 @@
                              OnUpload="PublishExportAsync"
                              OnSaveToDevice="SaveExportToDeviceAsync"
                              OnDiscard="DiscardExportAsync"
+                             CanUpload="@EnablePublish"
+                             UploadUnavailableReason="@PublishUnavailableReason"
                              ShowPostToFeed="@(EnablePostToFeed && OnPostToFeed.HasDelegate)"
                              OnPostToFeed="PostExportToFeedAsync" />
 
     <!-- ── Post-export save prompt (immediate exports only — see OnExportComplete) ─── -->
     <ExportSavePrompt @bind-Visible="_showExportSavePrompt"
-                      ShowServerOption="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+                      ShowServerOption="@ServerProjects.IsAvailable"
                       OnSaveLocally="SaveProjectAsync"
                       OnSaveToServer="SaveToServerHandlerAsync" />
+
+    <!-- ── Media this project needs, waiting on the server (2026-09-05 audit, F14) ── -->
+    <MissingMediaPrompt Candidates="@Projects.PendingRefetch"
+                        OnDownload="DownloadMissingMediaAsync"
+                        OnLater="Projects.DeclineRefetch" />
 
     <!-- ── "Not enough room" insert/overwrite confirmation (items #25, #49) ───────── -->
     <RippleInsertPrompt Visible="_rippleInsertPromptVisible"
@@ -429,6 +443,17 @@
                         OnConfirm="ConfirmRippleInsert"
                         OnOverwrite="ConfirmOverwriteInsert"
                         OnCancel="CancelRippleInsert" />
+
+    @* ── The picker "Replace Media…" opens ────────────────────────────────────── *@
+    @*
+       This element did not exist. "Replace Media…" clicked "#bv-relink-input", which matched
+       nothing at all, so the menu item did nothing whatsoever — the editor's only offer to repair
+       a clip whose media it had lost could not even be started (2026-09-05 audit, F14, found on
+       screen). Its handler had been written, maintained and audited for a control that was never
+       on the page.
+    *@
+    <input type="file" id="bv-relink-input" accept="video/*,audio/*,image/*"
+           style="display:none" @onchange="OnRelinkFileChangedAsync" />
 
     <!-- ── Keyboard shortcut help overlay ──────────────────────────────────────── -->
     @if (_showHelp)
@@ -452,6 +477,7 @@
                         <tr><td><kbd>Escape</kbd></td><td>Close editor panel / clear selection</td></tr>
                         <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
                         <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> / <kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>D</kbd></td><td>Duplicate the selected clip, title, callout or artwork</td></tr>
                         <tr><td><kbd>M</kbd></td><td>Add marker at playhead</td></tr>
                         <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame (nudge, with a layer selected)</td></tr>
                         <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>Jump to the start / end</td></tr>
@@ -517,6 +543,33 @@
 
     /// <summary>Host answers from the server's CanPost; the button never invites a refusal.</summary>
     [Parameter] public bool EnablePostToFeed { get; set; }
+
+    /// <summary>
+    /// Whether this person can currently publish a render to the server.
+    /// </summary>
+    /// <remarks>
+    /// Separate from whether the host offers publishing at all
+    /// (<see cref="OnPublishExport"/>), because the standalone host offers it and the person may
+    /// simply not be signed in yet — a state worth explaining rather than hiding (2026-09-05
+    /// audit, F12).
+    /// </remarks>
+    [Parameter] public bool EnablePublish { get; set; } = true;
+
+    /// <summary>What to say when publishing is offered but not currently possible.</summary>
+    [Parameter] public string? PublishUnavailableReasonText { get; set; }
+
+    /// <summary>
+    /// Host chrome for the toolbar — the standalone editor puts its sign-in state here.
+    /// </summary>
+    /// <remarks>
+    /// The editor does not know who is signed in and should not guess; it only leaves room. The
+    /// standalone host had no sign-in door at all before this, so the only way in was to know the
+    /// /login URL and type it (2026-09-05 audit, F11).
+    /// </remarks>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
+
+    private string PublishUnavailableReason =>
+        PublishUnavailableReasonText ?? "Sign in to upload this to your media library.";
 
     // ── Child component references ────────────────────────────────────────────
 
@@ -652,6 +705,8 @@
         Playback.OnStateChanged += OnPlaybackStateChanged;
         Layout.OnChanged        += OnLayoutChanged;
         Projects.OnChanged      += OnProjectStoreChanged;
+        // The offer is raised from the background restore, so nothing would repaint to show it.
+        Projects.OnRefetchOffered += OnProjectStoreChanged;
         ExportQueue.OnChanged   += OnQueueChanged;
 
         // Item #36 phase C — opt-in background render worker. Pause/resume piggybacks on the
@@ -1201,6 +1256,20 @@
                 _selectedTextOverlay = null;
                 _showHelp            = false;
                 _timeline?.ClearMultiSelection();
+                break;
+
+            case "d" or "D" when ctrl:
+                // Camtasia's shortcut for the thing people do most with an annotation: make
+                // another one just like it. Nothing in the editor had a duplicate shortcut at all
+                // (2026-09-05 audit, callouts-15).
+                if (SelectedTimelineItem is { } toDuplicate)
+                {
+                    if (Clips.FindTrackOf(toDuplicate.Id) is { IsLocked: true })
+                        _notifications?.Show(
+                            "That track is locked.", ThemeConstants.Notification.ThemeColor.Warning);
+                    else
+                        Clips.DuplicateClip(toDuplicate.Id);
+                }
                 break;
 
             case "z" or "Z" when ctrl && !shift:
@@ -1930,7 +1999,12 @@
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
-                    sourceHasAudio: vid.HasAudio);
+                    sourceHasAudio: vid.HasAudio,
+                    // The preview shows the clip as the render will: cropped and turned. Without
+                    // this the Working Window drew a clip at full frame while the export cut its
+                    // edges off, which is the kind of disagreement this preview exists to prevent
+                    // (found on screen while verifying phase 8).
+                    transform: vid.Transform);
                 await Ffmpeg.ExecAsync(args);
                 // Item #59-#65 flakiness investigation, phase 146 — size unknown (produced by an
                 // ffmpeg exec, not a C#-side byte array), so this is a 0-byte lower-bound entry
@@ -2420,6 +2494,15 @@
         // and discard the user's only copy — see OnPublishExport's remarks.
         await Exporter.TakeRetainedExportAsync(job, exported => OnPublishExport.InvokeAsync(exported));
         FinishExportDestination();
+
+        // The one moment the Server tab is known to be stale, because this editor is what made it
+        // so. Best-effort: a list that did not reload is no worse than before (2026-09-05 audit,
+        // media-10).
+        if (_browser is not null)
+        {
+            try { await _browser.RefreshLibraryAsync(); }
+            catch (Exception ex) { ErrorLog.Log("VideoEditor.PublishExportAsync.Refresh", ex); }
+        }
     }
 
     private async Task PostExportToFeedAsync()
@@ -2489,22 +2572,26 @@
 
         try
         {
-            var progress = new Progress<TransferProgress>(tp =>
-            {
-                _transfer.Update(tp);
-                InvokeAsync(StateHasChanged);
-            });
+            // Through the host's own store, not a raw post. The editor used to post over a named
+            // HttpClient, which on a Blazor Server host cannot reach the circuit's bearer token —
+            // so this button answered 401 there, always (2026-09-05 audit, F13).
+            var file = Project.BuildCurrentProjectFile(Projects.CurrentProjectName);
 
-            var response = await Project.SaveToServerAsync(Projects.CurrentProjectName, progress: progress);
+            var (id, problem) = await ServerProjects.SaveAsync(file, Projects.CurrentServerId);
 
             _transfer = null;
 
-            if (response.IsSuccessStatusCode)
+            if (problem is null)
+            {
+                // Remembered so the next save updates this project rather than creating another
+                // copy of it (2026-09-05 audit, persistence-13).
+                Projects.CurrentServerId = id;
                 _notifications?.Show("Project saved to server.", ThemeConstants.Notification.ThemeColor.Success);
+            }
             else
-                _notifications?.Show(
-                    $"Save to server failed: {(int)response.StatusCode} {response.ReasonPhrase}",
-                    ThemeConstants.Notification.ThemeColor.Error);
+            {
+                _notifications?.Show(problem, ThemeConstants.Notification.ThemeColor.Error);
+            }
         }
         catch (Exception ex)
         {
@@ -2697,6 +2784,52 @@
         await (await DomAsync()).InvokeVoidAsync("click", "#bv-relink-input", false);
     }
 
+    /// <summary>
+    /// Fetches the media a restored project is missing, and says how it went.
+    /// </summary>
+    /// <remarks>
+    /// A clip whose file could not be fetched, or came back different from the one the project was
+    /// saved against, is left missing rather than relinked to different footage — so this reports
+    /// both numbers instead of only the good one.
+    /// </remarks>
+    private async Task DownloadMissingMediaAsync()
+    {
+        var outcome = await Projects.RefetchMissingMediaAsync();
+
+        if (outcome.Restored > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Restored)} downloaded.",
+                ThemeConstants.Notification.ThemeColor.Success);
+
+        if (outcome.Mismatched > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Mismatched)} could not be used: the file on the server is not "
+                + "the one this project was saved against.",
+                ThemeConstants.Notification.ThemeColor.Warning);
+
+        if (outcome.Failed > 0)
+            _notifications?.Show(
+                $"{ClipCount(outcome.Failed)} could not be downloaded.",
+                ThemeConstants.Notification.ThemeColor.Error);
+
+        StateHasChanged();
+    }
+
+    private static string ClipCount(int count) => count == 1 ? "1 clip" : $"{count} clips";
+
+    /// <summary>
+    /// Replaces a clip's media with a file the person picked, and keeps the replacement.
+    /// </summary>
+    /// <remarks>
+    /// <para>This used to write the browser's session filesystem and nothing else, so the
+    /// replacement lasted exactly as long as the tab. Somebody who patiently re-linked eight clips
+    /// found all eight missing again the next time they opened the project — the one repair the
+    /// editor offered did not survive being used (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>The clip keeps its recorded server file only when the replacement really is that
+    /// file. Picking a different one and keeping the old id would let a later re-fetch quietly
+    /// overwrite the replacement with the footage it was chosen instead of.</para>
+    /// </remarks>
     private async Task OnRelinkFileChangedAsync(ChangeEventArgs _)
     {
         if (_relinkItemId is null) return;
@@ -2708,14 +2841,46 @@
                 "fileAt", "bv-relink-input", 0);
 
             var fileName = await (await DomAsync()).InvokeAsync<string>("fileName", "bv-relink-input", 0);
+            var ext      = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
 
-            var memFsName = $"relink_{Guid.NewGuid():N}_{fileName}";
-            await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+            // Storage is the copy of record, exactly as it is for an import. Written first so the
+            // clip can be mounted from it rather than carrying a session-only MEMFS copy.
+            await Opfs.WriteAsync(itemId, ext, fileRef);
+
+            var memFsName = await Mounter.MountAsync(itemId, ext);
+            if (memFsName is null)
+            {
+                memFsName = $"relink_{Guid.NewGuid():N}_{fileName}";
+                await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+            }
             await fileRef.DisposeAsync();
 
-            Clips.RelinkClip(itemId, memFsName);
+            var item  = Clips.FindItem(itemId);
+            var print = await Opfs.FingerprintAsync(itemId, ext);
+
+            // Only the same file keeps the same identity.
+            var stillTheRecordedFile = item is not null
+                && item.SourceFileId is not null
+                && MediaFingerprint.Compare(
+                       item.SourceFileSize, item.SourceContentHash, print?.Size, print?.Hash)
+                   is MediaFingerprint.Verdict.Matches;
+
+            Clips.RelinkClip(
+                itemId, memFsName, ext,
+                sourceFileId:      stillTheRecordedFile ? item!.SourceFileId : null,
+                sourceFileSize:    print?.Size,
+                sourceContentHash: print?.Hash);
         }
-        catch { /* silently ignore — user may have cancelled the dialog */ }
+        catch (Exception ex)
+        {
+            // Not silent any more. A cancelled picker raises nothing at all — this fires on a
+            // change event, so reaching here means a real failure, and swallowing it left somebody
+            // looking at a clip that stayed missing with no reason given.
+            ErrorLog.Log("VideoEditor.OnRelinkFileChangedAsync", ex);
+            _notifications?.Show(
+                "That file could not be used to replace this clip's media.",
+                ThemeConstants.Notification.ThemeColor.Error);
+        }
         finally
         {
             _relinkItemId = null;
@@ -3228,6 +3393,7 @@
         Playback.OnStateChanged -= OnPlaybackStateChanged;
         Layout.OnChanged        -= OnLayoutChanged;
         Projects.OnChanged      -= OnProjectStoreChanged;
+        Projects.OnRefetchOffered -= OnProjectStoreChanged;
         ExportQueue.OnChanged   -= OnQueueChanged;
         await BackgroundRender.DisposeAsync();
 

@@ -156,14 +156,38 @@ public sealed class ClipStore
         var track = FindTrackOf(item.Id);
         if (track is { IsMuted: true }) return false;
 
-        return item is not VideoClip { MuteAudio: true };
+        return item switch
+        {
+            VideoClip { MuteAudio: true } => false,
+            AudioClip { MuteAudio: true } => false,
+            _                             => true,
+        };
     }
 
     /// <summary>Audio clips that should actually be mixed, in the order they play.</summary>
+    /// <remarks>
+    /// A muted clip is left out here as well as a muted track, so silencing one sound behaves the
+    /// same way as silencing all of them (2026-09-05 audit, audio-19).
+    /// </remarks>
     public IEnumerable<AudioClip> AudibleAudioClips =>
         AudioTracks.Where(t => !t.IsMuted)
                    .SelectMany(t => t.AudioClips)
+                   .Where(a => !a.MuteAudio)
                    .OrderBy(a => a.TimelinePosition);
+
+    /// <summary>
+    /// Makes every other sound drop in level while this track is playing, or stops it.
+    /// </summary>
+    public void SetTrackDucking(Guid trackId, bool ducks)
+    {
+        var track = RequireTrack(trackId);
+        if (track.DucksOthers == ducks) return;
+
+        var command = new SetTrackDuckingCommand(track, ducks);
+        command.Execute();
+        PushCommand(command);
+        Notify();
+    }
 
     public void LockTrack(Guid trackId, bool locked)
     {
@@ -269,6 +293,78 @@ public sealed class ClipStore
         track.Items.Add(clip);
         PushCommand(new AddImageClipCommand(track, clip, index));
         Notify();
+    }
+
+    /// <summary>
+    /// Replaces where a clip's picture sits, undoably.
+    /// </summary>
+    /// <remarks>
+    /// Null means "fill the frame", which is what every clip did before placement existed and what
+    /// most clips should go on doing.
+    /// </remarks>
+    public void CommitClipTransform(Guid clipId, ClipTransform? after, ClipTransform? before)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == clipId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            Action<ClipTransform?> set = item switch
+            {
+                VideoClip v => t => v.Transform = t,
+                ImageClip i => t => i.Transform = t,
+                _           => _ => { },
+            };
+
+            if (item is not (VideoClip or ImageClip)) return;
+
+            var command = new SetClipTransformCommand(set, after, before, item.Name);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Replaces a clip's hidden areas, undoably.
+    /// </summary>
+    /// <remarks>
+    /// <para>The whole list rather than one region, because adding, removing and moving all change
+    /// it and there is no reason to have three ways of doing that.</para>
+    ///
+    /// <para>Undo matters more here than elsewhere. Silently losing a redaction leaves somebody
+    /// exporting a face they believe they covered, so the command records both lists outright
+    /// instead of a closure that reconstructs one.</para>
+    /// </remarks>
+    public void CommitClipRedactions(
+        Guid clipId, List<RedactionRegion> after, List<RedactionRegion> before)
+    {
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(before);
+
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == clipId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            Action<List<RedactionRegion>> set = item switch
+            {
+                VideoClip v => list => v.Redactions = list,
+                ImageClip i => list => i.Redactions = list,
+                _           => _ => { },
+            };
+
+            if (item is not (VideoClip or ImageClip)) return;
+
+            var command = new SetRedactionsCommand(set, after, before, item.Name);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
     }
 
     // ── Callout clips ─────────────────────────────────────────────────────────
@@ -524,7 +620,8 @@ public sealed class ClipStore
         Notify();
     }
 
-    private TrackItem? FindItem(Guid id)
+    /// <summary>The item with this id, on whichever track it sits.</summary>
+    public TrackItem? FindItem(Guid id)
     {
         foreach (var track in _tracks)
         {
@@ -863,10 +960,46 @@ public sealed class ClipStore
                     VolumeAutomation = new List<VolumeKeyframe>(ac.VolumeAutomation),
                     // BlobUrl and WaveformPeaks intentionally shared (read-only data)
                 },
+
+                // Overlays could not be duplicated at all, so making three matching callouts meant
+                // building each from scratch and matching every colour, size and font by hand —
+                // the thing Camtasia's Ctrl+D exists for (2026-09-05 audit, callouts-15).
+                //
+                // Every dictionary and list is copied rather than shared: two callouts made from
+                // one is the whole point, and a shared control-point dictionary would make editing
+                // either of them edit both.
+                CalloutClip cc => cc with
+                {
+                    Id                 = Guid.NewGuid(),
+                    TimelinePosition   = cc.TimelinePosition + cc.Duration + 0.1,
+                    ControlPointValues = new Dictionary<string, double>(cc.ControlPointValues),
+                    Runs               = cc.Runs is null ? null : [.. cc.Runs],
+                },
+
+                ClipArtClip ar => ar with
+                {
+                    Id                 = Guid.NewGuid(),
+                    TimelinePosition   = ar.TimelinePosition + ar.Duration + 0.1,
+                    ControlPointValues = new Dictionary<string, double>(ar.ControlPointValues),
+                    ControlPointColors = new Dictionary<string, string>(ar.ControlPointColors),
+                },
+
+                TextOverlay to => to with
+                {
+                    Id               = Guid.NewGuid(),
+                    TimelinePosition = to.TimelinePosition + to.Duration + 0.1,
+                    Runs             = to.Runs is null ? null : [.. to.Runs],
+                },
+
                 _ => null,
             };
 
             if (copy is null) return;
+
+            // An overlay's row is decided by its layer, and a copy belongs above what it was
+            // copied from rather than sharing its row.
+            if (copy is CalloutClip or ClipArtClip or TextOverlay)
+                copy.LayerIndex = NextLayerIndex();
 
             copy.Order = track.Items.Count;
             track.Items.Add(copy);
@@ -941,6 +1074,164 @@ public sealed class ClipStore
     /// <paramref name="start"/> and <paramref name="end"/> are seconds within the source file.
     /// Clamps both values to [0, clip.Duration] and ensures start &lt; end.
     /// </summary>
+    /// <summary>
+    /// Sets a clip's noise reduction and levelling, undoably.
+    /// </summary>
+    /// <remarks>
+    /// Both at once, because they are one decision — "make this recording easier to listen to" —
+    /// and separate undo steps for the two halves of it would be noise of a different kind.
+    /// </remarks>
+    public void SetAudioCleanup(Guid itemId, double noiseReduction, bool normalise)
+    {
+        noiseReduction = Math.Clamp(noiseReduction, 0.0, 1.0);
+
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is not AudioClip clip) continue;
+            if (track.IsLocked) return;
+
+            if (Math.Abs(clip.NoiseReduction - noiseReduction) < 1e-6 && clip.Normalise == normalise)
+                return;
+
+            var command = new SetAudioCleanupCommand(
+                clip, noiseReduction, normalise, clip.NoiseReduction, clip.Normalise);
+
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Silences one clip, or lets it be heard again.
+    /// </summary>
+    /// <remarks>
+    /// <para>A track could be muted and a video clip's own sound could be muted by separating it,
+    /// but a single audio clip could only be silenced by dragging its volume to zero — which loses
+    /// the level it was at, so putting it back means remembering the number (2026-09-05 audit,
+    /// audio-19).</para>
+    ///
+    /// <para>Reuses <c>MuteAudio</c>, which every clip already carries and the mix already reads,
+    /// so nothing downstream needs to learn about this.</para>
+    /// </remarks>
+    public void SetClipMuted(Guid itemId, bool muted)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            var wasMuted = item switch
+            {
+                VideoClip v => v.MuteAudio,
+                AudioClip a => a.MuteAudio,
+                _           => (bool?)null,
+            };
+
+            if (wasMuted is null || wasMuted == muted) return;
+
+            var command = new SetClipMutedCommand(item, muted);
+            command.Execute();
+            PushCommand(command);
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Sets a clip's trim without recording it, for use during a drag.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dragging a trim handle fires a pointermove per frame, and every one of them used to
+    /// push its own undo entry — so a two-second drag left dozens of steps on the stack and
+    /// undoing a trim meant pressing Ctrl+Z until something changed (2026-09-05 audit,
+    /// timeline-6).</para>
+    ///
+    /// <para>The drag mutates through this; <see cref="CommitTrim"/> records the whole gesture once
+    /// when the pointer comes up. Same shape as the transition resize already uses.</para>
+    /// </remarks>
+    public void SetTrimLive(Guid itemId, double start, double end)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            switch (item)
+            {
+                case VideoClip clip:
+                {
+                    var (s, e) = ClampTrim(start, end, clip.Duration);
+                    if (s is null) return;
+                    clip.StartTrim = s.Value; clip.EndTrim = e;
+                    break;
+                }
+                case AudioClip clip:
+                {
+                    var (s, e) = ClampTrim(start, end, clip.Duration);
+                    if (s is null) return;
+                    clip.StartTrim = s.Value; clip.EndTrim = e;
+                    break;
+                }
+                default: return;
+            }
+
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Records one trim gesture, from where it started to where it is now.
+    /// </summary>
+    /// <param name="originalStart">The trim before the drag began.</param>
+    /// <param name="originalEnd">The same.</param>
+    public void CommitTrim(Guid itemId, double originalStart, double originalEnd)
+    {
+        foreach (var track in _tracks)
+        {
+            var item = track.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null) continue;
+            if (track.IsLocked) return;
+
+            var (nowStart, nowEnd) = item switch
+            {
+                VideoClip v => (v.StartTrim, v.EndTrim),
+                AudioClip a => (a.StartTrim, a.EndTrim),
+                _           => (double.NaN, double.NaN),
+            };
+
+            if (double.IsNaN(nowStart)) return;
+
+            // A click that never became a drag changes nothing and deserves no undo step.
+            if (Math.Abs(nowStart - originalStart) < 1e-6 && Math.Abs(nowEnd - originalEnd) < 1e-6)
+                return;
+
+            // Each kind keeps its own command, because an audio trim's undo also has to put back
+            // whatever else that command already restores.
+            PushCommand(item switch
+            {
+                AudioClip a => new UpdateAudioTrimCommand(a, originalStart, originalEnd, nowStart, nowEnd),
+                _           => new UpdateTrimCommand(item, originalStart, originalEnd, nowStart, nowEnd),
+            });
+            Notify();
+            return;
+        }
+    }
+
+    /// <summary>The trim, kept inside the source and the right way round.</summary>
+    private static (double? Start, double End) ClampTrim(double start, double end, double duration)
+    {
+        start = Math.Clamp(start, 0, duration);
+        end   = Math.Clamp(end,   0, duration);
+
+        return start >= end ? (null, end) : (start, end);
+    }
+
     public void UpdateTrim(Guid itemId, double start, double end)
     {
         foreach (var track in _tracks)
@@ -1100,8 +1391,15 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not AudioClip clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
-            var maxFade = clip.Duration / 2.0;
+            // Against the trimmed length, not the source's. A ten-second excerpt of a three-minute
+            // recording accepted a ninety-second fade, which the render then had to apply to ten
+            // seconds of sound (2026-09-05 audit, audio-16).
+            var maxFade = clip.TrimmedDuration / 2.0;
             fadeInSeconds  = Math.Clamp(fadeInSeconds,  0, maxFade);
             fadeOutSeconds = Math.Clamp(fadeOutSeconds, 0, maxFade);
 
@@ -1119,7 +1417,28 @@ public sealed class ClipStore
     /// Re-link a clip to a new MEMFS source after project restore.
     /// Clears <see cref="TrackItem.IsMediaMissing"/> and pushes an undo command.
     /// </summary>
-    public void RelinkClip(Guid itemId, string newMemFsName)
+    /// <param name="opfsExt">
+    /// The extension the replacement was stored under, when it was persisted.
+    /// </param>
+    /// <param name="sourceFileId">
+    /// The server file the replacement is, when it is one — null when it is a file off this
+    /// person's own machine, or when it is not the file the clip previously recorded.
+    /// </param>
+    /// <param name="sourceFileSize">The replacement's size.</param>
+    /// <param name="sourceContentHash">Its hash, when one was taken.</param>
+    /// <remarks>
+    /// <para>Re-linking used to write the browser's session filesystem and nothing else, so the
+    /// replacement lasted exactly as long as the tab: reopening the project showed the clip as
+    /// missing again. The one repair the editor offered did not survive being used
+    /// (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>An image clip was silently not handled at all — its <c>MemFsName</c> was left alone
+    /// while the clip was marked present, so re-linking a picture produced a clip that claimed to
+    /// have media and pointed at nothing.</para>
+    /// </remarks>
+    public void RelinkClip(
+        Guid itemId, string newMemFsName, string? opfsExt = null,
+        Guid? sourceFileId = null, long? sourceFileSize = null, string? sourceContentHash = null)
     {
         foreach (var track in _tracks)
         {
@@ -1128,13 +1447,16 @@ public sealed class ClipStore
 
             string? oldMemFs = item is VideoClip vc ? vc.MemFsName
                              : item is AudioClip ac ? ac.MemFsName
+                             : item is ImageClip ic ? ic.MemFsName
                              : null;
 
-            if (item is VideoClip vc2) vc2.MemFsName = newMemFsName;
-            else if (item is AudioClip ac2) ac2.MemFsName = newMemFsName;
-            item.IsMediaMissing = false;
+            // Built before the edit is applied: it captures what is being replaced.
+            var command = new RelinkClipCommand(
+                item, oldMemFs, newMemFsName,
+                opfsExt, sourceFileId, sourceFileSize, sourceContentHash);
 
-            PushCommand(new RelinkClipCommand(item, oldMemFs, newMemFsName));
+            command.Execute();
+            PushCommand(command);
             Notify();
             return;
         }
@@ -1217,6 +1539,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             var oldVol = clip.Volume;
             clip.Volume = volume;
@@ -1241,6 +1567,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not AudioClip clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             var oldLeft  = clip.LeftVolume;
             var oldRight = clip.RightVolume;
@@ -1267,7 +1597,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            // Replace any existing keyframe at the same position
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ // Replace any existing keyframe at the same position
             var existing = clip.VolumeAutomation.FirstOrDefault(k => Math.Abs(k.Position - position) < 1e-6);
             if (existing is not null)
             {
@@ -1303,7 +1634,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
             if (kf is null) return;
 
             PushCommand(new UpdateVolumeKeyframeCommand(kf, kf.Position, kf.Volume, position, volume));
@@ -1326,7 +1658,8 @@ public sealed class ClipStore
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
 
-            var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
+                       if (track.IsLocked) return;   // a locked track refuses every mutation (audio-23)
+ var kf = clip.VolumeAutomation.FirstOrDefault(k => k.Id == keyframeId);
             if (kf is not null)
             {
                 PushCommand(new RemoveVolumeKeyframeCommand(clip, kf));
@@ -1346,6 +1679,10 @@ public sealed class ClipStore
         {
             var item = track.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is not IHasVolumeAutomation clip) continue;
+            // A locked track refuses every mutation. These went through regardless, so
+            // locking a track stopped it being moved and left its levels wide open
+            // (2026-09-05 audit, audio-23).
+            if (track.IsLocked) return;
 
             if (clip.VolumeAutomation.Count > 0)
             {
@@ -2051,6 +2388,36 @@ public sealed class ClipStore
         Notify();
     }
 
+    /// <summary>
+    /// Applies one change to a title, undoably.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same shape as <see cref="CommitCalloutUpdate"/>, and added for the same reason it
+    /// exists there. Titles were the one thing on the timeline whose edits were not undoable at
+    /// all: <see cref="UpdateTextOverlay"/> wrote straight into the model and pushed nothing, so
+    /// Ctrl+Z after changing a title undid whatever had happened before it (2026-09-05 audit,
+    /// titles-4).</para>
+    ///
+    /// <para>Per property rather than per panel, so undo steps back through the edits somebody
+    /// actually made instead of one opaque "the title changed".</para>
+    /// </remarks>
+    public void CommitTextOverlayUpdate(
+        Guid overlayId, string propertyPath,
+        Action<TextOverlay> apply, Action<TextOverlay> revert)
+    {
+        foreach (var track in _tracks)
+        {
+            var overlay = track.Items.OfType<TextOverlay>().FirstOrDefault(o => o.Id == overlayId);
+            if (overlay is null) continue;
+            if (track.IsLocked) return;
+
+            apply(overlay);
+            PushCommand(new CommitTextOverlayPropertyCommand(overlay, propertyPath, apply, revert));
+            Notify();
+            return;
+        }
+    }
+
     /// <summary>Remove a text overlay by id.</summary>
     public void RemoveTextOverlay(Guid overlayId) => RemoveClip(overlayId);
 
@@ -2697,6 +3064,7 @@ public sealed class ClipStore
                 Order    = pt.Order,
                 IsMuted  = pt.IsMuted,
                 IsLocked = pt.IsLocked,
+                DucksOthers = pt.DucksOthers,
             };
 
             foreach (var pv in pt.VideoClips.OrderBy(c => c.Order))
@@ -2848,6 +3216,11 @@ public sealed class ClipStore
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
+        Redactions        = [.. p.Redactions.Select(r => r with { })],
+        Transform         = p.Transform is null ? null : p.Transform with { },
     };
 
     private static AudioClip RestoreAudioClip(ProjectAudioClip p) => new()
@@ -2866,10 +3239,16 @@ public sealed class ClipStore
         VolumeAutomation = p.VolumeAutomation,
         LeftVolume       = p.LeftVolume,
         RightVolume      = p.RightVolume,
+        MuteAudio        = p.MuteAudio,
+        NoiseReduction   = p.NoiseReduction,
+        Normalise        = p.Normalise,
         LinkedClipId     = p.LinkedClipId,
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
     };
 
     private static Transition RestoreTransition(ProjectTransition p) => new()
@@ -2920,6 +3299,7 @@ public sealed class ClipStore
             FadeInSeconds    = p.FadeInSeconds,
             FadeOutSeconds   = p.FadeOutSeconds,
             Opacity          = p.Opacity,
+        MaxWidth         = p.MaxWidth,
             ShadowColor      = p.ShadowColor,
             ShadowOffsetX    = p.ShadowOffsetX,
             ShadowOffsetY    = p.ShadowOffsetY,
@@ -2946,6 +3326,11 @@ public sealed class ClipStore
         IsMediaMissing   = true,
         OriginalFileName = p.OriginalFileName,
         OpfsExt          = p.OpfsExt,
+        SourceFileId      = p.SourceFileId,
+        SourceFileSize    = p.SourceFileSize,
+        SourceContentHash = p.SourceContentHash,
+        Redactions        = [.. p.Redactions.Select(r => r with { })],
+        Transform         = p.Transform is null ? null : p.Transform with { },
     };
 
     private static CalloutClip RestoreCalloutClip(ProjectCalloutClip p) => new()
@@ -3016,6 +3401,8 @@ public sealed class ClipStore
         Width            = p.Width,
         Height           = p.Height,
         Rotation         = p.Rotation,
+        NativeWidth      = p.NativeWidth,
+        NativeHeight     = p.NativeHeight,
         Opacity          = p.Opacity,
         TintColor        = p.TintColor,
         ControlPointValues = new Dictionary<string, double>(p.ControlPointValues),

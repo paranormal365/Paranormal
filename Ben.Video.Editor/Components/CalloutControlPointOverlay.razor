@@ -140,17 +140,27 @@
         {
             case ShapeType.Arrow:
             case ShapeType.Line:
+                // Box fractions: 0 is the callout's own left/top edge, 1 its right/bottom. They
+                // used to be canvas fractions, which is why moving or resizing a callout left its
+                // arrow behind (2026-09-05 audit, callouts-3).
+                double HandleX(string key, double boxFallback) =>
+                    CalloutControlPointSpace.ToCanvas(GetV(key, boxFallback), clip.X, clip.Width)
+                    * CanvasWidth;
+                double HandleY(string key, double boxFallback) =>
+                    CalloutControlPointSpace.ToCanvas(GetV(key, boxFallback), clip.Y, clip.Height)
+                    * CanvasHeight;
+
                 _handles =
                 [
                     new(CalloutControlPoints.StartX + "|" + CalloutControlPoints.StartY, "Start",
-                        GetV(CalloutControlPoints.StartX, clip.X) * CanvasWidth,
-                        GetV(CalloutControlPoints.StartY, clip.Y + clip.Height / 2) * CanvasHeight),
+                        HandleX(CalloutControlPoints.StartX, 0.0),
+                        HandleY(CalloutControlPoints.StartY, 0.5)),
                     new(CalloutControlPoints.MidX   + "|" + CalloutControlPoints.MidY,   "Curve",
-                        GetV(CalloutControlPoints.MidX,   clip.X + clip.Width / 2)  * CanvasWidth,
-                        GetV(CalloutControlPoints.MidY,   clip.Y + clip.Height / 2) * CanvasHeight),
+                        HandleX(CalloutControlPoints.MidX,   0.5),
+                        HandleY(CalloutControlPoints.MidY,   0.5)),
                     new(CalloutControlPoints.EndX   + "|" + CalloutControlPoints.EndY,   "End",
-                        GetV(CalloutControlPoints.EndX,   clip.X + clip.Width)     * CanvasWidth,
-                        GetV(CalloutControlPoints.EndY,   clip.Y + clip.Height / 2) * CanvasHeight),
+                        HandleX(CalloutControlPoints.EndX,   1.0),
+                        HandleY(CalloutControlPoints.EndY,   0.5)),
                 ];
                 break;
 
@@ -330,8 +340,14 @@
         if (keys.Length == 2)
         {
             var kx = keys[0]; var ky = keys[1];
-            var nx = Math.Clamp(_liveClip.ControlPointValues.GetValueOrDefault(kx, 0.5) + fdx, 0.0, 1.0);
-            var ny = Math.Clamp(_liveClip.ControlPointValues.GetValueOrDefault(ky, 0.5) + fdy, 0.0, 1.0);
+
+            // The drag delta arrives as a fraction of the canvas; the value is a fraction of the
+            // callout's box, so a small box moves its handle further per pixel dragged. Not
+            // clamped to 0–1: an arrow pointing out of its own box is an ordinary thing to draw.
+            var boxW = _liveClip.Width  > 0 ? _liveClip.Width  : 1.0;
+            var boxH = _liveClip.Height > 0 ? _liveClip.Height : 1.0;
+            var nx = _liveClip.ControlPointValues.GetValueOrDefault(kx, 0.5) + fdx / boxW;
+            var ny = _liveClip.ControlPointValues.GetValueOrDefault(ky, 0.5) + fdy / boxH;
             _liveClip.ControlPointValues[kx] = nx;
             _liveClip.ControlPointValues[ky] = ny;
 

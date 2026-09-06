@@ -39,6 +39,19 @@ public sealed class TokenStore
         return _current?.AccessToken;
     }
 
+    /// <summary>Whether the token this store holds has already expired.</summary>
+    /// <remarks>
+    /// The store knew and nothing asked. Every call after expiry therefore went out carrying a
+    /// token the sender already knew was dead, collected a 401, refreshed and went again — two
+    /// round trips where one would do, on a connection that may be somebody's phone
+    /// (2026-09-05 audit, wasm-15).
+    /// </remarks>
+    public async Task<bool> IsAccessTokenExpiredAsync()
+    {
+        await EnsureLoadedAsync();
+        return _current is not null && IsExpired(_current);
+    }
+
     public async Task<string?> GetRefreshTokenAsync()
     {
         await EnsureLoadedAsync();

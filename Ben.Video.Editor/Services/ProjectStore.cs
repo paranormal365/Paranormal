@@ -36,6 +36,10 @@ public sealed class ProjectStore : IAsyncDisposable
     private readonly SourceMounter  _mounter;
     private readonly IJSRuntime     _js;
     private readonly ErrorLogService _errorLog;
+
+    /// <summary>Re-fetching missing media from the server, when the host can.</summary>
+    /// <remarks>Optional: a host with no media library has nothing to fetch from.</remarks>
+    private readonly MediaRelinkService? _relink;
     private readonly MotionKeyframeService _motion;
 
     // Audit #4 — typed localStorage access instead of interpolated eval strings. Imported lazily
@@ -62,9 +66,29 @@ public sealed class ProjectStore : IAsyncDisposable
     public string CurrentProjectName { get; set; } = DefaultName();
 
     /// <summary>
-    /// ID of the currently loaded project, or <c>null</c> when no saved project is open.
+    /// The key this project is stored under in this browser, or null when it has never been saved
+    /// here.
     /// </summary>
-    public Guid? CurrentProjectId { get; private set; }
+    /// <remarks>
+    /// <para>Deliberately not the same thing as <see cref="CurrentServerId"/>. There used to be one
+    /// field for both, and opening a project from the server set it to the server's row id — so
+    /// the next local save wrote to browser storage under a key from the server's namespace. Two
+    /// unrelated identifiers sharing a field is the kind of thing that works until the day two
+    /// systems disagree about what a Guid means (2026-09-05 audit, F15).</para>
+    ///
+    /// <para>Opening a server project leaves this null on purpose: pressing Save then keeps a
+    /// local copy under a key of its own rather than pretending the server's row lives here.</para>
+    /// </remarks>
+    public Guid? CurrentLocalId { get; private set; }
+
+    /// <summary>
+    /// The server row this project came from or was saved to, or null when it exists only here.
+    /// </summary>
+    /// <remarks>
+    /// What a publish attaches its video to, and what a save-to-server updates instead of
+    /// creating a second row (2026-09-05 audit, persistence-13 and site-4).
+    /// </remarks>
+    public Guid? CurrentServerId { get; set; }
 
     /// <summary>
     /// <c>true</c> when the editor state has changed since the last save or open.
@@ -81,8 +105,10 @@ public sealed class ProjectStore : IAsyncDisposable
 
     public ProjectStore(ClipStore clips, ProjectService projectService,
         OPFSService opfs, FfmpegService ffmpeg, SourceMounter mounter,
-        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog)
+        MotionKeyframeService motion, IJSRuntime js, ErrorLogService errorLog,
+        MediaRelinkService? relink = null)
     {
+        _relink         = relink;
         _clips          = clips;
         _projectService = projectService;
         _opfs           = opfs;
@@ -355,7 +381,12 @@ public sealed class ProjectStore : IAsyncDisposable
         finally { _restoring = false; }
 
         CurrentProjectName = name;
-        CurrentProjectId   = serverId;
+
+        // The server's row, not this browser's key. Setting the local key from the server id is
+        // what used to fork a server project into browser storage under a foreign identifier
+        // (2026-09-05 audit, F15).
+        CurrentServerId    = serverId;
+        CurrentLocalId     = null;
         IsDirty            = false;
         OnChanged?.Invoke();
         _ = Task.Run(async () => await RestoreOpfsFilesAsync(file));
@@ -373,8 +404,8 @@ public sealed class ProjectStore : IAsyncDisposable
         var projectName = name?.Trim() is { Length: > 0 } n ? n : CurrentProjectName;
         CurrentProjectName = projectName;
 
-        var id  = CurrentProjectId ?? Guid.NewGuid();
-        CurrentProjectId = id;
+        var id = CurrentLocalId ?? Guid.NewGuid();
+        CurrentLocalId = id;
 
         try
         {
@@ -453,7 +484,7 @@ public sealed class ProjectStore : IAsyncDisposable
 
             var summary = Projects.FirstOrDefault(p => p.Id == id);
             CurrentProjectName = summary?.Name ?? file.ProjectName ?? DefaultName();
-            CurrentProjectId   = id;
+            CurrentLocalId     = id;
             IsDirty            = false;
             await PersistActiveIdAsync(id);
             OnChanged?.Invoke();
@@ -508,7 +539,7 @@ public sealed class ProjectStore : IAsyncDisposable
         if (summary is null || summary.Name == trimmed) return;
 
         summary.Name = trimmed;
-        if (CurrentProjectId == id) CurrentProjectName = trimmed;
+        if (CurrentLocalId == id) CurrentProjectName = trimmed;
 
         try
         {
@@ -538,7 +569,7 @@ public sealed class ProjectStore : IAsyncDisposable
             // Item #69 — an active-pointer left dangling at a just-deleted id would otherwise
             // make the NEXT reload's restore silently no-op forever (RestoreLastActiveAsync
             // treats a stale pointer as "nothing to restore").
-            if (CurrentProjectId == id) await PersistActiveIdAsync(null);
+            if (CurrentLocalId == id) await PersistActiveIdAsync(null);
             OnChanged?.Invoke();
         }
         catch (Exception ex)
@@ -559,7 +590,8 @@ public sealed class ProjectStore : IAsyncDisposable
     /// </summary>
     public async Task NewProjectAsync()
     {
-        CurrentProjectId   = null;
+        CurrentLocalId     = null;
+        CurrentServerId    = null;
         CurrentProjectName = DefaultName();
         IsDirty            = false;
         await PersistActiveIdAsync(null); // clears the restore-on-reload pointer
@@ -698,6 +730,161 @@ public sealed class ProjectStore : IAsyncDisposable
         // adds makes it visible on every single restore, so a one-time notify once the whole
         // batch finishes is worth doing here rather than leaving a fixed project looking broken.
         _clips.NotifyChanged();
+
+        // Whatever is still missing may be on the server.
+        await OfferToRefetchAsync();
+    }
+
+    // ── Re-fetching missing media ─────────────────────────────────────────────
+
+    /// <summary>
+    /// The clips a re-fetch could bring back, when there are any.
+    /// </summary>
+    /// <remarks>
+    /// Set when a restore left media missing that the server can supply and the total is large
+    /// enough to be worth asking about. The host renders the question; this store never decides on
+    /// its own to move hundreds of megabytes.
+    /// </remarks>
+    public IReadOnlyList<MediaRelinkCandidate> PendingRefetch { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="PendingRefetch"/> becomes non-empty.</summary>
+    public event Action? OnRefetchOffered;
+
+    /// <summary>
+    /// The placed clips a re-fetch applies to.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately not the media bin. A project saved without a bin section is given one on
+    /// open, seeded from the timeline with a <b>fresh id per entry</b> — so fetching media for a
+    /// bin entry writes a new copy of the file under a new id on every single reload. Found on
+    /// screen: one reload of a one-clip project left three copies of the same file in storage.</para>
+    ///
+    /// <para>Bin entries do not need their own copy. They are clones of a placed clip, made to
+    /// represent the source in the panel, and <see cref="ShareMediaWithBinEntriesAsync"/> points
+    /// each one at the media its clip already has.</para>
+    /// </remarks>
+    private IEnumerable<TrackItem> AllRestorableItems =>
+        _clips.AllVideoClips.Cast<TrackItem>()
+            .Concat(_clips.AllAudioClips)
+            .Concat(_clips.AllImageClips);
+
+    /// <summary>
+    /// Points each media-bin entry at the media the clip it was cloned from now has.
+    /// </summary>
+    /// <remarks>
+    /// The bin card is a view of a source, not a second copy of it. Sharing the placed clip's
+    /// mounted file is what the bin does within a session anyway.
+    /// </remarks>
+    private void ShareMediaWithBinEntries()
+    {
+        foreach (var entry in _clips.MediaBin.Where(e => e.IsMediaMissing))
+        {
+            var placed = _clips.AllVideoClips.Cast<TrackItem>()
+                .Concat(_clips.AllAudioClips)
+                .Concat(_clips.AllImageClips)
+                .FirstOrDefault(c => c.SourceBinId == entry.Id && !c.IsMediaMissing);
+
+            if (placed is null) continue;
+
+            var memFsName = placed switch
+            {
+                VideoClip v => v.MemFsName,
+                AudioClip a => a.MemFsName,
+                ImageClip i => i.MemFsName,
+                _           => null,
+            };
+            if (memFsName is null) continue;
+
+            switch (entry)
+            {
+                case VideoClip v: v.MemFsName = memFsName; break;
+                case AudioClip a: a.MemFsName = memFsName; break;
+                case ImageClip i: i.MemFsName = memFsName; break;
+            }
+
+            entry.IsMediaMissing = false;
+        }
+    }
+
+    /// <summary>
+    /// Fetches missing media back from the server, or asks first when there is a lot of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what makes a project portable. Restoring reads this browser's storage by clip
+    /// id, so a project opened on a second machine — or after the storage was cleared — came back
+    /// with every clip missing and a manual re-link per clip as the only way out, while help
+    /// promised you could pick a project up on another machine (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>Small fetches happen without asking, because being asked about four megabytes is
+    /// noise. Anything larger, or anything whose size was never recorded, waits for an answer —
+    /// somebody opening a project on a tethered phone to check one title should not have an
+    /// evening's session recordings start moving in silence.</para>
+    /// </remarks>
+    private async Task OfferToRefetchAsync()
+    {
+        if (_relink is null) return;
+
+        // Clip art first, and never asked about: an icon is kilobytes, and the alternative is a
+        // layer that vanishes from the finished video while the timeline looks fine
+        // (2026-09-05 audit, callouts-14).
+        var art = _clips.AllClipArtClips.ToList();
+        if (art.Count > 0)
+        {
+            var restoredArt = await _relink.RestoreClipArtAsync(art);
+            if (restoredArt > 0 || art.Any(a => a.IsMediaMissing)) _clips.NotifyChanged();
+        }
+
+        if (!_relink.IsAvailable) return;
+
+        var candidates = MediaRelinkService.Candidates(AllRestorableItems);
+        if (candidates.Count == 0) return;
+
+        if (MediaRelinkPlan.ShouldAskFirst(candidates))
+        {
+            PendingRefetch = candidates;
+            OnRefetchOffered?.Invoke();
+            return;
+        }
+
+        await RefetchMissingMediaAsync(candidates);
+    }
+
+    /// <summary>
+    /// Fetches the media for <paramref name="candidates"/>, or for everything offered.
+    /// </summary>
+    /// <remarks>
+    /// Public so a host can call it when somebody answers the question. Nothing here can make a
+    /// project worse: a clip whose file could not be fetched, or came back different, is left
+    /// exactly as it was.
+    /// </remarks>
+    public async Task<MediaRelinkService.Outcome> RefetchMissingMediaAsync(
+        IReadOnlyList<MediaRelinkCandidate>? candidates = null, CancellationToken ct = default)
+    {
+        PendingRefetch = [];
+        if (_relink is null) return new MediaRelinkService.Outcome(0, 0, 0);
+
+        var wanted = (candidates ?? MediaRelinkService.Candidates(AllRestorableItems))
+            .Select(c => c.ClipId)
+            .ToHashSet();
+
+        var items = AllRestorableItems.Where(i => wanted.Contains(i.Id)).ToList();
+        if (items.Count == 0) return new MediaRelinkService.Outcome(0, 0, 0);
+
+        var outcome = await _relink.RelinkAsync(items, ct);
+
+        if (outcome.Restored > 0)
+        {
+            ShareMediaWithBinEntries();
+            _clips.NotifyChanged();
+        }
+        return outcome;
+    }
+
+    /// <summary>Dismisses the offer without fetching anything.</summary>
+    public void DeclineRefetch()
+    {
+        PendingRefetch = [];
+        OnChanged?.Invoke();
     }
 
     /// <summary>

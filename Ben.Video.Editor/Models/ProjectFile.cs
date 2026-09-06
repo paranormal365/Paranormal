@@ -17,7 +17,7 @@ public sealed class ProjectFile
     /// and what tells a reader that a file came from a newer editor than itself — which used to
     /// open silently and half-work.
     /// </remarks>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>Format version — bump when breaking changes are made to this schema.</summary>
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -99,6 +99,9 @@ public sealed class ProjectTrack
     public bool      IsMuted  { get; set; }
     public bool      IsLocked { get; set; }
 
+    /// <summary>Whether everything else drops in level while this track plays.</summary>
+    public bool      DucksOthers { get; set; }
+
     public List<ProjectVideoClip>    VideoClips    { get; set; } = [];
     public List<ProjectAudioClip>    AudioClips    { get; set; } = [];
     public List<ProjectImageClip>    ImageClips    { get; set; } = [];
@@ -162,6 +165,24 @@ public sealed class ProjectVideoClip
     /// </summary>
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
+
+    /// <summary>Parts of this clip's picture that must not be shown.</summary>
+    public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>Where this clip's picture sits in the frame. Null means it fills it.</summary>
+    public ClipTransform? Transform { get; set; }
 }
 
 /// <summary>Serialized <see cref="AudioClip"/>.</summary>
@@ -185,12 +206,33 @@ public sealed class ProjectAudioClip
     public double LeftVolume       { get; set; } = 1.0;
     public double RightVolume      { get; set; } = 1.0;
 
+    /// <summary>Whether this clip is silenced.</summary>
+    public bool   MuteAudio        { get; set; }
+
+    /// <summary>How hard to pull hiss out of the recording, 0 to 1.</summary>
+    public double NoiseReduction   { get; set; }
+
+    /// <summary>Whether to even out this clip's loudness.</summary>
+    public bool   Normalise        { get; set; }
+
     /// <summary>The picture this sound belongs with. The other half of the link.</summary>
     public Guid?  LinkedClipId     { get; set; }
 
     public bool   IsMediaMissing   { get; set; } = true;
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
 }
 
 /// <summary>Serialized <see cref="Transition"/>.</summary>
@@ -250,6 +292,11 @@ public sealed class ProjectTextOverlay
     public double FadeOutSeconds   { get; set; }
     public double Opacity          { get; set; } = 1.0;
 
+    /// <summary>
+    /// The widest the title may draw, as a fraction of the canvas. Null means no limit.
+    /// </summary>
+    public double? MaxWidth        { get; set; }
+
     // Shadow (packed ARGB double via ColorHelper)
     public double ShadowColor      { get; set; }
     public double ShadowOffsetX    { get; set; } = 3.0;
@@ -275,6 +322,24 @@ public sealed class ProjectImageClip
     public bool   IsMediaMissing   { get; set; } = true;
     public string? OriginalFileName { get; set; }
     public string? OpfsExt          { get; set; }
+
+    /// <summary>
+    /// Where the media came from, so it can be fetched again on another machine.
+    /// </summary>
+    /// <remarks>
+    /// The three together are what makes a project portable: the id says which server file, and
+    /// the size and hash say whether what came back is the same file (2026-09-05 audit, F14). The
+    /// hash is null above the size ceiling — see <c>MediaFingerprint</c>.
+    /// </remarks>
+    public Guid?   SourceFileId      { get; set; }
+    public long?   SourceFileSize    { get; set; }
+    public string? SourceContentHash { get; set; }
+
+    /// <summary>Parts of this clip's picture that must not be shown.</summary>
+    public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>Where this clip's picture sits in the frame. Null means it fills it.</summary>
+    public ClipTransform? Transform { get; set; }
 }
 
 /// <summary>Serialized <see cref="AppliedEffect"/></summary> — effect id + parameter snapshot.</summary>
@@ -424,6 +489,10 @@ public sealed class ProjectClipArtClip
     public double Width    { get; set; } = 0.2;
     public double Height   { get; set; } = -1.0;
     public double Rotation { get; set; }
+
+    /// <summary>The artwork's own pixel size, so a missing height resolves the same way everywhere.</summary>
+    public int?   NativeWidth      { get; set; }
+    public int?   NativeHeight     { get; set; }
     public double Opacity  { get; set; } = 1.0;
     public double? TintColor { get; set; }
 

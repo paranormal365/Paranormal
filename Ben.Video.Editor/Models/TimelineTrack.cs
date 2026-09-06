@@ -21,6 +21,19 @@ public sealed class TimelineTrack
     /// <summary>Whether the track is muted (audio suppressed during playback and export).</summary>
     public bool IsMuted { get; set; }
 
+    /// <summary>
+    /// Whether everything else should drop in level while this track is playing.
+    /// </summary>
+    /// <remarks>
+    /// <para>What a narration track needs. Music and room tone sit at a level chosen for the
+    /// stretches with nobody talking, and the moment a voice comes in they are too loud — so the
+    /// usual remedy is a volume envelope drawn by hand around every line, redrawn whenever the
+    /// timing moves (2026-09-05 audit, the completeness critic's ducking item).</para>
+    ///
+    /// <para>Off by default. A project with no narration track mixes exactly as it did.</para>
+    /// </remarks>
+    public bool DucksOthers { get; set; }
+
     /// <summary>Whether the track is locked (items cannot be moved or trimmed).</summary>
     public bool IsLocked { get; set; }
 

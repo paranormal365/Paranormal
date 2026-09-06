@@ -322,6 +322,12 @@
     // ── Library state ─────────────────────────────────────────────────────────
     private bool                           _libraryLoading;
     private string?                        _libraryError;
+
+    /// <summary>The library refused us, which is a different thing from it being empty.</summary>
+    private bool                           _libraryNeedsSignIn;
+
+    /// <summary>The host's own sign-in chrome, so the refusal can offer a way in.</summary>
+    [Parameter] public RenderFragment?     HostStatusContent { get; set; }
     private IReadOnlyList<MediaLibraryFile> _libraryFiles = [];
     private readonly HashSet<Guid>          _libraryImporting = [];
 
@@ -871,6 +877,24 @@
             }
         }
 
+        // Reload. The list was fetched once and never again, so a file uploaded from another tab
+        // — or the render this editor had just published — did not appear without reloading the
+        // whole page. A failed load had the same problem in reverse: the retry gate is "no files
+        // yet", which an error also satisfies, so there was nothing to press (2026-09-05 audit,
+        // media-10).
+        __builder.OpenComponent<TelerikButton>(seq++);
+        __builder.AddAttribute(seq++, "OnClick",
+            Microsoft.AspNetCore.Components.EventCallback.Factory
+                .Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(
+                    this, _ => RefreshLibraryAsync()));
+        __builder.AddAttribute(seq++, "Title",      "Reload this list from the server");
+        __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.ArrowRotateCw);
+        __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+        __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+        __builder.AddAttribute(seq++, "Enabled",    !_libraryLoading);
+        __builder.AddAttribute(seq++, "Class",      "bv-browser__scope-refresh");
+        __builder.CloseComponent();
+
         __builder.CloseElement(); // scope bar
     };
 
@@ -887,6 +911,25 @@
             __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Medium);
             __builder.CloseComponent();
             __builder.OpenElement(seq++, "span"); __builder.AddContent(seq++, "Loading library…"); __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else if (_libraryNeedsSignIn)
+        {
+            // A refusal, said as a refusal, with whatever way in the host offers. An empty tab or
+            // a raw HTTP message both describe a state that is not true (2026-09-05 audit, F11 and
+            // site-11).
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin");
+            __builder.OpenElement(seq++, "p");
+            __builder.AddContent(seq++,
+                "Sign in to see the files you have uploaded. Everything else in the editor works "
+                + "signed out.");
+            __builder.CloseElement();
+
+            if (HostStatusContent is not null)
+            {
+                __builder.AddContent(seq++, HostStatusContent);
+            }
+
             __builder.CloseElement();
         }
         else if (_libraryError is not null)
@@ -1228,26 +1271,56 @@
         await LoadLibraryAsync();
     }
 
+    /// <summary>
+    /// Reloads the server list, whatever state it is in.
+    /// </summary>
+    /// <remarks>
+    /// Public so the editor can call it after publishing a render, which is the one moment the
+    /// list is known to be out of date because this editor is what changed it.
+    /// </remarks>
+    public Task RefreshLibraryAsync() => LoadLibraryAsync();
+
     private async Task LoadLibraryAsync()
     {
         var generation = ++_libraryLoadGeneration;
 
         _libraryLoading = true;
         _libraryError   = null;
+        _libraryNeedsSignIn = false;
         StateHasChanged();
 
         IReadOnlyList<MediaLibraryFile> files = [];
         string? error = null;
-        try   { files = await MediaLib.GetFilesAsync(CurrentScope); }
-        catch (Exception ex) { error = ex.Message; ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex); }
+        var needsSignIn = false;
+
+        try
+        {
+            files = await MediaLib.GetFilesAsync(CurrentScope);
+        }
+        catch (MediaLibraryUnauthorizedException)
+        {
+            // Not an error to describe, a state with an action attached. This used to show either
+            // an empty tab or a raw HTTP message, both of which say something untrue about why
+            // there is nothing here (2026-09-05 audit, F11 and site-11).
+            needsSignIn = true;
+        }
+        catch (Exception ex)
+        {
+            // Not ex.Message. On WebAssembly an unreachable server arrives as the browser's own
+            // "TypeError: Failed to fetch", which was shown verbatim (2026-09-05 audit, found on
+            // screen while verifying the refusal state).
+            error = MediaLibraryProblemText.Describe(ex);
+            ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex);
+        }
 
         // A newer scope was chosen while this was in flight. Its results are the answer to a
         // question nobody is asking any more, and writing them would undo the newer selection.
         if (generation != _libraryLoadGeneration) return;
 
-        _libraryFiles   = files;
-        _libraryError   = error;
-        _libraryLoading = false;
+        _libraryFiles     = files;
+        _libraryError     = error;
+        _libraryNeedsSignIn = needsSignIn;
+        _libraryLoading   = false;
         StateHasChanged();
 
         // Phase 150 — seed the "downloaded locally" badge from a real OPFS check so it survives a
@@ -1450,6 +1523,27 @@
                 InvokeAsync(StateHasChanged);
             });
 
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+
+            // The browser fetches it itself when the host can say where from. Under Blazor Server
+            // the alternative pulls the file into the server's memory, copies it again into a byte
+            // array, and ships it over the circuit — three copies of a file the browser could have
+            // fetched directly, with a 2 GB ceiling on the way (2026-09-05 audit, site-2).
+            var directUrl = await MediaLib.GetDownloadUrlAsync(file.Id);
+            if (directUrl is not null)
+            {
+                var written = await OPFS.DownloadToClipAsync(directUrl, file.Id, ext);
+                if (written >= 0)
+                {
+                    _libraryCached.Add(file.Id);
+                    return;
+                }
+
+                // Fell through: the direct fetch failed, so try the way that always worked.
+                ErrorLog.Log($"ClipBrowser.DownloadAndCacheAsync({file.FileName})",
+                    "Direct download failed; falling back to fetching through the host.");
+            }
+
             byte[] bytes;
             try
             {
@@ -1462,12 +1556,11 @@
                 // JS-interop marshaling for ffmpeg's own worker traffic, so heavy concurrent
                 // ffmpeg activity (e.g. the Server tab's own automatic eager thumbnail prefetch)
                 // can measurably delay an otherwise-fast download's completion callback —
-                // live-reproduced at 31.2s for a normally-68ms request. See
-                // DemoMediaLibraryProvider's own HttpClient.Timeout comment for the full story.
+                // live-reproduced at 31.2s for a normally-68ms request. The provider's own
+                // HttpClient.Timeout is generous for the same reason.
                 throw new TimeoutException($"Downloading {file.FileName} timed out.", ocex);
             }
 
-            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
             await OPFS.WriteFromBytesAsync(file.Id, ext, bytes);
             _libraryCached.Add(file.Id);
         }
@@ -1533,6 +1626,12 @@
             // record, the main ffmpeg instance mounts it (zero-copy WORKERFS) rather than a full
             // MEMFS byte write — falling back to a real write only when mounting isn't possible.
             await OPFS.WriteAsync(clipId, ext, cachedFile);
+
+            // Where this media came from, recorded on the clip so the project can find it again on
+            // another machine. Without it a project restores by reading THIS browser's storage by
+            // clip id, so opening it anywhere else marks every clip missing (2026-09-05 audit,
+            // F14). Taken once here rather than per branch — all three place the same file.
+            var print = await OPFS.FingerprintAsync(clipId, ext);
             var memFsName = await Mounter.MountAsync(clipId, ext);
             if (memFsName is null)
             {
@@ -1568,6 +1667,9 @@
                     Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
                     HasAudio = meta.HasAudio,
                     ThumbnailUrls = [.. thumbs], OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 };
                 // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
                 // the primary track AND computes its TimelinePosition — calling Clips.AddClip
@@ -1587,6 +1689,9 @@
                 {
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 };
                 // Without an audio track to land on, the clip would silently vanish —
                 // decoded and reported "done" but never placed anywhere. Create one
@@ -1622,6 +1727,9 @@
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = 5.0, Width = libW, Height = libH,
                     ThumbnailUrl = thumbUrl, TimelinePosition = imgPos, OpfsExt = ext,
+                    SourceFileId      = file.Id,
+                    SourceFileSize    = print?.Size,
+                    SourceContentHash = print?.Hash,
                 });
             }
             Update(status, ImportStage.Done, 100);

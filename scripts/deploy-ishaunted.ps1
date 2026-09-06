@@ -70,7 +70,7 @@ param(
     [string]   $SqlConnectionString =
         'data source=localhost;initial catalog=IsHauntedDb;integrated security=True;persist security info=False;encrypt=True;trustservercertificate=True;',
     [string]   $SidecarDrop,
-    [string[]] $SidecarRids  = @('win-x64', 'osx-arm64'),
+    [string[]] $SidecarRids  = @('win-x64', 'osx-arm64', 'osx-x64'),
     [switch]   $StdoutLog,
     [switch]   $SkipBuild,
     [switch]   $SkipSmoke,
@@ -652,6 +652,18 @@ if ($Apps -contains 'editor') {
         throw 'no web.config in the editor publish - IIS will refuse .wasm and .dat files'
     }
     Write-Detail 'web.config present (WASM MIME types)'
+
+    # The editor's own build identity, asserted below exactly as the website's is. Without it the
+    # editor's only smoke check was "does index.html contain the right <base href>", which the
+    # PREVIOUS deploy's index.html answers just as happily - so a deploy that copied nothing
+    # passed (2026-09-05 audit, wasm-8). A plain wwwroot file works here because this app is
+    # served by IIS as static files, with no build-time asset manifest deciding what exists.
+    $script:EditorStamp = [Guid]::NewGuid().ToString('N')
+    $editorCommit = ''
+    try { $editorCommit = (& git -C (Split-Path $PSScriptRoot -Parent) rev-parse HEAD 2>$null) } catch { }
+    $editorStampJson = '{"stamp":"' + $script:EditorStamp + '","commit":"' + $editorCommit + '","stampedUtc":"' + [DateTime]::UtcNow.ToString('o') + '"}'
+    [IO.File]::WriteAllText((Join-Path $www 'build-info.json'), $editorStampJson)
+    Write-Detail ("editor build stamp {0}" -f $script:EditorStamp)
 }
 
 # =============================================================================
@@ -714,6 +726,30 @@ if (($Apps -contains 'files') -and -not $StageOnly) {
         [IO.File]::WriteAllText((Join-Path $dstDir 'checksums.txt'), "$hash  $name`n")
         $mb = [Math]::Round((Get-Item $src).Length / 1MB)
         Write-Detail "staged $name ($mb MB) -> /files/sidecar-video/$rid/"
+
+        # The downloads page links one fixed filename per platform, and this block stages whichever
+        # of two formats it found. When they disagree the page offers a 404, silently, to somebody
+        # who came to the site specifically to download the thing (2026-09-05 audit, F17). Rewrite
+        # the deployed page to name what is actually there, and say which.
+        # The artifact, not the deployed copy: this section runs before section 4 copies the
+        # editor to the site, so patching here is what reaches the server.
+        $page = Join-Path $editorOut 'wwwroot\downloads\index.html'
+        if (Test-Path $page) {
+            $html = [IO.File]::ReadAllText($page)
+            $rewrote = $false
+            foreach ($stale in $candidates) {
+                if ($stale -eq $name) { continue }
+                $from = "/files/sidecar-video/$rid/$stale"
+                if ($html.Contains($from)) {
+                    $html = $html.Replace($from, "/files/sidecar-video/$rid/$name")
+                    $rewrote = $true
+                }
+            }
+            if ($rewrote) {
+                [IO.File]::WriteAllText($page, $html)
+                Write-Detail "downloads page now links $name for $rid"
+            }
+        }
     }
 }
 
@@ -868,6 +904,21 @@ if (-not $SkipSmoke) {
     if ($Apps -contains 'editor') {
         $checks += @{ url = "$SiteUrl$EditorBase"; what = 'editor'; expect = "<base href=""$EditorBase""" }
         $checks += @{ url = "$SiteUrl${EditorBase}downloads/"; what = 'sidecar downloads page' }
+
+        # Demands the stamp this run just wrote, so a deploy that copied nothing fails instead of
+        # being confirmed by the build it was supposed to replace (2026-09-05 audit, wasm-8).
+        if ($script:EditorStamp) {
+            $checks += @{ url = "$SiteUrl${EditorBase}build-info.json?cb=$([Guid]::NewGuid().ToString('N'))"
+                          what = 'editor build identity'; expect = $script:EditorStamp
+                          why = 'the editor is serving a build-info.json OLDER than the one just copied - the deploy did not land' }
+        }
+
+        # The ffmpeg core is served by the app now rather than fetched from a CDN, and it is the
+        # one thing whose absence leaves an editor that loads, looks right and cannot start
+        # (2026-09-05 audit, media-13).
+        $checks += @{ url = "$SiteUrl${EditorBase}_content/Ben.Video.Editor/js/ffmpeg-core/st/ffmpeg-core.wasm"
+                      what = 'vendored ffmpeg core'
+                      why = 'the editor cannot start its engine without it' }
     }
     if ($Apps -contains 'files') {
         foreach ($rid in $SidecarRids) {

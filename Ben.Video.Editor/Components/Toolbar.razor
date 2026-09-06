@@ -254,6 +254,17 @@
                 }
         </ToolBarTemplateItem>
 
+        @* Whatever the host wants beside its own status — the standalone editor puts its sign-in
+           state here. The editor has no idea who is signed in and should not guess; it only leaves
+           room. Without this the standalone host had no sign-in door at all, and the only way in
+           was to know the /login URL and type it (2026-09-05 audit, F11). *@
+        @if (HostStatusContent is not null)
+        {
+            <ToolBarTemplateItem>
+                @HostStatusContent
+            </ToolBarTemplateItem>
+        }
+
         @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip: MEMFS residency, the
            operation trace and the raw log tail, one click away instead of only reachable by
            exporting the error log after the fact.
@@ -530,6 +541,9 @@
 
     /// <summary>Restarts the video engine after a wedge or a crash.</summary>
     [Parameter] public EventCallback OnResetEngine { get; set; }
+
+    /// <summary>Host chrome shown in the toolbar, such as a sign-in chip.</summary>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
 
     private bool _showSidecarPanel;
 

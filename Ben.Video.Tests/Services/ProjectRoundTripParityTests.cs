@@ -33,11 +33,21 @@ public sealed class ProjectRoundTripParityTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotPersisted = new()
     {
-        ["TrackItem.MemFsName"] =
+        // Declared on each clip type, not on TrackItem — these keys used to say TrackItem and
+        // therefore matched nothing. Parity passed anyway because both sides default to null,
+        // which is exactly the blind spot Every_fixture_gives_each_property_a_distinctive_value
+        // exists to close.
+        ["VideoClip.MemFsName"] =
             "where the media sits in this browser session's filesystem, remounted on open",
+        ["AudioClip.MemFsName"] =
+            "where the media sits in this browser session's filesystem, remounted on open",
+        ["ImageClip.MemFsName"] =
+            "where the media sits in this browser session's filesystem, remounted on open",
+        ["AudioClip.BlobUrl"] =
+            "a blob URL belonging to this page; recreated when the audio is remounted",
         ["TrackItem.IsMediaMissing"] =
             "true until the media is remounted, so it is decided on open rather than restored",
-        ["TrackItem.ThumbnailUrl"] =
+        ["ImageClip.ThumbnailUrl"] =
             "a blob URL belonging to this page; regenerated on open",
         ["VideoClip.ThumbnailUrls"] =
             "blob URLs for the filmstrip; regenerated on open",
@@ -45,10 +55,6 @@ public sealed class ProjectRoundTripParityTests
             "derived from the audio itself and recomputed on open",
         ["CalloutClip.AssetMissing"] =
             "decided when the asset is resolved on open",
-        ["ClipArtClip.NativeWidth"] =
-            "read from the asset when it resolves on open",
-        ["ClipArtClip.NativeHeight"] =
-            "read from the asset when it resolves on open",
         ["TrackItem.SourceBinId"] =
             "re-linked to the media bin entry on open, which for an older project is created then",
         ["TrackItem.LayerIndex"] =
@@ -148,6 +154,87 @@ public sealed class ProjectRoundTripParityTests
     };
 
     // ── One test per kind of thing on the timeline ────────────────────────────
+
+    /// <summary>
+    /// Every fixture actually says something about every property it is meant to cover.
+    /// </summary>
+    /// <remarks>
+    /// <para>The parity check compares a saved item with a restored one. A property the fixture
+    /// leaves at its default round-trips whatever the mapper does, because both sides land on the
+    /// same default — so an untouched property makes the parity test look green while proving
+    /// nothing at all.</para>
+    ///
+    /// <para>This is not hypothetical. Three new source-file properties were added, mapped on both
+    /// sides, and the parity test passed just as happily with the save mapper's line deleted. The
+    /// fixture's own doc comment already warned about this; nothing enforced it.</para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(EveryFixture))]
+    public void Every_fixture_gives_each_property_a_distinctive_value(string label, object fixture)
+    {
+        var pristine = Activator.CreateInstance(fixture.GetType())!;
+
+        var untouched = SettableProperties(fixture.GetType())
+            .Where(p => !NotPersisted.ContainsKey($"{p.DeclaringType!.Name}.{p.Name}"))
+            .Where(p => !NotPersisted.ContainsKey($"{label}.{p.Name}"))
+            .Where(p => !MayBeLeftAtDefault(p, label))
+            .Where(p => Same(p.GetValue(fixture), p.GetValue(pristine)))
+            .Select(p => $"{label}.{p.Name} is still its default, so parity proves nothing about it")
+            .ToList();
+
+        Assert.Empty(untouched);
+    }
+
+    public static TheoryData<string, object> EveryFixture() => new()
+    {
+        { nameof(VideoClip),    Fixtures.VideoClip()    },
+        { nameof(AudioClip),    Fixtures.AudioClip()    },
+        { nameof(ImageClip),    Fixtures.ImageClip()    },
+        { nameof(CalloutClip),  Fixtures.Callout()      },
+        { nameof(TextOverlay),  Fixtures.TextOverlay()  },
+        { nameof(ClipArtClip),  Fixtures.ClipArt()      },
+    };
+
+    /// <summary>
+    /// Overlays — callouts, titles, clip art — that are drawn rather than imported.
+    /// </summary>
+    private static readonly HashSet<string> DrawnNotImported =
+        [nameof(CalloutClip), nameof(TextOverlay), nameof(ClipArtClip)];
+
+    /// <summary>
+    /// Properties on <c>TrackItem</c> that only mean anything for imported media.
+    /// </summary>
+    /// <remarks>
+    /// They live on the base type because every item carries them, but a title has no source file
+    /// and no media bin entry, so a fixture leaving them alone is right rather than incomplete.
+    /// </remarks>
+    private static readonly HashSet<string> AboutImportedMedia =
+    [
+        nameof(TrackItem.SourceFileId), nameof(TrackItem.SourceFileSize),
+        nameof(TrackItem.SourceContentHash), nameof(TrackItem.SourceBinId),
+        nameof(TrackItem.OriginalFileName), nameof(TrackItem.OpfsExt),
+        nameof(TrackItem.LinkedClipId),
+    ];
+
+    /// <summary>
+    /// Anything else a fixture may leave alone, each with its reason.
+    /// </summary>
+    private static readonly HashSet<string> AllowedAtDefault =
+    [
+        // Assigned by the model itself, so there is no default to differ from.
+        "VideoClip.Id", "AudioClip.Id", "ImageClip.Id", "CalloutClip.Id",
+        "TextOverlay.Id", "ClipArtClip.Id",
+
+        // An image is never the other half of a link; only picture and sound are paired.
+        "ImageClip.LinkedClipId",
+
+        // Read from the asset when it resolves on open, like the two native dimensions beside them.
+        "ClipArtClip.Settings", "ClipArtClip.ControlPoints",
+    ];
+
+    private static bool MayBeLeftAtDefault(PropertyInfo property, string typeName) =>
+        AllowedAtDefault.Contains($"{typeName}.{property.Name}")
+        || (DrawnNotImported.Contains(typeName) && AboutImportedMedia.Contains(property.Name));
 
     [Fact]
     public void A_video_clip_comes_back_as_it_was_saved()

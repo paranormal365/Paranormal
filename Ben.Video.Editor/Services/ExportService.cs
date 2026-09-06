@@ -563,16 +563,59 @@ public sealed class ExportService : IAsyncDisposable
                 // Muting the video track silences its clips, the same as muting each of them.
                 var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, !_clips.IsAudible(clip),
                     sourceHasAudio: clip.HasAudio,
-                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
+                    transform: clip.Transform);
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
 
-            segments.Add(segName);
+            var finished = await ApplyRedactionsAsync(job, segName, clip.Redactions, s, tempFiles);
+
+            segments.Add(finished);
             job.CompletedPhases.Add($"Trimmed: {clip.Name}");
         }
 
         Advance(job, 45, "All clips trimmed.");
         return segments;
+    }
+
+    /// <summary>
+    /// Obscures a segment's redacted regions, if it has any.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own pass over the finished segment, because hiding part of a picture is a filter
+    /// graph rather than a chain — split, crop, blur, lay it back.</para>
+    ///
+    /// <para><b>A failure here fails the export.</b> Every other optional step in this pipeline
+    /// degrades: a thumbnail that will not generate costs a thumbnail. This one cannot, because
+    /// carrying on would produce a finished video with the face still in it, handed to somebody
+    /// who asked for it to be hidden and has no reason to check (2026-09-05 audit, the
+    /// completeness critic's first item).</para>
+    /// </remarks>
+    private async Task<string> ApplyRedactionsAsync(
+        ExportJob job, string segment, IReadOnlyList<RedactionRegion> regions,
+        ExportSettings s, List<string> tempFiles)
+    {
+        if (regions.Count == 0) return segment;
+
+        var (vw, vh) = ResolveCanvas(s);
+        var redacted = $"redact_{Guid.NewGuid():N}.mp4";
+
+        var args = ExportArgBuilders.BuildRedactionArgs(segment, redacted, regions, vw, vh, s);
+        if (args is null)
+        {
+            // Every region was too small to draw. Saying so beats a silent nothing, because the
+            // person who drew them believes something is hidden.
+            job.Warnings.Add(
+                "A hidden area was too small to render and has been left out. Check the picture "
+                + "before sharing it.");
+            return segment;
+        }
+
+        tempFiles.Add(redacted);
+        await _ffmpeg.ExecAsync(args, job.CancellationToken);
+
+        if (tempFiles.Remove(segment)) await _ffmpeg.DeleteFileAsync(segment);
+        return redacted;
     }
 
     /// <summary>
@@ -658,7 +701,9 @@ public sealed class ExportService : IAsyncDisposable
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
 
-            segments.Add(segName);
+            var finished = await ApplyRedactionsAsync(job, segName, clip.Redactions, s, tempFiles);
+
+            segments.Add(finished);
             job.CompletedPhases.Add($"Rendered image: {clip.Name}");
         }
 
@@ -1557,7 +1602,19 @@ public sealed class ExportService : IAsyncDisposable
         // pinned by AmixArgBuilderTests, whose expectations were transcribed from this code
         // BEFORE the move.
         var n = segmentNames.Count;
-        await _ffmpeg.ExecAsync(ExportArgBuilders.BuildAmixArgs(videoInput, segmentNames, outputName, s), job.CancellationToken);
+
+        // Which segments everything else drops under. The plan keeps the clip order, so a
+        // segment's index is its clip's index (2026-09-05 audit, the critic's ducking item).
+        var ducking = audioClips
+            .Select((clip, index) => (clip, index))
+            .Where(x => _clips.FindTrackOf(x.clip.Id) is { DucksOthers: true })
+            .Select(x => x.index)
+            .ToList();
+
+        await _ffmpeg.ExecAsync(
+            ExportArgBuilders.BuildAmixArgs(
+                videoInput, segmentNames, outputName, s, duckingSegments: ducking),
+            job.CancellationToken);
 
         // Item #38 phase D — the pre-mix video and every per-clip audio segment are consumed now.
         if (tempFiles.Remove(videoInput)) await _ffmpeg.DeleteFileAsync(videoInput);
@@ -1653,9 +1710,17 @@ public sealed class ExportService : IAsyncDisposable
             var next = $"composite_{index:D3}_{job.Id:N}.mp4";
             tempFiles.Add(next);
 
+            var placement = item switch
+            {
+                VideoClip v => v.Transform,
+                ImageClip i => i.Transform,
+                _           => null,
+            };
+
             await _ffmpeg.ExecAsync(ExportArgBuilders.BuildLayerCompositeArgs(
                 composited, segName, next, item.TimelinePosition, item.EffectiveLength, s,
-                layerHasAudio: segHasAudio),
+                layerHasAudio: segHasAudio,
+                transform: placement, frameWidth: vw, frameHeight: vh),
                 job.CancellationToken);
 
             if (tempFiles.Remove(segName)) await _ffmpeg.DeleteFileAsync(segName);
@@ -1679,12 +1744,12 @@ public sealed class ExportService : IAsyncDisposable
     private string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
-        string? extraVf = null, bool sourceHasAudio = true)
+        string? extraVf = null, bool sourceHasAudio = true, ClipTransform? transform = null)
     {
         var (vw, vh) = ResolveCanvas(s);
         return ExportArgBuilders.BuildTrimArgs(
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
-            outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
+            outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio, transform: transform);
     }
 
     private static IEnumerable<string> QualityArgs(ExportSettings s)
@@ -1797,7 +1862,8 @@ public sealed class ExportService : IAsyncDisposable
             ContentType:     MimeType(job.Settings.OutputFormat),
             SizeBytes:       job.OutputSizeBytes,
             DurationSeconds: job.Duration,
-            ReadBytesAsync:  () => ReadRetainedBytesAsync(blobUrl));
+            ReadBytesAsync:  () => ReadRetainedBytesAsync(blobUrl),
+            BlobUrl:         blobUrl);
 
         // NOT in a finally: a host that throws (upload failed) must keep its output, because the
         // destination prompt's whole recovery story is "you can still save it to your machine".

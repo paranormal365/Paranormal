@@ -10,13 +10,14 @@
     "version": "9.0.1"
   },
   "osx-x64": {
-    "url": "https://TODO-pin-a-specific-evermeet.cx-build/ffmpeg-osx64.zip",
-    "archiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "ffprobeUrl": "https://TODO-pin-a-specific-evermeet.cx-build/ffprobe-osx64.zip",
-    "ffprobeArchiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "ffprobeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "version": "TODO"
+    "_comment": "Pinned 2026-09-05 so an Intel Mac build could actually be produced \u2014 this entry was a TODO placeholder, so scripts/fetch-ffmpeg.sh osx-x64 failed and installer/macos/build.sh osx-x64 refused for want of a bundled ffmpeg. Same source as osx-arm64 (ffmpeg.martin-riedl.de), chosen for the same reasons: native static builds at immutable per-build paths with their own .sha256 files alongside. Both archives were checked against those published hashes before extraction, and both binaries are Mach-O x86_64. The version is 9.0.1 rather than arm64's 9.0 because that is what the source had built for amd64; each RID pins independently and nothing requires them to match.",
+    "url": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1787081194_9.0.1/ffmpeg.zip",
+    "archiveSha256": "5bdead62ff504ab9b447cc72b212c4fb481e3f7de5877d427a51bee8136dda40",
+    "sha256": "56f4a0478fff60fa549ab7aa03759d7ab116dadcdf63dba4d466ebfba1280b2f",
+    "ffprobeUrl": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1787081194_9.0.1/ffprobe.zip",
+    "ffprobeArchiveSha256": "34511bbcf1988ad2886023bf5ace4f44cf62e6defeb3d194d6f7619e5b061f7f",
+    "ffprobeSha256": "dd287b051b569382fe32eb73003b04035d416bccfa30148c140e35636cd3a1d8",
+    "version": "9.0.1"
   },
   "osx-arm64": {
     "_comment": "Item #70 phase 174 \u2014 the first REAL pin in this file, added so the sidecar could be tested against genuine ffmpeg instead of Ben.Video.Sidecar.FakeFfmpeg. Source: ffmpeg.martin-riedl.de, chosen for macOS/arm64 because it publishes native arm64 static builds at immutable per-build paths with their own .sha256 files alongside (evermeet.cx, the placeholder this replaced, ships x86_64 only). ffmpeg and ffprobe are separate archives here, which is why 'ffprobeUrl' exists. Verified locally: Mach-O arm64, ffmpeg 9.0, encoders libx264/libx265/aac/libmp3lame/libopus, muxers mp4/webm/matroska.",
