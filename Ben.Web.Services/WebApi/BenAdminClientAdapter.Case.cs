@@ -296,6 +296,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default)
         => _api.PostAsync<ExportAudioMixRequest, CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/audio-mix/export", request, token);
 
+    public Task<(CaseFileRecord? Result, string? Error)> ExportAudioMixWithReasonAsync(
+        Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<ExportAudioMixRequest, CaseFileRecord>(
+            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/audio-mix/export", request, token);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     public Task<LoadResult<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)

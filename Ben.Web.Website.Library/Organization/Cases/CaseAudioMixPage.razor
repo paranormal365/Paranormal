@@ -8,6 +8,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject IMediaUrlBuilder MediaUrls
 
 <PageTitle>Audio Mixer — @(_case?.DisplayLabel ?? "Case")</PageTitle>
 
@@ -33,16 +34,35 @@ else
 
         @* ── Transport bar ─────────────────────────────────────────────────── *@
         <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded border bg-body-secondary">
-            <button type="button" class="btn btn-secondary btn-sm" disabled="@(!(false))" title="Live preview isn't available yet">▶ Play</button>
-            <button type="button" class="btn btn-secondary btn-sm" disabled="@(!(false))" title="Live preview isn't available yet">⏸ Pause</button>
-            <button type="button" class="btn btn-secondary btn-sm" disabled="@(!(false))" title="Live preview isn't available yet">⏹ Stop</button>
+            @* These were three disabled buttons with a tooltip saying preview was not available, so
+               the only way to hear an arrangement was to render it, look at the case page and come
+               back (2026-09-06 audio walk, finding K-transport). *@
+            <button type="button" id="mix-play" class="btn btn-secondary btn-sm"
+                    @onclick="PlayPreviewAsync" disabled="@(!(HasAnyClips && !_previewPlaying))"
+                    title="Hear the arrangement without rendering it">▶ Play</button>
+            <button type="button" id="mix-pause" class="btn btn-secondary btn-sm"
+                    @onclick="PausePreviewAsync" disabled="@(!_previewPlaying)">⏸ Pause</button>
+            <button type="button" id="mix-stop" class="btn btn-secondary btn-sm"
+                    @onclick="StopPreviewAsync" disabled="@(!(_previewPlaying || _previewPaused))">⏹ Stop</button>
             @if (_exportError is not null)
             {
                 <span class="small text-danger ms-auto">@_exportError</span>
             }
-            else
+            else if (_addError is not null)
+            {
+                <span class="small text-warning ms-auto">@_addError</span>
+            }
+            else if (_previewError is not null)
+            {
+                <span class="small text-warning ms-auto">@_previewError</span>
+            }
+            else if (!HasAnyClips)
             {
                 <span class="small text-secondary ms-auto">Add clips from the case's Files tab to get started.</span>
+            }
+            else
+            {
+                <span class="small text-secondary ms-auto">@PreviewStatus</span>
             }
             <button type="button" class="btn btn-primary btn-sm" @onclick="ExportMixAsync" disabled="@(!(HasAnyClips && !_exporting))">
                 @(_exporting ? "Exporting…" : "Export Mix")
@@ -127,10 +147,10 @@ else
                                         <div id="@($"clip-{clip.ClipId}")"
                                              data-clip-id="@clip.ClipId"
                                              class="rounded px-2 py-1 text-white small text-truncate"
-                                             style="position:absolute;top:8px;left:@(clip.OffsetSeconds * PxPerSecond)px;width:@(DefaultClipSeconds * PxPerSecond)px;height:80px;background:#5b6fd8;cursor:grab;user-select:none;"
-                                             title="@clip.FileName">
+                                             style="position:absolute;top:8px;left:@(clip.OffsetSeconds * PxPerSecond)px;width:@(Math.Max(24, clip.DrawnSeconds * PxPerSecond))px;height:80px;background:#5b6fd8;cursor:grab;user-select:none;@(clip.LengthIsKnown ? "" : "border:2px dashed rgba(255,255,255,.6);")"
+                                             title="@(clip.LengthIsKnown ? $"{clip.FileName} — {clip.DrawnSeconds:0.#}s" : $"{clip.FileName} — length unknown, drawn at a placeholder width")">
                                             @clip.FileName
-                                            <span class="float-end" style="cursor:pointer;" @onclick="@(() => RemoveClip(track, clip))" @onclick:stopPropagation="true">✕</span>
+                                            <span class="float-end mix-clip-remove" style="cursor:pointer;" @onclick="@(() => RemoveClip(track, clip))" @onclick:stopPropagation="true">✕</span>
                                         </div>
                                     }
                                 </div>
@@ -149,10 +169,36 @@ else
 
     private const int TrackCount = 8;
     private const int PxPerSecond = 8;
-    private const int TimelineSeconds = 180; // 3-minute default visible window
-    private const int DefaultClipSeconds = 15; // visual placeholder width — real duration isn't probed until export (E4)
+    /// <summary>The shortest timeline the grid ever draws, so an empty mixer still has a ruler.</summary>
+    private const int MinimumTimelineSeconds = 180;
 
-    private static int TimelineWidthPx => TimelineSeconds * PxPerSecond;
+    /// <summary>How wide a clip is drawn when nobody has measured the recording.</summary>
+    private const int DefaultClipSeconds = 15;
+
+    /// <summary>
+    /// How far the ruler and the lanes reach: past the end of the longest thing on the grid.
+    /// </summary>
+    /// <remarks>
+    /// Fixed at three minutes before, while a clip could be longer than that — so a recording could
+    /// extend past the end of the timeline it was placed on and the ruler stopped describing it
+    /// (2026-09-06 audio walk, finding K-length).
+    /// </remarks>
+    private int TimelineSeconds
+    {
+        get
+        {
+            var furthest = _tracks
+                .SelectMany(t => t.Clips)
+                .Select(c => c.OffsetSeconds + c.DrawnSeconds)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            // Round up to a whole ten seconds so the ruler's labels land on its marks.
+            return (int)(Math.Ceiling(Math.Max(MinimumTimelineSeconds, furthest + 20) / 10.0) * 10);
+        }
+    }
+
+    private int TimelineWidthPx => TimelineSeconds * PxPerSecond;
 
     private sealed class MixClip
     {
@@ -161,6 +207,21 @@ else
         public Guid UploadFileId { get; init; }
         public string FileName { get; init; } = "";
         public double OffsetSeconds { get; set; }
+
+        /// <summary>How long the recording is, or null when nobody has measured it.</summary>
+        public double? DurationSeconds { get; init; }
+
+        /// <summary>
+        /// The width to draw, and whether it is real.
+        /// </summary>
+        /// <remarks>
+        /// Every block used to be drawn 15 seconds wide whatever it held, so a three-minute
+        /// recording and a four-second one were the same size and the grid could not represent what
+        /// was on it (2026-09-06 audio walk, finding K-length). An unmeasured file is drawn at the
+        /// old placeholder width and says so, rather than claiming a length it does not know.
+        /// </remarks>
+        public double DrawnSeconds => DurationSeconds is { } d && d > 0 ? d : DefaultClipSeconds;
+        public bool   LengthIsKnown => DurationSeconds is > 0;
     }
 
     private sealed class MixTrack
@@ -225,19 +286,42 @@ else
         }
     }
 
+    /// <summary>
+    /// Places a file on the first free track, or says there is no room.
+    /// </summary>
+    /// <remarks>
+    /// A ninth clip used to fall back to track one and land on top of whatever was already there at
+    /// offset zero, with no message — so the mixer silently accepted work it could not hold, and
+    /// the export refused it afterwards (2026-09-06 audio walk, finding K-9th).
+    /// </remarks>
     private void AddClipToTrack(CaseFileRecord file)
     {
-        var track = _tracks.FirstOrDefault(t => t.Clips.Count == 0) ?? _tracks[0];
+        var track = _tracks.FirstOrDefault(t => t.Clips.Count == 0);
+        if (track is null)
+        {
+            _addError = $"All {TrackCount} tracks are in use. Remove a clip before adding another.";
+            return;
+        }
+
+        _addError = null;
         track.Clips.Add(new MixClip
         {
-            CaseFileId = file.Id,
-            UploadFileId = file.UploadFileId,
-            FileName = file.FileName,
-            OffsetSeconds = 0,
+            CaseFileId      = file.Id,
+            UploadFileId    = file.UploadFileId,
+            FileName        = file.FileName,
+            DurationSeconds = file.DurationSeconds,
+            OffsetSeconds   = 0,
         });
     }
 
-    private void RemoveClip(MixTrack track, MixClip clip) => track.Clips.Remove(clip);
+    /// <summary>Why the last Add did nothing, when it did nothing.</summary>
+    private string? _addError;
+
+    private void RemoveClip(MixTrack track, MixClip clip)
+    {
+        track.Clips.Remove(clip);
+        _addError = null;   // there is room again
+    }
 
     private bool HasAnyClips => _tracks.Any(t => t.Clips.Count > 0);
 
@@ -257,17 +341,21 @@ else
 
         try
         {
-            var result = await AdminClient.ExportAudioMixAsync(OrgId, CaseId, new ExportAudioMixRequest(trackInputs));
+            // "Please try again" was the answer to every failure, including a 403 that will never
+            // succeed however many times it is tried (2026-09-06 audio walk, finding K-export).
+            var (result, error) = await AdminClient.ExportAudioMixWithReasonAsync(
+                OrgId, CaseId, new ExportAudioMixRequest(trackInputs));
+
             if (result is null)
             {
-                _exportError = "Export failed. Please try again.";
+                _exportError = error ?? "The mix could not be exported.";
                 return;
             }
             NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}");
         }
-        catch
+        catch (Exception ex)
         {
-            _exportError = "Export failed. Please try again.";
+            _exportError = $"The mix could not be exported: {ex.Message}";
         }
         finally
         {
@@ -286,11 +374,94 @@ else
         StateHasChanged();
     }
 
+    // ── Live preview ──────────────────────────────────────────────────────────
+
+    private bool    _previewPlaying;
+    private bool    _previewPaused;
+    private string? _previewError;
+
+    /// <summary>Names this page's preview inside the module, which keeps one per page.</summary>
+    private string PreviewKey => $"mix-{CaseId:N}";
+
+    private string PreviewStatus => _previewPlaying
+        ? "Playing the arrangement."
+        : _previewPaused ? "Paused." : "Ready to play.";
+
+    /// <summary>
+    /// The clips that will be heard, in the shape the module wants.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="MixAudibility"/>, the same rule the export uses, so what is heard here
+    /// and what is rendered there cannot be different mixes.
+    /// </remarks>
+    private List<object> AudibleClipsForPreview()
+    {
+        var audibleTracks = MixAudibility.Audible(_tracks, t => t.Mute, t => t.Solo);
+
+        return [.. audibleTracks.SelectMany(t => t.Clips.Select(c => (object)new
+        {
+            url           = MediaUrls.Download(c.UploadFileId),
+            offsetSeconds = c.OffsetSeconds,
+            gainDb        = t.VolumeDb,
+            pan           = t.Pan,
+        }))];
+    }
+
+    private async Task PlayPreviewAsync()
+    {
+        if (_module is null) return;
+        _previewError = null;
+
+        var clips = AudibleClipsForPreview();
+        if (clips.Count == 0)
+        {
+            _previewError = "Nothing is audible — every track with a clip on it is muted, or another track is soloed.";
+            return;
+        }
+
+        try
+        {
+            await _module.InvokeVoidAsync("preparePreview", PreviewKey, clips);
+            var seconds = await _module.InvokeAsync<double>("playPreview", PreviewKey, clips);
+            _previewPlaying = true;
+            _previewPaused  = false;
+
+            if (seconds <= 0)
+                _previewError = "None of these clips could be decoded in the browser.";
+        }
+        catch (Exception ex)
+        {
+            _previewError = $"The preview could not start: {ex.Message}";
+        }
+    }
+
+    private async Task PausePreviewAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("pausePreview", PreviewKey);
+        _previewPlaying = false;
+        _previewPaused  = true;
+    }
+
+    private async Task StopPreviewAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("stopPreview", PreviewKey);
+        _previewPlaying = false;
+        _previewPaused  = false;
+    }
+
     public async ValueTask DisposeAsync()
     {
         _dotNetRef?.Dispose();
         if (_module is not null)
         {
+            // The audio context outlives the component unless it is told otherwise, and a page left
+            // and returned to would then hold two.
+            try { await _module.InvokeVoidAsync("disposePreview", PreviewKey); }
+            catch (JSDisconnectedException) { /* circuit already gone */ }
+            catch (Exception) { /* the module may already be unloaded */ }
+
             try { await _module.DisposeAsync(); }
             catch (JSDisconnectedException) { /* circuit already gone */ }
         }

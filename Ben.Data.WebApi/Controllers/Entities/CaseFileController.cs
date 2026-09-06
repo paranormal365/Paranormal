@@ -60,7 +60,14 @@ public sealed class CaseFileController : BenControllerBase
             .OrderByDescending(f => f.DateCreated)
             .ToListAsync(ct);
 
-        return Ok(files.Select(ToRecord));
+        // How long each one is, for the callers that lay files out on a timeline. One query for the
+        // whole page rather than one per file — the mixer asks for every audio file on a case.
+        var fileIds  = files.Select(f => f.UploadFileId).ToList();
+        var durations = await db.UploadFileMetadata.AsNoTracking()
+            .Where(m => fileIds.Contains(m.UploadFileId) && m.DurationSeconds != null)
+            .ToDictionaryAsync(m => m.UploadFileId, m => m.DurationSeconds, ct);
+
+        return Ok(files.Select(f => ToRecord(f, durations.GetValueOrDefault(f.UploadFileId))));
     }
 
     [HttpPost]
@@ -254,8 +261,9 @@ public sealed class CaseFileController : BenControllerBase
                Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
-    private static CaseFileRecord ToRecord(CaseFile f) => new()
+    private static CaseFileRecord ToRecord(CaseFile f, double? durationSeconds = null) => new()
     {
+        DurationSeconds = durationSeconds,
         Id = f.Id,
         CaseId = f.CaseId,
         UploadFileId = f.UploadFileId,

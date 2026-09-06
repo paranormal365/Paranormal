@@ -79,9 +79,17 @@
                 <span class="badge fs-6 @_case.Status.BadgeClass()">
                     @_case.Status.Label()
                 </span>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
-                    🎚 Audio Mixer
-                </button>
+                @* The mixer's only outcome is attaching a rendered file to this case, and the
+                   export endpoint requires Cases.Create. The button was shown to everyone, so a
+                   read-only member could arrange a whole mix and meet a 403 at the end of it
+                   (2026-09-06 audio walk, finding K-perm). Same grant, same door. *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+                {
+                    <button type="button" id="case-audio-mixer" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
+                        🎚 Audio Mixer
+                    </button>
+                }
                 <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
                         title="How cases go public" @onclick="StartTourAsync">
                     <BenIcon Name="help-circle" />
