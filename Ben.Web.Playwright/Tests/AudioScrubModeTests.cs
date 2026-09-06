@@ -39,7 +39,12 @@ public class AudioScrubModeTests : BenTestBase
         if (!await caseItem.IsVisibleAsync()) return false;
         await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
 
-        await OpenTabAsync("Files", Page.Locator("#case-file-upload"));
+        // The upload input is display:none behind its "Upload File" label, and OpenTabAsync waits
+        // for the expected element to be VISIBLE — so this waited on a hidden input and timed out on
+        // a Files tab that had opened perfectly. Found by the 2026-09-06 audio walk, the first time
+        // this test ran under the harness at all.
+        await OpenTabAsync("Files", Main.GetByText("Upload File", new() { Exact = false }).First);
+        await Expect(Page.Locator("#case-file-upload")).ToBeAttachedAsync(new() { Timeout = 15_000 });
         return true;
     }
 
