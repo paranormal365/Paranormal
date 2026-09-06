@@ -181,6 +181,17 @@ public interface IBenCaseClient
     /// <summary>Renders the placed clips down to a single mixed audio file and saves it to the case's Files tab.</summary>
     Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Renders a mix, and on refusal hands back the server's own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The mixer answered every failure with "Export failed. Please try again." — including a 403,
+    /// which will never succeed however many times it is tried, and every bounds refusal added in
+    /// phase 1 (2026-09-06 audio walk, finding K-export).
+    /// </remarks>
+    Task<(CaseFileRecord? Result, string? Error)> ExportAudioMixWithReasonAsync(
+        Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);

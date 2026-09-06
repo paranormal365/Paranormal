@@ -69,8 +69,9 @@ public sealed class CaseAudioMixController : BenControllerBase
         if (caseFiles.Values.Any(f => !f.UploadFile.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)))
             return BadRequest("Only audio files can be placed in the mixer.");
 
-        var anySolo = request.Tracks.Any(t => t.Solo);
-        var audible = request.Tracks.Where(t => !t.Muted && (!anySolo || t.Solo)).ToList();
+        // The same rule the mixer page uses to decide what its preview plays — shared, so a preview
+        // and the export it previews cannot be different mixes.
+        var audible = MixAudibility.Audible(request.Tracks);
         if (audible.Count == 0) return BadRequest("At least one track must be audible (not muted, and soloed if any track is soloed).");
 
         var openStreams = new List<Stream>();

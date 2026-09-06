@@ -160,6 +160,56 @@ public class CaseFileControllerTests
         Assert.Empty(list);
     }
 
+    /// <summary>
+    /// A listed file carries how long it is, when that has been measured.
+    /// </summary>
+    /// <remarks>
+    /// The mixer draws each placed clip at its real length and had nothing to draw it from, so
+    /// every block was the same width — a three-minute recording and a four-second one looked
+    /// identical and the grid could not represent what was on it (2026-09-06 audio walk, finding
+    /// K-length).
+    /// </remarks>
+    [Fact]
+    public async Task GetAll_CarriesTheDurationOfAnythingThatHasBeenMeasured()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+
+        var measured   = await SeedSourceFileAsync(factory, userId, storagePath: "users/owner/a.wav");
+        var unmeasured = await SeedSourceFileAsync(factory, userId, storagePath: "users/owner/b.wav");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFileMetadata.Add(new UploadFileMetadata
+            {
+                Id = Guid.NewGuid(), UploadFileId = measured.Id, MediaKind = "Audio",
+                DurationSeconds = 186.4, ExtractedAtUtc = DateTime.UtcNow,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = measured.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = unmeasured.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, userId);
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var files = Assert.IsAssignableFrom<IEnumerable<CaseFileRecord>>(ok.Value).ToList();
+
+        Assert.Equal(186.4, files.Single(f => f.UploadFileId == measured.Id).DurationSeconds);
+
+        // Null, not zero: "nobody has measured this" is a different thing from "no length", and the
+        // mixer draws the two differently.
+        Assert.Null(files.Single(f => f.UploadFileId == unmeasured.Id).DurationSeconds);
+    }
+
     // ── Upload ────────────────────────────────────────────────────────────────
 
     [Fact]

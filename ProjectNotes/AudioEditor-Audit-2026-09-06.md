@@ -73,12 +73,12 @@ guard test that fails on any picker fed a list of tuples.
 
 | id | verdict | what happened |
 |---|---|---|
-| K-length | **OBSERVED** | Every clip block is 120 px wide whatever the file is; the fixture is 3:06 and the ruler only reaches 60 s. The grid cannot represent the file it holds. |
-| K-9th | **OBSERVED** | Nine adds put nine blocks on the grid, no message; blocks stack at offset 0 once the eight tracks are full. |
-| K-transport | **OBSERVED** | Play/Pause/Stop disabled, no player. |
-| K-remove | **OBSERVED** | The clip block swallows the click meant for its ✕; Playwright could not deliver it in 8 s. |
+| K-length | **OBSERVED → FIXED** | Every clip block is 120 px wide whatever the file is; the fixture is 3:06 and the ruler only reaches 60 s. The grid cannot represent the file it holds. |
+| K-9th | **OBSERVED → FIXED** | Nine adds put nine blocks on the grid, no message; blocks stack at offset 0 once the eight tracks are full. |
+| K-transport | **OBSERVED → FIXED** | Play/Pause/Stop disabled, no player. |
+| K-remove | **OBSERVED → FIXED** | The clip block swallows the click meant for its ✕; Playwright could not deliver it in 8 s. |
 | K-export | PASS | Exporting eight stacked copies produced a mix and returned to the case. |
-| K-perm | partly | The Viewer persona cannot see the case at all, so the ungated Mixer button was not reachable from that seat; the gap in the plan (button shown to a member without `Cases.Create`) needs the Member persona, James — added to phase 4's checks. |
+| K-perm | **FIXED** | The Viewer persona cannot see the case at all, so the ungated Mixer button was not reachable from that seat; the gap in the plan (button shown to a member without `Cases.Create`) needs the Member persona, James — added to phase 4's checks. |
 
 ## Tests and harness
 
@@ -294,6 +294,34 @@ side by side. Phase 1a fixed the editor and missed this one. It is fullscreen no
 players all decoding before the test's own edit gets any attention: a Silence that takes ten seconds
 alone took ninety-four sixth in line and timed out. The waits account for it; the pile-up itself is
 worth removing when phase 6 does the harness work.
+
+## Phase 4 — the case mixer
+
+**A new finding, and the reason K-length existed.** The mixer drew every clip the same width
+because it had no lengths to draw with, and it had none because **no MP3 uploaded to this site has
+ever been measured**. `FileMetadataExtractorService` constructed `Mp3FileReader` directly, which
+defaults to the ACM codec — `Msacm32.dll`, a Windows system library. Off Windows every MP3 threw
+`DllNotFoundException`, a bare `catch` swallowed it, and the row was written with no duration, no
+sample rate and no channel count. Silently: an MP3 nobody had measured looked exactly like one that
+could not be. This is the same Windows-only decoder `AudioSourceReader` exists to replace, still
+living in the extractor, and the site runs on Linux. Nothing caught it because no unit test had ever
+decoded an MP3; there is a fixture and four tests now.
+
+Everything else the walk saw here is fixed:
+
+| id | what it is now |
+|---|---|
+| K-length | Clips are drawn at their real length, an unmeasured one is dashed and says "length unknown", and the timeline reaches past the longest thing on it rather than stopping at three minutes. Verified: the 3:06 fixture draws 1492 px where it used to draw 120. |
+| K-transport | A real Web Audio preview: each clip fetched and decoded once, scheduled at its offset through a gain and a pan. It shares the mute-and-solo rule with the export through `MixAudibility` and uses the same pan law, so a preview and the thing it previews cannot be different mixes. |
+| K-9th | Refused with a sentence instead of stacked on top of the first clip. |
+| K-remove | The drag handler called `preventDefault` on every press, swallowing the click meant for the ✕ inside the block. A press that starts on the ✕ is no longer a drag. |
+| K-export | "Please try again" was the answer to every failure, including a 403 that never will. The server's own sentence now. |
+| K-perm | The button is gated on the same `Cases.Create` grant the export requires. The walk could not check this from the Viewer seat; from the Member seat the button is correctly absent, and from the administrator's it is present. |
+| 12 | Stereo survives the mixer, the soft knee only touches what is over full scale, and resampling goes through NAudio's band-limited resampler. Linear interpolation folded content above the new limit back into the audible band as tones that were never in the room — on this site, the worst artefact available. |
+
+**One thing a guard caught in my own work.** The permission test first ended with `Assert.Pass` on
+both branches, which `PlaywrightTestsCanFailTests` refused: a browser test that cannot fail reports
+coverage that is not there. It asserts both seats outright now.
 
 ## What this changes in the plan
 

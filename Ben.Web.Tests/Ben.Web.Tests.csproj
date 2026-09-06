@@ -30,4 +30,13 @@
          Data Protection ring (UploadTicketService and kin). -->
     <ProjectReference Include="..\Ben.Web.Website\Ben.Web.Website.csproj" />
   </ItemGroup>
+
+  <!-- The repo's only real MP3, shared with the Playwright fixtures rather than copied: the MP3
+       decode path has no other way to be tested, and it was broken off Windows for as long as
+       nothing decoded one in a unit test (2026-09-06 audio audit, phase 4). -->
+  <ItemGroup>
+    <None Include="..\Ben.Web.Playwright\Fixtures\test-audio.mp3" Link="Fixtures\test-audio.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

@@ -231,17 +231,67 @@ public class CaseAudioMixControllerTests
     [Fact]
     public async Task Export_SoloedTrack_ExcludesNonSoloedTracks()
     {
+        // This asserted only that the request came back 200, which it would have done with both
+        // tracks in the mix — the one thing solo is for was not checked at all (2026-09-06 audio
+        // audit). Two clearly different tones, and the un-soloed one must not be in the result.
         var (factory, orgId, caseId, userId) = await SeedAsync();
         var store = new Dictionary<string, byte[]>();
-        var soloed = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(440, 1));
-        var other = await SeedCaseFileAsync(factory, caseId, userId, store, "b.wav", CreateSineWav(880, 1));
-        var ctrl = BuildController(factory, userId, store);
+        var soloed = await SeedCaseFileAsync(factory, caseId, userId, store, "a.wav", CreateSineWav(300, 1));
+        var other  = await SeedCaseFileAsync(factory, caseId, userId, store, "b.wav", CreateSineWav(1200, 1));
+
+        byte[]? exported = null;
+        var ctrl = BuildController(factory, userId, store, bytes => exported = bytes);
 
         var result = await ctrl.Export(orgId, caseId,
             RequestFor((soloed.Id, false, true), (other.Id, false, false)), default);
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.IsType<CaseFileRecord>(ok.Value);
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.NotNull(exported);
+
+        // 300 Hz alone crosses zero 300 times a second. With the 1.2 kHz track mixed in as well the
+        // count rises to about 600, which is what this used to let through unnoticed.
+        Assert.InRange(DominantFrequencyHz(exported!), 260, 360);
+    }
+
+    /// <summary>
+    /// Estimates the dominant frequency of the left channel of a stereo 16-bit WAV, by counting
+    /// upward zero crossings.
+    /// </summary>
+    private static double DominantFrequencyHz(byte[] wavBytes)
+    {
+        using var ms = new MemoryStream(wavBytes);
+        using var r  = new BinaryReader(ms);
+        r.ReadBytes(4); r.ReadInt32(); r.ReadBytes(4);
+
+        var sampleRate = 0;
+        short[] interleaved = [];
+        while (ms.Position < ms.Length)
+        {
+            var chunkId   = new string(r.ReadChars(4));
+            var chunkSize = r.ReadInt32();
+            if (chunkId == "fmt ")
+            {
+                r.ReadInt16(); r.ReadInt16();
+                sampleRate = r.ReadInt32();
+                r.ReadBytes(chunkSize - 8);
+            }
+            else if (chunkId == "data")
+            {
+                var raw = r.ReadBytes(chunkSize);
+                interleaved = new short[raw.Length / 2];
+                Buffer.BlockCopy(raw, 0, interleaved, 0, raw.Length);
+            }
+            else r.ReadBytes(chunkSize);
+        }
+
+        var left = new short[interleaved.Length / 2];
+        for (var i = 0; i < left.Length; i++) left[i] = interleaved[i * 2];
+
+        var crossings = 0;
+        for (var i = 1; i < left.Length; i++)
+            if (left[i - 1] < 0 && left[i] >= 0) crossings++;
+
+        return left.Length == 0 ? 0 : crossings / (left.Length / (double)sampleRate);
     }
 
     [Fact]
