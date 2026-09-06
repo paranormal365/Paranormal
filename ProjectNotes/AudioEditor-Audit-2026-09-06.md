@@ -377,6 +377,76 @@ caption confidently described bands in it. The capture uses Viridis and the mel 
 caption says what is in the picture. Worth remembering: a screenshot is evidence, and a caption is a
 claim about it.
 
+## Phase 6 — test close-out
+
+**Twenty-two audio API calls had no test of any kind.** A route with a typo in it is a 404, and
+every one of these methods turns a 404 into null or an empty list, which the pages render as "no
+markers", "no notes", "no saved clips". Nothing throws and nothing is logged, so the whole feature
+reports an empty recording. `AudioApiRoutesTests` now checks each address and verb, plus the two
+contracts that carry meaning: a scan that found nothing is an empty list while a scan that did not
+happen is null, and a refusal written as a sentence reaches the caller while a `ProblemDetails` blob
+does not.
+
+**`EvpDetectionOptions.Validate` had none either** — six rules, checked at both ends of each range.
+And every detector test ran one of the three presets, so the fine-tune panel's individual dials were
+untested: a change that stopped `options` being read would have left them all green.
+
+**Regression E0 has a guard.** The capture-phase `pointerdown` handler once claimed every press, so
+grabbing a region's edge drew a new region instead of resizing it — move and resize unreachable by
+mouse. The guard drags an edge and asserts the region grew and no second one appeared.
+
+**Two tests had never run.** `AudioScrubModeTests`, the repo's only audio browser test before this
+audit, looked for a *link* containing "Belmont"; the case list renders a card with its own Open
+button and no such link, so the helper returned false and both tests `Assert.Ignore`d on every run —
+reported as skipped, which nobody reads as broken. They use the maintained helper now and pass.
+
+**V (NEW, M) — FIXED. Changing a setting and closing the editor lost the change.** The colour-ramp
+picker fires its save without waiting for it, and the modal's close handler resets every one of
+those fields — so a save landing after the reset wrote the *defaults* over what was chosen. It only
+looked reliable because a hand-run test paused between the two; on a clean database with the fixture
+running in order it lost the change every time. The close handler awaits the save before resetting.
+
+**W (NEW, M) — FIXED. Two saves a second apart crashed the config endpoint.** The editor saves the
+view as controls are used, and the colour-ramp picker does it without being awaited, so toggling the
+spectrogram and then choosing a ramp puts two requests in the air. On a recording with no saved row
+both found nothing, both inserted, and the second hit the one-to-one unique index —
+`Cannot insert duplicate key row in object 'dbo.UploadFileAudioConfigs'`. The component serialises
+its saves now, and the server recovers by re-reading and updating.
+
+**And the message was asserting a cause it did not know.** "These settings aren't saved for this
+recording — it isn't yours to change" was the fallback whenever the server sent nothing readable,
+which covers a 400 and a 500 as much as a 403. It sent me looking at permissions for a duplicate-key
+crash, on a file the person plainly owned. It says what it knows now.
+
+**The browser fixture moved out of the case.** Phase 3 noted the per-test 7 MB upload makes this
+fixture slow. Sharing one recording across the class does not work — a saved clip draws an overlay
+where it came from, so the next test to drag across that stretch grabs the overlay instead of
+drawing, and four tests failed in an order-dependent pattern. What works is leaving the case behind:
+the case Files tab draws a waveform for every audio file on the case (eleven was enough to push the
+twelfth past a minute) while the media library draws them on demand. Each test now uploads under a
+name of its own to Sarah's own library and opens the editor from that card, so it always works on a
+recording it owns. Ninety seconds to forty-six, and no more picking up somebody else's file.
+
+## Seven failures that are not this audit's
+
+The plan's phase 6 asks for the whole Playwright suite once. It ran: **448 passed, 9 failed, 40
+skipped** in 24 minutes. One of the nine was the audio persistence test, which is fixed above. The
+other eight were checked twice — re-run alone on a fresh database, then run against `master` before
+this phase — and **seven reproduce on master**, so they are pre-existing and nothing to do with the
+audio work:
+
+- `A_group_is_told_a_case_is_closed_rather_than_deleted`
+- `AuthoredPage_IsVisibleToASignedOutVisitor`
+- `Impersonation_shows_their_world_and_survives_a_reload_with_its_exit`
+- `OrgPublicHome_ShowsCasesNavItem`
+- `The_wizard_founds_a_group_and_the_hub_offers_the_tour`
+- `Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt`
+- `VideoEditorPage_Authenticated_PageTitleIsVideoEditor`
+
+The eighth, `AddingAPieceOfGear_ShowsItInTheListAndOnItsOwnPage`, failed in the full run and passed
+both times in isolation — the one that does look like interference. None of these are audio and none
+were investigated here; they are recorded so the next person does not mistake them for fallout.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with

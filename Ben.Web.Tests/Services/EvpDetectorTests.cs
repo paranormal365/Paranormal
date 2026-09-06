@@ -524,4 +524,94 @@ public class EvpDetectorTests(ITestOutputHelper output)
         var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
         Assert.All(found, c => Assert.InRange(c.Score, 0f, 100f));
     }
+
+    // ── The dials do something (2026-09-06 audio audit, phase 6) ──────────────
+
+    /// <summary>
+    /// The fine-tune panel's dials change what a scan finds.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every existing test here runs one of the three presets. The panel that lets somebody
+    /// adjust the individual numbers had no test at all, so a change that quietly stopped
+    /// <c>options</c> being read — or read one field and ignored the rest — would have left every
+    /// preset test green while the panel did nothing at all.</para>
+    ///
+    /// <para>What is asserted is direction, not an exact count: a lower threshold cannot find
+    /// fewer things than a higher one on the same recording.</para>
+    /// </remarks>
+    [Fact]
+    public void A_lower_threshold_finds_more_than_a_higher_one()
+    {
+        var buffer = BuildFixture();
+
+        var strict  = EvpDetector.Detect(buffer, SampleRate, new EvpDetectionOptions(ThresholdDb: 12.0), 100);
+        var relaxed = EvpDetector.Detect(buffer, SampleRate, new EvpDetectionOptions(ThresholdDb: 3.0), 100);
+
+        Dump("threshold 12 dB", strict);
+        Dump("threshold 3 dB",  relaxed);
+
+        Assert.True(relaxed.Count > strict.Count,
+            $"a 3 dB threshold found {relaxed.Count} and a 12 dB threshold found {strict.Count} — "
+            + "the threshold is being ignored, or applied backwards");
+    }
+
+    /// <summary>
+    /// Asking for longer candidates than the recording contains finds nothing.
+    /// </summary>
+    /// <remarks>
+    /// The clearest proof that the minimum length is read: the fixture's utterances are under two
+    /// seconds, so a floor of three seconds must empty the list.
+    /// </remarks>
+    [Fact]
+    public void A_minimum_length_longer_than_anything_in_the_recording_finds_nothing()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate,
+            new EvpDetectionOptions(MinDurationSeconds: 3.0, MaxEventSeconds: 10.0), 100);
+
+        Assert.Empty(found);
+    }
+
+    /// <summary>Context padding is honoured, and it is what widens a candidate either side.</summary>
+    [Fact]
+    public void More_context_padding_makes_every_candidate_longer()
+    {
+        var buffer = BuildFixture();
+
+        var tight = EvpDetector.Detect(buffer, SampleRate, Medium with { ContextPadSeconds = 0.0 }, 100);
+        var loose = EvpDetector.Detect(buffer, SampleRate, Medium with { ContextPadSeconds = 1.0 }, 100);
+
+        Assert.NotEmpty(tight);
+        Assert.Equal(tight.Count, loose.Count);
+
+        for (var i = 0; i < tight.Count; i++)
+            Assert.True(loose[i].DurationSeconds > tight[i].DurationSeconds,
+                $"candidate {i} was {tight[i].DurationSeconds:0.00}s with no padding and "
+                + $"{loose[i].DurationSeconds:0.00}s with a second either side");
+    }
+
+    /// <summary>
+    /// The merge gap is what stops a phrase shattering into syllables.
+    /// </summary>
+    /// <remarks>
+    /// Measured from the other end, because the fixture's utterances are eight seconds apart and no
+    /// sane gap spans that. Within one utterance the syllables are tenths of a second apart, so
+    /// taking the gap to zero must break each one into several candidates — which is exactly the
+    /// failure the setting exists to prevent.
+    /// </remarks>
+    [Fact]
+    public void Without_a_merge_gap_each_utterance_shatters_into_syllables()
+    {
+        var buffer = BuildFixture();
+
+        var merged      = EvpDetector.Detect(buffer, SampleRate, Medium, 100);
+        var unmerged    = EvpDetector.Detect(buffer, SampleRate,
+            Medium with { MergeGapSeconds = 0.0, MinDurationSeconds = 0.05 }, 100);
+
+        Dump("merge gap 0.35s", merged);
+        Dump("merge gap 0.00s", unmerged);
+
+        Assert.True(unmerged.Count > merged.Count,
+            $"with no merge gap the detector found {unmerged.Count} candidates and with the "
+            + $"default it found {merged.Count} — the gap is not being read");
+    }
 }

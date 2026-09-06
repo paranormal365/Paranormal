@@ -27,17 +27,13 @@ public class AudioScrubModeTests : BenTestBase
         // organisation's *name*, which is a plain grid cell on this site and navigates nowhere —
         // the exact trap OpenOrganizationAsync exists to avoid. The walk then stalled waiting for
         // a Cases tab on a page it had never left.
-        if (!await OpenOrganizationAsync("Paranormal365")) return false;
-
-        await OpenTabAsync("Cases", Main.GetByRole(AriaRole.Button, new() { Name = "New Case" }));
-
-        // The LINK, not any text mentioning Belmont: GetByText.First used to land on the
-        // card's "4512 Belmont Blvd" address line, which takes the click and goes nowhere —
-        // ClickUntilUrlAsync then times out against a perfectly healthy page.
-        var caseItem = Main.GetByRole(AriaRole.Link)
-            .Filter(new() { HasTextString = "Belmont" }).First;
-        if (!await caseItem.IsVisibleAsync()) return false;
-        await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
+        // OpenOrgCaseAsync, not a hand-rolled walk to the case. This looked for a LINK containing
+        // "Belmont"; the case list renders a card with its own Open button and no such link, so the
+        // lookup found nothing, the helper returned false, and both tests in this fixture
+        // Assert.Ignore'd on every run — reported as skipped, which nobody reads as broken. They
+        // had never once exercised the drag mode they are named for (2026-09-06 audio audit,
+        // phase 6).
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
 
         // The upload input is display:none behind its "Upload File" label, and OpenTabAsync waits
         // for the expected element to be VISIBLE — so this waited on a hidden input and timed out on

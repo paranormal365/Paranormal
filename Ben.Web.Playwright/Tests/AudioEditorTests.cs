@@ -27,22 +27,99 @@ public class AudioEditorTests : BenTestBase
 
     private ILocator Modal => Page.Locator(".modal.show").First;
 
-    /// <summary>Signs in, uploads the fixture to the seeded case, opens the full-view editor.</summary>
+
+    /// <summary>
+    /// Signs in, puts a recording in Sarah's own library, and opens the full-view editor on it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Her own library, not a case's Files tab.</b> These tests are about the editor, and
+    /// the case tab was the wrong place to reach it from for two reasons that only showed up under
+    /// load. It draws a waveform for every audio file on the case, so after a few runs — or after
+    /// the other fixtures in a full suite have uploaded to the same case — the page is decoding a
+    /// dozen recordings before the test's own file appears; eleven files was enough to push the
+    /// twelfth past a minute. And the file a test then picked up was not necessarily its own,
+    /// which surfaced as the editor refusing to save settings for a recording somebody else
+    /// owned (2026-09-06 audio audit, phase 6).</para>
+    ///
+    /// <para>The library draws waveforms on demand instead, one tap at a time, and everything here
+    /// belongs to the seat running the test.</para>
+    /// </remarks>
     private async Task<bool> ReadyInFullViewAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
 
-        // The upload input is display:none behind its label, so waiting for IT to be visible times
-        // out on a tab that opened perfectly.
-        await OpenTabAsync("Files", Main.GetByText("Upload File", new() { Exact = false }).First);
-        await Expect(Page.Locator("#case-file-upload")).ToBeAttachedAsync(new() { Timeout = 15_000 });
+        await Page.GotoAsync($"{BaseUrl}/upload-files");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        await Page.Locator("#case-file-upload").SetInputFilesAsync(TestAudioPath);
-        try { await Expect(Page.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 }); }
-        catch { return false; }
+        // The panel is behind its own button, and the file input does not exist until it opens.
+        var openPanel = Page.GetByRole(AriaRole.Button, new() { Name = "Upload New File" });
+        try { await Expect(openPanel).ToBeVisibleAsync(new() { Timeout = 30_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: /upload-files did not render"); return false; }
+        await openPanel.ClickAsync();
 
-        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        // A file type is required before anything will send.
+        var fileType = Page.Locator("select").First;
+        try { await Expect(fileType).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: no file-type picker on /upload-files"); return false; }
+        await fileType.SelectOptionAsync(new SelectOptionValue { Label = "Audio" });
+
+        var input = Page.Locator("#chunked-upload-input-7f31");
+        try { await Expect(input).ToBeAttachedAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: no upload input on /upload-files"); return false; }
+
+        // A name of its own, for two reasons: the library shows every recording this seat can SEE,
+        // including seeded ones owned by other people, so "the first card" is not necessarily ours
+        // — and the editor will not save settings for a file that is not. A unique name also walks
+        // past the same-name dialog rather than having to answer it.
+        var uploadedName = $"editor-test-{Guid.NewGuid():N}.mp3";
+        await input.SetInputFilesAsync(new FilePayload
+        {
+            Name      = uploadedName,
+            MimeType  = "audio/mpeg",
+            Buffer    = await File.ReadAllBytesAsync(TestAudioPath),
+        });
+
+        // The bytes go through page JavaScript in chunks, started by an explicit button.
+        var upload = Page.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true });
+        try { await Expect(upload).ToBeEnabledAsync(new() { Timeout = 20_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: the Upload button never enabled — a file type may be needed"); return false; }
+        await upload.ClickAsync();
+
+        // The page asks before making a second file of the same name, and the upload sits at
+        // "Waiting" behind that dialog. The unique name above should mean it never appears, but
+        // answering it costs nothing and a silent three-minute wait costs a lot.
+        var keepBoth = Page.GetByRole(AriaRole.Button, new() { Name = "Keep Both" });
+        await Page.WaitForTimeoutAsync(800);
+        if (await keepBoth.CountAsync() > 0 && await keepBoth.IsVisibleAsync())
+            await keepBoth.ClickAsync();
+
+        // Waiting on the library rather than on a word in the panel: the progress row is replaced
+        // when the upload finishes, so "Done is visible" was a race against the page tidying up.
+        // The library is where the recording has to appear for any of this to matter anyway.
+        await Page.GotoAsync($"{BaseUrl}/media-library");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // On demand, one waveform: the grid does not draw them until asked, which is the whole
+        // reason this fixture moved here.
+        // The card for OUR recording, found by the name it was given.
+        var ourCard = Page.Locator(".card").Filter(new() { HasTextString = uploadedName }).First;
+        try { await Expect(ourCard).ToBeVisibleAsync(new() { Timeout = 180_000 }); }
+        catch
+        {
+            TestContext.Out.WriteLine($"gave up: {uploadedName} never reached the library");
+            return false;
+        }
+
+        var waveformButton = ourCard.GetByTestId("show-waveform").First;
+        try { await Expect(waveformButton).ToBeVisibleAsync(new() { Timeout = 30_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: our card has no Waveform button"); return false; }
+        await waveformButton.ClickAsync();
+
+        try { await Expect(ourCard.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 }); }
+        catch { TestContext.Out.WriteLine("gave up: the waveform never drew"); return false; }
+
+        await ourCard.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+
         await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
         await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
@@ -119,37 +196,36 @@ public class AudioEditorTests : BenTestBase
         Assert.That((await readout.InnerTextAsync()).Trim(), Does.Not.Contain("Draw a region"),
             "no selection to silence, so this says nothing about the edit");
 
+        // Counted, not merely present. Asking whether a Saved Clips section is visible would be a
+        // free pass on any run where one already existed, and it is the kind of assertion that
+        // quietly stops testing anything the moment the fixture changes.
+        var clipCards = Modal.Locator("[id^='afp-']");
+        var before    = await clipCards.CountAsync();
+        var editError = Modal.Locator(".alert-danger").First;
+
         // By id, not by name: the toolbar's silence-DETECTION toggle is also called "Silence" and
         // comes first in the DOM, so a name lookup lands on it. That is what the walk hit, which is
         // why finding E read as "Silence produced nothing and said nothing" — detection produces no
         // clip and no error, correctly.
         await Modal.Locator("#edit-op-silence").ClickAsync();
 
-        // Either a saved clip appears or the panel explains itself. Silence did neither.
-        var savedClips = Modal.GetByText("Saved Clips", new() { Exact = false }).First;
-        var editError  = Modal.Locator(".alert-danger").First;
-
-        // Generous, and it has to be: every test in this fixture uploads its own copy of the
-        // fixture to the same case, so by the last one the Files tab is rendering half a dozen
-        // compact players each decoding 7 MB before this edit gets any attention. Alone this takes
-        // ten seconds; sixth in line it has taken ninety. The subject is whether Silence produces a
-        // clip, not how quickly. (The pile-up itself belongs to phase 6's harness work.)
-        try
+        // Generous: by the last test in this fixture the Files tab is decoding several copies of
+        // the recording before this edit gets any attention. Alone it takes ten seconds.
+        var deadline = DateTime.UtcNow.AddSeconds(180);
+        while (DateTime.UtcNow < deadline)
         {
-            await Expect(savedClips.Or(editError)).ToBeVisibleAsync(new() { Timeout = 180_000 });
-        }
-        catch (Exception)
-        {
-            Assert.Fail("Silence produced neither a saved clip nor a message within three minutes — "
-                      + "the walk's finding E, now with a region a person actually drew.");
-            return;
+            if (await clipCards.CountAsync() > before) break;
+            if (await editError.CountAsync() > 0 && await editError.IsVisibleAsync())
+                Assert.Fail($"Silence was refused: {(await editError.InnerTextAsync()).Trim()}");
+            await Page.WaitForTimeoutAsync(1_000);
         }
 
-        if (await editError.CountAsync() > 0 && await editError.IsVisibleAsync())
-            Assert.Fail($"Silence was refused: {(await editError.InnerTextAsync()).Trim()}");
+        var after = await clipCards.CountAsync();
+        TestContext.Out.WriteLine($"saved clips {before} -> {after}");
 
-        await Expect(savedClips).ToBeVisibleAsync();
-        TestContext.Out.WriteLine("Silence produced a saved clip.");
+        Assert.That(after, Is.GreaterThan(before),
+            "Silence produced neither a saved clip nor a message within three minutes — the walk's "
+            + "finding E, now with a region a person actually drew.");
     }
 
     /// <summary>
@@ -298,14 +374,33 @@ public class AudioEditorTests : BenTestBase
             return;
         }
 
-        // Turn the spectrogram on and pick a colour ramp that is not the default.
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false })
-                   .First.ClickAsync();
+        // Turn the spectrogram on only if it is off: on a re-run against a database that already
+        // holds this recording's settings, it is on already — which is the feature working.
+        var show = Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false }).First;
+        if (await show.CountAsync() > 0 && await show.IsVisibleAsync())
+            await show.ClickAsync();
 
         var colormap = Modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
         await Expect(colormap).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await colormap.SelectOptionAsync(new SelectOptionValue { Label = "Viridis" });
-        await Page.WaitForTimeoutAsync(1_500);   // the save is a round trip
+
+        var wasChosen = await colormap.InputValueAsync();
+        var wanted    = wasChosen == "viridis" ? "inferno" : "viridis";
+        TestContext.Out.WriteLine($"colormap was {wasChosen}; choosing {wanted}");
+
+        await colormap.SelectOptionAsync(new SelectOptionValue { Value = wanted });
+
+        // No long pause here on purpose: closing the editor is what must flush the save. Waiting
+        // for it here would test the pause rather than the product, and the change was lost every
+        // time on a page busy enough that the request had not finished by the time the modal shut.
+        await Page.WaitForTimeoutAsync(300);   // the save is a round trip
+
+        // If the editor said it could not save, that is the answer — and a far more useful failure
+        // than "it came back on jet". The notice appears when the server refuses the write, which
+        // on a shared database usually means this seat does not own the file the test picked.
+        var notSaved = Modal.GetByText("aren't saved", new() { Exact = false })
+                            .Or(Modal.GetByText("couldn't be saved", new() { Exact = false }));
+        if (await notSaved.CountAsync() > 0)
+            Assert.Fail($"the editor refused to save: {(await notSaved.First.InnerTextAsync()).Trim()}");
 
         // Close the editor and open it again on the same recording.
         await Modal.Locator(".btn-close").First.ClickAsync();
@@ -326,9 +421,62 @@ public class AudioEditorTests : BenTestBase
         var chosen   = await reopened.InputValueAsync();
         TestContext.Out.WriteLine($"colormap after reopening: {chosen}");
 
-        Assert.That(chosen, Is.EqualTo("viridis"),
-            "the editor came back on its default colour ramp, so nothing about how this recording "
-            + "was being looked at was remembered");
+        Assert.That(chosen, Is.EqualTo(wanted),
+            $"the editor came back on '{chosen}' rather than the '{wanted}' that was chosen, so "
+            + "nothing about how this recording was being looked at was remembered");
+    }
+
+    /// <summary>
+    /// A region's edge can still be grabbed and dragged.
+    /// </summary>
+    /// <remarks>
+    /// <para>The player installs a capture-phase <c>pointerdown</c> handler on the waveform for
+    /// drawing and for scrubbing. It used to claim <i>every</i> press and call
+    /// <c>setPointerCapture</c> on the container, so the regions plugin's own move and resize
+    /// handlers never saw the drag: grabbing a region's edge silently drew a brand new region
+    /// instead of resizing the one that was there. Move and resize were unreachable by mouse
+    /// (regression E0).</para>
+    ///
+    /// <para>The guard is a <c>composedPath</c> check, and regions live in the waveform's shadow
+    /// DOM — so an innocuous change to how the path is read brings the whole thing back. Nothing in
+    /// the suite exercised it.</para>
+    /// </remarks>
+    [Test]
+    public async Task A_regions_edge_can_be_dragged_rather_than_drawing_a_new_one()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Paranormal365 / Belmont case not reachable; seed data may differ.");
+            return;
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }).First.ClickAsync();
+        await Page.WaitForTimeoutAsync(400);
+
+        await DrawRegionAsync(0.30, 0.50);
+
+        var regions = Modal.Locator("[part~='region']");
+        Assert.That(await regions.CountAsync(), Is.EqualTo(1), "the drag did not produce one region");
+
+        var before = await regions.First.BoundingBoxAsync();
+        Assert.That(before, Is.Not.Null);
+
+        // Grab the right-hand edge and pull it further right.
+        var y = before!.Y + before.Height / 2;
+        await Page.Mouse.MoveAsync((float)(before.X + before.Width - 2), y);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync((float)(before.X + before.Width + 80), y, new() { Steps = 10 });
+        await Page.Mouse.UpAsync();
+        await Page.WaitForTimeoutAsync(600);
+
+        var after = await regions.First.BoundingBoxAsync();
+        TestContext.Out.WriteLine(
+            $"region {before.Width:0} px wide -> {after!.Width:0} px, count {await regions.CountAsync()}");
+
+        Assert.That(await regions.CountAsync(), Is.EqualTo(1),
+            "dragging the edge drew a second region instead of resizing the one that was there");
+        Assert.That(after.Width, Is.GreaterThan(before.Width + 20),
+            "the region did not grow, so the edge drag was swallowed before the regions plugin saw it");
     }
 
     /// <summary>Drags across the modal waveform from one fraction of its width to another.</summary>
