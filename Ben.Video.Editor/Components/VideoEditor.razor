@@ -1,4 +1,4 @@
-@inject FfmpegService Ffmpeg
+﻿@inject FfmpegService Ffmpeg
 @inject ExportService Exporter
 @inject ClipStore Clips
 @inject PlaybackService Playback
@@ -123,7 +123,44 @@
         <div class="bv-workspace__stage">
             <!-- ── Preview ──────────────────────────────────────────────── -->
             <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
-                @if (!_isPoppedOut)
+                @* Phase 12 (decision D5) — two ways to watch the timeline, and they answer
+                   different questions. Live plays the source files themselves, so a cut appears
+                   the instant it is made; Rendered plays the proxy the editor encodes, which is
+                   slower to appear and is the one that shows effects, transitions and everything
+                   else the export will contain. The choice is offered rather than made, because
+                   which one is right depends on whether somebody is cutting or checking. *@
+                @if (!_isPoppedOut && EffectiveOptions.MultiTrack)
+                {
+                    <div class="bv-preview-mode">
+                        <TelerikButtonGroup SelectionMode="@ButtonGroupSelectionMode.Single">
+                            @* The value matters: a single-select group tells BOTH buttons when the
+                               choice moves, so a handler that ignores it hears "Live is no longer
+                               selected" and turns Live back on. *@
+                            <ButtonGroupToggleButton Selected="@(!_livePlayback)"
+                                                     SelectedChanged="@(v => SetLivePlaybackAsync(!v))"
+                                                     Size="@ThemeConstants.Button.Size.Small"
+                                                     Title="Play the rendered preview: slower to appear, shows effects and transitions">
+                                Rendered
+                            </ButtonGroupToggleButton>
+                            <ButtonGroupToggleButton Selected="@_livePlayback"
+                                                     SelectedChanged="@(v => SetLivePlaybackAsync(v))"
+                                                     Size="@ThemeConstants.Button.Size.Small"
+                                                     Title="Play the timeline itself: instant, without effects or transitions">
+                                Live
+                            </ButtonGroupToggleButton>
+                        </TelerikButtonGroup>
+                    </div>
+                }
+
+                @if (!_isPoppedOut && _livePlayback)
+                {
+                    <LivePreview @ref="_livePlayer"
+                                 Plan="@_livePlan"
+                                 SourceLocation="@SourceLocationFor"
+                                 OnTimeChanged="OnLiveTimeChanged"
+                                 OnPlayingChanged="OnLivePlayingChanged" />
+                }
+                else if (!_isPoppedOut)
                 {
                     <VideoPreview @ref="_preview"
                                   OwnerLabel="WorkingWindow"
@@ -576,6 +613,74 @@
 
     private ClipBrowser?           _browser;
     private VideoPreview?          _preview;
+
+    // ── Live playback (phase 12, decision D5) ─────────────────────────────────
+
+    /// <summary>Whether the preview plays the timeline itself rather than the rendered proxy.</summary>
+    private bool _livePlayback;
+
+    private LivePreview?     _livePlayer;
+    private LivePlaybackPlan _livePlan = LivePlaybackPlan.Empty;
+
+    /// <summary>
+    /// Switches between the two ways of watching the timeline.
+    /// </summary>
+    /// <remarks>
+    /// Whichever one is leaving is stopped first: two players running at once would be two sounds
+    /// and two clocks, and the one nobody can see is the one that keeps playing.
+    /// </remarks>
+    private async Task SetLivePlaybackAsync(bool live)
+    {
+        if (_livePlayback == live) return;
+
+        if (_livePlayer is not null) await _livePlayer.PauseAsync();
+        if (_preview is not null)    await _preview.PauseAsync();
+
+        _livePlayback = live;
+
+        if (live) RebuildLivePlan();
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Rewrites the plan the live player follows.
+    /// </summary>
+    /// <remarks>
+    /// Cheap — it is a walk of the timeline — and done on every change, which is the whole point:
+    /// a cut appears in the live preview the instant it is made, with no encode in between.
+    /// </remarks>
+    private void RebuildLivePlan() => _livePlan = LivePlaybackPlan.Build(Clips.Tracks);
+
+    /// <summary>
+    /// Where the live player should look for a clip's media.
+    /// </summary>
+    /// <remarks>
+    /// Both possible ids, in the order the project restore tries them: a clip placed from the bin
+    /// shares the bin entry's stored copy rather than making a second one, so looking only under
+    /// the clip's own id finds nothing for it (see <see cref="MediaStorage"/>).
+    /// </remarks>
+    private (IReadOnlyList<Guid> Ids, string? Extension) SourceLocationFor(Guid clipId)
+    {
+        var item = Clips.Tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == clipId);
+
+        return item is null
+            ? ([], null)
+            : (MediaStorage.CandidateIds(item.Id, item.SourceBinId), item.OpfsExt);
+    }
+
+    /// <summary>
+    /// The live player's clock is the timeline's clock — there is no second coordinate system here,
+    /// which is the one good thing about playing the timeline directly.
+    /// </summary>
+    private void OnLiveTimeChanged(double seconds)
+    {
+        Playback.SetTimelineTime(seconds);
+        StateHasChanged();
+    }
+
+    private void OnLivePlayingChanged(bool playing) => StateHasChanged();
+
     private VideoTimeline?         _timeline;
     private ExportDialog?          _exportDialog;
     private bool                   _showQueuePanel;
@@ -784,6 +889,12 @@
 
             StateHasChanged();
         }
+
+        // A link that names a project opens it — after the first-render restore above, so it is the
+        // last word rather than something the restore quietly replaces. Checked on later renders
+        // too, because the link may have named a project while nobody was signed in yet, and the
+        // sign-in that makes it reachable happens after this (phase 12).
+        await OpenPendingServerProjectAsync();
 
         if (_pendingWorkingWindowRehydrate)
         {
@@ -1105,6 +1216,53 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Opens the server project the host asked for, if it asked for one.
+    /// </summary>
+    /// <remarks>
+    /// The standalone editor is reached by a link that can name a project, and the person following
+    /// it has just been signed in by the same link (phase 12). A failure is said out loud rather
+    /// than swallowed: somebody who followed a link to a particular project and silently got an
+    /// empty editor has no way to tell what happened.
+    /// </remarks>
+    private async Task OpenPendingServerProjectAsync()
+    {
+        if (Projects.PendingServerProjectId is not { } id) return;
+
+        // Left pending rather than dropped: a link can name a project while nobody is signed in,
+        // and the sign-in that makes it reachable may be seconds away. Said once, so somebody
+        // looking at an empty editor knows what it is waiting for.
+        if (!ServerProjects.IsAvailable)
+        {
+            if (!_saidProjectNeedsSignIn)
+            {
+                _saidProjectNeedsSignIn = true;
+                _notifications?.Show(
+                    "Sign in to open the project this link named.",
+                    ThemeConstants.Notification.ThemeColor.Info);
+            }
+            return;
+        }
+
+        // Cleared before the fetch, so a failure cannot leave a request that retries every render.
+        Projects.PendingServerProjectId = null;
+
+        var (file, name, problem) = await ServerProjects.GetAsync(id);
+
+        if (problem is not null || file is null)
+        {
+            _notifications?.Show(
+                problem ?? "That project could not be opened.",
+                ThemeConstants.Notification.ThemeColor.Warning);
+            return;
+        }
+
+        await Projects.LoadFromFileAsync(file, name ?? "Project", id);
+    }
+
+    /// <summary>So the sign-in hint above is said once, not on every render.</summary>
+    private bool _saidProjectNeedsSignIn;
+
     // ── Keyboard shortcut dispatch ──────────────────────────────────────────────
 
     public async Task OnEditorKeyDown(string key, bool ctrl, bool shift, bool alt)
@@ -1114,7 +1272,11 @@
         switch (command)
         {
             case EditorCommand.TogglePlayPause:
-                if (_preview is not null)
+                // Whichever player is on screen. In live mode there is no VideoPreview at all, so
+                // Space did nothing (phase 12).
+                if (_livePlayback && _livePlayer is not null)
+                    await _livePlayer.TogglePlayPauseAsync();
+                else if (_preview is not null)
                     await _preview.TogglePlayPauseAsync();
                 break;
 
@@ -1191,6 +1353,12 @@
                 {
                     NudgeSelectedCanvasItem(key, shift);
                 }
+                else if (_livePlayback && _livePlayer is not null)
+                {
+                    var fps = Playback.SessionFps;
+                    if (command == EditorCommand.MoveLeft)  await _livePlayer.StepBackAsync(fps);
+                    if (command == EditorCommand.MoveRight) await _livePlayer.StepForwardAsync(fps);
+                }
                 else if (_preview is not null)
                 {
                     if (command == EditorCommand.MoveLeft)  _preview.StepBackAsync();
@@ -1199,11 +1367,13 @@
                 break;
 
             case EditorCommand.Rewind:
-                if (_preview is not null) await _preview.RewindAsync();
+                if (_livePlayback && _livePlayer is not null) await _livePlayer.RewindAsync();
+                else if (_preview is not null) await _preview.RewindAsync();
                 break;
 
             case EditorCommand.SeekToEnd:
-                if (_preview is not null) await _preview.SeekToEndAsync();
+                if (_livePlayback && _livePlayer is not null) await _livePlayer.SeekToEndAsync();
+                else if (_preview is not null) await _preview.SeekToEndAsync();
                 break;
 
             case EditorCommand.NudgeSelectionEarlier:
@@ -2901,6 +3071,12 @@
         // Adding a track or an overlay lane changes how much room the timeline wants. Courtesy
         // only: it stops as soon as the person drags the seam themselves.
         AutoFitTimeline();
+
+        // The live player follows a plan rather than asking on every frame, so an edit means a new
+        // plan. Only while it is on screen: building one for a player nobody is watching is work
+        // for nothing (phase 12).
+        if (_livePlayback) RebuildLivePlan();
+
         InvokeAsync(StateHasChanged);
         PreviewFreshness.MarkStale();
         ScheduleAutoPreview();

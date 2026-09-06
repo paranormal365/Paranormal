@@ -218,6 +218,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/video-projects/{id}", token);
 
+    // Posted with no body: the code stands for whoever is holding this circuit's token, and an id
+    // in the body would be a request to be issued somebody else's session.
+    public Task<EditorHandoffCode?> GetEditorHandoffCodeAsync(CancellationToken token = default)
+        => _api.PostAsync<object, EditorHandoffCode>("/api/auth/editor-handoff", new { }, token);
+
     // ── Image editor ────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default)
         => _api.PutAsync<object, UploadFileRecord>($"/api/upload-files/{fileId}/edit-state", new { EditStateJson = editStateJson }, token);

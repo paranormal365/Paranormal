@@ -46,4 +46,30 @@ public sealed class BenProjectServerStore(IBenAdminClient adminClient, IBenUserS
             return (null, $"The project could not be saved to the server: {ex.Message}");
         }
     }
+
+    public async Task<(ProjectFile? File, string? Name, string? Problem)> GetAsync(
+        Guid id, CancellationToken ct = default)
+    {
+        if (!IsAvailable)
+            return (null, null, "You are not signed in, so the project could not be opened.");
+
+        try
+        {
+            var record = await adminClient.GetMyVideoProjectAsync(id, ct);
+
+            if (record is null)
+                return (null, null, "That project is no longer on the server.");
+
+            // ProjectSerializer rather than a reader of its own: the editor writes every enum as a
+            // string, and a reader without that converter throws on every project it is given
+            // (2026-09-05 audit, persistence-1).
+            var (file, problem) = ProjectSerializer.Parse(record.ProjectJson);
+
+            return problem is not null ? (null, null, problem) : (file, record.Name, null);
+        }
+        catch (Exception ex)
+        {
+            return (null, null, $"The project could not be opened: {ex.Message}");
+        }
+    }
 }

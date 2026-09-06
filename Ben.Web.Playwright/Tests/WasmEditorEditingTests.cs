@@ -396,6 +396,72 @@ public class WasmEditorEditingTests : BenTestBase
     }
 
     /// <summary>Whether a URL leaves this machine.</summary>
+    // ── The live player (phase 12, decision D5) ───────────────────────────────
+
+    /// <summary>Switches the preview from the rendered proxy to the sequence player.</summary>
+    private async Task SwitchToLivePlaybackAsync()
+    {
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Live", Exact = true }).First.ClickAsync();
+        await Expect(Page.Locator(".bv-live")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    [Test]
+    [Description("The live player finds a clip's media even when the bin holds the stored copy.")]
+    public async Task LivePlaybackFindsTheMediaForAPlacedClip()
+    {
+        await ReadyWithOneClipAsync();
+        await SwitchToLivePlaybackAsync();
+
+        // The player looked only under the clip's own id and played black for a clip that was
+        // plainly on the timeline, because a clip placed from the bin shares the bin entry's stored
+        // copy rather than making a second one. Found by opening the page (phase 12).
+        await Expect(Page.Locator(".bv-live__warning")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+
+        var loaded = await Page.EvaluateAsync<bool>(
+            "() => [...document.querySelectorAll('.bv-live__video')].some(v => v.src.startsWith('blob:'))");
+
+        Assert.That(loaded, Is.True, "no source was loaded into either video element");
+    }
+
+    [Test]
+    [Description("Pressing play in live mode moves the playhead and the picture with it.")]
+    public async Task LivePlaybackActuallyPlays()
+    {
+        await ReadyWithOneClipAsync();
+        await SwitchToLivePlaybackAsync();
+
+        await Page.Locator(".bv-live__transport button").First.ClickAsync();
+
+        // The whole promise of the live player: this happens with no render in between, so a
+        // second and a half is a long time to wait for it.
+        await Expect(Page.Locator(".bv-live__clock")).Not.ToContainTextAsync("0:00 /", new() { Timeout = 15_000 });
+
+        var elapsed = await Page.EvaluateAsync<double>(
+            "() => { const v = [...document.querySelectorAll('.bv-live__video')]"
+            + ".find(x => x.style.display !== 'none'); return v ? v.currentTime : 0; }");
+
+        Assert.That(elapsed, Is.GreaterThan(0), "the picture did not move with the playhead");
+    }
+
+    [Test]
+    [Description("Switching back to the rendered preview leaves nothing playing behind it.")]
+    public async Task LeavingLivePlaybackStopsIt()
+    {
+        await ReadyWithOneClipAsync();
+        await SwitchToLivePlaybackAsync();
+        await Page.Locator(".bv-live__transport button").First.ClickAsync();
+        await Expect(Page.Locator(".bv-live__clock")).Not.ToContainTextAsync("0:00 /", new() { Timeout = 15_000 });
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Rendered", Exact = true }).First.ClickAsync();
+        await Expect(Page.Locator(".bv-live")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        // A player nobody can see, still playing, is a second sound and a second clock.
+        var stillPlaying = await Page.EvaluateAsync<bool>(
+            "() => [...document.querySelectorAll('video, audio')].some(m => !m.paused)");
+
+        Assert.That(stillPlaying, Is.False, "something was left playing after the switch");
+    }
+
     private static bool IsThirdParty(string url)
     {
         if (url.StartsWith("data:") || url.StartsWith("blob:")) return false;

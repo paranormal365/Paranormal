@@ -1,0 +1,248 @@
+﻿@using Ben.Video.Editor.Services
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject OPFSService Opfs
+@inject ErrorLogService ErrorLog
+
+@*
+    Phase 12 (decision D5) — the sequence player.
+
+    Plays the timeline itself by seeking between the source files, instead of playing the proxy the
+    editor re-encodes after every edit. Two video elements so a cut is a swap rather than a seek,
+    an image element for stills, and an audio element per audio clip created by the JS side.
+
+    Deliberately a separate component from VideoPreview rather than a mode inside it: that one
+    loads a URL and plays it, which is a different job with a different clock, and folding both
+    into one component is how the two coordinate systems got mixed up in the first place.
+*@
+<div class="bv-live" @ref="_root">
+    <div class="bv-live__stage">
+        <video class="bv-live__video" playsinline preload="auto" style="display:none"></video>
+        <video class="bv-live__video" playsinline preload="auto" style="display:none"></video>
+        <img class="bv-live__image" alt="" style="display:none" />
+
+        @if (Plan.IsEmpty)
+        {
+            <div class="bv-live__empty">Nothing on the timeline yet.</div>
+        }
+        else if (_missingSources > 0)
+        {
+            @* Said out loud: a clip whose source the browser cannot open plays as black, and black
+               that nobody explained reads as a broken player. *@
+            <div class="bv-live__warning" role="status">
+                @(_missingSources == 1
+                    ? "1 clip is missing its media, so it plays as black here."
+                    : $"{_missingSources} clips are missing their media, so they play as black here.")
+            </div>
+        }
+    </div>
+
+    <div class="bv-live__transport">
+        <TelerikButton OnClick="TogglePlayPauseAsync"
+                       Icon="@(_isPlaying ? SvgIcon.Pause : SvgIcon.Play)"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Enabled="@(!Plan.IsEmpty)"
+                       Title="@(_isPlaying ? "Pause" : "Play the timeline")" />
+
+        <TelerikButton OnClick="RewindAsync"
+                       Icon="@SvgIcon.Rewind"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Enabled="@(!Plan.IsEmpty)"
+                       Title="Back to the start" />
+
+        <span class="bv-live__clock">@Format(_time) / @Format(Plan.Duration)</span>
+
+        <span class="bv-live__badge" title="Playing the timeline itself, with no render in between">Live</span>
+    </div>
+</div>
+
+@code {
+    /// <summary>What to play. Rebuilt by the editor whenever the timeline changes.</summary>
+    [Parameter] public LivePlaybackPlan Plan { get; set; } = LivePlaybackPlan.Empty;
+
+    /// <summary>Where the playhead is, so the timeline and the ruler follow along.</summary>
+    [Parameter] public EventCallback<double> OnTimeChanged { get; set; }
+
+    /// <summary>Whether the timeline is playing, so the editor's own transport agrees.</summary>
+    [Parameter] public EventCallback<bool> OnPlayingChanged { get; set; }
+
+    private ElementReference _root;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<LivePreview>? _selfRef;
+    private int _playerId;
+
+    private double _time;
+    private bool   _isPlaying;
+    private int    _missingSources;
+
+    /// <summary>Blob URLs by clip id, and what to revoke when the plan changes or we go away.</summary>
+    private readonly Dictionary<Guid, string> _urls = [];
+
+    private LivePlaybackPlan? _appliedPlan;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module  = await JS.InvokeAsync<IJSObjectReference>(
+                "benImportEditorModule", "js/livePreviewInterop.js");
+            _selfRef = DotNetObjectReference.Create(this);
+
+            _playerId = await _module.InvokeAsync<int>(
+                "create", _root, _selfRef, nameof(OnPlayerTime));
+        }
+
+        // The plan is applied here rather than in OnParametersSet because it needs the module, and
+        // resolving a blob URL per clip is work worth doing once per plan rather than per render.
+        if (_module is not null && !ReferenceEquals(_appliedPlan, Plan))
+        {
+            _appliedPlan = Plan;
+            await ApplyPlanAsync();
+        }
+    }
+
+    /// <summary>
+    /// Resolves every source the plan needs and hands both to the player.
+    /// </summary>
+    /// <remarks>
+    /// A source that cannot be opened is left out rather than faked: the player draws black for it
+    /// and the banner above says how many, because a clip silently missing from a preview is the
+    /// kind of thing somebody discovers after the export (2026-09-05 audit, F14's lesson).
+    /// </remarks>
+    private async Task ApplyPlanAsync()
+    {
+        if (_module is null) return;
+
+        await ReleaseUrlsAsync();
+
+        var missing = 0;
+
+        foreach (var clipId in Plan.RequiredSources)
+        {
+            var url = await OpenSourceAsync(clipId);
+
+            if (url is null) missing++;
+            else _urls[clipId] = url;
+        }
+
+        _missingSources = missing;
+
+        await _module.InvokeVoidAsync(
+            "setPlan", _playerId, Plan, _urls.ToDictionary(p => p.Key.ToString(), p => p.Value));
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Where a clip's media might be, in the order to try: its extension and the ids to look under.
+    /// </summary>
+    /// <remarks>
+    /// More than one id, because a clip placed from the media bin shares the bin entry's stored
+    /// copy rather than making a second one. Looking only under the clip's own id plays black for
+    /// a clip that is plainly on the timeline. See <see cref="MediaStorage"/>.
+    /// </remarks>
+    [Parameter] public Func<Guid, (IReadOnlyList<Guid> Ids, string? Extension)>? SourceLocation { get; set; }
+
+    private async Task<string?> OpenSourceAsync(Guid clipId)
+    {
+        if (SourceLocation is null) return null;
+
+        var (ids, ext) = SourceLocation(clipId);
+        if (string.IsNullOrEmpty(ext)) return null;
+
+        foreach (var id in ids)
+        {
+            var url = await Opfs.ReadAsBlobUrlAsync(id, ext);
+            if (url is not null) return url;
+        }
+
+        return null;
+    }
+
+    // ── Transport ─────────────────────────────────────────────────────────────
+
+    /// <summary>Starts or stops playback. The editor's own play button calls this in live mode.</summary>
+    public async Task TogglePlayPauseAsync()
+    {
+        if (_module is null || Plan.IsEmpty) return;
+
+        _isPlaying = !_isPlaying;
+        await _module.InvokeVoidAsync(_isPlaying ? "play" : "pause", _playerId);
+        await OnPlayingChanged.InvokeAsync(_isPlaying);
+    }
+
+    public async Task PauseAsync()
+    {
+        if (_module is null || !_isPlaying) return;
+
+        _isPlaying = false;
+        await _module.InvokeVoidAsync("pause", _playerId);
+        await OnPlayingChanged.InvokeAsync(false);
+    }
+
+    /// <summary>Moves the playhead. Called when somebody scrubs the timeline's own ruler.</summary>
+    public async Task SeekAsync(double seconds)
+    {
+        if (_module is null) return;
+
+        _time = seconds;
+        await _module.InvokeVoidAsync("seek", _playerId, seconds);
+    }
+
+    public Task RewindAsync() => SeekAsync(0);
+
+    public Task SeekToEndAsync() => SeekAsync(Plan.Duration);
+
+    /// <summary>One frame at a time, at the project's frame rate.</summary>
+    public Task StepBackAsync(double fps)    => SeekAsync(Math.Max(0, _time - 1 / Math.Max(1, fps)));
+    public Task StepForwardAsync(double fps) => SeekAsync(Math.Min(Plan.Duration, _time + 1 / Math.Max(1, fps)));
+
+    /// <summary>Called by the player about ten times a second while it runs.</summary>
+    [JSInvokable]
+    public async Task OnPlayerTime(double seconds, bool playing)
+    {
+        _time = seconds;
+
+        if (_isPlaying != playing)
+        {
+            _isPlaying = playing;
+            await OnPlayingChanged.InvokeAsync(playing);
+        }
+
+        await OnTimeChanged.InvokeAsync(seconds);
+        StateHasChanged();
+    }
+
+    private static string Format(double seconds)
+    {
+        if (!double.IsFinite(seconds) || seconds < 0) seconds = 0;
+
+        var span = TimeSpan.FromSeconds(seconds);
+        return $"{(int)span.TotalMinutes}:{span.Seconds:00}";
+    }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+
+    private async Task ReleaseUrlsAsync()
+    {
+        foreach (var url in _urls.Values)
+            await Opfs.RevokeBlobUrlAsync(url);
+
+        _urls.Clear();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null) await _module.InvokeVoidAsync("dispose", _playerId);
+            await ReleaseUrlsAsync();
+            if (_module is not null) await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { /* the circuit or the page went away first */ }
+        catch (ObjectDisposedException) { }
+        catch (Exception ex) { ErrorLog.Log("LivePreview.DisposeAsync", ex); }
+
+        _selfRef?.Dispose();
+    }
+}

@@ -35,6 +35,17 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
     /// <summary>Value written to <see cref="SignInEvent.Method"/> for Sign in with Apple.</summary>
     public const string AppleMethod = "apple";
 
+    /// <summary>
+    /// Value written to <see cref="SignInEvent.Method"/> when the standalone editor exchanges a
+    /// handoff code for a session (phase 12).
+    /// </summary>
+    /// <remarks>
+    /// Its own method rather than folded into password: the person did type a password, but on the
+    /// site, minutes or hours earlier. Counting the handoff as a password sign-in would double-count
+    /// one act of signing in and hide how often the standalone editor is actually reached.
+    /// </remarks>
+    public const string HandoffMethod = "handoff";
+
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly ILogger<RecordingSignInManager> _log;
 

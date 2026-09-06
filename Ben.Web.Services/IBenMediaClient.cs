@@ -238,6 +238,13 @@ public interface IBenMediaClient
     Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default);
     Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default);
 
+    /// <summary>
+    /// Asks the API for a one-minute, one-use code that signs this same person into the standalone
+    /// editor (phase 12).
+    /// </summary>
+    /// <returns>The code, or null when the API refused — in which case the link is offered without one.</returns>
+    Task<EditorHandoffCode?> GetEditorHandoffCodeAsync(CancellationToken token = default);
+
     // ── Image editor ────────────────────────────────────────────────────────
     Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default);
     Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default);

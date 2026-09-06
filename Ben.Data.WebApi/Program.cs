@@ -184,6 +184,9 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
+// Handoff codes are issued by one request and redeemed by another, so the store has to outlive
+// both — and it holds nothing worth persisting, since every code dies within a minute (phase 12).
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>();
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));

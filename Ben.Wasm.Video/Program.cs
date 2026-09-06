@@ -2,6 +2,7 @@ using Ben.Video.Editor.Extensions;
 using Ben.Wasm.Video;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.JSInterop;
 
 // The WebAssembly host for the Ben video editor.
 //
@@ -67,6 +68,16 @@ builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExte
     .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
 builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExtensions.ProjectPersistenceHttpClientName)
     .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
+
+// The site's link can carry a one-minute code that signs this host in as the same person, so
+// following it does not land on a second sign-in door (phase 12). Same reasoning as AuthService
+// for the client: no bearer handler, because the caller has no token yet.
+builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.EditorHandoffService(
+    new HttpClient { BaseAddress = new Uri(string.IsNullOrEmpty(apiBaseUrl)
+        ? builder.HostEnvironment.BaseAddress : apiBaseUrl) },
+    sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>(),
+    sp.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>(),
+    sp.GetRequiredService<IJSRuntime>()));
 
 // Tells the editor page whether the signed-in account administers anything, which is what decides
 // whether the diagnostics panel is drawn. See AccountInfoService — it is a display decision, not a
