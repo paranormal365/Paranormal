@@ -410,20 +410,27 @@
                             .ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
 
                         {
-                            var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip && !track.IsLocked;
+                            // Audio joins the list. Its chips had no handles at all, so the only way to
+                            // shorten a sound was to type numbers into the properties panel — while help
+                            // said every clip trims by its edges (2026-09-05 audit, audio-12).
+                            var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip or AudioClip && !track.IsLocked;
                             var chipWpx = (ItemDuration(item) * Timeline.PxPerSecond).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
-                            var trimmingThis = _trimmingClip?.Id == item.Id;
+                            var trimmingThis = _trimmingClip?.Id == item.Id || _trimmingAudio?.Id == item.Id;
                             var movingThis   = _movingItem?.Id   == item.Id;
                             var trimCls = trimmingThis
                                 ? (_trimmingSide == TrimSide.Start ? "bv-clip-chip--trimming bv-clip-chip--trimming-start"
                                                                     : "bv-clip-chip--trimming bv-clip-chip--trimming-end")
                                 : "";
                             var moveCls = movingThis ? "bv-clip-chip--moving" : "";
+                            @* draggable lists every in-progress drag: while one is running the
+                               chip must not also be natively draggable, because the browser then
+                               suppresses pointerup delivery entirely and the drag never ends (see
+                               FinalizeMove's note on #27). An audio trim is one of them. *@
                             <div @key="item.Id"
                                  class="bv-clip-chip bv-clip-chip--@ChipType(item) @(_selectedItemId == item.Id ? "bv-clip-chip--selected" : "") @(IsMultiSelected(item.Id) ? "bv-clip-chip--multi-selected" : "") @(_draggingId == item.Id ? "bv-clip-chip--dragging" : "") @trimCls @moveCls @(item.IsMediaMissing ? "bv-clip-chip--missing" : "") @(item.LinkedClipId is not null ? "bv-clip-chip--linked" : "")"
                                  style="position: absolute; left: @leftPxStr; width: @chipWpx; min-width: @chipWpx; max-width: none"
                                  data-item-id="@item.Id"
-                                 draggable="@(track.IsLocked || _trimmingClip != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
+                                 draggable="@(track.IsLocked || _trimmingClip != null || _trimmingAudio != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
                                  @onpointerdown="e => OnChipPointerDown(e, captured, track)"
                                  @onclick="e => SelectItemWithModifier(captured, e.CtrlKey || e.MetaKey)"
                                  @ondragstart="() => OnDragStart(captured)"
@@ -2526,11 +2533,15 @@
         _            => "Layer"
     };
 
-    private static double ItemDuration(TrackItem item) => item switch
-    {
-        VideoClip vc => vc.TrimmedDuration,
-        _            => item.Duration
-    };
+    /// <summary>How much of the timeline a chip covers.</summary>
+    /// <remarks>
+    /// <see cref="TrackItem.EffectiveLength"/> is the one place that answers this, and every item
+    /// type answers it correctly. Special-casing video here meant a trimmed audio chip kept the
+    /// full source's width and label however short it had been made, so trimming a sound by its
+    /// edges appeared to do nothing at all (2026-09-05 audit, audio-11's other half, found on
+    /// screen while verifying phase 9).
+    /// </remarks>
+    private static double ItemDuration(TrackItem item) => item.EffectiveLength;
 
     private static string TrackIcon(TrackType type) => type switch
     {
