@@ -42,6 +42,10 @@ builder.Services.AddBenVideoEditor(options =>
     // sidecar's one-time pairing code.
     VideoEditorHostDefaults.ApplyEditingDefaults(options);
 
+    // Site-absolute: the downloads page lives under the standalone editor, and the site's own
+    // editor pages are elsewhere entirely (2026-09-05 audit, F17).
+    options.SidecarDownloadUrl = "/editors/video/downloads/";
+
     // Media library, shared asset catalog and Save-to-server. The catalog's read endpoints are
     // anonymous by design, so its named HttpClient carries no auth handler.
     VideoEditorHostDefaults.ApplyServerIntegration(options, builder.Configuration["WebApi:BaseUrl"]);

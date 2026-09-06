@@ -265,6 +265,22 @@ public sealed class VideoEditorOptions
     public bool NativeSidecar { get; set; } = false;
 
     /// <summary>
+    /// Where the sidecar can be downloaded from, so the panel that asks for it can offer it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The panel said "Download and run it" and gave nobody anything to click. The downloads
+    /// page existed the whole time, one level down from the standalone editor, and nothing in the
+    /// editor linked to it — so the instruction was an instruction to go and find something
+    /// (2026-09-05 audit, F17).</para>
+    ///
+    /// <para>A host setting rather than a constant, because the two hosts reach it differently:
+    /// the site is at a site-absolute path, the standalone editor at one relative to its own
+    /// <c>&lt;base&gt;</c>. Null hides the link, which is right for a host that ships no sidecar.
+    /// </para>
+    /// </remarks>
+    public string? SidecarDownloadUrl { get; set; }
+
+    /// <summary>
     /// Whether to show the operator tools — the ffmpeg diagnostics chip and the panel behind it
     /// (MEMFS residency, worker state, the raw ffmpeg log).
     /// </summary>

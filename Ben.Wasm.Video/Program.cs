@@ -37,6 +37,11 @@ builder.Services.AddBenVideoEditor(options =>
     // project restored on reload (2026-09-05 audit, F2).
     VideoEditorHostDefaults.ApplyEditingDefaults(options);
 
+    // Relative to this app's own <base>, which under production is /editors/video/ — so the panel
+    // asking somebody to install the sidecar can hand them the page that offers it, instead of
+    // telling them to go and find it (2026-09-05 audit, F17).
+    options.SidecarDownloadUrl = "downloads/";
+
     // The media library, the shared asset catalog and Save-to-server — the only things that need
     // a server. No-op when nothing is configured.
     VideoEditorHostDefaults.ApplyServerIntegration(options, apiBaseUrl);

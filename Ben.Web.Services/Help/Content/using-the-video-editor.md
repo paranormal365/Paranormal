@@ -301,7 +301,7 @@ you make three matching callouts without building each from scratch.
 
 ## Preview and export
 
-**Preview** renders the real thing at full quality in a separate window, so you can check the
+**Preview** renders the real thing at full quality in a window of its own on the page, so you can check the
 finished result before committing to it. It can be stopped at any point, and if it stops reporting
 progress the window says so and offers to restart the video engine.
 
@@ -358,14 +358,18 @@ and both are faster with the native helper below.
 
 ## The native helper (Sidecar)
 
-Everything above runs inside the browser's sandbox, which is safe but slow: the browser will not
-use your machine's video hardware, and it works with one hand tied behind its back on long
-projects.
+Everything above runs inside the browser's sandbox, which is safe but slow: it renders on one
+processor core and inside a memory ceiling the browser sets, which is what makes a long project
+crawl.
 
-The **Sidecar** is a small application you install on your own computer to lift that limit. When it
-is running, the editor hands the heavy work — decoding, rendering, exporting — to it instead of
-doing it in the browser tab. The result is the same video, produced considerably faster, and long
-projects stop straining the browser's memory.
+The **Sidecar** is a small application you install on your own computer to lift both limits. When
+it is running, the editor hands the heavy work — decoding, rendering, exporting — to it instead of
+doing it in the browser tab, where it can use all of your processor's cores and is not bound by the
+browser's memory ceiling. The result is the same video, produced considerably faster.
+
+Titles, callouts, artwork, transitions and hidden areas are still drawn in the browser even with a
+sidecar running. Those are quick; it is the decoding and encoding that is slow, and that is what
+moves across.
 
 ![The native acceleration panel](/help/media/using-the-video-editor/sidecar-panel.png)
 *The panel behind the toolbar chip: whether a helper is installed, and whether this browser is

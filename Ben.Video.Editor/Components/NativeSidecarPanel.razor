@@ -1,4 +1,5 @@
 @inject NativeSidecarService NativeSidecar
+@inject Microsoft.Extensions.Options.IOptions<VideoEditorOptions> OptionsAccessor
 
 <TelerikWindow Visible="@Visible"
                VisibleChanged="@OnVisibleChanged"
@@ -10,8 +11,8 @@
 
             <p class="bv-sidecar-panel__intro">
                 A small companion app on this machine can render and export using all of your
-                CPU's cores instead of just one. It never sends your files anywhere — everything
-                stays on this computer.
+                CPU's cores, and outside the browser's memory limits, instead of one core inside
+                them. It never sends your files anywhere — everything stays on this computer.
             </p>
 
             @switch (NativeSidecar.State)
@@ -19,7 +20,18 @@
                 case NativeSidecarState.Disconnected:
                     <div class="bv-sidecar-panel__state">
                         <span class="bv-sidecar-panel__badge bv-sidecar-panel__badge--off">Not detected</span>
-                        <p>No sidecar found on this machine. Download and run it, then click Retry.</p>
+                        @* "Download and run it" with nothing to click. The downloads page existed
+                           the whole time, one level below the standalone editor, and nothing here
+                           linked to it (2026-09-05 audit, F17). *@
+                        <p>No sidecar found on this machine. Install it, then click Retry.</p>
+                        @if (Options.SidecarDownloadUrl is { Length: > 0 } downloadUrl)
+                        {
+                            <p>
+                                <a class="bv-sidecar-panel__download" href="@downloadUrl"
+                                   target="_blank" rel="noopener">Download the sidecar</a>
+                                — there is a build for Windows and for Mac.
+                            </p>
+                        }
                         <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw">Retry</TelerikButton>
                     </div>
                     break;
@@ -33,10 +45,19 @@
                         @if (NativeSidecar.State == NativeSidecarState.TokenRejected)
                         {
                             <p>Your saved pairing no longer works — the sidecar may have been reset. Get a fresh 6-digit code from its pairing page.</p>
+                            @if (Options.SidecarDownloadUrl is { Length: > 0 } resetUrl)
+                            {
+                                <p class="bv-sidecar-panel__hint">
+                                    Reinstalling also gives a fresh code:
+                                    <a href="@resetUrl" target="_blank" rel="noopener">download the sidecar</a>.
+                                </p>
+                            }
                         }
                         else
                         {
-                            <p>Type the 6-digit code from the sidecar's pairing page (it opens when the sidecar is installed; <code>pair.sh</code> reopens it). Each browser pairs once.</p>
+                            @* "pair.sh reopens it" is macOS wording and was shown to everybody,
+                               Windows included, where no such file exists (2026-09-05 audit, F17). *@
+                            <p>Type the 6-digit code from the sidecar's pairing page. It opens by itself when the sidecar is installed, and the sidecar's own menu or shortcut reopens it. Each browser pairs once.</p>
                         }
                         <TelerikTextBox @bind-Value="_code" PlaceHolder="6-digit code" Width="100%" />
                         @if (NativeSidecar.LastError is not null)
@@ -85,6 +106,8 @@
 </TelerikWindow>
 
 @code {
+    private VideoEditorOptions Options => OptionsAccessor.Value;
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
 

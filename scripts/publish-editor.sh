@@ -94,7 +94,10 @@ echo
 echo "Checks:"
 grep -o '<base href="[^"]*"' "$WWW/index.html" | sed 's/^/  /'
 grep -o '"WebApiBaseUrl": "[^"]*"' "$WWW/appsettings.json" | sed 's/^/  /'
-[ -f "$WWW/web.config" ] && echo "  web.config present (IIS MIME types + SPA rewrite)" \
+# Not "SPA rewrite". There is deliberately no <rewrite> section: URL Rewrite is a separate IIS
+# download, and a rewrite rule on a server without it fails the whole folder with HTTP 500.19. The
+# web.config says so at length; this line claimed the opposite (2026-09-05 audit, wasm-17).
+[ -f "$WWW/web.config" ] && echo "  web.config present (IIS MIME types, security and cache headers)" \
                          || echo "  WARNING: no web.config — IIS will refuse .wasm and .dat files"
 
 # Prove it rather than trust it: any surviving twin of a patched file is a stale copy of the very
