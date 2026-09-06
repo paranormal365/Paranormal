@@ -76,6 +76,12 @@ ProjectNotes/Agent007/
 
 # Ben.Video.Sidecar build outputs — fetched/built locally by scripts/fetch-ffmpeg.* and
 # installer/macos/build.sh, never committed (100+ MB of binaries; also environment-specific).
+#
+# The Intel Mac image was briefly committed here on 2026-09-05 so a Windows deploy host would have
+# one without a Mac in the loop, and taken back out: at 122 MiB it is over GitHub's hard 100 MiB
+# per-file limit, so the push was refused. All three images reach the server the same way — the
+# deploy script stages them from this folder — which means the deploy runs from a machine that has
+# built them.
 Ben.Video.Sidecar/ffmpeg/
 Ben.Video.Sidecar/installer/dist/
 
