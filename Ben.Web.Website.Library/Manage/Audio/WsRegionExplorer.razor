@@ -22,7 +22,10 @@
 @* Visible + VisibleChanged, not @bind-Visible: binding to the component's OWN parameter writes
    the field and never tells the parent, so AudioFilePreview kept thinking the explorer was open
    and put it straight back on its next render (2026-09-06 audio walk, finding I). *@
-<BenModal Visible="@Visible" VisibleChanged="@(v => VisibleChanged.InvokeAsync(v))" Title="@RegionTitle" Size="sm">
+@* Size="fullscreen", not "sm": this panel holds a waveform, a transport, a notes list and a save
+   form side by side, and "sm" is the same 300-pixel keyhole the main editor was rescued from in
+   phase 1a. The main editor's size was restored then and this one was missed. *@
+<BenModal Visible="@Visible" VisibleChanged="@(v => VisibleChanged.InvokeAsync(v))" Title="@RegionTitle" Size="fullscreen">
     <ChildContent>
         @if (_loading)
         {
@@ -164,7 +167,7 @@
                                                 @* TimeOffset is absolute; show clip-relative time *@
                                                 <span class="badge bg-primary me-1"
                                                       title="File time: @FormatTime(note.TimeOffset.Value)">
-                                                    ⏱ +@FormatTime(note.TimeOffset.Value - (Region?.Start ?? 0))
+                                                    ⏱ +@FormatTime(note.TimeOffset.Value - LoadedStart)
                                                 </span>
                                             }
                                             else
@@ -224,7 +227,7 @@
                             <input type="checkbox" class="form-check-input" id="pit-note" @bind="@_isPointInTime" />
                             <label for="pit-note" class="form-label form-label-sm mb-0">
                                 Attach to current position (+@FormatTime(_currentTime) in clip
-                                / @FormatTime(_currentTime + (Region?.Start ?? 0)) in file)
+                                / @FormatTime(_currentTime + LoadedStart) in file)
                             </label>
                         </div>
                         <TelerikEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
@@ -283,7 +286,19 @@
     /// A property, not an inline interpolation — a ternary's ':' terminates an interpolated
     /// string, so the inline form does not compile.</summary>
     private string RegionTitle
-        => "Region Explorer — " + (string.IsNullOrWhiteSpace(Region?.Label) ? $"{FormatTime(Region?.Start ?? 0)} – {FormatTime(Region?.End ?? 0)}" : Region!.Label);
+        => "Region Explorer — " + (string.IsNullOrWhiteSpace(Region?.Label)
+            ? $"{FormatTime(LoadedStart)} – {FormatTime(_loadedKey?.End ?? Region?.End ?? 0)}"
+            : Region!.Label);
+
+    /// <summary>
+    /// Where the audio on screen starts in the original recording.
+    /// </summary>
+    /// <remarks>
+    /// Read from the loaded key rather than the parameter: every displayed time, and every note
+    /// written at "this moment", is an offset from it, and when the two disagreed the panel
+    /// described one region while playing another (finding H).
+    /// </remarks>
+    private double LoadedStart => _loadedKey?.Start ?? Region?.Start ?? 0;
 
     // ── Editor toolbar — Bold / Italic / Underline / Ordered list / Unordered list ──
 
@@ -370,23 +385,39 @@
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    /// <summary>What the explorer is currently showing the audio for. Null until something loads.</summary>
+    /// <remarks>
+    /// The reload decision used to be "have I loaded anything at all", so the first region a person
+    /// explored became the audio they heard for every region afterwards — while the title, the
+    /// notes and the Save button all moved on to the new one (2026-09-06 audio walk, finding H).
+    /// </remarks>
+    private RegionExplorerKey? _loadedKey;
+
     protected override async Task OnParametersSetAsync()
     {
-        if (!Visible || _source is not null) return;
-        await LoadAsync();
+        if (!Visible) return;
+
+        var wanted = RegionExplorerKey.For(FileId, Region?.Start, Region?.End);
+        if (!RegionExplorerKey.ShouldReload(_loadedKey, wanted)) return;
+
+        await LoadAsync(wanted!.Value);
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(RegionExplorerKey key)
     {
-        if (Region is null) return;
         _loading = true;
         _loadError = null;
+
+        // Cleared before the fetch, not after: while a new region is loading, the old region's
+        // audio must not be playable and must not be what Save sends.
+        _source    = null;
+        _loadedKey = null;
         StateHasChanged();
 
         try
         {
             // Load ONLY the region’s bytes — no full-file download
-            var clipTask  = AdminClient.GetClipPreviewAsync(FileId, Region.Start, Region.End);
+            var clipTask  = AdminClient.GetClipPreviewAsync(key.FileId, key.Start, key.End);
             var typesTask = AdminClient.GetPublicFileTypesAsync();
             var notesTask = AdminClient.GetRegionNotesAsync(FileId);
 
@@ -394,7 +425,10 @@
 
             var clip = clipTask.Result;
             if (clip is not null)
-                _source = WsAudioSource.FromBytes(clip.Value.Data, clip.Value.ContentType);
+            {
+                _source    = WsAudioSource.FromBytes(clip.Value.Data, clip.Value.ContentType);
+                _loadedKey = key;   // only now is this what is on screen
+            }
             else
                 _loadError = "Could not clip audio for this region. Only WAV and MP3 sources are supported.";
 
@@ -422,7 +456,7 @@
     {
         // The rule lives in RegionNoteMatching so the Saved Clips list can ask the same question
         // and get the same answer — a note used to be visible only in the panel it was typed in.
-        return Region is null ? [] : RegionNoteMatching.For(all, Region.Start, Region.End);
+        return _loadedKey is { } key ? RegionNoteMatching.For(all, key.Start, key.End) : [];
     }
 
     private async Task ReloadNotesAsync()
@@ -480,7 +514,10 @@
 
     private async Task SaveClipAsync()
     {
-        if (Region is null || _clipFileTypeId == Guid.Empty) return;
+        // The key that was LOADED, not the parameter as it stands now. Those were allowed to differ
+        // — that is the whole of finding H — and when they did, the file that arrived was not the
+        // sound that had been playing.
+        if (_loadedKey is not { } key || _clipFileTypeId == Guid.Empty) return;
 
         _isClipping  = true;
         _clipError   = null;
@@ -490,7 +527,7 @@
         try
         {
             var (result, error) = await AdminClient.ClipAudioWithReasonAsync(FileId, new ClipAudioRequest(
-                Region.Start, Region.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
+                key.Start, key.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
                 _clipIsPublic, _clipFileTypeId, _clipNormalize));
 
             if (result is not null)
@@ -516,7 +553,7 @@
 
     private async Task AddNoteAsync()
     {
-        if (string.IsNullOrWhiteSpace(_noteHtml) || Region is null) return;
+        if (string.IsNullOrWhiteSpace(_noteHtml) || _loadedKey is null) return;
 
         _addingNote = true;
         _noteError  = null;
@@ -525,11 +562,13 @@
         try
         {
             var result = await AdminClient.CreateRegionNoteAsync(FileId, new CreateRegionNoteRequest(
-                RegionStart: Region.Start,
-                RegionEnd:   Region.End,
-                RegionLabel: Region.Label,
+                // The range that is loaded and audible, not the parameter: a note is about what the
+                // person just heard, and filing it against a different stretch loses it.
+                RegionStart: _loadedKey!.Value.Start,
+                RegionEnd:   _loadedKey!.Value.End,
+                RegionLabel: Region?.Label,
                 // _currentTime is clip-relative; store absolute (original file) time
-                TimeOffset:  _isPointInTime ? (_currentTime + Region.Start) : null,
+                TimeOffset:  _isPointInTime ? (_currentTime + LoadedStart) : null,
                 NoteHtml:    _noteHtml,
                 IsPublic:    _noteIsPublic));
 
