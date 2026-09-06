@@ -95,44 +95,47 @@
                     }
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="90px">
-                <GridCommandButton Command="View"
-                                   Icon="@SvgIcon.Eye"
-                                   OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
-                    View
-                </GridCommandButton>
-            </GridCommandColumn>
-            @* Impersonate and delete moved out of the command column so they can answer to the
-               row they are on. Both refuse on your own account, and a control that is offered and
-               then refuses is the dead-end click items 149 and 150 ruled out: three Playwright
-               tests clicked the first row's delete button and got the refusal, because on a fresh
-               database the SuperAdmin sorts first. Shown disabled rather than hidden, so the row
-               keeps its shape and the tooltip says why. *@
-            <GridColumn Title="" Width="110px" Sortable="false" Filterable="false" Context="row">
+            @* One actions column, three icon buttons, on one line. View used to be a Telerik
+               GridCommandColumn of its own, which read as two separate action columns and left
+               a text button beside two icon ones. Impersonate and delete stayed out of the
+               command column so they can answer to the row they are on; View joined them rather
+               than the other way round. Both refuse on your own account, and a control that is
+               offered and then refuses is the dead-end click items 149 and 150 ruled out: three
+               Playwright tests clicked the first row's delete button and got the refusal, because
+               on a fresh database the SuperAdmin sorts first. Shown disabled rather than hidden,
+               so the row keeps its shape and the tooltip says why. Viewing yourself is allowed,
+               so View is never disabled. *@
+            <GridColumn Title="Actions" Width="150px" Sortable="false" Filterable="false" Context="row">
                 <Template>
                     @{ var person = (AppUserRecord)row; }
-                    @if (person.Id == UserState.UserId)
-                    {
-                        <button type="button" class="btn btn-sm btn-outline-warning me-1" disabled
-                                title="You are signed in as this account">
-                            <BenIcon Name="user" />
+                    <div class="text-nowrap">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                title="View this user" @onclick="@(() => ViewUser(person))">
+                            <BenIcon Name="eye" />
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" disabled
-                                title="Delete your own account from your profile">
-                            <BenIcon Name="trash-2" />
-                        </button>
-                    }
-                    else
-                    {
-                        <button type="button" class="btn btn-sm btn-outline-warning me-1"
-                                title="Impersonate this user" @onclick="@(() => Impersonate(person))">
-                            <BenIcon Name="user" />
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger"
-                                title="Delete this user" @onclick="@(() => DeleteUser(person))">
-                            <BenIcon Name="trash-2" />
-                        </button>
-                    }
+                        @if (person.Id == UserState.UserId)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-warning me-1" disabled
+                                    title="You are signed in as this account">
+                                <BenIcon Name="user" />
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" disabled
+                                    title="Delete your own account from your profile">
+                                <BenIcon Name="trash-2" />
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-warning me-1"
+                                    title="Impersonate this user" @onclick="@(() => Impersonate(person))">
+                                <BenIcon Name="user" />
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    title="Delete this user" @onclick="@(() => DeleteUser(person))">
+                                <BenIcon Name="trash-2" />
+                            </button>
+                        }
+                    </div>
                 </Template>
             </GridColumn>
         </GridColumns>
