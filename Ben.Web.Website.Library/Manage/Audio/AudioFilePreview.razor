@@ -84,9 +84,9 @@ else
    restyle (bde4e03f, 2026-08-18) swapped that for a modal and chose the SMALLEST size — 300px,
    with the toolbar scrolling sideways, the waveform a 270px strip and every panel below the fold.
    The same commit dropped VisibleChanged, which is why closing it did not stick and why
-   OnModalVisibleChanged became dead code. Both halves are restored here (2026-09-06 audio walk,
+   OnModalVisibleChangedAsync became dead code. Both halves are restored here (2026-09-06 audio walk,
    findings P and A). *@
-<BenModal Visible="@_showModal" VisibleChanged="@OnModalVisibleChanged" Title="@FileName" Size="fullscreen">
+<BenModal Visible="@_showModal" VisibleChanged="@OnModalVisibleChangedAsync" Title="@FileName" Size="fullscreen">
     <ChildContent>
         @if (_showModal && _source is not null)
         {
@@ -1489,22 +1489,35 @@ else
 
     // ── Modal + explorer visibility handlers ──────────────────────────────────
 
-    private void OnModalVisibleChanged(bool visible)
+    /// <summary>
+    /// Closing the editor: save how it was set up, then put the component back to its defaults.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The save has to happen first, and it has to be awaited.</b> The colour-ramp picker
+    /// fires its save without waiting for it — the select's <c>OnChange</c> takes a plain callback
+    /// — so changing a setting and closing the editor straight afterwards could outrun the request.
+    /// Worse, the reset below runs on the same fields, so a save that landed after it would have
+    /// written the defaults over what the person chose. On a busy page that lost the change every
+    /// time; it only ever looked reliable because a hand-run test paused between the two
+    /// (2026-09-06 audio audit, phase 6).</para>
+    /// </remarks>
+    private async Task OnModalVisibleChangedAsync(bool visible)
     {
         _showModal = visible;
-        if (!visible)
-        {
-            _timelineEnabled    = true;
-            _spectrogramEnabled = false;
-            // Matches the field's own default (:825). Resetting it to false meant reopening the
-            // editor drew a spectrogram with no axis labels, once, for no stated reason.
-            _spectrogramLabels  = true;
-            _modalReady         = false;
-            _showMarkers        = false;
-            _showVoiceBand      = false;
-            _silenceDetectionEnabled = false;
-            _regionDrawMode     = true;
-        }
+        if (visible) return;
+
+        await SaveViewAsync();
+
+        _timelineEnabled    = true;
+        _spectrogramEnabled = false;
+        // Matches the field's own default (:825). Resetting it to false meant reopening the
+        // editor drew a spectrogram with no axis labels, once, for no stated reason.
+        _spectrogramLabels  = true;
+        _modalReady         = false;
+        _showMarkers        = false;
+        _showVoiceBand      = false;
+        _silenceDetectionEnabled = false;
+        _regionDrawMode     = true;
     }
 
     // ── Waveform click → toggle play/pause ────────────────────────────────────
