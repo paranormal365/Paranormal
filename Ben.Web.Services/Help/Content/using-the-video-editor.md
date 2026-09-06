@@ -188,6 +188,7 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Split** cuts the clip in two at the playhead.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
+- **Mute** on the right-click menu silences a clip's own sound without changing its level.
 
 ### Hiding part of the picture
 
@@ -218,6 +219,49 @@ By default a clip fills the frame. **Place this clip** lets you say otherwise:
 
 The picture keeps its own proportions inside whatever box you give it, so placing a clip never
 stretches it.
+
+## Sound
+
+Audio clips sit on their own tracks below the picture and behave like everything else on the
+timeline: drag one to move it, drag its edges to trim it, and the shape drawn on the chip is the
+part of the recording that clip actually plays.
+
+Select a sound and the **Properties** tab offers:
+
+- **Volume**, and a draggable envelope on the chip itself for fading within a single clip.
+- **Left** and **Right** separately, for a recording where one channel is hotter than the other.
+- **Fade in** and **fade out**, limited to half the clip.
+- **Mute this clip**, which silences it without losing the level it is set to.
+
+### Cleaning up a recording
+
+A recording made in a house at two in the morning is mostly room tone, fridge hum and the
+recorder's own noise floor.
+
+- **Reduce hiss** lifts a voice out of that. It goes further as you turn it up, and past about
+  three-quarters it starts to make speech sound watery — so turn it up until the noise stops
+  bothering you and no further.
+- **Even out the level** brings the clip to a common loudness. Worth switching on for every clip in
+  a reel cut from several recordings, so the volume does not need changing between them.
+
+Both are applied when the video is rendered, not to the file you imported, so nothing is lost and
+you can change your mind.
+
+### Music under a voice
+
+Music and room tone are usually set at a level chosen for the stretches with nobody talking, and
+the moment a voice comes in they are too loud.
+
+Open an audio track's menu and choose **Duck others under this**. Everything else — including the
+picture's own sound — drops in level whenever that track is playing and returns when it stops. It
+is the alternative to drawing a volume envelope around every line by hand and redrawing it whenever
+the timing moves.
+
+### Separating a clip's own sound
+
+Right-click a video clip and choose **Separate Audio** to put its sound on its own track, where it
+can be trimmed and moved independently. The new clip carries the trim, the speed and the level the
+picture had, so it starts out lined up exactly as it was.
 
 ## Layers above the picture
 
