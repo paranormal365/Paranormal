@@ -93,13 +93,19 @@ else
             <div class="d-flex flex-column h-100" style="overflow:hidden;">
 
                 @* Info bar *@
+                @* align-content:flex-start — this bar wraps onto two lines at ordinary widths (the
+                   file's details, then the toolbar), and a wrapped flex container's default is to
+                   spread its lines through whatever height it has. In a fullscreen modal that put
+                   two bands of empty space between the details and the toolbar, which is what the
+                   help screenshots showed. *@
                 <div class="d-flex flex-wrap gap-4 mb-2 p-2 rounded flex-shrink-0"
-                     style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;">
+                     style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;align-content:flex-start;">
                     <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
                     <span><strong>Type:</strong>@(" ")@ContentType</span>
                     <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
                     <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
                     <span class="ms-auto d-flex align-items-center gap-2">
+                        <HelpLink Slug="using-the-audio-editor" />
                         @* Timeline toggle *@
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleTimelineAsync" disabled="@(!(_modalReady))">
                             🕐 @(_timelineEnabled ? "Hide Timeline" : "Show Timeline")
@@ -236,7 +242,7 @@ else
                 @* EVP Markers panel *@
                 @if (_showMarkers && _modalReady)
                 {
-                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                    <div class="p-2 mb-2 rounded border bg-body-secondary" id="evp-markers-panel" style="font-size:0.8rem;">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <strong class="small">EVP Markers</strong>
                             <button type="button" class="btn btn-primary btn-sm" @onclick="AddMarkerAtCurrentTimeAsync">
@@ -512,7 +518,7 @@ else
                 }
 
                 @* Full WaveSurfer player *@
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0" id="modal-player-pane">
                     <WaveSurferPlayer @ref="_modalPlayer"
                                       Config="@_fullConfig"
                                       Resizable="true"

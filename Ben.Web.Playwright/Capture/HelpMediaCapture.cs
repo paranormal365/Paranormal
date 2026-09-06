@@ -637,6 +637,111 @@ public sealed class HelpMediaCapture : BenTestBase
                            20, "the import dialog would not close");
     }
 
+    /// <summary>
+    /// The audio editor: the full view, the spectrogram, a scan's candidates, and the case mixer.
+    /// </summary>
+    /// <remarks>
+    /// Every shot needs real audio on the page, so this uploads the fixture to the seeded case
+    /// first. A screenshot of an empty editor teaches nobody anything, and the spectrogram in
+    /// particular is the one picture that explains what the feature is for.
+    /// </remarks>
+    [Test]
+    [Description("using-the-audio-editor: the full view, the spectrogram, EVP candidates and the mixer.")]
+    public async Task Capture_UsingTheAudioEditor()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "Belmont"), Is.True,
+            "the seeded case the audio shots are taken on was not reachable.");
+
+        await OpenTabAsync("Files", Main.GetByText("Upload File", new() { Exact = false }).First);
+        await Expect(Page.Locator("#case-file-upload")).ToBeAttachedAsync(new() { Timeout = 15_000 });
+        await Page.Locator("#case-file-upload").SetInputFilesAsync(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3"));
+        await Expect(Page.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        // ── The full view ─────────────────────────────────────────────────────
+        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+
+        var modal = Page.Locator(".modal.show").First;
+        await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
+            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        await Page.WaitForTimeoutAsync(1_500);
+
+        // A region drawn, because the editor with nothing selected shows none of what it is for.
+        var box = await modal.Locator("[id^='ws-']").First.BoundingBoxAsync();
+        if (box is not null)
+        {
+            var y = box.Y + box.Height / 2;
+            await Page.Mouse.MoveAsync((float)(box.X + box.Width * 0.30), y);
+            await Page.Mouse.DownAsync();
+            await Page.Mouse.MoveAsync((float)(box.X + box.Width * 0.45), y, new() { Steps = 8 });
+            await Page.Mouse.UpAsync();
+            await Page.WaitForTimeoutAsync(600);
+        }
+
+        await modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        await Page.WaitForTimeoutAsync(500);
+        await ShootAsync("using-the-audio-editor", "editor-overview.png");
+
+        // ── The spectrogram ───────────────────────────────────────────────────
+        await modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false })
+                   .First.ClickAsync();
+        await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Hide Spectrogram", Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(4_000);   // the FFT and the draw both run in workers
+
+        // Viridis and the mel scale, because the point of the picture is that speech is VISIBLE in
+        // it. Jet on a linear axis puts a quiet recording's whole voice band in one dark blue strip
+        // at the bottom, which illustrates nothing.
+        var colormap = modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
+        if (await colormap.CountAsync() > 0)
+        {
+            await colormap.SelectOptionAsync(new SelectOptionValue { Label = "Viridis" });
+            await Page.WaitForTimeoutAsync(3_000);
+        }
+        var mel = modal.GetByRole(AriaRole.Button, new() { Name = "Mel Scale", Exact = false }).First;
+        if (await mel.CountAsync() > 0)
+        {
+            await mel.ClickAsync();
+            await Page.WaitForTimeoutAsync(4_000);
+        }
+
+        // Cropped to the player: the picture is about the waveform and the frequencies under it,
+        // and a full-viewport shot reduces both to a strip.
+        await ShootAsync("using-the-audio-editor", "spectrogram.png", selector: "#modal-player-pane");
+
+        // ── A scan's candidates ───────────────────────────────────────────────
+        await modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false })
+                   .First.ClickAsync();
+        await Page.WaitForTimeoutAsync(500);
+
+        var scan = modal.GetByRole(AriaRole.Button, new() { Name = "Scan", Exact = false }).First;
+        if (await scan.CountAsync() > 0)
+        {
+            await scan.ClickAsync();
+            await Page.WaitForTimeoutAsync(12_000);   // the scan reads the whole recording
+        }
+        await ShootAsync("using-the-audio-editor", "evp-candidates.png", selector: "#evp-markers-panel");
+
+        await modal.Locator(".btn-close").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+
+        // ── The case mixer ────────────────────────────────────────────────────
+        await Page.Locator("#case-audio-mixer").ClickAsync();
+        await Expect(Page.GetByText("Audio Clips", new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var add = Page.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).First;
+        await add.ClickAsync();
+        await Page.WaitForTimeoutAsync(400);
+        await add.ClickAsync();
+        await Expect(Page.Locator("[data-clip-id]").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.WaitForTimeoutAsync(600);
+
+        await ShootAsync("using-the-audio-editor", "case-mixer.png", proves: "Audio Clips");
+    }
+
     [Test]
     [Description("using-the-video-editor: the editor, its media library and a populated timeline.")]
     public async Task Capture_UsingTheVideoEditor()
