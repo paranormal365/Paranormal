@@ -427,6 +427,26 @@ twelfth past a minute) while the media library draws them on demand. Each test n
 name of its own to Sarah's own library and opens the editor from that card, so it always works on a
 recording it owns. Ninety seconds to forty-six, and no more picking up somebody else's file.
 
+## Seven failures that are not this audit's
+
+The plan's phase 6 asks for the whole Playwright suite once. It ran: **448 passed, 9 failed, 40
+skipped** in 24 minutes. One of the nine was the audio persistence test, which is fixed above. The
+other eight were checked twice — re-run alone on a fresh database, then run against `master` before
+this phase — and **seven reproduce on master**, so they are pre-existing and nothing to do with the
+audio work:
+
+- `A_group_is_told_a_case_is_closed_rather_than_deleted`
+- `AuthoredPage_IsVisibleToASignedOutVisitor`
+- `Impersonation_shows_their_world_and_survives_a_reload_with_its_exit`
+- `OrgPublicHome_ShowsCasesNavItem`
+- `The_wizard_founds_a_group_and_the_hub_offers_the_tour`
+- `Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt`
+- `VideoEditorPage_Authenticated_PageTitleIsVideoEditor`
+
+The eighth, `AddingAPieceOfGear_ShowsItInTheListAndOnItsOwnPage`, failed in the full run and passed
+both times in isolation — the one that does look like interference. None of these are audio and none
+were investigated here; they are recorded so the next person does not mistake them for fallout.
+
 ## What this changes in the plan
 
 1. **New phase 1a, before everything: the editor gets its size back.** P is a one-word change with
