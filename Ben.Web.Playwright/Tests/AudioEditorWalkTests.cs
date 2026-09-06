@@ -23,6 +23,50 @@ namespace Ben.Web.Playwright.Tests;
 [Explicit("Phase 0 walk — run on the isolated stack with --filter TestCategory=AudioEditorWalk")]
 public class AudioEditorWalkTests : BenTestBase
 {
+    /// <summary>
+    /// Dark, at a desktop size, like every other capture in this repo.
+    /// </summary>
+    /// <remarks>
+    /// The theme is applied synchronously from <c>&lt;head&gt;</c> out of the template's
+    /// <c>layoutSettings</c>, so seeding that from an init script is what makes the first paint
+    /// dark; <c>ColorScheme.Dark</c> covers the parts that read <c>prefers-color-scheme</c>
+    /// instead. Same pair <see cref="Capture.HelpMediaCapture"/> uses, and for the same reason.
+    /// </remarks>
+    public override BrowserNewContextOptions ContextOptions() => new()
+    {
+        ViewportSize = new ViewportSize { Width = 1440, Height = 900 },
+        ColorScheme  = ColorScheme.Dark,
+    };
+
+    private const string DarkModeInitScript = """
+        try {
+            localStorage.setItem('layoutSettings', JSON.stringify({ theme: 'dark' }));
+            localStorage.setItem('ben-theme', 'dark');
+        } catch (e) { /* storage blocked; the shot falls back to the default theme */ }
+        """;
+
+    [SetUp]
+    public async Task GoDarkAndWatchTheConsole()
+    {
+        await Context.AddInitScriptAsync(DarkModeInitScript);
+
+        // A spectrogram that never draws leaves no mark on the page; the reason is in the console.
+        _console.Clear();
+        Page.Console += (_, m) =>
+        {
+            if (m.Type is "error" or "warning") _console.Add($"{m.Type}: {m.Text}");
+        };
+        Page.PageError += (_, e) => _console.Add($"pageerror: {e}");
+    }
+
+    private readonly List<string> _console = [];
+
+    private void RecordConsole(string id)
+    {
+        foreach (var line in _console.Distinct().Take(6)) Record(id, "CONSOLE", line);
+        _console.Clear();
+    }
+
     private static readonly string TestAudioPath =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3");
 
@@ -299,6 +343,13 @@ public class AudioEditorWalkTests : BenTestBase
         {
             Record("C", "NOTE", "could not find the colormap select; captured screenshots only");
         }
+
+        // Did it draw at all? A spectrogram with no pixels is not a colormap problem.
+        var drawn = await Page.EvaluateAsync<string>(
+            @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                      return cs.map(c => `${c.width}x${c.height}`).join(' | ') || 'no canvases'; }");
+        Record("S", "NOTE", $"canvases in the modal: {drawn}");
+        RecordConsole("S");
 
         static int Delta(string a, string b)
         {
