@@ -29,6 +29,10 @@ set -euo pipefail
 #   scripts/run-e2e.sh --keep             # leave the hosts up afterwards to poke at
 #   BEN_E2E_DB=OtherName scripts/run-e2e.sh   # a fresh name = a fresh database AND uploads dir
 #
+# The seeded passwords the sign-in tests need are read from the gitignored
+# Ben.Data.WebApi/appsettings.Development.json and handed to the suite as BEN_*_PASSWORD; export
+# any of them yourself to override. They are never printed.
+#
 # It starts the hosts it needs and stops the ones it started. Hosts already running on those
 # ports are left alone and REUSED — which is wrong for isolation, so it refuses instead and says
 # so, rather than silently testing against whatever was there.
@@ -183,8 +187,45 @@ echo "── Turning on the features the walks audit ─────────
 # coverage and gains the thing the walk exists for: actually rendering those pages. This is
 # exactly what an isolated database buys — a configuration can be set for the run without
 # touching anything Ben ships.
+# THE SEEDED PASSWORDS. The suite's sign-in tests read them from BEN_*_PASSWORD, and this script
+# used to pass only BEN_BASE_URL — so every test that signs in was quietly Assert.Ignore'd, and
+# the only browser test the audio editor had never once ran under the harness (2026-09-06 audio
+# audit, phase 0). They live in Ben.Data.WebApi/appsettings.Development.json, which is gitignored;
+# anything already exported in the calling shell wins, and nothing here ever echoes a value.
+SECRETS="$ROOT_DIR/Ben.Data.WebApi/appsettings.Development.json"
+seeded_password() {
+  # $1 = one of: superadmin | devdata | <email>
+  python3 - "$SECRETS" "$1" <<'PYEOF' 2>/dev/null || true
+import json, sys
+d = json.load(open(sys.argv[1])).get("SeedData", {})
+who = sys.argv[2]
+if who == "superadmin":
+    print(d.get("SuperAdmin", {}).get("Password", ""))
+elif who == "devdata":
+    print(d.get("DevData", {}).get("Password", ""))
+else:
+    for u in d.get("SeedOrganization", {}).get("Users", []):
+        if u.get("Email", "").lower() == who.lower():
+            print(u.get("Password", "")); break
+PYEOF
+}
+export BEN_SUPERADMIN_PASSWORD="${BEN_SUPERADMIN_PASSWORD:-$(seeded_password superadmin)}"
+export BEN_USER_PASSWORD="${BEN_USER_PASSWORD:-$(seeded_password sarah.mitchell@benco.dev)}"
+export BEN_MEMBER_PASSWORD="${BEN_MEMBER_PASSWORD:-$(seeded_password james.thornton@benco.dev)}"
+export BEN_CLIENT_PASSWORD="${BEN_CLIENT_PASSWORD:-$(seeded_password daniel.park@benco.dev)}"
+export BEN_VIEWER_PASSWORD="${BEN_VIEWER_PASSWORD:-$(seeded_password devdata)}"
+for v in BEN_SUPERADMIN_PASSWORD BEN_USER_PASSWORD BEN_MEMBER_PASSWORD BEN_CLIENT_PASSWORD BEN_VIEWER_PASSWORD; do
+  if [[ -z "${!v}" ]]; then
+    echo "   $v could not be derived from $SECRETS — tests that sign in with it will be skipped."
+  fi
+done
+
 SA_EMAIL="${BEN_E2E_ADMIN_EMAIL:-haveben@msn.com}"
-SA_PASSWORD="${BEN_E2E_ADMIN_PASSWORD:?set BEN_E2E_ADMIN_PASSWORD — the seeded password is no longer in this repo}"
+SA_PASSWORD="${BEN_E2E_ADMIN_PASSWORD:-$BEN_SUPERADMIN_PASSWORD}"
+if [[ -z "$SA_PASSWORD" ]]; then
+  echo "set BEN_E2E_ADMIN_PASSWORD — the seeded password is not in this repo and could not be read from $SECRETS"
+  exit 1
+fi
 SA_TOKEN=$(curl -fsS -X POST "$API_URL/login" -H "Content-Type: application/json" \
   -d "{\"email\":\"$SA_EMAIL\",\"password\":\"$SA_PASSWORD\"}" 2>/dev/null \
   | python3 -c "import sys,json;print(json.load(sys.stdin).get('accessToken',''))" 2>/dev/null || true)
