@@ -148,6 +148,7 @@ The ones worth knowing straight away:
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the start or the end |
 | <kbd>S</kbd> | Split the selected clip at the playhead |
 | <kbd>M</kbd> | Drop a marker at the playhead |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>D</kbd> | Duplicate what is selected, clips and annotations alike |
 | <kbd>Delete</kbd> | Remove what is selected |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> | Undo (<kbd>Shift</kbd> as well to redo) |
 | <kbd>Escape</kbd> | Clear the selection |
@@ -188,6 +189,36 @@ Select a clip and the panel's **Properties** tab describes it.
 - **Link Nearby Audio** ties a separately-recorded sound file to the picture it belongs with, so
   moving one moves the other.
 
+### Hiding part of the picture
+
+A clip often has one thing in it that cannot go out: a face, a number plate, the house number by
+the door. **Hide an area** covers a rectangle of the picture with a blur or a mosaic, so the rest
+of the clip can still be used.
+
+Areas are drawn on the clip, so they travel with it if you move or trim it, and the preview shows
+each one where the finished video will obscure it. The marker in the preview has a dashed edge to
+say it is an editing marker: the browser's blur is not the one the render uses, and the render's is
+stronger.
+
+An area is measured as a share of the frame rather than in pixels, so it still covers the same
+thing if you export at a different resolution. If an area is somehow too small to render, the
+export says so in its warnings rather than quietly leaving it out — check the picture before
+sharing it.
+
+### Putting a clip somewhere other than the whole frame
+
+By default a clip fills the frame. **Place this clip** lets you say otherwise:
+
+- **Two cameras at once.** Put a clip on a second video track and place it in a corner, or place
+  both at half width for a side-by-side.
+- **Footage shot sideways.** **Turn upright** rotates a phone clip a quarter turn.
+- **Something at the edge you do not want.** **Cut off the edges** trims a share off any side,
+  which is how a recorder's timestamp bar or the neighbour's window comes out of shot. Cutting
+  removes it from the file completely, unlike hiding an area, which covers it.
+
+The picture keeps its own proportions inside whatever box you give it, so placing a clip never
+stretches it.
+
 ## Layers above the picture
 
 The timeline can hold more than one video track. A clip on a track above the first plays over the
@@ -213,7 +244,16 @@ Callouts can be moved, resized and rotated, and their movement can be animated o
 *Callouts are for drawing attention to a spot in the picture.*
 
 Both take colour, font and border settings from the properties panel, and both can move across the
-frame while they are on screen.
+frame while they are on screen. Every change is made as you make it and every one can be undone,
+including the words themselves — there is no separate Apply step.
+
+A title runs on one line unless you tell it not to. **Wrap long lines** breaks it at a width you
+choose, which is easier than typing the breaks yourself and survives a change of font size.
+
+Right-click any clip, title, callout or piece of artwork and choose **Duplicate**, or press
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>D</kbd>, to make another one just like it. The copy lands just
+after the original and is entirely separate, so editing one leaves the other alone — which is how
+you make three matching callouts without building each from scratch.
 
 ## Preview and export
 
