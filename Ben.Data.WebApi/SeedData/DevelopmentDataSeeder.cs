@@ -225,7 +225,18 @@ internal static class DevelopmentDataSeeder
             creator: sarah,
             confirms: 8, disputes: 0, inconclusive: 3, voters: [owner, james, emma, daniel],
             now: now,
-            latitude: 36.5726m, longitude: -87.0562m);
+            latitude: 36.5726m, longitude: -87.0562m,
+            // The one seeded case that shows its finding publicly (W-P3), so the surface exists
+            // to be seen on a fresh install rather than only in a test.
+            publicReportSummary:
+                "<p>Over four nights we recorded continuously in the main chamber and the upper "
+              + "passage. Twenty-one of the twenty-three audio anomalies reported this season "
+              + "matched airflow through the cave mouth at the hours they were heard; the "
+              + "remaining two were traced to a visitor group in the adjacent passage.</p>",
+            publicReportConclusion:
+                "<p>We found no evidence of paranormal activity. The site's acoustics are unusual "
+              + "and account for what visitors describe, which is worth saying plainly: people "
+              + "are hearing something real, and it is the cave.</p>");
 
         await SeedCaseAsync(db, nps,
             year: 2026, number: 1,
@@ -993,7 +1004,12 @@ internal static class DevelopmentDataSeeder
         int confirms, int disputes, int inconclusive,
         AppUser[] voters,
         DateTime now,
-        decimal? latitude = null, decimal? longitude = null)
+        decimal? latitude = null, decimal? longitude = null,
+        // W-P3 (site evaluation 2026-09-06): a finished report the group has chosen to show on
+        // the public case page. Without one, a fresh install has no case anywhere that
+        // demonstrates the surface, and the browser walk has nothing to walk.
+        string? publicReportSummary = null,
+        string? publicReportConclusion = null)
     {
         if (await db.Cases.AnyAsync(c => c.OrganizationId == org.Id && c.CaseYear == year && c.OrgCaseNumber == number))
             return;
@@ -1013,6 +1029,29 @@ internal static class DevelopmentDataSeeder
         };
         db.Cases.Add(caseEntity);
         await db.SaveChangesAsync();
+
+        // W-P3: a published report with its summary switched on, so a fresh install shows what a
+        // group's finding looks like on its own public page. Only on a case that is actually
+        // public — the switch means nothing otherwise, and seeding it elsewhere would suggest it
+        // does.
+        if (isPublic && publicReportSummary is not null)
+        {
+            db.CaseReports.Add(new CaseReport
+            {
+                Id                     = Guid.NewGuid(),
+                CaseId                 = caseEntity.Id,
+                Title                  = "Final report",
+                Summary                = publicReportSummary,
+                Conclusion             = publicReportConclusion,
+                Status                 = CaseReportStatus.Published,
+                IsPublicSummaryVisible = true,
+                PublishedAt            = opened.AddDays(45),
+                PublishedByAppUserId   = creator.Id,
+                DateCreated            = now,
+                CreatedByAppUserId     = creator.Id,
+            });
+            await db.SaveChangesAsync();
+        }
 
         // Timeline entries
         db.CaseTimelineEntries.Add(new CaseTimelineEntry

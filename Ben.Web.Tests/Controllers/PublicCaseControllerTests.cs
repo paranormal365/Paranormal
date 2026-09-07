@@ -305,4 +305,181 @@ public class PublicCaseControllerTests
         var result = await Build(factory).GetPublicCase("rivals", "the-haunted-manor", default);
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── The group's own finding (site evaluation 2026-09-06, W-P3) ───────────
+    //
+    // Three conditions, none implying another: the case is public, the report is Published, and
+    // the group switched this report's summary on. Each of the first three tests removes exactly
+    // one of them.
+
+    private static async Task<CaseReport> SeedReportAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId,
+        CaseReportStatus status = CaseReportStatus.Published,
+        bool showPublicly = true,
+        string? summary = "<p>Every recording had a mundane source.</p>",
+        string? conclusion = "<p>Not haunted.</p>")
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var report = new CaseReport
+        {
+            Id                     = Guid.NewGuid(),
+            CaseId                 = caseId,
+            Title                  = "Final report",
+            Summary                = summary,
+            Conclusion             = conclusion,
+            Status                 = status,
+            IsPublicSummaryVisible = showPublicly,
+            PublishedAt            = status == CaseReportStatus.Published ? new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc) : null,
+            DateCreated            = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            CreatedByAppUserId     = Guid.NewGuid(),
+        };
+        db.CaseReports.Add(report);
+        await db.SaveChangesAsync();
+        return report;
+    }
+
+    private static async Task<PublicCaseDetail> GetDetailAsync(
+        IDbContextFactory<BenDataContext> factory, Organization org, Case c)
+    {
+        var result = await Build(factory).GetPublicCase(org.UrlName, $"{c.CaseYear}-{c.OrgCaseNumber:D3}", CancellationToken.None);
+        return Assert.IsType<PublicCaseDetail>(Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    [Fact]
+    public async Task A_public_summary_shows_only_when_switched_on()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+        await SeedReportAsync(factory, c.Id, showPublicly: false);
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.Null(detail.Report);
+    }
+
+    [Fact]
+    public async Task An_unpublished_report_is_never_shown_however_the_switch_is_set()
+    {
+        // Publishing a report delivers it to the client. Switching this on says the group is
+        // willing to show it. A draft is neither, and the switch must not stand in for the work.
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+        await SeedReportAsync(factory, c.Id, status: CaseReportStatus.Draft, showPublicly: true);
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.Null(detail.Report);
+    }
+
+    [Fact]
+    public async Task A_case_that_is_not_public_carries_no_report_because_it_has_no_public_page()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory, status: CaseStatus.Active, isPublic: false);
+        await SeedReportAsync(factory, c.Id);
+
+        var result = await Build(factory).GetPublicCase(org.UrlName, $"{c.CaseYear}-{c.OrgCaseNumber:D3}", CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_switched_on_published_report_shows_its_summary_and_conclusion()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+        await SeedReportAsync(factory, c.Id);
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.NotNull(detail.Report);
+        Assert.Equal("Final report", detail.Report!.Title);
+        Assert.Contains("mundane source", detail.Report.Summary);
+        Assert.Contains("Not haunted", detail.Report.Conclusion);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), detail.Report.PublishedAt);
+    }
+
+    [Fact]
+    public async Task An_empty_report_is_not_a_heading_over_nothing()
+    {
+        // A group that switches the summary on before writing it would otherwise publish a
+        // "What we found" heading with no words under it, which reads as a fault.
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+        await SeedReportAsync(factory, c.Id, summary: "   ", conclusion: null);
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.Null(detail.Report);
+    }
+
+    [Fact]
+    public async Task The_newest_switched_on_report_is_the_one_shown()
+    {
+        // Nothing stops a group switching on two. One conclusion is better than two.
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+        await SeedReportAsync(factory, c.Id, summary: "<p>The first pass.</p>", conclusion: null);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.CaseReports.Add(new CaseReport
+            {
+                Id = Guid.NewGuid(), CaseId = c.Id, Title = "Revised report",
+                Summary = "<p>The second pass.</p>", Status = CaseReportStatus.Published,
+                IsPublicSummaryVisible = true,
+                PublishedAt = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
+                DateCreated = new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc),
+                CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.Equal("Revised report", detail.Report!.Title);
+        Assert.Contains("second pass", detail.Report.Summary);
+    }
+
+    [Fact]
+    public async Task A_private_engagements_names_are_substituted_in_the_report_too()
+    {
+        // The report is prose about a case, so it gets exactly the substitution the title and the
+        // timeline get. A report that named the client would undo the whole designation.
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory, pseudonym: "The Westside Family");
+
+        var clientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = clientId, UserName = "casey@t.com", NormalizedUserName = "CASEY@T.COM",
+                Email = "casey@t.com", NormalizedEmail = "CASEY@T.COM",
+                FirstName = "Casey", LastName = "Evaluator", DisplayName = "Casey Evaluator",
+                DateCreated = DateTime.UtcNow,
+            });
+            var request = new ClientRequest
+            {
+                Id = Guid.NewGuid(), AppUserId = clientId, StreetAddress1 = "1 Main",
+                City = "Springfield", State = "IL", ZipCode = "62701", Country = "US",
+                Status = ClientRequestStatus.Assigned, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = clientId,
+            };
+            db.ClientRequests.Add(request);
+
+            var tracked = await db.Cases.FirstAsync(x => x.Id == c.Id);
+            tracked.ClientRequestId     = request.Id;
+            tracked.IsPrivateEngagement = true;
+            await db.SaveChangesAsync();
+        }
+
+        await SeedReportAsync(factory, c.Id,
+            summary: "<p>We met Casey Evaluator on site.</p>", conclusion: null);
+
+        var detail = await GetDetailAsync(factory, org, c);
+
+        Assert.NotNull(detail.Report);
+        Assert.DoesNotContain("Evaluator", detail.Report!.Summary);
+    }
 }

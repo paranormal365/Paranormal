@@ -52,7 +52,7 @@ public sealed class CaseReportController : BenControllerBase
         var reports = await db.CaseReports.AsNoTracking()
             .Where(r => r.CaseId == caseId)
             .OrderByDescending(r => r.DateCreated)
-            .Select(r => new CaseReportSummary(r.Id, r.CaseId, r.Title, r.Status, r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated))
+            .Select(r => new CaseReportSummary(r.Id, r.CaseId, r.Title, r.Status, r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated, r.IsPublicSummaryVisible))
             .ToListAsync(ct);
         return Ok(reports);
     }
@@ -125,11 +125,81 @@ public sealed class CaseReportController : BenControllerBase
         report.Summary              = request.Summary?.Trim();
         report.Conclusion           = request.Conclusion?.Trim();
         report.ExpectedDeliveryDate = request.ExpectedDeliveryDate;
+        // W-P3: null leaves the group's choice alone, so a caller predating this field cannot
+        // silently take a published summary off the group's public page.
+        if (request.IsPublicSummaryVisible is { } showPublicly)
+            report.IsPublicSummaryVisible = showPublicly;
         report.DateUpdated          = DateTime.UtcNow;
         report.UpdatedByAppUserId   = userId;
         await db.SaveChangesAsync(ct);
         return Ok(ToDetail(report, await ReadoutsAsync(report, ct)));
     }
+
+    /// <summary>
+    /// Would this report's summary and conclusion put the client's name or street on the public
+    /// case page? (site evaluation 2026-09-06, W-P3; the same check item 176 gave the title.)
+    /// </summary>
+    /// <remarks>
+    /// <para>Advisory, like the title's. A surname is also a place name, and only the group knows
+    /// which their prose means — so this warns and lets them publish anyway.</para>
+    ///
+    /// <para>Server-side for the same reason as the title's: the client's real name deliberately
+    /// never reaches the org-facing records, so the check has to run where the name lives and
+    /// return only the sentence. It reads the report's stored text rather than taking it as a
+    /// parameter — the summary is prose and can be long, and the thing worth checking is what
+    /// would actually be published.</para>
+    ///
+    /// <para>Empty list when the prose is clean or the case has no client: both mean nothing to
+    /// warn about.</para>
+    /// </remarks>
+    [HttpGet("{id:guid}/public-summary-leak-check")]
+    public async Task<ActionResult<IReadOnlyList<string>>> PublicSummaryLeakCheck(
+        Guid orgId, Guid caseId, Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await MayAsync(orgId, OrganizationSecurityAction.Read, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
+
+        var report = await db.CaseReports.AsNoTracking()
+            .Where(r => r.Id == id && r.CaseId == caseId)
+            .Select(r => new { r.Summary, r.Conclusion })
+            .FirstOrDefaultAsync(ct);
+        if (report is null) return NotFound();
+
+        var caseRow = await db.Cases.AsNoTracking()
+            .Where(c => c.Id == caseId)
+            .Select(c => new { c.ClientRequestId, c.StreetAddress1, c.PublicPseudonym })
+            .FirstOrDefaultAsync(ct);
+        if (caseRow is null) return NotFound();
+
+        string?[] names = [];
+        if (caseRow.ClientRequestId is { } requestId)
+        {
+            var client = await db.ClientRequests.AsNoTracking()
+                .Where(r => r.Id == requestId)
+                .Select(r => new { r.AppUser.FirstName, r.AppUser.LastName, r.AppUser.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            if (client is not null) names = [client.FirstName, client.LastName, client.DisplayName];
+        }
+
+        // Tags stripped first — and NOT because markup could hide a name from the check. The
+        // word boundary in PublicTitleLeakCheck treats "<" and ">" as separators, so
+        // "<strong>Park</strong>" matches perfectly well. What stripping prevents is the
+        // opposite: a name living only in an ATTRIBUTE — a link title, an image alt — warning
+        // about prose that never shows it to anybody. A warning nobody can act on is how a
+        // group learns to click past all of them.
+        var prose = $"{StripTags(report.Summary)} {StripTags(report.Conclusion)}";
+
+        // The pseudonym is not re-checked here — the title's own check already covers it, and
+        // reporting it twice would put the same sentence in front of somebody twice.
+        return Ok(PublicTitleLeakCheck.Check(
+            prose, pseudonym: null, names, caseRow.StreetAddress1, subject: "summary"));
+    }
+
+    private static string StripTags(string? html)
+        => string.IsNullOrWhiteSpace(html)
+            ? string.Empty
+            : System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
 
     [HttpPost("{id:guid}/publish")]
     public async Task<ActionResult<CaseReportDetail>> Publish(Guid orgId, Guid caseId, Guid id, CancellationToken ct)
@@ -477,7 +547,8 @@ public sealed class CaseReportController : BenControllerBase
     private static CaseReportDetail ToDetail(CaseReport r, IReadOnlyDictionary<Guid, string?> readouts) => new(
         r.Id, r.CaseId, r.Title, r.Summary, r.Conclusion, r.Status,
         r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated,
-        r.Sections.OrderBy(s => s.SortOrder).Select(s => ToSectionDto(s, readouts)).ToList());
+        r.Sections.OrderBy(s => s.SortOrder).Select(s => ToSectionDto(s, readouts)).ToList(),
+        r.IsPublicSummaryVisible);
 
     private static CaseReportSectionDto ToSectionDto(CaseReportSection s, IReadOnlyDictionary<Guid, string?> readouts) => new(
         s.Id, s.CaseReportId, s.SortOrder, s.Title, s.Body, s.SectionType,
@@ -506,11 +577,16 @@ public sealed class CaseReportController : BenControllerBase
 
 // ── Request / Response records ────────────────────────────────────────────────
 
+/// <param name="IsPublicSummaryVisible">
+/// Show this report's summary and conclusion on the public case page (W-P3). Null means "leave
+/// as-is", so a caller that predates the field cannot switch a group's choice off.
+/// </param>
 public sealed record UpsertCaseReportRequest(
     string    Title,
     string?   Summary,
     string?   Conclusion,
-    DateTime? ExpectedDeliveryDate);
+    DateTime? ExpectedDeliveryDate,
+    bool?     IsPublicSummaryVisible = null);
 
 public sealed record UpsertSectionRequest(
     string                              Title,
@@ -557,8 +633,12 @@ public sealed record CaseReportSummary(
     Ben.Data.Common.Enums.CaseReportStatus Status,
     DateTime?                             ExpectedDeliveryDate,
     DateTime?                             PublishedAt,
-    DateTime                              DateCreated);
+    DateTime                              DateCreated,
+    bool                                  IsPublicSummaryVisible = false);
 
+/// <param name="IsPublicSummaryVisible">
+/// The group has switched this report's summary onto the public case page (W-P3).
+/// </param>
 public sealed record CaseReportDetail(
     Guid                                  Id,
     Guid                                  CaseId,
@@ -569,7 +649,8 @@ public sealed record CaseReportDetail(
     DateTime?                             ExpectedDeliveryDate,
     DateTime?                             PublishedAt,
     DateTime                              DateCreated,
-    IReadOnlyList<CaseReportSectionDto>   Sections);
+    IReadOnlyList<CaseReportSectionDto>   Sections,
+    bool                                  IsPublicSummaryVisible = false);
 
 public sealed record CaseReportSectionDto(
     Guid                                       Id,

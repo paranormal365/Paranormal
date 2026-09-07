@@ -22,6 +22,12 @@ site — a site administrator controls that.
 Permission is the same one that governs the group's CMS pages: whoever may speak for the group in
 public may write in a publication.
 
+**Not the place for a case's finding.** A publication is for what your group wants to say — an
+article, a notice, a piece of research. What you concluded about a particular case belongs on that
+case, and is published by ticking **Show this on our public case page** on the report itself. See
+*Showing your finding on your public page* in
+[Working a case](/help/working-a-case). A publication post can of course link to it.
+
 ![The Publications tab on a group's page](help-media:publications/org-tab.png)
 *Each publication shows its address, how many posts are published, how many are still drafts, and
 how many people subscribe.*

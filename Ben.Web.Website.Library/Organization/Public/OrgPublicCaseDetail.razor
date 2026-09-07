@@ -70,6 +70,40 @@ else
             </div>
         }
 
+        @* ── The group's finding (site evaluation 2026-09-06, W-P3) ───────────
+           Directly under the client's account of what happened, which is what it answers. Shown
+           only when the group switched this report on; the server decides, and sends nothing at
+           all otherwise. *@
+        @if (_case.Report is { } report)
+        {
+            <div class="mb-4" id="public-case-report">
+                <h5 class="border-bottom pb-1 mb-2">
+                    What we found
+                    @if (report.PublishedAt is { } published)
+                    {
+                        <span class="text-muted fw-normal ms-2" style="font-size:.8rem;">
+                            @report.Title · @published.ToDisplayDate()
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="text-muted fw-normal ms-2" style="font-size:.8rem;">@report.Title</span>
+                    }
+                </h5>
+                @if (!string.IsNullOrWhiteSpace(report.Summary))
+                {
+                    <div class="mb-2">@((MarkupString)report.Summary)</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(report.Conclusion))
+                {
+                    <div class="border-start border-3 ps-3 py-1">
+                        <div class="text-secondary small fw-semibold mb-1">Conclusion</div>
+                        <div>@((MarkupString)report.Conclusion)</div>
+                    </div>
+                }
+            </div>
+        }
+
         @* ── Community vote ───────────────────────────────────────────────── *@
         <div class="mb-4">
             <h5 class="border-bottom pb-1 mb-2">Community Rating</h5>

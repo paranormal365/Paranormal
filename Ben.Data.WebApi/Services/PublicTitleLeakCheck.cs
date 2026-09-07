@@ -27,8 +27,15 @@ public static class PublicTitleLeakCheck
     /// defeats itself. The dev seed shipped exactly this mistake.</param>
     /// <param name="clientNames">The client's names — first, last, display; nulls tolerated.</param>
     /// <param name="streetAddress">The case's street line; the house-number+street match.</param>
+    /// <param name="subject">
+    /// What the checked text IS, in the words the warning should use — "title", "summary". The
+    /// sentences name the field so a group knows which box to go and edit; the case report's
+    /// public summary reuses this check (W-P3), and telling somebody their <i>title</i> contains
+    /// a street when they are looking at a summary sends them to the wrong screen.
+    /// </param>
     public static IReadOnlyList<string> Check(
-        string? title, string? pseudonym, IEnumerable<string?> clientNames, string? streetAddress)
+        string? title, string? pseudonym, IEnumerable<string?> clientNames, string? streetAddress,
+        string subject = "title")
     {
         var warnings = new List<string>();
 
@@ -44,9 +51,9 @@ public static class PublicTitleLeakCheck
             if (ContainsWord(title, token))
             {
                 warnings.Add(
-                    $"The title contains \"{token}\", which matches the client's name. The pseudonym "
-                    + "hides their name everywhere else — a title carries it straight onto the public "
-                    + "page. Consider naming the place instead.");
+                    $"The {subject} contains \"{token}\", which matches the client's name. The "
+                    + $"pseudonym hides their name everywhere else — a {subject} carries it straight "
+                    + "onto the public page. Consider naming the place instead.");
             }
             if (ContainsWord(pseudonym, token))
             {
@@ -59,14 +66,14 @@ public static class PublicTitleLeakCheck
         if (!string.IsNullOrWhiteSpace(streetAddress))
         {
             // The street line minus its house number: "1428 Elm Street" → "Elm Street". The
-            // number alone is meaningless; the named street in a title is the leak.
+            // number alone is meaningless; the named street is the leak.
             var street = Regex.Replace(streetAddress.Trim(), @"^\s*\d+[\s\-]*", "").Trim();
             if (street.Length >= 4 && ContainsWord(title, street))
             {
                 warnings.Add(
-                    $"The title contains the street (\"{street}\"). Public pages show the area, "
-                    + "never the address — except where the title says it. Consider the neighborhood "
-                    + "or a landmark instead.");
+                    $"The {subject} contains the street (\"{street}\"). Public pages show the area, "
+                    + $"never the address — except where the {subject} says it. Consider the "
+                    + "neighborhood or a landmark instead.");
             }
         }
 

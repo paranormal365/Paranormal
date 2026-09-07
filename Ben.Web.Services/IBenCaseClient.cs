@@ -135,6 +135,12 @@ public interface IBenCaseClient
     Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default);
     Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Sentences warning that this report's summary would carry the client's name or street onto
+    /// the public page (W-P3). Empty when there is nothing to warn about.
+    /// </summary>
+    Task<LoadResult<string>> CheckPublicSummaryForLeaksAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default);
