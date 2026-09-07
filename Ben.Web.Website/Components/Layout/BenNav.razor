@@ -187,8 +187,9 @@
             {
                 // The client's way in: the request wizard, where they give the address the case
                 // is about. Sits above the browse-style entries because it is the thing a first
-                // -time visitor actually came to do — the wizard itself handles sending them
-                // through sign-in.
+                // -time visitor actually came to do — and since the 2026-09-06 evaluation the
+                // wizard runs signed out and makes the account at Submit, so this link now leads
+                // to the form itself rather than to a sign-in screen.
                 main.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
                 main.Add(new NavItem("Join a Group", "map-pin", "/find"));
 

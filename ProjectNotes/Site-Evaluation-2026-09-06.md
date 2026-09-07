@@ -261,7 +261,14 @@ Investigate and fix the seven pre-existing Playwright failures. They are the sam
 and they will hide anything new. Steps: run each in isolation with `HEADED=1`; fix or retire each
 with a note in `README-green-suite-and-open-debts.md`; full run green on a fresh `BEN_E2E_DB`.
 
-### Phase 1 — The client funnel (L)
+### Phase 1 — The client funnel (L) — **BUILT 2026-09-06**
+
+Branch `feature/site-eval-phase-1-client-funnel`, with `README-site-eval-phase-1-client-funnel.md`.
+Everything below is done except item 7's second half (the onboarding radios' accessible labels,
+which belong with the other labelling work in phase 2's W-A11). Closed by this phase: W-R1, W-R2,
+W-R3, W-R5, W-S3, W-S4, W-CL5, C1, and the proposal in full. New migration
+`AddPendingClientRequests` **reaches the live database only at deploy — Ben runs it**.
+
 1. Build the proposal above.
 2. W-R1: step 1 refuses Next until the address is verified, and says what Verify is doing.
 3. W-R2: the "go back" link becomes a button.

@@ -24,10 +24,13 @@ namespace Ben.Data.WebApi.Controllers;
 public sealed class EntraAuthController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
+    private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
 
-    public EntraAuthController(UserManager<AppUser> userManager)
+    public EntraAuthController(
+        UserManager<AppUser> userManager, Ben.Data.WebApi.Services.UserHandleService handles)
     {
         _userManager = userManager;
+        _handles     = handles;
     }
 
     /// <summary>
@@ -67,6 +70,9 @@ public sealed class EntraAuthController : BenControllerBase
             NormalizedUserName = entraEmail.ToUpperInvariant(),
             EmailConfirmed     = true,  // Entra has verified the email
             DisplayName        = request.DisplayName,
+            // C1: allocated here rather than left for the restart backfill — an account with no
+            // @name cannot be mentioned and is invisible to the feed until that job next runs.
+            Handle             = await _handles.AllocateAsync(request.DisplayName, entraEmail, cancellationToken),
             DateCreated        = DateTime.UtcNow
         };
 

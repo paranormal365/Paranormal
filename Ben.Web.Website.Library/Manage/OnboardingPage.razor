@@ -144,7 +144,15 @@
         {
             if (await AdminClient.GetMyProfileAsync() is { } me)
             {
-                _displayName = me.DisplayName ?? "";
+                // W-S3 (site evaluation 2026-09-06): the box came up empty for accounts that
+                // carry a legal name but no display name — the two creation paths fill different
+                // fields, and this only read one of them. An empty "What should people call you?"
+                // in front of somebody who has already given their name reads as the site having
+                // lost it, and the header's initials come from the same value.
+                _displayName = me.DisplayName is { Length: > 0 } shown
+                    ? shown
+                    : string.Join(' ', new[] { me.FirstName, me.LastName }
+                        .Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
                 _gender = me.Gender is { } g and not Ben.Data.Common.Enums.ClientGender.NotProvided
                     ? g.ToString() : "";
             }

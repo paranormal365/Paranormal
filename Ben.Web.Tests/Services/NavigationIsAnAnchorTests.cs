@@ -41,10 +41,9 @@ public sealed class NavigationIsAnAnchorTests
             "Inside the else of @if (_detail is null). _detail is null during prerender, so the "
           + "loading branch renders and this button does not exist yet.",
 
-        ["ClientRequestWizard.razor"] =
-            "Inside the signed-in branch and @if (_step == 5). An anonymous fetch of "
-          + "/my-requests/new returns only the signed-out panel, whose own button is already an "
-          + "anchor.",
+        // ClientRequestWizard.razor was here until the 2026-09-06 evaluation's phase 1. The
+        // wizard now runs signed out and its two navigating buttons became anchors, so the
+        // exception no longer describes anything — and this guard said so.
     };
 
     private static DirectoryInfo RepoRoot()

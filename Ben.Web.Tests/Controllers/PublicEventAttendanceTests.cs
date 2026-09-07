@@ -70,7 +70,8 @@ public sealed class PublicEventAttendanceTests
         return new PublicEventAttendanceController(
             factory, mail, UserManagerFor(factory),
             Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
-            NullLogger<PublicEventAttendanceController>.Instance)
+            NullLogger<PublicEventAttendanceController>.Instance,
+            new Ben.Data.WebApi.Services.UserHandleService(factory))
         {
             ControllerContext = new ControllerContext
             {
@@ -394,6 +395,9 @@ public sealed class PublicEventAttendanceTests
         Assert.True(user.EmailConfirmed);
         // No password: they never invented one, and are not being asked to.
         Assert.Null(user.PasswordHash);
+        // C1 (site evaluation 2026-09-06): a guest with a null @name is invisible to every
+        // mention until a restart's backfill runs — which is no use to the group that met them.
+        Assert.False(string.IsNullOrWhiteSpace(user.Handle));
 
         var attendee = await db.OrgCalendarEventAttendees.SingleAsync();
         Assert.Equal(user.Id, attendee.AppUserId);

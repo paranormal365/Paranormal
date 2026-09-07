@@ -133,10 +133,16 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        // Should show "Belmont Boulevard Residence" or the case reference
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("Nashville").Or.Contain("Park").Or.Contain("#2026"),
-            "Expected case title or reference on detail page.");
+        // Waited for, not read once. Every sibling test in this file uses an auto-waiting
+        // Expect; this one alone took a single snapshot of the body, which passed only because
+        // the card used to be a div whose @onclick could not fire until the circuit was live —
+        // so the app was always warm by the time the detail page loaded. The card became a real
+        // anchor in the 2026-09-06 evaluation's phase 1 (W-CL5), so the navigation now happens
+        // on the first click, and the snapshot started landing before the case had loaded.
+        // WaitUntilLoadedAsync cannot cover it: it returns as soon as no "Loading" text is on
+        // the page, which is also true a moment before the page renders anything at all.
+        await Expect(Main.GetByText("Nashville").Or(Main.GetByText("Park")).Or(Main.GetByText("#2026")).First)
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     [Test]

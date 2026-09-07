@@ -6,25 +6,19 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
 <PageTitle>Submit an Investigation Request</PageTitle>
 
-@if (!UserState.IsAuthenticated)
-{
-    <div class="container py-5 text-center">
-        <p class="lead">You must be signed in to submit a request.</p>
-        @* An anchor, not @@onclick. This is the first page a signed-out visitor reaches, and an
-           @@onclick handler only works once the SignalR circuit is live — measured at ~50ms after
-           the button is painted on localhost, and far longer over a real network. A click in that
-           window is dropped with no feedback. A plain href needs no circuit, survives a slow
-           connection, works with scripting off, and can be opened in a new tab. Item 131. *@
-        <a href="/login" class="btn btn-primary">Sign In</a>
-    </div>
-    return;
-}
-
+@*
+    The request runs signed out (site evaluation 2026-09-06, phase 1). It used to open with a
+    sign-in wall: a stranger with something happening in their house had to make an account, wait
+    for a confirmation email, sign in and finish onboarding before reaching step 1. Nothing in the
+    request needs an account until a group wants to talk back, so the account is made at Submit,
+    from what they typed. A signed-out draft lives in the browser only — see CaptureDraft.
+*@
 <div class="container py-4" style="max-width:820px;">
     <h2 class="mb-1">Request an Investigation</h2>
     <p class="text-secondary mb-4">
@@ -97,10 +91,21 @@
                         <input type="text" id="req-zip" class="form-control" placeholder="37201" @bind="@_zipCode" @bind:event="oninput" />
                     </div>
                     <div class="col-12">
-                        <button type="button" class="btn btn-secondary" @onclick="GeocodeAddress" disabled="@(!(!_isBusy && CanGeocode))"><BenIcon Name="map-pin" Class="me-1" />
-                            @(_isBusy ? "Looking up…" : "Verify Address")
+                        <button type="button" class="btn btn-secondary" @onclick="GeocodeAddress" disabled="@(!(!_verifying && CanGeocode))"><BenIcon Name="map-pin" Class="me-1" />
+                            @(_verifying ? "Looking up…" : "Verify Address")
                         </button>
-                        @if (_lat.HasValue)
+                        @* W-R1: the button used to give no sign it was working, and Next was
+                           allowed without it — the failure surfaced three screens later as
+                           "Address not verified", by which point the person had typed everything.
+                           It says what it is for, and reports while it runs. *@
+                        @if (_verifying)
+                        {
+                            <span class="ms-3 small text-secondary">
+                                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                                Finding this address on the map…
+                            </span>
+                        }
+                        else if (_lat.HasValue)
                         {
                             <span class="ms-3 text-success small">✓ Address verified</span>
                         }
@@ -108,11 +113,19 @@
                         {
                             <div class="text-danger small mt-1">@_geocodeError</div>
                         }
+                        <div class="form-text">
+                            We look the address up on the map so we can find the groups that work
+                            near you. It is never shown on a public page.
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="card-footer d-flex justify-content-end">
-                <button type="button" class="btn btn-primary" @onclick="Step1Next" disabled="@(!(!_isBusy))">
+            <div class="card-footer d-flex justify-content-end align-items-center gap-3">
+                @if (!_lat.HasValue)
+                {
+                    <span class="small text-secondary">Verify the address to continue.</span>
+                }
+                <button type="button" class="btn btn-primary" @onclick="Step1Next" disabled="@(!(!_isBusy && _lat.HasValue))">
                     Next: About You →
                 </button>
             </div>
@@ -131,8 +144,12 @@
                 </p>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Gender</label>
-                        <BenSelect Data="@_genderOptions" @bind-Value="@_gender" TextField="@nameof(GenderOption.Label)" ValueField="@nameof(GenderOption.Value)" Width="100%" />
+                        @* W-S4: onboarding asks "Sex" and this asked "Gender", so a signed-in
+                           person answered the same question twice under two names. One question,
+                           one word, and prefilled from the profile when there is one. *@
+                        <label class="form-label fw-semibold" id="req-gender-label">Gender</label>
+                        <BenSelect AriaLabel="Gender" Data="@_genderOptions" @bind-Value="@_gender" TextField="@nameof(GenderOption.Label)" ValueField="@nameof(GenderOption.Value)" Width="100%" />
+                        <div class="form-text">Optional. Groups use it only to know who is in the home.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold" for="clientrequestwizard-birth-year-optional-fa78">Birth Year (optional)</label>
@@ -160,10 +177,12 @@
                     Describe what you have experienced at this location.
                     Be as detailed as possible — when it started, how often it occurs, who has witnessed it.
                 </p>
-                <TelerikEditor @bind-Value="@_description"
+                <TelerikEditor @bind-Value="@_description" @bind-Value:after="@OnDescriptionChanged"
                                Height="320px"
                                Tools="@_editorTools" />
-                @if (string.IsNullOrWhiteSpace(_description) || _description == "<p></p>")
+                @* W-R3: this used to shout in red before anything had been typed. It is a
+                   reminder for somebody who has written and deleted, not a greeting. *@
+                @if (_descriptionTouched && string.IsNullOrWhiteSpace(StripHtml(_description)))
                 {
                     <div class="text-danger small mt-1">A description is required before submitting.</div>
                 }
@@ -199,7 +218,10 @@
                     {
                         <div class="alert alert-warning mb-0">
                             <strong>Address not verified.</strong> We couldn't locate your address to find nearby organizations.
-                            <a @onclick="@(() => _step = 1)" href="#" class="alert-link">Go back and verify your address.</a>
+                            @* W-R2: this was an href="#" anchor with no preventDefault, so it did
+                               nothing at all. A button does what it says. *@
+                            <button type="button" class="btn btn-link alert-link p-0 align-baseline"
+                                    @onclick="@(() => _step = 1)">Go back and verify your address.</button>
                         </div>
                     }
                     else
@@ -292,12 +314,60 @@
                         <div class="text-danger small mt-2">Select at least one organization.</div>
                     }
                 }
+
+                @* ── Who is asking ─────────────────────────────────────────
+                   For a signed-out person this is the sign-up, and it is deliberately three
+                   fields: no @@name to invent (one is allocated and shown after confirming), no
+                   separate first and last name, no second password box. The note below is the
+                   promise this whole form asks them to believe, so it is always visible and never
+                   behind a link. *@
+                @if (!UserState.IsAuthenticated)
+                {
+                    <hr class="my-4" />
+                    <h6 class="fw-semibold mb-1">Who should the group write back to?</h6>
+                    <p class="text-secondary small mb-3">
+                        This creates your account, so you can follow the request and talk to the
+                        group. You'll confirm the email address before anyone can reach you.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" for="req-name">Your name <span class="text-danger">*</span></label>
+                            <input type="text" id="req-name" class="form-control" autocomplete="name"
+                                   placeholder="Casey Miller" @bind="@_accountName" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" for="req-email">Email <span class="text-danger">*</span></label>
+                            <input type="email" id="req-email" class="form-control" autocomplete="email"
+                                   @bind="@_accountEmail" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" for="req-password">Choose a password <span class="text-danger">*</span></label>
+                            <input type="password" id="req-password" class="form-control" autocomplete="new-password"
+                                   @bind="@_accountPassword" @bind:event="oninput" />
+                            <div class="form-text">At least 8 characters, with an upper-case letter, a lower-case letter and a digit.</div>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary small mt-3 mb-0" id="req-privacy-note">
+                        Your name, address and what you tell us are shared only with the group you
+                        send this to. None of it is public, and none of it is ever sold.
+                    </div>
+                    <p class="small text-secondary mt-2 mb-0">
+                        Already have an account? <a href="/login?returnUrl=/my-requests/new">Sign in first</a>
+                        and your details will be filled in for you.
+                    </p>
+                }
             </div>
             <div class="card-footer d-flex justify-content-between">
                 <button type="button" class="btn btn-secondary" @onclick="@(() => _step = 3)">← Back</button>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-secondary" @onclick="SaveDraft" disabled="@(!(!_isBusy))">Save as Draft</button>
-                    <button type="button" class="btn btn-primary" @onclick="SubmitRequest" disabled="@(!(!_isBusy && _selectedOrgIds.Count > 0))"><BenIcon Name="check" Class="me-1" />
+                    @* Saving a draft on the server needs an account. Signed out, the wizard is
+                       already keeping one in this browser, and the button says so rather than
+                       offering something it cannot do. *@
+                    @if (UserState.IsAuthenticated)
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="SaveDraft" disabled="@(!(!_isBusy))">Save as Draft</button>
+                    }
+                    <button type="button" class="btn btn-primary" @onclick="SubmitRequest" disabled="@(!(!_isBusy && CanSubmit))"><BenIcon Name="check" Class="me-1" />
                         @(_isBusy ? "Submitting…" : "Submit Request")
                     </button>
                 </div>
@@ -312,15 +382,29 @@
             <div class="card-body text-center py-5">
                 <div class="mb-3" style="font-size:3rem;">✓</div>
                 <h4 class="text-success">Request Submitted!</h4>
-                <p class="text-secondary">
-                    Your request has been sent to @(_selectedOrgIds.Count == 1 ? "1 organization" : $"{_selectedOrgIds.Count} organizations").
-                    You'll be notified once one accepts your case.
-                </p>
-                <div class="d-flex justify-content-center gap-3 mt-4">
-                    <button type="button" class="btn btn-secondary" @onclick="@(() => NavManager.NavigateTo("/my-requests"))">
-                        View My Requests
-                    </button>
-                </div>
+                @if (_signedUpMessage is { } signedUp)
+                {
+                    @* The signed-out ending. Deliberately the same words whether the address was
+                       free or already had an account — the server will not say which, and neither
+                       will this page. *@
+                    <p class="text-secondary mb-1">@signedUp</p>
+                    <p class="text-secondary small">
+                        Until you use that link we cannot reach you, so open it as soon as you can.
+                    </p>
+                    <div class="d-flex justify-content-center gap-3 mt-4">
+                        <a class="btn btn-secondary" href="/login">Go to sign in</a>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-secondary">
+                        Your request has been sent to @(_selectedOrgIds.Count == 1 ? "1 organization" : $"{_selectedOrgIds.Count} organizations").
+                        You'll be notified once one accepts your case.
+                    </p>
+                    <div class="d-flex justify-content-center gap-3 mt-4">
+                        <a class="btn btn-secondary" href="/my-requests">View My Requests</a>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -332,6 +416,19 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // W-S4: a signed-in person has answered the gender question at onboarding. Asking it a
+        // second time under a different word is what made it two questions.
+        if (UserState.IsAuthenticated)
+        {
+            try
+            {
+                if (await AdminClient.GetMyProfileAsync() is { Gender: { } g }
+                    && g != ClientGender.NotProvided)
+                    _gender = g;
+            }
+            catch { /* an unanswered question is a fine starting point */ }
+        }
     }
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -350,12 +447,36 @@
     private decimal? _lon;
     private string? _geocodeError;
 
+    private bool _verifying;
+
     // Step 2 — about you
     private ClientGender _gender    = ClientGender.NotProvided;
     private int? _birthYear;
 
     // Step 3 — description
     private string _description = "";
+
+    /// <summary>Whether the description field has ever held anything. See W-R3 in the markup.</summary>
+    private bool _descriptionTouched;
+
+    // Step 4 — who is asking, for a signed-out person
+    private string _accountName     = "";
+    private string _accountEmail    = "";
+    private string _accountPassword = "";
+
+    /// <summary>Set when the signed-out submit succeeded — its sentence, and the ending it picks.</summary>
+    private string? _signedUpMessage;
+
+    /// <summary>
+    /// Enough to send. Signed in it is only the groups; signed out the account fields count too,
+    /// because Submit creates the account and there is no second screen to catch a blank one.
+    /// </summary>
+    private bool CanSubmit =>
+        _selectedOrgIds.Count > 0
+        && (UserState.IsAuthenticated
+            || (_accountName.Trim().Length >= 2
+                && _accountEmail.Contains('@')
+                && _accountPassword.Length >= 8));
 
     // Step 4 — org selection
     private List<OrgSearchResult>? _orgs;
@@ -413,13 +534,22 @@
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || Id is null) return;
-        // Without this, a hard nav could reach this pass before OnInitializedAsync's own
-        // (interactive-only) await had a chance to resolve AuthReady, reading a stale
-        // IsAuthenticated=false and silently skipping the draft load for good — firstRender
-        // only fires once, so nothing would ever retry it.
+        if (!firstRender) return;
         await UserState.AuthReady;
-        if (!UserState.IsAuthenticated) { StateHasChanged(); return; }
+
+        if (!UserState.IsAuthenticated)
+        {
+            if (Id is not null) { NavManager.NavigateTo("/login?returnUrl=/my-requests"); return; }
+            await RestoreBrowserDraftAsync();
+            StateHasChanged();
+            return;
+        }
+
+        if (Id is null) return;
+        // AuthReady is awaited above, before either branch: a hard nav can reach this pass before
+        // OnInitializedAsync's own (interactive-only) await has resolved it, and reading a stale
+        // IsAuthenticated=false here would skip the draft load for good — firstRender fires once,
+        // so nothing would ever retry it.
         try
         {
             var existing = await AdminClient.GetClientRequestAsync(Id.Value);
@@ -448,7 +578,9 @@
     private async Task GeocodeAddress()
     {
         _geocodeError = null;
-        _isBusy = true;
+        // Its own flag, not _isBusy: Next reads _isBusy, and sharing one made "verify then click
+        // Next" a race with the lookup that had already finished.
+        _verifying = true;
         try
         {
             var q = $"{_streetAddress1}, {_city}, {_state} {_zipCode}";
@@ -461,8 +593,8 @@
                 _lon = result.Longitude ?? _lon;
             }
         }
-        catch { _geocodeError = "Geocoding failed. You can continue without verification."; }
-        finally { _isBusy = false; }
+        catch { _geocodeError = "We couldn't reach the map service. Try again in a moment."; }
+        finally { _verifying = false; }
     }
 
     // ── Step navigation ───────────────────────────────────────────────────────
@@ -474,6 +606,13 @@
             string.IsNullOrWhiteSpace(_zipCode))
         {
             _error = "Please fill in the required address fields.";
+            return;
+        }
+        if (!_lat.HasValue || !_lon.HasValue)
+        {
+            // W-R1: this used to be allowed, and the consequence appeared at step 4 as "Address
+            // not verified" — three screens after the thing that caused it.
+            _error = "Press Verify Address first — we need to place it on the map to find groups near you.";
             return;
         }
         _error = null;
@@ -488,8 +627,15 @@
         _step = 3;
     }
 
+    /// <summary>Once anything has been written, the empty-field reminder is worth showing again.</summary>
+    private void OnDescriptionChanged()
+    {
+        if (!string.IsNullOrWhiteSpace(StripHtml(_description))) _descriptionTouched = true;
+    }
+
     private async Task Step3Next()
     {
+        _descriptionTouched = true;
         if (string.IsNullOrWhiteSpace(StripHtml(_description)))
         {
             _error = "Please describe your experiences before continuing.";
@@ -530,6 +676,14 @@
     /// anything user-facing (SaveDraft, SubmitRequest) must check it.</summary>
     private async Task<bool> SaveDraftSilent()
     {
+        // Signed out there is no server draft to make: the request belongs to nobody until Submit
+        // creates the account. What survives a closed tab is the browser copy below.
+        if (!UserState.IsAuthenticated)
+        {
+            await SaveBrowserDraftAsync();
+            return true;
+        }
+
         try
         {
             var req = BuildRequest();
@@ -550,11 +704,17 @@
 
     private async Task SubmitRequest()
     {
-        if (_selectedOrgIds.Count == 0) return;
+        if (!CanSubmit) return;
         _isBusy = true;
         _error  = null;
         try
         {
+            if (!UserState.IsAuthenticated)
+            {
+                await SubmitWithoutAccountAsync();
+                return;
+            }
+
             // Ensure the latest edits are saved first — if this silently failed, submitting now
             // would transition a stale server-side draft instead of what the user actually typed.
             if (!await SaveDraftSilent() || _draftId is null)
@@ -571,6 +731,100 @@
         }
         catch (Exception ex) { _error = $"Submission failed: {ex.Message}"; }
         finally { _isBusy = false; }
+    }
+
+    /// <summary>
+    /// The signed-out submit: the request and the account in one call.
+    /// </summary>
+    /// <remarks>
+    /// The server's answer is the same sentence whether the address was free or already had an
+    /// account, and this page passes it through unchanged — anything else here would leak what
+    /// the endpoint refuses to say. The browser draft is cleared only on success, so a refusal
+    /// leaves everything typed still there.
+    /// </remarks>
+    private async Task SubmitWithoutAccountAsync()
+    {
+        var outcome = await AdminClient.SubmitRequestWithoutAccountAsync(new AnonymousClientRequestSubmission(
+            StreetAddress1: _streetAddress1.Trim(),
+            StreetAddress2: string.IsNullOrWhiteSpace(_streetAddress2) ? null : _streetAddress2.Trim(),
+            City:           _city.Trim(),
+            State:          _state.Trim(),
+            ZipCode:        _zipCode.Trim(),
+            Country:        "US",
+            Latitude:       _lat,
+            Longitude:      _lon,
+            Gender:         _gender,
+            BirthYear:      _birthYear,
+            Description:    string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+            OrganizationIds: _selectedOrgIds.ToList(),
+            Name:            _accountName.Trim(),
+            Email:           _accountEmail.Trim(),
+            Password:        _accountPassword));
+
+        if (!outcome.Succeeded)
+        {
+            _error = outcome.Message;
+            return;
+        }
+
+        _signedUpMessage = outcome.Message;
+        _accountPassword = "";
+        await ClearBrowserDraftAsync();
+        _step = 5;
+    }
+
+    // ── The signed-out draft, in this browser only ───────────────────────────
+    //
+    // Not on the server: until Submit there is no account to own it, and a server-side anonymous
+    // draft store would be a place to write to without signing in. localStorage keeps a closed tab
+    // from costing somebody the whole form, which is the only thing it needs to do. The password
+    // is deliberately NOT part of it.
+
+    private const string DraftKey = "wizard:client-request";
+
+    private sealed record BrowserDraft(
+        int Step, string Street1, string? Street2, string City, string State, string Zip,
+        decimal? Lat, decimal? Lon, ClientGender Gender, int? BirthYear, string Description,
+        string Name, string Email);
+
+    private async Task SaveBrowserDraftAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", DraftKey,
+                System.Text.Json.JsonSerializer.Serialize(new BrowserDraft(
+                    _step, _streetAddress1, _streetAddress2, _city, _state, _zipCode,
+                    _lat, _lon, _gender, _birthYear, _description, _accountName, _accountEmail)));
+        }
+        catch { /* Draft-keeping is a courtesy; losing one restarts a form, never breaks it. */ }
+    }
+
+    private async Task RestoreBrowserDraftAsync()
+    {
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", DraftKey);
+            if (raw is null) return;
+            if (System.Text.Json.JsonSerializer.Deserialize<BrowserDraft>(raw) is not { } d) return;
+
+            _streetAddress1 = d.Street1; _streetAddress2 = d.Street2;
+            _city = d.City; _state = d.State; _zipCode = d.Zip;
+            _lat = d.Lat; _lon = d.Lon;
+            _gender = d.Gender; _birthYear = d.BirthYear;
+            _description = d.Description; _descriptionTouched = !string.IsNullOrWhiteSpace(StripHtml(d.Description));
+            _accountName = d.Name; _accountEmail = d.Email;
+
+            // Step 4 is not restored: its list of groups is fetched from the address, and landing
+            // on an empty one reads as "nobody covers you". Anything earlier is restored as it was.
+            _step = Math.Clamp(d.Step, 1, 3);
+        }
+        catch { /* A corrupt draft starts the form fresh. */ }
+    }
+
+    private async Task ClearBrowserDraftAsync()
+    {
+        try { await JS.InvokeVoidAsync("localStorage.removeItem", DraftKey); } catch { }
     }
 
     private void ToggleOrgSelection(Guid orgId, bool canSelect)

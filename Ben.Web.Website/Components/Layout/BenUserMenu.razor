@@ -98,7 +98,14 @@
         {
             var profile = await AdminClient.GetMyProfileAsync();
             if (profile is null) return;
-            _displayName = profile.DisplayName;
+            // Same fallback as onboarding (W-S3): an account with a legal name but no display
+            // name should show its own initials, not the ones its email address happens to spell.
+            _displayName = profile.DisplayName is { Length: > 0 } shown
+                ? shown
+                : string.Join(' ', new[] { profile.FirstName, profile.LastName }
+                    .Where(part => !string.IsNullOrWhiteSpace(part))).Trim() is { Length: > 0 } legal
+                    ? legal
+                    : null;
             // Public photo only. This chrome renders on every page for the signed-in user
             // themselves, so there is no audience question to answer here.
             _avatarFileId = profile.PublicPhoto?.UploadFileId;

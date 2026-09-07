@@ -48,14 +48,10 @@
     @* ── CTA buttons ──────────────────────────────────────────────────────── *@
     <div class="home-hero__ctas">
         <a href="/find" class="btn btn-outline-secondary">Browse All Groups</a>
-        @if (UserState.IsAuthenticated)
-        {
-            <a href="/my-requests/new" class="btn btn-outline-info">Request an Investigation</a>
-        }
-        else
-        {
-            <a href="/login" class="btn btn-outline-info">Sign In to Request an Investigation</a>
-        }
+        @* The request wizard runs signed out and makes the account at Submit (site evaluation
+           2026-09-06, phase 1), so this no longer routes the one person the page exists for
+           through a sign-in screen first. *@
+        <a href="/my-requests/new" class="btn btn-outline-info">Request an Investigation</a>
     </div>
 </div>
 

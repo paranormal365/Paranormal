@@ -344,6 +344,37 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/add-organization",
                new { OrganizationId = organizationId }, token);
 
+    public Task<bool> DeleteClientRequestDraftAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/client-requests/{id}", token);
+
+    /// <remarks>
+    /// The anonymous helper, because the person has no account yet and therefore no token. A null
+    /// body is the server failing to answer in shape — a 500, a proxy page, or the rate limiter's
+    /// 429, which this endpoint sits behind. Saying "couldn't reach" is the only honest reading;
+    /// the request may or may not have been made, and the email is what settles it.
+    /// </remarks>
+    public async Task<AnonymousSubmitOutcome> SubmitRequestWithoutAccountAsync(
+        AnonymousClientRequestSubmission request, CancellationToken token = default)
+    {
+        var result = await _api.PostAnonymousReadingBodyAsync<AnonymousClientRequestSubmission, AnonymousSubmitOutcome>(
+            "/api/public/client-requests/submit", request, token);
+
+        return result ?? new AnonymousSubmitOutcome(false,
+            "Couldn't reach the server. Check your email in a moment — if nothing arrives, try again.", null);
+    }
+
+    public Task<PendingClientRequestRecord?> GetPendingClientRequestAsync(Guid id, string key, CancellationToken token = default)
+        => _api.GetAsync<PendingClientRequestRecord>(
+               $"/api/client-requests/pending/{id}?key={Uri.EscapeDataString(key)}", token);
+
+    public Task<ClientRequestRecord?> AdoptPendingClientRequestAsync(Guid id, string key, CancellationToken token = default)
+        => _api.PostAsync<object, ClientRequestRecord>(
+               $"/api/client-requests/pending/{id}/adopt?key={Uri.EscapeDataString(key)}", new { }, token);
+
+    public Task<bool> DiscardPendingClientRequestAsync(Guid id, string key, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/client-requests/pending/{id}/discard?key={Uri.EscapeDataString(key)}", new { }, token);
+
     // ── My Cases ─────────────────────────────────────────────────────────────
 
     public Task<LoadResult<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default)

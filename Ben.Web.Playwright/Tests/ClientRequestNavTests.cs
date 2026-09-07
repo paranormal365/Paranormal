@@ -82,12 +82,15 @@ public class ClientRequestNavTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var nextBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Next: About You →" });
         await Expect(nextBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        // Click without filling anything — should show validation error
-        await nextBtn.ClickAsync();
+
+        // Since the 2026-09-06 evaluation (W-R1) the button is disabled until the address has
+        // been verified, rather than allowed and then refused three screens later. Disabled is a
+        // stronger answer than a validation message, and it is what this asserts now.
+        await Expect(nextBtn).ToBeDisabledAsync(new() { Timeout = 8_000 });
+
         var body = await Page.InnerTextAsync("body");
-        // Should still be on step 1 (no "About You" step heading yet)
         Assert.That(body, Does.Not.Contain("Step 2"),
-            "Should still be on step 1 after clicking Next without filling fields.");
+            "Should still be on step 1 with nothing filled in.");
     }
 
     [Test]

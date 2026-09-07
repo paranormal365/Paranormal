@@ -72,7 +72,10 @@ public sealed record RegisterAccount(
 /// <param name="Field">Which field to point at, when the server could say. Null for a general message.</param>
 public sealed record RegisterOutcome(bool Succeeded, string Message, string? Field);
 
-public sealed record ConfirmEmailOutcome(bool Succeeded, string Message);
+/// <param name="Handle">The @@name the account carries. The request wizard allocates one without
+/// asking, so the landing page is where its owner first meets it.</param>
+/// <param name="Waiting">Where the request they made before they could sign in stands, or null.</param>
+public sealed record ConfirmEmailOutcome(bool Succeeded, string Message, string? Handle = null, string? Waiting = null);
 
 public sealed record TwoFactorStatus(bool Enabled, bool HasAuthenticatorKey, int RecoveryCodesRemaining);
 

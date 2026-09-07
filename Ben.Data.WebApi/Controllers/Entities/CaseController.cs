@@ -320,7 +320,7 @@ public sealed class CaseController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var apps = await db.ClientRequestOrganizations
             .AsNoTracking()
-            .Include(a => a.ClientRequest)
+            .Include(a => a.ClientRequest).ThenInclude(r => r.AppUser)
             .Where(a => a.OrganizationId == orgId &&
                 (a.Status == ClientOrgRequestStatus.Pending ||
                  a.Status == ClientOrgRequestStatus.Viewed ||
@@ -340,6 +340,7 @@ public sealed class CaseController : BenControllerBase
             Latitude        = a.ClientRequest.Latitude,
             Longitude       = a.ClientRequest.Longitude,
             Status          = a.Status,
+            ClientEmailConfirmed = a.ClientRequest.AppUser?.EmailConfirmed ?? true,
         });
         return Ok(records);
     }
