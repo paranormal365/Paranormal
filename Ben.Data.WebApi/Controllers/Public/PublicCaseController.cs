@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -120,6 +121,11 @@ public sealed class PublicCaseController : ControllerBase
                 ? e.Files.Select(f => f.UploadFileId).ToList()
                 : [])).ToList();
 
+        // W-P3 (site evaluation 2026-09-06): the group's own finding, when they have chosen to
+        // show it. Null for every case whose group has not — which is every case until somebody
+        // switches one on. See CasePublicReport for the three conditions.
+        var publicReport = await CasePublicReport.ForCaseAsync(db, c.Id, roster, ct);
+
         return Ok(new PublicCaseDetail(
             CaseId:         c.Id,
             CaseReference:  $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
@@ -135,7 +141,8 @@ public sealed class PublicCaseController : ControllerBase
             DateCaseClosed: c.DateCaseClosed,
             Timeline:       publicTimeline,
             OrgName:        org.Name,
-            OrgUrlName:     org.UrlName));
+            OrgUrlName:     org.UrlName,
+            Report:         publicReport));
     }
 }
 
@@ -153,6 +160,9 @@ public sealed record PublicCaseListItem(
     DateTime? DateCaseClosed,
     bool IsHaunted);
 
+/// <param name="Report">
+/// The group's published finding, when they have switched it on. Null otherwise (W-P3).
+/// </param>
 public sealed record PublicCaseDetail(
     Guid CaseId,
     string CaseReference,
@@ -168,7 +178,8 @@ public sealed record PublicCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
-    string OrgUrlName);
+    string OrgUrlName,
+    Ben.Data.WebApi.Services.CasePublicReport.PublicReport? Report = null);
 
 public sealed record PublicTimelineEntry(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,

@@ -74,6 +74,36 @@ store. Filter the timeline by investigation to see just that visit.
 Readings recorded during a visit go in as **Instrument Reading** entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.
 
+## Showing your finding on your public page
+
+A report is written for your client, and by default that is the only person who ever sees it. If
+you want the world to read what you concluded, tick **Show this on our public case page** on the
+report, beside the summary and conclusion it publishes.
+
+**What goes out is those two fields and nothing else.** Not the sections, not the evidence files,
+not the field sessions you cited. Those carry the working detail of an investigation inside
+somebody's home; the summary and the conclusion are the parts you wrote to be read.
+
+**Three things have to be true** before a visitor sees any of it, and none of them implies another:
+
+| | |
+|---|---|
+| The report is **published** | Publishing delivers it to your client. That is a separate decision from showing it to the world. |
+| The case is **public** | Making a case public releases the case. That says nothing about a document written for its owner. |
+| This box is **ticked** | Per report. You can untick it at any time and the page stops showing it immediately. |
+
+**Check for the client's details** beside the box reads your summary and conclusion and warns you
+if they contain the client's name or their street — the same check the case title gets. It is
+advice, not a refusal: a surname is often a place name too, and only you know which yours means.
+
+On a **private engagement**, names in the summary are substituted on the way out exactly as they
+are in the title and the timeline. You write in plain language and the public copy does the
+substituting, every time it is read.
+
+The finding appears on the case's own public page under *What we found*, directly beneath your
+client's account of what happened. It is also available to the **cases** block in the page builder,
+so it can sit on any page you build.
+
 ## Putting field sessions in the final report
 
 Sessions recorded in the iPhone and iPad app land on the site whole — the readings, the marks, the

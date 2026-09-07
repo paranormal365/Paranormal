@@ -307,7 +307,12 @@ changes for them until an owner chooses.
    `A_new_member_opens_the_case_their_desk_shows`, `The_vote_page_stays_reachable_under_review`.
 8. Help: `working-a-case.md` (roles for new members), `organization-administration.md`.
 
-### Phase 3 — The results document on the group's public site (M)
+### Phase 3 — The results document on the group's public site (M) — **BUILT 2026-09-07**
+
+Branch `feature/site-eval-phase-3-public-report`, with its own README. Closes W-P3. New migration
+`AddCaseReportPublicSummary` **reaches the live database only at deploy — Ben runs it**; the
+switch is off on every existing report, so nothing becomes public until a group chooses it.
+
 W-P3. A published report gains a *Public summary* (executive summary + conclusion, run through
 `CaseProseRedactor`, media only from approved case slots) that the group can switch on per report.
 It renders on the public case page under the summary and is available as a CMS case-bound slot so

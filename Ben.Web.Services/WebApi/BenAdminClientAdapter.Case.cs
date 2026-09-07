@@ -188,6 +188,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default)
         => _api.PutAsync<UpsertCaseReportRequest, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", request, token);
 
+    public Task<LoadResult<string>> CheckPublicSummaryForLeaksAsync(
+        Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.GetListAsync<string>(
+               $"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/public-summary-leak-check", token);
+
     public Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
         => _api.PostAsync<object, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/publish", new { }, token);
 

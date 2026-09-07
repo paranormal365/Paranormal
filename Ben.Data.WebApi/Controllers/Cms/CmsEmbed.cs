@@ -193,6 +193,12 @@ public static class CmsEmbed
 
     /// <summary>One case as published on a group's own page.</summary>
     /// <remarks><see cref="ClientName"/> is an alias or nothing. There is no field for a real name.</remarks>
+    /// <param name="Report">
+    /// The group's published finding, when they have switched it onto the public page (W-P3), and
+    /// null for every case where they have not. Alongside <paramref name="Summary"/>, not instead
+    /// of it: the summary is the client's account of what happened and the report is the group's
+    /// answer to it.
+    /// </param>
     public sealed record EmbeddedCase(
         Guid Id,
         string Title,
@@ -204,7 +210,8 @@ public static class CmsEmbed
         string? State,
         decimal? Latitude,
         decimal? Longitude,
-        bool LocationIsApproximate);
+        bool LocationIsApproximate,
+        Services.CasePublicReport.PublicReport? Report = null);
 
     /// <summary>
     /// One file from a case, as published on a group's own page.
@@ -328,6 +335,14 @@ public static class CmsEmbed
         // inside the resolver, so the live page and the preview cannot disagree.
         var rosters = await CaseRedactionRoster.ForCasesAsync(db, rows.Select(r => r.Id).ToList(), ct);
 
+        // W-P3: only cases that are actually public can carry a finding here. IncludeNonPublic
+        // lets a group preview its own unpublished work on its own page; a report switched on for
+        // the public must not ride along with that.
+        var publicCaseIds = rows
+            .Where(r => r.IsPublic && (r.Status == CaseStatus.Public || r.Status == CaseStatus.Haunted))
+            .Select(r => r.Id).ToList();
+        var reports = await Services.CasePublicReport.ForCasesAsync(db, publicCaseIds, rosters, ct);
+
         return [.. ids
             .Select(id => rows.FirstOrDefault(r => r.Id == id))
             .Where(r => r is not null)
@@ -348,7 +363,10 @@ public static class CmsEmbed
                     settings.ShowApproximateLocation ? r.City : null,
                     settings.ShowApproximateLocation ? r.State : null,
                     lat, lon,
-                    LocationIsApproximate: true);
+                    LocationIsApproximate: true,
+                    // W-P3: resolved through the same helper the case's own public page uses, so
+                    // an embed and that page can never disagree about what was released.
+                    Report: reports.GetValueOrDefault(r.Id));
             })];
     }
 

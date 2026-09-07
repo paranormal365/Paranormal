@@ -112,6 +112,17 @@
                                 {
                                     <p class="card-text small">@summary</p>
                                 }
+                                @* W-P3 (site evaluation 2026-09-06): the group's own finding,
+                                   when they have switched that report onto the public page.
+                                   Beneath the client's account, not instead of it — the summary
+                                   is what happened and this is the group's answer to it. *@
+                                @if (ReportText(row, "summary") is { Length: > 0 } finding)
+                                {
+                                    <div class="border-start border-3 ps-2 py-1 mt-2">
+                                        <div class="text-secondary fw-semibold" style="font-size:.75rem;">What we found</div>
+                                        <div class="small">@((MarkupString)finding)</div>
+                                    </div>
+                                }
                                 @RenderPlace(row)
                             </div>
                         </div>
@@ -239,6 +250,12 @@
     private static string? Text(JsonElement row, string property)
         => row.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
+            : null;
+
+    /// <summary>One field of a case row's nested public report, or null when there is no report.</summary>
+    private static string? ReportText(JsonElement row, string property)
+        => row.TryGetProperty("report", out var report) && report.ValueKind == JsonValueKind.Object
+            ? Text(report, property)
             : null;
 
     private static string FormatDate(string raw)

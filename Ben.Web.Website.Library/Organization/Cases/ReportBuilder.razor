@@ -105,6 +105,57 @@ else
                 <label class="form-label small fw-semibold" for="reportbuilder-conclusion-determination-d0d0">Conclusion / Determination</label>
                 <textarea id="reportbuilder-conclusion-determination-d0d0" class="form-control" rows="4" @bind="@_form.Conclusion"></textarea>
             </div>
+            @* ── W-P3 (site evaluation 2026-09-06) ──────────────────────────
+               A published report used to exist only on the client's own page: the group wrote it,
+               the client read it, and nothing on the group's public site could carry any of it.
+               This is the switch that lets them show their finding. Deliberately beside the two
+               fields it publishes, so nobody has to guess which parts go out. *@
+            <div class="col-12"><hr class="my-1" /></div>
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="report-public-summary"
+                       @bind="@_form.IsPublicSummaryVisible" />
+                <label for="report-public-summary" class="form-label mb-0">
+                    Show this on our public case page
+                    <div class="text-secondary small">
+                        Publishes the <strong>executive summary</strong> and the
+                        <strong>conclusion</strong> above, and nothing else — no sections, no
+                        evidence files, no field sessions. It appears only once the report is
+                        published <em>and</em> the case itself is public, and it can be switched
+                        off again at any time.
+                    </div>
+                </label>
+            </div>
+
+            @if (_form.IsPublicSummaryVisible)
+            {
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="report-leak-check"
+                            @onclick="CheckPublicSummaryAsync" disabled="@(!(!_checkingLeaks))">
+                        <BenIcon Name="alert-triangle" Class="me-1" />
+                        @(_checkingLeaks ? "Checking…" : "Check for the client's details")
+                    </button>
+                    @if (_leakChecked && _leakWarnings.Count == 0)
+                    {
+                        <span class="small text-success ms-2">Nothing found in the summary or conclusion.</span>
+                    }
+                </div>
+                @if (_leakWarnings.Count > 0)
+                {
+                    <div class="col-12">
+                        <div class="alert alert-warning py-2 small mb-0">
+                            @foreach (var warning in _leakWarnings)
+                            {
+                                <div>@warning</div>
+                            }
+                            <div class="mt-1 text-secondary">
+                                You can publish anyway — only you know whether these words mean the
+                                client or the place.
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
             <div class="col-12 text-end">
                 <button type="button" class="btn btn-secondary" @onclick="SaveReport" disabled="@(!(!_saving && !string.IsNullOrWhiteSpace(_form.Title)))">
                     @(_saving ? "Saving…" : "Save")
@@ -340,6 +391,39 @@ else
     // Editor form
     private ReportForm _form = new();
 
+    // W-P3: the same leak check item 176 gave the case title, aimed at the prose about to be
+    // published. Advisory — a surname is also a place name, and only the group knows which
+    // theirs means.
+    private IReadOnlyList<string> _leakWarnings = [];
+    private bool _leakChecked;
+    private bool _checkingLeaks;
+
+    private async Task CheckPublicSummaryAsync()
+    {
+        if (_editingReport is null) return;
+        _checkingLeaks = true;
+        try
+        {
+            var result = await AdminClient.CheckPublicSummaryForLeaksAsync(OrgId, CaseId, _editingReport.Id);
+            // A refused or failed check must never read as "nothing found" — that is the one
+            // wrong answer here, and it is the reassuring one.
+            if (result.Failed)
+            {
+                _leakChecked  = false;
+                _leakWarnings = [result.Reason ?? "Couldn't run the check. Save and try again."];
+                return;
+            }
+            _leakWarnings = result.Items.ToList();
+            _leakChecked  = true;
+        }
+        catch
+        {
+            _leakChecked  = false;
+            _leakWarnings = ["Couldn't run the check. Save and try again."];
+        }
+        finally { _checkingLeaks = false; }
+    }
+
     private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum
         .GetValues<CaseReportSectionType>()
         .Select(t => new SectionTypeOption(t, t == CaseReportSectionType.FieldSessions ? "Field Sessions" : t.ToString()))
@@ -387,7 +471,8 @@ else
         _error = null;
         _editingReport = await AdminClient.GetCaseReportAsync(OrgId, CaseId, reportId);
         if (_editingReport is not null)
-            _form = new ReportForm { Title = _editingReport.Title, Summary = _editingReport.Summary, Conclusion = _editingReport.Conclusion, ExpectedDeliveryDate = _editingReport.ExpectedDeliveryDate };
+            _form = new ReportForm { Title = _editingReport.Title, Summary = _editingReport.Summary, Conclusion = _editingReport.Conclusion, ExpectedDeliveryDate = _editingReport.ExpectedDeliveryDate, IsPublicSummaryVisible = _editingReport.IsPublicSummaryVisible };
+            _leakWarnings = [];
     }
 
     private async Task SaveReport()
@@ -396,7 +481,8 @@ else
         _saving = true;
         try
         {
-            var req    = new UpsertCaseReportRequest(_form.Title, _form.Summary, _form.Conclusion, _form.ExpectedDeliveryDate);
+            var req    = new UpsertCaseReportRequest(_form.Title, _form.Summary, _form.Conclusion, _form.ExpectedDeliveryDate,
+                                                    IsPublicSummaryVisible: _form.IsPublicSummaryVisible);
             var result = await AdminClient.UpdateCaseReportAsync(OrgId, CaseId, _editingReport.Id, req);
             if (result is not null) { _editingReport = result; UpdateSummaryList(result); }
         }
@@ -532,6 +618,9 @@ else
         public string?   Summary             { get; set; }
         public string?   Conclusion          { get; set; }
         public DateTime? ExpectedDeliveryDate { get; set; }
+
+        /// <summary>Show the summary and conclusion on the group's public case page (W-P3).</summary>
+        public bool      IsPublicSummaryVisible { get; set; }
     }
 
     private record SectionTypeOption(CaseReportSectionType Value, string Label);

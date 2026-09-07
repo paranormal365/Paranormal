@@ -876,6 +876,7 @@ public sealed record PublicCaseListItem(
 /// Public timeline entries ordered by <c>EventDateTime</c>.
 /// Evidence entries include <see cref="PublicTimelineEntry.EvidenceFileIds"/> for <c>EvidenceVoteWidget</c>.
 /// </param>
+/// <param name="Report">The group's published finding, when switched on (W-P3). Null otherwise.</param>
 public sealed record PublicCaseDetail(
     Guid CaseId,
     string CaseReference,
@@ -891,7 +892,22 @@ public sealed record PublicCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
-    string OrgUrlName);
+    string OrgUrlName,
+    PublicCaseReport? Report = null);
+
+/// <summary>
+/// What a case's investigation report says to the public — the group's own finding, as opposed to
+/// the client's account of what happened (site evaluation 2026-09-06, W-P3).
+/// </summary>
+/// <remarks>
+/// The summary and the conclusion only. Never the sections, the evidence files or the cited field
+/// sessions: those carry the working detail of an investigation inside somebody's home.
+/// </remarks>
+public sealed record PublicCaseReport(
+    string Title,
+    string? Summary,
+    string? Conclusion,
+    DateTime? PublishedAt);
 
 /// <summary>
 /// A single public timeline entry within a <see cref="PublicCaseDetail"/>.
@@ -1175,11 +1191,15 @@ public sealed record OccurrenceFileItem(
     long   FileSize);
 
 // ── Case Report Builder records ───────────────────────────────────────────────
+/// <param name="IsPublicSummaryVisible">
+/// Show this report on the public case page (W-P3). Null leaves the group's choice alone.
+/// </param>
 public sealed record UpsertCaseReportRequest(
     string    Title,
     string?   Summary,
     string?   Conclusion,
-    DateTime? ExpectedDeliveryDate);
+    DateTime? ExpectedDeliveryDate,
+    bool?     IsPublicSummaryVisible = null);
 
 public sealed record UpsertSectionRequest(
     string                                           Title,
@@ -1193,8 +1213,10 @@ public sealed record CaseReportSummary(
     Ben.Data.Common.Enums.CaseReportStatus           Status,
     DateTime?                                        ExpectedDeliveryDate,
     DateTime?                                        PublishedAt,
-    DateTime                                         DateCreated);
+    DateTime                                         DateCreated,
+    bool                                             IsPublicSummaryVisible = false);
 
+/// <param name="IsPublicSummaryVisible">Switched onto the group's public case page (W-P3).</param>
 public sealed record CaseReportDetail(
     Guid                                             Id,
     Guid                                             CaseId,
@@ -1205,7 +1227,8 @@ public sealed record CaseReportDetail(
     DateTime?                                        ExpectedDeliveryDate,
     DateTime?                                        PublishedAt,
     DateTime                                         DateCreated,
-    IReadOnlyList<CaseReportSectionDto>              Sections);
+    IReadOnlyList<CaseReportSectionDto>              Sections,
+    bool                                             IsPublicSummaryVisible = false);
 
 public sealed record CaseReportSectionDto(
     Guid                                             Id,
