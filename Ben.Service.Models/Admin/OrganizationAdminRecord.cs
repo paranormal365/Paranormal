@@ -34,6 +34,12 @@ public record OrganizationAdminRecord
     public string? PublicPhone { get; init; }
     public string? PublicEmail { get; init; }
     public string? PublicWebsite { get; init; }
+
+    /// <summary>
+    /// The functional role people are given when they join (site evaluation 2026-09-06, W-M1).
+    /// Null means none, which is what every group did before the setting existed.
+    /// </summary>
+    public Guid? DefaultMemberRoleId { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

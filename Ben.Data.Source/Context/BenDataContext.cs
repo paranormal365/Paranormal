@@ -337,6 +337,14 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // The role new members start with (site evaluation 2026-09-06, W-M1). NoAction rather
+            // than SetNull: the role belongs to this same organization, so a cascade path would
+            // run in a circle, and a group that deletes the role it points at should be told
+            // rather than have the setting silently emptied under it.
+            modelBuilder.Entity<Organization>()
+                .HasOne(e => e.DefaultMemberRole).WithMany()
+                .HasForeignKey(e => e.DefaultMemberRoleId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── OrganizationAddress ──────────────────────────────────────────
             modelBuilder.Entity<OrganizationAddress>()
                 .HasOne(e => e.Organization).WithMany(e => e.OrganizationAddresses)

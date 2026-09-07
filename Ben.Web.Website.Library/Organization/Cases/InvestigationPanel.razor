@@ -183,7 +183,8 @@
                                        member saw the attendance and lead controls and got a 403 on
                                        using them — the exact thing CanEditRecord exists to stop. *@
                                     <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id"
-                                                         CanManage="@i.CanEditRecord" />
+                                                         CanManage="@i.CanEditRecord"
+                                                         ReloadToken="@_rosterReloadToken" />
                                 </div>
 
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
@@ -406,12 +407,14 @@
 
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
+    // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
+    // enum cannot be listed under one name in this panel and another on the timeline.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
-        new("Note",              CaseTimelineEntryType.InvestigatorNote),
-        new("Instrument reading", CaseTimelineEntryType.InstrumentReading),
-        new("Evidence",          CaseTimelineEntryType.Evidence),
-        new("Research",          CaseTimelineEntryType.ResearchNote),
+        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
+        new(CaseTimelineEntryTypes.DisplayName(CaseTimelineEntryType.InstrumentReading), CaseTimelineEntryType.InstrumentReading),
+        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.Evidence),          CaseTimelineEntryType.Evidence),
+        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.ResearchNote),      CaseTimelineEntryType.ResearchNote),
     ];
 
     private async Task ToggleBinderAsync(InvestigationRecord inv)
@@ -488,15 +491,10 @@
         }
     }
 
-    private static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
-    {
-        CaseTimelineEntryType.ClientReport      => "Client Report",
-        CaseTimelineEntryType.InvestigatorNote  => "Note",
-        CaseTimelineEntryType.Evidence          => "Evidence",
-        CaseTimelineEntryType.ResearchNote      => "Research",
-        CaseTimelineEntryType.InstrumentReading => "Reading",
-        _                                       => t.ToString(),
-    };
+    // W-A11: the badge's short form, from the one helper. Every copy of this switch ended in
+    // t.ToString(), which is how a raw enum name reached a screen when the enum grew.
+    private static string EntryTypeLabel(CaseTimelineEntryType t)
+        => CaseTimelineEntryTypes.ShortName(t);
 
     private static string EntryTypeBadge(CaseTimelineEntryType t) => t switch
     {
@@ -570,6 +568,9 @@
         finally { _attendeeBusy = false; }
     }
 
+    /// <summary>Bumped to make the roster panels re-read at once. See W-A7 on the roster.</summary>
+    private int _rosterReloadToken;
+
     private async Task AddAttendee(InvestigationRecord inv)
     {
         if (_newAttendeeUserId == Guid.Empty) return;
@@ -583,6 +584,9 @@
             _newAttendeeRole = "";
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
+            // W-A7: the roster panel above keeps its own state and would otherwise sit on
+            // "Nobody has been added to this investigation yet" until its next poll.
+            _rosterReloadToken++;
         }
         catch { _error = "Failed to add attendee."; }
         finally { _attendeeBusy = false; }
@@ -596,6 +600,7 @@
             await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
+            _rosterReloadToken++;
         }
         catch { _error = "Failed to remove attendee."; }
         finally { _attendeeBusy = false; }

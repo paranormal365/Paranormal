@@ -132,7 +132,28 @@ else
                 }
                 else
                 {
-                    <div class="text-secondary small mb-2">Voting is open while the request is marked Under Review.</div>
+                    @* W-A5 (site evaluation 2026-09-06): this said what the rule was and offered
+                       no way to satisfy it, so a reviewer who followed the message here to vote
+                       had to go back to another screen to find the button that opens voting. The
+                       page that states the condition is the page that should be able to meet it. *@
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <span class="text-secondary small">
+                            Voting is open while the request is marked Under Review.
+                        </span>
+                        @if (_detail.ApplicationStatus is ClientOrgRequestStatus.Pending
+                                                       or ClientOrgRequestStatus.Viewed)
+                        {
+                            <button type="button" id="review-open-voting" class="btn btn-outline-primary btn-sm"
+                                    disabled="@_busy" @onclick="OpenVotingAsync">
+                                <BenIcon Name="search" Class="me-1" />
+                                @(_busy ? "Opening…" : "Mark Under Review")
+                            </button>
+                        }
+                    </div>
+                    @if (_statusError is not null)
+                    {
+                        <div class="alert alert-danger py-1 px-2 small mb-2">@_statusError</div>
+                    }
                 }
 
                 @foreach (var v in _detail.Votes)
@@ -183,6 +204,35 @@ else
         _signedOut = !UserState.IsAuthenticated;
         _detail = _signedOut ? null : await AdminClient.GetRequestReviewAsync(OrgId, ClientRequestId);
         _loading = false;
+    }
+
+    private string? _statusError;
+
+    /// <summary>
+    /// Puts the request Under Review, which is what opens voting (W-A5).
+    /// </summary>
+    /// <remarks>
+    /// The same endpoint the pending-requests screen's own button calls; a refusal is reported
+    /// here rather than swallowed, because somebody without the permission to move a request
+    /// should be told that rather than watch a button do nothing.
+    /// </remarks>
+    private async Task OpenVotingAsync()
+    {
+        _busy = true;
+        _statusError = null;
+        try
+        {
+            var moved = await AdminClient.UpdatePendingRequestStatusAsync(
+                OrgId, ClientRequestId, ClientOrgRequestStatus.UnderReview);
+            if (!moved)
+            {
+                _statusError = "Couldn't open voting. You may not have permission to move this request.";
+                return;
+            }
+            _detail = await AdminClient.GetRequestReviewAsync(OrgId, ClientRequestId);
+        }
+        catch { _statusError = "Couldn't open voting. Please try again."; }
+        finally { _busy = false; }
     }
 
     private async Task VoteAsync(bool inFavor)

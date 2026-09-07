@@ -389,6 +389,12 @@ public sealed class OrganizationPurge
             await db.UploadFiles.Where(f => f.OwnerOrganizationId == organizationId)
                 .ExecuteUpdateAsync(u => u.SetProperty(f => f.OwnerOrganizationId, (Guid?)null), ct);
 
+            // The group's own pointer at one of its roles goes first, or the role rows below
+            // cannot be deleted (site evaluation 2026-09-06, W-M1: Organizations.DefaultMemberRoleId
+            // is NoAction, so it would refuse the delete and take the whole purge with it).
+            await db.Organizations.Where(o => o.Id == organizationId && o.DefaultMemberRoleId != null)
+                .ExecuteUpdateAsync(u => u.SetProperty(o => o.DefaultMemberRoleId, (Guid?)null), ct);
+
             // Roles, leaf-first, then the memberships, then the group itself.
             var roleIds = await db.OrganizationRoles.Where(r => r.OrganizationId == organizationId)
                 .Select(r => r.Id).ToListAsync(ct);

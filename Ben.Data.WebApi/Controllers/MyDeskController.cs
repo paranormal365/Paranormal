@@ -28,8 +28,15 @@ public sealed class MyDeskController : BenControllerBase
 {
     private const int ListCap = 5;
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public MyDeskController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public MyDeskController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    {
+        _db = db;
+        _security = security;
+    }
 
     [HttpGet("desk")]
     public async Task<ActionResult<MemberDeskResponse>> GetDesk(CancellationToken ct)
@@ -65,11 +72,24 @@ public sealed class MyDeskController : BenControllerBase
                 a.Investigation.Attendees.Count(x => x.Rsvp != RsvpStatus.Declined)))
             .FirstOrDefaultAsync(ct);
 
-        // Open cases in this person's groups, the ones they are a contact on first.
+        // Open cases in this person's groups — but only the groups whose cases they may actually
+        // read (site evaluation 2026-09-06, W-M1). The desk used to list every open case in every
+        // group they belonged to, and a membership rank on its own grants nothing below
+        // Administrator: a new member's desk was a column of links that all answered 403. A door
+        // must never offer what it cannot open.
+        var readableOrgIds = new List<Guid>();
+        foreach (var orgId in orgIds)
+        {
+            if (adminOrgIds.Contains(orgId)
+                || await _security.HasAccessAsync(
+                    userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct))
+                readableOrgIds.Add(orgId);
+        }
+
         var myContactCaseIds = await db.CaseContacts.AsNoTracking()
             .Where(c => c.AppUserId == userId).Select(c => c.CaseId).ToListAsync(ct);
         var openCases = db.Cases.AsNoTracking()
-            .Where(c => orgIds.Contains(c.OrganizationId) && c.Status <= CaseStatus.Summarized);
+            .Where(c => readableOrgIds.Contains(c.OrganizationId) && c.Status <= CaseStatus.Summarized);
         var openCaseCount = await openCases.CountAsync(ct);
         var cases = await openCases
             .OrderByDescending(c => myContactCaseIds.Contains(c.Id))

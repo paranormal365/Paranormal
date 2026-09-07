@@ -90,7 +90,7 @@ public sealed class SoloPlanController : BenControllerBase
         // A personal organization gets the full skeleton — roles, levels, duties, event types.
         // It is a real organization that happens to have one member, and a reduced version would
         // mean a second code path in every feature it touches.
-        NewOrganizationDefaults.AddAll(db, org.Id, userId);
+        await NewOrganizationDefaults.AddAllAsync(db, org, userId, ct);
 
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership
         {

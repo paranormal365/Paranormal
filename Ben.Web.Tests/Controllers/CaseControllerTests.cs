@@ -42,7 +42,11 @@ public class CaseControllerTests
         var m = new Mock<IMapper>();
         m.Setup(x => x.Map<CaseRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is Case c
-                ? new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Description = c.Description, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, DateCaseClosed = c.DateCaseClosed }
+                ? new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Description = c.Description, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, DateCaseClosed = c.DateCaseClosed,
+                    // Mirrors CaseProfile exactly: the name comes off the NAVIGATION, not the id.
+                    // That is what makes the W-A9 test below mean anything — the controller has to
+                    // have loaded the navigation for a name to appear here, which is the bug.
+                    CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName }
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
@@ -200,6 +204,39 @@ public class CaseControllerTests
         var dto = Assert.IsType<CaseRecord>(ok.Value);
         Assert.Equal("Updated", dto.Title);
         Assert.Equal(CaseStatus.Accepted, dto.Status);
+    }
+
+    [Fact]
+    public async Task Update_AnsweringWithTheManagersName_NotUnassigned()
+    {
+        // W-A9 (site evaluation 2026-09-06): the case is loaded without its manager navigation —
+        // it does not need it to save — and the record's name is mapped from exactly that
+        // navigation. So every save answered with a null name, and the page, which takes the
+        // response as the new truth, redrew its header as "Case Manager: Unassigned" over a case
+        // that had just been given one. It read correctly only after a fresh load, which is what
+        // made it look like the save had failed.
+        var (factory, orgId, userId) = await SeedAsync();
+        var managerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = managerId, UserName = "mgr@t.com", NormalizedUserName = "MGR@T.COM",
+                Email = "mgr@t.com", NormalizedEmail = "MGR@T.COM",
+                DisplayName = "Dana Holt", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory, userId);
+        var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
+
+        var result = await ctrl.Update(orgId, caseId,
+            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+
+        var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(managerId, dto.CaseManagerAppUserId);
+        Assert.Equal("Dana Holt", dto.CaseManagerDisplayName);
     }
 
     [Fact]
@@ -460,6 +497,33 @@ public class CaseControllerTests
 
         var app = await db2.ClientRequestOrganizations.FirstAsync(a => a.ClientRequestId == req.Id);
         Assert.Equal(ClientOrgRequestStatus.Accepted, app.Status);
+
+        // W-A6 (site evaluation 2026-09-06): the default title used to be built from the client's
+        // SURNAME — "Park, Nashville TN" — which put a private person's real name on the field
+        // that becomes a public page's heading, and (until the slug was fixed) its web address.
+        // The town alone says what the case is about and identifies nobody.
+        Assert.Equal("Nashville, TN", dto.Title);
+        Assert.DoesNotContain("Park", dto.Title);
+    }
+
+    [Fact]
+    public async Task AcceptClientRequest_KeepsATitleTheGroupTyped()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var clientId = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser { Id = clientId, UserName = "c2@t.com", NormalizedUserName = "C2@T.COM", Email = "c2@t.com", NormalizedEmail = "C2@T.COM", DisplayName = "Daniel Park", DateCreated = DateTime.UtcNow });
+        var req = new ClientRequest { Id = Guid.NewGuid(), AppUserId = clientId, City = "Nashville", State = "TN", ZipCode = "37201", Country = "US", StreetAddress1 = "1 Main", Description = "Haunting", Status = ClientRequestStatus.Submitted, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId };
+        db.ClientRequests.Add(req);
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization { Id = Guid.NewGuid(), ClientRequestId = req.Id, OrganizationId = orgId, Status = ClientOrgRequestStatus.Pending, DateApplied = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        await db.SaveChangesAsync();
+
+        var result = await Build(factory, userId).AcceptClientRequest(
+            orgId, req.Id, new AcceptClientRequestAsCaseRequest("The Westside Family", null), default);
+
+        var dto = Assert.IsType<CaseRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal("The Westside Family", dto.Title);
     }
 
     // ── GetClientRequest (C1) ─────────────────────────────────────────────────

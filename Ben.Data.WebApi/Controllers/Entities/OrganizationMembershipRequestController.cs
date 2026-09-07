@@ -295,7 +295,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
 
             if (!alreadyMember)
             {
-                db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+                var newMembership = new OrganizationUserMembership
                 {
                     Id                 = Guid.NewGuid(),
                     OrganizationId     = orgId,
@@ -304,7 +304,14 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
                     IsActive           = true,
                     DateCreated        = DateTime.UtcNow,
                     CreatedByAppUserId = userId.Value,
-                });
+                };
+                db.OrganizationUserMemberships.Add(newMembership);
+
+                // W-M1: the welcome message says "Welcome to the organization!" — this is what
+                // makes that true. Without the group's starting role the new member joins to a
+                // desk full of links that answer 403. See MemberDefaultRole.
+                await Ben.Data.Source.Services.MemberDefaultRole.ApplyAsync(
+                    db, orgId, newMembership, userId.Value, ct);
             }
         }
 

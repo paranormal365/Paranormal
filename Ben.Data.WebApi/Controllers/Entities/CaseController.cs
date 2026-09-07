@@ -478,14 +478,17 @@ public sealed class CaseController : BenControllerBase
 
         clientReq.Status = ClientRequestStatus.Assigned;
 
-        // Derive title: "{Surname}, {City} {State}" — case manager can rename later
-        var clientName = await db.AppUsers.AsNoTracking()
-            .Where(u => u.Id == clientReq.AppUserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct);
-        var surname    = ExtractSurname(clientName);
-        var caseTitle  = string.IsNullOrWhiteSpace(request.Title)
-            ? $"{surname}, {clientReq.City} {clientReq.State}"
+        // W-A6 (site evaluation 2026-09-06): the title used to be built from the client's
+        // SURNAME — "Evaluator, Nashville TN" — which put a private person's real name on the one
+        // field that becomes the public page's heading and, until phase 1 fixed the slug, its
+        // web address too. The leak warning then had to catch at publish time what this had
+        // written at accept time, and a group that never noticed shipped the name.
+        //
+        // The town alone is the honest default: it says what the case is about and identifies
+        // nothing. A group that wants a name types one, and the pseudonym field is where a
+        // publishable one belongs.
+        var caseTitle = string.IsNullOrWhiteSpace(request.Title)
+            ? $"{clientReq.City}, {clientReq.State}"
             : request.Title.Trim();
 
         var newCase = new Case
@@ -606,6 +609,15 @@ public sealed class CaseController : BenControllerBase
         await db.SaveChangesAsync(ct);
         // Item 206: the client hears the same sentence the site now shows.
         await _clientMail.CaseStatusChangedAsync(db, entity, previousStatus, ct);
+
+        // W-A9 (site evaluation 2026-09-06): the case is loaded WITHOUT its manager navigation —
+        // it does not need it to save — and the record's CaseManagerDisplayName is mapped from
+        // exactly that navigation. So every save answered with a null name, and the page, which
+        // takes the response as the new truth, redrew its header as "Case Manager: Unassigned"
+        // over a case that had just been assigned one. It read correctly only after a fresh load,
+        // which is what made it look like the save had failed. Reloaded with the navigation so
+        // the answer says who it is.
+        await db.Entry(entity).Reference(c => c.CaseManagerAppUser).LoadAsync(ct);
         return Ok(_mapper.Map<CaseRecord>(entity));
     }
 
@@ -829,16 +841,10 @@ public sealed class CaseController : BenControllerBase
         return (year, max + 1);
     }
 
-    /// <summary>
-    /// Extracts a display-friendly surname from a DisplayName.
-    /// "John Smith" → "Smith", "AverageBen" → "AverageBen"
-    /// </summary>
-    private static string ExtractSurname(string? displayName)
-    {
-        if (string.IsNullOrWhiteSpace(displayName)) return "Unknown";
-        var parts = displayName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length > 1 ? parts[^1] : parts[0];
-    }
+    // ExtractSurname was here. It built the default case title out of the client's surname, which
+    // is how "Evaluator, Nashville TN" reached the field that becomes a public page's heading
+    // (W-A6, site evaluation 2026-09-06). Removed rather than left unused: a helper whose only
+    // purpose was that default is an invitation to reinstate it.
 
     // ── Auto-generate CMS pages ───────────────────────────────────────────────
 

@@ -99,7 +99,10 @@ internal static class OrganizationSeeder
             // a net for databases that predate all this, not a thing correctness leans on.
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, org.Id, owner.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, org.Id, owner.Id);
-            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, org.Id, owner.Id);
+            var seededRoles = Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, org.Id, owner.Id);
+            // W-M1: a group with no starting role hands every new member a desk of doors that
+            // refuse them. A fresh install must not ship in that state.
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(org, seededRoles);
             await db.SaveChangesAsync();
 
             Console.WriteLine($"[OrganizationSeeder] Created organization: {orgName}");
