@@ -27,7 +27,9 @@
         <div class="d-flex flex-column gap-3">
             @foreach (var c in _result.Items)
             {
-                <div class="card" style="cursor:pointer;" data-testid="my-case-card" @onclick="@(() => NavManager.NavigateTo($"/my-cases/{c.CaseId}"))">
+                @* W-CL5: a click-only div could not be tabbed to, opened in a new tab, or read as
+                   a link by a screen reader. An anchor is all three for free. *@
+                <a class="card text-decoration-none text-reset" data-testid="my-case-card" href="/my-cases/@c.CaseId">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between">
                             <div>
@@ -57,7 +59,7 @@
                             </div>
                         }
                     </div>
-                </div>
+                </a>
             }
         </div>
         </ChildContent>

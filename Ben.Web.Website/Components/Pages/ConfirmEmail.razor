@@ -44,8 +44,26 @@
             {
                 <div class="mb-3" style="font-size:2rem;">✓</div>
                 <h1 class="h4 mb-3">You're all set</h1>
-                <p class="text-secondary mb-4">@_result.Message</p>
-                <a class="btn btn-primary w-100" href="/login">Sign in</a>
+                <p class="text-secondary mb-3">@_result.Message</p>
+
+                @* Somebody who signed up by asking for help has not been able to sign in since,
+                   so nothing that happened in the meantime has reached them. This is the first
+                   screen they see (site evaluation 2026-09-06, phase 1). *@
+                @if (_result.Waiting is { } waiting)
+                {
+                    <div class="alert alert-info small text-start mb-3">@waiting</div>
+                }
+
+                @* The @@name was allocated for them — the request wizard never asks for one — so
+                   this is the first they hear of it. Shown once, and it does not change. *@
+                @if (_result.Handle is { Length: > 0 } handle)
+                {
+                    <p class="small text-secondary mb-3">
+                        People can mention you as <strong>@("@" + handle)</strong>.
+                    </p>
+                }
+
+                <a class="btn btn-primary w-100" href="@SignInHref">Sign in</a>
             }
             else
             {
@@ -62,6 +80,22 @@
 @code {
     [SupplyParameterFromQuery(Name = "userId")] private string? UserIdParam { get; set; }
     [SupplyParameterFromQuery(Name = "code")]   private string? CodeParam { get; set; }
+
+    /// <summary>
+    /// Where to send them after signing in — their own request, when the link carried one.
+    /// </summary>
+    /// <remarks>
+    /// A local path only, never absolute and never protocol-relative, so a crafted confirmation
+    /// link cannot turn this page into a redirector. Same rule sign-in applies to its own
+    /// returnUrl, and the API applies before putting it in the link at all.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "returnUrl")] private string? ReturnUrlParam { get; set; }
+
+    private string SignInHref =>
+        !string.IsNullOrWhiteSpace(ReturnUrlParam)
+        && ReturnUrlParam.StartsWith('/') && !ReturnUrlParam.StartsWith("//")
+            ? $"/login?returnUrl={Uri.EscapeDataString(ReturnUrlParam)}"
+            : "/login";
 
     private ConfirmEmailOutcome? _result;
     private bool _busy;

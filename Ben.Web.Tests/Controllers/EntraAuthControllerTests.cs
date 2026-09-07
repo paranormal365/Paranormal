@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using Ben.Data.Source.Context;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -39,7 +42,11 @@ public class EntraAuthControllerTests
         Mock<UserManager<AppUser>> umMock,
         ClaimsPrincipal? principal = null)
     {
-        var controller = new EntraAuthController(umMock.Object);
+        var factory = new PooledDbContextFactory<BenDataContext>(
+            new DbContextOptionsBuilder<BenDataContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var controller = new EntraAuthController(
+            umMock.Object, new Ben.Data.WebApi.Services.UserHandleService(factory));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

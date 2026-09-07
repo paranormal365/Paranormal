@@ -72,7 +72,8 @@ public class AdminAppUserControllerTests
         auditMock.Setup(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
             It.IsAny<object>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var ctrl = new AdminAppUserController(factory, CreateMapper(), auditMock.Object, userMgr.Object);
+        var ctrl = new AdminAppUserController(factory, CreateMapper(), auditMock.Object, userMgr.Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
@@ -158,7 +159,8 @@ public class AdminAppUserControllerTests
         audit.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
             It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         c.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
@@ -177,16 +179,18 @@ public class AdminAppUserControllerTests
         var store    = new Mock<IUserStore<AppUser>>();
         var userMgr  = new Mock<UserManager<AppUser>>(
             store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        AppUser? created = null;
         userMgr.Setup(x => x.CreateAsync(It.IsAny<AppUser>(), It.IsAny<string>()))
                .ReturnsAsync(IdentityResult.Success)
-               .Callback<AppUser, string>((u, _) => u.Id = Guid.NewGuid());
+               .Callback<AppUser, string>((u, _) => { u.Id = Guid.NewGuid(); created = u; });
         userMgr.Setup(x => x.AddToRoleAsync(It.IsAny<AppUser>(), It.IsAny<string>()))
                .ReturnsAsync(IdentityResult.Success);
         var audit = new Mock<IAuditLogService>();
         audit.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
             It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         c.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
@@ -196,6 +200,11 @@ public class AdminAppUserControllerTests
             new AdminCreateUserRequest("new@test.com", "Str0ng!Pass", "New User", null, true, false), default);
 
         Assert.IsType<CreatedAtActionResult>(result.Result);
+
+        // C1 (site evaluation 2026-09-06): an administrator-created account used to carry a null
+        // @name until the next API restart's backfill ran, and could not be mentioned until then.
+        Assert.NotNull(created);
+        Assert.False(string.IsNullOrWhiteSpace(created!.Handle));
     }
 
     // ── UpdateProfile ─────────────────────────────────────────────────────────
@@ -289,7 +298,8 @@ public class AdminAppUserControllerTests
         audit.Setup(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object>(),
             It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         if (callerId is { } caller)
         {
@@ -419,7 +429,8 @@ public class AdminAppUserControllerTests
         userMgr.Setup(x => x.GetRolesAsync(It.Is<AppUser>(u => u.Id == user.Id))).ReturnsAsync(["Moderator", "Admin"]);
         var audit = new Mock<IAuditLogService>();
 
-        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
+        var ctrl = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()

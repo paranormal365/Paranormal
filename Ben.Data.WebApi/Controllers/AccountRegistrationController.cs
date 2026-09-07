@@ -1,4 +1,6 @@
 using Ben.Data.Common;
+using Ben.Data.Common.Enums;
+using Microsoft.EntityFrameworkCore;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
@@ -6,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Options;
 using System.Text;
 
 namespace Ben.Data.WebApi.Controllers;
@@ -40,31 +41,19 @@ public sealed class AccountRegistrationController : ControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly UserHandleService _handles;
-    private readonly IEmailSender<AppUser> _emailSender;
-    private readonly Ben.Data.WebApi.Services.IConfirmationMailer _mailer;
-    private readonly Ben.Data.Common.Interfaces.IEmailService _email;
-    private readonly SiteIdentity _site;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<AccountRegistrationController> _logger;
+    private readonly AccountCreationService _accounts;
+    private readonly IDbContextFactory<Ben.Data.Source.Context.BenDataContext> _db;
 
     public AccountRegistrationController(
         UserManager<AppUser> userManager,
         UserHandleService handles,
-        IEmailSender<AppUser> emailSender,
-        Ben.Data.WebApi.Services.IConfirmationMailer mailer,
-        Ben.Data.Common.Interfaces.IEmailService email,
-        IOptions<SiteIdentity> site,
-        IConfiguration configuration,
-        ILogger<AccountRegistrationController> logger)
+        AccountCreationService accounts,
+        IDbContextFactory<Ben.Data.Source.Context.BenDataContext> db)
     {
         _userManager = userManager;
-        _handles = handles;
-        _emailSender = emailSender;
-        _mailer      = mailer;
-        _email = email;
-        _site = site.Value;
-        _configuration = configuration;
-        _logger = logger;
+        _handles     = handles;
+        _accounts    = accounts;
+        _db          = db;
     }
 
     /// <summary>
@@ -128,43 +117,18 @@ public sealed class AccountRegistrationController : ControllerBase
         if (existing is not null)
         {
             // Deliberately indistinguishable from success. See the remarks.
-            await WarnExistingAccountHolderAsync(existing, ct);
+            await _accounts.WarnExistingAccountHolderAsync(existing, ct);
             return Ok(new RegisterResponse(true, CheckYourEmail, null));
         }
 
-        var user = new AppUser
-        {
-            Id                 = Guid.NewGuid(),
-            Email              = email,
-            UserName           = email,
-            NormalizedEmail    = email.ToUpperInvariant(),
-            NormalizedUserName = email.ToUpperInvariant(),
-            DisplayName        = displayName,
-            FirstName          = request.FirstName?.Trim(),
-            LastName           = request.LastName?.Trim(),
-            Handle             = UserHandle.Normalize(request.Handle),
-            EmailConfirmed     = false,
-            DateCreated        = DateTime.UtcNow,
-        };
+        var outcome = await _accounts.CreateUnconfirmedAsync(
+            email, request.Password, displayName, request.FirstName, request.LastName, request.Handle, ct);
 
-        var created = await _userManager.CreateAsync(user, request.Password);
-        if (!created.Succeeded)
-        {
-            // Identity's password rules produce the messages here. A duplicate handle can also
-            // land here if somebody took it between the check above and this line — the unique
-            // index is the real guard, and this is where it reports.
-            var isHandleClash = created.Errors.Any(e =>
-                e.Description.Contains("Handle", StringComparison.OrdinalIgnoreCase));
+        if (!outcome.Succeeded)
+            return BadRequest(new RegisterResponse(false, outcome.Error!,
+                outcome.HandleClash ? nameof(RegisterRequest.Handle) : nameof(RegisterRequest.Password)));
 
-            return BadRequest(new RegisterResponse(
-                false,
-                isHandleClash
-                    ? "That name was taken a moment ago. Try another."
-                    : string.Join(" ", created.Errors.Select(e => e.Description)),
-                isHandleClash ? nameof(RegisterRequest.Handle) : nameof(RegisterRequest.Password)));
-        }
-
-        await SendConfirmationAsync(user, ct);
+        await _accounts.SendConfirmationAsync(outcome.User!, returnUrl: null, ct);
 
         return Ok(new RegisterResponse(true, CheckYourEmail, null));
     }
@@ -172,96 +136,6 @@ public sealed class AccountRegistrationController : ControllerBase
     private const string CheckYourEmail =
         "Check your email — we've sent a link to confirm the address. You'll be able to sign in once you've used it.";
 
-    /// <summary>
-    /// Builds and sends the confirmation link.
-    /// </summary>
-    /// <remarks>
-    /// <para>The link points at the <b>website</b>, not at this API. Identity's own
-    /// <c>/confirmEmail</c> returns a line of text, which is a poor thing to land on after clicking
-    /// a link in an email; the website's page calls that endpoint and then offers a way to sign in.
-    /// </para>
-    ///
-    /// <para>The token is base64url-encoded because it goes in a query string and Identity's raw
-    /// tokens are not URL-safe. This is the same encoding <c>MapIdentityApi</c> uses, so the same
-    /// confirmation endpoint accepts both.</para>
-    /// </remarks>
-    private async Task SendConfirmationAsync(AppUser user, CancellationToken ct)
-    {
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-
-        var baseUrl = (_site.BaseUrl?.TrimEnd('/') is { Length: > 0 } configured
-                ? configured
-                : _configuration["AppBaseUrl"]?.TrimEnd('/'))
-            ?? string.Empty;
-
-        var link = $"{baseUrl}/confirm-email?userId={user.Id}&code={code}";
-
-        // This used to be a try/catch around SendConfirmationLinkAsync whose catch COULD NEVER
-        // RUN: the sender swallows its own exceptions and returns a completed Task, so the
-        // "Could not send" error below it was dead code. That is exactly why a failed confirmation
-        // left no trace — the layer that would have recorded it was never reached.
-        var sent = await _mailer.TrySendConfirmationAsync(user, user.Email!, link);
-
-        if (sent)
-        {
-            // Stamped only on a real send. An account with no DateConfirmationSent has never been
-            // told how to complete itself, and that is now a question the database can answer.
-            user.DateConfirmationSent = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
-        }
-    }
-
-    /// <summary>
-    /// Tells the real account holder that somebody tried to register their address.
-    /// </summary>
-    /// <remarks>
-    /// <para>The only person entitled to know that the address is registered is the person who
-    /// registered it. This is also genuinely useful to them: it is either their own forgotten
-    /// account, or somebody probing it.</para>
-    ///
-    /// <para>Sent through <c>IEmailService</c> with its own wording rather than through Identity's
-    /// sender: the three messages Identity knows how to send are confirmation, password reset and
-    /// email change, and this is none of them. Reusing the confirmation template would have
-    /// delivered "confirm your email" to somebody who confirmed theirs months ago.</para>
-    /// </remarks>
-    private async Task WarnExistingAccountHolderAsync(AppUser existing, CancellationToken ct)
-    {
-        try
-        {
-            var baseUrl = (_site.BaseUrl?.TrimEnd('/') is { Length: > 0 } configured
-                    ? configured
-                    : _configuration["AppBaseUrl"]?.TrimEnd('/'))
-                ?? string.Empty;
-
-            var name = System.Net.WebUtility.HtmlEncode(_site.Name);
-            var body = Ben.Data.WebApi.Services.BenEmailLayout.Wrap(_site,
-                "You already have an account",
-                $"<p>Somebody tried to create an account on {name} using this email address, and one "
-                + "already exists.</p>"
-                + "<p>If that was you, you already have an account — sign in below, or reset your "
-                + "password if you have forgotten it.</p>"
-                + "<p>If it was not you, there is nothing to do. Your account has not changed and "
-                + "nobody has been given access to it.</p>",
-                buttonText: "Sign in", buttonUrl: $"{baseUrl}/login");
-
-            await _email.SendAsync(existing.Email!, $"Someone tried to sign up with your email on {_site.Name}", body, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Could not warn {UserId} that their address was used in a sign-up attempt.", existing.Id);
-        }
-    }
-
-    /// <summary>
-    /// Confirms an email address from the link.
-    /// </summary>
-    /// <remarks>
-    /// A POST rather than a GET, and the website's page calls it on a button press rather than on
-    /// load. Mail scanners and link previewers fetch URLs found in messages; a confirmation that
-    /// happens on GET is a confirmation a scanner can perform on somebody's behalf.
-    /// </remarks>
     /// <summary>
     /// Sends the confirmation link again, on request from the sign-in page.
     /// </summary>
@@ -300,13 +174,21 @@ public sealed class AccountRegistrationController : ControllerBase
         if (user.DateConfirmationSent is { } last && DateTime.UtcNow - last < ResendCooldown)
             return Ok(neutral);
 
-        await SendConfirmationAsync(user, ct);
+        await _accounts.SendConfirmationAsync(user, returnUrl: null, ct);
         return Ok(neutral);
     }
 
     /// <summary>Matches the contact-info resend, deliberately — one number for one idea.</summary>
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Confirms an email address from the link.
+    /// </summary>
+    /// <remarks>
+    /// A POST rather than a GET, and the website's page calls it on a button press rather than on
+    /// load. Mail scanners and link previewers fetch URLs found in messages; a confirmation that
+    /// happens on GET is a confirmation a scanner can perform on somebody's behalf.
+    /// </remarks>
     [HttpPost("confirm-email")]
     public async Task<ActionResult<ConfirmEmailResponse>> ConfirmEmail(
         [FromBody] ConfirmEmailRequest request, CancellationToken ct)
@@ -314,7 +196,9 @@ public sealed class AccountRegistrationController : ControllerBase
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null) return Ok(new ConfirmEmailResponse(false, "That link is not valid."));
 
-        if (user.EmailConfirmed) return Ok(new ConfirmEmailResponse(true, "Your email is already confirmed."));
+        if (user.EmailConfirmed)
+            return Ok(new ConfirmEmailResponse(true, "Your email is already confirmed.",
+                user.Handle, await WhatIsWaitingAsync(user.Id, ct)));
 
         string token;
         try
@@ -337,8 +221,46 @@ public sealed class AccountRegistrationController : ControllerBase
         }
 
         return Ok(result.Succeeded
-            ? new ConfirmEmailResponse(true, "Your email is confirmed. You can sign in now.")
+            ? new ConfirmEmailResponse(true, "Your email is confirmed. You can sign in now.",
+                user.Handle, await WhatIsWaitingAsync(user.Id, ct))
             : new ConfirmEmailResponse(false, "That link has expired or has already been used."));
+    }
+
+    /// <summary>
+    /// A sentence about the investigation request this person made before they could sign in.
+    /// </summary>
+    /// <remarks>
+    /// Somebody who signed up by asking for help has been unable to sign in since, so nothing the
+    /// site did in the meantime — a group looking, a group accepting — has reached them. The
+    /// confirmation page is the first screen they see, so it says where things stand. Null for
+    /// everyone else; the page then says nothing.
+    /// </remarks>
+    private async Task<string?> WhatIsWaitingAsync(Guid userId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var latest = await db.ClientRequests.AsNoTracking()
+            .Where(r => r.AppUserId == userId
+                     && (r.Status == ClientRequestStatus.Submitted || r.Status == ClientRequestStatus.Assigned))
+            .OrderByDescending(r => r.DateCreated)
+            .Select(r => new
+            {
+                r.Status,
+                Groups = r.OrganizationApplications
+                    .Where(a => a.Status != ClientOrgRequestStatus.Cancelled)
+                    .Select(a => new { a.Organization.Name, a.Status })
+                    .ToList(),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (latest is null || latest.Groups.Count == 0) return null;
+
+        var accepted = latest.Groups.FirstOrDefault(g => g.Status == ClientOrgRequestStatus.Accepted);
+        if (latest.Status == ClientRequestStatus.Assigned && accepted is not null)
+            return $"{accepted.Name} has accepted your request. Sign in to see your case and talk to them.";
+
+        var names = latest.Groups.Select(g => g.Name).ToList();
+        var who = names.Count == 1 ? names[0] : string.Join(" and ", names);
+        return $"Your request is with {who}, waiting for their review. Sign in to follow it.";
     }
 }
 
@@ -359,4 +281,7 @@ public sealed record ResendConfirmationResponse(string Message);
 
 public sealed record ConfirmEmailRequest(Guid UserId, string Code);
 
-public sealed record ConfirmEmailResponse(bool Succeeded, string Message);
+/// <param name="Handle">The @name the account carries, shown once on the landing page — the
+/// request wizard allocates it without asking, so this is the first the person hears of it.</param>
+/// <param name="Waiting">Where the request they made before they could sign in stands, or null.</param>
+public sealed record ConfirmEmailResponse(bool Succeeded, string Message, string? Handle = null, string? Waiting = null);

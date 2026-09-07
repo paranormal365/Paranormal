@@ -58,6 +58,19 @@
                                 <div class="text-secondary small">
                                     Submitted @r.DateApplied.ToViewerLocalTime(UserState).ToDisplayDate()
                                 </div>
+                                @* A request from the signed-out wizard belongs to an account that
+                                   has not confirmed its email yet, so no message the group sends
+                                   will reach its owner and they cannot sign in to read one. Said
+                                   here so a silence is explained rather than read as being
+                                   ignored (site evaluation 2026-09-06, phase 1). *@
+                                @if (!r.ClientEmailConfirmed)
+                                {
+                                    <div class="small text-warning mt-1">
+                                        <BenIcon Name="alert-triangle" Class="me-1" />
+                                        The client hasn't confirmed their email yet — messages
+                                        won't reach them until they do. You can still accept.
+                                    </div>
+                                }
                             </div>
                             <div class="d-flex gap-2 flex-wrap justify-content-end">
                                 @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)

@@ -42,7 +42,9 @@
         <div class="d-flex flex-column gap-3">
             @foreach (var r in _requests)
             {
-                <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{r.Id}"))">
+                @* W-CL5: this was a click-only div — no link, no keyboard, no open-in-a-new-tab.
+                   The card is a real anchor now; the buttons inside it stop the propagation. *@
+                <a class="card text-decoration-none text-reset" href="/my-requests/@r.Id">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between">
                             <div>
@@ -59,7 +61,7 @@
                                 }
                                 @if (r.Status is ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn)
                                 {
-                                    <span @onclick="@(() => { })" @onclick:stopPropagation="true">
+                                    <span @onclick="@(() => { })" @onclick:stopPropagation="true" @onclick:preventDefault="true">
                                         <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenPickerAsync(r))">
                                             @(r.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")
                                         </button>
@@ -73,9 +75,13 @@
                                 @((MarkupString)TruncateHtml(r.Description, 120))
                             </div>
                         }
-                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                        @* W-R5: a draft said "Submitted", which is the one thing it is not. *@
+                        <div class="text-secondary small mt-2">
+                            @(r.Status == ClientRequestStatus.Draft ? "Started" : "Submitted")
+                            @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                        </div>
                     </div>
-                </div>
+                </a>
             }
         </div>
     }

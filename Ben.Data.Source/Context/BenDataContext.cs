@@ -81,6 +81,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileComment> UploadFileComments { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
+        public virtual DbSet<PendingClientRequest> PendingClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
         public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
         public virtual DbSet<Place> Places { get; set; }
@@ -2219,6 +2220,37 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseClientAccess>()
                 .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
+
+            // ── PendingClientRequest (site evaluation 2026-09-06, phase 1) ──────
+            // A request parked for an account holder to adopt. No foreign keys on purpose: it
+            // belongs to nobody until it is claimed, and it names the organisations by id in
+            // JSON so a group deleted in the meantime is skipped rather than blocking the row.
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.NormalizedEmail).HasMaxLength(320);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.SecretHash).HasMaxLength(64);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.StreetAddress1).HasMaxLength(256);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.StreetAddress2).HasMaxLength(256);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.City).HasMaxLength(128);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.State).HasMaxLength(64);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.ZipCode).HasMaxLength(20);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.Country).HasMaxLength(64);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.Longitude).HasPrecision(18, 10);
+            modelBuilder.Entity<PendingClientRequest>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<PendingClientRequest>()
+                .HasIndex(e => e.NormalizedEmail);
 
             // ── CaseClientInvite (item #4 remaining piece) ───────────────────
             modelBuilder.Entity<CaseClientInvite>()

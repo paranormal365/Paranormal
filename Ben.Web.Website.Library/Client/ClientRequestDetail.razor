@@ -60,7 +60,7 @@
                         <dd class="col-sm-9">@GenderLabel(_request.Gender)</dd>
                     }
 
-                    <dt class="col-sm-3">Submitted</dt>
+                    <dt class="col-sm-3">@(_request.Status == ClientRequestStatus.Draft ? "Started" : "Submitted")</dt>
                     <dd class="col-sm-9">@_request.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()</dd>
 
                     @if (_request.DateUpdated.HasValue)
@@ -80,16 +80,25 @@
 
             @if (_request.Status is ClientRequestStatus.Draft or ClientRequestStatus.Submitted)
             {
+                @* W-R5: a draft used to offer Withdraw, which left a Withdrawn card standing for
+                   a request no group ever received. There is nothing to withdraw from until it
+                   has been sent; a draft is simply deleted. *@
                 <div class="card-footer d-flex gap-2">
                     @if (_request.Status == ClientRequestStatus.Draft)
                     {
                         <button type="button" class="btn btn-secondary" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{Id}/edit"))"><BenIcon Name="edit-2" Class="me-1" />
                             Edit &amp; Submit
                         </button>
+                        <button type="button" class="btn btn-outline-danger" @onclick="@(() => _showDeleteConfirm = true)" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />
+                            Delete draft
+                        </button>
                     }
-                    <button type="button" class="btn btn-warning" @onclick="@ConfirmWithdraw" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
-                        Withdraw
-                    </button>
+                    else
+                    {
+                        <button type="button" class="btn btn-warning" @onclick="@ConfirmWithdraw" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
+                            Withdraw
+                        </button>
+                    }
                 </div>
             }
             @if (_request.Status == ClientRequestStatus.Assigned)
@@ -183,8 +192,47 @@
 </BenModal>
 }
 
+@* ── Delete-draft confirmation ─────────────────────────────────────────────── *@
+@if (_showDeleteConfirm)
+{
+    <BenModal Visible="true" Title="Delete this draft" Static="true">
+    <ChildContent>
+            <div class="p-2">
+                <p>This draft has not been sent to anyone. Deleting it removes it for good.</p>
+                @if (_deleteError is not null)
+                {
+                    <div class="alert alert-danger">@_deleteError</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="@DeleteDraftAsync" disabled="@(!(!_isBusy))">
+                        @(_isBusy ? "Deleting…" : "Delete draft")
+                    </button>
+                </div>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
 @code {
     [Parameter] public Guid Id { get; set; }
+    private bool _showDeleteConfirm;
+    private string? _deleteError;
+
+    private async Task DeleteDraftAsync()
+    {
+        _isBusy = true;
+        _deleteError = null;
+        try
+        {
+            if (await AdminClient.DeleteClientRequestDraftAsync(Id))
+                NavManager.NavigateTo("/my-requests");
+            else
+                _deleteError = "Couldn't delete this draft. Please try again.";
+        }
+        catch { _deleteError = "Couldn't delete this draft. Please try again."; }
+        finally { _isBusy = false; }
+    }
 
     private ClientRequestRecord? _request;
     private List<ClientRequestOrganizationRecord> _orgs = [];

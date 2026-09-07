@@ -107,14 +107,19 @@ and the **arrows** expand the page to fill the screen. Both are remembered on th
 
 ## Getting an account
 
-You need an account to request an investigation or join a group. Accounts are free, and the
-address you sign in with is never shown publicly.
+Accounts are free, and the address you sign in with is never shown publicly.
+
+**You do not need one first to ask for help.** The investigation request form opens to everybody:
+fill it in, and the last step asks your name, email and a password so the group has somewhere to
+write back. The account is made from the request itself — see
+[Requesting an Investigation](/help/requesting-an-investigation). You do need an account before
+you can join a group.
 
 ![The sign-up form](/help/media/getting-started/signup.png)
 *The @name is checked as you type, so you find out it is taken before you fill in the rest.*
 
-**Create one** from the sign-in page — *New here? Create an account* — or go straight to
-`/signup`. You'll be asked for four things:
+**To create one on its own**, use the sign-in page — *New here? Create an account* — or go
+straight to `/signup`. You'll be asked for four things:
 
 | | |
 |---|---|
@@ -136,7 +141,8 @@ you. Pick one you will still want in a year.
 ### Confirming your email
 
 You cannot sign in until you have. We send a link; open it and press the button on the page it
-takes you to.
+takes you to. If your account came from an investigation request, that page also tells you where
+your request stands and shows you the @name we chose for you.
 
 The button matters — we do not confirm your address just because the link was opened. Mail scanners
 and security filters visit every link they find in a message, and a confirmation that happened on
@@ -144,7 +150,7 @@ opening would be one they could complete for you, which would prove nothing abou
 address reaches a person.
 
 **If the email never arrives**, do not sign up a second time — a second account on the same address
-is refused anyway. Try to sign in instead. The message that stops you says *"Confirm your email
+is refused anyway, and so is a second investigation request under it. Try to sign in instead. The message that stops you says *"Confirm your email
 address first"*, and it now carries a **Send the email again** button; press that and a new link
 goes out.
 

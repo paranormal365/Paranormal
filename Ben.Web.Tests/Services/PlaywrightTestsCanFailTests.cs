@@ -72,7 +72,6 @@ public sealed class PlaywrightTestsCanFailTests
         ["CaseNotesTests.cs"]                = 2,
         ["CaseManagerAssignmentTests.cs"]    = 2,
         ["OrdinaryMemberBaselineTests.cs"]   = 1,
-        ["ClientRequestTests.cs"]            = 1,
         ["CaseManagementTests.cs"]           = 1,
     };
 

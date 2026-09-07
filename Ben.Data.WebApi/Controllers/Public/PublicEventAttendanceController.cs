@@ -43,6 +43,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _email;
     private readonly UserManager<AppUser> _users;
+    private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<PublicEventAttendanceController> _logger;
 
@@ -72,8 +73,10 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
     public PublicEventAttendanceController(
         IDbContextFactory<BenDataContext> db, IEmailService email, UserManager<AppUser> users,
-        IOptions<Ben.Data.Common.SiteIdentity> site, ILogger<PublicEventAttendanceController> logger)
+        IOptions<Ben.Data.Common.SiteIdentity> site, ILogger<PublicEventAttendanceController> logger,
+        Ben.Data.WebApi.Services.UserHandleService handles)
     {
+        _handles = handles;
         _db     = db;
         _email  = email;
         _users  = users;
@@ -257,6 +260,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 // They proved it by clicking a link sent to it, which is what confirmation means.
                 EmailConfirmed     = true,
                 DisplayName        = invite.DisplayName ?? invite.Email.Split('@')[0],
+                // C1: allocated at creation. A guest who signs up at a walking tour and is then
+                // invisible to every @mention is a person the group cannot talk to afterwards.
+                Handle             = await _handles.AllocateAsync(invite.DisplayName, invite.Email, ct),
                 DateCreated        = DateTime.UtcNow,
             };
 

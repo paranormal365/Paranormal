@@ -213,6 +213,25 @@ public interface IBenCaseClient
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
     Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default);
 
+    /// <summary>Deletes a draft the person never sent. Drafts only — see the controller.</summary>
+    Task<bool> DeleteClientRequestDraftAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Submits an investigation request with no account, creating one from the request itself
+    /// (site evaluation 2026-09-06, phase 1). Anonymous — there is no token to send.
+    /// </summary>
+    Task<AnonymousSubmitOutcome> SubmitRequestWithoutAccountAsync(
+        AnonymousClientRequestSubmission request, CancellationToken token = default);
+
+    /// <summary>A request parked for this account holder to claim, or null when the link is not theirs.</summary>
+    Task<PendingClientRequestRecord?> GetPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
+    /// <summary>Claims the parked request as this account's own.</summary>
+    Task<ClientRequestRecord?> AdoptPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
+    /// <summary>"Not mine" — discards the parked request.</summary>
+    Task<bool> DiscardPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
     // ── My Cases (client dashboard) ───────────────────────────────────────────
 
     /// <summary>Returns all cases where the current user is the originating client.</summary>

@@ -1065,6 +1065,31 @@ public sealed record UpsertClientRequestRequest(
     Ben.Data.Common.Enums.ClientGender Gender,
     int? BirthYear,
     string? Description);
+
+/// <summary>
+/// A request and its sign-up in one payload, for the signed-out wizard (site evaluation
+/// 2026-09-06, phase 1). Mirrors the API's own record — same names, same order.
+/// </summary>
+public sealed record AnonymousClientRequestSubmission(
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude,
+    Ben.Data.Common.Enums.ClientGender Gender,
+    int? BirthYear,
+    string? Description,
+    IList<Guid> OrganizationIds,
+    string Name,
+    string Email,
+    string Password);
+
+/// <param name="Field">Which input to point at, when the server could say. Null for a general message.</param>
+public sealed record AnonymousSubmitOutcome(bool Succeeded, string Message, string? Field);
+
 // ── My Cases (client dashboard) response records ─────────────────────────────
 public sealed record ClientCaseListItem(
     Guid      CaseId,

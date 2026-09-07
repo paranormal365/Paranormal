@@ -48,12 +48,15 @@ public sealed class ResendConfirmationTests
         return new AccountRegistrationController(
             um.Object,
             new UserHandleService(factory),
-            new Mock<IEmailSender<AppUser>>().Object,
-            mailer.Object,
-            new Mock<Ben.Data.Common.Interfaces.IEmailService>().Object,
-            Options.Create(new SiteIdentity { BaseUrl = "https://example.test" }),
-            new ConfigurationBuilder().Build(),
-            NullLogger<AccountRegistrationController>.Instance);
+            new AccountCreationService(
+                um.Object,
+                new UserHandleService(factory),
+                mailer.Object,
+                new Mock<Ben.Data.Common.Interfaces.IEmailService>().Object,
+                Options.Create(new SiteIdentity { BaseUrl = "https://example.test" }),
+                new ConfigurationBuilder().Build(),
+                NullLogger<AccountCreationService>.Instance),
+            factory);
     }
 
     private static string MessageOf(ActionResult<ResendConfirmationResponse> result)

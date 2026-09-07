@@ -372,4 +372,187 @@ public class ClientRequestControllerTests
         var result = await other.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default);
         Assert.IsType<ForbidResult>(result.Result);
     }
+
+    // ── Deleting a draft (site evaluation 2026-09-06, W-R5) ──────────────────
+
+    [Fact]
+    public async Task DeleteDraft_RemovesTheDraft()
+    {
+        var (factory, userId, _) = await SeedAsync();
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(), default)).Result!).Value!).Id;
+
+        var result = await ctrl.DeleteDraft(reqId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.ClientRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DeleteDraft_RefusesASubmittedRequest()
+    {
+        // A request a group has received is withdrawn, not erased — deleting it would take the
+        // application rows with it and leave the group's list with a hole it cannot explain.
+        var (factory, userId, orgId) = await SeedAsync();
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(36.17m, -86.78m, "Knocking"), default)).Result!).Value!).Id;
+        await ctrl.Submit(reqId, new SubmitClientRequestRequest([orgId]), default);
+
+        var result = await ctrl.DeleteDraft(reqId, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Single(await db.ClientRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DeleteDraft_RefusesSomebodyElsesDraft()
+    {
+        var (factory, userId, _) = await SeedAsync();
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await Build(factory, userId).Create(MakeRequest(), default)).Result!).Value!).Id;
+
+        var result = await Build(factory, Guid.NewGuid()).DeleteDraft(reqId, default);
+
+        Assert.IsType<ForbidResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Single(await db.ClientRequests.ToListAsync());
+    }
+
+    // ── Parked requests (site evaluation 2026-09-06, phase 1) ────────────────
+    //
+    // A request typed into the signed-out wizard under an address that already has an account is
+    // parked, not written to that account. These cover the only door back: the emailed link.
+
+    private const string ParkedSecret = "a-secret-from-the-email";
+
+    private static async Task<Guid> SeedPendingAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, string normalizedEmail = "U@T.COM",
+        string secret = ParkedSecret, TimeSpan? age = null)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.PendingClientRequests.Add(new PendingClientRequest
+        {
+            Id                  = id,
+            NormalizedEmail     = normalizedEmail,
+            SecretHash          = Ben.Data.WebApi.Controllers.Public.PublicClientRequestController.HashSecret(secret),
+            DisplayName         = "Casey Miller",
+            StreetAddress1      = "2500 West End Ave",
+            City                = "Nashville",
+            State               = "TN",
+            ZipCode             = "37203",
+            Country             = "US",
+            Latitude            = 36.1627m,
+            Longitude           = -86.7816m,
+            Description         = "<p>Three knocks, 2am.</p>",
+            OrganizationIdsJson = System.Text.Json.JsonSerializer.Serialize(new[] { orgId }),
+            DateCreated         = DateTime.UtcNow - (age ?? TimeSpan.Zero),
+            DateExpires         = DateTime.UtcNow - (age ?? TimeSpan.Zero) + TimeSpan.FromDays(14),
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task AdoptPending_MakesItTheirOwnSubmittedRequest()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId);
+
+        var result = await Build(factory, userId).AdoptPending(pendingId, ParkedSecret, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        var request = await db.ClientRequests.SingleAsync();
+        Assert.Equal(userId, request.AppUserId);
+        Assert.Equal(ClientRequestStatus.Submitted, request.Status);
+        Assert.Equal("2500 West End Ave", request.StreetAddress1);
+        Assert.Equal(orgId, (await db.ClientRequestOrganizations.SingleAsync()).OrganizationId);
+
+        // The parked row is gone, so the link cannot make a second copy.
+        Assert.Empty(await db.PendingClientRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdoptPending_RefusesTheWrongKey()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId);
+
+        var result = await Build(factory, userId).AdoptPending(pendingId, "not-the-secret", default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.ClientRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdoptPending_RefusesADifferentAccount()
+    {
+        // The whole point: the link is not a bearer token. Even holding it, an account that is
+        // not the one the request named gets nothing — the request is about somebody's home.
+        var (factory, _, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId, normalizedEmail: "SOMEBODY.ELSE@T.COM");
+
+        var (_, otherId) = (0, Guid.NewGuid());
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = otherId, UserName = "other@t.com", NormalizedUserName = "OTHER@T.COM",
+                Email = "other@t.com", NormalizedEmail = "OTHER@T.COM", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, otherId).AdoptPending(pendingId, ParkedSecret, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Empty(await check.ClientRequests.ToListAsync());
+        Assert.Single(await check.PendingClientRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdoptPending_RefusesAnExpiredRow()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId, age: TimeSpan.FromDays(15));
+
+        var result = await Build(factory, userId).AdoptPending(pendingId, ParkedSecret, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetPending_ShowsTheAddressButNotTheStory()
+    {
+        // What was written about the activity is not this reader's to have until they say the
+        // request is theirs. The address is, because it is what tells them whether it is.
+        var (factory, userId, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId);
+
+        var result = await Build(factory, userId).GetPending(pendingId, ParkedSecret, default);
+
+        var record = Assert.IsType<PendingClientRequestRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("2500 West End Ave", record.StreetAddress1);
+        Assert.Equal("Casey Miller", record.DisplayName);
+        Assert.Equal("Test Org", Assert.Single(record.OrganizationNames));
+        Assert.DoesNotContain("knocks", System.Text.Json.JsonSerializer.Serialize(record));
+    }
+
+    [Fact]
+    public async Task DiscardPending_LeavesTheAccountAlone()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var pendingId = await SeedPendingAsync(factory, orgId);
+
+        var result = await Build(factory, userId).DiscardPending(pendingId, ParkedSecret, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.PendingClientRequests.ToListAsync());
+        Assert.Empty(await db.ClientRequests.ToListAsync());
+    }
 }

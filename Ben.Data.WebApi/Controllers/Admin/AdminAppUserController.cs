@@ -15,12 +15,15 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper;
     private readonly UserManager<AppUser> _userManager;
+    private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly IAuditLogService _auditLog;
 
     public AdminAppUserController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper,
-        IAuditLogService auditLog, UserManager<AppUser> userManager)
+        IAuditLogService auditLog, UserManager<AppUser> userManager,
+        Ben.Data.WebApi.Services.UserHandleService handles)
         : base(dbContextFactory, mapper, auditLog)
     {
+        _handles     = handles;
         _dbFactory   = dbContextFactory;
         _mapper      = mapper;
         _userManager = userManager;
@@ -173,6 +176,11 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         };
         user.NormalizedUserName = user.UserName?.ToUpperInvariant();
         user.NormalizedEmail    = user.Email?.ToUpperInvariant();
+
+        // C1 in the 2026-09-06 evaluation: an account created here had Handle = null until the
+        // next API restart's backfill ran, and until then it could not be mentioned anywhere.
+        // Allocated at creation, like every other path that has no @name to ask for.
+        user.Handle = await _handles.AllocateAsync(user.DisplayName, user.Email, ct);
 
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
