@@ -121,7 +121,9 @@ internal static class DevelopmentDataSeeder
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, tgh.Id, owner.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, tgh.Id, owner.Id);
             // creation-time; the repair below covers groups that predate it
-            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id);
+            // W-M1: the group also starts its new members on the Investigator Role.
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(tgh,
+                Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id));
             // A group nobody can find is not a group a client can hire. The public search needs
             // IsAcceptingClients AND an area of operation; the seeders set the first and never the
             // second, so on a fresh database every seeded group wore the "Accepting new cases"
@@ -174,7 +176,9 @@ internal static class DevelopmentDataSeeder
             Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, nps.Id, owner.Id);
             Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, nps.Id, owner.Id);
             // creation-time; the repair below covers groups that predate it
-            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id);
+            // W-M1: the group also starts its new members on the Investigator Role.
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(nps,
+                Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id));
             // A group nobody can find is not a group a client can hire. The public search needs
             // IsAcceptingClients AND an area of operation; the seeders set the first and never the
             // second, so on a fresh database every seeded group wore the "Accepting new cases"
@@ -1098,7 +1102,14 @@ internal static class DevelopmentDataSeeder
             .ToListAsync();
 
         var before = existing.Count;
-        Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, orgId, createdBy, existing);
+        var staged = Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, orgId, createdBy, existing);
+
+        // W-M1: a group being repaired also gets the role its new members start on, unless it
+        // already has one. Without this a database seeded before the setting existed keeps
+        // handing every new member a desk of doors that refuse them.
+        if (await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId) is { } repaired)
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(repaired, staged);
+
         await db.SaveChangesAsync();
 
         var added = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == orgId) - before;

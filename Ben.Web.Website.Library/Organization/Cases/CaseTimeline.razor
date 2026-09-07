@@ -187,7 +187,11 @@
                                Tools="@_editorTools" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Experience Types (optional)</label>
+                @* W-A11 (site evaluation 2026-09-06): a fieldset with a legend, so the group has a
+                   name a screen reader can announce. The heading used to be a bare <label> with
+                   nothing to point at, which named nothing. *@
+                <fieldset class="border-0 p-0 m-0">
+                <legend class="form-label fw-semibold" style="font-size:1rem;">Experience Types (optional)</legend>
                 <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
                     @foreach (var cat in _taxonomy)
                     {
@@ -198,12 +202,18 @@
                         {
                             var typeId = t.Id;
                             var isSelected = _form.ExperienceTypeIds.Contains(typeId);
-                            <div class="d-flex align-items-center gap-1 border rounded px-2 py-1"
-                                 style="cursor:pointer;font-size:0.82rem;"
-                                 @onclick="@(() => ToggleType(typeId))">
-                                <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
-                                @t.Name
-                            </div>
+                            @* A real <label> around a real checkbox (W-A11). It used to be a
+                               DISABLED checkbox inside a clickable div: the whole group announced
+                               as a row of unnamed "checkbox, on" controls, and a disabled input
+                               cannot be tabbed to at all, so the only way to choose an experience
+                               type was with a mouse. The label names the box, the box takes focus
+                               and the space bar, and the chip is still clickable anywhere. *@
+                            <label class="d-flex align-items-center gap-1 border rounded px-2 py-1 mb-0"
+                                   style="cursor:pointer;font-size:0.82rem;">
+                                <input type="checkbox" class="form-check-input" checked="@isSelected"
+                                       @onchange="@(() => ToggleType(typeId))" />
+                                <span>@t.Name</span>
+                            </label>
                         }
 
                         @* Nothing in the list fits? Add it. The new type is usable straight away —
@@ -261,6 +271,7 @@
                     A type you add is available immediately and is flagged for site administrators
                     to review.
                 </div>
+                </fieldset>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="casetimeline-who-can-see-this-4780">Who can see this</label>
@@ -638,14 +649,13 @@
         finally { _isBusy = false; }
     }
 
-    internal static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
-    {
-        CaseTimelineEntryType.ClientReport     => "Client Report",
-        CaseTimelineEntryType.InvestigatorNote => "Investigator Note",
-        CaseTimelineEntryType.Evidence         => "Evidence",
-        CaseTimelineEntryType.ResearchNote     => "Research",
-        _                                      => t.ToString(),
-    };
+    /// <summary>
+    /// One helper for every screen (W-A11). This used to be a switch ending in <c>t.ToString()</c>,
+    /// and <c>InstrumentReading</c> was never added to it — so the Type list offered that raw
+    /// identifier to a person as something to pick.
+    /// </summary>
+    internal static string EntryTypeLabel(CaseTimelineEntryType t)
+        => CaseTimelineEntryTypes.DisplayName(t);
 
     // ── Visibility (C2) ───────────────────────────────────────────────────────
     // Three tiers replace a checkbox that could only mean "public or not", which forced a choice

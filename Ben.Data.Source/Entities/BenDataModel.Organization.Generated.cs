@@ -77,6 +77,24 @@ namespace Ben.Data.Source.Entities
 
         public bool IsAcceptingApplications { get; set; }
 
+        /// <summary>
+        /// The functional role a person is given when they become a member of this group
+        /// (site evaluation 2026-09-06, W-M1). Null means none, which is what every group did
+        /// before the setting existed.
+        /// </summary>
+        /// <remarks>
+        /// <para>Membership rank alone opens nothing below Administrator: <c>HasAccessAsync</c>
+        /// waves Owner and Administrator through and then requires a functional role or a direct
+        /// grant. So a new Member or Viewer could be named on a visit roster, see the case listed
+        /// on their desk, and be refused by the case API when they clicked it.</para>
+        ///
+        /// <para>Applied only when the membership is CREATED, and only to ranks that do not
+        /// already bypass. Changing this does not reach back into memberships that already exist —
+        /// a setting that silently re-permissioned the whole roster would be a worse surprise than
+        /// the one it fixes.</para>
+        /// </remarks>
+        public Guid? DefaultMemberRoleId { get; set; }
+
         /// <summary>When true, the public can submit investigation requests to this organization.</summary>
         public bool IsAcceptingClients { get; set; }
 
@@ -107,6 +125,7 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual OrganizationAreaOfOperation? AreaOfOperation { get; set; }
+        public virtual OrganizationRole? DefaultMemberRole { get; set; }
         public virtual ICollection<OrganizationAddress> OrganizationAddresses { get; set; } = new List<OrganizationAddress>();
         public virtual ICollection<OrganizationEmail> OrganizationEmails { get; set; } = new List<OrganizationEmail>();
         public virtual ICollection<OrganizationPhone> OrganizationPhones { get; set; } = new List<OrganizationPhone>();

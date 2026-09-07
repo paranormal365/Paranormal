@@ -321,7 +321,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         // One call rather than four: this path had drifted from the others once already, and the
         // duty matrix (item 160) would have been the second thing it silently lacked.
-        Ben.Data.Source.Services.NewOrganizationDefaults.AddAll(dbContext, organization.Id, appUserId);
+        await Ben.Data.Source.Services.NewOrganizationDefaults.AddAllAsync(dbContext, organization, appUserId, token);
 
 
         await dbContext.SaveChangesAsync(token);
@@ -442,6 +442,14 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             };
 
             dbContext.OrganizationUserMemberships.Add(existing);
+
+            // W-M1 (site evaluation 2026-09-06): a rank on its own opens nothing below
+            // Administrator, so this door used to produce members who could see the group's
+            // cases listed on their desk and be refused by the case API when they clicked one.
+            // The group's chosen starting role is staged on the same SaveChanges; a group that
+            // has chosen none is unaffected. See MemberDefaultRole.
+            await Ben.Data.Source.Services.MemberDefaultRole.ApplyAsync(
+                dbContext, organizationId, existing, actingUserId, token);
         }
         else
         {

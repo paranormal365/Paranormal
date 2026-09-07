@@ -58,10 +58,26 @@ each a starting point you can edit, rename, or delete like any role you build yo
 "Role" suffix is deliberate: member *titles* (the ladder below) say how senior somebody is,
 roles say what they may do, and the naming keeps the two impossible to confuse.
 
-Groups that existed before role-based case access arrived also carry an **Investigator Role**
-(read cases and investigations), assigned automatically — once — to everyone who was already an
-ordinary member, so the change took nothing from anyone. Members who join later start with no
-roles; hand them the Investigator Role, or any other, as they earn it.
+Every group also has an **Investigator Role** — read the group's cases and investigations — which
+is the one an ordinary member needs to do anything at all.
+
+## What new members start with
+
+**Settings → New members start as** decides which role somebody is given the moment they join,
+whether you added them yourself or accepted their application. A new group starts on
+**Investigator Role**, which is what lets a member open the cases they are put on.
+
+This matters more than it sounds. A membership rank alone opens nothing below Administrator: a
+Manager, Member or Viewer with no role can be named on a visit roster and see the group's cases
+listed on their desk, and every one of those links will refuse them. Owners and administrators
+are skipped, because their rank already opens everything.
+
+You can set it to **Nothing** and hand out roles yourself. Groups that existed before this
+setting arrived have it set to nothing, so nothing changed for them.
+
+Changing it applies to people who join **from then on**. It never reaches back into your existing
+roster — a setting that silently re-permissioned everybody would be a worse surprise than the one
+it prevents. To change what somebody already has, use their entry on the Members screen.
 
 ## What role grants open today
 

@@ -303,7 +303,12 @@ public class InvestigationCheckInTests
 
         await Build(w.Factory, AttendeeId).CheckIn(OrgId, w.InvestigationId, new CheckInRequest(), default);
 
-        var mine = new MyInvestigationsController(w.Factory)
+        var mineSecurity = new Mock<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>();
+        mineSecurity.Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+            It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityTable>(),
+            It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var mine = new MyInvestigationsController(w.Factory, mineSecurity.Object)
         {
             ControllerContext = new ControllerContext
             {

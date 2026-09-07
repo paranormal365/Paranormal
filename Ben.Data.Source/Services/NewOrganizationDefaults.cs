@@ -1,4 +1,5 @@
 using Ben.Data.Source.Context;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.Source.Services;
 
@@ -32,7 +33,13 @@ public static class NewOrganizationDefaults
     /// <param name="db">The context the organization itself was added to.</param>
     /// <param name="organizationId">The new organization.</param>
     /// <param name="createdByAppUserId">Who is creating it; recorded on every seeded row.</param>
-    public static void AddAll(BenDataContext db, Guid organizationId, Guid createdByAppUserId)
+    /// <returns>
+    /// The role the group should start new members on, or null when the defaults did not stage one.
+    /// Callers holding the <see cref="Entities.Organization"/> itself should prefer the overload
+    /// that takes it, which sets the setting for them.
+    /// </returns>
+    public static Entities.OrganizationRole? AddAll(
+        BenDataContext db, Guid organizationId, Guid createdByAppUserId)
     {
         OrgCalendarDefaults.AddDefaultEventTypes(db, organizationId, createdByAppUserId);
 
@@ -43,6 +50,39 @@ public static class NewOrganizationDefaults
         var duties = OrgInvestigationDutyDefaults.AddDefaultDuties(db, organizationId, createdByAppUserId);
         OrgInvestigationDutyDefaults.AddDefaultEligibility(db, duties, levels, createdByAppUserId);
 
-        OrgRoleDefaults.AddDefaultRoles(db, organizationId, createdByAppUserId);
+        var roles = OrgRoleDefaults.AddDefaultRoles(db, organizationId, createdByAppUserId);
+
+        // W-M1: rank alone opens nothing below Administrator, so a group that starts nobody on a
+        // functional role starts them unable to read the cases their own desk lists. New groups
+        // therefore begin with a default; an owner can clear it or change it on the settings page.
+        return roles.FirstOrDefault(r =>
+            string.Equals(r.Name, OrgRoleDefaults.DefaultMemberRoleName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The same, plus the group's starting-member role — saved in two steps, deliberately.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it saves twice.</b> An organization points at one of its own roles
+    /// (<see cref="Entities.Organization.DefaultMemberRoleId"/>) and every role points back at its
+    /// organization. Inserting both in one <c>SaveChanges</c> is a cycle EF cannot order, and it
+    /// refuses the whole batch — which is how registering a group started failing the moment the
+    /// pointer was set before the first save. So the group and its roles go in first, and the
+    /// pointer follows.</para>
+    ///
+    /// <para>The two saves are not a transaction boundary the caller can lose: if the second one
+    /// fails, the group exists with its roles and simply starts nobody on one, which is the same
+    /// state every group had before this setting existed.</para>
+    /// </remarks>
+    public static async Task AddAllAsync(
+        BenDataContext db, Entities.Organization organization, Guid createdByAppUserId,
+        CancellationToken token = default)
+    {
+        var starting = AddAll(db, organization.Id, createdByAppUserId);
+        await db.SaveChangesAsync(token);
+
+        if (starting is null) return;
+        organization.DefaultMemberRoleId = starting.Id;
+        await db.SaveChangesAsync(token);
     }
 }

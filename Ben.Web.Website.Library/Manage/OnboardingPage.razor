@@ -52,12 +52,20 @@
                         break;
 
                     case 1:
-                        <p class="small text-secondary mb-2">What brought you here? We'll drop you at the right door.</p>
+                        @* W-A11/W-S4 (site evaluation 2026-09-06): a fieldset with a legend names
+                           the group, and each radio carries an aria-label. The label element wraps
+                           the input, but its text is two spans of formatted markup — screen
+                           readers announced each of these as an unnamed "radio button, on". *@
+                        <fieldset class="border-0 p-0 m-0">
+                        <legend class="small text-secondary mb-2" style="font-size:inherit;">
+                            What brought you here? We'll drop you at the right door.
+                        </legend>
                         <div class="list-group" id="onboard-intents">
                             @foreach (var (intent, title, blurb) in IntentOptions)
                             {
                                 <label class="list-group-item d-flex gap-2 align-items-start">
                                     <input class="form-check-input mt-1" type="radio" name="onboard-intent"
+                                           aria-label="@title"
                                            checked="@(_intent == intent)"
                                            @onchange="@(() => _intent = intent)" />
                                     <span>
@@ -67,6 +75,7 @@
                                 </label>
                             }
                         </div>
+                        </fieldset>
                         break;
 
                     case 2:

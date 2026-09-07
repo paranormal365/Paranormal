@@ -24,6 +24,15 @@ the group's cases gets an internal message with a link to the review page, where
 the case by itself. Whoever holds the accept permission decides, with the tally in front of
 them.
 
+**Review & vote stays on the card** the whole time a request is open, including while it is
+Under Review — which is exactly when there is something to vote on. If you arrive at the review
+page before anybody has opened voting, **Mark Under Review** is there on the ballot itself.
+
+**Who gets the message, and who can vote,** is everyone who can read the group's cases. That is
+the Investigator Role or something wider — see *What new members start with* in
+[Group administration](/help/organization-administration). A member with no role hears nothing
+about the request and cannot open it.
+
 **The first group to accept wins.** The moment any group accepts, the other groups reviewing
 the same request are messaged that it is no longer available, and their review pages close. The
 client is told they have a group — and who their contact person is, when a case manager was
@@ -31,6 +40,11 @@ chosen at accept time.
 
 If your group is not going to take a request, decline it promptly — the client is waiting, and
 declining lets them offer it elsewhere without re-writing it.
+
+**The case title** you are offered when you accept is the client's town — "Nashville, TN" — not
+their name. Type whatever your group wants instead; just remember the title becomes the heading
+on the case's public page if you ever publish it, so a real name belongs in the **pseudonym**
+field rather than here.
 
 ## The case tabs
 

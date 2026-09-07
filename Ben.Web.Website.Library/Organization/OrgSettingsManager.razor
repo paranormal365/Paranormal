@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Organization
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Service.Models.Entities
 
 @inject IBenAdminClient AdminClient
 
@@ -136,6 +137,40 @@ else
                     </label>
                 </div>
 
+                @* ── W-M1 (site evaluation 2026-09-06) ─────────────────────────
+                   Membership rank alone opens nothing below Administrator, so a group whose new
+                   members start on no functional role hands them a desk full of case links that
+                   answer 403. This is the one place that decides what they start with. *@
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label" for="set-default-member-role">New members start as</label>
+                    <select id="set-default-member-role" class="form-select"
+                            value="@(_defaultMemberRoleId?.ToString() ?? "")"
+                            @onchange="@(e => _defaultMemberRoleId = Guid.TryParse(e.Value?.ToString(), out var picked) ? picked : null)">
+                        <option value="">Nothing — I'll assign roles myself</option>
+                        @foreach (var role in _roles)
+                        {
+                            <option value="@role.Id">@role.Name</option>
+                        }
+                    </select>
+                    @if (_rolesResult.Failed)
+                    {
+                        <div class="alert alert-warning py-1 px-2 small mt-1 mb-0">
+                            @(_rolesResult.Reason ?? "Couldn't load this group's roles, so the list above is incomplete.")
+                        </div>
+                    }
+                    <div class="form-text">
+                        The role somebody is given the moment they join, whether you add them
+                        yourself or accept their application. <strong>Investigator Role</strong> is
+                        what a new group starts with: it lets a member read the cases and
+                        investigations they are put on. Owners and administrators are skipped —
+                        their rank already opens everything.
+                        <br />
+                        Changing this affects people who join <em>from now on</em>. It does not
+                        touch anybody already on your roster.
+                    </div>
+                </div>
+
                 <div class="col-12 mt-2">
                     <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))"><BenIcon Name="save" Class="me-1" />
                         @(_saving ? "Saving…" : "Save Settings")
@@ -175,6 +210,9 @@ else
     private string  _orgName = string.Empty;
     private string  _orgUrlName = string.Empty;
     private bool    _orgAcceptingApplications;
+    private Guid?   _defaultMemberRoleId;
+    private IReadOnlyList<OrganizationRoleRecord> _roles = [];
+    private LoadResult<OrganizationRoleRecord> _rolesResult;
     private string? _errorMessage;
     private string? _successMessage;
 
@@ -203,7 +241,18 @@ else
             _orgName                  = org.Name;
             _orgUrlName               = org.UrlName;
             _orgAcceptingApplications = org.IsAcceptingApplications;
+            _defaultMemberRoleId      = org.DefaultMemberRoleId;
         }
+
+        // The list the picker offers. A refusal is SHOWN rather than swallowed: an empty picker
+        // beside "New members start as" reads as "this group has no roles", which would send an
+        // owner to the Roles screen to create ones they already have.
+        _rolesResult = await AdminClient.GetOrgRolesAsync(OrgId);
+        _roles = _rolesResult.Items
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ToList();
+
         _loading = false;
     }
 
@@ -227,7 +276,11 @@ else
                    new AdminUpdateOrganizationRequest(_orgName, _orgUrlName,
                        IsAcceptingApplications: _orgAcceptingApplications,
                        Kind: _kind,
-                       RunsPublicTours: _runsPublicTours));
+                       RunsPublicTours: _runsPublicTours,
+                       // Sent literally, including when it is null: the flag is what lets an
+                       // owner CLEAR the starting role, which a bare null could not say.
+                       DefaultMemberRoleId: _defaultMemberRoleId,
+                       SetDefaultMemberRole: true));
             orgSaved = saved is not null;
             orgError = error;
         }

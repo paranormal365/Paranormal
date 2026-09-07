@@ -251,6 +251,23 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         // caller editing the name must not be able to revoke a privacy policy it never sent.
         if (request.AllowMemberPrivatePhotosToClients is { } allow)
             org.AllowMemberPrivatePhotosToClients = allow;
+
+        // W-M1: which role people start on. Two fields rather than one, because "leave it alone"
+        // and "clear it" are different instructions and null cannot carry both — every other
+        // optional field on this record uses null for the first, so clearing needed its own flag.
+        // The role has to be this group's own: a group must not be able to point its starting
+        // role at somebody else's, which would hand its members a permission set it cannot see.
+        if (request.SetDefaultMemberRole)
+        {
+            if (request.DefaultMemberRoleId is { } startingRoleId)
+            {
+                var roleIsOurs = await db.OrganizationRoles
+                    .AnyAsync(r => r.Id == startingRoleId && r.OrganizationId == id, ct);
+                if (!roleIsOurs)
+                    return BadRequest("That role does not belong to this group.");
+            }
+            org.DefaultMemberRoleId = request.DefaultMemberRoleId;
+        }
         org.DateUpdated            = DateTime.UtcNow;
         org.UpdatedByAppUserId     = userId.Value;
 
@@ -294,6 +311,17 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var birthDuties = await db.InvestigationDuties
             .Where(d => d.OrganizationId == id).ToListAsync(ct);
         db.InvestigationDuties.RemoveRange(birthDuties);
+
+        // The group's own pointer at one of its roles is cleared FIRST, in its own save (site
+        // evaluation 2026-09-06, W-M1). Not merely set to null: an organization and the role it
+        // points at, both marked Deleted in one SaveChanges, are a cycle EF refuses outright —
+        // "a circular dependency was detected in the data to be saved". The pointer has to be
+        // gone from the database before the rows that make the cycle are staged for removal.
+        if (org.DefaultMemberRoleId is not null)
+        {
+            org.DefaultMemberRoleId = null;
+            await db.SaveChangesAsync(ct);
+        }
 
         // Roles and their dependents are birth children too (item 156 Phase C) — removed
         // leaf-first: assignments, then grants, then the roles themselves.
@@ -368,7 +396,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.RunsPublicTours = OrganizationKindDefaults.RunsPublicTours(request.Kind);
 
         db.Organizations.Add(org);
-        NewOrganizationDefaults.AddAll(db, org.Id, userId.Value);
+        await NewOrganizationDefaults.AddAllAsync(db, org, userId.Value, ct);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
@@ -506,5 +534,11 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool? AllowMemberPrivatePhotosToClients = null,
     // Null means "leave as-is" for the same reason: a caller that predates this field must not
     // silently list a group that had chosen to be unlisted.
-    bool? IsUnlisted = null);
+    bool? IsUnlisted = null,
+    // Which functional role new members start on (W-M1). Null means "leave as-is"; the sentinel
+    // below is how a caller says "none", since null cannot mean both.
+    Guid? DefaultMemberRoleId = null,
+    // True when DefaultMemberRoleId is meant literally, INCLUDING when it is null. Without this
+    // an owner could set a starting role but never clear one.
+    bool SetDefaultMemberRole = false);
 

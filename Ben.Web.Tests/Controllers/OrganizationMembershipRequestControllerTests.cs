@@ -206,6 +206,54 @@ public class OrganizationMembershipRequestControllerTests
     }
 
     [Fact]
+    public async Task Respond_Accept_GivesTheNewMemberTheGroups_StartingRole()
+    {
+        // W-M1 (site evaluation 2026-09-06): the acceptance message says "Welcome to the
+        // organization!" — this is what makes that true. A rank alone opens nothing below
+        // Administrator, so without the group's starting role the new member joins to a desk
+        // full of case links that answer 403.
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+
+        Guid startingRoleId;
+        await using (var setup = await factory.CreateDbContextAsync())
+        {
+            var org = await setup.Organizations.SingleAsync(o => o.Id == orgId);
+            await Ben.Data.Source.Services.NewOrganizationDefaults.AddAllAsync(setup, org, adminId);
+            startingRoleId = org.DefaultMemberRoleId!.Value;
+        }
+
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        await Build(factory, adminId, hasPermission: true)
+            .Respond(orgId, reqId, new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var membership = await db.OrganizationUserMemberships
+            .SingleAsync(m => m.OrganizationId == orgId && m.AppUserId == applicantId);
+        Assert.True(await db.OrganizationRoleMemberships.AnyAsync(
+            rm => rm.OrganizationUserMembershipId == membership.Id
+               && rm.OrganizationRoleId == startingRoleId));
+    }
+
+    [Fact]
+    public async Task Respond_Accept_OnAGroupWithNoStartingRole_ChangesNothing()
+    {
+        // Every group that existed before the setting did has none of these, and none of them
+        // should silently gain permissions because this shipped.
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        await Build(factory, adminId, hasPermission: true)
+            .Respond(orgId, reqId, new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.OrganizationUserMemberships.AnyAsync(m => m.AppUserId == applicantId));
+        Assert.Empty(await db.OrganizationRoleMemberships.ToListAsync());
+    }
+
+    [Fact]
     public async Task Respond_Deny_UpdatesStatusWithReason()
     {
         var (factory, orgId, applicantId, adminId) = await SeedAsync();

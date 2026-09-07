@@ -12,8 +12,15 @@ namespace Ben.Data.WebApi.Controllers;
 public sealed class MyInvestigationsController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public MyInvestigationsController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public MyInvestigationsController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    {
+        _db = db;
+        _security = security;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<MyInvestigationItem>>> GetMyInvestigations(CancellationToken ct)
@@ -33,14 +40,30 @@ public sealed class MyInvestigationsController : BenControllerBase
             .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .ToListAsync(ct);
 
+        // Which of these groups' cases this person may actually open (site evaluation 2026-09-06,
+        // W-M1). The roster named somebody Lead Investigator on a case and offered its reference
+        // as the way in, while a membership rank on its own grants nothing below Administrator —
+        // so the link answered 403. A visit whose case is closed to the reader still appears, and
+        // still opens: it falls back to the group's Investigations tab, the same landing a
+        // case-less visit has always had.
+        var readable = new Dictionary<Guid, bool>();
+        foreach (var orgId in attendances.Select(a => a.Investigation.OrganizationId).Distinct())
+            readable[orgId] = await _security.HasAccessAsync(
+                userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
+
         return Ok(attendances.Select(a => new MyInvestigationItem(
             AttendeeId:        a.Id,
             InvestigationId:   a.InvestigationId,
-            CaseId:            a.Investigation.CaseId,
+            CaseId:            readable.GetValueOrDefault(a.Investigation.OrganizationId)
+                                   ? a.Investigation.CaseId
+                                   : null,
             CaseReference:     a.Investigation.Case is null
+                                || !readable.GetValueOrDefault(a.Investigation.OrganizationId)
                                    ? null
                                    : $"#{a.Investigation.Case.CaseYear}-{a.Investigation.Case.OrgCaseNumber:D3}",
-            CaseTitle:         a.Investigation.Case?.Title,
+            CaseTitle:         readable.GetValueOrDefault(a.Investigation.OrganizationId)
+                                   ? a.Investigation.Case?.Title
+                                   : null,
             OrgId:             a.Investigation.OrganizationId,
             OrgName:           a.Investigation.Organization.Name,
             OrgUrlName:        a.Investigation.Organization.UrlName,

@@ -3,6 +3,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject IJSRuntime JS
+@inject NavigationManager NavManager
+@using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 
 @*
@@ -103,13 +105,40 @@
     private int _generation;
 
     public void Dispose()
-        => UserState.StateChanged -= OnAuthChanged;
+    {
+        UserState.StateChanged -= OnAuthChanged;
+        NavManager.LocationChanged -= OnLocationChanged;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || !RendererInfo.IsInteractive) return;
+        NavManager.LocationChanged += OnLocationChanged;
         await LoadAsync();
     }
+
+    /// <summary>
+    /// Re-reads the counts when the person moves to another page (site evaluation 2026-09-06, W-A3).
+    /// </summary>
+    /// <remarks>
+    /// <para>This banner lives in the layout and loaded once per circuit, so acting on what it
+    /// says never changed it. Accepting one of two waiting investigation requests left "has work
+    /// waiting: 2 investigation requests" on screen over a group that now had one — and accepting
+    /// navigates to the new case, so the stale number was the first thing the page showed.</para>
+    ///
+    /// <para>Debounced, because a click-heavy stretch through several pages should cost one fetch,
+    /// not one per page. The window is short enough that acting and moving on always re-reads —
+    /// the API round trip alone outlasts it.</para>
+    /// </remarks>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (DateTimeOffset.UtcNow - _lastLoadUtc < RefreshDebounce) return;
+        _loaded = false;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private static readonly TimeSpan RefreshDebounce = TimeSpan.FromSeconds(3);
+    private DateTimeOffset _lastLoadUtc = DateTimeOffset.MinValue;
 
     private async Task LoadAsync()
     {
@@ -139,6 +168,7 @@
             // Somebody else's answer, arriving late. Drop it rather than render it.
             if (generation != _generation) return;
             _loaded = true;
+            _lastLoadUtc = DateTimeOffset.UtcNow;
 
             // Rebuild rather than append — belt to the guard's braces.
             _visible.Clear();

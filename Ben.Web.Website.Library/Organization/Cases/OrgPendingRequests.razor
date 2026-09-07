@@ -73,11 +73,16 @@
                                 }
                             </div>
                             <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @* W-A4 (site evaluation 2026-09-06): the door to the vote page used
+                                   to disappear the moment a request went Under Review — which is
+                                   exactly when voting opens. Reviewers were left following the
+                                   platform message to find a page the card had stopped offering.
+                                   It stays for every state where the request is still open. *@
+                                <a class="btn btn-outline-secondary btn-sm" href="/organizations/@OrgId/request-review/@r.ClientRequestId"><BenIcon Name="eye" Class="me-1" />
+                                    Review &amp; vote
+                                </a>
                                 @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)
                                 {
-                                    <a class="btn btn-outline-secondary btn-sm" href="/organizations/@OrgId/request-review/@r.ClientRequestId"><BenIcon Name="eye" Class="me-1" />
-                                        Review & vote
-                                    </a>
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MarkUnderReview(r))" disabled="@(!(!_isBusy))"><BenIcon Name="search" Class="me-1" />
                                         Under Review
                                     </button>
@@ -127,7 +132,7 @@
                 </p>
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="orgpendingrequests-case-title-optional-280c">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
-                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="Auto-generated from client name and city if blank" @bind="@_acceptTitle" @bind:event="oninput" />
+                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="The town, if you leave this blank" @bind="@_acceptTitle" @bind:event="oninput" />
                 </div>
                 @if (_actionError is not null)
                 {

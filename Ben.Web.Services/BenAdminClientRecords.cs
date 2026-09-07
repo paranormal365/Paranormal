@@ -87,7 +87,13 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool? AllowMemberPrivatePhotosToClients = null,
     // Null means "leave as-is": a caller predating this must not list a group that chose not
     // to be found.
-    bool? IsUnlisted = null);
+    bool? IsUnlisted = null,
+    // Which functional role new members start on (W-M1). Null means "leave as-is"; the sentinel
+    // below is how a caller says "none", since null cannot mean both.
+    Guid? DefaultMemberRoleId = null,
+    // True when DefaultMemberRoleId is meant literally, INCLUDING when it is null. Without this
+    // an owner could set a starting role but never clear one.
+    bool SetDefaultMemberRole = false);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);

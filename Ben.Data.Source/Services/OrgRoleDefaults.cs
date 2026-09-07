@@ -74,8 +74,32 @@ public static class OrgRoleDefaults
              (OrganizationSecurityTable.Organization, ReadUpdate)]),
     ];
 
+    /// <summary>The role a group starts new members on unless its owner says otherwise (W-M1).</summary>
+    public const string DefaultMemberRoleName = "Investigator Role";
+
+    /// <summary>
+    /// Points a group at its starting role, given the roles just staged for it.
+    /// </summary>
+    /// <remarks>
+    /// For the seeders, which build organizations directly rather than through
+    /// <c>NewOrganizationDefaults</c>. Without this a fresh install produced groups with no
+    /// starting role, which is precisely the W-M1 state the setting exists to end. Leaves an
+    /// existing choice alone — a seeder re-running must not overwrite what an owner picked.
+    /// </remarks>
+    public static void PointAtStartingRole(
+        Entities.Organization organization, IReadOnlyList<OrganizationRole> staged)
+    {
+        if (organization.DefaultMemberRoleId is not null) return;
+
+        var starting = staged.FirstOrDefault(r =>
+            string.Equals(r.Name, DefaultMemberRoleName, StringComparison.OrdinalIgnoreCase));
+        if (starting is not null) organization.DefaultMemberRoleId = starting.Id;
+    }
+
     /// <summary>Stages the seven roles with their grants; the caller's SaveChangesAsync commits them.</summary>
-    public static void AddDefaultRoles(BenDataContext db, Guid organizationId, Guid createdByAppUserId)
+    /// <returns>The roles staged, so a caller can point the group's default-member setting at one.</returns>
+    public static IReadOnlyList<OrganizationRole> AddDefaultRoles(
+        BenDataContext db, Guid organizationId, Guid createdByAppUserId)
         => AddDefaultRoles(db, organizationId, createdByAppUserId, existingRoleNames: []);
 
     /// <summary>
@@ -97,10 +121,11 @@ public static class OrgRoleDefaults
     /// before the creation-time fix kept exactly one role forever, because the seeder would not
     /// recreate it and the backfill would not touch it).</para>
     /// </remarks>
-    public static void AddDefaultRoles(
+    public static IReadOnlyList<OrganizationRole> AddDefaultRoles(
         BenDataContext db, Guid organizationId, Guid createdByAppUserId,
         IReadOnlyCollection<string> existingRoleNames)
     {
+        var staged = new List<OrganizationRole>();
         var now = DateTime.UtcNow;
         var sort = 0;
         foreach (var (name, description, grants) in Defaults)
@@ -121,6 +146,7 @@ public static class OrgRoleDefaults
                 CreatedByAppUserId = createdByAppUserId,
             };
             db.OrganizationRoles.Add(role);
+            staged.Add(role);
 
             foreach (var (table, actions) in grants)
             {
@@ -135,5 +161,7 @@ public static class OrgRoleDefaults
                 });
             }
         }
+
+        return staged;
     }
 }

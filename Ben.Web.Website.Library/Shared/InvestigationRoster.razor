@@ -315,6 +315,19 @@
     /// <summary>How often to re-read the roster. A few seconds is ample for a handful of chips.</summary>
     [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
 
+    /// <summary>
+    /// Bumped by the host after it writes something this panel shows, so the panel re-reads at
+    /// once instead of on its next poll (site evaluation 2026-09-06, W-A7).
+    /// </summary>
+    /// <remarks>
+    /// A token rather than a component reference: the host renders one of these per investigation
+    /// inside a loop, and <c>@@ref</c> cannot be captured per iteration. The panel used to show
+    /// "0 of 0 arrived / Nobody has been added to this investigation yet" and hide the duty board
+    /// for up to twelve seconds after somebody had just been added right above it, which reads as
+    /// the add having failed.
+    /// </remarks>
+    [Parameter] public int ReloadToken { get; set; }
+
     private List<InvestigationRosterEntry> _roster = [];
     private InvestigationDutyBoard? _board;
     private string? _dutyError;
@@ -336,12 +349,17 @@
     private PeriodicTimer? _timer;
     private CancellationTokenSource? _cts;
     private Guid _loadedFor;
+    private int  _loadedToken;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (InvestigationId == Guid.Empty || InvestigationId == _loadedFor) return;
-        _loadedFor = InvestigationId;
-        _statedArrival = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        if (InvestigationId == Guid.Empty) return;
+        if (InvestigationId == _loadedFor && ReloadToken == _loadedToken) return;
+
+        var isNewInvestigation = InvestigationId != _loadedFor;
+        _loadedFor   = InvestigationId;
+        _loadedToken = ReloadToken;
+        if (isNewInvestigation) _statedArrival = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
         await LoadAsync();
     }
 

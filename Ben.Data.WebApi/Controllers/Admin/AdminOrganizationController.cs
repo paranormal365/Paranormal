@@ -56,7 +56,7 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
         };
 
         db.Organizations.Add(org);
-        NewOrganizationDefaults.AddAll(db, org.Id, GetCurrentUserIdOrThrow());
+        await NewOrganizationDefaults.AddAllAsync(db, org, GetCurrentUserIdOrThrow(), ct);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 

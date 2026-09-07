@@ -143,14 +143,10 @@ else
         _loading = false;
     }
 
-    private static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
-    {
-        CaseTimelineEntryType.ClientReport     => "Client",
-        CaseTimelineEntryType.InvestigatorNote => "Investigator",
-        CaseTimelineEntryType.Evidence         => "Evidence",
-        CaseTimelineEntryType.ResearchNote     => "Research",
-        _                                      => t.ToString(),
-    };
+    // W-A11: from the one helper. This is the PUBLIC page, so its fallback to the enum's own
+    // name would have printed an internal identifier to visitors.
+    private static string EntryTypeLabel(CaseTimelineEntryType t)
+        => CaseTimelineEntryTypes.ShortName(t);
 
     private static string EntryBadgeClass(CaseTimelineEntryType t) => t switch
     {

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Security.Claims;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -19,7 +20,23 @@ public class MyDeskControllerTests
         => new PooledDbContextFactory<BenDataContext>(new DbContextOptionsBuilder<BenDataContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
-    private static MyDeskController Build(IDbContextFactory<BenDataContext> f, Guid userId) => new(f)
+
+    /// <summary>
+    /// A permission service that says yes. These tests are about what the endpoint returns for
+    /// somebody who may read the group's cases; the refusal path has tests of its own.
+    /// </summary>
+    private static Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService
+        SecurityAllowing(bool allowed = true)
+    {
+        var security = new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(Moq.It.IsAny<Guid>(), Moq.It.IsAny<Guid>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityTable>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityAction>(), Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allowed);
+        return security.Object;
+    }
+
+    private static MyDeskController Build(IDbContextFactory<BenDataContext> f, Guid userId, bool canReadCases = true) => new(f, SecurityAllowing(canReadCases))
     {
         ControllerContext = new ControllerContext
         {
@@ -95,6 +112,42 @@ public class MyDeskControllerTests
         Assert.Equal(1, desk.GearCheckedOutCount);
         Assert.Equal(1, desk.OverdueGearCount);
         Assert.True(desk.GearCheckedOut[0].IsOverdue);
+    }
+
+    [Fact]
+    public async Task A_member_who_cannot_read_the_groups_cases_is_not_offered_them()
+    {
+        // W-M1 (site evaluation 2026-09-06): the desk listed every open case in every group the
+        // person belonged to, and a membership rank on its own grants nothing below
+        // Administrator — so a new member's desk was a column of links that all answered 403.
+        // The group and its next visit still belong on the desk; only the cases go.
+        var f = Factory();
+        var me = Guid.NewGuid();
+        var org = new Organization { Id = Guid.NewGuid(), Name = "Closed Books", UrlName = "closed-books" };
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = me, UserName = "me@benco.dev", Email = "me@benco.dev", DisplayName = "Me" });
+            db.Organizations.Add(org);
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = me, IsActive = true,
+                Role = OrganizationMemberRole.Member, CreatedByAppUserId = me,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, Title = "Not for me",
+                CaseYear = 2026, OrgCaseNumber = 1, Status = CaseStatus.Active,
+                DateCaseOpened = DateTime.UtcNow, City = "Nashville",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var desk = Assert.IsType<MemberDeskResponse>(Assert.IsType<OkObjectResult>(
+            (await Build(f, me, canReadCases: false).GetDesk(default)).Result).Value);
+
+        Assert.Equal(1, desk.GroupCount);
+        Assert.Empty(desk.OpenCases);
+        Assert.Equal(0, desk.OpenCaseCount);
     }
 
     [Fact]

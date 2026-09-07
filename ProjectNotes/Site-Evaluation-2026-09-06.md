@@ -282,7 +282,14 @@ W-R3, W-R5, W-S3, W-S4, W-CL5, C1, and the proposal in full. New migration
    signed-in), `AccountRegistrationController` service extraction, Playwright
    `A_stranger_can_ask_for_help_without_an_account`, `An_existing_address_is_never_confirmed_to_a_stranger`.
 
-### Phase 2 — Membership doors and the case page (M)
+### Phase 2 — Membership doors and the case page (M) — **BUILT 2026-09-06**
+
+Branch `feature/site-eval-phase-2-membership-doors`, with its own README. Closed by this phase:
+W-M1, W-VW1, W-A3, W-A4, W-A5, W-A6, W-A7, W-A9, W-A11, and the accessible-label half of W-S4 that
+phase 1 deferred here. New migration `AddOrganizationDefaultMemberRole` **reaches the live
+database only at deploy — Ben runs it**; existing groups start with the setting empty, so nothing
+changes for them until an owner chooses.
+
 1. W-M1 root: one rule for what a new member can read, applied at every door — application
    accepted, admin PUT membership, SuperAdmin add, the seeders. Recommended: a group setting
    *"new members start as"* defaulting to the Investigator role; the ladder's bottom rung maps to

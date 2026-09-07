@@ -46,10 +46,14 @@ internal static class OrgRoleSeeder
             .Select(r => r.OrganizationId).Distinct().ToListAsync();
         var bare = await db.Organizations
             .Where(o => !orgsWithRoles.Contains(o.Id))
-            .Select(o => new { o.Id, o.CreatedByAppUserId })
             .ToListAsync();
         foreach (var org in bare)
-            OrgRoleDefaults.AddDefaultRoles(db, org.Id, org.CreatedByAppUserId);
+        {
+            var staged = OrgRoleDefaults.AddDefaultRoles(db, org.Id, org.CreatedByAppUserId);
+            // W-M1: a group being given roles for the first time is also being given the one its
+            // new members start on. A group that already chose is left alone — see the helper.
+            OrgRoleDefaults.PointAtStartingRole(org, staged);
+        }
         if (bare.Count > 0)
         {
             await db.SaveChangesAsync();
