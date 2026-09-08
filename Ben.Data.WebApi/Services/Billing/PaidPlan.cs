@@ -49,14 +49,18 @@ public static class PaidPlan
     /// then hide the evidence. Deciding not to publish in the first place is not gaming anything
     /// — it is bounded by the free storage cap, which is what makes a private vault unattractive
     /// rather than forbidden.</para>
+    /// <para><b>This sentence reaches the iPhone app verbatim</b> and therefore says nothing about
+    /// a plan, a price or where one is bought. App Review reads wording that points at a purchase
+    /// made outside the app under Guideline 3.1.1, and the app sells nothing — so the refusal
+    /// describes the rule and stops. The website is free to explain the plan beside it, in its own
+    /// markup, which no phone ever renders (see <c>MyFieldSessions.razor</c>).</para>
     /// </remarks>
     public static async Task<string?> WhyCannotKeepPrivateAsync(
         BenDataContext db, Guid appUserId, CancellationToken ct)
         => await CoversAsync(db, appUserId, ct)
             ? null
-            : "Keeping your sessions private is part of a paid plan. On a free account, what you "
-            + "publish to a place's archive stays there — it is what makes the archive worth "
-            + "reading. A paid plan lets you keep your work to yourself.";
+            : "Publishing to a place's archive cannot be undone on this account. What you publish "
+            + "stays there — it is what makes the archive worth reading.";
 
     /// <summary>
     /// Why this group may not take on another member, or null when it may.

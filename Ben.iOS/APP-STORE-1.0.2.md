@@ -1,16 +1,18 @@
-# App Store submission — IsHaunted 1.0.2 (build 2)
+# App Store submission — IsHaunted 1.0.2 (build 3)
 
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
 
-**State on 2026-09-04 (end of day):** ready, not sent. Ben: *"I am going to wait until we finish
-everything to try to get the submission done."* Items 214 (screenshots and previews) and 215
-(delayed session start) have both landed; §5 describes the final set.
+**State on 2026-09-08:** ready, not sent, and re-verified line by line against the tree as it now
+stands (evaluation phase 9). Two evaluation phases landed in the app after this document was
+written on 2026-09-04, so every claim in it was a claim about a tree that no longer existed. What
+changed is recorded below; what did not is marked re-verified rather than carried.
 
-Bundle id `com.ishaunted.ios` · `MARKETING_VERSION` **1.0.2** · `CURRENT_PROJECT_VERSION` **2** ·
+Bundle id `com.ishaunted.ios` · `MARKETING_VERSION` **1.0.2** · `CURRENT_PROJECT_VERSION` **3** ·
 iPhone and iPad · iOS 18.0 minimum. Both numbers are set in `IsHaunted.xcodeproj` and were proven
-in the built bundle's `Info.plist` (`CFBundleShortVersionString` 1.0.2, `CFBundleVersion` 2).
+on 2026-09-08 in a bundle built from this tree (`CFBundleShortVersionString` 1.0.2,
+`CFBundleVersion` 3, `MinimumOSVersion` 18.0, `CFBundleIdentifier` com.ishaunted.ios).
 
 ---
 
@@ -25,8 +27,12 @@ confused (2026-09-04). App Store Connect accepts any higher version string.
 
 **The build-number rule:** `CFBundleVersion` must be strictly higher than any build ever uploaded
 for a marketing version, and an uploaded number is never reusable even after a rejection. Build 1
-was uploaded, so this is **build 2**. If 1.0.2 build 2 is ever uploaded and then needs a code fix,
-the next upload is build 3 — do not reset it.
+was uploaded for 1.0.0.
+
+**This is build 3**, not 2. Build 2 was prepared on 2026-09-04 and, as far as this repository
+knows, never sent — but only App Store Connect knows that for certain, and a number is cheap where
+a rejected upload is not. Ben's call on 2026-09-08: burn 2 and go up as 3. If build 3 is uploaded
+and then needs a code fix, the next upload is 4 — never reset it.
 
 ---
 
@@ -61,6 +67,9 @@ exercised on 1.0 behaves differently.
 - **Smaller truths.** An untitled session no longer prints its timestamp twice in the Field Kit
   list; the review screen says "no base level was set" over the empty chart instead of leaving it
   blank; and My Cases no longer tells a group member to ask a group for help.
+- **Nothing in the app mentions a plan any more.** The two sentences that did — the session
+  review's comparison and the server's refusal when a publication is retracted — now describe what
+  this account does and stop there. See §4; this is the change that made it build 3.
 
 **What's New (paste into the version's "What's New in This Version"):**
 
@@ -79,17 +88,22 @@ Unchanged from 1.0.0 and still accurate — see `APP-STORE.md` §1 and §2 for t
 reasoning. Copy them forward as they are. Three things were re-verified against **this** tree on
 2026-09-04 rather than carried from build 1:
 
-- **No third-party SDKs.** Every `import` in `IsHaunted/` and `BenKit/` is an Apple framework or
-  BenKit itself (AVFoundation, AVKit, AuthenticationServices, Charts, CoreLocation, CoreMotion,
-  CryptoKit, EventKit, EventKitUI, Foundation, MapKit, Observation, PDFKit, PhotosUI, Security,
-  Speech, SwiftData, SwiftUI, UIKit, os). The Xcode project has **zero** remote package
-  references and `BenKit/Package.swift` has no dependencies.
-- **App Privacy answers** still match `IsHaunted/PrivacyInfo.xcprivacy`: seven data types, all
-  linked, none for tracking, purpose App Functionality; no tracking.
+- **No third-party SDKs.** Re-verified 2026-09-08. Every `import` in `IsHaunted/` and `BenKit/` is
+  an Apple framework or BenKit itself (AVFoundation, AVKit, AuthenticationServices, Charts,
+  CoreLocation, CoreMotion, CryptoKit, EventKit, EventKitUI, Foundation, FoundationNetworking,
+  MapKit, Observation, PDFKit, PhotosUI, Security, Speech, SwiftData, SwiftUI, UIKit, os).
+  `FoundationNetworking` is Apple's too and is behind `#if canImport`, which is false on iOS — it
+  is there so BenKit still compiles off Apple platforms. The Xcode project has **zero** remote
+  package references and `BenKit/Package.swift` has no dependencies.
+- **App Privacy answers** still match `IsHaunted/PrivacyInfo.xcprivacy` — re-read 2026-09-08:
+  seven data types (email address, name, user ID, precise location, photos or videos, audio data,
+  other user content), all linked, none for tracking, purpose App Functionality; `NSPrivacyTracking`
+  false.
 - **Usage strings** in `Support/Info.plist`: Calendars, Calendars (write-only), Camera, Location
   When In Use, Microphone, Motion, Photo Library (add), Speech Recognition. Calendar access is new
   since the checklist in `APP-STORE.md` was written — it is for adding an event to the person's own
-  calendar and asks only when they tap that. `ITSAppUsesNonExemptEncryption` is `false`.
+  calendar and asks only when they tap that. `ITSAppUsesNonExemptEncryption` is `false`. All ten
+  facts in this bullet were re-read from `Support/Info.plist` on 2026-09-08.
 
 ---
 
@@ -118,15 +132,18 @@ in App Store Connect → 1.0 → Resolution Center; match the order there.
 > 2. **Third-party SDKs or analytics:** none. Every framework the app links is Apple's. No
 >    analytics service, no crash reporter, no advertising SDK.
 > 3. **In-app purchases, subscriptions or links to purchase:** none. The app contains no StoreKit
->    code, shows no price, and has no purchase flow or link to one. Groups that want more than the
->    free tier subscribe on the website in a browser; the app does not link to that page. (Two
->    sentences in the app mention that a paid plan exists — see the note to Ben below.)
+>    code, shows no price, names no plan, and has no purchase flow or link to one. Where an account
+>    cannot do something, the app says what that account does and stops — it does not say what
+>    would change it or where. Groups that want more than the free tier arrange that on the website
+>    in a browser; the app neither says so nor links there.
 > 4. **AI or machine-learning services:** photos and video posted to the feed are screened for
 >    explicit content by a model that runs on our own server, not by any outside AI service. Voice
 >    notes are transcribed on the device by Apple's Speech framework. Nothing is sent to a
 >    third-party AI provider.
 > 5. **Authentication:** email and password on our own server, and Sign in with Apple. Microsoft
->    sign-in is offered on the website only and is not in the app.
+>    sign-in is offered on the website only and is not in the app. (An account created through
+>    Microsoft on the website is told, in the app, to finish setting it up there; that is the only
+>    mention of Microsoft the app contains and it offers no such sign-in.)
 > 6. **Location and mapping:** location is stamped on field-session readings on the device and
 >    uploaded only when the person sends the session. The app makes no geocoding or routing
 >    calls to any outside service; maps are Apple's MapKit.
@@ -140,19 +157,28 @@ in App Store Connect → 1.0 → Resolution Center; match the order there.
 > **Privacy** is stated in-app at Profile → About & Privacy, reachable without signing in, and in
 > full at https://ishaunted.com/privacy.
 
-**Note to Ben — the one review risk in this build.** Two places say a paid plan exists, with no way
-to buy one in the app:
+**The 3.1.1 risk this build used to carry, and how it was removed.** Two places said a paid plan
+exists, with no way to buy one in the app. Neither linked anywhere, named a price or said "buy" —
+but Apple's Guideline 3.1.1 has been applied to wording that merely points at an outside purchase,
+and answering a reviewer's question is worse than not raising it. **Ben's decision, 2026-09-08:
+soften both.** Both now describe the account rather than the plan:
 
-- `SessionReviewView`: *"A paid plan compares this session with theirs — your flagged moments per
-  hour against what this place typically gives people, and whether this night stood out."*
-- The server's sentence when retracting an archive publication: *"Keeping your sessions private is
-  part of a paid plan"*, surfaced verbatim by `EvidenceActions`.
+| Where | Now says |
+|---|---|
+| `SessionReviewView` | *"This account doesn't compare your session with everyone else's here: your flagged moments per hour against what this place typically gives people, and whether this night stood out."* |
+| `PaidPlan.WhyCannotKeepPrivateAsync`, surfaced verbatim by `EvidenceActions` | *"Publishing to a place's archive cannot be undone on this account. What you publish stays there — it is what makes the archive worth reading."* |
 
-Apple's Guideline 3.1.1 has been applied to wording that points at an outside purchase. Neither
-sentence links anywhere, names a price, or says "buy", which is the usual line — but a reviewer
-could ask. Options: leave them and answer as in item 3 above; or soften both to describe the
-feature without the word "paid". Your call before archiving; changing them is a code change and
-therefore a new build number.
+Each still names exactly what it withholds, which is the rule these sentences were written to: a
+refusal that hides the shape of what you are missing teaches people to assume it is nothing.
+
+**The website keeps its own words.** The second sentence is the server's, and the website shows it
+too — so the plan is explained beside it in `MyFieldSessions.razor`, which is Razor markup no phone
+ever renders. `PaidPlanTests` now asserts the sentence carries the reason and **does not contain
+the word "plan"**, so nobody can put it back by accident; the assertion was run against the old
+wording and seen to fail.
+
+A grep of `IsHaunted/` and `BenKit/` finds no "paid plan", no price, no "subscribe" and no
+"upgrade" in any string the app can show.
 
 ---
 
@@ -176,6 +202,19 @@ Upload order suggestion — lead with the Field Kit, since it is the reason the 
 The previews have no audio track. App Store Connect accepts silent previews; if it objects at
 upload, the README says how a silent track would be added.
 
+**Re-checked 2026-09-08, and kept as they are.** `FieldKitScreenshotTests` was re-run against a
+build of this tree on the iPhone 17 Pro Max, and every frame came back the same screen: nothing
+phase 7 changed shows in this set (its untitled-session fix only shows on a session with no name,
+and these have one; its "no base level was set" line only shows when no base was taken, and this
+night takes one). Re-capturing now would have made them worse, not newer — this simulator carries
+months of interrupted test sessions that would have filled the Field Kit list behind the frame.
+
+**Why the tab bar differs between frames, and why that is right.** The six Field Kit frames show a
+three-tab bar (Feed, Field Kit, Profile) and the four carried frames show five. That is the app
+doing what §4 item 7 says it does: it offers only the sections that apply, so somebody with no
+group has three and a group member has five. The set shows both, which is the product, not a
+mistake in the capture.
+
 ---
 
 ## 6. Build and submit — the whole procedure
@@ -195,10 +234,12 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    `application/json` with no redirect. It ships with the website deploy from the same merge. iOS
    fetches it once at install and caches the answer.
 
-4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **2**.
+4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **3**.
    They are already set; this is a look, not an edit.
 
-5. **Decide on the two paid-plan sentences** (§4). If you change them, commit first.
+5. **The two paid-plan sentences are already decided and changed** (§4) — nothing to do here.
+   The server half of that change ships with the website deploy from the same merge, so deploy
+   before a reviewer opens the app: until then the API still answers with the old wording.
 
 6. **Archive.** Select "Any iOS Device (arm64)" as the destination, then Product → Archive.
    The Organizer opens with the archive.
@@ -214,7 +255,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    text, description, keywords, support and marketing URLs carried from `APP-STORE.md` §1 — they
    pre-fill from 1.0, check them rather than retyping. Age rating and category are unchanged.
 
-10. **Select build 2** in the Build section once processing finishes.
+10. **Select build 3** in the Build section once processing finishes.
 
 11. **App Review Information.** Sign-in required: yes; demo user apple@apple.com and its password.
     Notes: paste §4 in full. Contact: Ben's phone and email.
@@ -236,9 +277,9 @@ rostered — the reviewer uses all three.
 Check App Store Connect → 1.0.2 → App Review → Resolution Center for the letter.
 
 - **Metadata only** (2.1 Information Needed, screenshot or wording complaints): fix in the form,
-  reply in Resolution Center, **Add for Review** again with the **same build 2**. No new build.
+  reply in Resolution Center, **Add for Review** again with the **same build 3**. No new build.
 - **A code problem** (crash, a flow that does not work, a guideline that needs a change): fix it,
-  bump `CURRENT_PROJECT_VERSION` to **3** (marketing stays 1.0.2), Archive, Upload, select build 3
+  bump `CURRENT_PROJECT_VERSION` to **4** (marketing stays 1.0.2), Archive, Upload, select build 4
   on the version page, reply in Resolution Center saying what changed, Add for Review.
 - The "How to Prevent Common Issues" list at the bottom of a 2.1 letter is boilerplate on every
   such letter, not findings.
@@ -250,17 +291,23 @@ they are the complaint), the demo account, the association file, the App ID capa
 
 ## 8. Checklist
 
-- [x] `MARKETING_VERSION` 1.0.2, `CURRENT_PROJECT_VERSION` 2 — set and proven in the built bundle
-- [x] No third-party frameworks or packages — re-verified in this tree
-- [x] `PrivacyInfo.xcprivacy` present; App Privacy answers match it
+Everything ticked below was re-verified against **this** tree on 2026-09-08, not carried from the
+2026-09-04 pass.
+
+- [x] `MARKETING_VERSION` 1.0.2, `CURRENT_PROJECT_VERSION` 3 — proven in a bundle built from this tree
+- [x] No third-party frameworks or packages — every import re-read; zero remote package references
+- [x] `PrivacyInfo.xcprivacy` present; seven types, all linked, no tracking; App Privacy matches
 - [x] `ITSAppUsesNonExemptEncryption = false`
 - [x] Usage strings for every permission the app asks for (eight)
-- [x] Associated-domains entitlement in `Support/IsHaunted.entitlements`
-- [x] `screenshots-1.0.2/` — ten per device, dark, right sizes, driven through a real night (item 214)
+- [x] Associated-domains and Sign in with Apple entitlements in `Support/IsHaunted.entitlements`
+- [x] No StoreKit, no price, no plan named, nothing pointing at a purchase (§4)
+- [x] `screenshots-1.0.2/` — ten per device; re-run against this tree and unchanged, so kept (§5)
 - [x] Two new 28 s previews at Apple's sizes, from Start onward (item 214)
 - [x] **Item 215** — delayed session start, in this build
-- [ ] Ben's decision on the two paid-plan sentences (§4)
+- [x] Ben's decision on the two paid-plan sentences — soften both; done, and guarded by a test
+- [x] BenKit suite green on this tree (330 tests)
 - [ ] Associated Domains capability enabled on the App ID (§6 step 2)
 - [ ] Association file live on ishaunted.com (§6 step 3)
+- [ ] **Website and API deployed from this merge** — the softened server sentence ships with it
 - [ ] Demo account apple@apple.com verified working on production the day of submission
-- [ ] Archive, upload, + Version 1.0.2, fill, select build 2, submit
+- [ ] Archive, upload, + Version 1.0.2, fill, select build 3, submit

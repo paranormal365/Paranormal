@@ -464,7 +464,37 @@ Seven failures are the pre-existing set above. The eighth,
 alone and alongside the fixture phase 6 found it colliding with, and phase 8 changes no code it
 touches. Recorded, not made green.
 
-### Phase 9 — App Store 1.0.2 (S)
+### Phase 9 — App Store 1.0.2 (S) — **PREPARED 2026-09-08; the submission is Ben's**
+
+Branch `feature/site-eval-phase-9-app-store-102`, with its own README. **No migration.**
+
+`APP-STORE-1.0.2.md` was written on 2026-09-04, and two evaluation phases landed in the app after
+it — so every claim in it described a tree that no longer existed, and it is the document a
+reviewer's answers are copied from. It is now re-verified line by line against the tree that would
+be archived, and two decisions Ben made on 2026-09-08 are in the code.
+
+**Build 3, not 2.** Build 2 was never sent as far as this repository knows, but only App Store
+Connect knows for certain and an uploaded number can never be reused. Burn 2, go up as 3.
+
+**Both paid-plan sentences softened**, which is what made it a new build. The session review's
+comparison and the server's refusal when a publication is retracted now describe what the account
+does and stop — no plan, no price, nothing pointing at a purchase made outside the app (Guideline
+3.1.1). Each still names exactly what it withholds. **The website keeps its own words**: the plan
+is explained beside the refusal in `MyFieldSessions.razor`, Razor markup no phone renders.
+`PaidPlanTests` asserts the sentence carries its reason and contains no "plan".
+
+**The screenshots did not change** — `FieldKitScreenshotTests` re-run against this tree returned
+the same screens, so the 2026-09-04 set is kept rather than replaced with one captured on a
+simulator full of interrupted test sessions. §3's list of imports had missed `FoundationNetworking`
+(Apple's, `#if canImport`, false on iOS); a list offered as exhaustive now is one.
+
+Proven on the wire: `DELETE /api/field-sessions/{id}/publish` on a free account answers **402** with
+the new sentence. Left for Ben: the App ID capability, the association file, **a deploy of the
+website and API from this merge** (until then the live API still says "part of a paid plan"), the
+demo account on production, and the fourteen steps in §6 with build 3.
+
+The original plan for this phase:
+
 1. Bump `CURRENT_PROJECT_VERSION` to **3** (build 2 was never uploaded, so 2 is still legal, but
    the tree has changed since §8 was checked — re-verify rather than assume).
 2. `Ben.iOS/APP-STORE-1.0.2.md`: §2 "What changed" gains the roster fix (iOS-3) and, if Phase 7
