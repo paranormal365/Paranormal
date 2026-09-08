@@ -417,7 +417,33 @@ screen rendered a spinner and never redrew. Nothing else would have caught that.
    the shapes the seeders produce.
 5. UI tests on both simulators: `EverySurfaceUITests` extended with the member seat.
 
-### Phase 8 — Documentation, screenshots, PDFs (M)
+### Phase 8 — Documentation, screenshots, PDFs (M) — **BUILT 2026-09-08**
+
+Branch `feature/site-eval-phase-8-docs-and-captures`, with its own README. **No product code
+changed**; no migration.
+
+Everything was rebuilt: the product documentation PDF (two whole articles had never appeared in it
+and fifteen of seventeen had changed), the six persona documents, both app documents and the
+investor overview, from 41 fresh help screenshots taken in dark mode on an isolated stack.
+
+**Five defects in the capture machinery, four of them shipping quietly into documents.** The app
+documents were captured **against the live site** — no `-apiBaseURL`, and two relaunches that
+rebuilt the launch arguments from scratch — while their first page said everything in them was
+simulated. A stale simulator Keychain session silently outranked the credentials passed to it,
+because `SessionStore.signIn` returns immediately unless the app is signed out, so one capture came
+out as a different person's account without a word about it. `53-session-review` had been recorded
+as "cannot reliably be reached" for weeks: it was reachable, and what blocked it was the note
+composer's field being a `TextField` where the capture asked for a `textView`, leaving the sheet
+over every control below it including Stop — six sections lost, no error. And the video editor's
+help shots kept dying on a wedged ffmpeg the toolbar was already offering to reset.
+
+A fifth: nobody may report their own post, so the feed clear skipped the SuperAdmin's and a junk
+post survived into three persona documents.
+
+Both app documents gained sections rather than losing them: 22 on iPhone and 24 on iPad, against 16
+of an expected 17 before. `scripts/seeded-passwords.sh` now holds the one copy of the seeded
+password derivation that `run-e2e.sh`, the persona captures and the iOS capture all read.
+
 Runs after Phases 1–7, in this order, all captures in **dark mode**:
 1. `BEN_CAPTURE=1 dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter TestCategory=Capture`
    on an isolated stack — every help screenshot whose screen changed (request step 4, case page,
@@ -431,6 +457,12 @@ Runs after Phases 1–7, in this order, all captures in **dark mode**:
    the two `IsHaunted-iOS-*.pdf`; fill `53-session-review` now that the review screen is reachable
    after a scripted session.
 5. `docs/README.md` updated for anything new in the pipeline.
+
+Full Playwright suite on a fresh `IsHauntedDb_p8b`: **473 passed, 8 failed, 40 skipped of 521**.
+Seven failures are the pre-existing set above. The eighth,
+`The_leak_warning_fires_before_save_not_after_it`, is order-dependent and unexplained: it passes
+alone and alongside the fixture phase 6 found it colliding with, and phase 8 changes no code it
+touches. Recorded, not made green.
 
 ### Phase 9 — App Store 1.0.2 (S)
 1. Bump `CURRENT_PROJECT_VERSION` to **3** (build 2 was never uploaded, so 2 is still legal, but

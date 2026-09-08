@@ -362,14 +362,24 @@ public sealed class HelpMediaCapture : BenTestBase
         var page = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/feed");
         if (!page.TryGetProperty("posts", out var posts)) return;
 
+        // Nobody may report their own post, so the SuperAdmin's own junk used to be skipped and
+        // survived every clear — and then appeared in the persona documents as a post reading
+        // "posted from elsewhere #tc2c5c4200". Report those as the member instead, and hide them
+        // with the admin as usual.
+        var memberToken = await TokenForCaptureAsync(MemberEmail, MemberPassword);
+        using var asMember = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        if (memberToken is not null)
+            asMember.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", memberToken);
+
         foreach (var post in posts.EnumerateArray())
         {
             var id = post.GetProperty("id").GetString();
 
-            // The SuperAdmin cannot report their own post; skip those rather than fail the run.
-            if (post.GetProperty("isOwnPost").GetBoolean()) continue;
+            var mine = post.GetProperty("isOwnPost").GetBoolean();
+            if (mine && memberToken is null) continue;
 
-            using var reported = await http.PostAsJsonAsync(
+            using var reported = await (mine ? asMember : http).PostAsJsonAsync(
                 $"/api/feed/posts/{id}/report", new { reason = "clearing the feed for a help capture" });
 
             var queue = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/feed/reports");
@@ -476,14 +486,18 @@ public sealed class HelpMediaCapture : BenTestBase
         await Task.Delay(35_000);
     }
 
-    private static async Task<string?> AdminTokenForCaptureAsync()
+    private static Task<string?> AdminTokenForCaptureAsync() =>
+        TokenForCaptureAsync(SuperAdminEmail, SuperAdminPassword);
+
+    private static async Task<string?> TokenForCaptureAsync(string email, string password)
     {
+        if (string.IsNullOrEmpty(password)) return null;
+
         using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
 
         try
         {
-            using var response = await http.PostAsJsonAsync("/login",
-                new { email = SuperAdminEmail, password = SuperAdminPassword });
+            using var response = await http.PostAsJsonAsync("/login", new { email, password });
             if (!response.IsSuccessStatusCode) return null;
 
             var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -930,8 +944,29 @@ public sealed class HelpMediaCapture : BenTestBase
     /// </remarks>
     private async Task WaitForReadyWithTrailAsync(int seconds)
     {
-        var status = Page.Locator(".bv-toolbar__status").First;
         var trail = new List<string>();
+
+        if (await PollForReadyAsync(seconds, trail)) return;
+
+        // The editor itself says "Stuck — reset it" when the worker wedges, and offers a Reset
+        // that reloads ffmpeg and reconnects the clips. Doing what the screen says is what a
+        // person does, so the capture does it too — once — rather than abandoning six help
+        // screenshots to a background render that is a known defect of its own (backlog item 94).
+        if (await ResetTheWedgedWorkerAsync())
+        {
+            trail.Add("reset");
+            if (await PollForReadyAsync(60, trail)) return;
+        }
+
+        await ReportEditorStateAsync(
+            "ffmpeg never went back to Ready, so Export stayed disabled.\n"
+            + "  render trail: " + string.Join(" → ", trail));
+    }
+
+    /// <summary>Watches the toolbar status until it says Ready, recording every change it saw.</summary>
+    private async Task<bool> PollForReadyAsync(int seconds, List<string> trail)
+    {
+        var status = Page.Locator(".bv-toolbar__status").First;
         var deadline = DateTime.UtcNow.AddSeconds(seconds);
         var started = DateTime.UtcNow;
 
@@ -945,15 +980,39 @@ public sealed class HelpMediaCapture : BenTestBase
             if (text.Contains("Ready", StringComparison.OrdinalIgnoreCase))
             {
                 TestContext.Out.WriteLine("render trail: " + string.Join(" → ", trail));
-                return;
+                return true;
             }
 
             await Page.WaitForTimeoutAsync(3_000);
         }
 
-        await ReportEditorStateAsync(
-            "ffmpeg never went back to Ready, so Export stayed disabled.\n"
-            + "  render trail: " + string.Join(" → ", trail));
+        return false;
+    }
+
+    /// <summary>
+    /// Opens the diagnostics panel and presses its Reset, returning whether there was one to press.
+    /// </summary>
+    /// <remarks>
+    /// DOM clicks throughout: the media panel floats over the right-hand end of the toolbar, so a
+    /// real pointer click on a chip beneath it is intercepted — the same reason Export is clicked
+    /// this way below.
+    /// </remarks>
+    private async Task<bool> ResetTheWedgedWorkerAsync()
+    {
+        var chip = Page.Locator(".bv-diagnostics-chip");
+        if (await chip.CountAsync() == 0) return false;
+
+        await chip.First.EvaluateAsync("el => el.click()");
+        await Page.WaitForTimeoutAsync(1_000);
+
+        var reset = Page.Locator(".k-window button").Filter(new() { HasTextString = "Reset" });
+        if (await reset.CountAsync() == 0) { await CloseAnyWindowAsync(); return false; }
+
+        await reset.First.EvaluateAsync("el => el.click()");
+        // Reloading the core is the multi-megabyte download again on a cold cache.
+        await Page.WaitForTimeoutAsync(5_000);
+        await CloseAnyWindowAsync();
+        return true;
     }
 
     /// <summary>Polls a condition, and reports what the editor was showing when it never came true.</summary>
