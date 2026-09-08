@@ -34,10 +34,17 @@ struct CasesListView: View {
                 }
 
             case .loaded where store?.cases.isEmpty == true:
+                // iOS-2 of the 2026-09-06 evaluation: this is the CLIENT's list, and it said so in
+                // client's words to a group member — "when you ask a group to look into
+                // something". A member reads that as the app not knowing who they are. They have
+                // cases; they are just somebody else's, and they reach them through the visit
+                // they are on.
                 ContentUnavailableView {
-                    Label("No cases yet", systemImage: "folder")
+                    Label("No cases of your own", systemImage: "folder")
                 } description: {
-                    Text("When you ask a group to look into something, it appears here.")
+                    Text(dependencies.surfaces.surfaces.hasGroups
+                         ? "This list is for cases you asked a group to look into. The cases your group is working are on the visit you are rostered for, under Investigations."
+                         : "When you ask a group to look into something, it appears here.")
                 }
 
             case .loaded:

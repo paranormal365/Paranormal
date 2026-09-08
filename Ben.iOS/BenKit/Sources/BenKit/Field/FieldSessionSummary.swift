@@ -49,12 +49,25 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   uploadedAt: session.uploadedAt)
     }
 
+    /// Whether anybody has given this session a name of its own.
+    ///
+    /// iOS-4 of the 2026-09-06 evaluation: a session with no label printed its start time as the
+    /// title AND as the first thing in the subtitle, so the list read the same timestamp twice on
+    /// every untitled row. The row needs to know which it is looking at, not just what to print.
+    public var isUntitled: Bool {
+        (locationLabel?.isEmpty ?? true) && (investigationTitle?.isEmpty ?? true)
+    }
+
     /// What to call it in a list. The operator's own label wins; failing that, where it sat in
     /// the calendar, because "Session 4" tells nobody anything.
+    ///
+    /// The unnamed case says it is unnamed rather than repeating the timestamp the row is about
+    /// to print underneath (iOS-4). Nothing is lost: the date and time are in the subtitle, where
+    /// they sit beside the length and the counts a reader is scanning for anyway.
     public var title: String {
         if let locationLabel, !locationLabel.isEmpty { return locationLabel }
         if let investigationTitle, !investigationTitle.isEmpty { return investigationTitle }
-        return startedAt.formatted(date: .abbreviated, time: .shortened)
+        return "Untitled session"
     }
 
     public var duration: TimeInterval? {

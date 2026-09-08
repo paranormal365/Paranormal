@@ -51,14 +51,25 @@ exercised on 1.0 behaves differently.
   see §6 step 2.
 - **Retracting an archive publication requires a paid plan** (server-side rule; the app surfaces
   the server's own sentence). See §4, the one review risk.
+- **The roster decodes when nobody has been marked** (iOS-3, found by the 2026-09-06 evaluation).
+  `didAttend` arrives null for an attendee nobody has recorded either way, and one such row made
+  the whole Investigations list fail — which also emptied the Send screen's destination list, so a
+  member could not file a night against the visit they were on.
+- **A member can open the case behind a visit** (iOS-8). Investigations → the visit → the case:
+  what the client reported, the timeline, the files, and the group's thread with them. Read-only
+  on the phone; adding to a case is done on the website.
+- **Smaller truths.** An untitled session no longer prints its timestamp twice in the Field Kit
+  list; the review screen says "no base level was set" over the empty chart instead of leaving it
+  blank; and My Cases no longer tells a group member to ask a group for help.
 
 **What's New (paste into the version's "What's New in This Version"):**
 
 > Send only the part of a session that mattered: drag the in and out points on the Send screen,
 > preview exactly what will go, and keep the full recording on your phone. Publish a session to a
 > location's public archive and see how your night compares with everyone else's there. Your
-> evidence from other people's events now lives under Settings → My evidence. And the app shows
-> only the sections that apply to you.
+> evidence from other people's events now lives under Settings → My evidence. Open the case behind
+> a visit you are on, and read what the client reported without leaving the house. And the app
+> shows only the sections that apply to you.
 
 ---
 
@@ -119,9 +130,12 @@ in App Store Connect → 1.0 → Resolution Center; match the order there.
 > 6. **Location and mapping:** location is stamped on field-session readings on the device and
 >    uploaded only when the person sends the session. The app makes no geocoding or routing
 >    calls to any outside service; maps are Apple's MapKit.
-> 7. **What the tabs are:** Feed, My Cases, Investigations, Field Kit, Events, Profile. The app
->    shows only the ones that apply to the signed-in person, so a reviewer on the demo account
->    sees all six; a person with no group sees Feed, Field Kit and Profile.
+> 7. **What the tabs are, and where Events is.** On **iPhone** the tab bar holds five: Feed, My
+>    Cases, Investigations, Field Kit, Profile. **Public events are on the Profile tab** — tap
+>    Profile, then *Public events*. On **iPad** the sidebar shows all six, Events among them.
+>    Either way the app offers only the sections that apply to the signed-in person, so a
+>    reviewer on the demo account sees every one of them; somebody with no group sees Feed,
+>    Field Kit and Profile.
 >
 > **Privacy** is stated in-app at Profile → About & Privacy, reachable without signing in, and in
 > full at https://ishaunted.com/privacy.
