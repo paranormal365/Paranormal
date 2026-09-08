@@ -249,9 +249,13 @@ struct SessionReviewView: View {
 
     private var instrumentsAtPlayhead: some View {
         HStack(spacing: 10) {
+            // iOS-5: "—" here means one of two very different things — no reading at this
+            // instant, or no base level for the whole session — and the second one was silent.
             readout("Field",
-                    value: replay.frame.magneticDeviationMilligauss(from: replay.timeline.baselines)
-                        .map { String(format: "%+.0f mG", $0) } ?? "—",
+                    value: replay.timeline.baselines.magneticMicrotesla == nil
+                        ? "no base"
+                        : replay.frame.magneticDeviationMilligauss(from: replay.timeline.baselines)
+                            .map { String(format: "%+.0f mG", $0) } ?? "—",
                     icon: "gauge.with.needle")
             readout("Sound",
                     value: replay.frame.soundDbfs.map { String(format: "%.0f dB", $0) } ?? "—",

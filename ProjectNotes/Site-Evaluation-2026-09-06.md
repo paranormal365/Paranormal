@@ -388,7 +388,24 @@ missing media; V-6 a dev-time route for `/editors/video/` or the button hidden w
 absent. Tests: `WasmEditorEditingTests.A_server_audio_file_lands_in_the_audio_bin`, unit tests for
 the bin state. Help: `using-the-video-editor.md` (Server tab).
 
-### Phase 7 — The iOS app before 1.0.2 (M)
+### Phase 7 — The iOS app before 1.0.2 (M) — **BUILT 2026-09-08**
+
+Branch `feature/site-eval-phase-7-ios-before-102`, with its own README. Closes iOS-1, iOS-2, iOS-4,
+iOS-5, iOS-8, and the fixture-drift class iOS-3 belonged to. **No migration, and no server change
+at all.**
+
+**iOS-8** is now Investigations → the visit → the case: the client's report, the timeline, the
+files and the thread, read-only, over the three org endpoints the website already uses. The door is
+offered only when the roster carried a `caseId`, which the server nulls for anybody who cannot open
+the case — so the id IS the permission.
+
+**iOS-1 is by design on a phone and the review notes were wrong about it.** `compactTabs` lists
+five and Events is deliberately not one; Events lives on Profile, and the iPad sidebar shows all
+six. Verified on both. §4 item 7 of `APP-STORE-1.0.2.md` now says where Events is on each device.
+
+**The new UI walk earned itself immediately**: `GroupCaseStore` had lost its `@Observable`, so the
+screen rendered a spinner and never redrew. Nothing else would have caught that.
+
 1. iOS-8: a group-side case list for members with case access, read-only at first (timeline,
    files, messages), reached from Investigations; iOS-2 the copy for members.
 2. iOS-1: Events reachable from the tab bar for anyone in a group with a public event, or the

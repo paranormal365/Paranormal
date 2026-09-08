@@ -129,7 +129,12 @@ private struct SessionRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(summary.title).foregroundStyle(Theme.bone)
+                // iOS-4: an unnamed session reads as unnamed, and dimmer than a real name, so a
+                // list of them still scans by the date underneath rather than by a row of
+                // identical grey words.
+                Text(summary.title)
+                    .foregroundStyle(summary.isUntitled ? Theme.fog : Theme.bone)
+                    .italic(summary.isUntitled)
                 Text(detail).font(.caption).foregroundStyle(Theme.fog)
                 if let investigation = summary.investigationTitle, !investigation.isEmpty,
                    investigation != summary.title {

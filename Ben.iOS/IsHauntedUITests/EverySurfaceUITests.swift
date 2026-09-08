@@ -104,8 +104,66 @@ final class EverySurfaceUITests: XCTestCase {
 
     func testTheCaseListOpens() {
         XCTAssertTrue(AppNavigator.openSection("My Cases", in: app))
+        // iOS-2 added a fourth allowed state: a group MEMBER with no cases of their own is now
+        // told this list is the client's and where their group's cases actually are, rather than
+        // being asked to imagine asking a group for help.
         assertSettled("My Cases", anyOf: [
-            "it appears here", "between you and the group", "#20"])
+            "it appears here", "between you and the group", "#20",
+            "This list is for cases you asked"])
+    }
+
+    /// A member can reach the case behind a visit they are rostered on (iOS-8).
+    ///
+    /// The app had no group-side case view at all: My Cases is the client's list, so somebody
+    /// standing in the house they were sent to could not open the case from the phone.
+    ///
+    /// Written to pass on a seat that has no rostered visit with a case, because the seed data
+    /// decides that and this test is about the door working, not about the data. What it will not
+    /// tolerate is the door being there and leading to a blank screen — which is what the route
+    /// did before the screen existed, since it resolved onto a "Coming soon" placeholder.
+    func testAMemberCanOpenTheCaseBehindAVisit() {
+        XCTAssertTrue(AppNavigator.openSection("Investigations", in: app))
+
+        // By identifier, not `cells.firstMatch`. The first cell on this screen is the "Where
+        // you've been" map card, so tapping it stayed exactly where it was — and the test then
+        // reported "this visit has no case" about a visit it had never opened.
+        let visit = app.descendants(matching: .any)["investigation-row"].firstMatch
+        guard visit.waitForExistence(timeout: 20) else {
+            return // no visits on this seat — nothing to walk
+        }
+        visit.tap()
+
+        // The detail is where the door lives; without this the next guard would again be
+        // measuring the wrong screen.
+        guard app.descendants(matching: .any)["start-session-for-investigation"]
+                 .firstMatch.waitForExistence(timeout: 20) else {
+            XCTFail("tapping a visit did not open its detail screen")
+            return
+        }
+
+        // `descendants`, not `buttons`: a SwiftUI Button with .buttonStyle(.plain) inside a List
+        // surfaces as a CELL in the accessibility tree, not as a button. Querying app.buttons
+        // found nothing and the test returned early — reporting "this visit has no case" about a
+        // visit whose case the API was serving perfectly.
+        let openCase = app.descendants(matching: .any)["open-group-case"].firstMatch
+        guard openCase.waitForExistence(timeout: 15) else {
+            // The visit has no case, or this person may not read it — the roster nulls the case
+            // for anybody who cannot open it, which is the correct absence.
+            return
+        }
+        openCase.tap()
+
+        // The header is the part that decides whether the case opened at all.
+        let settled = app.staticTexts["Read-only on the phone. Adding to a case is done on the website."]
+                        .firstMatch.waitForExistence(timeout: 30)
+                   || app.staticTexts["Couldn't open the case"].firstMatch.exists
+                   || app.staticTexts["Timeline"].firstMatch.exists
+        XCTAssertTrue(settled,
+                      "the group case screen opened but drew neither the case nor a reason")
+
+        // And it must never be the placeholder the route used to land on.
+        XCTAssertFalse(app.staticTexts["Coming soon"].firstMatch.exists,
+                       "the group case route is still landing on the placeholder screen")
     }
 
     func testFieldKitOpens() {

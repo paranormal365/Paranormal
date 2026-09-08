@@ -68,6 +68,28 @@ struct ReadingsChart: View {
             }
         }
         .frame(height: 180)
+        // iOS-5 of the 2026-09-06 evaluation: with no base level the chart is an empty grid, and
+        // the only hint that anything was skipped was back on the live screen — long gone by the
+        // time somebody opens the review. An empty chart with an axis reads as "nothing happened",
+        // which is a claim about the night rather than about the setup.
+        .overlay {
+            if !timeline.baselines.isSet {
+                VStack(spacing: 6) {
+                    Image(systemName: "gauge.with.dots.needle.bottom.0percent")
+                        .font(.title2).foregroundStyle(Theme.fog)
+                    Text("No base level was set")
+                        .font(.caption).foregroundStyle(Theme.bone)
+                    Text("The field line is drawn as a change from a reading taken at the start. "
+                         + "Without one there is nothing to compare against.")
+                        .font(.caption2).foregroundStyle(Theme.fog)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 18)
+                }
+                .padding(10)
+                .background(Theme.mist.opacity(0.92), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("replay-no-baseline")
+            }
+        }
         .accessibilityLabel("Magnetic field over the session")
     }
 

@@ -72,6 +72,39 @@ struct InvestigationDetailView: View {
                 }
             }
 
+            // iOS-8: the way into the case, from the one screen that knows both ids.
+            //
+            // Offered only when the roster carried a caseId — and the server nulls that field for
+            // anybody who cannot open the case (phase 2, W-M1), so the presence of the id IS the
+            // permission. A door that is drawn and then refuses is worse than no door.
+            if let caseId = investigation.caseId {
+                Section {
+                    Button {
+                        router.push(.orgCase(organizationId: investigation.orgId, caseId: caseId),
+                                    in: .investigations)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(investigation.caseTitle ?? "Open the case")
+                                    .foregroundStyle(Theme.bone)
+                                if let reference = investigation.caseReference {
+                                    Text(reference).font(.caption).foregroundStyle(Theme.fog)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption).foregroundStyle(Theme.fog)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("open-group-case")
+                } header: {
+                    Text("The case")
+                } footer: {
+                    Text("What the client reported, what has been recorded, and the group's thread with them. Read-only here.")
+                }
+            }
+
             // The reason this screen exists on a phone.
             Section {
                 Button {

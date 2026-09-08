@@ -194,6 +194,10 @@ struct RootShell: View {
             NotificationsView()
         case .caseDetail(let id):
             CaseDetailView(caseId: id)
+        case .orgCase(let organizationId, let caseId):
+            // The GROUP's side of the case (iOS-8) — a different surface from the client's view
+            // of the same one. Until this existed the route resolved and landed on a placeholder.
+            GroupCaseView(organizationId: organizationId, caseId: caseId)
         case .caseReports(let id):
             CaseReportsView(caseId: id)
         case .caseMessages(let id):
