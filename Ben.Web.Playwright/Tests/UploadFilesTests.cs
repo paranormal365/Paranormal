@@ -99,6 +99,12 @@ public class UploadFilesTests : BenTestBase
         await ClickUntilAsync(deleteButton, Page.GetByText("Delete File", new() { Exact = false }));
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).Last.ClickAsync();
-        await Expect(Main.GetByText(name)).Not.ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // The ROW is gone, not "the name is nowhere on the page". The confirm dialog names the file
+        // in a <strong>, so while it is still up the name matches twice and an unscoped locator
+        // fails on strict mode instead of telling us whether the delete worked — which is what it
+        // did for weeks.
+        await Expect(Page.Locator("tr", new() { HasTextString = name }))
+            .ToHaveCountAsync(0, new() { Timeout = 15_000 });
     }
 }

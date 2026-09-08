@@ -256,10 +256,35 @@ Sizes: S about half a day, M one to two days, L three or more. Every phase: its 
 README, tests run against the un-fixed code first, help updated in the same change, verified on
 screen on an isolated stack as an ordinary member before merge.
 
-### Phase 0 — Green suite (S)
-Investigate and fix the seven pre-existing Playwright failures. They are the same seven on master
-and they will hide anything new. Steps: run each in isolation with `HEADED=1`; fix or retire each
-with a note in `README-green-suite-and-open-debts.md`; full run green on a fresh `BEN_E2E_DB`.
+### Phase 0 — Green suite (S) — **BUILT 2026-09-08, last of the ten**
+
+Branch `feature/site-eval-phase-0-green-suite`, with its own README. **No product code changed**;
+nine files, all harness or test.
+
+The seven became eight during the arc. **Not one was a product defect.** Three were locators that
+reached the wrong control — one clicked Telerik's column filter toggle for weeks, and one clicked
+*Delete this user*, failing only because the delete asks first. Two were the site telling the truth
+and the test not knowing it: a wizard step that refuses until a group says where it works, and a
+Details panel that says "Address given" rather than "Address". One was a guided tour auto-launching
+over an older test. One was a page deliberately retired, whose redirect is now the contract the
+test holds. One was an ambiguity the page itself creates.
+
+Two helpers came out of it, both on `BenTestBase` so the traps are learned once: `GridCommand` for
+a Telerik row command, and `SkipAnyTourAsync` for a page whose tour opens itself.
+`ClickUntilUrlAsync` now says *why* a click never navigated.
+
+The last two to fall were the same shape: something one circuit round trip behind the test. The
+leak warning's label binds on `oninput`, so a blur fired immediately after typing ran the check on
+the title the server had not received yet — ~3 ms alone, longer under load, which is exactly why it
+passed in isolation and failed every full run. The equipment dropdown re-renders its makes when the
+category changes, and the test selected into that gap. Both are the W-A12 class.
+
+**Full suite on a fresh database: 480 passed, 0 failed, 41 skipped of 521.** Run with
+`--blame-hang-timeout 6m` after an earlier attempt hung on the equipment test and produced no
+summary at all — a run that never finishes is worse than one that fails.
+
+Original steps: run each in isolation with `HEADED=1`; fix or retire each with a note in
+`README-green-suite-and-open-debts.md`; full run green on a fresh `BEN_E2E_DB`.
 
 ### Phase 1 — The client funnel (L) — **BUILT 2026-09-06**
 

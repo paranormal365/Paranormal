@@ -38,9 +38,15 @@ public class StartGroupWizardTests : BenTestBase
             // Step 2 — address, deliberately skipped (it is optional by design).
             await Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }).ClickAsync();
 
-            // Step 3 — defaults are fine.
+            // Step 3 — the defaults are NOT all fine, and that is the product being right. An
+            // investigation group takes client cases by default, and a group that takes client
+            // cases has to say where it works or a client cannot find it. The step refuses without
+            // it, in a sentence. Saying where we work is what a person does here.
             await Expect(Main.Locator("#newgroup-applications")).ToBeVisibleAsync(new() { Timeout = 45_000 });
-            await Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }).ClickAsync();
+            await Main.Locator("#newgroup-area").FillAsync("Nashville, TN");
+            await ClickUntilAsync(
+                Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
+                Main.Locator("#newgroup-review"));
 
             // Step 4 — review shows the name, then create.
             await Expect(Main.Locator("#newgroup-review")).ToContainTextAsync($"E2E Wizard Group {suffix}");

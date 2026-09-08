@@ -589,14 +589,31 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected async Task ClickUntilUrlAsync(ILocator target, string urlPattern, int attempts = 4)
     {
+        // Why a click never landed, in the failure message. "Clicking never navigated" is true and
+        // useless: a control that is missing, covered, or disabled all read the same from here, and
+        // each wants a different fix.
+        var lastClickProblem = "none — every click was accepted";
+
         for (var attempt = 0; attempt < attempts; attempt++)
         {
             try
             {
                 await target.ClickAsync(new() { Timeout = 5_000 });
             }
-            catch (TimeoutException)
+            catch (TimeoutException ex)
             {
+                // Diagnostics only: whatever happens here must never change what this method does,
+                // or a helper meant to explain a failure becomes a way to cause one.
+                try
+                {
+                    lastClickProblem = await target.CountAsync() == 0
+                        ? "the control was not on the page"
+                        : $"the click was never accepted ({ex.Message.Split('\n')[0]})";
+                }
+                catch
+                {
+                    lastClickProblem = "the click was never accepted, and the control could not be re-counted";
+                }
                 continue;
             }
 
@@ -613,7 +630,8 @@ public abstract class BenTestBase : PageTest
         }
 
         Assert.That(Page.Url, Does.Match(urlPattern),
-            $"clicking never navigated to something matching {urlPattern}");
+            $"clicking never navigated to something matching {urlPattern}. "
+            + $"Clicks: {lastClickProblem}.");
     }
 
     /// <summary>
@@ -690,6 +708,51 @@ public abstract class BenTestBase : PageTest
         }
         // Deliberately does not throw: some pages keep a permanent element containing the word,
         // and a caller's own assertion is a better failure message than a generic timeout here.
+    }
+
+    /// <summary>
+    /// A Telerik grid's row command button, by the text on it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not <c>GetByRole(Button, name)</c>.</b> Telerik's filter row renders one icon button per
+    /// column carrying <c>aria-label="Open"</c> — fifteen of them on the SuperAdmin cases grid —
+    /// so an accessible-name match finds a filter toggle long before it finds the row's command,
+    /// clicks it happily, and reports that the row would not navigate. That cost this suite one
+    /// standing failure for weeks. Command buttons live in <c>td.k-command-cell</c> and carry real
+    /// text; both facts are what make this selector safe.
+    /// </remarks>
+    protected ILocator GridCommand(string text, ILocator? within = null)
+        => (within ?? Main).Locator("td.k-command-cell button", new() { HasTextString = text });
+
+    /// <summary>
+    /// Skips a guided tour if one has opened over the page, and says whether it did.
+    /// </summary>
+    /// <remarks>
+    /// <para>Item 166 gave several pages a tour that <b>auto-launches for anybody who has not
+    /// dismissed it</b>, which on a freshly seeded database is every seat the suite signs in as.
+    /// Its backdrop covers the page, so the next click is intercepted and the test fails pointing
+    /// at whatever it was reaching for — never at the tour, which is the thing in the way.</para>
+    ///
+    /// <para>This is what a person does: read it or skip it, then get on. Tests that are ABOUT a
+    /// tour must not call this — they assert the tour is offered, which is a different job.</para>
+    /// </remarks>
+    protected async Task<bool> SkipAnyTourAsync(int timeoutMs = 3_000)
+    {
+        var skip = Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Skip tour" });
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await skip.CountAsync() > 0)
+            {
+                await skip.First.ClickAsync();
+                await Expect(Page.Locator(".ben-tour-card")).ToHaveCountAsync(0, new() { Timeout = 5_000 });
+                return true;
+            }
+            await Task.Delay(150);
+        }
+
+        return false;
     }
 
     /// <summary>

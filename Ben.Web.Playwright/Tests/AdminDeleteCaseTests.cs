@@ -108,7 +108,9 @@ public class AdminDeleteCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/cases");
         await WaitUntilLoadedAsync();
 
-        var open = Page.GetByRole(AriaRole.Button, new() { Name = "Open" }).First;
+        // The ROW's command button. An accessible-name match finds Telerik's filter toggles first
+        // (fifteen of them here, all labelled "Open"), which is what this test used to click.
+        var open = GridCommand("Open").First;
         if (await open.CountAsync() == 0)
         {
             Assert.Ignore("No cases in this database to open.");

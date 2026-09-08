@@ -281,8 +281,12 @@ public class LookAndTruthsTests : BenTestBase
         var street = await Page.EvaluateAsync<string?>(
             """
             (() => {
+                // Starts with "Address", not equals it. The Details panel labels this row
+                // "Address given" — a case's address is what the client SAID, which is a
+                // different claim from a verified place — and an exact match on 'Address'
+                // silently found nothing and blamed the panel for changing shape.
                 const leaf = [...document.querySelectorAll('dt, div, span, td')]
-                    .filter(e => e.childElementCount === 0 && e.textContent.trim() === 'Address');
+                    .filter(e => e.childElementCount === 0 && /^address\b/i.test(e.textContent.trim()));
                 for (const l of leaf) {
                     const v = l.nextElementSibling?.textContent?.trim();
                     if (v) return v.split('\n')[0].trim();
@@ -305,6 +309,14 @@ public class LookAndTruthsTests : BenTestBase
 
         var label = Page.Locator("#casedetail-case-label-surname-city-0146");
         await label.FillAsync($"{street} survey");
+
+        // A beat before blurring. The field binds on `oninput`, so the typed value reaches the
+        // server one circuit round trip behind the keyboard, and `onblur` fires the leak check
+        // with whatever the server has. Alone that round trip is ~3 ms and blur lands after it;
+        // under a full-suite load it does not, the check runs on the OLD title, and the warning
+        // never appears — which is how this test passed on its own and failed in every full run.
+        // A person never blurs zero milliseconds after their last keystroke either.
+        await Page.WaitForTimeoutAsync(500);
         await label.BlurAsync();
 
         // No Save has been pressed anywhere above this line. That is the whole assertion.
