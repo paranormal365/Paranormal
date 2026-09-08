@@ -59,7 +59,9 @@ where pressing it again is the right move.
 
 Everything you bring in lands in the **Media** panel first. That is your material for this project,
 and it is not the same thing as your edit: a clip sits there whether or not it is on the timeline,
-and the card tells you which — *on timeline*, or *on timeline ×2* if you have used it twice.
+and the card tells you which — *on timeline*, or *on timeline ×2* if you have used it twice. A
+card that reads **media missing** is one whose file is no longer in this browser's storage; see
+*Where your footage lives*.
 
 Press **+** on a card to place it at the playhead. The same source can be placed as many times as
 you like, and trimming one placement leaves the others alone. **Remove from media** takes the card
@@ -91,6 +93,10 @@ The list above the files narrows what the tab shows:
 | **My files** | Only what you uploaded yourself. |
 | **By case** | One case's media. A second list appears; pick the case. |
 
+Each row says **whose file it is**, and which case it belongs to when it belongs to one. Two people
+can easily upload a recording with the same name, and on **All media** you are looking at
+everybody's at once.
+
 Picking a case that had more than one visit adds a third list, so you can narrow to a single
 night's material rather than everything the case has ever produced. Leave it on **The whole case**
 to see all of it.
@@ -104,13 +110,17 @@ refreshes the list on its own.
 
 Bringing a file over is deliberately **two clicks**:
 
-1. **Click the file once.** It downloads to your browser and is kept there. A tick appears on the
-   card. Nothing has been added to your video yet — this step is just fetching, and it does not
-   need the engine.
-2. **Click it again.** Now it is decoded and placed on the timeline.
+1. **Click the file once.** It downloads to your browser and is kept there. The card then reads
+   **Click to add**. Nothing has been added to your video yet — this step is just fetching, and it
+   does not need the engine.
+2. **Click it again.** Now it is decoded, put in the matching bin — Video, Audio or Images — and
+   placed on the timeline. This step does need the engine, so start it first.
 
 The split exists because downloading a large file and committing it to your edit are different
 decisions. You can pull several files down while you think, and place them later.
+
+If your editor has audio tracks switched off, an audio file still arrives in the **Audio** bin and
+the import row says why it was not placed. It is there for whenever you want it.
 
 ![The import summary, listing what came in](/help/media/using-the-video-editor/import-complete.png)
 *Each import reports what it found — length and frame size — and waits for you to dismiss it.*

@@ -45,4 +45,26 @@ public record UploadFileRecord
 
     /// <summary>Set when this row is an archived prior version kept by a replace (item #6 phase 3).</summary>
     public Guid? ArchivedFromUploadFileId { get; init; }
+
+    // ── Who and what this file belongs to (V-3, site evaluation 2026-09-06) ──
+    // Filled by the media-library listing only, and null everywhere else. The video editor's
+    // Server tab showed seven identical "test-audio.mp3" rows — other people's uploads, reachable
+    // through a shared group — with nothing to tell them apart. A file name is not an identity.
+    //
+    // Not mapped from the entity: both need a join, and every other consumer of this record would
+    // pay for them unread. The listing sets them after the map.
+
+    /// <summary>The person or group this file belongs to, for a listing that spans several.</summary>
+    public string? OwnerDisplayName { get; init; }
+
+    /// <summary>
+    /// The case this file is attached to, as its reference (<c>#2026-003</c>), or null.
+    /// </summary>
+    /// <remarks>
+    /// The first one, when a file reaches more than one case. A file belongs to a case three ways
+    /// — a link on its Files tab, evidence on a timeline entry, and a published video project —
+    /// and the point here is to tell two identically named rows apart, not to enumerate every
+    /// place a file appears.
+    /// </remarks>
+    public string? CaseReference { get; init; }
 }

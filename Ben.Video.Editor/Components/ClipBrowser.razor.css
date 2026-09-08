@@ -290,6 +290,35 @@
        is glance-able status, not an action — stays visible regardless of .bv-clip-card__actions'
        own opacity:0 default so the user can tell at a glance what they already have locally. */
     opacity: 1 !important;
+    gap: .25rem;
+}
+
+/* The word beside the tick. V-2: the tick alone said "something happened" and its only
+   explanation was a hover title, so somebody who had just watched a download finish went looking
+   in the bins and found nothing. The next step is a second click; this says so. */
+.bv-clip-card__cached-label {
+    font-size: .625rem;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--kendo-color-success, #4caf50);
+}
+
+/* Owner and case, under the file size on a Server-tab card (V-3). Dimmer than the size, and
+   clipped rather than wrapped: it identifies a row at a glance, and the full text is in its
+   title. */
+.bv-clip-card__provenance {
+    font-size: .625rem;
+    line-height: 1.2;
+    color: var(--kendo-color-subtle, #9aa0a6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* V-4: a bin card whose bytes are not here. The words already say so; this makes the card
+   findable in a grid of twenty without reading every line. */
+.bv-clip-card__meta--missing {
+    color: var(--kendo-color-warning, #f0ad4e);
 }
 
 /* ── Error banner ───────────────────────────────────────────────────────── */

@@ -606,7 +606,7 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.TrimmedDuration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.TrimmedDuration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
@@ -671,7 +671,7 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
@@ -750,7 +750,7 @@
                 // Info
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
@@ -1021,6 +1021,19 @@
                 __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", file.FileName); __builder.AddContent(seq++, file.FileName); __builder.CloseElement();
                 __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, file.FileSizeDisplay); __builder.CloseElement();
+                // V-3: whose it is, and which case it belongs to. The tab spans several people's
+                // files — the evaluation met seven rows all called test-audio.mp3 — and a file
+                // name is not an identity. Omitted entirely when the host knows neither, rather
+                // than printing an empty line.
+                if (file.Provenance is { } provenance)
+                {
+                    __builder.OpenElement(seq++, "span");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "class", "bv-clip-card__provenance");
+                    __builder.AddAttribute(seq++, "title", provenance);
+                    __builder.AddContent(seq++, provenance);
+                    __builder.CloseElement();
+                }
                 __builder.CloseElement();
 
                 // Actions
@@ -1049,14 +1062,25 @@
                 }
                 else if (cached)
                 {
-                    // Phase 150 — downloaded locally, not yet on the timeline. Click again to add.
+                    // Phase 150 — downloaded locally, not yet in the project. Click again to add.
+                    //
+                    // V-2: this was a bare tick whose only explanation was a hover title. The
+                    // evaluation downloaded a file twice, watched the progress bar finish, found
+                    // nothing anywhere, and reported "no message" — because the message was a
+                    // tooltip, and the next step was a second click nobody had been told about.
+                    // The word is on the card now.
                     __builder.OpenElement(seq++, "span");
                     __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "class", "bv-clip-card__cached-badge");
-                    __builder.AddAttribute(seq++, "title", "Downloaded locally — click to add to the timeline");
+                    __builder.AddAttribute(seq++, "title", "Downloaded to this browser — click the card to add it to the project");
                     __builder.OpenComponent<TelerikSvgIcon>(seq++);
                     __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Check);
                     __builder.CloseComponent();
+                    __builder.OpenElement(seq++, "span");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "class", "bv-clip-card__cached-label");
+                    __builder.AddContent(seq++, "Click to add");
+                    __builder.CloseElement();
                     __builder.CloseElement();
                 }
                 else
@@ -1671,6 +1695,18 @@
                     SourceFileSize    = print?.Size,
                     SourceContentHash = print?.Hash,
                 };
+                // V-2: the bin FIRST, and the bin every time.
+                //
+                // This whole method used to place a clip on the timeline and never put it in a
+                // bin, while the local-file import beside it did both. So a file brought in from
+                // the Server tab was on the timeline and absent from the bin that claims to list
+                // what the project has — and an audio file, on an editor with audio tracks
+                // switched off, went nowhere at all. That is what "the download finished and the
+                // file was nowhere" was.
+                //
+                // AddToBin is idempotent by clip Id, so this is safe on every path below.
+                Clips.AddToBin(clip);
+
                 // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
                 // the primary track AND computes its TimelinePosition — calling Clips.AddClip
                 // here too double-adds the same clip instance to the track's Items list.
@@ -1693,6 +1729,11 @@
                     SourceFileSize    = print?.Size,
                     SourceContentHash = print?.Hash,
                 };
+                // V-2, and this is the path the evaluation walked. The bin holds it whatever
+                // happens next, so the Audio bin stops saying "No audio yet" about a file the
+                // person just watched download.
+                Clips.AddToBin(audioClip);
+
                 // Without an audio track to land on, the clip would silently vanish —
                 // decoded and reported "done" but never placed anywhere. Create one
                 // on demand, same as the always-present default video track — but
@@ -1703,6 +1744,13 @@
                     audioClip.TimelinePosition = t.Items.Any() ? t.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
                     Clips.AddClipToTrack(t.Id, audioClip);
                 }
+                else
+                {
+                    // Said, not swallowed. The clip is in the bin and reachable; what did not
+                    // happen is the placing, and the reason is a setting rather than a fault.
+                    status.MetaText = $"{status.MetaText} · in the Audio bin — audio tracks are switched off in this editor";
+                }
+
                 await OnAudioClipAdded.InvokeAsync(audioClip);
             }
             else
@@ -1722,7 +1770,7 @@
 
                 var imgTrack = Clips.PrimaryVideoTrack;
                 var imgPos   = imgTrack.Items.Any() ? imgTrack.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
-                Clips.AddImageClip(new ImageClip
+                var imageClip = new ImageClip
                 {
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = 5.0, Width = libW, Height = libH,
@@ -1730,7 +1778,10 @@
                     SourceFileId      = file.Id,
                     SourceFileSize    = print?.Size,
                     SourceContentHash = print?.Hash,
-                });
+                };
+                // V-2, third of three: the Images bin was as empty as the other two.
+                Clips.AddToBin(imageClip);
+                Clips.AddImageClip(imageClip);
             }
             Update(status, ImportStage.Done, 100);
         }
@@ -2256,18 +2307,17 @@
     /// The count is what tells the bin apart from the edit. Without it, a card gives no clue
     /// whether it is already in use — which is the question anybody looking at a bin is asking.
     /// </remarks>
-    private string CardMeta(TrackItem source, double durationSeconds)
-    {
-        var used = Clips.TimesOnTimeline(source.Id);
-        var when = FormatDuration(durationSeconds);
-
-        return used switch
-        {
-            0 => when,
-            1 => $"{when} · on timeline",
-            _ => $"{when} · on timeline ×{used}",
-        };
-    }
+    /// <summary>
+    /// The line under a bin card's name. V-4: it now says when the media is missing.
+    /// </summary>
+    /// <remarks>
+    /// The wording lives in <see cref="BinCardState"/> so it can be tested — all three bins here
+    /// are raw RenderTreeBuilder code with nothing a test can reach.
+    /// </remarks>
+    private string CardMeta(TrackItem source, double durationSeconds) =>
+        BinCardState.Meta(FormatDuration(durationSeconds),
+                          Clips.TimesOnTimeline(source.Id),
+                          source.IsMediaMissing);
 
     private static string FormatDuration(double seconds)
     {
