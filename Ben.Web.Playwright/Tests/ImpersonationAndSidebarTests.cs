@@ -34,8 +34,12 @@ public class ImpersonationAndSidebarTests : BenTestBase
 
         var row = Main.Locator("tr", new() { HasTextString = "Sarah Mitchell" }).First;
         await Expect(row).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        // The impersonate control is the row's non-View action button.
-        await row.Locator("button.btn-warning, button[title*='mpersonate'], td:last-child button").Last.ClickAsync();
+        // BY ITS TITLE, and the first match. This used to be a three-way selector ending in
+        // `td:last-child button` with `.Last`, which resolves in document order — so it clicked the
+        // row's LAST action button. That is Delete this user. The test then failed on a banner that
+        // was never going to appear, and the reason it never deleted Sarah is that the delete asks
+        // first. A selector that can reach a destructive button by accident is not a selector.
+        await row.Locator("button[title='Impersonate this user']").First.ClickAsync();
 
         // Her world: the authenticated menu (not the signed-out list), her banner, no admin section.
         await Expect(Page.GetByText("Viewing as sarah.mitchell", new() { Exact = false }))

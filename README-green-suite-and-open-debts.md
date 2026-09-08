@@ -76,3 +76,27 @@ skips until that band exists, and enforces it again the moment it does.
 - `OrgRequests_Tab` is either fixed or understood and recorded.
 - The storage interface can remove an emptied directory, or the gap is written down as a decision
   rather than an omission.
+
+---
+
+## 2026-09-08 — the next eight, and where they went
+
+That branch got the suite from 27 failures to seven. The seven stayed, and an eighth joined them
+during the 2026-09-06 evaluation. All eight were fixed as **Phase 0 of that evaluation**, on
+`feature/site-eval-phase-0-green-suite`; the diagnosis of each is in
+`README-site-eval-phase-0-green-suite.md`.
+
+**Not one of the eight was a product defect.** Three were locators that reached the wrong control —
+including one that clicked Telerik's column filter toggle for weeks, and one that clicked *Delete
+this user* and only failed because the delete asks first. Two were the site telling the truth and
+the test not knowing it. One was a guided tour arriving on top of an older test. One was a page
+that had been deliberately retired. One was an ambiguity the page itself created.
+
+Two helpers came out of it, both on `BenTestBase`, both there so the next test does not relearn the
+trap: `GridCommand` for a Telerik row command button, and `SkipAnyTourAsync` for a page whose tour
+auto-launches. `ClickUntilUrlAsync` now says *why* a click never navigated instead of only that it
+did not.
+
+**Done: 480 passed, 0 failed, 41 skipped of 521** on a fresh database, 2026-09-08. The first
+bullet of "Done when" above is reached. The other two — `OrgRequests_Tab` and the storage
+interface's directory delete — are untouched and still open.

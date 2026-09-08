@@ -76,14 +76,28 @@ public class VideoEditorTests : BenTestBase
         await Expect(editorDiv).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
+    /// <summary>
+    /// <c>/video-editor</c> takes you to My Videos, and keeps working as an address.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert the page title was "Video Editor". The 2026-09-05 audit (site-9) retired
+    /// that page: it mounted the editor with no height-constrained ancestor, had no header, no
+    /// project list and no link from anywhere on the site, and My Videos does the same job
+    /// properly. What is left is a redirect, kept because the address is in the help, in people's
+    /// bookmarks and in this suite — so the redirect, not the title, is the contract worth holding.
+    /// </remarks>
     [Test]
-    public async Task VideoEditorPage_Authenticated_PageTitleIsVideoEditor()
+    public async Task VideoEditorPage_Authenticated_TakesYouToMyVideos()
     {
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/video-editor");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
 
-        await Expect(Page).ToHaveTitleAsync(new System.Text.RegularExpressions.Regex("Video Editor", System.Text.RegularExpressions.RegexOptions.IgnoreCase), new() { Timeout = 10_000 });
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/my-videos"),
+            new() { Timeout = 15_000 });
+        await Expect(Page).ToHaveTitleAsync(
+            new System.Text.RegularExpressions.Regex("My Videos", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+            new() { Timeout = 10_000 });
     }
 
     [Test]

@@ -32,7 +32,10 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" });
+        // Exact, because the page also carries a sentence linking to "public cases" at the same
+        // address; without it this is a strict-mode violation rather than a failed assertion, and
+        // it reads as the nav item being missing when the nav item is right there.
+        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases", Exact = true });
         await Expect(casesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

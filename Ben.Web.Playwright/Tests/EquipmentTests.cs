@@ -113,6 +113,13 @@ public class EquipmentTests : BenTestBase
             var makes = await OptionValuesAsync(selects.Nth(1));
             foreach (var make in makes)
             {
+                // The make list is re-rendered over the circuit when the category changes, so a
+                // value read a moment ago can be absent for a beat while the new list arrives.
+                // Selecting into that gap times out after 30 s with "did not find some options",
+                // which reads as a broken taxonomy rather than a list still on its way. Wait for
+                // the option to actually be there, and move on if this category has stopped
+                // offering it at all.
+                if (!await OptionIsPresentAsync(selects.Nth(1), make)) continue;
                 await selects.Nth(1).SelectOptionAsync(make);
                 if (!await PickFirstRealOptionAsync(selects.Nth(2))) continue;   // no models here
                 reached = true;
@@ -184,6 +191,18 @@ public class EquipmentTests : BenTestBase
     /// taxonomy data.
     /// </summary>
     /// <summary>The real (non-placeholder) option values of a select, once it is enabled.</summary>
+    /// <summary>Waits for one option to be present on a select that may still be re-rendering.</summary>
+    private async Task<bool> OptionIsPresentAsync(ILocator select, string value, int timeoutMs = 8_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if ((await OptionValuesAsync(select)).Contains(value)) return true;
+            await Task.Delay(150);
+        }
+        return false;
+    }
+
     private async Task<string[]> OptionValuesAsync(ILocator select)
     {
         await Expect(select).ToBeEnabledAsync(new() { Timeout = 8_000 });

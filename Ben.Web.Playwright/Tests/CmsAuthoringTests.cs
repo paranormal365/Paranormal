@@ -64,6 +64,11 @@ public class CmsAuthoringTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await WaitUntilLoadedAsync();
 
+        // The editor's tour auto-launches for anybody who has not dismissed it, which on a freshly
+        // seeded database is this seat. Its backdrop covers the toolbar, so every click below was
+        // intercepted and the test failed pointing at the modal that never opened.
+        await SkipAnyTourAsync();
+
         // ── Author it ────────────────────────────────────────────────────────
         var dialog = Page.Locator(".modal.show");
 
