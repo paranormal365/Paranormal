@@ -106,8 +106,10 @@ public struct EvidenceActions: Sendable {
     private func outcome(_ result: LoadResult<EmptyBody>) -> Result<Void, FeedActionError> {
         switch result {
         case .ok: .success(())
-        // The server's sentence survives. "Keeping your sessions private is part of a paid plan"
-        // tells somebody what to do; "couldn't remove that" does not.
+        // The server's sentence survives. "Publishing to a place's archive cannot be undone on
+        // this account" says what the rule is; "couldn't remove that" says nothing. That sentence
+        // deliberately names no plan and no price — it is shown here verbatim, and this app sells
+        // nothing (Guideline 3.1.1). See PaidPlan.WhyCannotKeepPrivateAsync.
         case .failed(let reason, _): .failure(.failed(reason: reason))
         case .sessionEnded: .failure(.sessionEnded)
         case .rateLimited(let after): .failure(.rateLimited(retryAfter: after))

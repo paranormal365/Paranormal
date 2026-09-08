@@ -125,7 +125,7 @@ public class MyEvidenceArchiveTests : BenTestBase
         // Either it worked (this account turned out to be covered by a plan) or the refusal
         // explains itself. What must never happen is a bare failure with no guidance.
         var removed = Main.GetByText("Removed from the place's archive");
-        var refused = Main.GetByText("part of a paid plan");
+        var refused = Main.GetByText("cannot be undone on this account");
 
         await Expect(removed.Or(refused)).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }

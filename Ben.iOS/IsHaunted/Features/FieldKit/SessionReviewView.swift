@@ -151,11 +151,16 @@ struct SessionReviewView: View {
                             .foregroundStyle(Theme.fog)
                     }
                 } else {
-                    // The upsell names exactly what it withholds. A paywall that hides the SHAPE
-                    // of what you would get teaches people to assume it is nothing.
-                    Text("A paid plan compares this session with theirs — your flagged moments per "
-                       + "hour against what this place typically gives people, and whether this "
-                       + "night stood out.")
+                    // Names exactly what it withholds. Hiding the SHAPE of what you would get
+                    // teaches people to assume it is nothing.
+                    //
+                    // It deliberately does NOT say "a paid plan". Nothing in this app sells
+                    // anything, and App Review reads wording that points at a purchase made
+                    // outside the app under Guideline 3.1.1 — so the sentence describes what this
+                    // account does, and says nothing about how that could change.
+                    Text("This account doesn't compare your session with everyone else's here: "
+                       + "your flagged moments per hour against what this place typically gives "
+                       + "people, and whether this night stood out.")
                         .font(.caption)
                         .foregroundStyle(Theme.fog)
                 }

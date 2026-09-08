@@ -95,8 +95,12 @@ public sealed class PaidPlanTests
         var why = await PaidPlan.WhyCannotKeepPrivateAsync(db, user, default);
 
         Assert.NotNull(why);
-        // The sentence has to sell the plan, not just refuse — it is the paywall's own words.
-        Assert.Contains("paid plan", why);
+        // It has to say WHY, not just refuse. And it must NOT name a plan: this sentence is
+        // surfaced verbatim by the iPhone app, where wording that points at a purchase made
+        // outside the app is a Guideline 3.1.1 risk. The website explains the plan in its own
+        // markup instead (MyFieldSessions.razor), which no phone renders.
+        Assert.Contains("cannot be undone on this account", why);
+        Assert.DoesNotContain("plan", why);
     }
 
     [Fact]
