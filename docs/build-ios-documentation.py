@@ -222,6 +222,49 @@ the photographs and the audio are one record, not five.</p>
 stamped with the time and the current room.</p>
 """),
 
+    ("A note as it is typed", "46-note-typed", """
+<p>Typing is the fallback where the device cannot transcribe offline, and the correction path
+where it can — a transcription is a machine's best guess, and the person who spoke is the
+authority on what they said. Saving drops the note onto the session timeline at the current
+moment.</p>
+"""),
+
+    ("EVP", "47-evp-mode", """
+<p>Question, silence, question — the shape of an EVP session, and this screen is built for doing it
+in the dark while talking to a room: two controls, both large enough to hit without looking.</p>
+
+<p><b>The wait is what is being recorded, not the question.</b> Marking only the moment somebody
+spoke would leave a reviewer hunting through hours of tape; bracketing the silence after each
+question turns the same recording into a list of places to listen. The questions and their brackets
+go onto the session timeline, so the replay puts them back beside the readings taken at the same
+moment.</p>
+"""),
+
+    ("The sentry", "50-sentry-panel", """
+<p>The sentry watches while nobody is looking at the phone and marks the timeline by itself. Four
+triggers, each switched on separately: magnetic field and sound, measured as a departure from the
+base level; the device being moved, which is what matters when a tripod is disturbed; and movement
+in the camera's view. It can also start a clip when something fires.</p>
+
+<p>Arming is refused, in words, when it would be pointless — a magnetic threshold with no base
+level to measure against is not a threshold, and scene motion needs the camera switched on.</p>
+"""),
+
+    ("Armed", "51-sentry-armed", """
+<p>Every mark the sentry makes carries its own kind — <code>sentry_emf</code>,
+<code>sentry_sound</code>, <code>device_moved</code>, <code>scene_motion</code> — so a machine's
+notice is never mistaken for a person's on replay. Who noticed a thing is part of the evidence.</p>
+"""),
+
+    ("Blackout", "52-blackout", """
+<p>The screen off, while everything underneath keeps running. A lit phone in a dark room reaches
+the recording, the room and everyone in it, so this takes the brightness to nothing and covers the
+screen in black while the session keeps logging.</p>
+
+<p>It is deliberately not a lock: a single tap anywhere brings it back, because fumbling for a
+specific control in the dark is exactly what somebody cannot do.</p>
+"""),
+
     ("How a recording is replayed — and why", None, """
 <p class="rule"><b>The Field Kit records every reading, continuously, for the whole session — and
 selecting a past session plays the entire recording back as it happened. This is deliberate and it

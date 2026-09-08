@@ -19,10 +19,38 @@ final class DeveloperDocCaptureTests: XCTestCase {
         }
         continueAfterFailure = true   // one unreachable screen must not cost the whole set
         app = XCUIApplication()
-        let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com"
-        let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
-        app.launchArguments += ["-autoSignIn", "\(email):\(password)", "-fieldKitFakeSensors"]
+        app.launchArguments += Self.baseArguments + ["-autoSignIn", Self.credentials]
         app.launch()
+    }
+
+    /// A SEEDED account by default.
+    ///
+    /// These documents state on their first page that every account, case and recording in them is
+    /// simulated, so the default has to be somebody the seeders create — not the live site's
+    /// administrator, which is what this used to be, paired unworkably with the seeded client's
+    /// password.
+    private static var captureEmail: String {
+        ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "daniel.park@benco.dev"
+    }
+
+    private static var credentials: String {
+        "\(captureEmail):\(TestSecrets.required("BEN_CLIENT_PASSWORD"))"
+    }
+
+    /// The arguments EVERY launch in this capture needs, including the two relaunches below.
+    ///
+    /// `-apiBaseURL` is the important one and it is deliberately not sticky: `APIEnvironmentStore`
+    /// reads it per launch and never saves it, so a relaunch that rebuilds `launchArguments` from
+    /// scratch silently falls back to the app's shipped address — **production**. These documents
+    /// say on their first page that every account, case and recording in them is simulated, so a
+    /// capture that could reach the live site would make that sentence untrue. Set
+    /// `TEST_RUNNER_BEN_API_BASE_URL=http://localhost:5252` and point it at the seeded stack.
+    private static var baseArguments: [String] {
+        var args = ["-fieldKitFakeSensors"]
+        if let base = ProcessInfo.processInfo.environment["BEN_API_BASE_URL"], !base.isEmpty {
+            args += ["-apiBaseURL", base]
+        }
+        return args
     }
 
     private func snap(_ name: String) {
@@ -64,14 +92,56 @@ final class DeveloperDocCaptureTests: XCTestCase {
         return false
     }
 
+    /// Waits until the sign-in from `-autoSignIn` has actually landed in the Keychain.
+    ///
+    /// It used to be `settle(6)`, a guess. On a cold first launch against a locally seeded API the
+    /// sign-in took longer than that, the terminate below cut it off, and the whole capture ran
+    /// signed out — thirteen screenshots of an app nobody was using, and five sections missing
+    /// with nothing to say why. Signed in is the precondition for every screen after this one, so
+    /// it is waited for and, if it never comes, said out loud.
+    private func waitUntilSignedIn() {
+        if confirmSignedIn(as: Self.captureEmail) { return }
+
+        // Whoever the simulator was signed in as LAST is still signed in: the Keychain survives a
+        // reinstall, and `SessionStore.signIn` returns immediately unless the state is signedOut,
+        // so `-autoSignIn` is a no-op over a restored session. A whole capture once came out as a
+        // different person's account without a word about it. Sign that session out and ask again.
+        if app.descendants(matching: .any)["Sign out"].firstMatch.exists {
+            app.descendants(matching: .any)["Sign out"].firstMatch.tap()
+            settle(3)
+            app.terminate()
+            app.launchArguments = Self.baseArguments + ["-autoSignIn", Self.credentials]
+            app.launch()
+            settle(4)
+            if confirmSignedIn(as: Self.captureEmail) { return }
+        }
+
+        XCTFail("Signing in as \(Self.captureEmail) never landed — every signed-in screen below "
+                + "would be captured as somebody else, or signed out. Check BEN_CLIENT_EMAIL / "
+                + "BEN_CLIENT_PASSWORD and that BEN_API_BASE_URL is serving them.")
+    }
+
+    /// Opens Profile and waits for the account row to name the person we asked for.
+    ///
+    /// By LABEL, not by identifier. `descendants(...)[key]` matches identifiers only, and the
+    /// account row is a plain `LabeledContent` with none — so the subscript form could never match
+    /// and reported a good sign-in as a failure while the capture went on working perfectly.
+    private func confirmSignedIn(as email: String) -> Bool {
+        guard AppNavigator.openSection("Profile", in: app, timeout: 20) else { return false }
+        let row = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", email))
+            .firstMatch
+        return row.waitForExistence(timeout: 45)
+    }
+
     func testCaptureTheDocumentationSet() {
-        settle(6)                       // let -autoSignIn land its token in the Keychain
+        waitUntilSignedIn()
 
         // Relaunch signed in FROM THE KEYCHAIN, the way a real session starts. Without it the
         // stores fetch while sign-in is still in flight and cache their anonymous answers —
         // every signed-in surface then screenshots as empty.
         app.terminate()
-        app.launchArguments = ["-fieldKitFakeSensors"]
+        app.launchArguments = Self.baseArguments
         app.launch()
         settle(5)
 
@@ -144,13 +214,25 @@ final class DeveloperDocCaptureTests: XCTestCase {
 
                     if tap("open-note") {
                         settle(2); snap("45-note-composer")
-                        let note = app.textViews.matching(identifier: "note-text").firstMatch
-                        if note.waitForExistence(timeout: 5) {
+                        // A TEXT FIELD, not a text view: `note-text` is a TextField with a vertical
+                        // axis, which XCUITest reports as a textField. Asking for textViews found
+                        // nothing, so nothing was typed, Save stayed disabled, and the composer
+                        // stayed open over everything after it — six sections of this document
+                        // went missing that way, silently.
+                        let note = app.descendants(matching: .any)
+                            .matching(identifier: "note-text").firstMatch
+                        if note.waitForExistence(timeout: 8) {
                             note.tap(); note.typeText("Three knocks, low on the wall.")
                             settle(1); snap("46-note-typed")
                         }
-                        if !tap("save-note") { tapLabel("Save the note") }
+                        if !tap("save-note") { _ = tapLabel("Save the note") }
                         settle(2)
+                        // Whatever happened, leave the sheet. A composer left up hides the Stop
+                        // button, and Stop is the door to the session review.
+                        if app.descendants(matching: .any)["save-note"].firstMatch.exists {
+                            _ = tapLabel("Cancel")
+                            settle(1)
+                        }
                     }
 
                     if tap("open-evp") {
@@ -187,7 +269,7 @@ final class DeveloperDocCaptureTests: XCTestCase {
         // session is already persisted, and the remaining screens are reached from the root.
         // Without this, five sections of the document came out with no picture at all.
         app.terminate()
-        app.launchArguments = ["-fieldKitFakeSensors"]
+        app.launchArguments = Self.baseArguments
         app.launch()
         settle(5)
 
