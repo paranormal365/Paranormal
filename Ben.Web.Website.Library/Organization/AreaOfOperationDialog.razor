@@ -15,7 +15,8 @@
                         <input id="areaofoperationdialog-center-location-use-a-af4a" type="text" class="form-control" placeholder="e.g. Nashville, TN"
                                value="@_locationQuery"
                                @oninput="@(e => OnLocationQueryChanged(e.Value?.ToString() ?? string.Empty))" />
-                        <button type="button" class="btn btn-secondary" @onclick="GeocodeLookup" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_locationQuery)))">
+                        @* W-A12: gated on _isBusy only — see the comment on GeocodeLookup. *@
+                        <button type="button" class="btn btn-secondary" id="area-look-up" @onclick="GeocodeLookup" disabled="@_isBusy">
                             Look Up
                         </button>
                     </div>
@@ -109,9 +110,22 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Looks the place up, or says why it did not.
+    /// </summary>
+    /// <remarks>
+    /// W-A12: this button used to be disabled while the box looked empty, and the box binds on
+    /// input — so "empty" lagged the keyboard by a circuit round trip and a click inside that
+    /// window was discarded by the browser without a word. The early return was already here; it
+    /// now leaves a sentence behind rather than nothing.
+    /// </remarks>
     private async Task GeocodeLookup()
     {
-        if (string.IsNullOrWhiteSpace(_locationQuery)) return;
+        if (string.IsNullOrWhiteSpace(_locationQuery))
+        {
+            _geocodeError = "Type a city and state first, like Nashville, TN.";
+            return;
+        }
         _isBusy = true; _geocodeError = null; _geocodedLat = null; _geocodedLon = null;
         StateHasChanged();
         try

@@ -91,7 +91,12 @@
                         <input type="text" id="req-zip" class="form-control" placeholder="37201" @bind="@_zipCode" @bind:event="oninput" />
                     </div>
                     <div class="col-12">
-                        <button type="button" class="btn btn-secondary" @onclick="GeocodeAddress" disabled="@(!(!_verifying && CanGeocode))"><BenIcon Name="map-pin" Class="me-1" />
+                        @* W-A12: gated on _verifying only. "The address is incomplete" is the
+                           server's opinion of fields that bind on oninput, so it is one round trip
+                           behind the keyboard — and a click landing in that window was discarded
+                           by the browser on a still-disabled button, silently. GeocodeAddress says
+                           what is missing instead. *@
+                        <button type="button" class="btn btn-secondary" id="req-verify-address" @onclick="GeocodeAddress" disabled="@_verifying"><BenIcon Name="map-pin" Class="me-1" />
                             @(_verifying ? "Looking up…" : "Verify Address")
                         </button>
                         @* W-R1: the button used to give no sign it was working, and Next was
@@ -577,6 +582,13 @@
     // ── Geocoding ─────────────────────────────────────────────────────────────
     private async Task GeocodeAddress()
     {
+        // W-A12: the refusal the disabled attribute used to make, made here where it can speak.
+        if (!CanGeocode)
+        {
+            _geocodeError = "Fill in the street, city, state and ZIP first.";
+            return;
+        }
+
         _geocodeError = null;
         // Its own flag, not _isBusy: Next reads _isBusy, and sharing one made "verify then click
         // Next" a race with the lookup that had already finished.

@@ -43,11 +43,25 @@ var builder = WebApplication.CreateBuilder(args);
 // exception this middleware sees still logs in full. This lives in code because it is a
 // correctness rule about not contradicting ourselves, not a verbosity preference — a config
 // setting that silently turned it off would bring the noise straight back.
+// W-S7 of the 2026-09-06 evaluation: the same "No confirmation message" error printed twice per
+// sign-up, and was read as two failed sends. It was one send and two console sinks — and the
+// second one was an accident of how .NET merges configuration.
+//
+// `Serilog:WriteTo` is an ARRAY, and configuration merges arrays by INDEX, merging the object at
+// each index key by key. appsettings.Development.json declares [Console, MSSqlServer]; this
+// project's appsettings.json declared [MSSqlServer] alone. So index 0 came out as a hybrid —
+// Name=Console from Development, Args from the base file, including
+// restrictedToMinimumLevel=Error. That sink printed errors and nothing else, on top of the
+// console this file used to add unconditionally. An Error therefore appeared twice and a Warning
+// once, which is exactly the shape of the report.
+//
+// appsettings.json now lists Console at index 0 and MSSqlServer at index 1, matching the
+// Development file, so each index merges with its own kind and configuration owns the console
+// outright. Nothing is added here. See the _comment_WriteTo note in appsettings.json, and
+// SerilogSinkOrderTests, which fails if the two files stop agreeing.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Filter.ByExcluding(Ben.Data.WebApi.Logging.LogNoise.IsDuplicateOfAHandledMissingFile)
-    .WriteTo.Console(
-        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}")
     .CreateLogger();
 
 builder.Host.UseSerilog();
@@ -341,6 +355,30 @@ if (entraEnabled)
                 ValidateIssuer   = !multiTenant,
                 ValidateLifetime = true,
                 NameClaimType    = "preferred_username",
+            };
+
+            // W-A16: decline a token this handler could not own, rather than failing on it.
+            //
+            // The default policy below lists both schemes, and a policy listing two schemes runs
+            // BOTH — so every ordinary sign-in's Identity bearer token was handed here, reported
+            // as "not well formed", and logged twice at Warning. 188,000 lines in one afternoon,
+            // for a request that succeeded.
+            //
+            // NoResult, not Fail: the handler is saying "this is not mine", which is the truth.
+            // Failing would be a claim that the token is bad, and it is not — the Identity
+            // handler is about to accept it.
+            jwt.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var header = context.Request.Headers.Authorization.ToString();
+                    if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                        && !Ben.Data.WebApi.Authorization.BearerTokenShape.CouldBeAJwt(header["Bearer ".Length..].Trim()))
+                    {
+                        context.NoResult();
+                    }
+                    return Task.CompletedTask;
+                },
             };
         });
 }

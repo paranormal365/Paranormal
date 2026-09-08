@@ -342,7 +342,22 @@ rows out of the public catalogue; W-SA3 the dashboard sentence; W-A14 published 
 re-publish; W-O2 Settings anchors; W-M3 the Functional roles column; W-P4 the leak warning shown
 before Save. Help screenshots re-captured wherever a screen changed.
 
-### Phase 5 — Server hygiene (S)
+### Phase 5 — Server hygiene (S) — **BUILT 2026-09-07**
+
+Branch `feature/site-eval-phase-5-server-hygiene`, with its own README. Closed by this phase:
+W-A16, W-S7, C1, W-A12. **No migration.**
+
+Four of the five were not what their line said. **W-A16** is a policy listing two authentication
+schemes, which runs both — measured at four warning lines per request, zero after the fix.
+**W-S7** was a configuration-merge trap, not two sends: `Serilog:WriteTo` is an array, .NET merges
+arrays by index and merges each entry key by key, so index 0 came out as a console carrying the
+SQL sink's errors-only restriction. **C1** was already fixed in the code; what was missing was the
+Entra path's test and a guard for the next account-creating path. **W-S6 does not reproduce** —
+one circuit, kept across fourteen navigations — so it was not the root of W-A12. **W-A12 is real**
+and its cause is a commit button disabled by a field whose emptiness is the server's opinion, one
+circuit round trip behind the keyboard. Fifty-three other buttons gate the same way and are left,
+with the reason, in the README.
+
 W-A16: the Entra scheme stops logging on Identity bearer tokens (a challenge scheme selector, or
 the Entra handler's `ForwardDefault`); W-S7 the duplicate console line; C1 every account-creating
 path calls `UserHandleService.AllocateAsync` (admin create, case invite, event magic link) with a
