@@ -224,6 +224,12 @@ public sealed class CaseReportController : BenControllerBase
             .FirstOrDefaultAsync(r => r.Id == id && r.CaseId == caseId, ct);
         if (report is null) return NotFound();
 
+        // W-A14: a second publish is a re-publish, and the client is told so in those words. The
+        // endpoint always allowed this; nothing in the editor ever offered it, so a group that
+        // corrected a published report had no way to say they had. The message is the whole
+        // point — a client who was sent a document is entitled to know it changed.
+        var isRepublish = report.Status == CaseReportStatus.Published && report.PublishedAt is not null;
+
         report.Status               = CaseReportStatus.Published;
         report.PublishedAt          = DateTime.UtcNow;
         report.PublishedByAppUserId = userId;
@@ -245,7 +251,9 @@ public sealed class CaseReportController : BenControllerBase
             Id                 = Guid.NewGuid(),
             CaseId             = caseId,
             AuthorAppUserId    = userId,
-            Body               = $"Your investigation report has been published: {report.Title}. You can view and download it from your case page.",
+            Body               = isRepublish
+                ? $"Your investigation report has been updated: {report.Title}. The version on your case page is the current one."
+                : $"Your investigation report has been published: {report.Title}. You can view and download it from your case page.",
             SenderSide         = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient     = false,
             IsReadByOrg        = true,
@@ -295,6 +303,7 @@ public sealed class CaseReportController : BenControllerBase
         };
         db.CaseReportSections.Add(section);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return Ok(new CaseReportSectionDto(section.Id, section.CaseReportId, section.SortOrder, section.Title, section.Body, section.SectionType, [], []));
     }
 
@@ -314,6 +323,7 @@ public sealed class CaseReportController : BenControllerBase
 
         section.Title = request.Title.Trim(); section.Body = request.Body?.Trim(); section.SectionType = request.SectionType;
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return Ok(ToSectionDto(section, await ReadoutsAsync(section.FieldSessions, ct)));
     }
 
@@ -329,6 +339,7 @@ public sealed class CaseReportController : BenControllerBase
         if (section is null) return NotFound();
         db.CaseReportSections.Remove(section);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return NoContent();
     }
 
@@ -351,6 +362,7 @@ public sealed class CaseReportController : BenControllerBase
         };
         db.CaseReportSectionFiles.Add(link);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return Ok(new CaseReportSectionFileDto(link.Id, file.Id, file.FileName, file.ContentType, file.FileSize, link.Caption, link.SortOrder));
     }
 
@@ -365,6 +377,7 @@ public sealed class CaseReportController : BenControllerBase
         if (link is null) return NotFound();
         db.CaseReportSectionFiles.Remove(link);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return NoContent();
     }
 
@@ -432,6 +445,7 @@ public sealed class CaseReportController : BenControllerBase
         {
             existing.Caption = request.Caption?.Trim();
             await db.SaveChangesAsync(ct);
+            await TouchReportAsync(db, id, ct);
             return Ok(new CaseReportSectionFieldSessionDto(
                 existing.Id, session.Id, session.LocationLabel, session.RecordedByName,
                 session.StartedAt, session.EndedAt, session.ReadingCount, session.MarkerCount,
@@ -449,6 +463,7 @@ public sealed class CaseReportController : BenControllerBase
         };
         db.CaseReportSectionFieldSessions.Add(link);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
 
         return Ok(new CaseReportSectionFieldSessionDto(
             link.Id, session.Id, session.LocationLabel, session.RecordedByName,
@@ -471,6 +486,7 @@ public sealed class CaseReportController : BenControllerBase
         // Removes the CITATION only. The session, its document and its recordings are untouched.
         db.CaseReportSectionFieldSessions.Remove(link);
         await db.SaveChangesAsync(ct);
+        await TouchReportAsync(db, id, ct);
         return NoContent();
     }
 
@@ -544,11 +560,36 @@ public sealed class CaseReportController : BenControllerBase
             ? Task.FromResult(true)
             : _security.MayAsync(GetCurrentUserId(), orgId, OrganizationPermissionArea.Cases, action, ct);
 
+    /// <summary>
+    /// Marks the report itself as changed, whatever part of it was actually edited.
+    /// </summary>
+    /// <remarks>
+    /// <para>W-A14 of the 2026-09-06 evaluation: a published report stayed fully editable and
+    /// nothing said so. The client had been sent a document and was reading a live PDF, so every
+    /// later edit reached them silently — no notice on the case board, no new date, no record of
+    /// what they had actually been given.</para>
+    ///
+    /// <para>Only the report row's own Update touched DateUpdated before this. A report IS its
+    /// sections, and rewriting a section is the ordinary edit — so an "edited since published"
+    /// flag built on the old behaviour would have been blind to almost every case it exists for.
+    /// Every mutating endpoint here calls this, including the ones that change a section's files
+    /// or its cited field sessions.</para>
+    /// </remarks>
+    private async Task TouchReportAsync(BenDataContext db, Guid reportId, CancellationToken ct)
+    {
+        var report = await db.CaseReports.FirstOrDefaultAsync(r => r.Id == reportId, ct);
+        if (report is null) return;
+        report.DateUpdated        = DateTime.UtcNow;
+        report.UpdatedByAppUserId = GetCurrentUserId();
+        await db.SaveChangesAsync(ct);
+    }
+
     private static CaseReportDetail ToDetail(CaseReport r, IReadOnlyDictionary<Guid, string?> readouts) => new(
         r.Id, r.CaseId, r.Title, r.Summary, r.Conclusion, r.Status,
         r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated,
         r.Sections.OrderBy(s => s.SortOrder).Select(s => ToSectionDto(s, readouts)).ToList(),
-        r.IsPublicSummaryVisible);
+        r.IsPublicSummaryVisible,
+        r.DateUpdated);
 
     private static CaseReportSectionDto ToSectionDto(CaseReportSection s, IReadOnlyDictionary<Guid, string?> readouts) => new(
         s.Id, s.CaseReportId, s.SortOrder, s.Title, s.Body, s.SectionType,
@@ -639,6 +680,13 @@ public sealed record CaseReportSummary(
 /// <param name="IsPublicSummaryVisible">
 /// The group has switched this report's summary onto the public case page (W-P3).
 /// </param>
+/// <param name="DateUpdated">
+/// When the report was last changed in any way, including its sections.
+/// <para>W-A14: paired with <c>PublishedAt</c>, this is how the editor knows a published report
+/// has been edited since the client was sent it. Every mutating endpoint on this controller
+/// touches it — see <c>TouchReportAsync</c> — because a report is its sections, and a report
+/// whose only change was a rewritten section is exactly the case that matters.</para>
+/// </param>
 public sealed record CaseReportDetail(
     Guid                                  Id,
     Guid                                  CaseId,
@@ -650,7 +698,8 @@ public sealed record CaseReportDetail(
     DateTime?                             PublishedAt,
     DateTime                              DateCreated,
     IReadOnlyList<CaseReportSectionDto>   Sections,
-    bool                                  IsPublicSummaryVisible = false);
+    bool                                  IsPublicSummaryVisible = false,
+    DateTime?                             DateUpdated = null);
 
 public sealed record CaseReportSectionDto(
     Guid                                       Id,

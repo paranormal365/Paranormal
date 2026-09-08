@@ -777,6 +777,22 @@ public abstract class BenTestBase : PageTest
     protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
 
     /// <summary>
+    /// The typing surface of the site's rich-text box — one place that knows its shape.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two fixtures each carried <c>Page.FrameLocator(".k-editor iframe").Locator("body")</c>,
+    /// which was right while the editor ran in Telerik's default Iframe mode. The 2026-09-06
+    /// evaluation's W-R3 moved every editor on the site to <c>EditMode.Div</c> so the content
+    /// inherits the page's font, and there is no longer an iframe to reach into — both fixtures
+    /// then timed out waiting thirty seconds for an element that will never exist, in tests whose
+    /// subject was a client request and an org message.</para>
+    ///
+    /// <para>Type into what this returns; never set its value from script. Setting an editor's
+    /// value from script updates the DOM without ever reaching the bound C# field.</para>
+    /// </remarks>
+    protected ILocator EditorBody => Page.Locator(".k-editor [contenteditable='true']").First;
+
+    /// <summary>
     /// Opens the header's profile menu, which is where the new site keeps the signed-in email and
     /// the Sign Out button. The original showed both directly in the app bar, so this is a no-op
     /// there — it only clicks when the menu's contents are not already visible.

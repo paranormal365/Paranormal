@@ -14,10 +14,33 @@ else
     @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
     @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
 
+    @* ── W-O2 (site evaluation 2026-09-06) ─────────────────────────────────
+       Settings is one very long page: billing, promotion, attribution, address display, media
+       privacy, group kind, walking tours, the starting role, event types, the title ladder,
+       duties and the eligibility matrix. Everything on it belongs here — it is the group's own
+       configuration — but an owner who came to change one thing had to scroll past eleven others
+       to find out whether it was even on this page.
+
+       An index, not tabs. Tabs would hide ten sections to show one and break the reading of a
+       page whose whole job is "here is everything you can set"; the anchors leave the page intact
+       and answer "is it here, and where". *@
+    <nav class="mb-3" aria-label="Settings sections">
+        <div class="d-flex flex-wrap gap-2 small">
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-billing">Billing</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-promote">Promotion</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-attribution">Feed attribution</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-group">Group &amp; addresses</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-event-types">Event types</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-member-levels">Member titles</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-duties">Duties</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-duty-matrix">Who can do what</a>
+        </div>
+    </nav>
+
     @* The door to billing — its own page, not a card here: a payment flow, plan, history and
        receipts are a manage-everything surface (pages-over-windows), and half of it was
        write-only until the page existed. *@
-    <div class="card mb-3">
+    <div class="card mb-3" id="settings-billing">
         <div class="card-body d-flex align-items-center gap-3">
             <BenIcon Name="credit-card" Class="fs-4 text-success" />
             <div class="flex-grow-1">
@@ -29,7 +52,7 @@ else
     </div>
 
     @* Item 166 W3: the door to the promotion wizard. *@
-    <div class="card mb-3">
+    <div class="card mb-3" id="settings-promote">
         <div class="card-body d-flex align-items-center gap-3">
             <BenIcon Name="star" Class="fs-4 text-warning" />
             <div class="flex-grow-1">
@@ -42,7 +65,7 @@ else
 
     @* Item 186 F7: the door to the feed-attribution queue — a link always shows something,
        so this leads to the page's own honest empty state rather than hiding until needed. *@
-    <div class="card mb-3">
+    <div class="card mb-3" id="settings-attribution">
         <div class="card-body d-flex align-items-center gap-3">
             <BenIcon Name="film" Class="fs-4 text-info" />
             <div class="flex-grow-1">
@@ -54,9 +77,13 @@ else
         </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="settings-group">
         <div class="card-body">
-            <h6 class="card-title mb-3">Address Display Features</h6>
+            @* The heading said "Address Display Features" while the card also held media privacy,
+               the group's kind, walking tours and the starting role — three of which arrived after
+               it was written. A heading that names a third of what is under it is how a section
+               becomes unfindable. *@
+            <h6 class="card-title mb-3">Group settings</h6>
             <div class="row g-3">
                 <div class="col-12 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="set-map" @bind="@_showAddressMap" />
@@ -182,14 +209,14 @@ else
 
     @* Loads and saves independently of the settings above — its own permission failure has no
        business blocking the address toggles. *@
-    <OrgCalendarEventTypesManager OrgId="@OrgId" />
+    <div id="settings-event-types"><OrgCalendarEventTypesManager OrgId="@OrgId" /></div>
 
-    <OrgMemberLevelsManager OrgId="@OrgId" />
+    <div id="settings-member-levels"><OrgMemberLevelsManager OrgId="@OrgId" /></div>
 
-    <OrgInvestigationDutiesManager OrgId="@OrgId" />
+    <div id="settings-duties"><OrgInvestigationDutiesManager OrgId="@OrgId" /></div>
 
     @* Directly under the ladder and the duties, because it is about both (item 160). *@
-    <OrgDutyEligibilityMatrixManager OrgId="@OrgId" />
+    <div id="settings-duty-matrix"><OrgDutyEligibilityMatrixManager OrgId="@OrgId" /></div>
 }
 
 @code {

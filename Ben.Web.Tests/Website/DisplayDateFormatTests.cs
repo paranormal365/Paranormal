@@ -16,12 +16,30 @@ public class DisplayDateFormatTests
     [Fact]
     public void Date_IsMonthFirst() => Assert.Equal("08/04/2026", Sample.ToDisplayDate());
 
+    /// <summary>
+    /// The default carries no seconds. W-V1/W-A2/W-A10 of the 2026-09-06 evaluation: an event at
+    /// "03:00:00 PM", a visit at "01:40:33 PM", a group created at "09:12:47". Nobody types
+    /// seconds and no picker offers them, so the trailing pair is noise dressed as precision.
+    /// </summary>
     [Fact]
-    public void DateTime_IsDayFirstWithTwelveHourClockAndSeconds()
-        => Assert.Equal("08/04/2026 09:30:05 PM", Sample.ToDisplayDateTime());
+    public void DateTime_IsMonthFirstTwelveHourAndCarriesNoSeconds()
+        => Assert.Equal("08/04/2026 09:30 PM", Sample.ToDisplayDateTime());
 
     [Fact]
-    public void Time_IsTwelveHourWithSeconds() => Assert.Equal("09:30:05 PM", Sample.ToDisplayTime());
+    public void Time_IsTwelveHourAndCarriesNoSeconds()
+        => Assert.Equal("09:30 PM", Sample.ToDisplayTime());
+
+    /// <summary>
+    /// And the exception is still reachable, by a name long enough that nobody picks it by
+    /// accident. The audit log and the error log use it: there the gap between two entries is
+    /// the reason somebody opened the page.
+    /// </summary>
+    [Fact]
+    public void SecondsAreStillAvailableUnderALongerName()
+    {
+        Assert.Equal("08/04/2026 09:30:05 PM", Sample.ToDisplayDateTimeWithSeconds());
+        Assert.Equal("09:30:05 PM", Sample.ToDisplayTimeWithSeconds());
+    }
 
     [Fact]
     public void LongDate_IsWrittenOut() => Assert.Equal("August 4, 2026", Sample.ToDisplayDateLong());
@@ -37,7 +55,7 @@ public class DisplayDateFormatTests
     public void MorningTimes_KeepTheLeadingZeroAndReadAM()
     {
         var morning = new DateTime(2026, 8, 4, 9, 5, 0);
-        Assert.Equal("08/04/2026 09:05:00 AM", morning.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 09:05 AM", morning.ToDisplayDateTime());
     }
 
     [Fact]
@@ -45,14 +63,14 @@ public class DisplayDateFormatTests
     {
         // The classic 12-hour bug: "00" instead of "12".
         var midnight = new DateTime(2026, 8, 4, 0, 0, 0);
-        Assert.Equal("08/04/2026 12:00:00 AM", midnight.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 12:00 AM", midnight.ToDisplayDateTime());
     }
 
     [Fact]
     public void Noon_ReadsAsTwelvePM()
     {
         var noon = new DateTime(2026, 8, 4, 12, 0, 0);
-        Assert.Equal("08/04/2026 12:00:00 PM", noon.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 12:00 PM", noon.ToDisplayDateTime());
     }
 
     [Fact]

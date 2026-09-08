@@ -201,6 +201,12 @@
                 // Sections a SuperAdmin can switch off. The links go when the feature does — and
                 // the pages themselves refuse the URL through the same provider, so a hidden link
                 // is never the only thing standing between a visitor and a disabled section.
+                // W-V1 of the 2026-09-06 evaluation: /events is public, it is the one page a
+                // stranger can reach that shows real groups doing real things on a real date, and
+                // nothing anywhere linked to it. It was reachable by typing the URL.
+                if (Features.IsOn(SiteFeatures.Events))
+                    main.Add(new NavItem("What's On", "calendar", "/events"));
+
                 if (Features.IsOn(SiteFeatures.Equipment))
                     main.Add(new NavItem("Equipment", "tool", "/equipment-catalog"));
 
@@ -219,15 +225,29 @@
                 // These two are checked constantly rather than navigated to, and a thing you look
                 // at every few minutes should not be behind a disclosure triangle. Everything else
                 // below is a place you go on purpose, which is what a group is for.
+                // W-CL3 of the 2026-09-06 evaluation: this badged two of the eight buckets while
+                // calling itself "Notifications", so a client read 6 here, 1 on the bell and 1 on
+                // the page — three numbers, one word, all of them honest about a different
+                // question. It now counts what the bell counts and what the page lists, because
+                // all three read NotificationRows.
                 main.Add(new NavItem("Notifications",     "bell",        "/notifications",
-                                     Combine(s.SystemMessages, s.PendingPermissionRequests),
+                                     new NotificationBucket(NotificationRows.TotalFor(s),
+                                                            NotificationRows.OldestFor(s)),
                                      badgeNoun: "unread notifications"));
                 // Count of groups, not unread messages — Ben read the old badge as a count and he
                 // was right to: a bare number after a label reads as a quantity of that label.
                 // The unread counts still appear, broken out by bucket, in the bell popover.
-                main.Add(new NavItem("Organizations",     "globe",       "/organizations",
-                                     CountBadge(_organizationCount),
-                                     badgeNoun: "groups"));
+                //
+                // W-S5: only for somebody who is in one. A client who asked a group to come and
+                // look at their house has no groups, and this sent them to a page listing other
+                // people's. "Join a Group" under Community is the entry that is actually for
+                // them, and it stays. Their own groups are already linked by name under Home,
+                // so this entry adds nothing for a member with one or two either — it earns its
+                // place as the way to the roster and settings of the ones they are in.
+                if (_myOrgs.Count > 0)
+                    main.Add(new NavItem("Organizations",     "globe",       "/organizations",
+                                         CountBadge(_organizationCount),
+                                         badgeNoun: "groups"));
 
                 // ── My Work ───────────────────────────────────────────────────
                 main.Add(Group("My Work", "clipboard",
@@ -273,6 +293,11 @@
                                               badgeNoun: "posts that mention you"));
                 if (Features.IsOn(SiteFeatures.Publications))
                     community.Add(new NavItem("Publications", "book-open", "/publications"));
+
+                // Same page, signed in. Anyone may come along to a group's public event —
+                // including somebody who belongs to no group at all.
+                if (Features.IsOn(SiteFeatures.Events))
+                    community.Add(new NavItem("What's On", "calendar", "/events"));
 
                 community.Add(new NavItem("Join a Group", "map-pin", "/find"));
                 community.Add(new NavItem("Pricing", "dollar-sign", "/pricing"));

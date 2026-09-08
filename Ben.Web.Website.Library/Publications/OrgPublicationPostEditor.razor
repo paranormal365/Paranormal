@@ -107,7 +107,7 @@
                 <label class="form-label">Body</label>
                 @* @bind-Value, not OnChange: OnChange on TelerikEditor throws during render and
                    takes the circuit with it. Same trap as the scheduler's description field. *@
-                <TelerikEditor @bind-Value="@_bodyHtml" Height="60vh" />
+                <BenEditor @bind-Value="@_bodyHtml" Height="60vh" />
             </div>
         }
     </div>

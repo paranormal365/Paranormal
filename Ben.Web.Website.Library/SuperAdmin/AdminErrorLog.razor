@@ -40,7 +40,7 @@
             <div class="col-sm-4">
                 <div class="card h-100"><div class="card-body py-2">
                     <div class="text-secondary small">Oldest kept</div>
-                    <div>@(_summary.OldestUtc?.ToDisplayDateTime() ?? "—")</div>
+                    <div>@(_summary.OldestUtc?.ToDisplayDateTimeWithSeconds() ?? "—")</div>
                 </div></div>
             </div>
             <div class="col-sm-5">
@@ -131,7 +131,7 @@
             <div class="p-3 bg-body-tertiary border rounded ms-3">
                 <div class="row g-2 mb-2">
                     <div class="col-sm-2 text-secondary small">When</div>
-                    <div class="col-sm-10 small">@row.TimeStamp.ToDisplayDateTime() UTC</div>
+                    <div class="col-sm-10 small">@row.TimeStamp.ToDisplayDateTimeWithSeconds() UTC</div>
                     <div class="col-sm-2 text-secondary small">Application</div>
                     <div class="col-sm-10 small">@(row.Application ?? "—")</div>
                     <div class="col-sm-2 text-secondary small">Request path</div>
@@ -153,7 +153,7 @@
             <GridColumn Field="@nameof(ErrorLogRecord.TimeStamp)" Title="When" Width="165px">
                 <Template>
                     @{ var r = (ErrorLogRecord)context; }
-                    <span class="small">@r.TimeStamp.ToDisplayDateTime()</span>
+                    <span class="small">@r.TimeStamp.ToDisplayDateTimeWithSeconds()</span>
                 </Template>
             </GridColumn>
             <GridColumn Field="@nameof(ErrorLogRecord.Level)" Title="Level" Width="90px">

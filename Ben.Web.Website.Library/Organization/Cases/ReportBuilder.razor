@@ -70,9 +70,17 @@ else
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _editingReport = null)"><BenIcon Name="chevron-left" Class="me-1" />Back</button>
         <span class="fw-semibold flex-grow-1">@(_editingReport.Title)</span>
         <span class="badge @(_editingReport.Status == CaseReportStatus.Published ? "bg-success" : "bg-warning text-dark")">@_editingReport.Status</span>
+        @* W-A14: a published report stayed editable with nothing to publish the edits WITH. The
+           client reads a live PDF, so every later change reached them without a word — and the
+           notice on their case board still described the version they were first sent. *@
         @if (_editingReport.Status == CaseReportStatus.Draft)
         {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="PublishReport" disabled="@(!(!_saving))">Publish</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="report-publish" @onclick="PublishReport" disabled="@(!(!_saving))">Publish</button>
+        }
+        else if (_editingReport.HasUnpublishedChanges)
+        {
+            <span id="report-unpublished-changes" class="badge bg-warning text-dark">Edited since published</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="report-republish" @onclick="PublishReport" disabled="@(!(!_saving))">Re-publish</button>
         }
         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DownloadPdf(_editingReport.Id, _editingReport.Title))"><BenIcon Name="file-text" Class="me-1" />PDF</button>
     </div>
@@ -81,7 +89,8 @@ else
     @if (_publishedTitle is not null)
     {
         <div class="alert alert-success py-2 small mb-3">
-            <strong>Published.</strong> Client has been notified via the case message board: "@_publishedTitle"
+            <strong>@(_wasRepublish ? "Re-published." : "Published.")</strong>
+            Client has been notified via the case message board: "@_publishedTitle"
         </div>
     }
 
@@ -490,10 +499,14 @@ else
         finally { _saving = false; }
     }
 
+    /// <summary>Whether the last publish was a re-issue, so the banner says which it was.</summary>
+    private bool _wasRepublish;
+
     private async Task PublishReport()
     {
         if (_editingReport is null) return;
         _saving = true; _publishedTitle = null;
+        _wasRepublish = _editingReport.Status == CaseReportStatus.Published;
         try
         {
             var result = await AdminClient.PublishCaseReportAsync(OrgId, CaseId, _editingReport.Id);

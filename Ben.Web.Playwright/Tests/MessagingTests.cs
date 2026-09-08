@@ -320,8 +320,7 @@ public class MessagingTests : BenTestBase
     /// </remarks>
     private async Task TypeIntoEditorAsync(string text)
     {
-        var frame = Page.FrameLocator(".k-editor iframe");
-        var body  = frame.Locator("body");
+        var body = EditorBody;
 
         await body.ClickAsync();
         await body.PressSequentiallyAsync(text);

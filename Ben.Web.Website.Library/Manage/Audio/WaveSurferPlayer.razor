@@ -90,9 +90,12 @@
             </span>
 
             @* Volume *@
+            @* AE-3: the site's icon set, and a slider wide enough to be a slider. At 5rem, with
+               the theme's own range styling on top, both of these read as a dot with a line
+               through it — the walk's word for them was "tiny dots". *@
             <label class="d-flex align-items-center gap-1 small mb-0" title="Volume">
-                🔊
-                <input type="range" class="form-range" style="width:5rem;"
+                <BenIcon Name="volume-2" />
+                <input type="range" class="form-range ws-player-range" style="width:8rem;"
                        min="0" max="1" step="0.02"
                        value="@_volume.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
                        @oninput="OnVolumeInput" />
@@ -102,8 +105,8 @@
             @if (cfg.Plugins.Zoom)
             {
                 <label class="d-flex align-items-center gap-1 small mb-0" title="Zoom">
-                    🔍
-                    <input type="range" class="form-range" style="width:5rem;"
+                    <BenIcon Name="zoom-in" />
+                    <input type="range" class="form-range ws-player-range" style="width:8rem;"
                            min="@cfg.MinZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                            max="@cfg.MaxZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                            step="1"
@@ -114,7 +117,7 @@
 
             @* Playback rate *@
             <label class="d-flex align-items-center gap-1 small mb-0" title="Speed">
-                ⏩
+                <BenIcon Name="fast-forward" />
                 <select class="form-select form-select-sm" style="width:auto;" @onchange="OnRateChange">
                     <option value="0.5">0.5×</option>
                     <option value="0.75">0.75×</option>

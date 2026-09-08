@@ -122,9 +122,18 @@
                                 <span class="badge text-bg-secondary me-1">@roleName</span>
                             }
                         }
+                        else if (rm.Role is OrganizationMemberRole.Owner
+                                          or OrganizationMemberRole.Administrator)
+                        {
+                            @* W-M3 (site evaluation 2026-09-06): a dash here read as "this person
+                               can do nothing", when for these two ranks the truth is the exact
+                               opposite — they bypass the role check entirely, which is why they
+                               are never given a functional role in the first place. *@
+                            <span class="text-secondary small fst-italic">Everything, by rank</span>
+                        }
                         else if (_rolesLoaded)
                         {
-                            <span class="text-secondary small">—</span>
+                            <span class="text-secondary small">None yet</span>
                         }
                     </Template>
                 </GridColumn>

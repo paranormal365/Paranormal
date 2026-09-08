@@ -92,31 +92,41 @@ else
         {
             <div class="d-flex flex-column h-100" style="overflow:hidden;">
 
-                @* Info bar *@
-                @* align-content:flex-start — this bar wraps onto two lines at ordinary widths (the
-                   file's details, then the toolbar), and a wrapped flex container's default is to
-                   spread its lines through whatever height it has. In a fullscreen modal that put
-                   two bands of empty space between the details and the toolbar, which is what the
-                   help screenshots showed. *@
+                @* ── Info bar ─────────────────────────────────────────────────
+                   AE-2 of the 2026-09-06 audio walk: this row and the toolbar below it used to be
+                   ONE flex container, with the whole toolbar inside a single ms-auto child. At
+                   1440x900 with the spectrogram controls showing, that child was wider than the
+                   space ms-auto pushed it into, so it overflowed to the LEFT — the first button
+                   read "e Timeline" — the drag hint at its end collapsed to one word per line, and
+                   a ~150px band of nothing opened between the two. Two rows, each wrapping on its
+                   own, and nothing pushed anywhere. *@
                 <div class="d-flex flex-wrap gap-4 mb-2 p-2 rounded flex-shrink-0"
                      style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;align-content:flex-start;">
                     <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
                     <span><strong>Type:</strong>@(" ")@ContentType</span>
                     <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
                     <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
-                    <span class="ms-auto d-flex align-items-center gap-2">
-                        <HelpLink Slug="using-the-audio-editor" />
+                    <span class="ms-auto"><HelpLink Slug="using-the-audio-editor" /></span>
+                </div>
+
+                @* ── Toolbar ──────────────────────────────────────────────────
+                   AE-3: the site's icon set, not emoji. Emoji are drawn by the operating system's
+                   own font, so the toolbar was a different size, weight and colour on every
+                   machine, ignored the dark theme, and sat beside BenIcon buttons that did not.
+                   Two of them (the scissors and the speaking head) have no glyph at all on some
+                   Windows builds and rendered as a box. *@
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2 flex-shrink-0">
                         @* Timeline toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleTimelineAsync" disabled="@(!(_modalReady))">
-                            🕐 @(_timelineEnabled ? "Hide Timeline" : "Show Timeline")
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleTimelineAsync" disabled="@(!(_modalReady))">
+                            <BenIcon Name="clock" Class="me-1" />@(_timelineEnabled ? "Hide Timeline" : "Show Timeline")
                         </button>
                         @* Clear user-drawn regions *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ClearUserRegionsAsync" disabled="@(!(_modalReady))">
-                            🗑 Clear Regions
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ClearUserRegionsAsync" disabled="@(!(_modalReady))">
+                            <BenIcon Name="trash-2" Class="me-1" />Clear Regions
                         </button>
                         @* Spectrogram toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleSpectrogramAsync" disabled="@(!(_modalReady))">
-                            📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleSpectrogramAsync" disabled="@(!(_modalReady))">
+                            <BenIcon Name="bar-chart-2" Class="me-1" />@(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </button>
                         @* Spectrogram resolution — only shown when spectrogram is active *@
                         @if (_viewNotSavedReason is not null)
@@ -129,46 +139,49 @@ else
                             @* Colormap selector *@
                             <BenSelect Class="form-select-sm" Data="@_colormapOptions" @bind-Value="_colormap" TextField="@nameof(ColormapOption.Label)" ValueField="@nameof(ColormapOption.Value)" Width="115px" Enabled="@_modalReady" OnChange="@((string? value) => { _ = OnColormapChangedAsync(); })" />
                             @* Mel-scale toggle *@
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleMelScaleAsync" disabled="@(!(_modalReady))">
-                                🎵 Mel Scale
+                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleMelScaleAsync" disabled="@(!(_modalReady))">
+                                <BenIcon Name="music" Class="me-1" />Mel Scale
                             </button>
                             @* Voice frequency band overlay *@
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleVoiceBandAsync" disabled="@(!(_modalReady))">
-                                🗣 Voice Band
+                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleVoiceBandAsync" disabled="@(!(_modalReady))">
+                                <BenIcon Name="mic" Class="me-1" />Voice Band
                             </button>
                         }
                         @* Drag mode toggle: create region (default) vs. scrub the playhead *@
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleDragModeAsync" disabled="@(!(_modalReady))" title="@(_regionDrawMode ? "Create Region" : "Scrub Playhead")"><BenIcon Name="crop" />
                         </button>
                         @* EQ toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" id="toolbar-eq" @onclick="@(() => _showEq = !_showEq)" disabled="@(!(_modalReady))">
-                            🎚 @(_showEq ? "Hide EQ" : "EQ / Filters")
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" id="toolbar-eq" @onclick="@(() => _showEq = !_showEq)" disabled="@(!(_modalReady))">
+                            <BenIcon Name="sliders" Class="me-1" />@(_showEq ? "Hide EQ" : "EQ / Filters")
                         </button>
                         @* EVP Markers toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showMarkers = !_showMarkers)" disabled="@(!(_modalReady))">
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="@(() => _showMarkers = !_showMarkers)" disabled="@(!(_modalReady))">
                             @* Counts confirmed findings only — dismissed candidates are kept solely
                                for re-scan deduping, and counting them would inflate this. *@
-                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({ConfirmedMarkers.Count()})")
+                            <BenIcon Name="target" Class="me-1" />@(_showMarkers ? "Hide Markers" : $"EVP Markers ({ConfirmedMarkers.Count()})")
                         </button>
                         @* Destructive edit toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showEdit = !_showEdit)" disabled="@(!(_modalReady))">
-                            ✂ @(_showEdit ? "Hide Edit" : "Edit")
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="@(() => _showEdit = !_showEdit)" disabled="@(!(_modalReady))">
+                            <BenIcon Name="scissors" Class="me-1" />@(_showEdit ? "Hide Edit" : "Edit")
                         </button>
                         @* Silence detection toggle *@
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleSilenceDetectionAsync" disabled="@(!(_modalReady))">
-                            🤫 Silence
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleSilenceDetectionAsync" disabled="@(!(_modalReady))">
+                            <BenIcon Name="volume-x" Class="me-1" />Silence
                         </button>
                         @if (_silenceDetectionEnabled)
                         {
-                            <input type="number" class="form-control" min="-80" max="-10" step="1" style="max-width:90px;" @bind="_silenceThresholdDb" @bind:event="oninput" @onchange="@(() => _ = ApplySilenceDetectionAsync())" />
+                            <input type="number" class="form-control form-control-sm" min="-80" max="-10" step="1" style="max-width:90px;" @bind="_silenceThresholdDb" @bind:event="oninput" @onchange="@(() => _ = ApplySilenceDetectionAsync())" />
                             <span class="small text-secondary">dB</span>
                         }
-                        <span class="small text-secondary fst-italic">
-                            @(_regionDrawMode
-                                ? "Click & drag to mark a region — right-click to play, save, or edit"
-                                : "Click & drag the waveform to scrub — audio plays while dragging")
-                        </span>
-                    </span>
+                </div>
+
+                @* The hint gets its own line. Inside the toolbar's flex row it was the item that
+                   absorbed the overflow, and a sentence squeezed to 40px wide is one word per
+                   line — the column the walk photographed. *@
+                <div class="small text-secondary fst-italic mb-2 flex-shrink-0">
+                    @(_regionDrawMode
+                        ? "Click & drag to mark a region — right-click to play, save, or edit"
+                        : "Click & drag the waveform to scrub — audio plays while dragging")
                 </div>
 
                 @* EQ / Processing panel *@

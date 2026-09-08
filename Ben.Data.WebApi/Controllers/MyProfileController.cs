@@ -68,6 +68,13 @@ public sealed class MyProfileController : BenControllerBase
                   m => m.OrganizationId, o => o.Id, (_, o) => o.AllowMemberPrivatePhotosToClients)
             .AnyAsync(allows => allows, ct);
 
+        // W-CL4: whether the member-facing controls on the profile are addressed to this person
+        // at all. Asked separately from anyOrgAllows — "your group has not enabled this" and
+        // "you are not in a group" are different sentences, and the profile said the first to
+        // people for whom the second was true.
+        var belongsToAnyOrg = await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
+
         return Ok(new MyProfileRecord
         {
             AppUserId    = user.Id,
@@ -79,6 +86,7 @@ public sealed class MyProfileController : BenControllerBase
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
             SharePrivatePhotoWithClients    = user.SharePrivatePhotoWithClients,
             AnyOrgAllowsPrivatePhotoSharing = anyOrgAllows,
+            BelongsToAnyOrganization        = belongsToAnyOrg,
             Gender                          = user.Gender ?? Ben.Data.Common.Enums.ClientGender.NotProvided,
         });
     }

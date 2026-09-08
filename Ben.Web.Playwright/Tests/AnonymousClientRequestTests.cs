@@ -110,8 +110,8 @@ public class AnonymousClientRequestTests : BenTestBase
             Page.GetByRole(AriaRole.Button, new() { Name = "Next: Your Experiences" }),
             Page.GetByText("Step 3"));
 
-        // The editor is an iframe; typing into its body is how a person writes here.
-        var editorBody = Page.FrameLocator(".k-editor iframe").Locator("body");
+        // Typing, the way a person writes here — see BenTestBase.EditorBody.
+        var editorBody = EditorBody;
         await editorBody.ClickAsync();
         await editorBody.PressSequentiallyAsync("Three knocks on the north wall, about 2am, twice last week.");
 

@@ -201,28 +201,42 @@
 
                                 <hr />
 
-                                <div class="d-flex align-items-start gap-2">
-                                    <input type="checkbox" class="form-check-input mt-1" id="share-private"
-                                           checked="@_shareWithClients"
-                                           @onchange="@(e => ToggleShareAsync((bool)(e.Value ?? false)))" />
-                                    <label for="share-private" class="mb-0">
-                                        Show my private photo to clients of the groups I work with
-                                        <span class="d-block text-secondary small">
-                                            Clients see a face rather than a name alone. Your group has to allow
-                                            this too — both of you decide, not just one.
-                                        </span>
-                                    </label>
-                                </div>
-
-                                @* An opt-in that silently does nothing is worse than no opt-in: say so plainly
-                                   rather than letting the user believe they've shared something they haven't. *@
-                                @if (_shareWithClients && !_profile.AnyOrgAllowsPrivatePhotoSharing)
+                                @* W-CL4: the switch reads "the groups I work with", and it was
+                                   offered to people who work with none — clients, who are the other
+                                   side of that sentence. The photo itself stays: it is theirs, it is
+                                   private, and it is used the moment they join a group. *@
+                                @if (!_profile.BelongsToAnyOrganization)
                                 {
-                                    <div class="alert alert-warning py-2 mt-2 mb-0 small">
-                                        You've turned this on, but none of your groups currently allow member
-                                        photos to be shown to clients — so nothing is being shared yet. It will
-                                        take effect if a group turns it on.
+                                    <div id="private-photo-no-group" class="text-secondary small mb-0">
+                                        This one is for members of an investigation group — it decides whether
+                                        that group's clients see your face. Nothing to decide yet.
                                     </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex align-items-start gap-2">
+                                        <input type="checkbox" class="form-check-input mt-1" id="share-private"
+                                               checked="@_shareWithClients"
+                                               @onchange="@(e => ToggleShareAsync((bool)(e.Value ?? false)))" />
+                                        <label for="share-private" class="mb-0">
+                                            Show my private photo to clients of the groups I work with
+                                            <span class="d-block text-secondary small">
+                                                Clients see a face rather than a name alone. Your group has to allow
+                                                this too — both of you decide, not just one.
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    @* An opt-in that silently does nothing is worse than no opt-in: say so plainly
+                                       rather than letting the user believe they've shared something they haven't. *@
+                                    @if (_shareWithClients && !_profile.AnyOrgAllowsPrivatePhotoSharing)
+                                    {
+                                        <div class="alert alert-warning py-2 mt-2 mb-0 small">
+                                            You've turned this on, but none of your groups currently allow member
+                                            photos to be shown to clients — so nothing is being shared yet. It will
+                                            take effect if a group turns it on.
+                                        </div>
+                                    }
                                 }
                             </div>
                         </div>

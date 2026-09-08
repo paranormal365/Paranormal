@@ -104,6 +104,21 @@ The finding appears on the case's own public page under *What we found*, directl
 client's account of what happened. It is also available to the **cases** block in the page builder,
 so it can sit on any page you build.
 
+## Correcting a report your client already has
+
+A published report stays editable, and it should — a date is wrong, a name is misspelled, a
+paragraph reads badly. What matters is that your client finds out.
+
+Edit and save as usual. The report then shows **Edited since published** beside its status, and a
+**Re-publish** button appears next to it. Re-publishing posts a fresh note on the case message
+board saying the report has been *updated*, so the person reading it knows the copy on their case
+page is not the one they were first sent.
+
+Until you re-publish, nothing tells them. Your client reads the report from their case page, so
+your edits are already in front of them — which is exactly why the note matters. Re-publish when
+you have changed anything a reader would care about, and leave it alone for a typo nobody would
+notice.
+
 ## Putting field sessions in the final report
 
 Sessions recorded in the iPhone and iPad app land on the site whole — the readings, the marks, the
@@ -425,11 +440,15 @@ the pseudonym then stands in for the client's name everywhere the site writes it
 except one place: the **case label**, which is free text your group typed, often in the
 "surname, city" habit that is perfect for private files and wrong for a public page.
 
-So the save checks. If the label about to go public contains the client's name or the street
-address, saving warns you once, names exactly what would leak, and suggests naming the place
-instead — "The Hargrove Farmhouse", not "Hargrove, Franklin TN". It is a warning, not a refusal:
-a surname is also sometimes a street or a town, and only you know which your label means. Save
-again and it publishes as written.
+So the dialog checks, as you work. Tick **Make Public**, or leave the label or the pseudonym
+after editing it, and if what is about to go public contains the client's name or the street
+address you are told there and then — beside the tickbox, before you save. It names exactly what
+would leak and suggests naming the place instead: "The Hargrove Farmhouse", not "Hargrove,
+Franklin TN".
+
+It is a warning, not a refusal. A surname is also sometimes a street or a town, and only you know
+which your label means — so the first Save stops and shows it once more, and the second publishes
+the label as written.
 
 The same save reads the pseudonym itself. "The Park Family" as the pseudonym for the Parks is a
 disguise made of the thing it hides — if the pseudonym contains the client's real name, you will

@@ -132,7 +132,7 @@
                 @* Rich text, because the description is stored and displayed as HTML. Bound with
                    @bind-Value:after rather than OnChange — OnChange on TelerikEditor threw an
                    unhandled cast exception (item #58). *@
-                <TelerikEditor @bind-Value="@_form.Description" Height="160px" Tools="@_editorTools" />
+                <BenEditor @bind-Value="@_form.Description" Height="160px" Tools="@_editorTools" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgscheduler-repeats-6f10">Repeats</label>

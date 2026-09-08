@@ -109,7 +109,7 @@ public sealed class DateFormatSourceGuardTests
 
              This site is American: 08/04/2026 means August 4th. Use the constants on
              DateTimeViewerExtensions rather than typing a pattern — DatePattern,
-             DateTimeNoSecondsPattern, MediumDatePattern, LongDatePattern, ChartDayPattern, or
+             DateTimePattern, MediumDatePattern, LongDatePattern, ChartDayPattern, or
              GridDateFormat / GridDateTimeFormat for a Telerik DisplayFormat.
 
              ISO (yyyy-MM-dd) is fine and deliberately not flagged.
@@ -132,5 +132,30 @@ public sealed class DateFormatSourceGuardTests
         Assert.StartsWith("MMM", Ben.Web.Services.DateTimeViewerExtensions.ChartDayPattern);
         Assert.Equal("{0:MM/dd/yyyy}", Ben.Web.Services.DateTimeViewerExtensions.GridDateFormat);
         Assert.Equal("{0:MM/dd/yyyy hh:mm tt}", Ben.Web.Services.DateTimeViewerExtensions.GridDateTimeFormat);
+    }
+
+    /// <summary>
+    /// The default time formats carry no seconds, and the ones that do say so in their name.
+    /// </summary>
+    /// <remarks>
+    /// <para>W-A10, W-V1 and W-A2 of the 2026-09-06 evaluation were one finding reported three
+    /// times: a visit at "01:40:33 PM", an event at "03:00:00 PM", a group created at "09:12:47".
+    /// The site had a no-seconds helper for a fortnight before that evaluation and three of
+    /// sixty-five call sites used it, because the shorter name is the one people reach for.</para>
+    ///
+    /// <para>So the rule is enforced on the DEFAULT rather than on the call sites. A page that
+    /// wants seconds has to type <c>WithSeconds</c>, which is a decision somebody made; a page
+    /// that types nothing gets the answer almost every page wanted.</para>
+    /// </remarks>
+    [Fact]
+    public void The_default_time_formats_carry_no_seconds()
+    {
+        Assert.DoesNotContain("ss", Ben.Web.Services.DateTimeViewerExtensions.DateTimePattern);
+        Assert.DoesNotContain("ss", Ben.Web.Services.DateTimeViewerExtensions.TimePattern);
+        Assert.DoesNotContain("ss", Ben.Web.Services.DateTimeViewerExtensions.GridDateTimeFormat);
+
+        // And the exception exists, so "no seconds anywhere" never becomes the reading.
+        Assert.Contains("ss", Ben.Web.Services.DateTimeViewerExtensions.DateTimeWithSecondsPattern);
+        Assert.Contains("ss", Ben.Web.Services.DateTimeViewerExtensions.TimeWithSecondsPattern);
     }
 }

@@ -321,7 +321,18 @@ Help: `working-a-case.md` (reports), `publishing-with-publications.md` cross-ref
 `PublicCaseControllerTests.A_public_summary_shows_only_when_switched_on`, redaction of the summary,
 a Playwright walk from the report to `/o/{group}/cases/{ref}`.
 
-### Phase 4 — Look, feel and small truths (M)
+### Phase 4 — Look, feel and small truths (M) — **BUILT 2026-09-07**
+
+Branch `feature/site-eval-phase-4-look-and-truths`, with its own README. Closed by this phase:
+W-V1, W-V2, W-V3, W-H1, W-CL3, W-CL4, W-S5 (in part — see the README), W-A2, W-A10, W-A14, W-M3,
+W-O2, W-P4, W-SA3, AE-2, AE-3, and the TelerikEditor half of W-R3. **No migration.**
+
+Two findings were not what their one line said. W-H1 was two different vote tables under one word,
+not a wrong count; W-V1 was twenty-three pages centred on both axes inside a flex wrapper, not
+`/events`. Left undone on purpose: the page-title suffix (nine of 109 titles carry it, so it is the
+exception rather than a rule to enforce inside this phase) and most of W-S5 (the only signal the
+navigation has is group membership, and a solo investigator has no group either).
+
 Times without seconds everywhere (one `ToDisplayDateTime` rule); TelerikEditor inherits the site
 font; the audio editor's emoji toolbar becomes BenIcon (AE-3) and its toolbar wraps instead of
 clipping (AE-2); the group page shows the group's name and its tabs in one scrollable row (W-A2);

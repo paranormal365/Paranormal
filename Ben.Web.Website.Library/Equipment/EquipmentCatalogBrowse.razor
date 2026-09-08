@@ -1,5 +1,6 @@
 @page "/equipment-catalog"
 @namespace Ben.Web.Website.Library.Equipment
+@using Ben.Data.Common.Constants
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Shared
@@ -224,7 +225,12 @@
 
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
         _modelsResult = await AdminClient.SearchEquipmentModelsAsync(search, _categoryId);
-        _models       = [.. _modelsResult.Items];
+        // W-V3: the placeholder rows are for a dropdown, not for a browser. See
+        // EquipmentCatalogNames.GenericBrand — the API keeps serving them, because the person
+        // ADDING a no-name meter still has to be able to pick one.
+        _models       = [.. _modelsResult.Items.Where(m =>
+                            !string.Equals(m.BrandName, EquipmentCatalogNames.GenericBrand,
+                                           StringComparison.OrdinalIgnoreCase))];
         _itemsResult  = await AdminClient.GetPublicEquipmentItemsAsync(search, _categoryId);
         _items        = [.. _itemsResult.Items];
 

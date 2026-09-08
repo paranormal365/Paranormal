@@ -391,8 +391,14 @@
 
     private static readonly StateCut[] StateCuts =
     [
-        new("people", "People", "Registered accounts, by the state on their address.",
-            "Nobody has recorded an address yet."),
+        // W-SA3 of the 2026-09-06 evaluation: this said "Nobody has recorded an address yet" on a
+        // site where clients had recorded plenty — on their investigation requests. What it counts
+        // is the address on an ACCOUNT PROFILE, which almost nobody fills in, and the sentence
+        // read as a statement about the whole site. It now names what it looked at, and points at
+        // the cut that holds the addresses people actually gave.
+        new("people", "People", "Registered accounts, by the state on their profile address.",
+            "No account has a state on its profile address yet — client addresses given on a "
+            + "request are counted under Cases."),
         new("cases", "Cases", "Reported cases, by the state of the address in the report.",
             "No cases with an address yet."),
         new("investigations", "Investigations", "Investigations, by the state of the place visited.",
