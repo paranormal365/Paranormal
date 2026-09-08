@@ -97,6 +97,40 @@ public class EntraAuthControllerTests
         Assert.NotEqual(Guid.Empty, reg.UserId);
     }
 
+    /// <summary>
+    /// An Entra sign-in that creates an account gets an <c>@name</c> with it.
+    /// </summary>
+    /// <remarks>
+    /// C1 of the 2026-09-06 evaluation. Nobody is present to be asked for a handle on this path —
+    /// the person is signing in with Microsoft, not filling in a sign-up form — so it has to be
+    /// allocated. Without one the account cannot be mentioned on the feed, and nothing on any
+    /// screen says why.
+    /// </remarks>
+    [Fact]
+    public async Task Register_NewUser_IsGivenAHandle()
+    {
+        var umMock = CreateUserManagerMock();
+        AppUser? capturedUser = null;
+        umMock.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser?)null);
+        umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
+        umMock.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
+              .Callback<AppUser>(u => capturedUser = u)
+              .ReturnsAsync(IdentityResult.Success);
+        umMock.Setup(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()))
+              .ReturnsAsync(IdentityResult.Success);
+
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "dana.holt@example.com"));
+        await controller.Register(new EntraRegisterRequest("Dana Holt"), default);
+
+        Assert.NotNull(capturedUser);
+        Assert.False(string.IsNullOrWhiteSpace(capturedUser!.Handle),
+            "An account created by an Entra sign-in has no @name, so it cannot be mentioned.");
+
+        // Derived from the name they gave, not a random string — the handle is permanent and
+        // people read it.
+        Assert.Equal("danaholt", capturedUser.Handle);
+    }
+
     [Fact]
     public async Task Register_NewUser_SetsEmailConfirmedTrue()
     {

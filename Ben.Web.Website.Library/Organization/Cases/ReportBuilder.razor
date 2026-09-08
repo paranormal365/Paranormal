@@ -277,6 +277,10 @@ else
             <div class="col-12">
                 <label class="form-label fw-semibold" for="reportbuilder-title-af64">Title <span class="text-danger">*</span></label>
                 <input id="reportbuilder-title-af64" type="text" class="form-control" placeholder="e.g. BenCo Investigation Report — Park Residence" @bind="@_newTitle" @bind:event="oninput" />
+                @if (_newTitleProblem is not null)
+                {
+                    <div id="report-create-problem" class="form-text text-danger">@_newTitleProblem</div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Expected Delivery Date</label>
@@ -286,8 +290,10 @@ else
     </ChildContent>
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showNewDialog = false)">Cancel</button>
-        <button type="button" class="btn btn-primary" @onclick="CreateReport"
-                disabled="@(_saving || string.IsNullOrWhiteSpace(_newTitle))">Create</button>
+        @* W-A12: gated on _saving only. See CreateReport for why a title that is still empty is
+           refused by the handler rather than by the browser. *@
+        <button type="button" class="btn btn-primary" id="report-create"
+                @onclick="CreateReport" disabled="@_saving">Create</button>
     </FooterContent>
 </BenModal>
 
@@ -349,6 +355,10 @@ else
             <div class="col-12">
                 <label class="form-label fw-semibold" for="reportbuilder-title-cf7b">Title</label>
                 <input id="reportbuilder-title-cf7b" type="text" class="form-control" @bind="@_sectionTitle" @bind:event="oninput" />
+                @if (_sectionTitleProblem is not null)
+                {
+                    <div id="report-add-section-problem" class="form-text text-danger">@_sectionTitleProblem</div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Type</label>
@@ -362,8 +372,9 @@ else
     </ChildContent>
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showSectionDialog = false)">Cancel</button>
-        <button type="button" class="btn btn-primary" @onclick="SaveSection"
-                disabled="@(_saving || string.IsNullOrWhiteSpace(_sectionTitle))">Add</button>
+        @* W-A12, as above. *@
+        <button type="button" class="btn btn-primary" id="report-add-section"
+                @onclick="SaveSection" disabled="@_saving">Add</button>
     </FooterContent>
 </BenModal>
 
@@ -455,10 +466,46 @@ else
         _loading = false;
     }
 
-    private void NewReport() { _newTitle = ""; _newDeliveryDate = null; _showNewDialog = true; }
+    private void NewReport()
+    {
+        _newTitle = ""; _newDeliveryDate = null; _newTitleProblem = null; _sectionTitleProblem = null;
+        _showNewDialog = true;
+    }
 
+    /// <summary>Why the last Create was refused, or null.</summary>
+    private string? _newTitleProblem;
+
+    /// <summary>Why the last Add was refused, or null.</summary>
+    private string? _sectionTitleProblem;
+
+    /// <summary>
+    /// Creates the report, or says why it did not.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>W-A12 of the 2026-09-06 evaluation.</b> This button used to be
+    /// <c>disabled</c> whenever the title was empty — and the title binds on <c>oninput</c>, so
+    /// "empty" is the server's opinion, one circuit round trip behind the keyboard. Somebody who
+    /// typed the last character and clicked landed inside that window, the browser discarded the
+    /// click on a still-disabled button, and the second identical click worked. The evaluation
+    /// found the same on four other buttons and could not tell whether it was real; a Playwright
+    /// walk that types character by character and clicks once reproduced it, intermittently,
+    /// which is what a race looks like. On localhost the window measured about three
+    /// milliseconds. Over a real connection it is the round trip.</para>
+    ///
+    /// <para>So the button stays live and the refusal moved here, where it can also SAY something
+    /// — a disabled control explains nothing, to anybody, and least of all to a screen reader.
+    /// <c>_saving</c> still disables it, because that flag is set by this handler after the click
+    /// and so is not a state anybody can race.</para>
+    /// </remarks>
     private async Task CreateReport()
     {
+        if (string.IsNullOrWhiteSpace(_newTitle))
+        {
+            _newTitleProblem = "Give the report a title first.";
+            return;
+        }
+
+        _newTitleProblem = null;
         _saving = true;
         try
         {
@@ -527,11 +574,25 @@ else
         _reports.RemoveAll(r => r.Id == reportId);
     }
 
-    private void AddSection() { _sectionTitle = ""; _sectionBody = ""; _sectionType = CaseReportSectionType.Text; _showSectionDialog = true; }
+    private void AddSection()
+    {
+        _sectionTitle = ""; _sectionBody = ""; _sectionType = CaseReportSectionType.Text;
+        _sectionTitleProblem = null;
+        _showSectionDialog = true;
+    }
 
+    /// <summary>Adds the section, or says why it did not. W-A12 — see CreateReport.</summary>
     private async Task SaveSection()
     {
         if (_editingReport is null) return;
+
+        if (string.IsNullOrWhiteSpace(_sectionTitle))
+        {
+            _sectionTitleProblem = "Give the section a title first.";
+            return;
+        }
+
+        _sectionTitleProblem = null;
         _saving = true;
         try
         {
