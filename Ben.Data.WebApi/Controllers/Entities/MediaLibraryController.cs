@@ -185,15 +185,94 @@ public sealed class MediaLibraryController : BenControllerBase
             .Where(f => idSet.Contains(f.Id) && f.ArchivedFromUploadFileId == null);
 
         var prefixes = contentTypePrefixes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var listed = await query.OrderByDescending(f => f.DateCreated).ToListAsync(ct);
         if (prefixes is { Length: > 0 })
+            listed = listed.Where(f => prefixes.Any(p => f.ContentType.StartsWith(p, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        return Ok(await WithOwnerAndCaseAsync(db, listed, ct));
+    }
+
+    /// <summary>
+    /// The mapped records, each told who owns it and which case it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// <para>V-3 of the 2026-09-06 evaluation. The video editor's Server tab listed seven
+    /// identical <c>test-audio.mp3</c> rows — other people's uploads, reachable through a shared
+    /// group — with no owner and no case. A file name is not an identity, and this listing is the
+    /// one place that spans several people's files at once.</para>
+    ///
+    /// <para>Two batched lookups over the page that is actually being returned, not a join in the
+    /// query above: the audience union is built from id sets and the result is already in memory,
+    /// so this costs two round trips regardless of how large the union was.</para>
+    ///
+    /// <para>A file handed to a group (item 180 Phase B) has no owning person; the group's name
+    /// is the answer then, and it is labelled as a group on the card.</para>
+    /// </remarks>
+    private async Task<IEnumerable<UploadFileRecord>> WithOwnerAndCaseAsync(
+        BenDataContext db, List<Ben.Data.Source.Entities.UploadFile> files, CancellationToken ct)
+    {
+        // Map<IEnumerable<…>>, matching every other call in this controller — the profile is
+        // registered for that shape and nothing else.
+        var records = _mapper.Map<IEnumerable<UploadFileRecord>>(files).ToList();
+        if (records.Count == 0) return records;
+
+        var fileIds = records.Select(r => r.Id).ToList();
+
+        var userIds = records.Where(r => r.AppUserId.HasValue).Select(r => r.AppUserId!.Value).Distinct().ToList();
+        var orgIdsOwning = records.Where(r => r.OwnerOrganizationId.HasValue)
+                                  .Select(r => r.OwnerOrganizationId!.Value).Distinct().ToList();
+
+        var owners = userIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.AppUsers.AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.Email ?? "Someone", ct);
+
+        var owningOrgs = orgIdsOwning.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Organizations.AsNoTracking()
+                .Where(o => orgIdsOwning.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.Name, ct);
+
+        // The three ways a file belongs to a case, in the order the reader would name them.
+        var caseOf = new Dictionary<Guid, string>();
+
+        void Remember(Guid fileId, int year, int number)
         {
-            var files = await query.ToListAsync(ct);
-            files = files.Where(f => prefixes.Any(p => f.ContentType.StartsWith(p, StringComparison.OrdinalIgnoreCase))).ToList();
-            return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(files.OrderByDescending(f => f.DateCreated)));
+            if (!caseOf.ContainsKey(fileId)) caseOf[fileId] = $"#{year}-{number:D3}";
         }
 
-        var all = await query.OrderByDescending(f => f.DateCreated).ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(all));
+        foreach (var row in await db.CaseFiles.AsNoTracking()
+                     .Where(cf => fileIds.Contains(cf.UploadFileId))
+                     .Select(cf => new { cf.UploadFileId, cf.Case.CaseYear, cf.Case.OrgCaseNumber })
+                     .ToListAsync(ct))
+            Remember(row.UploadFileId, row.CaseYear, row.OrgCaseNumber);
+
+        foreach (var row in await db.CaseTimelineEntryFiles.AsNoTracking()
+                     .Where(ef => fileIds.Contains(ef.UploadFileId))
+                     .Select(ef => new { ef.UploadFileId,
+                                         ef.CaseTimelineEntry.Case.CaseYear,
+                                         ef.CaseTimelineEntry.Case.OrgCaseNumber })
+                     .ToListAsync(ct))
+            Remember(row.UploadFileId, row.CaseYear, row.OrgCaseNumber);
+
+        foreach (var row in await db.VideoProjects.AsNoTracking()
+                     .Where(vp => vp.PublishedUploadFileId.HasValue
+                               && fileIds.Contains(vp.PublishedUploadFileId.Value)
+                               && vp.Case != null)
+                     .Select(vp => new { FileId = vp.PublishedUploadFileId!.Value,
+                                         vp.Case!.CaseYear, vp.Case.OrgCaseNumber })
+                     .ToListAsync(ct))
+            Remember(row.FileId, row.CaseYear, row.OrgCaseNumber);
+
+        return records.Select(r => r with
+        {
+            OwnerDisplayName = r.OwnerOrganizationId is { } orgId
+                ? owningOrgs.TryGetValue(orgId, out var orgName) ? $"{orgName} (group)" : null
+                : r.AppUserId is { } ownerId && owners.TryGetValue(ownerId, out var name) ? name : null,
+            CaseReference = caseOf.GetValueOrDefault(r.Id),
+        }).ToList();
     }
 
     /// <summary>

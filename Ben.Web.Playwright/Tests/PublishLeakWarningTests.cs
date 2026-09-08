@@ -9,8 +9,15 @@ namespace Ben.Web.Playwright.Tests;
 /// still publishes — a warning the dialog discarded would be the sixth instance of the
 /// server-guard-with-no-UI-path bug, so the UI path is the thing to verify.
 /// </summary>
+// Fixtures that drive the Edit Case dialog on the one seeded case, or upload to it, cannot run
+// beside each other: each one changes the case, asserts, and restores, and in parallel one
+// fixture's restore lands in the middle of another's assertion. The 2026-09-07 full run failed
+// The_leak_warning_fires_before_save_not_after_it exactly that way, having passed twice in
+// isolation and once beside PublishLeakWarningTests. NonParallelizable is what this suite already
+// uses for shared seeded state — a dozen fixtures carry it for the same reason.
 [TestFixture]
 [Category("PublishLeakWarning")]
+[NonParallelizable]
 public class PublishLeakWarningTests : BenTestBase
 {
     // Resolved from the seed, not hardcoded: the 2026-08-26 database rebuild regenerated every

@@ -45,6 +45,9 @@ public class MediaLibraryControllerTests
                    Id = f.Id, FileName = f.FileName, StoredFileName = f.StoredFileName,
                    ContentType = f.ContentType, FileSize = f.FileSize, DateCreated = f.DateCreated,
                    AppUserId = f.AppUserId, IsPublic = f.IsPublic,
+                   // Carried because the listing reads it to name a group that was handed a
+                   // file (item 180 Phase B) — a stand-in mapper that drops it hides V-3.
+                   OwnerOrganizationId = f.OwnerOrganizationId,
                })
              : []);
         return m.Object;
@@ -758,5 +761,97 @@ public class MediaLibraryControllerTests
 
         var offered = Assert.Single(scopes);
         Assert.Equal(caseId, offered.Id);
+    }
+
+    // ── Owner and case, so two identical file names can be told apart (V-3) ──
+
+    /// <summary>
+    /// Every listed file says who owns it.
+    /// </summary>
+    /// <remarks>
+    /// V-3 of the 2026-09-06 evaluation: the video editor's Server tab showed seven identical
+    /// <c>test-audio.mp3</c> rows — other people's uploads, reachable through a shared group —
+    /// with no owner and no case. A file name is not an identity, and this listing is the one
+    /// place that spans several people's files at once.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_SaysWhoOwnsEachFile()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        var otherId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.AppUsers.AddRange(
+                new AppUser { Id = userId,  DisplayName = "Sarah Mitchell", Email = "sarah@t.com", DateCreated = DateTime.UtcNow },
+                new AppUser { Id = otherId, DisplayName = "James Thornton", Email = "james@t.com", DateCreated = DateTime.UtcNow });
+
+            var mine   = MakeFile(userId);
+            var theirs = MakeFile(otherId, isPublic: true);   // reachable as public
+            db.UploadFiles.AddRange(mine, theirs);
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId));
+        Assert.Equal(2, files.Count);
+        Assert.Contains(files, f => f.OwnerDisplayName == "Sarah Mitchell");
+        Assert.Contains(files, f => f.OwnerDisplayName == "James Thornton");
+    }
+
+    /// <summary>A file handed to a group names the group, and says it is one.</summary>
+    /// <remarks>
+    /// Item 180 Phase B leaves such a file with no owning person at all, so "who owns this" has
+    /// to have a second answer or the row goes back to being anonymous.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_NamesTheGroupWhenAFileWasHandedOver()
+    {
+        var (factory, userId, orgId, _) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var handedOver = MakeFile(userId, isPublic: true);
+            handedOver.AppUserId           = null;
+            handedOver.OwnerOrganizationId = orgId;
+            db.UploadFiles.Add(handedOver);
+            await db.SaveChangesAsync();
+        }
+
+        var file = Assert.Single(await GetFilesAsync(Build(factory, userId)));
+        Assert.Equal("Org (group)", file.OwnerDisplayName);
+    }
+
+    /// <summary>A file attached to a case carries the case's reference.</summary>
+    [Fact]
+    public async Task GetFiles_SaysWhichCaseAFileBelongsTo()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.AppUsers.Add(new AppUser { Id = userId, DisplayName = "Sarah Mitchell", Email = "sarah@t.com", DateCreated = DateTime.UtcNow });
+
+            var attached = MakeFile(userId);
+            var loose    = MakeFile(userId);
+            db.UploadFiles.AddRange(attached, loose);
+
+            var seeded = await db.Cases.FirstAsync(c => c.Id == caseId);
+            seeded.CaseYear      = 2026;
+            seeded.OrgCaseNumber = 3;
+
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = attached.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+
+            var files = await GetFilesAsync(Build(factory, userId));
+            Assert.Equal(2, files.Count);
+            Assert.Equal("#2026-003", files.Single(f => f.Id == attached.Id).CaseReference);
+
+            // And a file that belongs to no case says nothing rather than guessing.
+            Assert.Null(files.Single(f => f.Id == loose.Id).CaseReference);
+        }
     }
 }

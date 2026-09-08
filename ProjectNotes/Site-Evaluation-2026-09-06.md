@@ -365,7 +365,23 @@ test per path; W-S6 measure the circuits per navigation and, if it is enhanced n
 re-creating the root, keep one circuit alive; W-A12 reproduced with a real mouse and, if real,
 fixed at its cause.
 
-### Phase 6 — The WASM editor's server tab (S)
+### Phase 6 — The WASM editor's server tab (S) — **BUILT 2026-09-07**
+
+Branch `feature/site-eval-phase-6-wasm-server-tab`, with its own README. Closes V-2, V-3, V-4, V-6.
+**No migration.**
+
+**V-2** was not a broken download. The Server tab's import placed clips on the timeline and never
+called `Clips.AddToBin`, while the local-file import beside it always did — so a downloaded file
+was absent from the bin that lists what the project has, and audio, in an editor with audio tracks
+switched off, was not placed either and went nowhere at all. The second half was the affordance:
+after the first of two clicks the card showed a tick whose only explanation was a hover tooltip.
+It says **Click to add** now. **V-3** gives every Server-tab row its owner and its case.
+**V-4** makes all three bins say *media missing* instead of *on timeline*. **V-6** takes the
+standalone editor's address from the environment rather than the literal `/editors/video/`.
+
+Also: three fixtures that share the one seeded case are now `[NonParallelizable]`, after a full run
+failed a phase-4 test that passes in isolation.
+
 V-2: a server download that finishes must land in the right bin or say why it did not (the audio
 path is the one that vanished); V-3 owner and case columns on the Server tab; V-4 the bin shows
 missing media; V-6 a dev-time route for `/editors/video/` or the button hidden when the mount is

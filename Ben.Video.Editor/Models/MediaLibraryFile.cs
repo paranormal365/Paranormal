@@ -13,6 +13,31 @@ public sealed record MediaLibraryFile
     public string? Description { get; init; }
     public DateTime DateCreated { get; init; }
 
+    /// <summary>Who this file belongs to — a person, or a group when one was handed it.</summary>
+    /// <remarks>
+    /// V-3 of the 2026-09-06 evaluation: the Server tab listed seven identical
+    /// <c>test-audio.mp3</c> rows, reachable through a shared group, with nothing to tell them
+    /// apart. Null when the host does not supply it, and the card simply omits the line.
+    /// </remarks>
+    public string? OwnerDisplayName { get; init; }
+
+    /// <summary>The case this file is attached to, as its reference, or null.</summary>
+    public string? CaseReference { get; init; }
+
+    /// <summary>
+    /// The owner and the case on one line, or null when neither is known.
+    /// </summary>
+    /// <remarks>
+    /// One place builds it so the two hosts' cards cannot come out differently.
+    /// </remarks>
+    public string? Provenance => (OwnerDisplayName, CaseReference) switch
+    {
+        (null,     null)  => null,
+        (null,     var c) => c,
+        (var o,    null)  => o,
+        var (o, c)        => $"{o} · {c}",
+    };
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>True when the file is a video (content-type starts with "video/").</summary>

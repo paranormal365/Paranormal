@@ -9,6 +9,9 @@
 @inject IJSRuntime JSRuntime
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
+@using Microsoft.Extensions.Hosting
 @using Ben.Web.Services
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
@@ -31,7 +34,7 @@
             <a class="btn btn-primary" href="/login?returnUrl=@Uri.EscapeDataString("/my-videos")">Sign in</a>
             <p class="text-muted small mt-3 mb-0">
                 There is also a
-                <a href="/editors/video/" target="_blank" rel="noopener">standalone editor</a>
+                <a href="@StandaloneEditorUrl" target="_blank" rel="noopener">standalone editor</a>
                 that runs entirely on your own computer. It edits and renders without signing in;
                 signing in is what connects it to your uploaded media.
             </p>
@@ -204,6 +207,18 @@
     private bool _openingStandalone;
 
     /// <summary>
+    /// Where the standalone editor is, which differs between a development machine and the site.
+    /// </summary>
+    /// <remarks>
+    /// V-6 of the 2026-09-06 evaluation: this was the literal <c>/editors/video/</c>, a path IIS
+    /// mounts in production and nothing serves in development — so the site's one link into the
+    /// standalone editor was a 404 on every machine it was being built on. See
+    /// <see cref="StandaloneEditorAddress"/>.
+    /// </remarks>
+    private string StandaloneEditorUrl => StandaloneEditorAddress.For(
+        HostEnvironment.IsDevelopment(), Configuration["VideoEditor:StandaloneUrl"]);
+
+    /// <summary>
     /// Opens <c>/editors/video/</c> already signed in, and on the project that is open here.
     /// </summary>
     /// <remarks>
@@ -239,7 +254,7 @@
         if (!string.IsNullOrWhiteSpace(code))          fragment.Add($"handoff={Uri.EscapeDataString(code)}");
         if (ProjectStore.CurrentServerId is { } server) fragment.Add($"project={server}");
 
-        var url = "/editors/video/" + (fragment.Count > 0 ? "#" + string.Join("&", fragment) : "");
+        var url = StandaloneEditorUrl + (fragment.Count > 0 ? "#" + string.Join("&", fragment) : "");
 
         NavManager.NavigateTo(url, forceLoad: true);
     }

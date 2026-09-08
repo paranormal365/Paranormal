@@ -89,6 +89,8 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibr
                 FileSize    = r.FileSize,
                 Description = r.Description,
                 DateCreated = r.DateCreated,
+                OwnerDisplayName = r.OwnerDisplayName,
+                CaseReference    = r.CaseReference,
             })
             .ToList()
             .AsReadOnly();
@@ -182,6 +184,8 @@ public sealed class HttpMediaLibraryProvider : IMediaLibraryProvider, IMediaLibr
         public long     FileSize    { get; set; }
         public string?  Description { get; set; }
         public DateTime DateCreated { get; set; }
+        public string?  OwnerDisplayName { get; set; }
+        public string?  CaseReference    { get; set; }
     }
 
     private sealed class ScopeGroupDto

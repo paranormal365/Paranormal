@@ -15,8 +15,15 @@ namespace Ben.Web.Playwright.Tests;
 ///
 /// <para>The signed-out checks come first: most of these are what a stranger meets.</para>
 /// </remarks>
+// Fixtures that drive the Edit Case dialog on the one seeded case, or upload to it, cannot run
+// beside each other: each one changes the case, asserts, and restores, and in parallel one
+// fixture's restore lands in the middle of another's assertion. The 2026-09-07 full run failed
+// The_leak_warning_fires_before_save_not_after_it exactly that way, having passed twice in
+// isolation and once beside PublishLeakWarningTests. NonParallelizable is what this suite already
+// uses for shared seeded state — a dozen fixtures carry it for the same reason.
 [TestFixture]
 [Category("LookAndTruths")]
+[NonParallelizable]
 public class LookAndTruthsTests : BenTestBase
 {
     /// <summary>

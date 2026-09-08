@@ -487,4 +487,97 @@ public class WasmEditorTests : BenTestBase
         await Expect(Page.Locator(".bv-workspace")).ToBeVisibleAsync(new() { Timeout = 10_000 });
         await Expect(Page.Locator(".bv-editor__too-narrow")).ToBeHiddenAsync();
     }
+
+    // ── The Server tab actually brings a file in (V-2, V-3) ─────────────────
+
+    /// <summary>
+    /// A server audio file, downloaded and then added, lands in the Audio bin.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>V-2 of the 2026-09-06 evaluation.</b> Download on an audio file: the progress bar
+    /// ran to 100%, the download answered 200, and the file was nowhere. The Audio bin still said
+    /// "No audio yet", the library size was unchanged, and nothing said anything. Twice.</para>
+    ///
+    /// <para>The download had worked. The Server tab's import placed clips on the timeline and
+    /// never put them in a bin, while the local-file import beside it always did — and audio, in
+    /// an editor with audio tracks switched off, was not placed either, so it went nowhere at
+    /// all.</para>
+    ///
+    /// <para><b>Two clicks, deliberately.</b> The first downloads and caches; the second adds it
+    /// to the project. That split is by design (phase 150) — what was missing was any visible sign
+    /// of it, which is why the card now says "Click to add" in words rather than in a tooltip.
+    /// This test clicks twice because a person now can.</para>
+    /// </remarks>
+    [Test]
+    [Description("A server audio file lands in the Audio bin.")]
+    public async Task AServerAudioFileLandsInTheAudioBin()
+    {
+        await SignInAsync();
+
+        // The engine, first. Downloading a server file needs no ffmpeg by design, but ADDING one
+        // to the project does — it reads the cached bytes and probes them. Without this the
+        // import refuses with "click Initialize", which is correct behaviour and not what this
+        // test is about.
+        await EnsureEngineReadyAsync();
+
+        await OpenMediaTabAsync("Server");
+
+        var audioCard = Page.Locator(".bv-clip-card").Filter(new() { HasTextString = ".mp3" })
+                            .Or(Page.Locator(".bv-clip-card").Filter(new() { HasTextString = ".m4a" }))
+                            .First;
+        if (await audioCard.CountAsync() == 0)
+            Assert.Ignore("no audio in this account's media library on this database");
+
+        // The name, so the bin can be checked for THIS file rather than for "not empty" — the
+        // media panel keeps every tab's markup in the DOM, so an unscoped emptiness check reads
+        // whichever bin happens to answer first.
+        var fileName = (await audioCard.Locator(".bv-clip-card__name").First.InnerTextAsync()).Trim();
+        Assert.That(fileName, Is.Not.Empty, "The Server-tab card has no file name to follow.");
+
+        // First click: download and cache. The card then says so, in words.
+        await audioCard.ClickAsync();
+        await Expect(audioCard.Locator(".bv-clip-card__cached-label"))
+            .ToBeVisibleAsync(new() { Timeout = 120_000 });
+        await Expect(audioCard.Locator(".bv-clip-card__cached-label"))
+            .ToContainTextAsync("Click to add");
+
+        // Second click: into the project. This opens the import window, whose overlay covers the
+        // tab strip until the import finishes and Done is pressed — so the walk waits for the
+        // button rather than racing the dialog.
+        await audioCard.ClickAsync();
+
+        var done = Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true }).First;
+        await Expect(done).ToBeVisibleAsync(new() { Timeout = 180_000 });
+        await done.ClickAsync();
+
+        await OpenMediaTabAsync("Audio");
+
+        var inTheBin = Page.Locator(".bv-clip-card__name").Filter(new() { HasTextString = fileName });
+        await Expect(inTheBin.First).ToBeVisibleAsync(new() { Timeout = 120_000 });
+    }
+
+    /// <summary>
+    /// Server-tab rows say whose file it is, so two of the same name can be told apart.
+    /// </summary>
+    /// <remarks>
+    /// V-3: "All media" listed seven identical <c>test-audio.mp3</c> rows — other people's
+    /// uploads, reachable through a shared group — with no owner and no case.
+    /// </remarks>
+    [Test]
+    [Description("Server-tab cards carry the owner, and the case when there is one.")]
+    public async Task TheServerTabSaysWhoseFileEachOneIs()
+    {
+        await SignInAsync();
+        await OpenMediaTabAsync("Server");
+
+        var cards = Page.Locator(".bv-clip-card");
+        await Expect(cards.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var total = await cards.CountAsync();
+        var named = await Page.Locator(".bv-clip-card__provenance").CountAsync();
+
+        Assert.That(named, Is.EqualTo(total),
+            $"{total - named} of {total} Server-tab rows say nothing about whose file they are. "
+            + "A file name is not an identity, and this tab spans several people's files.");
+    }
 }
