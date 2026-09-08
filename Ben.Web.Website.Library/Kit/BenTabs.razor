@@ -9,7 +9,15 @@
     <div class="d-none">@ChildContent</div>
 </CascadingValue>
 
-<ul class="nav @NavClass" role="tablist">
+@* W-A2 of the 2026-09-06 evaluation: a group page carries fifteen tabs, which wrapped onto a
+   second row and pushed the page's content down by the height of a row of buttons — and, worse,
+   split one control into two lines so the eye stopped reading at the end of the first.
+
+   One row that scrolls sideways instead. flex-nowrap stops the wrap; overflow-x:auto gives the
+   overflow somewhere to go; the scrollbar is hidden on the platforms that draw a permanent one,
+   because a horizontal bar under a tab strip reads as a divider. Keyboard users are unaffected —
+   focus moves through the buttons in order and the browser scrolls each one into view. *@
+<ul class="nav @NavClass flex-nowrap ben-tabs-scroll" role="tablist">
     @foreach (var tab in _tabs)
     {
         var index = _tabs.IndexOf(tab);

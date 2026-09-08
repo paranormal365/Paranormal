@@ -59,6 +59,21 @@ public record MyProfileRecord
     public bool AnyOrgAllowsPrivatePhotoSharing { get; init; }
 
     /// <summary>
+    /// Whether this person is an active member of any investigation group at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>W-CL4 of the 2026-09-06 evaluation. Somebody who is only a client — they asked a
+    /// group to come and look at their house, and that is their whole relationship with the site
+    /// — was offered "Show my private photo to clients of the groups I work with". They work with
+    /// no groups. They ARE the client the sentence is about.</para>
+    ///
+    /// <para>Distinct from <see cref="AnyOrgAllowsPrivatePhotoSharing"/>, which answers "would
+    /// ticking this do anything today?" for a member whose group has not enabled it. This answers
+    /// the prior question: is the control addressed to this person at all.</para>
+    /// </remarks>
+    public bool BelongsToAnyOrganization { get; init; }
+
+    /// <summary>
     /// Self-declared, optional, and used for exactly one thing: which of the site's three
     /// default avatars stands in when this person has no photo (item 163). NotProvided is a
     /// first-class answer, not a gap — it selects the generic default.

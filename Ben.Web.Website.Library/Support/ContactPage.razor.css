@@ -1,0 +1,22 @@
+/*
+    The honeypot's hiding place.
+
+    W-V2 of the 2026-09-06 evaluation: this rule did not exist. The markup carried
+    class="contact-hp" and nothing on the site defined it, so the trap field rendered as a plain
+    labelled "Website" input in the middle of the contact form — and the guard treats anything in
+    it as proof the submission was not typed by a person. A visitor who filled in the field the
+    form appeared to be asking them for was silently classified as spam.
+
+    Moved off-canvas rather than display:none. A field with no box model is one a scripted filler
+    can cheaply skip, and the point is that it gets filled. It is already aria-hidden and
+    tabindex="-1", so nobody reaches it by keyboard or by screen reader; this only stops it being
+    reached by eye.
+*/
+.contact-hp {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}

@@ -25,7 +25,14 @@ else if (_refusal is not null)
         <div class="alert alert-warning" data-testid="desk-refusal">@_refusal</div>
     </div>
 }
-else if (_desk is not null)
+@* W-S5 of the 2026-09-06 evaluation: a person who is only a client got this desk too — a next
+   investigation nobody will ever put them on, the open cases of groups they are not in, gear they
+   have not borrowed, and requests that wait on somebody else. Four tiles of zeroes above the hero
+   that was already there for them.
+
+   Every tile here is group work. GroupCount is the same answer already sent to Home through
+   OnHasGroups, so the hero it swaps in for is the page's own fallback, not a blank. *@
+else if (_desk is { GroupCount: > 0 })
 {
     <div class="container-fluid px-3 py-3" style="max-width:1100px;" data-testid="member-desk">
         <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-3">

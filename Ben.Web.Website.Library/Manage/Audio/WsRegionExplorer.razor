@@ -196,7 +196,7 @@
                                     <div class="card-body py-1 px-2">
                                         @if (_editNoteId == note.Id)
                                         {
-                                            <TelerikEditor @bind-Value="@_editNoteHtml" Height="140px" Tools="@_noteEditorTools" />
+                                            <BenEditor @bind-Value="@_editNoteHtml" Height="140px" Tools="@_noteEditorTools" />
                                             <div class="d-flex align-items-center gap-2 mt-1">
                                                 <input type="checkbox" class="form-check-input" id="@($"enp-{note.Id}")" @bind="@_editNotePublic" />
                                                 <label for="@($"enp-{note.Id}")" class="form-label form-label-sm mb-0">Public</label>
@@ -230,7 +230,7 @@
                                 / @FormatTime(_currentTime + LoadedStart) in file)
                             </label>
                         </div>
-                        <TelerikEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
+                        <BenEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
                         <div class="d-flex align-items-center gap-2 mt-2">
                             <input type="checkbox" class="form-check-input" id="note-pub" @bind="@_noteIsPublic" />
                             <label for="note-pub" class="form-label form-label-sm mb-0">Public</label>

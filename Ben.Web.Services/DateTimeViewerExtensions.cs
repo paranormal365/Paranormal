@@ -107,17 +107,29 @@ public static class DateTimeViewerExtensions
     /// <summary>US month-first numeric date, used by every grid column and date control.</summary>
     public const string DatePattern = "MM/dd/yyyy";
 
-    /// <summary>Numeric date with a 12-hour clock and seconds.</summary>
-    public const string DateTimePattern = "MM/dd/yyyy hh:mm:ss tt";
+    /// <summary>
+    /// Numeric date and time. No seconds — see <see cref="ToDisplayDateTime(DateTime)"/>.
+    /// </summary>
+    public const string DateTimePattern = "MM/dd/yyyy hh:mm tt";
 
-    /// <summary>Numeric date and time without seconds, where seconds carry no meaning.</summary>
-    public const string DateTimeNoSecondsPattern = "MM/dd/yyyy hh:mm tt";
+    /// <summary>
+    /// The same, with seconds, for the two places a second is evidence rather than noise.
+    /// </summary>
+    public const string DateTimeWithSecondsPattern = "MM/dd/yyyy hh:mm:ss tt";
+
+    /// <summary>
+    /// Kept as the name older call sites use for the no-seconds format, which is now the default.
+    /// </summary>
+    public const string DateTimeNoSecondsPattern = DateTimePattern;
 
     /// <summary>Written-out date for prose: <c>August 4, 2026</c>.</summary>
     public const string LongDatePattern = "MMMM d, yyyy";
 
-    /// <summary>Time on its own, 12-hour with seconds.</summary>
-    public const string TimePattern = "hh:mm:ss tt";
+    /// <summary>Time on its own, 12-hour. No seconds, for the same reason as the date.</summary>
+    public const string TimePattern = "hh:mm tt";
+
+    /// <summary>Time on its own, with seconds. For logs.</summary>
+    public const string TimeWithSecondsPattern = "hh:mm:ss tt";
 
     /// <summary>
     /// A date short enough for a chart axis, where thirty of them sit side by side and a slash
@@ -158,9 +170,31 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDate(this DateTime local) =>
         local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time: <c>08/04/2026 09:30:00 PM</c>.</summary>
+    /// <summary>A date and time: <c>08/04/2026 09:30 PM</c>.</summary>
+    /// <remarks>
+    /// <para><b>No seconds, and that is the default on purpose.</b> Ben reported the seconds three
+    /// separate times — a visit at "01:40:33 PM", an event at "03:00:00 PM", a group created at
+    /// "09:12:47" — and each was fixed where it was noticed, which is how the site came to print
+    /// them in five more places. Nobody types seconds. A picker does not offer them. A number that
+    /// nobody chose and nothing depends on is noise wearing the costume of precision.</para>
+    ///
+    /// <para>The earlier attempt at this added <c>ToDisplayDateTimeNoSeconds</c> beside the
+    /// second-bearing default and asked every future call site to remember which one it wanted.
+    /// Sixty-two of the sixty-five chose wrong, because the shorter name is the one people reach
+    /// for. So the default is now the one almost everybody wants, and the exception has the longer
+    /// name: <see cref="ToDisplayDateTimeWithSeconds(DateTime)"/>, for the audit log and the error
+    /// log, where the gap between two entries is the whole point.</para>
+    /// </remarks>
     public static string ToDisplayDateTime(this DateTime local) =>
         local.ToString(DateTimePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date and time to the second: <c>08/04/2026 09:30:05 PM</c>.</summary>
+    /// <remarks>
+    /// For logs and audit trails only. Everywhere else, see
+    /// <see cref="ToDisplayDateTime(DateTime)"/>.
+    /// </remarks>
+    public static string ToDisplayDateTimeWithSeconds(this DateTime local) =>
+        local.ToString(DateTimeWithSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The same date written out: <c>August 4, 2026</c>. For prose and cards — anywhere the date
@@ -170,9 +204,13 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDateLong(this DateTime local) =>
         local.ToString(LongDatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A time on its own: <c>09:30:00 PM</c>.</summary>
+    /// <summary>A time on its own: <c>09:30 PM</c>. No seconds — see ToDisplayDateTime.</summary>
     public static string ToDisplayTime(this DateTime local) =>
         local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A time on its own, to the second. For logs.</summary>
+    public static string ToDisplayTimeWithSeconds(this DateTime local) =>
+        local.ToString(TimeWithSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// A scheduled moment, without seconds.
@@ -195,6 +233,9 @@ public static class DateTimeViewerExtensions
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
 
     public static string? ToDisplayDateTime(this DateTime? local) => local?.ToDisplayDateTime();
+
+    public static string? ToDisplayDateTimeWithSeconds(this DateTime? local) =>
+        local?.ToDisplayDateTimeWithSeconds();
 
     public static string? ToDisplayDateLong(this DateTime? local) => local?.ToDisplayDateLong();
 }

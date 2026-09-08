@@ -314,7 +314,7 @@
                                 @foreach (var row in _history.Items)
                                 {
                                     <tr>
-                                        <td>@row.DateCreated.ToString("MM/dd/yyyy")</td>
+                                        <td>@row.DateCreated.ToDisplayDate()</td>
                                         <td>
                                             <span class="badge me-1 @(row.Kind switch {
                                                 Ben.Data.Common.Enums.BillingLedgerKind.Payment => "bg-success",

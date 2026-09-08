@@ -55,25 +55,30 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
         // Item 184: titles of private-engagement cases substitute real names at display time.
         var rosters = await CaseRedactionRoster.ForCasesAsync(db, caseIds, ct);
 
-        // Aggregate evidence vote counts for all cases in one query
-        var voteCounts = await db.EvidenceVotes.AsNoTracking()
-            .Join(db.CaseTimelineEntryFiles,
-                  ev => ev.UploadFileId,
-                  f  => f.UploadFileId,
-                  (ev, f) => new { ev, f.CaseTimelineEntryId })
-            .Join(db.CaseTimelineEntries,
-                  x  => x.CaseTimelineEntryId,
-                  e  => e.Id,
-                  (x, e) => new { x.ev, e.CaseId })
-            .Where(x => caseIds.Contains(x.CaseId))
-            .GroupBy(x => x.CaseId)
+        // ── The card's tally ─────────────────────────────────────────────────
+        // CaseVotes — a vote on the CASE — because that is what the card's own buttons cast and
+        // what /vote-summaries reads back.
+        //
+        // W-H1 of the 2026-09-06 evaluation: a card printed "No votes yet" beside "✓ 3 ✗ 0 ? 0 ·
+        // 3 votes". Neither number was wrong. This aggregate counted EvidenceVotes — votes on
+        // individual files, reached through the timeline — while the widget below it counted
+        // CaseVotes, and the card labelled both "votes". A case can easily have three people
+        // saying "yes, haunted" and nobody yet arguing about a particular photo, which is exactly
+        // what that card was reporting, twice, in contradictory words.
+        //
+        // Evidence votes are a real thing and they belong on the piece of evidence. They are not
+        // the number to put beside a button that casts something else: a visitor who voted here
+        // watched the tally above their click stay at zero.
+        var voteCounts = await db.CaseVotes.AsNoTracking()
+            .Where(v => caseIds.Contains(v.CaseId))
+            .GroupBy(v => v.CaseId)
             .Select(g => new
             {
                 CaseId       = g.Key,
                 Total        = g.Count(),
-                Confirms     = g.Count(x => x.ev.VoteType == EvidenceVoteType.Confirms),
-                Disputes     = g.Count(x => x.ev.VoteType == EvidenceVoteType.Disputes),
-                Inconclusive = g.Count(x => x.ev.VoteType == EvidenceVoteType.Inconclusive),
+                Confirms     = g.Count(v => v.VoteType == EvidenceVoteType.Confirms),
+                Disputes     = g.Count(v => v.VoteType == EvidenceVoteType.Disputes),
+                Inconclusive = g.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             })
             .ToDictionaryAsync(x => x.CaseId, ct);
 

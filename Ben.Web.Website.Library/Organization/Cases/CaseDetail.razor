@@ -102,7 +102,7 @@
                                  Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
                 {
                     <button type="button" id="case-audio-mixer" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
-                        🎚 Audio Mixer
+                        <BenIcon Name="sliders" Class="me-1" />Audio Mixer
                     </button>
                 }
                 <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
@@ -393,7 +393,8 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="casedetail-case-label-surname-city-0146">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
-                <input id="casedetail-case-label-surname-city-0146" type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" />
+                @* W-P4: the check re-runs when the label is left, not only at Save. *@
+                <input id="casedetail-case-label-surname-city-0146" type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" @onblur="CheckLeaksAsync" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Status</label>
@@ -411,17 +412,34 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description (optional HTML summary)</label>
-                <TelerikEditor @bind-Value="@_editDescription" Height="200px" />
+                <BenEditor @bind-Value="@_editDescription" Height="200px" />
             </div>
             <div class="col-md-8">
                 <label class="form-label fw-semibold" for="casedetail-public-pseudonym-88c6">Public Pseudonym</label>
-                <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" />
+                <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" @onblur="CheckLeaksAsync" />
                 <div class="form-text">Shown on public pages instead of real client name.</div>
             </div>
             <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
-                <input type="checkbox" class="form-check-input" id="case-public" @bind="@_editIsPublic" />
+                <input type="checkbox" class="form-check-input" id="case-public"
+                       @bind="@_editIsPublic" @bind:after="CheckLeaksAsync" />
                 <label for="case-public" class="form-label mb-0">Make Public</label>
             </div>
+            @* W-P4: the warning sits with the decision it is about. It used to render at the
+               bottom of this dialog, below the fold, and only after Save had already been pressed
+               once — so the first thing a group learned about publishing their client's surname
+               was that their save had not happened, for a reason they had to scroll to read. *@
+            @if (_leakWarnings.Count > 0)
+            {
+                <div class="col-12">
+                    <div class="alert alert-warning mb-0" id="case-title-leak-warning">
+                        <strong>Before this goes public:</strong>
+                        <ul class="mb-1">
+                            @foreach (var w in _leakWarnings) { <li>@w</li> }
+                        </ul>
+                        <span class="small">This is a warning, not a refusal — Save again to publish with this label.</span>
+                    </div>
+                </div>
+            }
             @* Item 193: this rendered for every group, so a free-tier group could tick it, save,
                and collect a 400 from PrivateCaseGate. The plan is knowable before the click — say
                so beside the control rather than after the attempt. Already-private cases keep the
@@ -451,16 +469,6 @@
                 <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
             </div>
         </div>
-        @if (_leakWarnings.Count > 0)
-        {
-            <div class="alert alert-warning mt-3 mb-0" id="case-title-leak-warning">
-                <strong>Before this goes public:</strong>
-                <ul class="mb-1">
-                    @foreach (var w in _leakWarnings) { <li>@w</li> }
-                </ul>
-                <span class="small">This is a warning, not a refusal — click Save again to publish with this title.</span>
-            </div>
-        }
         @if (_editError is not null)
         {
             <div class="alert alert-danger mt-3 mb-0">@_editError</div>
@@ -738,6 +746,40 @@
         }
         catch (Exception ex) { _republishError = ex.Message; }
         finally { _isBusy = false; }
+    }
+
+    /// <summary>
+    /// Runs the publish leak check now, while the dialog is still open (W-P4).
+    /// </summary>
+    /// <remarks>
+    /// <para>Called when Make Public is ticked and whenever the label or the pseudonym is left.
+    /// The check used to run only inside Save, so a group learned that they were about to publish
+    /// their client's surname by having their save silently not happen — the reason waiting at the
+    /// bottom of a dialog they had to scroll.</para>
+    ///
+    /// <para>Silent when the case is not going public and silent when the check itself fails.
+    /// An advisory that cannot run must never look like an all-clear OR like a problem; it is
+    /// simply not offering an opinion.</para>
+    ///
+    /// <para><b>This shows the warning; it does not spend it.</b> <c>_leakWarnedTitle</c> stays
+    /// where it was, so the first Save still stops once and asks for a second — which is what the
+    /// original design got right and W-P4 was never about. The complaint was that the warning
+    /// arrived only after a save had silently not happened, at the bottom of a dialog somebody
+    /// had to scroll. Now it arrives while they are still choosing, and the stop is unchanged.</para>
+    /// </remarks>
+    private async Task CheckLeaksAsync()
+    {
+        if (!_editIsPublic || string.IsNullOrWhiteSpace(_editTitle))
+        {
+            _leakWarnings = [];
+            return;
+        }
+
+        var check = await AdminClient.GetPublishLeakWarningsAsync(
+            OrgId, CaseId, _editTitle.Trim(), _editPseudonym.Trim());
+        if (check.Failed) return;
+
+        _leakWarnings = check.Items;
     }
 
     private async Task SaveEdit()

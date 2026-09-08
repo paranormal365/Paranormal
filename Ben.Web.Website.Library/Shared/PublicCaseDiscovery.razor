@@ -166,17 +166,24 @@
                                     <h6 class="card-title mb-1">@item.Title</h6>
                                     <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
                                     <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
-                                    <CaseVoteBar Confirms="@item.ConfirmsCount"
-                                             Disputes="@item.DisputesCount"
-                                             Inconclusive="@item.InconclusiveCount"
-                                             Total="@item.TotalVotes"
-                                             Score="@item.Score" />
-                                    @if (UserState.IsAuthenticated)
+                                    @* W-H1: one tally per card. The widget draws the same bar and
+                                       the same three counts as CaseVoteBar and adds the buttons,
+                                       so rendering both put two tallies on one card — and while
+                                       they were reading different tables they disagreed, which is
+                                       how the card came to say "No votes yet" over "3 votes".
+                                       Whoever cannot see the widget still gets the bar. *@
+                                    @if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
                                     {
-                                        <div class="mt-2">
-                                            <CaseVoteWidget CaseId="@item.CaseId"
-                                                            PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
-                                        </div>
+                                        <CaseVoteWidget CaseId="@item.CaseId"
+                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                                    }
+                                    else
+                                    {
+                                        <CaseVoteBar Confirms="@item.ConfirmsCount"
+                                                 Disputes="@item.DisputesCount"
+                                                 Inconclusive="@item.InconclusiveCount"
+                                                 Total="@item.TotalVotes"
+                                                 Score="@item.Score" />
                                     }
                                 </div>
                                 <div class="card-footer bg-transparent d-flex gap-2 pt-2">

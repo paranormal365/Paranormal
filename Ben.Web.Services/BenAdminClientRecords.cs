@@ -1217,6 +1217,10 @@ public sealed record CaseReportSummary(
     bool                                             IsPublicSummaryVisible = false);
 
 /// <param name="IsPublicSummaryVisible">Switched onto the group's public case page (W-P3).</param>
+/// <param name="DateUpdated">
+/// When any part of the report last changed, sections included. With <c>PublishedAt</c> this is
+/// what tells the editor a published report has been edited since the client was sent it (W-A14).
+/// </param>
 public sealed record CaseReportDetail(
     Guid                                             Id,
     Guid                                             CaseId,
@@ -1228,7 +1232,29 @@ public sealed record CaseReportDetail(
     DateTime?                                        PublishedAt,
     DateTime                                         DateCreated,
     IReadOnlyList<CaseReportSectionDto>              Sections,
-    bool                                             IsPublicSummaryVisible = false);
+    bool                                             IsPublicSummaryVisible = false,
+    DateTime?                                        DateUpdated = null)
+{
+    /// <summary>
+    /// Whether the client is reading something older than what is on this screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>W-A14 of the 2026-09-06 evaluation. Publishing a report delivers it and posts a
+    /// notice on the case board; after that the report stayed fully editable with nothing to say
+    /// so and no way to re-issue it. The group corrects a date, and the client — who is reading a
+    /// PDF generated live — is silently handed a different document, or reads the old notice and
+    /// assumes nothing has moved.</para>
+    ///
+    /// <para>A second of slack, because Publish writes PublishedAt and DateUpdated in the same
+    /// statement and a clock that resolves them a tick apart would put every freshly published
+    /// report into this state.</para>
+    /// </remarks>
+    public bool HasUnpublishedChanges =>
+        Status == Ben.Data.Common.Enums.CaseReportStatus.Published
+        && PublishedAt is { } published
+        && DateUpdated is { } updated
+        && updated > published.AddSeconds(1);
+}
 
 public sealed record CaseReportSectionDto(
     Guid                                             Id,

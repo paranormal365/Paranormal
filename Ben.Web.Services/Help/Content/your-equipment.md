@@ -233,7 +233,8 @@ lenders deciding that person's next request; what borrowers write is shown, unat
 borrowers considering asking. The full rules are in
 [Borrowing Equipment](/help/borrowing-equipment#feedback-after-a-loan).
 
-A group's **Administrators and Owner** can open **Equipment feedback** from the group's page. It
+A group's **Administrators and Owner** get an **Equipment feedback** link on the group's Equipment
+tab; nobody else is shown it, because nobody else can open the page. It
 lists everything left about the group's gear and its members' loans, naming both sides, and anything
 that crosses a line can be removed. That page exists so a complaint can be acted on — it is the one
 place in the app where feedback is attributed on both ends.

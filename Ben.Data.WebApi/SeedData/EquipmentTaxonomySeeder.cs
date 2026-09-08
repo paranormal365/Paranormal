@@ -24,7 +24,7 @@ namespace Ben.Data.WebApi.SeedData;
 /// </remarks>
 internal static class EquipmentTaxonomySeeder
 {
-    private const string GenericBrandName = "Generic / Unbranded";
+    private const string GenericBrandName = Ben.Data.Common.Constants.EquipmentCatalogNames.GenericBrand;
     private static readonly (string Name, string Description, string IconClass)[] _categories =
     [
         ("Audio Recorder",           "Digital recorders used to capture EVP and ambient audio.", "bi bi-mic"),

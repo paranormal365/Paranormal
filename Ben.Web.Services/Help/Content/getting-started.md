@@ -250,6 +250,9 @@ had merely refused to say so.
 The **bell** in the top bar counts everything waiting on you, and the number is a total across
 several different kinds of thing. Open it, or the **Notifications** page, to see which.
 
+The sidebar's **Notifications** entry, the bell and the page all report the same number, and that
+number is always the sum of the rows underneath it. If the bell says four, four things are listed.
+
 | | |
 |---|---|
 | Replies on your cases | A group has written back about a case of yours. |

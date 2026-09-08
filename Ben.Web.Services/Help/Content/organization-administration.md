@@ -11,8 +11,18 @@ configure the group itself.
 
 ## Group settings
 
-The group's **Edit** screen holds its public identity — name, URL, contact details — and two
-switches worth understanding.
+Everything a group can configure lives on the **Settings** tab, and there is a lot of it: billing,
+promotion, feed attribution, address display, media privacy, the kind of group you are, walking
+tours, the role new members start on, calendar event types, member titles, investigation duties
+and the duty eligibility matrix.
+
+The row of buttons at the top of the tab jumps to each of those in turn. Nothing is hidden behind
+them — the whole page is still one page you can read top to bottom — they are there so you can
+find out in one glance whether the thing you came to change is on this screen, and go straight to
+it if it is.
+
+The group's **Edit** screen — the button beside the group's name, not the Settings tab — holds its
+public identity: name, URL, contact details, and two switches worth understanding.
 
 **Accepting membership applications** controls whether people can apply to join.
 

@@ -22,14 +22,16 @@
 
     @* ── Waiting on you ───────────────────────────────────────────────────── *@
     <h6 class="text-secondary text-uppercase small mb-2">Waiting on you</h6>
-    @if (_summary.TotalCount == 0)
+    @* W-CL3: the same list the bell and the sidebar badge read, so "nothing is waiting" and the
+       rows below it can never disagree. See NotificationRows. *@
+    @if (_rows.Count == 0)
     {
         <div class="alert alert-light border">You're all caught up — nothing is waiting on you.</div>
     }
     else
     {
         <div class="list-group mb-4">
-            @foreach (var row in SummaryRows())
+            @foreach (var row in _rows)
             {
                 <button type="button"
                         class="list-group-item list-group-item-action d-flex align-items-center gap-3"
@@ -165,7 +167,6 @@
 </div>
 
 @code {
-    private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
     private List<MyMessageRecord> _messages = [];
     private LoadResult<MyMessageRecord> _messagesResult;
     private LoadResult<PendingPermissionRequestRecord> _pendingRequestsResult;
@@ -183,16 +184,27 @@
 
         Notifications.Changed += OnNotificationsChanged;
         await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
-        _summary = Notifications.Current;
+        SetSummary(Notifications.Current);
 
         await LoadDetailAsync();
     }
 
     private void OnNotificationsChanged() => InvokeAsync(() =>
     {
-        _summary = Notifications.Current;
+        SetSummary(Notifications.Current);
         StateHasChanged();
     });
+
+    /// <summary>
+    /// The rows this page shows, and therefore the number it stands over (W-CL3).
+    /// </summary>
+    /// <remarks>
+    /// The page used to keep the summary and read <c>TotalCount</c> off it to decide whether to
+    /// say "you're all caught up", then render a list built separately — so it could say
+    /// something was waiting and show nothing. It now holds only the rows.
+    /// </remarks>
+    private void SetSummary(NotificationSummaryResponse summary) =>
+        _rows = NotificationRows.For(summary);
 
     private async Task LoadDetailAsync()
     {
@@ -272,46 +284,13 @@
     }
 
     /// <summary>
-    /// The non-empty buckets, each with somewhere to go. Buckets with nothing in them are dropped
-    /// rather than shown as zeroes — this page is a to-do list, not a dashboard.
+    /// What is waiting, from the one shared list (W-CL3). Recomputed whenever the summary does.
     /// </summary>
-    private IEnumerable<SummaryRow> SummaryRows()
-    {
-        var s = _summary;
-
-        if (s.CaseMessagesAsClient.Count > 0)
-            yield return new("Replies on your cases",
-                $"From the group handling your case · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsClient.OldestUnreadUtc)}",
-                "folder", "/my-cases", s.CaseMessagesAsClient);
-
-        // Item 173: one row per group, opening exactly what it counts.
-        foreach (var slice in s.CaseMessagesAsOrgMemberByCase ?? [])
-            yield return new($"Client messages awaiting a reply · {slice.CaseTitle}",
-                $"{slice.OrganizationName} · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
-                "message-square", $"/organizations/{slice.OrganizationId}/cases/{slice.CaseId}",
-                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
-
-        foreach (var slice in s.OrgMessagesByOrg ?? [])
-            yield return new($"Unread group messages · {slice.OrganizationName}",
-                $"Internal messages addressed to you · oldest {NotificationBadge.DescribeAge(slice.OldestUnreadUtc)}",
-                "mail", $"/organizations/{slice.OrganizationId}?tab=messages",
-                new NotificationBucket(slice.Count, slice.OldestUnreadUtc));
-
-        if (s.PendingPermissionRequests.Count > 0)
-            yield return new("File permission requests",
-                $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
-                "lock", "/notifications", s.PendingPermissionRequests);
-
-        if (s.EquipmentCheckouts.Count > 0)
-            yield return new("Equipment requests & overdue gear",
-                $"Waiting on your decision, or late back · oldest {NotificationBadge.DescribeAge(s.EquipmentCheckouts.OldestUnreadUtc)}",
-                "tool", "/my-checkouts", s.EquipmentCheckouts);
-
-        if (s.SystemMessages.Count > 0)
-            yield return new("Unread messages",
-                $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
-                "bell", "/notifications", s.SystemMessages);
-    }
+    /// <remarks>
+    /// Buckets with nothing in them produce no row, so this page stays a to-do list rather than a
+    /// dashboard of zeroes.
+    /// </remarks>
+    private IReadOnlyList<NotificationRow> _rows = [];
 
     /// <summary>
     /// How to name a message's author. "Anonymous" states that we are withholding it; "Unknown" is
@@ -320,9 +299,6 @@
     /// </summary>
     private static string SenderLabel(MyMessageRecord msg)
         => msg.SenderHidden ? "Anonymous" : (msg.SentByDisplayName ?? "Unknown");
-
-    private sealed record SummaryRow(
-        string Title, string Detail, string Icon, string Destination, NotificationBucket Bucket);
 
     public void Dispose() => Notifications.Changed -= OnNotificationsChanged;
 }

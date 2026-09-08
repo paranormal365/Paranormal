@@ -19,7 +19,11 @@
             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(ReturnUrl ?? "/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
                 Back
             </button>
-            <h3 class="d-inline-block ms-3 mb-0">Organization</h3>
+            @* W-A2: this said "Organization" — the name of the TABLE — on the page for a
+               particular group, on a site where a person belongs to several. The name is what
+               tells you which one you are looking at. It falls back to the word only while the
+               group is still loading or could not be read, where there is nothing better to say. *@
+            <h3 class="d-inline-block ms-3 mb-0">@(_org?.Name ?? "Organization")</h3>
         </div>
         @if (_canEdit && !_editMode)
         {
@@ -655,15 +659,19 @@
         _successMessage = null;
     }
 
-    private static readonly TimeZoneInfo _centralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
-
-    /// <summary>Formats a stored UTC timestamp as the server's own Central time, explicitly labeled
-    /// "(server)" so it's never confused with the viewer's own local time.</summary>
-    private static string FormatServerTime(DateTime utc)
-    {
-        var central = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _centralTimeZone);
-        return $"{central:MM/dd/yyyy HH:mm:ss} (server)";
-    }
+    /// <summary>When the group was created or last changed, in the reader's own time.</summary>
+    /// <remarks>
+    /// <para>W-A2 of the 2026-09-06 evaluation. This used to convert to America/Chicago and append
+    /// "(server)" — the machine's timezone, labelled as such so nobody mistook it for their own.
+    /// The label was honest and the value was still useless: a reader in Portland was being asked
+    /// to do timezone arithmetic to learn what day their group was created, and told the answer to
+    /// the second, of a second nobody typed.</para>
+    ///
+    /// <para>Every other timestamp on the site goes through ToViewerLocalTime. There was never a
+    /// reason for this one not to.</para>
+    /// </remarks>
+    private string FormatServerTime(DateTime utc) =>
+        utc.ToViewerLocalTime(UserState).ToDisplayDateTime();
 
     private void BeginEdit()
     {

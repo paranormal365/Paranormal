@@ -177,7 +177,7 @@
                     Describe what you have experienced at this location.
                     Be as detailed as possible — when it started, how often it occurs, who has witnessed it.
                 </p>
-                <TelerikEditor @bind-Value="@_description" @bind-Value:after="@OnDescriptionChanged"
+                <BenEditor @bind-Value="@_description" @bind-Value:after="@OnDescriptionChanged"
                                Height="320px"
                                Tools="@_editorTools" />
                 @* W-R3: this used to shout in red before anything had been typed. It is a

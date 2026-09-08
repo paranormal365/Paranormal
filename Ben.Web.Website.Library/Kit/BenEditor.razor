@@ -1,0 +1,42 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@*
+    The site's rich-text box. One wrapper so the font is decided once.
+
+    W-R3 of the 2026-09-06 evaluation: what somebody typed into an investigation request came back
+    in Times New Roman, on a site set in a sans-serif face, and the same happened on the case
+    timeline. Nothing was misconfigured — TelerikEditor defaults to EditMode.Iframe, and an iframe
+    starts from the browser's own defaults with none of the page's stylesheets. Every editor on the
+    site looked like a different application from the page around it.
+
+    EditMode.Div is Telerik's own answer: the editable region is a div in the page, so it inherits
+    the page's typography the way every other input does. The trade is that page CSS now reaches
+    the content — which is the point, and is also what makes the WYSIWYG claim true, since the
+    published article is rendered by that same CSS.
+
+    Three parameters, declared rather than splatted: TelerikEditor throws on an attribute it does
+    not recognise, so this forwards exactly what call sites pass and nothing else.
+*@
+
+<TelerikEditor Value="@Value"
+               ValueChanged="@ValueChanged"
+               EditMode="@EditorEditMode.Div"
+               Height="@Height"
+               Tools="@Tools" />
+
+@code {
+    /// <summary>The HTML being edited. Two-way bindable: <c>@bind-Value</c>.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Any CSS height — <c>"200px"</c>, <c>"60vh"</c>.</summary>
+    [Parameter] public string Height { get; set; } = "200px";
+
+    /// <summary>
+    /// The toolbar. Defaults to Telerik's own full set, which is what most call sites want; the
+    /// few that pass a shorter list are places where a heading or a table would be out of place
+    /// (a note on an audio region, a message body).
+    /// </summary>
+    [Parameter] public List<IEditorTool> Tools { get; set; } = Telerik.Blazor.Components.Editor.EditorToolSets.Default;
+}
