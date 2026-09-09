@@ -229,6 +229,35 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayTimeNoSeconds(this DateTime local) =>
         local.ToString("hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// A scheduled window, read the way people say it out loud.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three readings, because an investigation has three shapes:</para>
+    /// <list type="bullet">
+    ///   <item><description>finishes the same evening — <c>09/14/2026 07:00 PM – 11:30 PM</c></description></item>
+    ///   <item><description>runs past midnight — <c>09/14/2026 03:00 PM – 08:00 AM next day</c>,
+    ///   which the site treats as one day: one arrival, one departure</description></item>
+    ///   <item><description>genuinely spans days — <c>09/14/2026 03:00 PM – 09/21/2026 08:00 AM</c></description></item>
+    /// </list>
+    /// <para>Both arguments are already in the viewer's zone. Six places printed the end as a
+    /// bare time, which is right for the first shape and quietly wrong for the other two: a
+    /// week-long visit read as though it had finished that evening.</para>
+    /// </remarks>
+    public static string ToDisplaySpan(this DateTime localStart, DateTime? localEnd)
+    {
+        var start = localStart.ToDisplayDateTime();
+        if (localEnd is not { } end || end <= localStart) return start;
+
+        var days = (end.Date - localStart.Date).Days;
+        return days switch
+        {
+            0 => $"{start} – {end.ToDisplayTime()}",
+            1 => $"{start} – {end.ToDisplayTime()} next day",
+            _ => $"{start} – {end.ToDisplayDateTime()}",
+        };
+    }
+
     /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
 

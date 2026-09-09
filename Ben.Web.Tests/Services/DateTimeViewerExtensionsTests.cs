@@ -112,4 +112,56 @@ public class DateTimeViewerExtensionsTests
 
         Assert.True((result - expected).Duration() < TimeSpan.FromSeconds(5));
     }
+
+    // ── ToDisplaySpan ────────────────────────────────────────────────────────
+    //
+    // Ben's rule, 2026-09-09: "you usually arrive like 3pm on one day and the investigation ends
+    // 8am the next day, this is considered a single-day investigation". So crossing midnight is
+    // not a multi-day visit, and the reading has to say which one it is.
+
+    [Fact]
+    public void ToDisplaySpan_SameEvening_ShowsOnlyTheEndTime()
+    {
+        var start = new DateTime(2026, 9, 14, 19, 0, 0);
+        var end   = new DateTime(2026, 9, 14, 23, 30, 0);
+
+        Assert.Equal("09/14/2026 07:00 PM – 11:30 PM", start.ToDisplaySpan(end));
+    }
+
+    [Fact]
+    public void ToDisplaySpan_PastMidnight_SaysNextDay()
+    {
+        var start = new DateTime(2026, 9, 14, 15, 0, 0);
+        var end   = new DateTime(2026, 9, 15, 8, 0, 0);
+
+        Assert.Equal("09/14/2026 03:00 PM – 08:00 AM next day", start.ToDisplaySpan(end));
+    }
+
+    [Fact]
+    public void ToDisplaySpan_AcrossAWeek_ShowsBothDates()
+    {
+        var start = new DateTime(2026, 9, 14, 15, 0, 0);
+        var end   = new DateTime(2026, 9, 21, 8, 0, 0);
+
+        Assert.Equal("09/14/2026 03:00 PM – 09/21/2026 08:00 AM", start.ToDisplaySpan(end));
+    }
+
+    [Fact]
+    public void ToDisplaySpan_NoEnd_IsJustTheStart()
+    {
+        var start = new DateTime(2026, 9, 14, 15, 0, 0);
+
+        Assert.Equal("09/14/2026 03:00 PM", start.ToDisplaySpan(null));
+    }
+
+    [Fact]
+    public void ToDisplaySpan_EndBeforeStart_IsIgnoredRatherThanPrinted()
+    {
+        // Rows written before the server refused this shape. A reading that says
+        // "3pm – 2pm" invites somebody to fix the wrong thing.
+        var start = new DateTime(2026, 9, 14, 15, 0, 0);
+        var end   = new DateTime(2026, 9, 14, 14, 0, 0);
+
+        Assert.Equal("09/14/2026 03:00 PM", start.ToDisplaySpan(end));
+    }
 }

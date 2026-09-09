@@ -33,9 +33,33 @@
             </div>
 
             <div class="col-md-6">
-                <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">When</label>
+                <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">Starts</label>
                 <input id="newinvestigationwindow-when-60b5" type="datetime-local" class="form-control" value="@_whenText"
                        @oninput="@(e => _whenText = e.Value?.ToString() ?? "")" />
+            </div>
+
+            @* One arrival and one departure, allowed to cross midnight — 3pm until 8am the next
+               morning is one visit. A weekend or a week ticks the box. *@
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="newinvestigationwindow-ends-7c31">Ends (optional)</label>
+                @if (_multiDay)
+                {
+                    <input id="newinvestigationwindow-ends-7c31" type="datetime-local" class="form-control" value="@_endText"
+                           @oninput="@(e => _endText = e.Value?.ToString() ?? "")" />
+                }
+                else
+                {
+                    <input id="newinvestigationwindow-ends-7c31" type="time" class="form-control" value="@_endTimeText"
+                           @oninput="@(e => _endTimeText = e.Value?.ToString() ?? "")" />
+                    <div class="form-text">A time at or before the start is the next morning.</div>
+                }
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="newinvestigationwindow-multi-day"
+                           checked="@_multiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="newinvestigationwindow-multi-day">
+                        Runs over more than one day
+                    </label>
+                </div>
             </div>
 
             <div class="col-md-6">
@@ -226,6 +250,9 @@
     private string _title = "";
     private string _description = "";
     private string _whenText = DateTime.Now.AddDays(1).ToString("yyyy-MM-ddTHH:mm");
+    private string _endText = "";
+    private string _endTimeText = "";
+    private bool   _multiDay;
     private PlaceKind _kind = PlaceKind.PublicLocation;
     private InvestigationVisibility _visibility = InvestigationVisibility.PlaceInvestigators;
 
@@ -242,6 +269,44 @@
     private Timer? _lookupTimer;
     private bool _saving;
     private string? _error;
+
+    /// <summary>
+    /// The end a single-day visit gets from a clock time: at or before the start is the next
+    /// morning. Null whenever nothing usable has been typed — the field is optional.
+    /// </summary>
+    private DateTime? EffectiveEnd()
+    {
+        if (!DateTime.TryParse(_whenText, out var start)) return null;
+
+        if (_multiDay)
+            return DateTime.TryParse(_endText, out var end) && end > start ? end : null;
+
+        return TimeSpan.TryParse(_endTimeText, out var timeOfDay)
+            ? Ben.Web.Services.InvestigationWindow.SingleDayEnd(start, timeOfDay)
+            : null;
+    }
+
+    /// <summary>Carries the end across the toggle rather than clearing it.</summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _multiDay) return;
+
+        var carried = EffectiveEnd();
+        _multiDay = on;
+
+        if (on)
+        {
+            var seed = carried ?? (DateTime.TryParse(_whenText, out var start) ? start.AddDays(1) : (DateTime?)null);
+            _endText = seed?.ToString("yyyy-MM-ddTHH:mm") ?? "";
+            _endTimeText = "";
+        }
+        else
+        {
+            _endTimeText = carried?.ToString("HH:mm") ?? "";
+            _endText = "";
+        }
+    }
 
     private bool CanSave =>
         !string.IsNullOrWhiteSpace(_title)
@@ -366,6 +431,7 @@
             var request = new CreateOrgInvestigationRequest(
                 Title: _title.Trim(),
                 ScheduledDateTime: DateTime.Parse(_whenText).ToUniversalTime(),
+                EndDateTime: EffectiveEnd()?.ToUniversalTime(),
                 Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 PlaceId: _chosenPlace?.Id,
                 // Only sent when no existing place was picked — otherwise the server would be

@@ -53,6 +53,11 @@ public sealed class ScheduleProposalController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (request.Slots is null || request.Slots.Count == 0) return BadRequest("At least one proposed slot is required.");
 
+        // A slot may cross midnight, and it may span a weekend — it may not finish before it
+        // starts. A client asked to choose between reversed windows has nothing to choose.
+        if (request.Slots.Any(s => s.EndDateTime is { } end && end <= s.StartDateTime))
+            return BadRequest("Every proposed date has to end after it starts.");
+
         var proposal = new InvestigationScheduleProposal
         {
             Id = Guid.NewGuid(), CaseId = caseId, Notes = request.Notes?.Trim(),

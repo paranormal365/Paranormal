@@ -321,11 +321,8 @@
                 </div>
                 <div class="small mt-1">
                     <BenIcon Name="calendar" />
-                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
-                    @if (inv.EndDateTime.HasValue)
-                    {
-                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTimeNoSeconds()</span>
-                    }
+                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState)
+                      .ToDisplaySpan(inv.EndDateTime?.ToViewerLocalTime(UserState))
                 </div>
                 @if (!string.IsNullOrWhiteSpace(inv.Location))
                 {

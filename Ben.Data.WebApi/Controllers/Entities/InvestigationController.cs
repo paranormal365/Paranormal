@@ -79,11 +79,26 @@ public sealed class InvestigationController : BenControllerBase
         });
     }
 
+    /// <summary>
+    /// Why this start and end cannot be a visit, or null.
+    /// </summary>
+    /// <remarks>
+    /// An investigation may run past midnight — arriving at 3pm and leaving at 8am is one visit —
+    /// and it may run for a week. What it may not do is end before it starts. Nothing checked
+    /// that until 2026-09-09, and the calendar event built from it inherited the same reversed
+    /// window without complaint.
+    /// </remarks>
+    private static string? WhyNotThisWindow(UpsertInvestigationRequest request)
+        => request.EndDateTime is { } end && end <= request.ScheduledDateTime
+            ? "The end has to come after the start."
+            : null;
+
     [HttpPost]
     public async Task<ActionResult<InvestigationRecord>> Create(
         Guid orgId, Guid caseId, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct))
@@ -185,6 +200,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();

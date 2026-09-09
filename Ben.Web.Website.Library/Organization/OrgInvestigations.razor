@@ -275,7 +275,7 @@ else
                 {
                     <tr id="inv-row-@row.Id" class="@(row.Id == _focused ? "table-active" : null)">
                         <td class="text-nowrap">
-                            @row.ScheduledDateTime.ToLocalTime().ToDisplayDateTime()
+                            @row.ScheduledDateTime.ToLocalTime().ToDisplaySpan(row.EndDateTime?.ToLocalTime())
                         </td>
                         <td>
                             @row.Title

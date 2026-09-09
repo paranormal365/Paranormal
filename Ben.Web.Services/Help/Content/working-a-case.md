@@ -212,6 +212,22 @@ investigation rather than by rank: the person who scheduled it, the case manager
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.
 
+## How long a visit runs
+
+Every investigation has a start and, if you want it, an end. **Starts** is a date and a time.
+**Ends** is a time, because the ordinary visit is one arrival and one departure — and it is
+allowed to cross midnight. Arriving at 3:00 PM and leaving at 8:00 AM is a single-day
+investigation: an end at or before the start is read as the next morning.
+
+For anything longer — a weekend, a week — tick **Runs over more than one day** and the end
+becomes a date and a time of its own. The visit then reads with both dates wherever it appears,
+so nobody mistakes a week on site for an evening.
+
+The end may not come before the start. Say so and the form refuses rather than booking a visit
+that finishes before anyone arrives.
+
+The same applies to **Propose Dates**, where you offer a client a choice of windows.
+
 ## Scheduling a visit with no case
 
 **Schedule an investigation** on the group's Investigations tab books a visit that belongs to no

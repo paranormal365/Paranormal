@@ -40,8 +40,8 @@ else
                                 var isAccepted = prop.AcceptedSlotId == slot.Id;
                                 <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
                                     @(isAccepted ? "✓ " : "• ")
-                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                    @slot.StartDateTime.ToViewerLocalTime(UserState)
+                                      .ToDisplaySpan(slot.EndDateTime?.ToViewerLocalTime(UserState))
                                 </div>
                             }
                         </div>
@@ -79,6 +79,17 @@ else
                 <textarea id="schedulingproposalpanel-message-to-client-optional-66d6" class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
             </div>
             <div class="col-12 fw-semibold small">Proposed Date/Time Options</div>
+            @* Same rule as the schedule dialog: one arrival and one departure, allowed to cross
+               midnight, is a single day. A proposal for a weekend or a week ticks the box. *@
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="schedulingproposalpanel-multi-day"
+                           checked="@_multiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="schedulingproposalpanel-multi-day">
+                        These run over more than one day
+                    </label>
+                </div>
+            </div>
             @for (var i = 0; i < _slots.Count; i++)
             {
                 var idx = i;
@@ -87,13 +98,24 @@ else
                         <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
                         <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].Start" Width="200px" />
                         <span class="text-secondary small">to</span>
-                        <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].End" Width="200px" />
+                        @if (_multiDay)
+                        {
+                            <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].End" Width="200px" />
+                        }
+                        else
+                        {
+                            <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_slots[idx].EndTime" Width="120px" />
+                        }
                         @if (_slots.Count > 1)
                         {
                             <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.RemoveAt(idx))"><BenIcon Name="trash-2" /></button>
                         }
                     </div>
                 </div>
+            }
+            @if (!_multiDay)
+            {
+                <div class="col-12 form-text">An end at or before the start is the next morning.</div>
             }
             <div class="col-12">
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.Add(new SlotForm()))"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
@@ -118,6 +140,7 @@ else
     private string? _error;
 
     private bool _showProposeDialog;
+    private bool _multiDay;
     private string _proposeNotes = "";
     private List<SlotForm> _slots = [new()];
 
@@ -133,7 +156,7 @@ else
         _saving = true;
         var slots = _slots
             .Where(s => s.Start.HasValue)
-            .Select((s, i) => new SlotInput(s.Start!.Value, s.End))
+            .Select((s, i) => new SlotInput(s.Start!.Value, EffectiveEnd(s)))
             .ToList();
         try
         {
@@ -183,9 +206,44 @@ else
         _                                       => "bg-secondary",
     };
 
+    private DateTime? EffectiveEnd(SlotForm slot)
+    {
+        if (_multiDay) return slot.End;
+        if (slot.Start is not { } start || slot.EndTime is not { } t) return null;
+        return InvestigationWindow.SingleDayEnd(start, t.TimeOfDay);
+    }
+
+    /// <summary>Carries each slot's end across rather than clearing it.</summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _multiDay) return;
+
+        foreach (var slot in _slots)
+        {
+            if (on)
+            {
+                slot.End = EffectiveEnd(slot) ?? slot.Start?.AddDays(1);
+                slot.EndTime = null;
+            }
+            else
+            {
+                slot.EndTime = slot.End;
+                slot.End = null;
+            }
+        }
+
+        _multiDay = on;
+    }
+
     private class SlotForm
     {
-        public DateTime? Start { get; set; }
-        public DateTime? End   { get; set; }
+        public DateTime? Start   { get; set; }
+
+        /// <summary>The end when the dialog is in multi-day mode.</summary>
+        public DateTime? End     { get; set; }
+
+        /// <summary>The end when it is not — only the time of day is read.</summary>
+        public DateTime? EndTime { get; set; }
     }
 }

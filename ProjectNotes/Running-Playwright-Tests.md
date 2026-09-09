@@ -86,6 +86,7 @@ Available categories:
 | `MyCases` | Client case list and detail |
 | `Voting` | Evidence vote widget |
 | `ErrorHandling` | 404, invalid guids, Telerik parameter errors |
+| `MultiDayInvestigation` | Single-day is the norm; the checkbox opens a longer window |
 | `Capture` | **Writes files.** Re-captures the help screenshots and recordings — see below |
 
 ### A single test by name
