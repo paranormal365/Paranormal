@@ -86,6 +86,7 @@ Available categories:
 | `MyCases` | Client case list and detail |
 | `Voting` | Evidence vote widget |
 | `ErrorHandling` | 404, invalid guids, Telerik parameter errors |
+| `PopupInModal` | A Telerik popup opened from a dialog stays inside the window |
 | `Capture` | **Writes files.** Re-captures the help screenshots and recordings — see below |
 
 ### A single test by name
