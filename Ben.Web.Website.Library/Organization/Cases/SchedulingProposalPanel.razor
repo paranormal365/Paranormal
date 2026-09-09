@@ -96,7 +96,8 @@ else
                 <div class="col-12">
                     <div class="d-flex gap-2 align-items-center">
                         <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
-                        <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].Start" Width="200px" />
+                        <TelerikDatePicker Format="MM/dd/yyyy" @bind-Value="@_slots[idx].StartDate" Width="150px" />
+                        <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_slots[idx].StartTime" Width="120px" />
                         <span class="text-secondary small">to</span>
                         @if (_multiDay)
                         {
@@ -118,7 +119,7 @@ else
                 <div class="col-12 form-text">An end at or before the start is the next morning.</div>
             }
             <div class="col-12">
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.Add(new SlotForm()))"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddSlot"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
             </div>
         </div>
     </ChildContent>
@@ -142,7 +143,7 @@ else
     private bool _showProposeDialog;
     private bool _multiDay;
     private string _proposeNotes = "";
-    private List<SlotForm> _slots = [new()];
+    private List<SlotForm> _slots = [new() { Start = DefaultSlotStart() }];
 
     protected override async Task OnInitializedAsync()
     {
@@ -167,7 +168,7 @@ else
                 _proposals.Insert(0, result);
                 _showProposeDialog = false;
                 _proposeNotes = "";
-                _slots = [new()];
+                _slots = [new SlotForm { Start = DefaultSlotStart() }];
             }
         }
         catch { _error = "Failed to send proposal."; }
@@ -206,6 +207,19 @@ else
         _                                       => "bg-secondary",
     };
 
+    /// <summary>
+    /// Where a proposed window starts before anybody touches it: a week out, at 7pm — the hour a
+    /// visit usually begins, and far enough ahead that a client has time to answer.
+    /// </summary>
+    private static DateTime DefaultSlotStart() => DateTime.Today.AddDays(7).AddHours(19);
+
+    /// <summary>Each further option is the next evening, which is how three dates get offered.</summary>
+    private void AddSlot()
+    {
+        var last = _slots.LastOrDefault()?.Start ?? DefaultSlotStart().AddDays(-1);
+        _slots.Add(new SlotForm { Start = last.AddDays(1) });
+    }
+
     private DateTime? EffectiveEnd(SlotForm slot)
     {
         if (_multiDay) return slot.End;
@@ -238,7 +252,31 @@ else
 
     private class SlotForm
     {
+        /// <summary>
+        /// Seeded, never null, and that is load-bearing rather than a convenience.
+        /// </summary>
+        /// <remarks>
+        /// An empty Telerik date field rebuilds the whole date the first time a segment is
+        /// stepped: type <c>09</c>, press Up on the day, and you get <c>10/01</c> — the month you
+        /// typed is gone. Reproduced on 2026-09-09 and it is deterministic, not a race. A field
+        /// that already holds a date steps its segments correctly, so the fix is to start from
+        /// one. The Schedule Investigation dialog has always seeded its start and has never had
+        /// the fault.
+        /// </remarks>
         public DateTime? Start   { get; set; }
+
+        /// <summary>The two halves of the start, over one field.</summary>
+        public DateTime StartDate
+        {
+            get => Start?.Date ?? DefaultSlotStart().Date;
+            set => Start = value.Date + (Start?.TimeOfDay ?? DefaultSlotStart().TimeOfDay);
+        }
+
+        public DateTime StartTime
+        {
+            get => Start ?? DefaultSlotStart();
+            set => Start = (Start?.Date ?? DefaultSlotStart().Date) + value.TimeOfDay;
+        }
 
         /// <summary>The end when the dialog is in multi-day mode.</summary>
         public DateTime? End     { get; set; }

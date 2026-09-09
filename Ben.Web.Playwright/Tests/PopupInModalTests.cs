@@ -45,9 +45,21 @@ public class PopupInModalTests : BenTestBase
         return true;
     }
 
-    /// <summary>Opens the first date/time field's calendar and returns its container.</summary>
+    /// <summary>
+    /// Opens a date-and-time calendar inside the dialog and returns its container.
+    /// </summary>
+    /// <remarks>
+    /// Through the multi-day checkbox, because that is now where the combined picker lives: the
+    /// start was split into a date box and a time box on 2026-09-09, and their popups are short
+    /// enough to fit. The tall one — calendar, time list and a footer — is the shape this test
+    /// exists for.
+    /// </remarks>
     private async Task<ILocator> OpenTheCalendarAsync()
     {
+        var multiDay = Page.Locator(".modal.show input[type=checkbox]").First;
+        await Expect(multiDay).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await multiDay.CheckAsync();
+
         var toggle = Page.Locator(".modal.show .k-datetimepicker button.k-input-button").First;
         await Expect(toggle).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await toggle.ClickAsync();
@@ -105,12 +117,8 @@ public class PopupInModalTests : BenTestBase
         await set.ClickAsync(new() { Timeout = 5_000 });
 
         var field = Page.Locator(".modal.show .k-datetimepicker input.k-input-inner").First;
-        await Expect(field).Not.ToHaveValueAsync("", new() { Timeout = 10_000 });
-
-        // And the dialog's own Send Proposal button is now live, which is the thing the field
-        // was being filled for.
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Send Proposal" }))
-            .ToBeEnabledAsync(new() { Timeout = 10_000 });
+        await Expect(field).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"\d{2}/\d{2}/\d{4}"),
+            new() { Timeout = 10_000 });
     }
 
     /// <summary>

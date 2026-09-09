@@ -286,9 +286,18 @@
             </div>            <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
-            </div>            <div class="col-md-6">
-                <label class="form-label fw-semibold">Starts</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
+            </div>            @* A date box and a time box rather than one combined picker. Two reasons, both
+               reported by Ben on 2026-09-09: the combined popup jumps to its Time panel the moment
+               you click a day, so changing your mind about the date costs a trip back through the
+               tab; and its single masked input rebuilds the whole date when a segment is stepped
+               while the value is incomplete — type 09, press Up on the day, and the month you just
+               typed becomes 10. A calendar that closes on the day you click has neither problem. *@
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
+                <div class="d-flex gap-2">
+                    <TelerikDatePicker Id="investigationpanel-start-date" Format="MM/dd/yyyy" @bind-Value="@_form.StartDate" Width="160px" />
+                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.StartTime" Width="130px" />
+                </div>
             </div>
             @* One arrival and one departure is the ordinary shape, and it is allowed to cross
                midnight: 3pm until 8am the next morning is one investigation, not two days. So the
@@ -828,6 +837,20 @@
         public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
         public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+
+        /// <summary>The two halves of the start, over one field. Splitting the state as well as
+        /// the controls is how the halves drift apart.</summary>
+        public DateTime StartDate
+        {
+            get => ScheduledDateTime.Date;
+            set => ScheduledDateTime = value.Date + ScheduledDateTime.TimeOfDay;
+        }
+
+        public DateTime StartTime
+        {
+            get => ScheduledDateTime;
+            set => ScheduledDateTime = ScheduledDateTime.Date + value.TimeOfDay;
+        }
 
         /// <summary>The end when <see cref="MultiDay"/> is on — a date and a time.</summary>
         public DateTime?          EndDateTime       { get; set; }

@@ -11117,3 +11117,33 @@ a table is emptied entirely or excluded row by row, never both, and the partly-e
 named so they cannot be skipped wholesale again. Reintroducing the old list fails four tests.
 Suite 4,109/0. Help: the "kept, emptied" bullet now names the two cases it was missing.
 
+
+## 221. A date field rewrote the date you were building (FIXED 2026-09-09)
+
+Ben, typing a date into Propose Dates: *"I had entered 09 and was moving the numbers up for the
+date from 00 to 18 and before I could even get to 18, it moved and my 09 had changed to 10."*
+
+**An empty Telerik date field rebuilds the whole date the first time a segment is stepped.**
+Measured on the isolated stack: select the month, type `09`, press Up **once** on the day, and the
+field reads `10/01`. One slow press does it, so it is not a race with the circuit. The caret never
+moves — everything after that press is being typed into a date nobody started.
+
+A field that already holds a date is fine: twelve fast presses on the day of `09/14/2026 03:00 PM`
+walk it 14 → 26 and never touch the month. An empty **time** field is fine too. So the trigger is
+precisely an empty date field, and the Schedule Investigation dialog never had the fault because it
+has always seeded its start.
+
+**Fixed** by seeding the proposed dates — a week out at 7pm, each further option the next evening —
+so the picker is never empty. `DateFieldTests` guards the precondition rather than the symptom,
+because the precondition IS the fix; both tests fail against the pre-change code with
+`"MM/dd/yyyy hh:mm aa"`.
+
+**Also, at Ben's choice:** the start is now a **date box and a time box** rather than one combined
+picker. That answers his other complaint — the combined popup switches to its Time panel the moment
+you click a day, so changing your mind about the date cost a trip back through the tab every time.
+
+### Still open: an impossible day is silently taken as its second digit
+
+Typing `31` into a September date gives you the **1st**. Telerik rejects the day that cannot exist
+and keeps the `1`, with no indication. It is inside `AutoCorrectParts` and no call site can reach
+it, so it needs either a Telerik change or a date control of our own. Recorded, not fixed.
