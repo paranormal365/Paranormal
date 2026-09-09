@@ -55,4 +55,47 @@ public sealed class WebApiClientEmptyBodyTests
 
         Assert.Equal("the list has a gap", await Client(response).GetAsync<string?>("/x"));
     }
+
+    // ── The same hole in POST and PUT (2026-09-09) ───────────────────────────
+    //
+    // GetAsync learned this in August; PostAsync, PutAsync and the two anonymous posts did not.
+    // CompleteMyOnboardingAsync posts to a 204 endpoint, the throw was swallowed by the page's own
+    // catch, and the first-run wizard was never stamped as answered — so every account made on the
+    // live site was asked to set itself up again on every visit, and Skip could not stop it.
+
+    [Fact]
+    public async Task A_post_to_a_void_endpoint_completes_rather_than_throwing()
+    {
+        var result = await Client(new HttpResponseMessage(HttpStatusCode.NoContent))
+            .PostAsync<object, object>("/api/me/onboarding/complete", new { });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task A_put_to_a_void_endpoint_completes_rather_than_throwing()
+    {
+        var result = await Client(new HttpResponseMessage(HttpStatusCode.NoContent))
+            .PutAsync<object, object>("/api/anything", new { });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task An_anonymous_post_to_a_void_endpoint_completes_rather_than_throwing()
+    {
+        var result = await Client(new HttpResponseMessage(HttpStatusCode.NoContent))
+            .PostAnonymousAsync<object, object>("/api/public/anything", new { });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task A_post_that_does_answer_still_deserializes()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("\"kept\"", System.Text.Encoding.UTF8, "application/json") };
+
+        Assert.Equal("kept", await Client(response).PostAsync<object, string>("/x", new { }));
+    }
 }

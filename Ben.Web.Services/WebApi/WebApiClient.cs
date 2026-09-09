@@ -193,7 +193,7 @@ public sealed class WebApiClient : IWebApiClient
 
         try
         {
-            return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+            return await BodyOrDefaultAsync<TResponse>(response, token);
         }
         catch (Exception)
         {
@@ -204,13 +204,35 @@ public sealed class WebApiClient : IWebApiClient
         }
     }
 
+    /// <summary>
+    /// A success response's body, or <c>default</c> when there is none.
+    /// </summary>
+    /// <remarks>
+    /// <para>A 204 carries no body and <c>ReadFromJsonAsync</c> THROWS on an empty stream, so every
+    /// void endpoint (<c>return NoContent()</c>) — and every <c>Ok(null)</c>, which the framework
+    /// turns into a 204 — reaches this. Three methods already knew; four did not, and the rule was
+    /// being restated rather than shared.</para>
+    ///
+    /// <para>What the fourth one cost: <c>CompleteMyOnboardingAsync</c> posts to a 204 endpoint, the
+    /// throw was swallowed by the page's own catch, and the first-run wizard was never stamped as
+    /// answered. Every account created on the live site was therefore asked to set itself up again
+    /// on every visit, and no amount of clicking Skip could stop it. Found on 2026-09-09 while
+    /// checking what App Review's demo account would see.</para>
+    /// </remarks>
+    private static async Task<TResponse?> BodyOrDefaultAsync<TResponse>(
+        HttpResponseMessage response, CancellationToken token)
+        => response.StatusCode == System.Net.HttpStatusCode.NoContent
+           || response.Content.Headers.ContentLength == 0
+            ? default
+            : await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     /// <inheritdoc />
@@ -288,7 +310,7 @@ public sealed class WebApiClient : IWebApiClient
         using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     public async Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
@@ -304,7 +326,7 @@ public sealed class WebApiClient : IWebApiClient
         req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     public async Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default)

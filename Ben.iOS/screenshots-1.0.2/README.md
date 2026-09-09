@@ -50,8 +50,16 @@ No ffmpeg on this Mac, so `tools/preview.swift` (AVFoundation) does the resize a
     /tmp/preview cut    <recording.mp4> <out.mp4> 886 1920 30 28   # iPhone: fill+crop, H.264
     /tmp/preview cut    <recording.mp4> <out.mp4> 1200 1600 27 28  # iPad
 
-Video only — no audio track. App Store Connect accepts silent previews; if it ever objects, add a
-silent AAC track at upload time.
+Video, plus a **silent AAC track**. It objected — *"Your app preview contains unsupported or
+corrupted audio"* — on 2026-09-09, for files that had no audio stream at all. So a silent track is
+not optional after all, and both previews now carry one:
+
+    ffmpeg -i in.mp4 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
+           -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart out.mp4
+
+`-c:v copy` matters: the picture is the one that was captured, untouched, so re-adding audio costs
+no quality and no time. There is a vendored ffmpeg at
+`Ben.Video.Sidecar/ffmpeg/osx-arm64/ffmpeg`; nothing needs installing.
 
 ## Refreshing the Field Kit set
 

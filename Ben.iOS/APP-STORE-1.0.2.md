@@ -1,15 +1,29 @@
-# App Store submission — IsHaunted 1.0.2 (build 3)
+# App Store submission — IsHaunted 1.0.2 (build 4)
 
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
 
-**State on 2026-09-08:** ready, not sent, and re-verified line by line against the tree as it now
-stands (evaluation phase 9). Two evaluation phases landed in the app after this document was
+**State on 2026-09-09: SUBMITTED and waiting for review.**
+
+| | |
+|---|---|
+| Item | iOS App 1.0.2, build **1.0.2 (4)** |
+| Type | App Version — not a beta build; check this, the two look alike in the list |
+| Submitted | 2026-09-09 12:27 PM, by Ben |
+| Submission ID | `db9c74ed-6459-4029-9663-fcebe39c0503` |
+
+The archive was built on this tree, signed with the universal-links entitlement, and passed
+`-validate-for-store`. Verified live at submission: production answers 200, the association file
+returns `application/json`, and `features.public-feed` is **on**. All three have to stay that way
+until the verdict — see the note at the end of §6.
+
+**Earlier state, 2026-09-08:** ready, not sent, and re-verified line by line against the tree as it
+then stood (evaluation phase 9). Two evaluation phases landed in the app after this document was
 written on 2026-09-04, so every claim in it was a claim about a tree that no longer existed. What
 changed is recorded below; what did not is marked re-verified rather than carried.
 
-Bundle id `com.ishaunted.ios` · `MARKETING_VERSION` **1.0.2** · `CURRENT_PROJECT_VERSION` **3** ·
+Bundle id `com.ishaunted.ios` · `MARKETING_VERSION` **1.0.2** · `CURRENT_PROJECT_VERSION` **4** ·
 iPhone and iPad · iOS 18.0 minimum. Both numbers are set in `IsHaunted.xcodeproj` and were proven
 on 2026-09-08 in a bundle built from this tree (`CFBundleShortVersionString` 1.0.2,
 `CFBundleVersion` 3, `MinimumOSVersion` 18.0, `CFBundleIdentifier` com.ishaunted.ios).
@@ -29,10 +43,15 @@ confused (2026-09-04). App Store Connect accepts any higher version string.
 for a marketing version, and an uploaded number is never reusable even after a rejection. Build 1
 was uploaded for 1.0.0.
 
-**This is build 3**, not 2. Build 2 was prepared on 2026-09-04 and, as far as this repository
-knows, never sent — but only App Store Connect knows that for certain, and a number is cheap where
-a rejected upload is not. Ben's call on 2026-09-08: burn 2 and go up as 3. If build 3 is uploaded
-and then needs a code fix, the next upload is 4 — never reset it.
+**This is build 4, and the repository did not choose it.** Build 2 was prepared on 2026-09-04 and
+never sent as far as this repository knows; Ben's call on 2026-09-08 was to burn it and go up as 3,
+and the archive was built as 3 on 2026-09-09. **Xcode uploaded it as 4**: the Distribute wizard's
+*manage version and build number* was left on, and it incremented. Harmless, but it means the
+uploaded number is the authority and this file follows it. `CURRENT_PROJECT_VERSION` is now 4 so
+the tree and App Store Connect agree; the next upload is 5.
+
+**The build-number rule stands:** an uploaded `CFBundleVersion` is never reusable, even after a
+rejection. Turn that checkbox OFF and the number stays the one in the project.
 
 ---
 
@@ -69,7 +88,7 @@ exercised on 1.0 behaves differently.
   blank; and My Cases no longer tells a group member to ask a group for help.
 - **Nothing in the app mentions a plan any more.** The two sentences that did — the session
   review's comparison and the server's refusal when a publication is retracted — now describe what
-  this account does and stop there. See §4; this is the change that made it build 3.
+  this account does and stop there. See §4; this is the change that made it a new build.
 
 **What's New (paste into the version's "What's New in This Version"):**
 
@@ -199,8 +218,10 @@ Upload order suggestion — lead with the Field Kit, since it is the reason the 
 | App Preview, iPhone | `app-preview/fieldkit-preview-886x1920.mp4` (28 s) |
 | App Preview, iPad | `app-preview/fieldkit-preview-ipad-1200x1600.mp4` (28 s) |
 
-The previews have no audio track. App Store Connect accepts silent previews; if it objects at
-upload, the README says how a silent track would be added.
+**The previews now carry a silent AAC track.** App Store Connect refused them on 2026-09-09 with
+*"Your app preview contains unsupported or corrupted audio"* — for files that had no audio stream
+at all. The picture is unchanged (stream copy); only a silent track was added. The command is in
+the set's README.
 
 **Re-checked 2026-09-08, and kept as they are.** `FieldKitScreenshotTests` was re-run against a
 build of this tree on the iPhone 17 Pro Max, and every frame came back the same screen: nothing
@@ -234,7 +255,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    `application/json` with no redirect. It ships with the website deploy from the same merge. iOS
    fetches it once at install and caches the answer.
 
-4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **3**.
+4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **4**.
    They are already set; this is a look, not an edit.
 
 5. **The two paid-plan sentences are already decided and changed** (§4) — nothing to do here.
@@ -248,14 +269,28 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    manage version and build number OFF — the numbers are ours). Wait for "Upload Successful".
    Processing takes 10–30 minutes; the build appears under TestFlight → iOS Builds.
 
-8. **Create the version.** App Store Connect → My Apps → IsHaunted → **+ Version** → 1.0.2.
-   (1.0 stays in its rejected state; a new version supersedes it.)
+8. **Rename the version — you cannot add one.** An app whose first version has never been
+   released has exactly **one** version record, so there is no "+ Version" anywhere; the sidebar
+   offers only *Add Platform*. Open the existing version page, scroll past the description and
+   keywords to the general information at the bottom, and change **Version** from 1.0 to 1.0.2.
+   The heading then reads *iOS App Version 1.0.2*.
+
+   This matters more than it looks: **App Store Connect only offers builds whose version string
+   matches the page**, so build 4 is invisible until the rename is saved. Learned on 2026-09-09,
+   after this document had confidently said the opposite.
 
 9. **Fill the version page.** What's New from §2. Screenshots and previews from §5. Promotional
    text, description, keywords, support and marketing URLs carried from `APP-STORE.md` §1 — they
    pre-fill from 1.0, check them rather than retyping. Age rating and category are unchanged.
 
-10. **Select build 3** in the Build section once processing finishes.
+10. **Swap the build.** The renamed version still carries **build 1** — the binary Apple rejected —
+    and *Submit* will happily send it. App Store Connect warns with a **"Newer Build Available"**
+    dialog rather than refusing, so read that dialog rather than clicking through it. Cancel,
+    remove the attached build on its row in the **Build** section, then choose **1.0.2 (4)** from
+    the list the empty slot offers.
+
+    A build still sitting in TestFlight beta review is selectable here; the two queues are
+    independent.
 
 11. **App Review Information.** Sign-in required: yes; demo user apple@apple.com and its password.
     Notes: paste §4 in full. Contact: Ben's phone and email.
@@ -277,9 +312,10 @@ rostered — the reviewer uses all three.
 Check App Store Connect → 1.0.2 → App Review → Resolution Center for the letter.
 
 - **Metadata only** (2.1 Information Needed, screenshot or wording complaints): fix in the form,
-  reply in Resolution Center, **Add for Review** again with the **same build 3**. No new build.
+  reply in Resolution Center, **Add for Review** again with the **same build 4**. No new build —
+  but check the Build section still says 4 before submitting, for the reason in §6 step 10.
 - **A code problem** (crash, a flow that does not work, a guideline that needs a change): fix it,
-  bump `CURRENT_PROJECT_VERSION` to **4** (marketing stays 1.0.2), Archive, Upload, select build 4
+  bump `CURRENT_PROJECT_VERSION` to **5** (marketing stays 1.0.2), Archive, Upload, select build 5
   on the version page, reply in Resolution Center saying what changed, Add for Review.
 - The "How to Prevent Common Issues" list at the bottom of a 2.1 letter is boilerplate on every
   such letter, not findings.
