@@ -111,7 +111,8 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 GeocodeNote: i.GeocodeNote,
                 AttendeeCount: i.AttendeeCount,
                 CanEditRecord: f.CanEditRecord,
-                CanCompleteMyFindings: f.CanCompleteMyFindings);
+                CanCompleteMyFindings: f.CanCompleteMyFindings,
+                PlaceKind: i.Place?.Kind);
         }));
     }
 
@@ -806,7 +807,10 @@ public sealed record OrgInvestigationRow(
     string? GeocodeNote,
     int AttendeeCount,
     bool CanEditRecord,
-    bool CanCompleteMyFindings);
+    bool CanCompleteMyFindings,
+    // Null when the visit has no place at all. The map draws a known landmark differently and
+    // leaves everything else exactly as it was — an unknown is not a private residence.
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
 
 /// <summary>
 /// One person on an investigation's team, and whether they turned up.

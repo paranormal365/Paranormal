@@ -45,10 +45,32 @@ function investigationMapMarkerTemplate(ctx) {
     // Past visits are dimmed rather than hidden or recoloured to something that reads as an alert:
     // a completed investigation is ordinary, it is just no longer upcoming.
     const dim = ctx.IsPast ? 'opacity:.55;' : ''
+    const title = (ctx.Title || 'View investigation').replace(/"/g, '&quot;')
+
+    // A visit at a landmark anyone can go to gets a ring; everything else keeps the bare torch it
+    // has always had. Only a KNOWN landmark is drawn differently — IsPublicPlace is null when the
+    // caller could not say, and an unknown must not be styled as though somebody had checked.
+    //
+    // A ring rather than a colour on its own: a difference nobody can see without colour vision is
+    // not a difference. The tint rides along for the people it does help.
+    if (ctx.IsPublicPlace === true) {
+        return `<span
+            class="investigation-map-single investigation-map-public-place"
+            onclick="investigationMapMarkerClick('${key}', ${idx})"
+            title="${title} — a place anyone can visit"
+            style="
+                display:inline-flex;align-items:center;justify-content:center;
+                width:2.1rem;height:2.1rem;border-radius:50%;
+                border:2px solid var(--kendo-color-info,#3f9fd6);
+                background:rgba(63,159,214,.18);
+                font-size:1.15rem;cursor:pointer;${dim}
+                filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));">🔦</span>`
+    }
+
     return `<span
         class="investigation-map-single"
         onclick="investigationMapMarkerClick('${key}', ${idx})"
-        title="${(ctx.Title || 'View investigation').replace(/"/g, '&quot;')}"
+        title="${title}"
         style="font-size:1.5rem;cursor:pointer;${dim}
                filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));">🔦</span>`
 }

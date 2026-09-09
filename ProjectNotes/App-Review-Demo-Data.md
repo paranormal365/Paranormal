@@ -63,7 +63,30 @@ Both are public, neither is attached to a case, and both were **verified through
 the public Bell Witch Cave place, so it carries a city and an approximate pin on the discovery map;
 the library evening carries a text location only, which is what it honestly has.
 
-These two are **disposable**. Delete them once the app is approved, or keep them and move the dates
+### Added on 2026-09-09 — five public landmarks and a public investigation
+
+Places, all genuinely open to visitors. Coordinates are approximate to a few hundred metres, which
+is all the product ever publishes for a public location anyway; `GeocodeNote` on each row says so.
+
+| Place | Id |
+|---|---|
+| Carnton, Franklin TN | `3a83553d-f4e7-4ab5-a56b-ccfef88318d3` |
+| The Carter House, Franklin TN | `987c42c3-8f53-43a5-8114-f4434ee9a8f0` |
+| Ryman Auditorium, Nashville TN | `8aea5f28-6e71-4251-a6b7-46a64d5d422d` |
+| The Hermitage, Nashville TN | `33ee9381-78cf-45a4-9e58-5605ac61eb72` |
+| Waverly Hills Sanatorium, Louisville KY | `6fbf7756-d065-4fe5-84b9-682ae9191dc4` |
+
+And one investigation, `d1e1631d-237b-4111-86d4-03a2533cf473`, *Bell Witch Cave — autumn survey*,
+26–27 September, **public** visibility with both accounts rostered and Ben as lead. Public is
+allowed here only because the place is a landmark: the same setting is refused on a private
+residence, which is why the Franklin case's own visit stays group-only and carries no coordinates.
+
+**A place on its own puts no pin on the map.** The home map's nearby search returns groups, by
+their searchable public address, and public events. Places are reached through what is attached to
+them. So each landmark needs a public event or a public investigation before it appears; the Bell
+Witch Cave night has one and does.
+
+These are all **disposable**. Delete them once the app is approved, or keep them and move the dates
 forward — a group with nothing coming up looks abandoned, and moving a date is cheaper than
 inventing content again before the next review.
 
