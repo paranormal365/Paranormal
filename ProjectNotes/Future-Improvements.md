@@ -11173,3 +11173,32 @@ cost more than it buys.
 all is the problem. At that point the honest shape is the Field Kit's — a bounded query, a cap, and
 a footer naming what was left out — applied to the map *and* the list together, so the two never
 disagree.
+
+## 223. Two maps now load what is in view (DONE 2026-09-09)
+
+The pair item 222 set aside its three exceptions from. Both loaded once and then panned over a set
+that never changed, and the public one asked for **500**, so past that it quietly stopped being the
+whole picture.
+
+- **A group's Investigations map** got `GET /api/organizations/{orgId}/investigations/map` — pins
+  and nothing actionable, so it can be asked on every pan without the per-row permission verdicts
+  the grid endpoint carries. Gated on membership exactly as the grid is. The page draws first from
+  the rows it already has, so the map is never blank mid-request.
+- **The home page's public cases map**: `GET /api/public/cases` now takes the four bounds, and the
+  map and the list are built from **one** answer. They can never disagree, because a reader has no
+  way to tell which of two pictures is the true one.
+
+Both follow `FieldSessionUploadController.GetMyMapPoints` rather than a second convention: all four
+bounds or none, corners normalised (map libraries disagree about which one comes first, and a
+reversed box reads as "nothing here" rather than as a mistake), a row with no coordinates dropped
+only when bounded, a 350 ms debounce with cancellation, and a footer naming what is not shown.
+
+**The rule worth carrying forward:** a viewport map is only honest if it says what it is leaving
+out. Eleven unit tests, four of which fail against a mutant that drops the normalisation and the
+all-or-nothing check; Playwright `MapViewport` proves three quick drags produce exactly one request.
+
+One thing the Playwright work taught: **a bounding box is in viewport coordinates**, so a map below
+the fold hands back a y the mouse cannot reach and the drags land on whatever is on screen instead.
+The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
+first.
+
