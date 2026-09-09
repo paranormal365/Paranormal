@@ -473,7 +473,10 @@ public sealed record OrgInvestigationRow(
     string? GeocodeNote,
     int AttendeeCount,
     bool CanEditRecord,
-    bool CanCompleteMyFindings);
+    bool CanCompleteMyFindings,
+    // Null when the visit has no place at all. The map draws a known landmark differently and
+    // leaves everything else exactly as it was — an unknown is not a private residence.
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
 
 /// <summary>
 /// A place being created inline with the investigation held there, so scheduling a visit to

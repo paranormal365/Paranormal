@@ -179,7 +179,13 @@ else
         _unplaceable = _rows.Where(r => r.Latitude is null || r.Longitude is null).ToList();
 
         _pins = _rows.Select(r => new InvestigationMapPin(
-            r.Id, r.Title, r.Latitude, r.Longitude, IsPast: r.ScheduledDateTime < now)).ToList();
+            r.Id, r.Title, r.Latitude, r.Longitude,
+            IsPast: r.ScheduledDateTime < now,
+            // Null stays null: a visit with no place on file is an unknown, and the map says so
+            // by looking exactly as it always did.
+            IsPublicPlace: r.PlaceKind is null
+                ? null
+                : r.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)).ToList();
 
         if (FocusInvestigationId is { } focus && _rows.Any(r => r.Id == focus))
             FocusRow(focus);

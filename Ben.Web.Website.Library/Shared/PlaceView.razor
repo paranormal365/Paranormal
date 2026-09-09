@@ -496,7 +496,8 @@
 
         _pins = rows
             .Select(r => new InvestigationMapPin(
-                r.Id, r.Title, _place.Latitude, _place.Longitude, IsPast: true))
+                r.Id, r.Title, _place.Latitude, _place.Longitude, IsPast: true,
+                IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
             .ToList();
     }
 
