@@ -40,7 +40,10 @@ else
 
         <h1 class="mb-1">@_inv.Title</h1>
         <p class="text-secondary mb-4">
-            @_inv.ScheduledDateTime.ToLocalTime().ToDisplayDate()
+            @* A date on its own is right for an evening or an overnight, and wrong for a week —
+               so the second date appears only when the visit really does span days. *@
+            @_inv.ScheduledDateTime.ToLocalTime().ToDisplayDate()@if (Ben.Web.Services.InvestigationWindow.NeedsMultiDay(_inv.ScheduledDateTime.ToLocalTime(), _inv.EndDateTime?.ToLocalTime()))
+            {<text> – @_inv.EndDateTime!.Value.ToLocalTime().ToDisplayDate()</text>}
             · investigated by <a href="@($"/o/{_inv.OrganizationUrlName}")">@_inv.OrganizationName</a>
         </p>
 

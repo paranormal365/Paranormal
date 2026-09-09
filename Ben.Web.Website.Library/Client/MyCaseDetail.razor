@@ -283,9 +283,8 @@
                                     <div>
                                         <div class="fw-semibold small">@inv.Title</div>
                                         <div class="text-secondary small">
-                                            @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                            @if (inv.EndDateTime.HasValue)
-                                            { <span> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                            @inv.ScheduledDateTime.ToViewerLocalTime(UserState)
+                                              .ToDisplaySpan(inv.EndDateTime?.ToViewerLocalTime(UserState))
                                         </div>
                                         @if (!string.IsNullOrEmpty(inv.Location))
                                         {
@@ -353,8 +352,8 @@
                                 var s = slot;
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="small">
-                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                        @s.StartDateTime.ToViewerLocalTime(UserState)
+                                          .ToDisplaySpan(s.EndDateTime?.ToViewerLocalTime(UserState))
                                     </span>
                                     <button type="button" class="btn btn-success btn-sm" @onclick="@(async () => await AcceptProposal(p.Id, s.Id))" disabled="@(!(!_respondingProposal))">Accept</button>
                                 </div>

@@ -87,6 +87,7 @@ Available categories:
 | `Voting` | Evidence vote widget |
 | `ErrorHandling` | 404, invalid guids, Telerik parameter errors |
 | `PopupInModal` | A Telerik popup opened from a dialog stays inside the window |
+| `MultiDayInvestigation` | Single-day is the norm; the checkbox opens a longer window |
 | `Capture` | **Writes files.** Re-captures the help screenshots and recordings — see below |
 
 ### A single test by name

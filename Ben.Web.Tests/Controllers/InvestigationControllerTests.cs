@@ -455,4 +455,84 @@ public class InvestigationControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── The window (2026-09-09) ──────────────────────────────────────────────
+    //
+    // An investigation may cross midnight and it may span a week. It may not end before it
+    // starts, and nothing said so until Ben asked for week-long visits.
+
+    [Fact]
+    public async Task Create_EndBeforeStart_IsRefused()
+    {
+        var (factory, orgId, caseId, userId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, userId);
+
+        var start = DateTime.UtcNow.AddDays(7);
+        var request = MakeRequest() with { ScheduledDateTime = start, EndDateTime = start.AddHours(-1) };
+
+        var result = await ctrl.Create(orgId, caseId, request, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("The end has to come after the start.", bad.Value);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.Investigations.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Create_EndEqualToStart_IsRefused()
+    {
+        var (factory, orgId, caseId, userId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, userId);
+
+        var start = DateTime.UtcNow.AddDays(7);
+        var request = MakeRequest() with { ScheduledDateTime = start, EndDateTime = start };
+
+        var result = await ctrl.Create(orgId, caseId, request, default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Create_WeekLongVisit_IsStoredWithItsEnd()
+    {
+        var (factory, orgId, caseId, userId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, userId);
+
+        var start = new DateTime(2026, 9, 14, 15, 0, 0, DateTimeKind.Utc);
+        var end   = start.AddDays(7);
+        var request = MakeRequest("Apple review week") with { ScheduledDateTime = start, EndDateTime = end };
+
+        var result = await ctrl.Create(orgId, caseId, request, default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.Investigations.SingleAsync();
+        Assert.Equal(end, stored.EndDateTime);
+
+        // The calendar event copies the window rather than inventing a two-hour one.
+        var calendar = await db.OrgCalendarEvents.SingleAsync(e => e.CaseId == caseId);
+        Assert.Equal(end, calendar.EndDateTime);
+    }
+
+    [Fact]
+    public async Task Update_EndBeforeStart_IsRefusedAndChangesNothing()
+    {
+        var (factory, orgId, caseId, userId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, userId);
+
+        var created = await ctrl.Create(orgId, caseId, MakeRequest(), default);
+        var id = Assert.IsType<InvestigationRecord>(Assert.IsType<CreatedAtActionResult>(created.Result).Value).Id;
+
+        var start = DateTime.UtcNow.AddDays(9);
+        var request = MakeRequest("Renamed") with { ScheduledDateTime = start, EndDateTime = start.AddMinutes(-30) };
+
+        var result = await ctrl.Update(orgId, caseId, id, request, default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal("Night Visit #1", (await db.Investigations.SingleAsync()).Title);
+    }
 }

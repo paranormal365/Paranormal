@@ -57,9 +57,8 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                @if (i.EndDateTime.HasValue)
-                                { <span> – @i.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                @i.ScheduledDateTime.ToViewerLocalTime(UserState)
+                                  .ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState))
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -288,12 +287,32 @@
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
             </div>            <div class="col-md-6">
-                <label class="form-label fw-semibold">Scheduled Date & Time</label>
+                <label class="form-label fw-semibold">Starts</label>
                 <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
             </div>
+            @* One arrival and one departure is the ordinary shape, and it is allowed to cross
+               midnight: 3pm until 8am the next morning is one investigation, not two days. So the
+               end is a clock time, and a time at or before the start belongs to the next morning.
+               Anything longer — a weekend, a week — is behind the checkbox, which keeps the common
+               case down to a time. *@
             <div class="col-md-6">
-                <label class="form-label fw-semibold">End Time (optional)</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                <label class="form-label fw-semibold">Ends (optional)</label>
+                @if (_form.MultiDay)
+                {
+                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                }
+                else
+                {
+                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.EndTime" Width="100%" />
+                    <div class="form-text">A time at or before the start is the next morning.</div>
+                }
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="investigationpanel-multi-day"
+                           checked="@_form.MultiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="investigationpanel-multi-day">
+                        Runs over more than one day
+                    </label>
+                </div>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-location-within-property-optional-0b20">Location within property (optional)</label>
@@ -660,13 +679,20 @@
     private void OpenEdit(InvestigationRecord inv)
     {
         _editInv = inv;
+        var start = inv.ScheduledDateTime.ToViewerLocalTime(UserState);
+        var end   = inv.EndDateTime?.ToViewerLocalTime(UserState);
+
+        var multiDay = InvestigationWindow.NeedsMultiDay(start, end);
+
         _form = new InvForm
         {
             Title             = inv.Title,
             Description       = inv.Description ?? "",
             Location          = inv.Location ?? "",
-            ScheduledDateTime = inv.ScheduledDateTime.ToViewerLocalTime(UserState),
-            EndDateTime       = inv.EndDateTime?.ToViewerLocalTime(UserState),
+            ScheduledDateTime = start,
+            MultiDay          = multiDay,
+            EndDateTime       = multiDay ? end : null,
+            EndTime           = multiDay ? null : end,
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
             EvidenceDueDate   = inv.EvidenceDueDate?.ToViewerLocalTime(UserState),
@@ -676,9 +702,46 @@
         _showDialog = true;
     }
 
+    /// <summary>What the two controls between them mean.</summary>
+    private DateTime? EffectiveEnd()
+    {
+        if (_form.MultiDay) return _form.EndDateTime;
+        return _form.EndTime is { } t
+            ? InvestigationWindow.SingleDayEnd(_form.ScheduledDateTime, t.TimeOfDay)
+            : null;
+    }
+
+    /// <summary>
+    /// Ticking the box carries the end across rather than clearing it, so somebody who set a time
+    /// and then realised the visit runs longer does not start again.
+    /// </summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _form.MultiDay) return;
+
+        if (on)
+        {
+            _form.EndDateTime = EffectiveEnd() ?? _form.ScheduledDateTime.AddDays(1);
+            _form.EndTime = null;
+        }
+        else
+        {
+            _form.EndTime = _form.EndDateTime;
+            _form.EndDateTime = null;
+        }
+
+        _form.MultiDay = on;
+    }
+
     private async Task Save()
     {
         if (string.IsNullOrWhiteSpace(_form.Title)) { _dialogError = "Title is required."; return; }
+        if (_form.MultiDay && _form.EndDateTime is { } multiEnd && multiEnd <= _form.ScheduledDateTime)
+        {
+            _dialogError = "The end has to come after the start.";
+            return;
+        }
         _isBusy = true; _dialogError = null;
         try
         {
@@ -687,7 +750,7 @@
                 Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
                 ScheduledDateTime: _form.ScheduledDateTime.ToUtcFromViewerLocal(UserState),
-                EndDateTime:       _form.EndDateTime?.ToUtcFromViewerLocal(UserState),
+                EndDateTime:       EffectiveEnd()?.ToUtcFromViewerLocal(UserState),
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
                 OrgCalendarEventId: null,
@@ -765,7 +828,14 @@
         public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
         public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+
+        /// <summary>The end when <see cref="MultiDay"/> is on — a date and a time.</summary>
         public DateTime?          EndDateTime       { get; set; }
+
+        /// <summary>The end when it is off — only the time of day is read.</summary>
+        public DateTime?          EndTime           { get; set; }
+
+        public bool               MultiDay          { get; set; }
         public InvestigationStatus Status           { get; set; } = InvestigationStatus.Scheduled;
         public string             Notes             { get; set; } = "";
         public DateTime?          EvidenceDueDate   { get; set; }
