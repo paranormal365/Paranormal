@@ -25,8 +25,17 @@ public class MapViewportTests : BenTestBase
         "() => document.querySelector(\"[data-testid='org-map-bounded-loads']\")?.textContent?.trim() ?? 'missing'";
 
     /// <summary>Three quick drags, all inside the debounce window.</summary>
+    /// <remarks>
+    /// Scrolled into view first, and deliberately. A bounding box is in viewport coordinates, so a
+    /// map below the fold hands back a y the mouse cannot reach — the drags land on whatever
+    /// happens to be there instead, and the test reports "the map never reloaded" about a map
+    /// nobody touched. The public cases map is near the bottom of the home page.
+    /// </remarks>
     private async Task PanThriceAsync(ILocator map)
     {
+        await map.ScrollIntoViewIfNeededAsync();
+        await Page.WaitForTimeoutAsync(300);
+
         var box = (await map.BoundingBoxAsync())!;
         var cx = box.X + box.Width / 2;
         var cy = box.Y + box.Height / 2;
