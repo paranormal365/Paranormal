@@ -4,9 +4,19 @@ Everything needed to build, upload and submit **1.0.2**, and every answer App Re
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
 
-**State on 2026-09-09: uploaded.** `1.0.2 (4)` reached App Store Connect from an archive built on
-this tree, signed with the universal-links entitlement and passing `-validate-for-store`. What
-remains is the version page and Submit — §6 steps 8 onward.
+**State on 2026-09-09: SUBMITTED and waiting for review.**
+
+| | |
+|---|---|
+| Item | iOS App 1.0.2, build **1.0.2 (4)** |
+| Type | App Version — not a beta build; check this, the two look alike in the list |
+| Submitted | 2026-09-09 12:27 PM, by Ben |
+| Submission ID | `db9c74ed-6459-4029-9663-fcebe39c0503` |
+
+The archive was built on this tree, signed with the universal-links entitlement, and passed
+`-validate-for-store`. Verified live at submission: production answers 200, the association file
+returns `application/json`, and `features.public-feed` is **on**. All three have to stay that way
+until the verdict — see the note at the end of §6.
 
 **Earlier state, 2026-09-08:** ready, not sent, and re-verified line by line against the tree as it
 then stood (evaluation phase 9). Two evaluation phases landed in the app after this document was
