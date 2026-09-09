@@ -54,7 +54,13 @@ public interface IBenCaseClient
     /// Used to drive the home-page investigation map and ranked list.
     /// </summary>
     /// <param name="sort">"votes" (default) sorts by total votes desc; "date" sorts by open date desc.</param>
-    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default);
+    /// <summary>
+    /// Public cases for the discovery map and list. With <paramref name="bounds"/>, only those
+    /// inside the view; without, the whole map — which is what a first load wants.
+    /// </summary>
+    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(
+        int page = 1, int pageSize = 20, string sort = "votes",
+        MapBounds? bounds = null, CancellationToken token = default);
 
     // ── Case votes (community rating) ─────────────────────────────────────────
 

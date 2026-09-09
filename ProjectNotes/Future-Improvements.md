@@ -11147,3 +11147,29 @@ you click a day, so changing your mind about the date cost a trip back through t
 Typing `31` into a September date gives you the **1st**. Telerik rejects the day that cannot exist
 and keeps the `1`, with no indication. It is inside `AutoCorrectParts` and no call site can reach
 it, so it needs either a Telerik change or a date control of our own. Recorded, not fixed.
+
+## 222. Viewport loading for the three maps that were deliberately left without it
+
+Ben, 2026-09-09, asked for viewport loading on every map that lacked it, then agreed to take the
+two that need it now (item 223) and record these three.
+
+None of them is a straight port of the Field Kit's pattern, and the reason is the same in each
+case: **a viewport map must say what it is not showing**, and on these three that sentence would
+cost more than it buys.
+
+- **A place's own page** (`PlaceView.razor`). Every pin is at the place's own coordinates, because
+  the map is showing the visits made *there*. Panning cannot bring anything new into view. Bounds
+  here are ceremony with a chance of bugs, and would be worth adding only if the map ever plots
+  something other than that one point — a room-level layout, say, or neighbouring places.
+
+- **Your profile map** (`MyProfile.razor`) and **My Investigations** (`Client/MyInvestigations.razor`).
+  One person's attended visits, each drawn beside a list of exactly the same rows. Loading by
+  viewport would make the map and the list disagree with no way for the reader to tell which is
+  right. The Field Kit map escapes that because it deliberately answers a different question from
+  its table and prints the gap; here the equivalent footer would tell somebody "showing 12 of 40 in
+  view" about their own history, which is worse than today's complete picture.
+
+**What would change the answer:** a person or a place with enough plotted rows that loading them
+all is the problem. At that point the honest shape is the Field Kit's — a bounded query, a cap, and
+a footer naming what was left out — applied to the map *and* the list together, so the two never
+disagree.

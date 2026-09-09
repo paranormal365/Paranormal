@@ -83,6 +83,21 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<OrgInvestigationRow>($"/api/organizations/{orgId}/investigations", token);
 
+    /// <inheritdoc />
+    public Task<ItemResult<OrgInvestigationMapPage>> GetOrgInvestigationMapAsync(
+        Guid orgId, MapBounds? bounds = null, CancellationToken token = default)
+    {
+        // Invariant culture on every edge: a decimal comma in a query string is two parameters as
+        // far as the server is concerned, and the map would come back empty on a French machine.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? $"/api/organizations/{orgId}/investigations/map"
+            : $"/api/organizations/{orgId}/investigations/map"
+              + $"?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<OrgInvestigationMapPage>(url, token);
+    }
+
     public Task<(InvestigationRecord? Result, string? Error)> CreateOrgInvestigationAsync(
         Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
