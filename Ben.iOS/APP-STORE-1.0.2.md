@@ -208,8 +208,10 @@ Upload order suggestion — lead with the Field Kit, since it is the reason the 
 | App Preview, iPhone | `app-preview/fieldkit-preview-886x1920.mp4` (28 s) |
 | App Preview, iPad | `app-preview/fieldkit-preview-ipad-1200x1600.mp4` (28 s) |
 
-The previews have no audio track. App Store Connect accepts silent previews; if it objects at
-upload, the README says how a silent track would be added.
+**The previews now carry a silent AAC track.** App Store Connect refused them on 2026-09-09 with
+*"Your app preview contains unsupported or corrupted audio"* — for files that had no audio stream
+at all. The picture is unchanged (stream copy); only a silent track was added. The command is in
+the set's README.
 
 **Re-checked 2026-09-08, and kept as they are.** `FieldKitScreenshotTests` was re-run against a
 build of this tree on the iPhone 17 Pro Max, and every frame came back the same screen: nothing
