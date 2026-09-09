@@ -68,6 +68,10 @@
     @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
        theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
        the template's own layoutSettings convention. *@
+    @* Telerik places a popup below its anchor and flips it above when there is no room —
+       and leaves it hanging off the bottom edge when there is room on neither side, which is
+       what a dialog's centred layout produces. See the file for the measurement. *@
+    <script src="/js/popup-fit.js"></script>
     <script src="/js/geolocation.js"></script>
     <script src="/js/timezone.js"></script>
     <script src="/js/chunked-upload.js"></script>
