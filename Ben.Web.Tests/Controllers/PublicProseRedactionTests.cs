@@ -164,7 +164,18 @@ public class PublicProseRedactionTests
         var factory = TestDbFactory.Create();
         var seededPrivate = await SeedCaseAsync(factory, isPrivate: true);
         var seededPublic  = await SeedCaseAsync(factory, isPrivate: false);
-        var controller = new PublicCaseDiscoveryController(factory);
+        // No caller: this test is about what a VISITOR is shown, which is the whole point of it.
+        var controller = new PublicCaseDiscoveryController(
+            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+                {
+                    User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity())
+                }
+            }
+        };
 
         var page = Assert.IsType<PublicCaseDiscoveryPagedResponse>(
             Assert.IsType<OkObjectResult>(
