@@ -473,7 +473,10 @@ public sealed record OrgInvestigationRow(
     string? GeocodeNote,
     int AttendeeCount,
     bool CanEditRecord,
-    bool CanCompleteMyFindings);
+    bool CanCompleteMyFindings,
+    // Null when the visit has no place at all. The map draws a known landmark differently and
+    // leaves everything else exactly as it was — an unknown is not a private residence.
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
 
 /// <summary>
 /// A place being created inline with the investigation held there, so scheduling a visit to
@@ -1506,6 +1509,17 @@ public sealed record FieldSessionMapPage(
 
 /// <summary>Four edges of a map viewport, for asking only about what is in view.</summary>
 public sealed record MapBounds(double North, double South, double East, double West);
+
+/// <summary>One of an organization's investigations as a map needs it, and nothing else.</summary>
+public sealed record OrgInvestigationMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude, bool IsPast,
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind);
+
+/// <summary>
+/// The pins in view, and how many matched — so "500 of 500" can be told from "500 of 4,000".
+/// </summary>
+public sealed record OrgInvestigationMapPage(
+    IReadOnlyList<OrgInvestigationMapPoint> Points, int Total);
 
 public sealed record FieldSessionFileSummary(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,

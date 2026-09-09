@@ -11147,3 +11147,58 @@ you click a day, so changing your mind about the date cost a trip back through t
 Typing `31` into a September date gives you the **1st**. Telerik rejects the day that cannot exist
 and keeps the `1`, with no indication. It is inside `AutoCorrectParts` and no call site can reach
 it, so it needs either a Telerik change or a date control of our own. Recorded, not fixed.
+
+## 222. Viewport loading for the three maps that were deliberately left without it
+
+Ben, 2026-09-09, asked for viewport loading on every map that lacked it, then agreed to take the
+two that need it now (item 223) and record these three.
+
+None of them is a straight port of the Field Kit's pattern, and the reason is the same in each
+case: **a viewport map must say what it is not showing**, and on these three that sentence would
+cost more than it buys.
+
+- **A place's own page** (`PlaceView.razor`). Every pin is at the place's own coordinates, because
+  the map is showing the visits made *there*. Panning cannot bring anything new into view. Bounds
+  here are ceremony with a chance of bugs, and would be worth adding only if the map ever plots
+  something other than that one point — a room-level layout, say, or neighbouring places.
+
+- **Your profile map** (`MyProfile.razor`) and **My Investigations** (`Client/MyInvestigations.razor`).
+  One person's attended visits, each drawn beside a list of exactly the same rows. Loading by
+  viewport would make the map and the list disagree with no way for the reader to tell which is
+  right. The Field Kit map escapes that because it deliberately answers a different question from
+  its table and prints the gap; here the equivalent footer would tell somebody "showing 12 of 40 in
+  view" about their own history, which is worse than today's complete picture.
+
+**What would change the answer:** a person or a place with enough plotted rows that loading them
+all is the problem. At that point the honest shape is the Field Kit's — a bounded query, a cap, and
+a footer naming what was left out — applied to the map *and* the list together, so the two never
+disagree.
+
+## 223. Two maps now load what is in view (DONE 2026-09-09)
+
+The pair item 222 set aside its three exceptions from. Both loaded once and then panned over a set
+that never changed, and the public one asked for **500**, so past that it quietly stopped being the
+whole picture.
+
+- **A group's Investigations map** got `GET /api/organizations/{orgId}/investigations/map` — pins
+  and nothing actionable, so it can be asked on every pan without the per-row permission verdicts
+  the grid endpoint carries. Gated on membership exactly as the grid is. The page draws first from
+  the rows it already has, so the map is never blank mid-request.
+- **The home page's public cases map**: `GET /api/public/cases` now takes the four bounds, and the
+  map and the list are built from **one** answer. They can never disagree, because a reader has no
+  way to tell which of two pictures is the true one.
+
+Both follow `FieldSessionUploadController.GetMyMapPoints` rather than a second convention: all four
+bounds or none, corners normalised (map libraries disagree about which one comes first, and a
+reversed box reads as "nothing here" rather than as a mistake), a row with no coordinates dropped
+only when bounded, a 350 ms debounce with cancellation, and a footer naming what is not shown.
+
+**The rule worth carrying forward:** a viewport map is only honest if it says what it is leaving
+out. Eleven unit tests, four of which fail against a mutant that drops the normalisation and the
+all-or-nothing check; Playwright `MapViewport` proves three quick drags produce exactly one request.
+
+One thing the Playwright work taught: **a bounding box is in viewport coordinates**, so a map below
+the fold hands back a y the mouse cannot reach and the drags land on whatever is on screen instead.
+The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
+first.
+

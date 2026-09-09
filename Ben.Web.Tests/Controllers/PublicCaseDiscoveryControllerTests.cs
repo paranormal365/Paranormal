@@ -279,4 +279,89 @@ public class PublicCaseDiscoveryControllerTests
         Assert.Equal(summary.DisputesCount,     card.DisputesCount);
         Assert.Equal(summary.InconclusiveCount, card.InconclusiveCount);
     }
+
+    // ── The viewport (2026-09-09) ────────────────────────────────────────────
+    //
+    // The page used to ask for 500 cases once and pan over a set that never changed, so past 500
+    // it quietly stopped being the whole picture. The bounds are all-or-nothing, and the corners
+    // are normalised because map libraries disagree about which one they hand over first.
+
+    private static async Task<IDbContextFactory<BenDataContext>> SeedTwoCitiesAsync()
+    {
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var org = MakeOrg();
+        db.Organizations.Add(org);
+        db.Cases.Add(MakeCase(org.Id, "Nashville case",  36.16m, -86.78m));
+        db.Cases.Add(MakeCase(org.Id, "Louisville case", 38.25m, -85.75m));
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    private static async Task<PublicCaseDiscoveryPagedResponse> GetAsync(
+        IDbContextFactory<BenDataContext> factory,
+        double? north = null, double? south = null, double? east = null, double? west = null)
+    {
+        var result = await Build(factory).GetAll(1, 50, "date", north, south, east, west, default);
+        return Assert.IsType<PublicCaseDiscoveryPagedResponse>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    [Fact]
+    public async Task No_bounds_still_answers_the_whole_map()
+    {
+        var page = await GetAsync(await SeedTwoCitiesAsync());
+
+        Assert.Equal(2, page.TotalCount);
+    }
+
+    [Fact]
+    public async Task Bounds_answer_only_what_is_in_view()
+    {
+        var page = await GetAsync(await SeedTwoCitiesAsync(),
+            north: 36.5, south: 35.8, east: -86.4, west: -87.2);
+
+        Assert.Single(page.Items);
+        Assert.Equal("Nashville case", page.Items[0].Title);
+    }
+
+    [Fact]
+    public async Task Corners_handed_over_backwards_still_mean_the_same_box()
+    {
+        // North and south swapped, east and west swapped. A reversed box must not read as
+        // "nothing here" — that is a mistake wearing the costume of an answer.
+        var page = await GetAsync(await SeedTwoCitiesAsync(),
+            north: 35.8, south: 36.5, east: -87.2, west: -86.4);
+
+        Assert.Single(page.Items);
+        Assert.Equal("Nashville case", page.Items[0].Title);
+    }
+
+    [Fact]
+    public async Task Three_of_the_four_bounds_is_refused_rather_than_guessed()
+    {
+        var result = await Build(await SeedTwoCitiesAsync())
+            .GetAll(1, 50, "date", north: 36.5, south: 35.8, east: -86.4, west: null, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Give all four bounds, or none.", bad.Value);
+    }
+
+    [Fact]
+    public async Task A_case_with_no_coordinates_cannot_be_inside_a_box()
+    {
+        var factory = CreateFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var org = MakeOrg();
+            db.Organizations.Add(org);
+            db.Cases.Add(MakeCase(org.Id, "Unplaced case"));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetAsync(factory)).TotalCount);
+
+        var inView = await GetAsync(factory, north: 90, south: -90, east: 180, west: -180);
+        Assert.Empty(inView.Items);
+    }
 }

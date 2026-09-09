@@ -88,6 +88,7 @@ Available categories:
 | `ErrorHandling` | 404, invalid guids, Telerik parameter errors |
 | `PopupInModal` | A Telerik popup opened from a dialog stays inside the window |
 | `MultiDayInvestigation` | Single-day is the norm; the checkbox opens a longer window |
+| `MapViewport` | Panning a map asks for the new area, once per gesture |
 | `DateField` | A date field starts from a real date, and stepping the day leaves the month alone |
 | `Capture` | **Writes files.** Re-captures the help screenshots and recordings — see below |
 
