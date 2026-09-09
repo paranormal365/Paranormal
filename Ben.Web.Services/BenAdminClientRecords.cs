@@ -1510,6 +1510,17 @@ public sealed record FieldSessionMapPage(
 /// <summary>Four edges of a map viewport, for asking only about what is in view.</summary>
 public sealed record MapBounds(double North, double South, double East, double West);
 
+/// <summary>One of an organization's investigations as a map needs it, and nothing else.</summary>
+public sealed record OrgInvestigationMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude, bool IsPast,
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind);
+
+/// <summary>
+/// The pins in view, and how many matched — so "500 of 500" can be told from "500 of 4,000".
+/// </summary>
+public sealed record OrgInvestigationMapPage(
+    IReadOnlyList<OrgInvestigationMapPoint> Points, int Total);
+
 public sealed record FieldSessionFileSummary(
     Guid Id, string RelativePath, long FileSize, string? Sha256, bool DigestMatched,
     DateTime DateCreated);

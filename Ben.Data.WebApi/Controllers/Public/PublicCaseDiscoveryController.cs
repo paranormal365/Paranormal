@@ -29,23 +29,53 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
     /// this endpoint is unauthenticated and public, so it must never geocode on the
     /// request path; a case with no resolved coordinates just omits them.
     /// </summary>
+    /// <remarks>
+    /// <para><b>The four bounds are optional and all-or-nothing.</b> Without them this answers the
+    /// whole map, which is what a first load wants; with them it answers only what is in view,
+    /// which is what every pan afterwards wants. Shaped after
+    /// <c>FieldSessionUploadController.GetMyMapPoints</c> rather than inventing a second
+    /// convention — corners normalised, because map libraries disagree about which one they hand
+    /// over first and a reversed box reads as "nothing here" rather than as a mistake.</para>
+    ///
+    /// <para>A case with no resolved coordinates is <b>kept</b> when unbounded and dropped when
+    /// bounded. It cannot be inside a box nobody can place it in, and silently keeping it would
+    /// make the count disagree with the pins.</para>
+    /// </remarks>
     [HttpGet]
     public async Task<ActionResult<PublicCaseDiscoveryPagedResponse>> GetAll(
         [FromQuery] int    page     = 1,
         [FromQuery] int    pageSize = 20,
         [FromQuery] string sort     = "votes",
+        [FromQuery] double? north   = null, [FromQuery] double? south = null,
+        [FromQuery] double? east    = null, [FromQuery] double? west  = null,
         CancellationToken  ct       = default)
     {
         if (page < 1) page = 1;
         pageSize = Math.Clamp(pageSize, 1, 100);
 
+        var bounded = north is not null || south is not null || east is not null || west is not null;
+        if (bounded && (north is null || south is null || east is null || west is null))
+            return BadRequest("Give all four bounds, or none.");
+
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var cases = await db.Cases.AsNoTracking()
+        var query = db.Cases.AsNoTracking()
             .Include(c => c.Organization)
             .Where(c => c.IsPublic
-                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
-            .ToListAsync(ct);
+                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted));
+
+        if (bounded)
+        {
+            var n  = (decimal)Math.Max(north!.Value, south!.Value);
+            var so = (decimal)Math.Min(north!.Value, south!.Value);
+            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
+            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            query = query.Where(c => c.Latitude != null && c.Longitude != null
+                                  && c.Latitude <= n && c.Latitude >= so
+                                  && c.Longitude <= e && c.Longitude >= w);
+        }
+
+        var cases = await query.ToListAsync(ct);
 
         if (cases.Count == 0)
             return Ok(new PublicCaseDiscoveryPagedResponse([], 0, page, pageSize));

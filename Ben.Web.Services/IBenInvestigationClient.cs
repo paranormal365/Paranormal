@@ -61,6 +61,17 @@ public interface IBenInvestigationClient
     /// </remarks>
     Task<LoadResult<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>
+    /// The organization's investigations as map pins, optionally only those inside a viewport.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="GetOrgInvestigationsAsync"/>: that one feeds the grid and carries a
+    /// permission verdict per row, this one carries a coordinate and nothing actionable, so it can
+    /// be asked for on every pan.
+    /// </remarks>
+    Task<ItemResult<OrgInvestigationMapPage>> GetOrgInvestigationMapAsync(
+        Guid orgId, MapBounds? bounds = null, CancellationToken token = default);
+
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     // Org side

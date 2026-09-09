@@ -64,8 +64,19 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAnonymousAsync<PublicCaseDetail>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/cases/{Uri.EscapeDataString(caseRef)}", token);
 
-    public Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default)
-        => _api.GetAnonymousAsync<PublicCaseDiscoveryPagedResponse>($"/api/public/cases?page={page}&pageSize={pageSize}&sort={Uri.EscapeDataString(sort)}", token);
+    public Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(
+        int page = 1, int pageSize = 20, string sort = "votes",
+        MapBounds? bounds = null, CancellationToken token = default)
+    {
+        // Invariant culture on every edge: a decimal comma in a query string is two parameters as
+        // far as the server is concerned, and the map would come back empty on a French machine.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = $"/api/public/cases?page={page}&pageSize={pageSize}&sort={Uri.EscapeDataString(sort)}";
+        if (bounds is not null)
+            url += $"&north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+                 + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetAnonymousAsync<PublicCaseDiscoveryPagedResponse>(url, token);
+    }
 
     // ── Case votes ────────────────────────────────────────────────────────────
 

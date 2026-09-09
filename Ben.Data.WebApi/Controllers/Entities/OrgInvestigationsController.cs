@@ -116,6 +116,69 @@ public sealed class OrgInvestigationsController : BenControllerBase
         }));
     }
 
+    /// <summary>
+    /// The organization's investigations as map pins, optionally only those inside a viewport.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="GetAll"/> on purpose. That one feeds the grid and carries a
+    /// permission verdict per row; this one carries a coordinate and nothing a person could act
+    /// on, so it can be asked for on every pan without the cost.</para>
+    ///
+    /// <para>Shaped after <c>FieldSessionUploadController.GetMyMapPoints</c> rather than inventing
+    /// a second convention: all four bounds or none, corners normalised, a hard cap, and the count
+    /// of what matched so the page can say "the newest 500 of 4,000 in view" instead of quietly
+    /// showing a fraction.</para>
+    /// </remarks>
+    [HttpGet("map")]
+    public async Task<ActionResult<OrgInvestigationMapPage>> GetMapPoints(
+        Guid orgId,
+        [FromQuery] double? north, [FromQuery] double? south,
+        [FromQuery] double? east,  [FromQuery] double? west,
+        CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var bounded = north is not null || south is not null || east is not null || west is not null;
+        if (bounded && (north is null || south is null || east is null || west is null))
+            return BadRequest("Give all four bounds, or none.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var query = db.Investigations.AsNoTracking()
+            .Include(i => i.Place)
+            .Where(i => i.OrganizationId == orgId
+                     && i.Latitude != null && i.Longitude != null);
+
+        if (bounded)
+        {
+            // Normalised, because map libraries disagree about which corner they hand over first
+            // and a reversed box reads as "nothing here" rather than as a mistake.
+            var n  = (decimal)Math.Max(north!.Value, south!.Value);
+            var so = (decimal)Math.Min(north!.Value, south!.Value);
+            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
+            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            query = query.Where(i => i.Latitude <= n && i.Latitude >= so
+                                  && i.Longitude <= e && i.Longitude >= w);
+        }
+
+        var total = await query.CountAsync(ct);
+        var now   = DateTime.UtcNow;
+
+        var points = await query
+            .OrderByDescending(i => i.ScheduledDateTime)
+            .Take(MapPointCap)
+            .Select(i => new OrgInvestigationMapPoint(
+                i.Id, i.Title, i.Latitude!.Value, i.Longitude!.Value,
+                i.ScheduledDateTime < now,
+                i.Place == null ? null : i.Place.Kind))
+            .ToListAsync(ct);
+
+        return Ok(new OrgInvestigationMapPage(points, total));
+    }
+
+    /// <summary>The most pins one answer will ever carry. See the remarks on GetMapPoints.</summary>
+    private const int MapPointCap = 500;
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<InvestigationRecord>> GetById(
         Guid orgId, Guid id, CancellationToken ct)
@@ -811,6 +874,17 @@ public sealed record OrgInvestigationRow(
     // Null when the visit has no place at all. The map draws a known landmark differently and
     // leaves everything else exactly as it was — an unknown is not a private residence.
     Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
+
+/// <summary>One investigation as a map needs it, and nothing else.</summary>
+public sealed record OrgInvestigationMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude, bool IsPast,
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind);
+
+/// <summary>
+/// The pins in view, and how many matched — so "500 of 500" can be told from "500 of 4,000".
+/// </summary>
+public sealed record OrgInvestigationMapPage(
+    IReadOnlyList<OrgInvestigationMapPoint> Points, int Total);
 
 /// <summary>
 /// One person on an investigation's team, and whether they turned up.

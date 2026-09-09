@@ -67,9 +67,27 @@ else if (_rows.Count == 0)
 else
 {
     @* ── Map ──────────────────────────────────────────────────────────────── *@
-    @if (_pins.Any(p => p.Latitude.HasValue))
+    @* Once the map has had something to show it stays, and a pan that finds nothing says so in
+       the footer. Taking it away would move the page under the person's hands mid-gesture. *@
+    @if (_mapShown)
     {
-        <InvestigationsMap Pins="@_pins" Height="380px" OnPinClicked="@GoToInvestigation" />
+        <InvestigationsMap Pins="@_pins" Height="380px" OnPinClicked="@GoToInvestigation"
+                           OnViewportChanged="@OnViewportChanged" />
+        <span hidden data-testid="org-map-bounded-loads">@_boundedLoads</span>
+        <div class="text-muted small mt-1 d-flex flex-wrap gap-3" data-testid="org-map-footer">
+            @if (_pins.Count == 0)
+            {
+                <span data-testid="org-map-empty-view">No investigations in this view.</span>
+            }
+            else if (_mapTotal > _pins.Count)
+            {
+                @* Said out loud rather than left as a shorter map: a partial picture nobody is
+                   told about is worse than a smaller one they can reason about. *@
+                <span data-testid="org-map-capped">
+                    Showing the most recent @_pins.Count of @_mapTotal in view — zoom in to see the rest.
+                </span>
+            }
+        </div>
     }
 
     @* An investigation the map could not place is easy to lose: the pin simply is not drawn, and
@@ -135,6 +153,18 @@ else
     private List<OrgInvestigationRow> _unplaceable = [];
 
     private bool _loading = true;
+
+    /// <summary>How many pins the bounds actually held, which may exceed the ones drawn.</summary>
+    private int _mapTotal;
+
+    /// <summary>Counts bounded loads. Hidden on the page so a test can prove a pan asked again.</summary>
+    private int _boundedLoads;
+
+    /// <summary>Once shown, the map stays — see the comment beside it in the markup.</summary>
+    private bool _mapShown;
+
+    private CancellationTokenSource? _viewportLoad;
+
     private LoadResult<OrgInvestigationRow> _rowsResult;
     private bool _creating;
 
@@ -151,6 +181,50 @@ else
     }
 
     private MyOrgPermissionsItem? _perms;
+
+    /// <summary>
+    /// Re-asks for the pins inside the new view, once the gesture has settled.
+    /// </summary>
+    /// <remarks>
+    /// <para>Debounced and cancellable, because a pan raises this repeatedly and an answer that
+    /// arrives after the person has moved on describes somewhere the map no longer is — drawing it
+    /// would shift pins under their cursor.</para>
+    ///
+    /// <para>A failed load leaves the pins alone rather than emptying the map: "nothing here" and
+    /// "we could not ask" look identical to a reader, and only one of them is true.</para>
+    /// </remarks>
+    private async Task OnViewportChanged(MapViewport viewport)
+    {
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+
+            var page = await AdminClient.GetOrgInvestigationMapAsync(
+                OrgId,
+                new MapBounds(viewport.North, viewport.South, viewport.East, viewport.West),
+                cts.Token);
+
+            if (cts.IsCancellationRequested || page.Failed || page.Item is null) return;
+
+            _pins = page.Item.Points
+                .Select(pt => new InvestigationMapPin(
+                    pt.Id, pt.Title, pt.Latitude, pt.Longitude, pt.IsPast,
+                    IsPublicPlace: pt.PlaceKind is null
+                        ? null
+                        : pt.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
+                .ToList();
+            _mapTotal = page.Item.Total;
+            _boundedLoads++;
+            StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a later gesture — nothing to draw
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -178,6 +252,8 @@ else
 
         _unplaceable = _rows.Where(r => r.Latitude is null || r.Longitude is null).ToList();
 
+        // The first draw comes from the rows already loaded, so the map is never blank while a
+        // second request is in flight. Every pan after that asks the server for what is in view.
         _pins = _rows.Select(r => new InvestigationMapPin(
             r.Id, r.Title, r.Latitude, r.Longitude,
             IsPast: r.ScheduledDateTime < now,
@@ -186,6 +262,8 @@ else
             IsPublicPlace: r.PlaceKind is null
                 ? null
                 : r.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)).ToList();
+        _mapTotal = _pins.Count;
+        if (_pins.Any(p => p.Latitude.HasValue)) _mapShown = true;
 
         if (FocusInvestigationId is { } focus && _rows.Any(r => r.Id == focus))
             FocusRow(focus);

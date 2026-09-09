@@ -41,13 +41,18 @@
                 <TelerikMap @ref="_mapRef"
                             Center="@_mapCenter"
                             Zoom="@_mapZoom"
-                            Height="420px">
+                            Height="420px"
+                            OnPanEnd="@OnPanEnd"
+                            OnZoomEnd="@OnZoomEnd">
                     <MapLayers>
                         <MapLayer Type="@MapLayersType.Tile"
                                   Attribution="© OpenStreetMap contributors"
                                   Subdomains="@(new[] {"a","b","c"})"
                                   UrlTemplate="caseMapTileTemplate" />
 
+                        @* A pan or a zoom re-asks for the cases inside the new view, and the list
+                           below follows the same answer. Map and list must never disagree: a
+                           reader has no way to tell which of two pictures is the true one. *@
                         @if (_markers.Count > 0)
                         {
                             <MapLayer Type="@MapLayersType.Marker"
@@ -146,9 +151,18 @@
                 </div>
             </div>
 
+            @if (_inView is not null)
+            {
+                <div class="text-muted small mb-2" data-testid="case-map-in-view">
+                    Showing @_totalCount case@(_totalCount == 1 ? "" : "s") in this view. Zoom out to widen the search.
+                </div>
+            }
+
             @if (_pagedItems.Count == 0)
             {
-                <div class="alert alert-light text-muted text-center">No public investigations yet.</div>
+                <div class="alert alert-light text-muted text-center" data-testid="case-map-empty-view">
+                    @(_inView is null ? "No public investigations yet." : "No public investigations in this view.")
+                </div>
             }
             else
             {
@@ -293,14 +307,54 @@
         }
     }
 
-    private async Task LoadAsync()
+    /// <summary>The view the last answer described, or null when nothing has been panned yet.</summary>
+    private MapBounds? _inView;
+
+    private CancellationTokenSource? _viewportLoad;
+
+    private Task OnPanEnd(MapPanEndEventArgs args)  => ReloadForViewAsync(args.Extent);
+    private Task OnZoomEnd(MapZoomEndEventArgs args) => ReloadForViewAsync(args.Extent);
+
+    /// <summary>
+    /// Re-asks for the cases inside the new view, once the gesture has settled.
+    /// </summary>
+    /// <remarks>
+    /// <para>Telerik hands the extent over as [north-west lat, north-west lng, south-east lat,
+    /// south-east lng].</para>
+    ///
+    /// <para>Debounced and cancellable: a pan raises this repeatedly, and an answer arriving after
+    /// the person has moved on describes somewhere the map no longer is. A failure leaves the last
+    /// good answer on screen rather than emptying it — "nothing here" and "we could not ask" look
+    /// identical to a reader, and only one of them is true.</para>
+    /// </remarks>
+    private async Task ReloadForViewAsync(double[]? extent)
+    {
+        if (extent is not { Length: 4 }) return;
+
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            _inView = new MapBounds(North: extent[0], West: extent[1], South: extent[2], East: extent[3]);
+            await LoadAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a later gesture — nothing to draw
+        }
+    }
+
+    private async Task LoadAsync(CancellationToken token = default)
     {
         _loading = true;
         StateHasChanged();
 
-        // Load all cases for the map + first page for the list
-        // We load up to 500 for map coverage; list is sliced client-side
-        var response = await AdminClient.GetPublicCaseDiscoveryAsync(page: 1, pageSize: 500, sort: _sort);
+        // The map and the list are built from ONE answer, so they can never disagree. Bounded once
+        // the person has moved the map; unbounded before that, which is what a first load wants.
+        var response = await AdminClient.GetPublicCaseDiscoveryAsync(
+            page: 1, pageSize: 500, sort: _sort, bounds: _inView, token: token);
         if (response is null)
         {
             _loading = false;
