@@ -259,14 +259,28 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    manage version and build number OFF — the numbers are ours). Wait for "Upload Successful".
    Processing takes 10–30 minutes; the build appears under TestFlight → iOS Builds.
 
-8. **Create the version.** App Store Connect → My Apps → IsHaunted → **+ Version** → 1.0.2.
-   (1.0 stays in its rejected state; a new version supersedes it.)
+8. **Rename the version — you cannot add one.** An app whose first version has never been
+   released has exactly **one** version record, so there is no "+ Version" anywhere; the sidebar
+   offers only *Add Platform*. Open the existing version page, scroll past the description and
+   keywords to the general information at the bottom, and change **Version** from 1.0 to 1.0.2.
+   The heading then reads *iOS App Version 1.0.2*.
+
+   This matters more than it looks: **App Store Connect only offers builds whose version string
+   matches the page**, so build 4 is invisible until the rename is saved. Learned on 2026-09-09,
+   after this document had confidently said the opposite.
 
 9. **Fill the version page.** What's New from §2. Screenshots and previews from §5. Promotional
    text, description, keywords, support and marketing URLs carried from `APP-STORE.md` §1 — they
    pre-fill from 1.0, check them rather than retyping. Age rating and category are unchanged.
 
-10. **Select build 4** in the Build section once processing finishes.
+10. **Swap the build.** The renamed version still carries **build 1** — the binary Apple rejected —
+    and *Submit* will happily send it. App Store Connect warns with a **"Newer Build Available"**
+    dialog rather than refusing, so read that dialog rather than clicking through it. Cancel,
+    remove the attached build on its row in the **Build** section, then choose **1.0.2 (4)** from
+    the list the empty slot offers.
+
+    A build still sitting in TestFlight beta review is selectable here; the two queues are
+    independent.
 
 11. **App Review Information.** Sign-in required: yes; demo user apple@apple.com and its password.
     Notes: paste §4 in full. Contact: Ben's phone and email.
@@ -288,7 +302,8 @@ rostered — the reviewer uses all three.
 Check App Store Connect → 1.0.2 → App Review → Resolution Center for the letter.
 
 - **Metadata only** (2.1 Information Needed, screenshot or wording complaints): fix in the form,
-  reply in Resolution Center, **Add for Review** again with the **same build 4**. No new build.
+  reply in Resolution Center, **Add for Review** again with the **same build 4**. No new build —
+  but check the Build section still says 4 before submitting, for the reason in §6 step 10.
 - **A code problem** (crash, a flow that does not work, a guideline that needs a change): fix it,
   bump `CURRENT_PROJECT_VERSION` to **5** (marketing stays 1.0.2), Archive, Upload, select build 5
   on the version page, reply in Resolution Center saying what changed, Add for Review.
