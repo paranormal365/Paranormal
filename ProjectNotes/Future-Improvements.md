@@ -11492,3 +11492,62 @@ An account cannot exist without a display name and a permanent, unique @name —
 validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
 — so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
 
+---
+
+## 228. Apple Maps (MapKit JS) instead of OpenStreetMap tiles (BUILT 2026-09-10)
+
+Ben asked whether the website could use Apple Maps instead of OpenStreetMap, and whether that costs
+money. It does not: MapKit JS comes with the Developer Program membership (250,000 map views and
+25,000 service calls a day, and a request to Apple rather than a bill past that). What the site
+uses today is OpenStreetMap's public tile server, whose usage policy tolerates small sites and
+throttles without notice, and the public OSRM demo server over plain http for driving directions.
+
+**Not a URL swap.** Apple serves no raster tiles, so `TelerikMap`'s tile layer cannot point at it.
+The four map components are rebuilt on a `Kit/BenMap` wrapper over MapKit JS, one component per
+phase behind a provider switch, with the Telerik path removed at the end. Directions move to
+MapKit's own service; geocoding stays on Geocodio for now.
+
+Plan of record: `README-apple-mapkit-228.md` on `feature/apple-mapkit-228`. Portal work needed
+first: a **Maps ID** and a key with the Maps service enabled — not a Services ID, which belongs to
+Sign in with Apple (item 227).
+
+### Built 2026-09-10, all six phases
+
+Every map on the website is Apple MapKit JS through `Kit/Maps/BenMap`, authorised by a
+thirty-minute token the website signs with the key for Maps ID `maps.com.ishaunted`. The Telerik
+map, the OpenStreetMap tile server, the OSRM demo server and the modal's metered Geocodio lookup
+are gone; a guard test refuses their return. Details, verification and the two wrapper races
+found along the way: `README-apple-mapkit-228.md`. Left open: geocoding on the Apple Maps Server
+API, a separate decision.
+
+---
+
+## 229. Revoke Apple tokens when an account is deleted (BUILT and MERGED 2026-09-10)
+
+App Review guideline 5.1.1(v): an app offering Sign in with Apple that lets people delete their
+account must revoke their Sign in with Apple tokens as part of the deletion. Account deletion
+anonymises the row and drops the external login, so nobody can get back in, but Apple is never
+told. Revocation needs a refresh token, which needs the authorization code exchanged at sign-in
+with a client secret signed by the Sign in with Apple key Ben created 2026-09-10 (`5VY456C8RR`).
+Neither client sends the code today. Plan and phases: `README-apple-token-revocation-229.md`.
+
+### Built 2026-09-10, phases A-D
+
+The API signs Apple's client secret with the key, exchanges the authorization code every client
+now sends for a data-protected refresh token, and revokes every kept token before an account is
+anonymised — by its owner or by a SuperAdmin purge. Apple accepted a secret signed with the real
+key (a bogus code answered `invalid_grant`). Merged to develop and master and the
+`AppleCredentials` migration applied to production the same day. Left for deploy time: the three
+`Apple:*` values plus the `.p8` on the server.
+
+---
+
+## 230. Geocoding on the Apple Maps Server API (BUILT 2026-09-10)
+
+Ben: "Move geocoding to apple." The last metered call after item 228: Geocodio is gone from the
+API, the deploy script, the secrets template and the setup script. `AddressGeocodingService`
+keeps its one static door and its eight callers; behind it `AppleMapsGeocoder` signs the same
+Maps key the website uses, buys an access token, and answers forward, reverse and free-text
+lookups in the shapes the callers already had. Fixtures captured from the real API; a live test
+proves the key. Details: `README-apple-geocoding-230.md`.
+

@@ -97,7 +97,7 @@ function Write-Detail ([string]$m) { Write-Host "   $m" }
 function Write-Warn   ([string]$m) { Write-Host "   WARNING: $m" -ForegroundColor Yellow }
 
 # ---- JSON helpers -----------------------------------------------------------
-# Configuration paths use the .NET colon notation ("Geocodio:ApiKey") so they read the same here as
+# Configuration paths use the .NET colon notation ("Maps:KeyId") so they read the same here as
 # they do in the C# that consumes them.
 
 function Read-JsonFile ([string]$path) {
@@ -473,12 +473,15 @@ if ($Apps -contains 'webapi') {
     Set-SerilogConnectionString $cfg $sqlConn
 
     # Carried from the secrets file. Each of these turns a feature off SILENTLY when absent, which
-    # is worse than failing loudly: geocoding returns nothing, and Entra sign-in disappears from
-    # the UI because Program.cs only wires it up when ClientId parses as a GUID.
+    # is worse than failing loudly: Entra sign-in disappears from the UI because Program.cs only
+    # wires it up when ClientId parses as a GUID.
     $carry = [ordered]@{
         'TelerikKey'                      = (Get-JsonValue $secrets 'TelerikKey')
-        'Geocodio:ApiKey'                 = (Get-JsonValue $secrets 'GeocodioApiKey')
-        'Geocodio:BaseUrl'                = (Get-JsonValue $secrets 'GeocodioBaseUrl')
+        # Geocoding through the Apple Maps Server API (item 230): the SAME Maps key the website
+        # signs MapKit tokens with. Absent, address lookups answer nothing - the forms say so.
+        'Maps:TeamId'                     = (Get-JsonValue $secrets 'AppleTeamId')
+        'Maps:KeyId'                      = (Get-JsonValue $secrets 'AppleMapsKeyId')
+        'Maps:PrivateKeyPath'             = (Get-JsonValue $secrets 'AppleMapsKeyPath')
         'AzureAd:TenantId'                = (Get-JsonValue $secrets 'AzureAd:TenantId')
         'AzureAd:ClientId'                = (Get-JsonValue $secrets 'AzureAd:ClientId')
         # No Audience key. Program.cs derives ValidAudiences from ClientId as api://<id> and <id>,
@@ -491,6 +494,14 @@ if ($Apps -contains 'webapi') {
         # instead of being screened, and audio/video keeps its metadata - the app reports the
         # feature as unavailable rather than failing an upload (item 181, 186 F5b).
         'MediaTools:FfmpegPath'           = (Get-JsonValue $secrets 'FfmpegPath')
+        # Sign in with Apple's server side (item 229): the key that signs client secrets, so a
+        # person's Apple tokens can be revoked when they delete their account. PrivateKeyPath is an
+        # absolute path to the .p8 OUTSIDE the publish folder - Invoke-Publish wipes that folder -
+        # beside this secrets file is the natural place. Absent, codes are not exchanged and
+        # nothing is revoked, silently, which App Review will notice before anyone here does.
+        'Apple:TeamId'                    = (Get-JsonValue $secrets 'AppleTeamId')
+        'Apple:KeyId'                     = (Get-JsonValue $secrets 'AppleSignInKeyId')
+        'Apple:PrivateKeyPath'            = (Get-JsonValue $secrets 'AppleSignInKeyPath')
     }
     foreach ($key in $carry.Keys) {
         if ($null -ne $carry[$key] -and "$($carry[$key])" -ne '') {
@@ -563,12 +574,27 @@ if ($Apps -contains 'website') {
         'AzureAd:TenantId'              = (Get-JsonValue $secrets 'AzureAd:TenantId')
         'AzureAd:ClientId'              = $entraClientId
         'DownstreamApis:BenWebApi:Scope' = (Get-JsonValue $secrets 'AzureAd:ApiScope')
+        # Apple Maps (item 228): every map on the site is MapKit JS, authorised by a token the
+        # website signs with this key. Same team as the sign-in key, a DIFFERENT key id and file.
+        # Absent, every map says it could not be loaded - visible on the home page at once.
+        'Maps:TeamId'                   = (Get-JsonValue $secrets 'AppleTeamId')
+        'Maps:KeyId'                    = (Get-JsonValue $secrets 'AppleMapsKeyId')
+        'Maps:PrivateKeyPath'           = (Get-JsonValue $secrets 'AppleMapsKeyPath')
     }
     foreach ($key in $siteCarry.Keys) {
         if ($null -ne $siteCarry[$key] -and "$($siteCarry[$key])" -ne '') {
             Set-JsonValue $cfg $key $siteCarry[$key]
         } else {
-            Write-Detail ("{0,-32} not set (Entra sign-in stays off)" -f $key)
+            Write-Detail ("{0,-32} not set (that feature stays off)" -f $key)
+        }
+    }
+
+    # The two key files must exist where the settings say, or the apps refuse to start - by
+    # design, because a wrong path is a deployment mistake. Checked here, where somebody is
+    # watching, rather than discovered as a failed service start.
+    foreach ($keyPath in @((Get-JsonValue $secrets 'AppleSignInKeyPath'), (Get-JsonValue $secrets 'AppleMapsKeyPath'))) {
+        if ($keyPath -and -not (Test-Path $keyPath)) {
+            throw "The secrets file names an Apple key file that is not on this machine: $keyPath"
         }
     }
 

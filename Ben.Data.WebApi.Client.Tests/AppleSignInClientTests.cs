@@ -111,6 +111,23 @@ public sealed class AppleSignInClientTests
     }
 
     /// <summary>An empty string is a value; the server would take it as a chosen name of nothing.</summary>
+    /// <summary>The authorization code rides along when the client has one, and is absent when it does not (item 229).</summary>
+    [Fact]
+    public async Task The_authorization_code_is_sent_when_held_and_omitted_when_not()
+    {
+        var handler = StubHandler.Always(HttpStatusCode.OK, Fixture.Read("login-200.json"));
+        var (client, _) = Build(handler);
+
+        await client.SignInAsync("t", authorizationCode: "c-1");
+        Assert.Contains("\"authorizationCode\":\"c-1\"", handler.LastBody);
+
+        await client.SignInAsync("t");
+        Assert.DoesNotContain("authorizationCode", handler.LastBody);
+
+        await client.LinkAsync("t", "a@b.test", "pw", authorizationCode: "c-2");
+        Assert.Contains("\"authorizationCode\":\"c-2\"", handler.LastBody);
+    }
+
     [Fact]
     public async Task Nothing_optional_is_sent_when_there_is_nothing_to_send()
     {

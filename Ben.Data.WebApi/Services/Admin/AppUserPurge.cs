@@ -89,13 +89,17 @@ public sealed class AppUserPurge
     private readonly Ben.Data.Common.Interfaces.IFileStorageService _fileStorage;
     private readonly ILogger<AppUserPurge> _log;
 
+    private readonly Apple.AppleCredentialService _apple;
+
     public AppUserPurge(
         IDbContextFactory<BenDataContext> dbFactory,
         Ben.Data.Common.Interfaces.IFileStorageService fileStorage,
+        Apple.AppleCredentialService apple,
         ILogger<AppUserPurge> log)
     {
         _dbFactory = dbFactory;
         _fileStorage = fileStorage;
+        _apple = apple;
         _log = log;
     }
 
@@ -216,6 +220,10 @@ public sealed class AppUserPurge
             .Where(f => fileIds.Contains(f.Id) && f.StoragePath != null && f.StoragePath != "")
             .Select(f => f.StoragePath!)
             .ToListAsync(ct);
+
+        // The person's Apple tokens go first, outside the transaction (item 229): a network call,
+        // and a purge must not fail because Apple is down. See AccountClosureService.CloseAsync.
+        await _apple.RevokeAllAsync(user.Id, ct);
 
         await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {

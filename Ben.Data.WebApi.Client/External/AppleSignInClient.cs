@@ -69,17 +69,19 @@ public sealed class AppleSignInClient
     /// again, so an account created without it has no name it did not invent.
     /// </param>
     /// <param name="handle">The chosen @name, on the second attempt after a needs-profile answer.</param>
+    /// <param name="authorizationCode">Apple's one-shot code from the same sign-in, for revocation later (item 229).</param>
     public async Task<Outcome> SignInAsync(
         string identityToken,
         string? displayName = null,
         string? handle = null,
+        string? authorizationCode = null,
         CancellationToken token = default)
     {
         HttpResponseMessage response;
         try
         {
             response = await _http.PostAsJsonAsync(
-                "api/auth/apple", new AppleSignInRequest(identityToken, displayName, handle), token);
+                "api/auth/apple", new AppleSignInRequest(identityToken, displayName, handle, authorizationCode), token);
         }
         catch (HttpRequestException)
         {
@@ -172,6 +174,7 @@ public sealed class AppleSignInClient
         string password,
         string? twoFactorCode = null,
         string? recoveryCode = null,
+        string? authorizationCode = null,
         CancellationToken token = default)
     {
         HttpResponseMessage response;
@@ -179,7 +182,7 @@ public sealed class AppleSignInClient
         {
             response = await _http.PostAsJsonAsync(
                 "api/auth/apple/link",
-                new AppleLinkRequest(identityToken, email, password, twoFactorCode, recoveryCode),
+                new AppleLinkRequest(identityToken, email, password, twoFactorCode, recoveryCode, authorizationCode),
                 token);
         }
         catch (HttpRequestException)

@@ -229,6 +229,25 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.IConfirmationSender>(
 // so it is a singleton — one key fetch for the process, not one per sign-in.
 builder.Services.AddHttpClient<Ben.Data.WebApi.Controllers.IAppleIdentityTokenValidator,
                                Ben.Data.WebApi.Controllers.AppleIdentityTokenValidator>();
+
+// Sign in with Apple's server side (item 229): the key that signs client secrets, read from a
+// FILE named in configuration and never from configuration itself — the repository is public. A
+// missing path means "not configured": codes are not exchanged and nothing is revoked, and the
+// token client says so once. A malformed key throws at startup, as a deployment mistake should.
+builder.Services.AddSingleton(sp =>
+{
+    var section = sp.GetRequiredService<IConfiguration>().GetSection("Apple");
+    var path = section["PrivateKeyPath"];
+    var pem = string.IsNullOrWhiteSpace(path) ? string.Empty
+            : File.Exists(path) ? File.ReadAllText(path)
+            : throw new InvalidOperationException($"Apple:PrivateKeyPath names a file that does not exist: {path}");
+    return new Ben.Data.WebApi.Services.Apple.AppleSigningOptions(
+        section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
+});
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Apple.AppleClientSecret>();
+builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Apple.IAppleTokenClient,
+                               Ben.Data.WebApi.Services.Apple.AppleTokenClient>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Apple.AppleCredentialService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
 // Cleans message bodies written before sending sanitised them (2026-09-04). Idempotent: after the
@@ -525,10 +544,27 @@ if (corsOrigins.Length == 0)
 else
     Log.Information("CORS: allowing browser origins {Origins}", (object)corsOrigins);
 
-// Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
-Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
-    builder.Configuration["Geocodio:ApiKey"] ?? string.Empty,
-    builder.Configuration["Geocodio:BaseUrl"]);
+// Geocoding through the Apple Maps Server API (item 230), signed with the same Maps key the
+// website's maps use, read from a FILE named in configuration and never from configuration
+// itself. No path means "not configured": every lookup answers nothing, which the address forms
+// already explain. A malformed key throws here, at startup, as a deployment mistake should.
+{
+    var maps = builder.Configuration.GetSection("Maps");
+    var keyPath = maps["PrivateKeyPath"];
+    var teamId = maps["TeamId"]; var keyId = maps["KeyId"];
+    if (!string.IsNullOrWhiteSpace(keyPath) && !string.IsNullOrWhiteSpace(teamId) && !string.IsNullOrWhiteSpace(keyId))
+    {
+        if (!File.Exists(keyPath))
+            throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {keyPath}");
+        Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
+            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(teamId, keyId, File.ReadAllText(keyPath), maps["BaseUrl"]));
+        Log.Information("Geocoding: Apple Maps Server API, key {KeyId}", keyId);
+    }
+    else
+    {
+        Log.Warning("Geocoding: no Maps key configured; address lookups will answer nothing");
+    }
+}
 
 app.UseExceptionHandler(handler =>
 {

@@ -1,13 +1,12 @@
 @*
   AddressMapPlayer.razor
   ──────────────────────
-  Reusable map component for displaying and configuring a single address on a
-  Telerik Blazor Map (OpenStreetMap tiles).
+  Reusable map component for displaying and configuring a single address, drawn by
+  Kit/Maps/BenMap (item 228: Apple Maps, with the retiring Telerik map as the fallback).
 
   Features:
-  • Tile layer — OpenStreetMap (no API key required)
-  • Marker layer — colored SVG pin using a Telerik icon, with tooltip
-  • Shape layer — geographically accurate radius circle (64-sided polygon)
+  • Marker — the person's chosen colour and icon, with a tooltip
+  • Region — a circle of a real radius on the ground
   • Config panel — toggle visibility, pick colors (TelerikColorPicker),
                    pick icon (TelerikDropDownList with icon preview),
                    set radius via numeric input or slider,
@@ -27,8 +26,7 @@
 *@
 
 @namespace Ben.Web.Website.Library.Manage.Maps
-@inject IJSRuntime JS
-@implements IAsyncDisposable
+@using Ben.Web.Website.Library.Kit.Maps
 
 @if (_invalidCoords)
 {
@@ -41,54 +39,12 @@ else
 {
     <div class="address-map-player">
 
-        @* ── Telerik Map ──────────────────────────────────────────────────── *@
-        <TelerikMap @ref="_mapRef"
-                    Center="@_center"
-                    Zoom="@_zoom"
-                    Height="@Height"
-                    Width="100%"
-                    OnClick="@OnMapClick">
-            <MapLayers>
-
-                @* Tile (OpenStreetMap) — UrlTemplate refers to the JS function
-                   defined in AddressMapPlayer.razor.js that returns the tile URL. *@
-                <MapLayer Type="@MapLayersType.Tile"
-                          Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
-                          Subdomains="@_tileSubdomains"
-                          UrlTemplate="addressMapTileTemplate" />
-
-                @* Region circle — Shape layer with computed GeoJSON polygon *@
-                @if (_form.ShowRegion && _circleGeoJson is not null)
-                {
-                    <MapLayer Type="@MapLayersType.Shape"
-                              Data="@_circleGeoJson">
-                        <MapLayerShapeSettings>
-                            <MapLayerShapeSettingsStyle>
-                                <MapLayerShapeSettingsStyleFill
-                                    Color="@_form.RegionFillColor"
-                                    Opacity="@_form.RegionFillOpacity" />
-                                <MapLayerShapeSettingsStyleStroke
-                                    Color="@_form.RegionStrokeColor"
-                                    Opacity="@_form.RegionStrokeOpacity"
-                                    Width="@_form.RegionStrokeWidth" />
-                            </MapLayerShapeSettingsStyle>
-                        </MapLayerShapeSettings>
-                    </MapLayer>
-                }
-
-                @* Marker — custom SVG pin via JS template *@
-                @if (_form.ShowMarker)
-                {
-                    <MapLayer Type="@MapLayersType.Marker"
-                              Data="@_markerData"
-                              LocationField="@nameof(AddressMarkerModel.LatLng)"
-                              TitleField="@nameof(AddressMarkerModel.Title)">
-                        <MapLayerMarkerSettings Template="addressMapMarkerTemplate" />
-                    </MapLayer>
-                }
-
-            </MapLayers>
-        </TelerikMap>
+        @* The map. Its view is this component's to drive: centred on the address, zoomed for
+           the region when there is one. A click reaches OnMapClick only while the person has
+           armed "click to set the edge"; the rest of the time the map is just looked at. *@
+        <BenMap Pins="@_pins" Circle="@_circle" Height="@Height" FitToPins="false"
+                CenterLatitude="@Latitude" CenterLongitude="@Longitude" Zoom="@_zoom"
+                OnMapClicked="@OnMapClick" />
 
         @* ── Click-to-set-radius instruction banner ────────────────────────── *@
         @if (_resizeMode)
@@ -268,21 +224,15 @@ else
 
     // ── Internal state ────────────────────────────────────────────────────────
 
-    private static readonly string[] _tileSubdomains = ["a", "b", "c"];
-
-    private TelerikMap? _mapRef;
-    private IJSObjectReference? _jsModule;
-
     private bool _invalidCoords;
     private bool _resizeMode;
 
-    private double[] _center = [0, 0];
-    private double   _zoom   = 13;
+    private double _zoom = 13;
 
     private AddressMapConfig _form = AddressMapConfig.Default;
 
-    private List<AddressMarkerModel>? _markerData;
-    private object? _circleGeoJson;
+    private IReadOnlyList<BenMapPin> _pins = [];
+    private BenMapCircle? _circle;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -291,7 +241,6 @@ else
         _invalidCoords = Latitude == 0 && Longitude == 0;
         if (_invalidCoords) return;
 
-        _center = [Latitude, Longitude];
         _form   = AddressMapConfig.FromRecord(null) with
         {
             IsOnMap           = Config?.IsOnMap           ?? false,
@@ -315,41 +264,28 @@ else
         RebuildMapData();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && !_invalidCoords)
-        {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./_content/Ben.Web.Website.Library/Manage/Maps/AddressMapPlayer.razor.js");
-            await _jsModule.InvokeVoidAsync("initAddressMapTemplates");
-            _mapRef?.Refresh();
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_jsModule is not null)
-            await _jsModule.DisposeAsync();
-    }
-
     // ── Map data builders ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// New records on every change, deliberately: BenMap redraws a pin set or a circle only when
+    /// the reference it holds is no longer the one it drew.
+    /// </summary>
     private void RebuildMapData()
     {
-        _markerData = [
-            new AddressMarkerModel
-            {
-                LatLng      = [Latitude, Longitude],
-                Title       = Title,
-                Color       = _form.MarkerColor,
-                IconSvgPath = AddressMapIconRegistry.GetPath(_form.MarkerIconKey),
-            }
-        ];
+        _pins = _form.ShowMarker
+            ? [new BenMapPin(Latitude, Longitude, Title,
+                Color: _form.MarkerColor,
+                IconSvgPath: AddressMapIconRegistry.GetPath(_form.MarkerIconKey))]
+            : [];
 
-        _circleGeoJson = _form.ShowRegion && _form.RegionRadiusMiles > 0
-            ? MapGeoJsonHelper.ComputeCircleGeoJson(Latitude, Longitude, _form.RegionRadiusMiles)
+        _circle = _form.ShowRegion && _form.RegionRadiusMiles > 0
+            ? new BenMapCircle(Latitude, Longitude, _form.RegionRadiusMiles * MetersPerMile,
+                _form.RegionFillColor, _form.RegionFillOpacity,
+                _form.RegionStrokeColor, _form.RegionStrokeOpacity, _form.RegionStrokeWidth)
             : null;
     }
+
+    private const double MetersPerMile = 1609.344;
 
     private void UpdateForm(AddressMapConfig updated)
     {
@@ -358,19 +294,16 @@ else
 
         if (_form.ShowRegion)
             _zoom = MapGeoJsonHelper.ZoomForRadius(_form.RegionRadiusMiles);
-
-        _mapRef?.Refresh();
     }
 
     // ── Map click — set region edge ───────────────────────────────────────────
 
-    private void OnMapClick(MapClickEventArgs args)
+    private void OnMapClick(BenMapPoint point)
     {
         if (!_resizeMode) return;
 
         double miles = MapGeoJsonHelper.HaversineDistanceMiles(
-            Latitude, Longitude,
-            args.Location.Latitude, args.Location.Longitude);
+            Latitude, Longitude, point.Latitude, point.Longitude);
 
         miles = Math.Round(Math.Max(0.1, miles), 2);
         UpdateForm(_form with { RegionRadiusMiles = miles });

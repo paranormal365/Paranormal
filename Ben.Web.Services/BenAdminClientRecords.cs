@@ -747,17 +747,6 @@ public static class OrgMembershipItemExtensions
             : $"{m.DisplayName} ({m.Role})";
 }
 
-public sealed record DirectionsResult(
-    string RouteGeoJson,
-    IReadOnlyList<RoutePoint> RoutePoints,
-    double TotalDistanceMiles,
-    double TotalDurationMinutes,
-    IReadOnlyList<RouteStep> Steps);
-
-public sealed record RoutePoint(double Lat, double Lon);
-
-public sealed record RouteStep(string Instruction, double DistanceMiles, double DurationSeconds);
-
 public sealed record OrgSettingsResponse(
     bool ShowAddressMap, bool ShowAddressDirections,
     // Item 181: the group's preference, plus whether it is actually in effect and why not.

@@ -88,7 +88,7 @@ public sealed class AdminAppUserPurgeControllerTests
     private static AdminAppUserPurgeController Build(IDbContextFactory<BenDataContext> factory)
     {
         var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
-        var purge = new AppUserPurge(factory, storage.Object, NullLogger<AppUserPurge>.Instance);
+        var purge = new AppUserPurge(factory, storage.Object, Support.AppleTestSupport.Credentials(factory), NullLogger<AppUserPurge>.Instance);
 
         var controller = new AdminAppUserPurgeController(purge)
         {

@@ -17,7 +17,7 @@ public class HomeMapTests : BenTestBase
     {
         await Page.GotoAsync(BaseUrl);
 
-        // NOT NetworkIdle. The home page carries a map, and the map streams OpenStreetMap tiles
+        // NOT NetworkIdle. The home page carries a map, and the map streams tiles
         // for as long as it is on screen — so "no network activity for 500ms" is a condition this
         // page may simply never satisfy. Under the full suite's load it did not, and every test in
         // this fixture failed in SetUp with a bare 30s timeout that named nothing.
@@ -27,62 +27,139 @@ public class HomeMapTests : BenTestBase
         await WaitUntilLoadedAsync();
     }
 
+    // ── The map (Apple MapKit JS since item 228) ─────────────────────────────
+    //
+    // MapKit draws tiles AND pins on canvas: there is no tile <img> to watch for and no marker
+    // element to click. The map module exports what a test needs instead — the pins as drawn,
+    // and a select-by-index that fires the same event a click does — and a test imports the
+    // very module instance the page holds.
+
+    private const string MapModule = "/_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js";
+
+    /// <summary>A plain class with settable properties: Playwright's result converter cannot fill a positional record.</summary>
+    private sealed class DrawnPin
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Subtitle { get; set; } = string.Empty;
+        public string Glyph { get; set; } = string.Empty;
+    }
+
+    /// <summary>The pins once the map has some, or an empty list after 20 seconds.</summary>
+    private async Task<IReadOnlyList<DrawnPin>> WaitForPinsAsync()
+    {
+        var raw = await Page.EvaluateAsync<DrawnPin[]>(@"async (path) => {
+            const mod = await import(path);
+            const id = document.querySelector('.ben-map')?.id;
+            if (!id) return [];
+            for (let i = 0; i < 80 && mod.pinCount(id) === 0; i++) await new Promise(r => setTimeout(r, 250));
+            return mod.pins(id).map(p => ({ Title: p.title ?? '', Subtitle: p.subtitle ?? '', Glyph: p.glyph ?? '' }));
+        }", MapModule);
+        return raw;
+    }
+
+    /// <summary>Selects the first pin whose glyph the predicate accepts. False when there is none.</summary>
+    private async Task<bool> SelectPinAsync(Func<DrawnPin, bool> pick)
+    {
+        var pins = await WaitForPinsAsync();
+        var index = pins.ToList().FindIndex(p => pick(p));
+        if (index < 0) return false;
+        return await Page.EvaluateAsync<bool>(@"async ([path, index]) => {
+            const mod = await import(path);
+            return mod.selectPin(document.querySelector('.ben-map').id, index);
+        }", new object[] { MapModule, index });
+    }
+
+    private static bool IsSingle(DrawnPin p)  => p.Glyph == "👻";
+    private static bool IsGroup(DrawnPin p)   => int.TryParse(p.Glyph, out var n) && n > 1;
+
     [Test]
     public async Task Map_TileLayerLoads()
     {
-        // Wait for at least one OpenStreetMap tile request
-        var tileLoaded = false;
-        Page.Response += (_, response) =>
-        {
-            if (response.Url.Contains("tile.openstreetmap.org"))
-                tileLoaded = true;
-        };
-        await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Page.WaitForTimeoutAsync(3_000); // tiles load async
-        Assert.That(tileLoaded, Is.True, "Expected at least one OpenStreetMap tile to be requested.");
+        // Apple's tiles are drawn on canvas; the map has at least two canvases once anything is drawn.
+        var canvases = Page.Locator(".ben-map canvas");
+        await Expect(canvases.First).ToBeAttachedAsync(new() { Timeout = 25_000 });
+        Assert.That(await canvases.CountAsync(), Is.GreaterThanOrEqualTo(2), "Expected the map to have drawn.");
     }
 
     [Test]
     public async Task Map_MarkersRenderAfterLoad()
     {
-        // Ghost or cluster markers appear as spans in the DOM after LoadAsync completes
-        await Page.WaitForSelectorAsync(".case-map-cluster, .case-map-single", new() { Timeout = 15_000 });
-        var markers = Page.Locator(".case-map-cluster, .case-map-single");
-        var count = await markers.CountAsync();
-        Assert.That(count, Is.GreaterThan(0), "Expected at least one map marker to render.");
+        var pins = await WaitForPinsAsync();
+        Assert.That(pins.Count, Is.GreaterThan(0), "Expected at least one map pin to be drawn.");
+    }
+
+    private sealed class MapState
+    {
+        public double[] Size { get; set; } = [];
+        public double[] Span { get; set; } = [];
+        public int Annotations { get; set; }
+    }
+
+    /// <summary>
+    /// The map recreated by a sort frames the same view as the first one, at the container's real
+    /// width (item 228, phase 3).
+    /// </summary>
+    /// <remarks>
+    /// The home page swaps its map for a loader on every reload, so a sort makes a NEW map. That
+    /// map used to come up with no pins (a re-render during its first render marked them drawn
+    /// before it existed), and the state it reports is checked here against the container it
+    /// fills: a region framed for the wrong width shows the Gulf of Mexico in place of the country.
+    /// </remarks>
+    [Test]
+    public async Task Map_KeepsItsPinsAndFramingAfterASort()
+    {
+        var before = await WaitForPinsAsync();
+        if (before.Count == 0) { Assert.Ignore("No pins in the seed."); return; }
+
+        await Page.GetByText("Newest").ClickAsync();
+        await Page.WaitForTimeoutAsync(2_500);
+
+        var after = await WaitForPinsAsync();
+        Assert.That(after.Count, Is.EqualTo(before.Count), "the sort must not lose the pins");
+
+        var state = await Page.EvaluateAsync<MapState>(@"async (path) => {
+            const mod = await import(path);
+            const el = document.querySelector('.ben-map');
+            const d = mod.describe(el.id);
+            return { Size: d.size, Span: d.span, Annotations: d.annotations };
+        }", MapModule);
+        Assert.That(state.Size[0], Is.GreaterThan(300), "the map should fill its container, not a mid-layout sliver");
+        // At zoom 4 a Web-Mercator map shows 360 / (256 · 2^4) degrees of longitude per pixel.
+        var expectedLon = 360.0 / (256 * 16) * state.Size[0];
+        Assert.That(state.Span[1], Is.EqualTo(expectedLon).Within(expectedLon * 0.35),
+            $"longitude span {state.Span[1]:F1}° for a {state.Size[0]}px map is not zoom 4");
+        Assert.That(await Page.InnerTextAsync("body"), Does.Not.Contain("An unhandled error has occurred"));
+
+        // Opt-in proof for a reviewer: BEN_MAP_SHOT=/some/dir writes the home map as a PNG.
+        if (Environment.GetEnvironmentVariable("BEN_MAP_SHOT") is { Length: > 0 } dir)
+        {
+            var map = Page.Locator(".ben-map").First;
+            await map.ScrollIntoViewIfNeededAsync();
+            await Page.WaitForTimeoutAsync(4_000);
+            Directory.CreateDirectory(dir);
+            await map.ScreenshotAsync(new() { Path = Path.Combine(dir, "home-map.png") });
+        }
     }
 
     [Test]
     public async Task Map_ClusterMarkerShowsCount()
     {
-        await Page.WaitForSelectorAsync(".case-map-cluster", new() { Timeout = 15_000, State = WaitForSelectorState.Attached });
-        var cluster = Page.Locator(".case-map-cluster").First;
-        if (await cluster.IsVisibleAsync())
-        {
-            var text = await cluster.InnerTextAsync();
-            Assert.That(int.TryParse(text.Trim(), out var n) && n > 1, Is.True,
-                "Cluster marker should display a count ≥ 2.");
-        }
-        else
-        {
-            Assert.Pass("No cluster markers — all seeded cities have exactly one case.");
-        }
+        var pins = await WaitForPinsAsync();
+        var group = pins.FirstOrDefault(IsGroup);
+        if (group is null) { Assert.Ignore("No grouped pins — all seeded cities have exactly one case."); return; }
+        Assert.That(int.Parse(group.Glyph), Is.GreaterThan(1), "A grouped pin shows its count.");
+        Assert.That(group.Title, Does.Contain("cases near"));
     }
 
     [Test]
     public async Task Map_ClickingSingleMarker_OpensPopup()
     {
-        await Page.WaitForSelectorAsync(".case-map-single", new() { Timeout = 15_000, State = WaitForSelectorState.Attached });
-        // Not .First: at the default zoom the first marker in DOM order is sitting underneath a
-        // neighbouring pin, so clicking it is intercepted rather than dropped.
-        if (!await ClickTopmostAsync(Page.Locator(".case-map-single")))
+        if (!await SelectPinAsync(IsSingle))
         {
-            Assert.Pass("No reachable single-case marker at the default US zoom level.");
+            Assert.Ignore("No single-case pin in the seed.");
             return;
         }
 
-        // TelerikWindow popup should appear
         var popup = Page.Locator(".k-window, .modal.show");
         await Expect(popup).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
@@ -90,16 +167,14 @@ public class HomeMapTests : BenTestBase
     [Test]
     public async Task Map_PopupShowsViewInvestigationButton()
     {
-        await Page.WaitForSelectorAsync(".case-map-single, .case-map-cluster", new() { Timeout = 15_000 });
-        if (!await ClickTopmostAsync(Page.Locator(".case-map-single"))
-         && !await ClickTopmostAsync(Page.Locator(".case-map-cluster")))
+        if (!await SelectPinAsync(IsSingle) && !await SelectPinAsync(IsGroup))
         {
-            Assert.Pass("No reachable marker at the default US zoom level.");
+            Assert.Ignore("No pin in the seed.");
             return;
         }
         await Page.WaitForTimeoutAsync(500);
         var viewBtn = Page.GetByText("View Investigation", new() { Exact = false });
-        // If cluster, may need to click a case first
+        // If a group, a case has to be picked first
         if (!await viewBtn.IsVisibleAsync())
         {
             var firstCase = Page.Locator(".list-group-item").First;
@@ -147,17 +222,16 @@ public class HomeMapTests : BenTestBase
     }
 
     [Test]
-    [Description("The map popup (TelerikWindow) shows a non-empty title when a marker is clicked.")]
+    [Description("The map popup shows a non-empty title when a pin is selected.")]
     public async Task Map_PopupTitle_IsNotEmpty()
     {
-        await Page.WaitForSelectorAsync(".case-map-single, .case-map-cluster", new() { Timeout = 15_000 });
-        if (!await ClickTopmostAsync(Page.Locator(".case-map-single, .case-map-cluster")))
-        { Assert.Pass("No reachable marker at the default US zoom level."); return; }
+        if (!await SelectPinAsync(_ => true))
+        { Assert.Ignore("No pin in the seed."); return; }
         await Page.WaitForTimeoutAsync(500);
         var titleBar = Page.Locator(".k-window, .modal.show-title, .k-window, .modal.show-titlebar, .modal.show .modal-title").First;
         await Expect(titleBar).ToBeVisibleAsync(new() { Timeout = 5_000 });
         var titleText = await titleBar.InnerTextAsync();
-        Assert.That(titleText, Is.Not.Empty, "TelerikWindow title should not be empty.");
+        Assert.That(titleText, Is.Not.Empty, "The popup title should not be empty.");
     }
 
     [Test]

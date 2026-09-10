@@ -410,8 +410,11 @@ if (-not (Test-Path $secretsFile)) {
             $starter = @'
 {
   "SmtpPassword": "",
-  "GeocodioApiKey": "",
-  "GeocodioBaseUrl": null,
+  "AppleTeamId": "",
+  "AppleSignInKeyId": "",
+  "AppleSignInKeyPath": "",
+  "AppleMapsKeyId": "",
+  "AppleMapsKeyPath": "",
   "SqlConnectionString": null
 }
 '@
@@ -419,7 +422,7 @@ if (-not (Test-Path $secretsFile)) {
             Write-Change "wrote a starter $secretsFile"
             Write-Detail "secrets.template.json was not beside this script; see it in the repo for the optional keys."
         }
-        Write-Detail 'Fill in SmtpPassword (and GeocodioApiKey) before deploying. Leave SqlConnectionString null - the pools use Integrated Security.'
+        Write-Detail 'Fill in SmtpPassword (and the Apple key ids and paths) before deploying. Leave SqlConnectionString null - the pools use Integrated Security.'
     }
 } else {
     Write-Detail "$secretsFile already exists - left alone"
@@ -436,7 +439,7 @@ Write-Host @"
    /files           $FilesRoot
 
    Next:
-     1. Fill in $secretsFile (SQL connection string, SMTP password, Geocodio key).
+     1. Fill in $secretsFile (SQL connection string, SMTP password, Apple key ids and paths).
      2. Bring the database up to date:
         dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi --connection "<conn>"
      3. Copy the existing upload tree (users\, orgs\, cases\) into $UploadsRoot .
