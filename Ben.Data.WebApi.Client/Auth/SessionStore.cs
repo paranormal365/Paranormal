@@ -82,8 +82,21 @@ public sealed class SessionStore
             return;
         }
 
-        Set(new SessionState(SessionPhase.SignedIn, me.Item));
+        Set(Resolved(me.Item));
     }
+
+    /// <summary>
+    /// Where a resolved identity actually lands.
+    /// </summary>
+    /// <remarks>
+    /// An empty UserId is not a signed-in person. It is the server saying the token is valid but
+    /// nothing here belongs to it — which only an external provider can produce. Reporting it as
+    /// signed in would hand somebody an app in which every single page refuses them.
+    /// </remarks>
+    private static SessionState Resolved(MeResponse me) =>
+        me.UserId == Guid.Empty
+            ? new SessionState(SessionPhase.NeedsLocalAccount, me)
+            : new SessionState(SessionPhase.SignedIn, me);
 
     /// <summary>Signs in with an email address and password.</summary>
     public Task SignInAsync(string email, string password, CancellationToken token = default)
@@ -160,11 +173,43 @@ public sealed class SessionStore
 
     /// <summary>
     /// Takes on a session that came from somewhere other than the password form — Sign in with
-    /// Apple, or an Entra exchange. The body those endpoints answer is the same one <c>/login</c>
-    /// answers, deliberately, so there is nothing special to do with it.
+    /// Apple. The body that endpoint answers is the same one <c>/login</c> answers, deliberately,
+    /// so there is nothing special to do with it.
     /// </summary>
+    /// <remarks>
+    /// NOT the Microsoft path. A Microsoft sign-in leaves the client holding a token issued by
+    /// Microsoft rather than by us, so it is adopted directly into the token session with its own
+    /// renewal and then settled by <see cref="ResolveIdentityAsync"/>.
+    /// </remarks>
     public Task AdoptExternalSignInAsync(WebApiTokenResponse response, CancellationToken token = default)
         => AdoptAsync(response, token);
+
+    /// <summary>
+    /// Asks the server who the current token belongs to, and moves to the state that implies.
+    /// </summary>
+    /// <remarks>
+    /// <para>Call after adopting a token this store did not itself obtain, and again after an
+    /// external identity has been given a local account — the answer changes from an empty UserId
+    /// to a real one, and nothing else tells the client that happened.</para>
+    ///
+    /// <para>A refusal here ends the session rather than leaving somebody in front of an app whose
+    /// every page will refuse them.</para>
+    /// </remarks>
+    public async Task ResolveIdentityAsync(CancellationToken token = default)
+    {
+        Set(new SessionState(SessionPhase.FetchingIdentity));
+
+        var me = await _fetchMe(token);
+        if (me.Failed || me.Item is null)
+        {
+            _expectingDeliberateEnd = true;
+            await _session.SignOutAsync();
+            Set(new SessionState(SessionPhase.SignedOut, Failure: LoginFailure.UnknownRefusal));
+            return;
+        }
+
+        Set(Resolved(me.Item));
+    }
 
     private async Task AdoptAsync(WebApiTokenResponse response, CancellationToken token)
     {
@@ -182,7 +227,7 @@ public sealed class SessionStore
             return;
         }
 
-        Set(new SessionState(SessionPhase.SignedIn, me.Item));
+        Set(Resolved(me.Item));
     }
 
     /// <summary>Signs out at this person's request. There is no server endpoint; the tokens are simply dropped.</summary>

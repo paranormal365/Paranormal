@@ -22,6 +22,19 @@ public enum SessionPhase
 
     /// <summary>Signed in, with roles resolved.</summary>
     SignedIn,
+
+    /// <summary>
+    /// Microsoft accepted them, but no account here is linked to that identity yet, so they must
+    /// either create one or attach it to an account they already have.
+    /// </summary>
+    /// <remarks>
+    /// The server signals this by answering <c>GET api/me</c> with a UserId of
+    /// <see cref="System.Guid.Empty"/> rather than with a refusal — the token is perfectly valid,
+    /// there is simply nobody here it belongs to. Treating that as signed in would put somebody in
+    /// front of an app with no account behind it, and every page would refuse them for reasons
+    /// none of them could explain.
+    /// </remarks>
+    NeedsLocalAccount,
 }
 
 /// <summary>
@@ -50,6 +63,15 @@ public sealed record SessionState(
     public static readonly SessionState SignedOut = new(SessionPhase.SignedOut);
 
     public bool IsSignedIn => Phase == SessionPhase.SignedIn;
+
+    /// <summary>Whether an external sign-in is waiting for an account to be created or linked.</summary>
+    public bool NeedsLocalAccount => Phase == SessionPhase.NeedsLocalAccount;
+
+    /// <summary>
+    /// The address the external provider gave, when one is waiting for an account. Carried on
+    /// <see cref="Me"/>, whose UserId is empty in that state.
+    /// </summary>
+    public string? ExternalEmail => NeedsLocalAccount ? Me?.Email : null;
 
     /// <summary>Whether a screen should be showing the two-factor prompt.</summary>
     public bool NeedsTwoFactor => Phase == SessionPhase.TwoFactorChallenge;

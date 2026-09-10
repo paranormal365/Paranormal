@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Ben.Data.WebApi.Client.Auth;
+using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 
 namespace Ben.Data.WebApi.Client.Tests;
@@ -151,5 +152,95 @@ public sealed class LiveApiTests
 
         Assert.NotNull(result);
         Assert.True(result!.Available);
+    }
+
+    // ── External sign-in, as far as it can honestly be taken without a provider ──
+
+    /// <summary>
+    /// A token Apple did not sign is refused, and the refusal is a sentence.
+    /// </summary>
+    /// <remarks>
+    /// This is as far as Sign in with Apple can be checked without a real Apple identity token,
+    /// and it is worth checking: it proves the endpoint is reachable, that the server has an Apple
+    /// audience configured at all (an unconfigured one answers 503, not 401), and that the client
+    /// maps the refusal to something a person can read.
+    /// </remarks>
+    [SkippableFact]
+    public async Task Apple_refuses_a_token_it_cannot_verify()
+    {
+        Skip.IfNot(Configured, "No live API configured.");
+
+        var identity = new WebApiIdentityClient(Http());
+        var session = new TokenSession(new InMemoryTokenStorage(), identity);
+        var store = new SessionStore(session, identity,
+            ct => ApiResponseMapper.ReadItemAsync<MeResponse>(
+                Http(), new HttpRequestMessage(HttpMethod.Get, "api/me"), ct));
+
+        var outcome = await new AppleSignInClient(Http(), store).SignInAsync("not.a.real.token");
+
+        Assert.False(outcome.Succeeded);
+        Assert.False(outcome.RequiresProfile);
+
+        // A 503 here would mean Apple:ClientIds is empty on this server, which is a configuration
+        // fact worth failing on rather than passing over.
+        Assert.DoesNotContain("isn't switched on", outcome.Reason);
+        Assert.False(string.IsNullOrWhiteSpace(outcome.Reason));
+    }
+
+    /// <summary>
+    /// The Microsoft endpoints refuse a caller who holds no Microsoft token.
+    /// </summary>
+    /// <remarks>
+    /// Both are gated on a validated Entra token, and the server reads the identity off that
+    /// token's claims rather than the request body — deliberately, because trusting a body-supplied
+    /// identifier there once allowed an account to be claimed by somebody who did not hold it.
+    /// This proves the gate is actually on; the interactive half needs a tenant and a browser.
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_microsoft_endpoints_refuse_an_unauthenticated_caller()
+    {
+        Skip.IfNot(Configured, "No live API configured.");
+
+        var client = new EntraAccountClient(Http());
+
+        var registered = await client.RegisterAsync("Nobody At All");
+        var linked = await client.LinkAsync("nobody@example.test", "whatever");
+
+        Assert.False(registered.Succeeded);
+        Assert.False(registered.ShouldLinkInstead);   // 401, not the 409 that means "use the other door"
+        Assert.False(linked.Succeeded);
+    }
+
+    /// <summary>
+    /// The Apple link door exists, and refuses a token Apple did not sign.
+    /// </summary>
+    /// <remarks>
+    /// It is the door that stops an Apple relay address, or an Apple ID at a different address,
+    /// silently producing a second account. This proves it is routed and that a forged token gets
+    /// nowhere near the password check; the rest needs a real Apple identity token.
+    /// </remarks>
+    [SkippableFact]
+    public async Task Apple_linking_refuses_a_token_it_cannot_verify()
+    {
+        Skip.IfNot(Configured, "No live API configured.");
+
+        var identity = new WebApiIdentityClient(Http());
+        var session = new TokenSession(new InMemoryTokenStorage(), identity);
+        var store = new SessionStore(session, identity,
+            ct => ApiResponseMapper.ReadItemAsync<MeResponse>(
+                Http(), new HttpRequestMessage(HttpMethod.Get, "api/me"), ct));
+
+        var outcome = await new AppleSignInClient(Http(), store)
+            .LinkAsync("not.a.real.token", Email!, Password!);
+
+        Assert.False(outcome.Succeeded);
+
+        // A 404 would surface as "The server answered 404", which is how a route that was never
+        // mapped shows up. A 503 would mean Apple:ClientIds is empty on this server.
+        Assert.DoesNotContain("404", outcome.Reason);
+        Assert.DoesNotContain("isn't switched on", outcome.Reason);
+
+        // And nothing was signed in on the strength of a forged token.
+        Assert.NotEqual(SessionPhase.SignedIn, store.State.Phase);
     }
 }

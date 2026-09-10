@@ -53,6 +53,14 @@ public sealed class TokenSession
 
     private StoredTokens? _tokens;
     private Task<string?>? _refreshInFlight;
+
+    // Set when the session came from somewhere other than a password — a Microsoft account, say.
+    // Those tokens are renewed by whoever issued them, not by our own /refresh endpoint, which
+    // would not recognise them.
+    private Func<CancellationToken, Task<StoredTokens?>>? _externalRenewal;
+
+    // Some sessions must not outlive the process. See AdoptExternalAsync.
+    private bool _persist = true;
     private SessionEvent? _undelivered;
     private bool _hasSubscriber;
 
@@ -107,10 +115,47 @@ public sealed class TokenSession
     public async Task AdoptAsync(WebApiTokenResponse response, CancellationToken token = default)
     {
         var tokens = StoredTokens.From(response, _now());
+        _externalRenewal = null;
+        _persist = true;
         _tokens = tokens;
         await _storage.SaveAsync(tokens, token);
         Raise(SessionEvent.SignedIn);
     }
+
+    /// <summary>
+    /// Takes on a session whose tokens were issued by somebody else — a Microsoft account, for
+    /// instance — and which therefore renews somewhere other than our own <c>/refresh</c>.
+    /// </summary>
+    /// <param name="renew">
+    /// How to get a fresh token when this one expires. Answering null ends the session, exactly as
+    /// a refused <c>/refresh</c> does.
+    /// </param>
+    /// <param name="persist">
+    /// Whether to write these to secure storage. False for a session that must not outlive the
+    /// process.
+    /// </param>
+    /// <remarks>
+    /// This is NOT for Sign in with Apple. That endpoint answers with our own Identity tokens —
+    /// byte-identical to what <c>/login</c> returns — so an Apple sign-in is an ordinary session
+    /// and goes through <see cref="AdoptAsync"/>. Using this for it would renew against the wrong
+    /// place.
+    /// </remarks>
+    public async Task AdoptExternalAsync(
+        StoredTokens tokens,
+        Func<CancellationToken, Task<StoredTokens?>> renew,
+        bool persist = true,
+        CancellationToken token = default)
+    {
+        _externalRenewal = renew;
+        _persist = persist;
+        _tokens = tokens;
+
+        if (persist) await _storage.SaveAsync(tokens, token);
+        Raise(SessionEvent.SignedIn);
+    }
+
+    /// <summary>Whether this session renews somewhere other than our own API.</summary>
+    public bool IsExternalSession => _externalRenewal is not null;
 
     /// <summary>
     /// An access token that is good to send, refreshing first if the stored one has expired.
@@ -132,16 +177,16 @@ public sealed class TokenSession
             if (current is null) return null;
             if (!current.IsExpiredAt(_now())) return current.AccessToken;
 
-            // A session with no refresh token cannot be renewed, and the access token is already
+            // A session with no way to renew cannot be saved, and the access token is already
             // spent. Ending it here is the honest answer; the alternative is sending a token known
             // to be dead and reporting the 401 as though something went wrong.
-            if (!current.CanRefresh)
+            if (_externalRenewal is null && !current.CanRefresh)
             {
                 await EndSessionAsync();
                 return null;
             }
 
-            refresh = _refreshInFlight ??= RefreshAsync(current.RefreshToken!);
+            refresh = _refreshInFlight ??= RenewAsync(current);
         }
         finally
         {
@@ -151,12 +196,15 @@ public sealed class TokenSession
         return await refresh;
     }
 
-    private async Task<string?> RefreshAsync(string refreshToken)
+    private async Task<string?> RenewAsync(StoredTokens current)
     {
         try
         {
-            var response = await _identity.RefreshAsync(refreshToken);
-            if (response is null || string.IsNullOrWhiteSpace(response.AccessToken))
+            var renewed = _externalRenewal is { } external
+                ? await external(CancellationToken.None)
+                : Convert(await _identity.RefreshAsync(current.RefreshToken!));
+
+            if (renewed is null || string.IsNullOrWhiteSpace(renewed.AccessToken))
             {
                 // The refresh token is spent, revoked, or was signed with a key ring this server no
                 // longer has. Nothing the client can do restores it, so stop pretending: a retry
@@ -165,10 +213,9 @@ public sealed class TokenSession
                 return null;
             }
 
-            var tokens = StoredTokens.From(response, _now());
-            _tokens = tokens;
-            await _storage.SaveAsync(tokens);
-            return tokens.AccessToken;
+            _tokens = renewed;
+            if (_persist) await _storage.SaveAsync(renewed);
+            return renewed.AccessToken;
         }
         catch (HttpRequestException)
         {
@@ -203,9 +250,14 @@ public sealed class TokenSession
     {
         var had = _tokens is not null;
         _tokens = null;
+        _externalRenewal = null;
+        _persist = true;
         await _storage.ClearAsync();
         if (had) Raise(SessionEvent.SessionEnded);
     }
+
+    private StoredTokens? Convert(WebApiTokenResponse? response) =>
+        response is null ? null : StoredTokens.From(response, _now());
 
     private void Raise(SessionEvent e)
     {

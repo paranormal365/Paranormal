@@ -59,3 +59,14 @@ public sealed record AppleSignInRequest(
     string? DisplayName = null,
     [property: JsonPropertyName("handle"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? Handle = null);
+
+/// <summary>Claiming an account that already exists here for a verified Apple identity.</summary>
+/// <param name="Email">
+/// The account being claimed. Deliberately not tied to whatever address Apple supplied: a Hide My
+/// Email relay address matches nothing here, and an Apple ID is often simply a different address
+/// from the one somebody signed up with.
+/// </param>
+public sealed record AppleLinkRequest(
+    [property: JsonPropertyName("identityToken")] string IdentityToken,
+    [property: JsonPropertyName("email")] string Email,
+    [property: JsonPropertyName("password")] string Password);

@@ -16,12 +16,15 @@ namespace Ben.Desktop.App.UI.Pages;
 public partial class SignInPage : ContentPage
 {
     private readonly SessionViewModel _session;
+    private readonly ExternalSignInViewModel _external;
 
-    public SignInPage(SessionViewModel session)
+    public SignInPage(SessionViewModel session, ExternalSignInViewModel external)
     {
         InitializeComponent();
         _session = session;
+        _external = external;
         _session.PropertyChanged += (_, _) => Render();
+        _external.PropertyChanged += (_, _) => Render();
         Render();
     }
 
@@ -36,11 +39,22 @@ public partial class SignInPage : ContentPage
             _ => null,
         };
 
+        // A provider's window is open, or its answer is being settled. The password form should
+        // not be pressable underneath it.
+        Busy.IsBusy = busy || _external.IsBusy;
+
         var challenge = _session.NeedsTwoFactor;
         CredentialsSection.IsVisible = !challenge;
         TwoFactorSection.IsVisible = challenge;
 
         SessionEndedBanner.IsVisible = _session.ShowSessionEndedBanner;
+
+        MicrosoftButton.IsVisible = _external.CanSignInWithMicrosoft;
+        AppleButton.IsVisible = _external.CanSignInWithApple;
+        ExternalSection.IsVisible = _external.ShowExternalOptions && !challenge;
+
+        ExternalMessage.Text = _external.Message;
+        ExternalMessage.IsVisible = !string.IsNullOrWhiteSpace(_external.Message);
 
         // The two-factor prompt is instruction, not error, and the section above already carries
         // it. Repeating it in red would report a working password as a problem.
@@ -62,6 +76,18 @@ public partial class SignInPage : ContentPage
     {
         await _session.SubmitTwoFactorAsync(CodeField.Code, RecoveryToggle.IsChecked);
         CodeField.Code = string.Empty;
+    }
+
+    private async void OnMicrosoft(object? sender, EventArgs e)
+    {
+        _session.AcknowledgeSessionEnded();
+        await _external.SignInWithMicrosoftAsync();
+    }
+
+    private async void OnApple(object? sender, EventArgs e)
+    {
+        _session.AcknowledgeSessionEnded();
+        await _external.SignInWithAppleAsync();
     }
 
     private void OnCancelTwoFactor(object? sender, EventArgs e)

@@ -31,6 +31,9 @@ public sealed class SessionViewModel : INotifyPropertyChanged
     public bool IsSignedIn => State.IsSignedIn;
     public bool IsBusy => State.IsBusy;
     public bool NeedsTwoFactor => State.NeedsTwoFactor;
+
+    /// <summary>A provider vouched for them, but no account here is linked to it yet.</summary>
+    public bool NeedsLocalAccount => State.NeedsLocalAccount;
     public string? DisplayName => State.Me?.Email;
 
     /// <summary>Whether the "your session ended" banner should be on screen.</summary>
@@ -80,6 +83,7 @@ public sealed class SessionViewModel : INotifyPropertyChanged
         Raise(nameof(IsSignedIn));
         Raise(nameof(IsBusy));
         Raise(nameof(NeedsTwoFactor));
+        Raise(nameof(NeedsLocalAccount));
         Raise(nameof(DisplayName));
         Raise(nameof(ShowSessionEndedBanner));
         Raise(nameof(Message));

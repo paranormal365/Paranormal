@@ -318,4 +318,176 @@ public class AppleAuthControllerTests
             "\"email\":\"new@test.com\",\"isPrivateEmail\":false,\"handleProblem\":null}",
             json);
     }
+
+    // ── Claiming an account whose address Apple never mentioned ───────────────
+
+    /// <summary>
+    /// The whole point of the link endpoint: an Apple identity joining an account it could never
+    /// have matched by email.
+    /// </summary>
+    /// <remarks>
+    /// A Hide My Email relay address will never equal anything already here, and plenty of people
+    /// have an Apple ID at one address and an account at another. Without this door both end at
+    /// "create an account", which produces a SECOND account holding none of their cases, groups or
+    /// history — and nothing to merge it back.
+    /// </remarks>
+    [Fact]
+    public async Task LinkJoinsAnAccountWhoseAddressAppleNeverMentioned()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        // Apple only ever offered a relay address, which matches nothing here.
+        var validator = new FakeValidator(new AppleIdentity(Sub, "xyz@privaterelay.appleid.com", true, true));
+
+        var result = await Build(um, validator, sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.AddLoginAsync(mine, It.Is<UserLoginInfo>(l =>
+            l.LoginProvider == "Apple" && l.ProviderKey == Sub)), Times.Once);
+        um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Never);
+        sim.Verify(s => s.SignInAsync(mine, false, null), Times.Once);
+    }
+
+    /// <summary>
+    /// The password is what proves the account is theirs; the Apple token only proves the Apple
+    /// identity.
+    /// </summary>
+    /// <remarks>
+    /// Without this check, anybody holding any Apple ID could attach themselves to any address
+    /// they could name, and then sign in as that person for good.
+    /// </remarks>
+    [Fact]
+    public async Task LinkRefusesAWrongPasswordAndLinksNothing()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "wrong", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "wrong"), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+        sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    /// <summary>
+    /// An unknown address and a wrong password answer identically.
+    /// </summary>
+    /// <remarks>
+    /// Two different answers would make this endpoint a way to ask whether any given address has
+    /// an account here, which is not something a stranger is entitled to know.
+    /// </remarks>
+    [Fact]
+    public async Task LinkAnswersTheSameForAnUnknownAddressAsForAWrongPassword()
+    {
+        var um = UserManagerMock();   // FindByEmailAsync answers null by default
+        var sim = SignInManagerMock(um);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "nobody@nowhere.test", "whatever"), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Equal("That email address and password don't match an account.", refusal.Value);
+    }
+
+    /// <summary>Guesses must not be free on a door that takes a password from a stranger.</summary>
+    [Fact]
+    public async Task LinkHonoursLockout()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, It.IsAny<string>(), true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.LockedOut);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "guess"), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Contains("locked", refusal.Value!.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        // lockoutOnFailure: true is what makes repeated guesses cost something. CheckPasswordAsync,
+        // which the Entra link uses, does not count them at all.
+        sim.Verify(s => s.CheckPasswordSignInAsync(mine, "guess", true), Times.Once);
+    }
+
+    /// <summary>An Apple identity cannot be moved to a second account by whoever asks last.</summary>
+    [Fact]
+    public async Task LinkRefusesAnAppleIdentityAlreadyHeldElsewhere()
+    {
+        var theirs = new AppUser { Id = Guid.NewGuid(), Email = "someone@else.test" };
+        var mine   = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(theirs);
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    /// <summary>Linking what is already linked signs them in rather than complaining.</summary>
+    [Fact]
+    public async Task LinkingAnIdentityAlreadyOnThisAccountJustSignsIn()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(mine);
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+        sim.Verify(s => s.SignInAsync(mine, false, null), Times.Once);
+    }
+
+    /// <summary>A token Apple did not sign links nothing, whatever password came with it.</summary>
+    [Fact]
+    public async Task LinkRefusesAnUnverifiableAppleToken()
+    {
+        var um = UserManagerMock();
+        var sim = SignInManagerMock(um);
+
+        var result = await Build(um, new FakeValidator(null), sim)
+            .Link(new AppleLinkRequest("forged", "ben@ishaunted.com", "right"), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        um.Verify(m => m.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    /// <summary>A server with no Apple audience configured links nothing either.</summary>
+    [Fact]
+    public async Task LinkRefusesWhenAppleIsNotConfigured()
+    {
+        var um = UserManagerMock();
+        var sim = SignInManagerMock(um);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim, clientIds: [])
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        var refusal = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, refusal.StatusCode);
+    }
 }

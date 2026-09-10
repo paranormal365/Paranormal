@@ -50,6 +50,25 @@
                     <Button Text="Cancel" Clicked="OnCancelTwoFactor" />
                 </VerticalStackLayout>
 
+                <!-- Only rendered when a provider is actually usable here. A button that cannot
+                     work reads as a broken feature rather than an absent one. -->
+                <VerticalStackLayout x:Name="ExternalSection" Spacing="12" IsVisible="False">
+                    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+                        <BoxView VerticalOptions="Center" HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#E5E7EB, Dark=#374151}" />
+                        <Label Grid.Column="1" Text="or" VerticalOptions="Center" />
+                        <BoxView Grid.Column="2" VerticalOptions="Center" HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#E5E7EB, Dark=#374151}" />
+                    </Grid>
+
+                    <Button x:Name="MicrosoftButton" Text="Continue with Microsoft"
+                            IsVisible="False" Clicked="OnMicrosoft" />
+                    <Button x:Name="AppleButton" Text="Continue with Apple"
+                            IsVisible="False" Clicked="OnApple" />
+
+                    <Label x:Name="ExternalMessage" IsVisible="False" />
+                </VerticalStackLayout>
+
                 <Label x:Name="MessageText" IsVisible="False"
                        TextColor="{AppThemeBinding Light=#B91C1C, Dark=#FCA5A5}" />
             </VerticalStackLayout>

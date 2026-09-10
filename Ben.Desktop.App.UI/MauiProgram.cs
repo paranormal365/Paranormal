@@ -1,6 +1,8 @@
 using Ben.Data.WebApi.Client.Auth;
+using Ben.Desktop.App.Library.External;
 using Ben.Desktop.App.Library.Storage;
 using Ben.Desktop.App.Library.ViewModels;
+using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -70,8 +72,46 @@ public static class MauiProgram
                     http, new HttpRequestMessage(HttpMethod.Get, "api/me"), ct));
         });
 
+        // ── External sign-in ──────────────────────────────────────────────
+        //
+        // Microsoft leaves the client holding a token MICROSOFT issued, which our API validates
+        // under a second scheme — so that session renews at Microsoft, not at our /refresh. Apple
+        // is the opposite: its endpoint hands back our own Identity tokens, so an Apple sign-in is
+        // an ordinary session with nothing special about it.
+        builder.Services.AddSingleton(EntraSettings.FromConfiguration());
+        builder.Services.AddSingleton<IInteractiveBrowser, WebAuthenticatorBrowser>();
+
+        builder.Services.AddHttpClient("entra");
+
+        builder.Services.AddSingleton(sp => new EntraTokenClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("entra"),
+            sp.GetRequiredService<EntraOptions>()));
+
+        builder.Services.AddSingleton(sp => new EntraSignInService(
+            sp.GetRequiredService<EntraOptions>(),
+            sp.GetRequiredService<EntraTokenClient>(),
+            sp.GetRequiredService<IInteractiveBrowser>(),
+            sp.GetRequiredService<TokenSession>(),
+            sp.GetRequiredService<SessionStore>()));
+
+        builder.Services.AddSingleton(sp =>
+            new EntraAccountClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("api")));
+
+#if MACCATALYST
+        builder.Services.AddSingleton<IAppleIdentityProvider, AppleIdentityProvider>();
+#else
+        builder.Services.AddSingleton<IAppleIdentityProvider, UnavailableAppleIdentityProvider>();
+#endif
+
+        builder.Services.AddSingleton(sp => new AppleSignInClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("api"),
+            sp.GetRequiredService<SessionStore>()));
+
+        builder.Services.AddSingleton<ExternalSignInViewModel>();
+
         builder.Services.AddSingleton<SessionViewModel>();
         builder.Services.AddSingleton<Pages.SignInPage>();
+        builder.Services.AddSingleton<Pages.CompleteProfilePage>();
         builder.Services.AddSingleton<Pages.HomePage>();
         builder.Services.AddSingleton<AppShell>();
 
