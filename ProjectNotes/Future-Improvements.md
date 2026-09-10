@@ -11520,3 +11520,14 @@ are gone; a guard test refuses their return. Details, verification and the two w
 found along the way: `README-apple-mapkit-228.md`. Left open: geocoding on the Apple Maps Server
 API, a separate decision.
 
+---
+
+## 229. Revoke Apple tokens when an account is deleted (IN PROGRESS 2026-09-10)
+
+App Review guideline 5.1.1(v): an app offering Sign in with Apple that lets people delete their
+account must revoke their Sign in with Apple tokens as part of the deletion. Account deletion
+anonymises the row and drops the external login, so nobody can get back in, but Apple is never
+told. Revocation needs a refresh token, which needs the authorization code exchanged at sign-in
+with a client secret signed by the Sign in with Apple key Ben created 2026-09-10 (`5VY456C8RR`).
+Neither client sends the code today. Plan and phases: `README-apple-token-revocation-229.md`.
+
