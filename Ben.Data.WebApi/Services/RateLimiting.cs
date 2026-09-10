@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Services;
 /// general principle:</para>
 /// <list type="bullet">
 /// <item><description><b>Geocoding.</b> The address search endpoint is anonymous and proxies
-/// geocod.io, which is <i>metered and paid</i>. Without a limit, anyone with a shell loop spends
+/// the Apple Maps Server API, whose <i>daily quota</i> is shared with the website's maps. Without a limit, anyone with a shell loop spends
 /// the account's quota.</description></item>
 /// <item><description><b>Identity.</b> <c>/login</c> is an unthrottled password oracle and
 /// <c>/register</c> creates accounts. Identity's own lockout protects a single account from
@@ -34,7 +34,7 @@ namespace Ben.Data.WebApi.Services;
 /// </remarks>
 public static class RateLimiting
 {
-    /// <summary>Anonymous geocoding proxy — guards a paid third-party quota.</summary>
+    /// <summary>Anonymous geocoding proxy — guards a shared daily quota.</summary>
     public const string GeocodingPolicy = "geocoding";
 
     /// <summary>Identity endpoints — login, registration, password reset.</summary>
