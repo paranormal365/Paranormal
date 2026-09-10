@@ -15,10 +15,12 @@ with Apple's identity for the web (item 227); MapKit JS never sees it.
    Apple hands the file over once. Note the **Key ID** shown next to it.
 3. Nothing else: no redirect URLs, no domain file, no App ID grouping. Team ID stays `5778H75249`.
 
-The three values (`Team ID`, `Key ID`, `.p8` contents) go in the website's configuration **outside
-the repository** — the repository is public, and this key can spend the daily quota on somebody
-else's site if it leaks. Same treatment as `Apple:DomainAssociation`: an empty value means the
-feature stays hidden, not broken.
+**Done 2026-09-10:** key "IsHaunted Apple Maps", Key ID `623JTDWHAQ`, the `.p8` kept at
+`~/.ishaunted/AuthKey_623JTDWHAQ.p8` (mode 600) on Ben's machine. The website reads
+`Maps:TeamId`, `Maps:KeyId` and `Maps:PrivateKeyPath` — a **path**, so the key itself is never in
+configuration, let alone the repository, which is public. A missing path means "not configured"
+and the Telerik map; a malformed key throws at startup, because that is a deployment mistake.
+Production needs the same three values and the file placed on the server.
 
 ## What is there today, exactly
 
@@ -53,7 +55,7 @@ category against the running site, and its own commit. No `git add -A`.
 
 | Phase | Work | Verified by |
 | --- | --- | --- |
-| 0 | Config + token: `Maps:TeamId/KeyId/PrivateKey` on the website; `GET /auth/mapkit-token` signs a short-lived ES256 JWT with an `origin` claim, hidden (404) when unconfigured; `Maps:Provider = Telerik | Apple` so each component can fall back during the swap | Unit tests on the token (claims, expiry, origin, unconfigured ⇒ 404); a real token accepted by `mapkit.init` in the browser |
+| 0 | **Done.** `MapKitSigningOptions` + `MapKitTokenService` (hand-rolled ES256, 30-minute life, `origin` claim, raw r‖s signature); `GET /auth/mapkit-token` (404 until configured, `no-store`); `Kit/Maps/MapsOptions` with `Provider` and `Effective`, Apple honoured only when a token can be signed | 9 unit tests; a token fetched from the running site decoded to the expected header and claims; **Apple accepted it**: `mapkit.init` reported `Initialized` and a map of Nashville with a marker drew over the home page (MapKit JS 5.81.65) |
 | 1 | `Kit/BenMap`: loads `mapkit.js` once, initialises with the token endpoint, exposes Center/Zoom/Height, Pins (with a per-pin template and click callback to .NET), FitToPins, Resize, Dispose, theme-following colour scheme. Source-scan guard: `mapkit.` appears nowhere outside `Kit/` | Guard test; a Playwright page with the component alone; the pin click reaches .NET |
 | 2 | `InvestigationsMap` on `BenMap`, behind the provider switch | Playwright on OrgInvestigations, PlaceView and the profile map tab; the pin click still navigates |
 | 3 | `PublicCaseDiscovery` on `BenMap`: MapKit's `clusteringIdentifier` replaces the hand-rolled clusters; browser geolocation as today | Playwright `HomeMap` category; declined geolocation still shows the map (the NearbyDiscovery lesson) |
