@@ -1,4 +1,5 @@
 using Ben.Data.Common.Constants;
+using System.Text.RegularExpressions;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -9,7 +10,7 @@ using Xunit;
 namespace Ben.Web.Tests.Controllers;
 
 /// <summary>
-/// The SuperAdmin switch that closes the door to NEW tour and event businesses (item 233).
+/// The SuperAdmin switch that closes the door to NEW ghost walking tours (item 233).
 /// </summary>
 /// <remarks>
 /// <para><b>Ben, 2026-09-10:</b> "I want to be able to toggle the option for sign ups as tour
@@ -89,19 +90,32 @@ public sealed class TourSignUpSwitchTests
         Assert.Contains("tour", label, StringComparison.OrdinalIgnoreCase);
         // The half somebody switching this off most needs to be sure of.
         Assert.Contains("already", description, StringComparison.OrdinalIgnoreCase);
+        // And the half they would otherwise have to find out by turning it off.
+        Assert.Contains("events", description, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── which kinds it covers ────────────────────────────────────────────────
 
     [Theory]
     [InlineData(OrganizationKind.GhostWalkingTour, true)]
-    [InlineData(OrganizationKind.PublicEventProvider, true)]
+    // Ben, 2026-09-10: "just tours". An events business sits on the same flat plan but is a
+    // different trade, and closing the door to walks must not turn it away.
+    [InlineData(OrganizationKind.PublicEventProvider, false)]
     [InlineData(OrganizationKind.InvestigationGroup, false)]
     [InlineData(OrganizationKind.HauntedProperty, false)]
-    public void It_covers_exactly_the_kinds_the_tour_plan_prices(OrganizationKind kind, bool covered)
-        // One definition, shared with the pricing: a switch that closed a different set of doors
-        // from the set being sold would be a second rule to keep in step.
-        => Assert.Equal(covered, Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(kind));
+    public void It_covers_tours_and_only_tours(OrganizationKind kind, bool covered)
+        // One definition of "this is a tour", shared with everything else that asks.
+        => Assert.Equal(covered, OrganizationKindDefaults.RunsPublicTours(kind));
+
+    [Fact]
+    public void An_events_business_is_on_the_same_plan_and_is_still_let_in()
+    {
+        // The pair worth stating together: same price list, different door. If these two ever
+        // agree again it will be because somebody reached for IsBusinessKind here by reflex.
+        Assert.True(Ben.Data.Source.Services.SubscriptionTierResolver
+            .IsBusinessKind(OrganizationKind.PublicEventProvider));
+        Assert.False(OrganizationKindDefaults.RunsPublicTours(OrganizationKind.PublicEventProvider));
+    }
 
     // ── it never reaches an existing business ────────────────────────────────
 
@@ -140,7 +154,7 @@ public sealed class TourSignUpSwitchTests
         await using var after = await factory.CreateDbContextAsync();
         var org = await after.Organizations.SingleAsync();
 
-        // Still a tour business, still running its tour, still priced as one.
+        // Still a walking tour, still running its tour, still priced as one.
         Assert.Equal(OrganizationKind.GhostWalkingTour, org.Kind);
         Assert.True(org.RunsPublicTours);
         Assert.Equal(1, await after.Tours.CountAsync(t => t.OrganizationId == orgId && t.RetiredAtUtc == null));
@@ -152,12 +166,18 @@ public sealed class TourSignUpSwitchTests
     {
         // Pinned as a rule rather than as a string: a 403 that says "Forbidden" to somebody
         // trying to start a business tells them nothing about what to do next.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(),
-            "Ben.Data.WebApi", "Controllers", "OrganizationMembershipController.cs"));
+        var source = CodeOf("Ben.Data.WebApi", "Controllers", "OrganizationMembershipController.cs");
 
         Assert.Contains("AllowTourBusinessSignUps", source, StringComparison.Ordinal);
-        Assert.Contains("aren't taking on new tour or event businesses", source, StringComparison.Ordinal);
+        Assert.Contains("aren't taking on new ghost walking tours", source, StringComparison.Ordinal);
         Assert.Contains("investigation group", source, StringComparison.Ordinal);
+        // The refusal names what IS still open, or it reads as the whole site being closed.
+        Assert.Contains("paranormal events business", source, StringComparison.Ordinal);
+        // And it asks the one definition of "this is a tour" rather than the pricing set, which
+        // covers events businesses too. Matched on the CALL, and with the comments stripped —
+        // a guard that a comment can satisfy is a guard that passes while the rule is wrong.
+        Assert.Contains("RunsPublicTours(request.Kind)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsBusinessKind(request.Kind)", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -165,11 +185,30 @@ public sealed class TourSignUpSwitchTests
     {
         // Without this, switching the toggle off closes the front door and leaves the side one
         // open: register as an investigation group on Monday, change kind on Tuesday.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(),
-            "Ben.Data.WebApi", "Controllers", "Entities", "OrganizationController.cs"));
+        var source = CodeOf("Ben.Data.WebApi", "Controllers", "Entities", "OrganizationController.cs");
 
         Assert.Contains("AllowTourBusinessSignUps", source, StringComparison.Ordinal);
-        Assert.Contains("becomingABusiness", source, StringComparison.Ordinal);
+        Assert.Contains("becomingATour", source, StringComparison.Ordinal);
+        // Tours only here too: reclassifying into an events business stays open.
+        Assert.DoesNotContain("IsBusinessKind(wantedKind)", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One file's code with its comments taken out.
+    /// </summary>
+    /// <remarks>
+    /// A source-scan guard that reads comments is a guard the prose can satisfy — which is
+    /// exactly how this suite passed once while the rule underneath it had been widened back.
+    /// </remarks>
+    private static string CodeOf(params string[] parts)
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot(), Path.Combine(parts)));
+        text = Regex.Replace(text, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        return string.Join('\n', text.Split('\n').Select(line =>
+        {
+            var slashes = line.IndexOf("//", StringComparison.Ordinal);
+            return slashes >= 0 ? line[..slashes] : line;
+        }));
     }
 
     private static string RepoRoot()

@@ -23,7 +23,7 @@ namespace Ben.Service.Models.Support;
 /// how the product has always worked, and the enforcement must not switch it off for a site that
 /// never set it.</param>
 /// <param name="AllowTourBusinessSignUps">
-/// Whether a new ghost walking tour or paranormal events business may be started (item 233).
+/// Whether a new ghost walking tour may be started (item 233).
 /// Defaults to true, so an older server — or an unreachable one — leaves the choices where they
 /// have always been. Existing businesses are never affected by this: it closes one door.
 /// </param>
