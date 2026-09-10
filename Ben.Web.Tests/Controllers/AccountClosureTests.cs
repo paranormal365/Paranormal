@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.InMemory.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -39,8 +40,8 @@ public sealed class AccountClosureTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
-    private static AccountClosureService Service(IDbContextFactory<BenDataContext> db) =>
-        new(db, NullLogger<AccountClosureService>.Instance);
+    private static AccountClosureService Service(IDbContextFactory<BenDataContext> db, Moq.Mock<Ben.Data.WebApi.Services.Apple.IAppleTokenClient>? apple = null) =>
+        new(db, Support.AppleTestSupport.Credentials(db, apple), NullLogger<AccountClosureService>.Instance);
 
     /// <summary>A person, with everything personal about them filled in.</summary>
     private static async Task<Guid> SeedPersonAsync(IDbContextFactory<BenDataContext> factory)
@@ -285,6 +286,47 @@ public sealed class AccountClosureTests
         Assert.False(result.Closed);
         Assert.NotNull(result.Refusal);
     }
+
+    // ── Apple tokens (item 229) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Closing the account tells Apple, so the person's Apple ID stops listing IsHaunted among the
+    /// apps it signs into. App Review guideline 5.1.1(v) checks for exactly this call.
+    /// </summary>
+    [Fact]
+    public async Task Closing_revokes_the_persons_apple_tokens()
+    {
+        var factory = Db();
+        var userId = await SeedPersonAsync(factory);
+        var apple = Support.AppleTestSupport.TokenClient();
+        await Support.AppleTestSupport.Credentials(factory, apple).RememberAsync(userId, "com.ishaunted.ios", "code", default);
+
+        var result = await Service(factory, apple).CloseAsync(userId);
+
+        Assert.True(result.Closed);
+        apple.Verify(c => c.RevokeAsync("refresh-for-code", "com.ishaunted.ios", It.IsAny<CancellationToken>()), Times.Once);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.AppleCredentials);
+    }
+
+    /// <summary>Apple being down is not a reason a person cannot leave. The token is kept for a later attempt.</summary>
+    [Fact]
+    public async Task A_refused_revocation_still_closes_the_account()
+    {
+        var factory = Db();
+        var userId = await SeedPersonAsync(factory);
+        var apple = Support.AppleTestSupport.TokenClient();
+        apple.Setup(c => c.RevokeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        await Support.AppleTestSupport.Credentials(factory, apple).RememberAsync(userId, "com.ishaunted.ios", "code", default);
+
+        var result = await Service(factory, apple).CloseAsync(userId);
+
+        Assert.True(result.Closed);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.NotNull((await db.AppUsers.FirstAsync(u => u.Id == userId)).DateClosed);
+        Assert.NotNull(Assert.Single(db.AppleCredentials).DateRevocationFailed);
+    }
+
 }
 
 /// <summary>
