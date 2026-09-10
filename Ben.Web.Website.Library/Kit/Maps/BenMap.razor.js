@@ -81,7 +81,11 @@ function zoomForRegion(container, region) {
 export async function create(containerId, dotnetRef, options) {
     const container = document.getElementById(containerId)
     if (!container) return
-    const entry = { map: null, annotations: [], dotnetRef, options, resize: null }
+    const entry = {
+        map: null, container, annotations: [], dotnetRef, options, observer: null,
+        view: { lat: options.centerLatitude, lon: options.centerLongitude, zoom: options.zoom },
+        userMoved: false,
+    }
     _maps.set(containerId, entry)
 
     try { await ensureMapKit(options.tokenPath) }
@@ -100,9 +104,25 @@ export async function create(containerId, dotnetRef, options) {
         showsMapTypeControl: false,
         isRotationEnabled: false,
     })
-    map.region = regionForZoom(container, options.centerLatitude, options.centerLongitude, options.zoom)
     entry.map = map
+    applyView(entry)
     watchTheme()
+
+    // The container is measured when the map is made, and a map made mid-layout — the home page
+    // swaps a loader for its content, and the content arrives narrower than it ends up — frames
+    // a region for the wrong width and keeps it. So the view is re-applied whenever the container
+    // settles at a new size, until the person moves the map themselves; after that their view
+    // is the one that matters. Window resizes come through here too.
+    let sizeTimer
+    entry.observer = new ResizeObserver(() => {
+        clearTimeout(sizeTimer)
+        sizeTimer = setTimeout(() => {
+            if (!entry.map) return
+            if (entry.options.fitToPins && entry.annotations.length) fit(containerId)
+            else if (!entry.userMoved) applyView(entry)
+        }, 100)
+    })
+    entry.observer.observe(container)
 
     // Only a person's own gesture reports a viewport: MapKit fires region-change-end for the
     // programmatic framing too, so the flag around setPins/fit keeps those quiet.
@@ -112,7 +132,10 @@ export async function create(containerId, dotnetRef, options) {
     // the first, so three quick drags produce ends at odd moments spread wider than the caller's
     // debounce. The report waits for a short quiet after an end, and any new start cancels it.
     let settle
-    map.addEventListener('region-change-start', () => clearTimeout(settle))
+    map.addEventListener('region-change-start', () => {
+        clearTimeout(settle)
+        if (!entry.framing) entry.userMoved = true
+    })
     map.addEventListener('region-change-end', () => {
         if (entry.framing) return
         clearTimeout(settle)
@@ -139,9 +162,16 @@ export async function create(containerId, dotnetRef, options) {
         }
     })
 
-    let timeout
-    entry.resize = () => { clearTimeout(timeout); timeout = setTimeout(() => fit(containerId), 150) }
-    window.addEventListener('resize', entry.resize)
+}
+
+/** Frames the caller's centre and zoom against the container as it is now. Programmatic, so not reported. */
+function applyView(entry) {
+    const { map, container, view } = entry
+    entry.framing = true
+    // Measured against OUR container, never map.element: MapKit's element is not the box the
+    // map fills, and measuring it framed a 944px map as though it were 115px wide.
+    map.region = regionForZoom(container, view.lat, view.lon, view.zoom)
+    setTimeout(() => { entry.framing = false }, 300)
 }
 
 export function setPins(containerId, pins) {
@@ -184,7 +214,7 @@ export function fit(containerId) {
     entry.framing = true
     if (entry.annotations.length === 1) {
         const a = entry.annotations[0]
-        map.region = regionForZoom(map.element, a.coordinate.latitude, a.coordinate.longitude, 12)
+        map.region = regionForZoom(entry.container, a.coordinate.latitude, a.coordinate.longitude, 12)
     } else if (entry.annotations.length > 1) {
         map.showItems(entry.annotations, { animate: false, padding: new mapkit.Padding(40, 40, 40, 40) })
     }
@@ -194,9 +224,9 @@ export function fit(containerId) {
 export function setCenter(containerId, lat, lon, zoom) {
     const entry = _maps.get(containerId)
     if (!entry?.map) return
-    entry.framing = true
-    entry.map.region = regionForZoom(entry.map.element, lat, lon, zoom)
-    setTimeout(() => { entry.framing = false }, 300)
+    entry.view = { lat, lon, zoom }
+    entry.userMoved = false      // the caller's view again, until the person moves it
+    applyView(entry)
 }
 
 /**
@@ -216,6 +246,14 @@ export function pinCount(containerId) {
     return _maps.get(containerId)?.annotations.length ?? 0
 }
 
+/** The pins as drawn — title, subtitle, glyph — for a test that cannot read a canvas. */
+export function pins(containerId) {
+    return (_maps.get(containerId)?.annotations ?? []).map(a => ({
+        title: a.title, subtitle: a.subtitle, glyph: a.glyphText,
+        latitude: a.coordinate.latitude, longitude: a.coordinate.longitude,
+    }))
+}
+
 /** The index last reported to .NET through a select, or -1. Lets a test tell a missed click from a broken seam. */
 export function lastSelectedPin(containerId) {
     return _maps.get(containerId)?.lastSelected ?? -1
@@ -230,7 +268,8 @@ export function describe(containerId) {
         center: [r.center.latitude, r.center.longitude],
         span: [r.span.latitudeDelta, r.span.longitudeDelta],
         cameraDistance: m.cameraDistance,
-        size: [m.element.clientWidth, m.element.clientHeight],
+        size: [_maps.get(containerId).container.clientWidth, _maps.get(containerId).container.clientHeight],
+
         annotations: m.annotations.length,
         colorScheme: m.colorScheme,
     }
@@ -239,7 +278,7 @@ export function describe(containerId) {
 export function dispose(containerId) {
     const entry = _maps.get(containerId)
     if (!entry) return
-    if (entry.resize) window.removeEventListener('resize', entry.resize)
+    entry.observer?.disconnect()
     try { entry.map?.destroy() } catch { /* already gone with its container */ }
     _maps.delete(containerId)
     if (_maps.size === 0) telerikTeardown()
@@ -268,14 +307,18 @@ function benMapMarkerClick(containerId, index) {
 
 export function initTelerik(containerId, dotnetRef) {
     _telerikRefs.set(containerId, dotnetRef)
-    _maps.set(containerId, { map: null, annotations: [], dotnetRef, options: {}, resize: null })
+    const entry = { map: null, annotations: [], dotnetRef, options: {}, observer: null }
+    _maps.set(containerId, entry)
     window.benMapTileTemplate = benMapTileTemplate
     window.benMapMarkerTemplate = benMapMarkerTemplate
     window.benMapMarkerClick = benMapMarkerClick
-    const entry = _maps.get(containerId)
+    // Telerik's map measures its container once; the component re-measures it on our word.
     let timeout
-    entry.resize = () => { clearTimeout(timeout); timeout = setTimeout(() => dotnetRef.invokeMethodAsync('OnContainerResized'), 150) }
-    window.addEventListener('resize', entry.resize)
+    entry.observer = new ResizeObserver(() => {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => dotnetRef.invokeMethodAsync('OnContainerResized'), 150)
+    })
+    entry.observer.observe(document.getElementById(containerId))
 }
 
 function telerikTeardown() {
