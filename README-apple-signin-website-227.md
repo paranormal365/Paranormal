@@ -8,6 +8,12 @@ Branched from `develop` at `bb7a3701` (2026-09-10).
 Follows item 225, which built the same two doors for the desktop client and added the server half
 both front ends need.
 
+**Plan of record for the rest of this branch and what follows it:**
+`ProjectNotes/External-SignIn-Plan-2026-09-10.md` — what the right answer is, what the day found in
+order of consequence, what is still open for Ben's decision, and the phased path: finish 226 on the
+iPhone, then consolidate both providers into one `ExternalSignInService`, then the Entra decisions,
+then UAT through the real providers.
+
 ## Why this closes the iPhone gap without touching the iPhone app
 
 The Apple sign-in endpoint has three outcomes, and the first is **this Apple identity is already
