@@ -82,7 +82,7 @@ export async function create(containerId, dotnetRef, options) {
     const container = document.getElementById(containerId)
     if (!container) return
     const entry = {
-        map: null, container, annotations: [], dotnetRef, options, observer: null,
+        map: null, container, annotations: [], circle: null, dotnetRef, options, observer: null,
         view: { lat: options.centerLatitude, lon: options.centerLongitude, zoom: options.zoom },
         userMoved: false,
     }
@@ -147,6 +147,16 @@ export async function create(containerId, dotnetRef, options) {
                 zoomForRegion(container, r))
         }, 250)
     })
+    // A click on the map itself, for a caller that asked (an address's "click to set the edge").
+    // MapKit's single-tap fires for a click on empty map, not for one that selected a pin.
+    if (options.reportClicks) {
+        map.addEventListener('single-tap', e => {
+            const c = map.convertPointOnPageToCoordinate(e.pointOnPage)
+            entry.lastTap = [c.latitude, c.longitude]
+            dotnetRef.invokeMethodAsync('OnMapTapped', c.latitude, c.longitude)
+        })
+    }
+
     map.addEventListener('select', e => {
         const a = e.annotation
         if (!a) return
@@ -185,7 +195,8 @@ export function setPins(containerId, pins) {
             const a = new mapkit.MarkerAnnotation(new mapkit.Coordinate(p.latitude, p.longitude), {
                 title: p.title ?? '',
                 subtitle: p.subtitle ?? '',
-                glyphText: p.glyph ?? '',
+                glyphText: p.iconSvgPath ? '' : (p.glyph ?? ''),
+                glyphImage: p.iconSvgPath ? glyphImageFor(p.iconSvgPath) : undefined,
                 color: p.color ?? undefined,
                 clusteringIdentifier: p.cluster ?? null,
                 data: { index },
@@ -205,6 +216,40 @@ export function setPins(containerId, pins) {
     }
     if (entry.map) apply()
     else _mapkitReady?.then(() => setTimeout(apply, 0))   // pins arrived before the map did
+}
+
+/**
+ * The chosen icon, drawn white on the pin. MapKit wants a raster-sized image per scale; an SVG
+ * data URI with an explicit size serves both, and the 512-unit path the icon registry stores
+ * is scaled into it.
+ */
+function glyphImageFor(svgPath) {
+    const svg = size => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><path fill="#fff" d="${svgPath}"/></svg>`)
+    return { 1: svg(20), 2: svg(40), 3: svg(60) }
+}
+
+/** Draws, replaces or removes the one region circle a map may carry. */
+export function setCircle(containerId, circle) {
+    const entry = _maps.get(containerId)
+    if (!entry) return
+    const apply = () => {
+        const map = entry.map
+        if (!map) return
+        if (entry.circle) { map.removeOverlay(entry.circle); entry.circle = null }
+        if (!circle) return
+        entry.circle = new mapkit.CircleOverlay(
+            new mapkit.Coordinate(circle.latitude, circle.longitude), circle.radiusMeters, {
+                style: new mapkit.Style({
+                    fillColor: circle.fillColor, fillOpacity: circle.fillOpacity,
+                    strokeColor: circle.strokeColor, strokeOpacity: circle.strokeOpacity,
+                    lineWidth: circle.strokeWidth,
+                }),
+            })
+        map.addOverlay(entry.circle)
+    }
+    if (entry.map) apply()
+    else _mapkitReady?.then(() => setTimeout(apply, 0))
 }
 
 export function fit(containerId) {
@@ -271,6 +316,8 @@ export function describe(containerId) {
         size: [_maps.get(containerId).container.clientWidth, _maps.get(containerId).container.clientHeight],
 
         annotations: m.annotations.length,
+        overlays: m.overlays.length,
+        lastTap: _maps.get(containerId).lastTap ?? null,
         colorScheme: m.colorScheme,
     }
 }
@@ -296,8 +343,13 @@ function benMapTileTemplate(ctx) {
 function benMapMarkerTemplate(ctx) {
     const title = (ctx.Title || '').replace(/"/g, '&quot;')
     const dim = ctx.Dimmed ? 'opacity:.55;' : ''
-    const glyph = ctx.Glyph || '📍'
     const color = ctx.Color ? `color:${ctx.Color};` : ''
+    if (ctx.IconSvgPath) {
+        return `<span class="k-svg-icon k-icon-xl" onclick="benMapMarkerClick('${ctx.ContainerId}', ${ctx.Index})" title="${title}"
+            style="cursor:pointer;${dim}${color}filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));" aria-hidden="true">
+            <svg viewBox="0 0 512 512" focusable="false"><path d="${ctx.IconSvgPath}"></path></svg></span>`
+    }
+    const glyph = ctx.Glyph || '📍'
     return `<span onclick="benMapMarkerClick('${ctx.ContainerId}', ${ctx.Index})" title="${title}"
         style="font-size:1.5rem;cursor:pointer;${dim}${color}filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));">${glyph}</span>`
 }

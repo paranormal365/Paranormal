@@ -26,8 +26,6 @@ public class MapProviderGuardTests
     /// </summary>
     private static readonly HashSet<string> StillCrossing = new(StringComparer.Ordinal)
     {
-        "Ben.Web.Website.Library/Manage/Maps/AddressMapPlayer.razor",         // phase 4
-        "Ben.Web.Website.Library/Manage/Maps/AddressMapPlayer.razor.js",
         "Ben.Web.Website.Library/Manage/Maps/DirectionsMapModal.razor",       // phase 5
         "Ben.Web.Website.Library/Manage/Maps/DirectionsMapModal.razor.js",
     };

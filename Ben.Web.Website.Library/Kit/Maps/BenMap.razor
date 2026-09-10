@@ -19,12 +19,23 @@
     @if (Maps.Effective == MapProvider.Telerik && _telerikReady)
     {
         <TelerikMap @ref="_telerikMap" Center="@_telerikCenter" Zoom="@_telerikZoom" Height="@Height"
-                    OnPanEnd="@OnTelerikPanEnd" OnZoomEnd="@OnTelerikZoomEnd">
+                    OnPanEnd="@OnTelerikPanEnd" OnZoomEnd="@OnTelerikZoomEnd" OnClick="@OnTelerikClick">
             <MapLayers>
                 <MapLayer Type="@MapLayersType.Tile"
                           Attribution="© OpenStreetMap contributors"
                           Subdomains="@(new[] { "a", "b", "c" })"
                           UrlTemplate="benMapTileTemplate" />
+                @if (Circle is { } circle)
+                {
+                    <MapLayer Type="@MapLayersType.Shape" Data="@_telerikCircle">
+                        <MapLayerShapeSettings>
+                            <MapLayerShapeSettingsStyle>
+                                <MapLayerShapeSettingsStyleFill Color="@circle.FillColor" Opacity="@circle.FillOpacity" />
+                                <MapLayerShapeSettingsStyleStroke Color="@circle.StrokeColor" Opacity="@circle.StrokeOpacity" Width="@circle.StrokeWidth" />
+                            </MapLayerShapeSettingsStyle>
+                        </MapLayerShapeSettings>
+                    </MapLayer>
+                }
                 @if (_telerikMarkers.Count > 0)
                 {
                     <MapLayer Type="@MapLayersType.Marker"
@@ -59,10 +70,17 @@
     /// <summary>Raised when a pan or zoom ends, with what is now in view. Not raised for the map's own framing.</summary>
     [Parameter] public EventCallback<BenMapViewport> OnViewportChanged { get; set; }
 
+    /// <summary>A region drawn on the ground, or null for none. Replace the record to change it.</summary>
+    [Parameter] public BenMapCircle? Circle { get; set; }
+
+    /// <summary>Raised with the ground coordinate when somebody clicks the map itself, not a pin.</summary>
+    [Parameter] public EventCallback<BenMapPoint> OnMapClicked { get; set; }
+
     private readonly string _containerId = $"ben-map-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
     private DotNetObjectReference<BenMap>? _self;
     private IReadOnlyList<BenMapPin>? _drawnPins;
+    private BenMapCircle? _drawnCircle;
     private (double Lat, double Lon, double Zoom) _appliedView;
     private bool _ready;
     private bool _disposed;
@@ -91,6 +109,7 @@
                         tokenPath = MapsOptions.TokenPath,
                         centerLatitude = CenterLatitude, centerLongitude = CenterLongitude, zoom = Zoom,
                         fitToPins = FitToPins,
+                        reportClicks = OnMapClicked.HasDelegate,
                     });
                 }
                 else
@@ -146,6 +165,22 @@
             }
         }
 
+        if (!ReferenceEquals(_drawnCircle, Circle))
+        {
+            _drawnCircle = Circle;
+            if (Maps.Effective == MapProvider.Apple)
+            {
+                if (_module is not null)
+                    await _module.InvokeVoidAsync("setCircle", _containerId, Circle);
+                if (_disposed) return;
+            }
+            else
+            {
+                BuildTelerikCircle();
+                if (_telerikReady) { StateHasChanged(); _telerikMap?.Refresh(); }
+            }
+        }
+
         // A caller that drives the view (FitToPins off) moves it by changing Center/Zoom — the
         // home map recentring on the person's own location, for one. Applied only when the
         // values actually changed, so an ordinary re-render never yanks the map from under a
@@ -177,6 +212,10 @@
             ? OnViewportChanged.InvokeAsync(new BenMapViewport(north, south, east, west, zoom))
             : Task.CompletedTask;
 
+    [JSInvokable]
+    public Task OnMapTapped(double latitude, double longitude) =>
+        OnMapClicked.HasDelegate ? OnMapClicked.InvokeAsync(new BenMapPoint(latitude, longitude)) : Task.CompletedTask;
+
     /// <summary>Re-measures the map after its container changes size.</summary>
     [JSInvokable]
     public Task OnContainerResized()
@@ -207,13 +246,24 @@
     private double[] _telerikCenter = [39.8283, -98.5795];
     private double _telerikZoom = 4;
     private List<TelerikMarker> _telerikMarkers = [];
+    private object? _telerikCircle;
+
+    private void BuildTelerikCircle() =>
+        _telerikCircle = Circle is { } c
+            ? Manage.Maps.MapGeoJsonHelper.ComputeCircleGeoJson(c.Latitude, c.Longitude, c.RadiusMeters / 1609.344)
+            : null;
+
+    private Task OnTelerikClick(MapClickEventArgs a) =>
+        OnMapClicked.HasDelegate
+            ? OnMapClicked.InvokeAsync(new BenMapPoint(a.Location.Latitude, a.Location.Longitude))
+            : Task.CompletedTask;
 
     private void BuildTelerikMarkers()
     {
         _telerikMarkers = Pins.Select((p, i) => new TelerikMarker
         {
             LatLng = [p.Latitude, p.Longitude],
-            Title = p.Title, Glyph = p.Glyph, Color = p.Color, Dimmed = p.Dimmed,
+            Title = p.Title, Glyph = p.Glyph, Color = p.Color, Dimmed = p.Dimmed, IconSvgPath = p.IconSvgPath,
             Index = i, ContainerId = _containerId,
         }).ToList();
 
@@ -242,6 +292,7 @@
         public string? Glyph { get; set; }
         public string? Color { get; set; }
         public bool Dimmed { get; set; }
+        public string? IconSvgPath { get; set; }
         public int Index { get; set; }
         public string ContainerId { get; set; } = string.Empty;
     }

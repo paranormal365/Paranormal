@@ -184,14 +184,3 @@ public static class MapGeoJsonHelper
 }
 
 // ── Marker data model for the Telerik Map layer ───────────────────────────────
-
-/// <summary>Data model passed to the Telerik Map Marker layer.</summary>
-public class AddressMarkerModel
-{
-    public double[]? LatLng { get; set; }
-    public string Title { get; set; } = string.Empty;
-    /// <summary>CSS color for the marker template function.</summary>
-    public string Color { get; set; } = "#e63535";
-    /// <summary>SVG path data string for the selected icon.</summary>
-    public string IconSvgPath { get; set; } = AddressMapIconRegistry.PathMapMarkerTarget;
-}
