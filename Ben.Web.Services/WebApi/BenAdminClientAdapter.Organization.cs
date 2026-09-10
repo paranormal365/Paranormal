@@ -326,6 +326,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAsync<PublicTourRecord>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/tours/{Uri.EscapeDataString(tourSlug)}", token);
 
+    public Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default)
+        => _api.GetListAsync<EventEvidenceRecord>($"/api/public/tours/{tourId}/my-evidence", token);
+
     public Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default)
         => _api.GetAnonymousListAsync<PublicTourMapPin>("/api/public/tours/map", token);
 

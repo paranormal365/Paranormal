@@ -566,10 +566,26 @@ A public date of a tour business has to name a tour. Without one there is nothin
 where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
 a guides' meeting, a rehearsal — needs no tour.
 
+### Pictures and the slideshow
+
+Each tour keeps up to 50 pictures. Add your own from **Tours → the tour → Pictures**; the first one
+is the picture on the tour's card and at the top of its page. Anything you add is fitted inside
+1920 by 1080 and re-encoded, which strips the camera data — including where the photograph was
+taken — before it is ever published.
+
+The tour's page shows a slideshow of those pictures **and** of the photographs guests sent in that
+you accepted, each credited to whoever took it. Accepting a guest's photograph is also how you keep
+it: it is the answer to the retention clock, so a shot worth keeping goes on the page.
+
+Somebody who came on the tour sees their own uploads on the tour's page, whatever you decided about
+them — accepted, waiting, or not published. They took the photograph; your decision is about what
+the tour publishes, not about who it belongs to.
+
 ### Where your tours show up
 
 Tours are public. They appear on your own public page, on the map on the front page, and in the
-nearby search, with the meeting point given in full — an address held back from somebody deciding
+nearby search, with the meeting point given in full — shown on its own map on the tour's page, with
+directions and a link that opens it in Maps — an address held back from somebody deciding
 whether to come is held back from the wrong person. Each tour also has a page of its own at
 `/o/your-group/tours/the-tour-name`, which is the link worth sharing.
 

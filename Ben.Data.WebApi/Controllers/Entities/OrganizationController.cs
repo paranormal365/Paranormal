@@ -5,6 +5,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Controllers.Admin;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -242,6 +243,26 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.IsAcceptingApplications = request.IsAcceptingApplications;
         // A group that has chosen not to be found stays that way unless this call says otherwise.
         if (request.IsUnlisted is { } unlisted) org.IsUnlisted = unlisted;
+        // Item 233: becoming a tour business is a sign-up by another route, so the switch that
+        // closes the front door closes this one too. Only the change INTO one is refused — a
+        // business already classified this way keeps everything, which is exactly what Ben asked
+        // for, and turning the flag OFF is always allowed so nobody is trapped.
+        var becomingABusiness =
+            (request.Kind is { } wantedKind
+                && Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(wantedKind)
+                && !Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(org.Kind))
+            || (request.RunsPublicTours is true && !org.RunsPublicTours);
+
+        if (becomingABusiness && !isSuperAdmin
+            && !await SiteSettingsService.GetBoolAsync(
+                    db, SiteSettingKeys.AllowTourBusinessSignUps, whenUnset: true, ct))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "We aren't taking on new tour or event businesses just now, so this group can't "
+                + "become one yet. Nothing about it changes in the meantime — get in touch and we "
+                + "will let you know when they reopen.");
+        }
+
         if (request.Kind is { } kind) org.Kind = kind;
         if (request.RunsPublicTours is { } runsTours) org.RunsPublicTours = runsTours;
         org.PublicPhone             = request.PublicPhone?.Trim();

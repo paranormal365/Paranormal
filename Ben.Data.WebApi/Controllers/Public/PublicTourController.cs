@@ -3,6 +3,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -94,6 +95,24 @@ public sealed class PublicTourController : BenControllerBase
             .Select(g => new PublicTourImage(g.UploadFileId, g.Caption))
             .ToListAsync(ct);
 
+        // What guests took, as the business accepted it. Images only — a slideshow cannot show a
+        // sound file, and an audio recording deserves the player on the event's own page rather
+        // than a blank frame here. Newest first and capped: a tour that has run for two years has
+        // more photographs than anybody scrolls.
+        var guestGallery = await db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.OrgCalendarEvent.TourId == tour.Id
+                     && e.OrgCalendarEvent.IsPublic
+                     && e.Status == EvidenceSubmissionStatus.Accepted
+                     && e.UploadFile.ContentType.StartsWith("image/"))
+            .OrderByDescending(e => e.DateCreated)
+            .Take(40)
+            .Select(e => new PublicTourGuestPhoto(
+                e.Id, e.OrgCalendarEventId, e.UploadFile.FileName, e.UploadFile.ContentType,
+                e.Note,
+                e.SubmittedByAppUser.DisplayName ?? e.SubmittedByAppUser.UserName ?? "A guest",
+                e.DateCreated))
+            .ToListAsync(ct);
+
         return Ok(new PublicTourRecord(
             tour.Id, tour.Name, tour.UrlName, _sanitizer.SanitizeHtml(tour.Description),
             org.Id, org.Name, org.UrlName,
@@ -101,7 +120,46 @@ public sealed class PublicTourController : BenControllerBase
             address?.City, address?.State, address?.Latitude, address?.Longitude,
             tour.DurationMinutes, tour.DefaultCapacity, tour.TimeZoneId,
             tour.ContactLine, tour.IsBookable, tour.AllowReviews,
-            guides, dates, rating, ratingCount, gallery));
+            guides, dates, rating, ratingCount, gallery, guestGallery));
+    }
+
+    /// <summary>
+    /// What this caller sent in from this tour, whatever the business made of it (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-10: a participant should be able to find their own photographs from the
+    /// tour page. Until this, they could only find them from the page of the particular date they
+    /// went on — which is the one thing somebody who walked a tour last month does not remember
+    /// the address of.</para>
+    ///
+    /// <para><b>Every status, not just accepted.</b> A guest handed over their own photograph; a
+    /// decline is the business choosing not to publish it, not the business coming to own it. The
+    /// same rule already governs the bytes on the evidence route.</para>
+    /// </remarks>
+    [HttpGet("{tourId:guid}/my-evidence")]
+    [Authorize]
+    public async Task<ActionResult<IReadOnlyList<EventEvidenceController.EvidenceSubmissionRecord>>> MyEvidence(
+        Guid tourId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var mine = await db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.OrgCalendarEvent.TourId == tourId && e.SubmittedByAppUserId == userId)
+            .OrderByDescending(e => e.DateCreated)
+            .Select(e => new EventEvidenceController.EvidenceSubmissionRecord(
+                e.Id, e.OrgCalendarEventId, e.OrgCalendarEvent.Title,
+                e.SubmittedByAppUser.DisplayName ?? e.SubmittedByAppUser.UserName ?? "You",
+                e.UploadFileId, e.UploadFile.FileName, e.UploadFile.ContentType,
+                e.Note, e.Status, e.RejectionReason, e.DateCreated,
+                e.PublishedToPlaceAtUtc,
+                e.OrgCalendarEvent.PlaceId != null
+                    && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation))
+            .ToListAsync(ct);
+
+        return Ok(mine);
     }
 
     /// <summary>Every tour that can be drawn on a map.</summary>

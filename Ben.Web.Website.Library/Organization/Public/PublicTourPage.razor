@@ -5,6 +5,8 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Kit.Maps
+@using Ben.Web.Website.Library.Manage.Maps
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -77,32 +79,71 @@ else
             </div>
         }
 
-        <div class="card mb-3">
+        @* The meeting point on a map, with directions (item 233).
+
+           Ben asked whether this was overdone. It is the opposite: this page exists to get
+           somebody to a street corner at a particular time, and a line of text is what a site in
+           2005 would have given them. The map is small and beside the address rather than a
+           full-bleed hero, and the button hands the walk to whatever they navigate with — the
+           functional answer, not a decorative one. Drawn only when the address geocoded; an
+           empty grey box would be worse than the sentence alone. *@
+        <div class="row g-3 mb-3">
+            <div class="col-lg-@(HasMap ? "7" : "12")">
+        <div class="card h-100">
             <div class="card-body">
                 <dl class="row mb-0">
-                    <dt class="col-sm-3">Where you meet</dt>
-                    <dd class="col-sm-9" id="tour-meeting-point">@_tour.MeetingPoint</dd>
+                    <dt class="col-sm-4">Where you meet</dt>
+                    <dd class="col-sm-8" id="tour-meeting-point">
+                        @_tour.MeetingPoint
+                        @if (HasMap)
+                        {
+                            <div class="mt-2 d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="tour-directions"
+                                        @onclick="ShowDirections">
+                                    <BenIcon Name="map" Class="me-1" />Directions
+                                </button>
+                                <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+                                   href="@AppleMapsUrl">Open in Maps</a>
+                            </div>
+                        }
+                    </dd>
 
                     @if (_tour.DurationMinutes is { } minutes)
                     {
-                        <dt class="col-sm-3">How long</dt>
-                        <dd class="col-sm-9">@Length(minutes)</dd>
+                        <dt class="col-sm-4">How long</dt>
+                        <dd class="col-sm-8">@Length(minutes)</dd>
                     }
 
                     @if (_tour.DefaultCapacity is { } capacity)
                     {
-                        <dt class="col-sm-3">Group size</dt>
-                        <dd class="col-sm-9">Up to @capacity people</dd>
+                        <dt class="col-sm-4">Group size</dt>
+                        <dd class="col-sm-8">Up to @capacity people</dd>
                     }
 
                     @if (!string.IsNullOrWhiteSpace(_tour.ContactLine))
                     {
-                        <dt class="col-sm-3">Getting in touch</dt>
-                        <dd class="col-sm-9" id="tour-contact">@_tour.ContactLine</dd>
+                        <dt class="col-sm-4">Getting in touch</dt>
+                        <dd class="col-sm-8" id="tour-contact">@_tour.ContactLine</dd>
                     }
                 </dl>
             </div>
         </div>
+            </div>
+
+            @if (HasMap)
+            {
+                <div class="col-lg-5">
+                    <div class="card h-100 overflow-hidden">
+                        <BenMap Pins="@_mapPins" Height="260px" FitToPins="false"
+                                CenterLatitude="@((double)_tour!.Latitude!.Value)"
+                                CenterLongitude="@((double)_tour!.Longitude!.Value)"
+                                Zoom="15" />
+                    </div>
+                </div>
+            }
+        </div>
+
+        <DirectionsMapModal @ref="_directions" />
 
         @if (!string.IsNullOrWhiteSpace(_tour.Description))
         {
@@ -132,26 +173,65 @@ else
             </div>
         }
 
-        @if (_gallery.Count > 1)
+        @* A slideshow rather than a wall of thumbnails (Ben, 2026-09-10): "a slideshow of images
+           for the tour as taken by guests and the tour guides and company". Both sources sit in
+           one reel and every slide says whose picture it is — a guest who took the best shot of
+           the night should see their name on it. *@
+        @* One picture is already the hero above, so the reel earns its place from two. *@
+        @if (_slides.Count > 1)
         {
             <h2 class="h5 mb-2">Pictures</h2>
-            <div class="row g-2 mb-4" id="tour-gallery">
-                @foreach (var picture in _gallery.Skip(1))
-                {
-                    <div class="col-6 col-md-4">
-                        <figure class="mb-0">
-                            <div class="ratio ratio-4x3 rounded overflow-hidden bg-body-tertiary">
-                                <img src="@MediaUrls.TourPhoto(picture.UploadFileId)"
-                                     alt="@(picture.Caption ?? _tour.Name)"
-                                     class="w-100 h-100 object-fit-cover" loading="lazy" />
+            <div class="card mb-2 overflow-hidden" id="tour-slideshow">
+                <BenSlideshow Slides="@_slides" Height="360px" />
+            </div>
+            <p class="text-secondary small mb-4">
+                @_gallery.Count from @_tour.OrganizationName@(_guestPhotos.Count > 0
+                    ? $", {_guestPhotos.Count} sent in by people who came along" : "").
+            </p>
+        }
+
+        @* Somebody who walked this tour finds their own photographs here, whatever the business
+           made of them — they handed over their own picture, and a decline is a decision not to
+           publish it rather than a decision to keep it from them. *@
+        @if (_myEvidence.Count > 0)
+        {
+            <div class="card mb-4" id="tour-my-evidence">
+                <div class="card-header"><strong>What you sent in from this tour</strong></div>
+                <div class="card-body">
+                    @foreach (var mine in _myEvidence)
+                    {
+                        <div class="py-2 border-bottom d-flex justify-content-between gap-3 flex-wrap">
+                            <div>
+                                <a href="@AdminClient.GetEventEvidenceFileUrl(mine.OrgCalendarEventId, mine.Id)"
+                                   target="_blank" rel="noopener">@mine.FileName</a>
+                                <div class="text-secondary small">
+                                    @mine.EventTitle · @mine.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(mine.Note))
+                                {
+                                    <div class="small">@mine.Note</div>
+                                }
                             </div>
-                            @if (!string.IsNullOrWhiteSpace(picture.Caption))
-                            {
-                                <figcaption class="small text-secondary mt-1">@picture.Caption</figcaption>
-                            }
-                        </figure>
-                    </div>
-                }
+                            <div class="text-nowrap small">
+                                @switch (mine.Status)
+                                {
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Accepted:
+                                        <span class="badge text-bg-success">On the tour's page</span>
+                                        break;
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Rejected:
+                                        <span class="badge text-bg-secondary">Not published</span>
+                                        break;
+                                    default:
+                                        <span class="badge text-bg-warning">Waiting on a look</span>
+                                        break;
+                                }
+                            </div>
+                        </div>
+                    }
+                    <p class="text-secondary small mb-0 mt-2">
+                        These are yours. Download anything you want to keep.
+                    </p>
+                </div>
             </div>
         }
 
@@ -233,6 +313,35 @@ else
     private bool _loading = true;
 
     private IReadOnlyList<PublicTourImage> _gallery = [];
+    private IReadOnlyList<PublicTourGuestPhoto> _guestPhotos = [];
+    private IReadOnlyList<EventEvidenceRecord> _myEvidence = [];
+
+    private List<BenSlide> _slides = [];
+
+    private Ben.Web.Website.Library.Manage.Maps.DirectionsMapModal? _directions;
+    private IReadOnlyList<Ben.Web.Website.Library.Kit.Maps.BenMapPin> _mapPins = [];
+
+    /// <summary>Whether the meeting point has coordinates to draw.</summary>
+    private bool HasMap => _tour is { Latitude: not null, Longitude: not null };
+
+    /// <summary>
+    /// The meeting point handed to whatever the reader navigates with.
+    /// </summary>
+    /// <remarks>
+    /// Coordinates rather than the address text: the address has already been resolved once, and
+    /// asking a second map to guess at it again is how a guest ends up on the wrong Church Street.
+    /// </remarks>
+    private string AppleMapsUrl => _tour is { Latitude: { } lat, Longitude: { } lon }
+        ? $"https://maps.apple.com/?ll={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},"
+          + $"{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+          + $"&q={Uri.EscapeDataString(_tour.Name)}"
+        : "#";
+
+    private void ShowDirections()
+    {
+        if (_tour is not { Latitude: { } lat, Longitude: { } lon }) return;
+        _directions?.Show(_tour.MeetingPoint, (double)lat, (double)lon);
+    }
 
     /// <summary>The day the calendar is showing. Starts on the next date this tour runs.</summary>
     private DateTime _selectedDate = DateTime.Today;
@@ -263,6 +372,27 @@ else
     {
         _tour = await AdminClient.GetPublicTourAsync(UrlName, TourSlug);
         _gallery = _tour?.Gallery ?? [];
+        _guestPhotos = _tour?.GuestGallery ?? [];
+
+        // The business's own pictures first, in the order it chose, then what guests sent in,
+        // newest first — so the reel opens on the shot the business picked to sell the walk.
+        _slides =
+        [
+            .. _gallery.Select(g => new BenSlide(
+                   MediaUrls.TourPhoto(g.UploadFileId), g.Caption,
+                   Credit: _tour is null ? null : $"From {_tour.OrganizationName}",
+                   AltText: g.Caption ?? _tour?.Name)),
+            .. _guestPhotos.Select(p => new BenSlide(
+                   AdminClient.GetEventEvidenceFileUrl(p.EventId, p.SubmissionId), p.Note,
+                   Credit: $"Taken by {p.By}",
+                   AltText: p.Note ?? $"A photograph taken by {p.By}")),
+        ];
+
+        _mapPins = _tour is { Latitude: { } pinLat, Longitude: { } pinLon }
+            ? [new Ben.Web.Website.Library.Kit.Maps.BenMapPin(
+                   (double)pinLat, (double)pinLon,
+                   Title: _tour.Name, Subtitle: "Where you meet", Glyph: "🚶")]
+            : [];
 
         // The dates in the reader's zone, so the bold days on the calendar match the times in
         // the list beside it.
@@ -275,6 +405,11 @@ else
             _calendarMin = _dateDays.Min().AddMonths(-1);
             _calendarMax = _dateDays.Max().AddMonths(1);
         }
+
+        // Only for somebody signed in, and only their own: the endpoint refuses anyone else.
+        _myEvidence = _tour is not null && UserState.IsAuthenticated
+            ? (await AdminClient.GetMyTourEvidenceAsync(_tour.Id)).Items
+            : [];
 
         _loading = false;
     }

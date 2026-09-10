@@ -418,6 +418,15 @@ public interface IBenOrganizationClient
     /// <summary>Takes a picture off the page and deletes the business's copy.</summary>
     Task<bool> DeleteTourImageAsync(Guid orgId, Guid tourId, Guid imageId, CancellationToken token = default);
 
+    /// <summary>
+    /// What the signed-in caller sent in from one tour, whatever became of it.
+    /// </summary>
+    /// <remarks>
+    /// So somebody who walked a tour last month can find their own photographs from the tour's
+    /// page, rather than having to remember which night they went on.
+    /// </remarks>
+    Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default);
+
     /// <summary>Tours by name, by business, or near a point.</summary>
     Task<LoadResult<PublicTourListItem>> SearchToursAsync(
         string? query = null, double? latitude = null, double? longitude = null,

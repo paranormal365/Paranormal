@@ -60,6 +60,8 @@
                                     <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-investigation">
                                         <BenIcon Name="search" Class="me-1" />Investigation group
                                     </label></div>
+                                    @if (!_businessKindsClosed)
+                                    {
                                     <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
                                            checked="@(_kind == OrganizationKind.GhostWalkingTour)"
                                            @onchange="@(() => SetKind(OrganizationKind.GhostWalkingTour))" />
@@ -72,6 +74,7 @@
                                     <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-events">
                                         <BenIcon Name="calendar" Class="me-1" />Paranormal events
                                     </label></div>
+                                    }
                                     <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-property"
                                            checked="@(_kind == OrganizationKind.HauntedProperty)"
                                            @onchange="@(() => SetKind(OrganizationKind.HauntedProperty))" />
@@ -79,6 +82,16 @@
                                         <BenIcon Name="home" Class="me-1" />Haunted property
                                     </label></div>
                                 </div>
+                                @if (_businessKindsClosed)
+                                {
+                                    <div class="form-text" id="newgroup-tours-closed">
+                                        We aren't taking on new tour or event businesses just now.
+                                        Start an investigation group today, or
+                                        <a href="/contact">get in touch</a> and we will let you know
+                                        when they reopen.
+                                    </div>
+                                }
+
                                 <div class="form-text">
                                     @* One sentence per kind, saying what it STARTS as. None of it is a
                                        gate — every kind can do everything, and all of this is editable
@@ -297,6 +310,9 @@
     private string? _error;
     private bool _closed;
 
+    /// <summary>Whether the tour and events choices are hidden (item 233).</summary>
+    private bool _businessKindsClosed;
+
     private bool HasAddress => !string.IsNullOrWhiteSpace(_city);
 
     public StartGroupPage()
@@ -320,6 +336,14 @@
         }
 
         _closed = !Features.AllowOrganizationSelfRegistration && !UserState.IsSuperAdmin;
+
+        // Item 233: the site can be closed to NEW tour and event businesses while staying open to
+        // everyone else. Asked before the choices are drawn, because the alternative is somebody
+        // picking "ghost walking tour", filling in four steps and being refused at the end.
+        _businessKindsClosed = !Features.AllowTourBusinessSignUps && !UserState.IsSuperAdmin;
+        if (_businessKindsClosed && _kind != OrganizationKind.InvestigationGroup
+                                 && _kind != OrganizationKind.HauntedProperty)
+            SetKind(OrganizationKind.InvestigationGroup);
     }
 
     // ── Step gates: null allows Next, a sentence refuses (WizardModel contract) ──

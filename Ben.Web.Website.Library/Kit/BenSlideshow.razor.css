@@ -1,0 +1,45 @@
+/*
+    The frame is positioned so the caption strip can sit inside it, and the strip is painted on a
+    dark scrim rather than tinted glass: a caption over a photograph has to stay readable whatever
+    the photograph happens to be, and a light-on-light frame is exactly the case a designer never
+    has to hand while building it.
+*/
+
+.ben-slideshow {
+    position: relative;
+    overflow: hidden;
+}
+
+.ben-slideshow__frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--bs-tertiary-bg, #f1f1f1);
+}
+
+.ben-slideshow__link {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.ben-slideshow__image {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.ben-slideshow__strip {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: .5rem .75rem;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font-size: .875rem;
+    line-height: 1.25;
+}
+
+.ben-slideshow__credit {
+    opacity: .75;
+    font-size: .8125rem;
+}

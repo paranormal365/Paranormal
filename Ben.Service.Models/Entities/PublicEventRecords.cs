@@ -255,7 +255,28 @@ public sealed record PublicTourRecord(
     decimal? Rating,
     int RatingCount,
     /// <summary>The tour's own pictures, in the order the business put them.</summary>
-    IReadOnlyList<PublicTourImage>? Gallery = null);
+    IReadOnlyList<PublicTourImage>? Gallery = null,
+    /// <summary>
+    /// Pictures guests took on the nights out, as accepted by the business (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Ben asked for a slideshow "as taken by guests and the tour guides and company", so the two
+    /// sources sit side by side and each slide says whose it is. Only accepted submissions from
+    /// public dates appear, which is the rule the event page already publishes under — a guest is
+    /// told at the moment they upload that acceptance makes it public and credited.
+    /// </remarks>
+    IReadOnlyList<PublicTourGuestPhoto>? GuestGallery = null);
+
+/// <summary>One picture a guest took on a tour, credited to them.</summary>
+/// <param name="EventId">The date it was taken on — also where its bytes are served from.</param>
+public sealed record PublicTourGuestPhoto(
+    Guid SubmissionId,
+    Guid EventId,
+    string FileName,
+    string ContentType,
+    string? Note,
+    string By,
+    DateTime WhenUtc);
 
 /// <summary>A picture on a tour's public page.</summary>
 /// <param name="Caption">Also the alt text, so a picture here is never mute.</param>
