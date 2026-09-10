@@ -274,6 +274,89 @@ else
             </div>
         }
 
+        @* ── Reviews (item 233) ──────────────────────────────────────────── *@
+        @if (_reviews is not null && (_reviews.Reviews.Count > 0 || _reviews.MayReview))
+        {
+            <h2 class="h5 mb-2" id="tour-reviews">
+                What people said
+                @if (_reviews.Average is { } avg)
+                {
+                    <span class="text-secondary fs-6">
+                        · @avg.ToString("0.0") ★ from @_reviews.Count @(_reviews.Count == 1 ? "guest" : "guests")
+                    </span>
+                }
+            </h2>
+
+            @if (_reviews.MayReview)
+            {
+                <div class="card mb-3" id="tour-review-form">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">
+                            @(_reviews.Mine is null ? "How was it?" : "Your review")
+                        </div>
+                        <div class="d-flex gap-1 mb-2" role="group" aria-label="Stars">
+                            @for (var star = 1; star <= 5; star++)
+                            {
+                                var value = star;
+                                <button type="button"
+                                        class="btn btn-sm @(value <= _myStars ? "btn-warning" : "btn-outline-secondary")"
+                                        aria-label="@($"{value} star{(value == 1 ? "" : "s")}")"
+                                        @onclick="@(() => _myStars = value)">★</button>
+                            }
+                        </div>
+                        <textarea class="form-control mb-2" rows="3" maxlength="1000"
+                                  placeholder="What was it like? What should somebody bring?"
+                                  @bind="@_myComment" @bind:event="oninput"></textarea>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-primary btn-sm" id="tour-review-save"
+                                    disabled="@(_savingReview || _myStars == 0)" @onclick="SaveReviewAsync">
+                                @(_savingReview ? "Saving…" : _reviews.Mine is null ? "Leave it" : "Change it")
+                            </button>
+                            @if (_reviews.Mine is not null)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        disabled="@_savingReview" @onclick="DeleteReviewAsync">Take it down</button>
+                            }
+                        </div>
+                        @if (_reviewError is not null)
+                        {
+                            <div class="text-warning small mt-2">@_reviewError</div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_reviews.WhyNot is { } whyNot && _reviews.Reviews.Count > 0)
+            {
+                <p class="text-secondary small">@whyNot</p>
+            }
+
+            @foreach (var review in _reviews.Reviews)
+            {
+                <div class="border-bottom py-2">
+                    <div class="d-flex justify-content-between gap-2 flex-wrap">
+                        <div>
+                            @* Razor reads `@new` as the start of an expression it cannot parse;
+                               the stars are built in the code block instead. *@
+                            <span class="text-warning">@Stars(review.Stars)</span>
+                            <span class="text-secondary">@Stars(5 - review.Stars)</span>
+                            <span class="fw-semibold ms-1">@review.By</span>
+                            @if (review.IsHidden)
+                            {
+                                <span class="badge text-bg-secondary ms-1">Hidden by the business</span>
+                            }
+                        </div>
+                        <span class="text-secondary small">
+                            @review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                        </span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(review.Comment))
+                    {
+                        <div class="small mt-1">@review.Comment</div>
+                    }
+                </div>
+            }
+        }
+
         <h2 class="h5 mb-2">When it runs</h2>
         @if (_tour.UpcomingDates.Count == 0)
         {
@@ -352,6 +435,11 @@ else
     private bool _loading = true;
 
     private IReadOnlyList<PublicTourImage> _gallery = [];
+    private TourReviewsRecord? _reviews;
+    private int _myStars;
+    private string _myComment = "";
+    private bool _savingReview;
+    private string? _reviewError;
     private IReadOnlyList<PublicTourGuestPhoto> _guestPhotos = [];
     private IReadOnlyList<EventEvidenceRecord> _myEvidence = [];
 
@@ -445,6 +533,16 @@ else
             _calendarMax = _dateDays.Max().AddMonths(1);
         }
 
+        if (_tour is not null)
+        {
+            _reviews = await AdminClient.GetTourReviewsAsync(_tour.Id);
+            if (_reviews?.Mine is { } mine)
+            {
+                _myStars = mine.Stars;
+                _myComment = mine.Comment ?? "";
+            }
+        }
+
         // Only for somebody signed in, and only their own: the endpoint refuses anyone else.
         _myEvidence = _tour is not null && UserState.IsAuthenticated
             ? (await AdminClient.GetMyTourEvidenceAsync(_tour.Id)).Items
@@ -452,6 +550,35 @@ else
 
         _loading = false;
     }
+
+    private async Task SaveReviewAsync()
+    {
+        if (_tour is null || _myStars == 0) return;
+
+        _savingReview = true; _reviewError = null;
+        var (saved, error) = await AdminClient.SaveMyTourReviewAsync(
+            _tour.Id, _myStars, string.IsNullOrWhiteSpace(_myComment) ? null : _myComment.Trim());
+        _savingReview = false;
+
+        if (saved is null) { _reviewError = error ?? "That could not be saved."; return; }
+        _reviews = saved;
+    }
+
+    private async Task DeleteReviewAsync()
+    {
+        if (_tour is null) return;
+
+        _savingReview = true; _reviewError = null;
+        var gone = await AdminClient.DeleteMyTourReviewAsync(_tour.Id);
+        _savingReview = false;
+
+        if (!gone) { _reviewError = "That could not be taken down."; return; }
+        _myStars = 0;
+        _myComment = "";
+        _reviews = await AdminClient.GetTourReviewsAsync(_tour.Id);
+    }
+
+    private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
 
     private static string Length(int minutes)
     {

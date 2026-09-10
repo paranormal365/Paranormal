@@ -409,6 +409,19 @@ public interface IBenOrganizationClient
     Task<TourMailPreviewRecord?> PreviewTourMailAsync(
         Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default);
 
+    /// <summary>What people who walked this tour thought of it, and whether the reader may add.</summary>
+    Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Leaves or changes the caller's own review. Keeps the server's refusal.</summary>
+    Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default);
+
+    /// <summary>Takes the caller's own review down.</summary>
+    Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Hides or restores a review on one of the business's own tours.</summary>
+    Task<bool> SetTourReviewHiddenAsync(Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default);
+
     /// <summary>The pictures on a tour's page.</summary>
     Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default);
 

@@ -148,3 +148,41 @@ public static class TourMailTokens
         ("{{site.name}}",           "IsHaunted.com"),
     ];
 }
+
+// ── Reviews (item 233) ───────────────────────────────────────────────────────
+
+/// <summary>One guest's verdict on a tour they walked.</summary>
+/// <param name="Stars">One to five.</param>
+/// <param name="IsMine">
+/// Whether this is the reading caller's own, so a page can offer to change it rather than
+/// offering to write a second one.
+/// </param>
+public sealed record TourReviewRecord(
+    Guid Id,
+    string By,
+    string? Handle,
+    int Stars,
+    string? Comment,
+    DateTime WhenUtc,
+    bool IsMine,
+    bool IsHidden);
+
+/// <summary>Leaving or changing a review.</summary>
+public sealed record UpsertTourReviewRequest(int Stars, string? Comment);
+
+/// <summary>
+/// What a reader may do about reviews on this tour.
+/// </summary>
+/// <param name="MayReview">
+/// True when the caller came to a date of this tour that has finished, and the tour takes
+/// reviews. Decided on the server: a page that worked out for itself who is eligible would be a
+/// second copy of a rule the endpoint also has.
+/// </param>
+/// <param name="WhyNot">The sentence to show instead, or null when they may.</param>
+public sealed record TourReviewsRecord(
+    IReadOnlyList<TourReviewRecord> Reviews,
+    decimal? Average,
+    int Count,
+    bool MayReview,
+    string? WhyNot,
+    TourReviewRecord? Mine);

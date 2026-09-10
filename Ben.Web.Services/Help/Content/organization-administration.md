@@ -601,6 +601,33 @@ Somebody who came on the tour sees their own uploads on the tour's page, whateve
 them — accepted, waiting, or not published. They took the photograph; your decision is about what
 the tour publishes, not about who it belongs to.
 
+### What people say about it
+
+Guests who came on a date that has finished can leave a rating out of five and a few words. It is
+on by default and switchable per tour under **Details**; turning it off stops new ones and leaves
+anything already there.
+
+You can **hide** a review you think is unfair. You cannot change what somebody wrote — their name
+is on it — and hiding is undoable, so nothing is lost either way. Whoever wrote it still sees it on
+the page, marked as hidden, rather than being left to wonder where it went. If they rewrite it, it
+comes back: new words have not been judged.
+
+### How long things stay
+
+On the tour plan, a photograph a guest sends in stays for **a month** and a recording for **a
+week**, unless somebody keeps it. Recordings are limited to **five minutes** each; a longer one is
+refused when it is sent, with the length said plainly, because the phone can trim before uploading
+and only the person who was there knows which five minutes matter.
+
+**Keeping a photograph means putting it in a tour's gallery.** That makes the business its own copy
+— fitted inside 1920 by 1080, with the camera data stripped — and the guest's original keeps its
+own clock and its own owner.
+
+Everyone who sends something in is emailed before it goes, a week ahead and again the day before,
+so they can download it. Nothing is ever deleted that has not been warned about first.
+
+Groups that are not on a tour plan have no clock at all: their files stay, as they always have.
+
 ### Where your tours show up
 
 Tours are public. They appear on your own public page, on the map on the front page, and in the

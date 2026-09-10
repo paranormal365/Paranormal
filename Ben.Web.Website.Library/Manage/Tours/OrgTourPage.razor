@@ -74,6 +74,7 @@
             <a class="btn btn-outline-secondary btn-sm" href="#tour-mail">Guest email</a>
             <a class="btn btn-outline-secondary btn-sm" href="#tour-gallery">Pictures</a>
             <a class="btn btn-outline-secondary btn-sm" href="#tour-dates">Dates</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-reviews">Reviews</a>
             <a class="btn btn-outline-secondary btn-sm" href="@PublicUrl" target="_blank">See the public page</a>
         </nav>
 
@@ -419,6 +420,58 @@
             </div>
         </div>
 
+        @* ── Reviews ─────────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-reviews">
+            <div class="card-body">
+                <h2 class="h6 card-title">
+                    Reviews
+                    @if (_reviews?.Average is { } avg)
+                    {
+                        <span class="text-secondary fw-normal">
+                            · @avg.ToString("0.0") ★ from @_reviews.Count
+                        </span>
+                    }
+                </h2>
+                <p class="text-secondary small">
+                    From people who came on a date that has finished. You can hide one you think is
+                    unfair — you cannot change what somebody wrote, and hiding is undoable.
+                    @if (!_form.AllowReviews)
+                    {
+                        <text><strong>Reviews are switched off for this tour</strong>, so nothing
+                        new comes in; anything already here stays.</text>
+                    }
+                </p>
+
+                @if (_reviews is null || _reviews.Reviews.Count == 0)
+                {
+                    <div class="text-secondary small">Nothing yet.</div>
+                }
+                else
+                {
+                    @foreach (var review in _reviews.Reviews)
+                    {
+                        <div class="border-bottom py-2 d-flex justify-content-between gap-3 flex-wrap">
+                            <div>
+                                <span class="text-warning">@Stars(review.Stars)</span>
+                                <span class="fw-semibold ms-1">@review.By</span>
+                                <span class="text-secondary small ms-1">
+                                    @review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(review.Comment))
+                                {
+                                    <div class="small">@review.Comment</div>
+                                }
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                                    @onclick="@(() => SetReviewHiddenAsync(review.Id, !review.IsHidden))">
+                                @(review.IsHidden ? "Show it again" : "Hide it")
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
         @* ── Dates ───────────────────────────────────────────────────────── *@
         <div class="card mb-3" id="tour-dates">
             <div class="card-body">
@@ -493,6 +546,7 @@
     private List<OrgCalendarEventRecord> _dates = [];
     private HashSet<Guid> _guideIds = [];
     private List<TourImageRecord> _gallery = [];
+    private TourReviewsRecord? _reviews;
     private bool _uploading;
     private bool _previewing;
     private TourMailPreviewRecord? _preview;
@@ -571,6 +625,7 @@
         _dates = [.. _dateResult.Items.Where(e => e.TourId == TourId).OrderByDescending(e => e.StartDateTime)];
 
         _gallery = [.. (await AdminClient.GetTourGalleryAsync(OrgId, TourId)).Items];
+        _reviews = await AdminClient.GetTourReviewsAsync(TourId);
 
         var org = await AdminClient.GetOrganizationAsync(OrgId);
         _orgUrlName = org?.UrlName;
@@ -629,6 +684,18 @@
         if (saved is null) { _error = error ?? "That could not be changed."; return; }
         _notice = saved.PlanNote;
         await LoadAsync();
+    }
+
+    private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
+
+    private async Task SetReviewHiddenAsync(Guid reviewId, bool hidden)
+    {
+        if (!await AdminClient.SetTourReviewHiddenAsync(OrgId, TourId, reviewId, hidden))
+        {
+            _error = "That review could not be changed.";
+            return;
+        }
+        _reviews = await AdminClient.GetTourReviewsAsync(TourId);
     }
 
     private async Task PreviewAsync()

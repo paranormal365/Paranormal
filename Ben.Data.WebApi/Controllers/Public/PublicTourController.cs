@@ -162,6 +162,157 @@ public sealed class PublicTourController : BenControllerBase
         return Ok(mine);
     }
 
+    // ── Reviews (item 233) ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// What people who walked this tour thought of it, and whether the reader may add to it.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous: a review nobody can read before signing in is a review written for nobody.
+    /// Hidden ones are absent rather than marked, except to the person who wrote one — they
+    /// should not be told their words were taken down by a stranger, but nor should they be left
+    /// wondering why their own review has vanished from the page.
+    /// </remarks>
+    [HttpGet("{tourId:guid}/reviews")]
+    [AllowAnonymous]
+    public async Task<ActionResult<TourReviewsRecord>> GetReviews(Guid tourId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var tour = await db.Tours.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tourId, ct);
+        if (tour is null) return NotFound();
+
+        var userId = GetCurrentUserId();
+
+        var rows = await db.TourReviews.AsNoTracking()
+            .Where(r => r.TourId == tourId && (r.HiddenAtUtc == null || r.AppUserId == userId))
+            .OrderByDescending(r => r.DateCreated)
+            .Select(r => new TourReviewRecord(
+                r.Id,
+                r.AppUser.DisplayName ?? r.AppUser.UserName ?? "A guest",
+                r.AppUser.Handle,
+                r.Stars, r.Comment, r.DateCreated,
+                r.AppUserId == userId,
+                r.HiddenAtUtc != null))
+            .ToListAsync(ct);
+
+        var (average, count) = await PublicEventController.TourRatingAsync(db, tourId, ct);
+        var mine = rows.FirstOrDefault(r => r.IsMine);
+        var whyNot = await WhyCannotReviewAsync(db, tour, userId, ct);
+
+        return Ok(new TourReviewsRecord(rows, average, count, whyNot is null, whyNot, mine));
+    }
+
+    /// <summary>
+    /// Leaves or changes this caller's review of a tour.
+    /// </summary>
+    /// <remarks>
+    /// One review per guest per tour, editable: somebody who walks the same tour three times has
+    /// one opinion of it, not three. Editing clears a hiding, because a rewritten review is a
+    /// different set of words and the business gets to judge it afresh.
+    /// </remarks>
+    [HttpPut("{tourId:guid}/my-review")]
+    [Authorize]
+    public async Task<ActionResult<TourReviewsRecord>> UpsertReview(
+        Guid tourId, [FromBody] UpsertTourReviewRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        if (request.Stars is < 1 or > 5) return BadRequest("A rating is one to five stars.");
+        var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
+        if (comment is { Length: > 1000 }) return BadRequest("That is longer than 1,000 characters.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var tour = await db.Tours.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tourId, ct);
+        if (tour is null) return NotFound();
+
+        if (await WhyCannotReviewAsync(db, tour, userId, ct) is { } refusal) return BadRequest(refusal);
+
+        var attended = await AttendedDateAsync(db, tourId, userId, ct);
+        var now = DateTime.UtcNow;
+
+        var existing = await db.TourReviews
+            .FirstOrDefaultAsync(r => r.TourId == tourId && r.AppUserId == userId, ct);
+
+        if (existing is null)
+        {
+            db.TourReviews.Add(new TourReview
+            {
+                Id = Guid.NewGuid(), TourId = tourId, OrgCalendarEventId = attended!.Value,
+                AppUserId = userId, Stars = request.Stars, Comment = comment,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+        }
+        else
+        {
+            existing.Stars = request.Stars;
+            existing.Comment = comment;
+            // Rewritten words are new words; a business judging the old ones has judged something
+            // that is no longer there.
+            existing.HiddenAtUtc = null;
+            existing.HiddenByAppUserId = null;
+            existing.DateUpdated = now;
+            existing.UpdatedByAppUserId = userId;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetReviews(tourId, ct);
+    }
+
+    /// <summary>Takes this caller's own review down.</summary>
+    [HttpDelete("{tourId:guid}/my-review")]
+    [Authorize]
+    public async Task<IActionResult> DeleteMyReview(Guid tourId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var mine = await db.TourReviews
+            .FirstOrDefaultAsync(r => r.TourId == tourId && r.AppUserId == userId, ct);
+        if (mine is null) return NotFound();
+
+        db.TourReviews.Remove(mine);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Why this caller may not review this tour, or null.
+    /// </summary>
+    /// <remarks>
+    /// One method, asked by the page and by the endpoint, so the form a guest is shown and the
+    /// answer they get on submitting cannot disagree.
+    /// </remarks>
+    private static async Task<string?> WhyCannotReviewAsync(
+        BenDataContext db, Tour tour, Guid userId, CancellationToken ct)
+    {
+        if (!tour.AllowReviews) return "This tour isn't taking reviews.";
+        if (userId == Guid.Empty) return "Sign in to leave a review.";
+
+        return await AttendedDateAsync(db, tour.Id, userId, ct) is null
+            ? "Reviews come from people who came along — yours will open after the walk."
+            : null;
+    }
+
+    /// <summary>A date of this tour the caller was accepted on and which has finished.</summary>
+    private static async Task<Guid?> AttendedDateAsync(
+        BenDataContext db, Guid tourId, Guid userId, CancellationToken ct)
+    {
+        if (userId == Guid.Empty) return null;
+        var now = DateTime.UtcNow;
+
+        return await db.OrgCalendarEventAttendees.AsNoTracking()
+            .Where(a => a.AppUserId == userId
+                     && a.RsvpStatus == RsvpStatus.Accepted
+                     && a.OrgCalendarEvent.TourId == tourId
+                     && a.OrgCalendarEvent.EndDateTime < now)
+            .OrderByDescending(a => a.OrgCalendarEvent.StartDateTime)
+            .Select(a => (Guid?)a.OrgCalendarEventId)
+            .FirstOrDefaultAsync(ct);
+    }
+
     /// <summary>Every tour that can be drawn on a map.</summary>
     /// <remarks>
     /// Deliberately the smallest shape in this file: a pin needs a point, a name and somewhere to

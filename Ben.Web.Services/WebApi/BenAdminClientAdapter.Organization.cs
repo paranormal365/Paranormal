@@ -287,6 +287,24 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/tours/{tourId}/mail-preview",
                new TourMailPreviewRequest(subjectTemplate, bodyTemplate), token);
 
+    public Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default)
+        => _api.GetAsync<TourReviewsRecord>($"/api/public/tours/{tourId}/reviews", token);
+
+    public Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertTourReviewRequest, TourReviewsRecord>(
+               HttpMethod.Put, $"/api/public/tours/{tourId}/my-review",
+               new UpsertTourReviewRequest(stars, comment), token);
+
+    public Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/tours/{tourId}/my-review", token);
+
+    public Task<bool> SetTourReviewHiddenAsync(
+        Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/organizations/{orgId}/tours/{tourId}/reviews/{reviewId}/{(hidden ? "hide" : "show")}",
+               new { }, token);
+
     public Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default)
         => _api.GetListAsync<TourImageRecord>($"/api/organizations/{orgId}/tours/{tourId}/gallery", token);
 

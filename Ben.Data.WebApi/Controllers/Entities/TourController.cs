@@ -310,6 +310,43 @@ public sealed class TourController : OrgCmsControllerBase
             rendered.Subject, rendered.HtmlBody, calendar, next is not null));
     }
 
+    /// <summary>
+    /// Hides or restores a review on one of this business's tours (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <b>Hide, never edit.</b> Changing somebody's words while their name stays on them is the
+    /// one thing a review system must not allow. Hiding is visible as an absence, reversible, and
+    /// leaves the words where the person who wrote them can still see them.
+    /// </remarks>
+    [HttpPost("{tourId:guid}/reviews/{reviewId:guid}/{action}")]
+    public async Task<IActionResult> SetReviewHidden(
+        Guid orgId, Guid tourId, Guid reviewId, string action, CancellationToken ct)
+    {
+        if (action is not ("hide" or "show")) return NotFound();
+
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // Scoped through the tour's own business, not the one in the route.
+        var review = await db.TourReviews
+            .FirstOrDefaultAsync(r => r.Id == reviewId && r.TourId == tourId
+                                   && r.Tour.OrganizationId == orgId, ct);
+        if (review is null) return NotFound();
+
+        var hiding = action == "hide";
+        review.HiddenAtUtc = hiding ? DateTime.UtcNow : null;
+        review.HiddenByAppUserId = hiding ? userId : null;
+        review.DateUpdated = DateTime.UtcNow;
+        review.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
     // ── guides ───────────────────────────────────────────────────────────────
 
     /// <summary>
