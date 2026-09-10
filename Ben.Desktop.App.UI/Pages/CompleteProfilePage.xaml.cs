@@ -54,6 +54,15 @@ public partial class CompleteProfilePage : ContentPage
 
         CreateButton.IsEnabled = _external.CanSubmit;
 
+        LinkTwoFactorSection.IsVisible = _external.LinkNeedsTwoFactor;
+        LinkCodeLabel.Text = _external.UseRecoveryCode
+            ? "Recovery code"
+            : "Code from your authenticator app";
+        LinkButton.Text = _external.LinkNeedsTwoFactor ? "Verify and link it" : "Link it";
+
+        if (LinkCodeField.Text != _external.TwoFactorCode)
+            LinkCodeField.Text = _external.TwoFactorCode;
+
         MessageText.Text = _external.Message;
         MessageText.IsVisible = !string.IsNullOrWhiteSpace(_external.Message);
     }
@@ -65,6 +74,12 @@ public partial class CompleteProfilePage : ContentPage
         => _external.Handle = e.NewTextValue ?? string.Empty;
 
     private async void OnCreate(object? sender, EventArgs e) => await _external.CreateAccountAsync();
+
+    private void OnLinkCodeChanged(object? sender, TextChangedEventArgs e)
+        => _external.TwoFactorCode = e.NewTextValue ?? string.Empty;
+
+    private void OnRecoveryToggled(object? sender, CheckedChangedEventArgs e)
+        => _external.UseRecoveryCode = e.Value;
 
     private async void OnLink(object? sender, EventArgs e)
         => await _external.LinkExistingAccountAsync(

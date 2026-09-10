@@ -100,9 +100,34 @@
                        placeholder="••••••••" autocomplete="current-password" />
             </div>
 
+            @*
+                Only after the server says the account has a second factor. Asking up front leaves
+                most people wondering what to type, and sending an empty code would spend a failed
+                attempt against an account that may not have one at all.
+            *@
+            @if (_needsTwoFactor)
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="cp-link-2fa">
+                        @(_useRecoveryCode ? "Recovery code" : "Code from your authenticator app")
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input id="cp-link-2fa" class="form-control" @bind="_twoFactorCode" @bind:event="oninput"
+                           autocomplete="one-time-code" placeholder="123456" />
+                    <div class="form-text">Spaces and hyphens are fine — they're ignored.</div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="cp-link-recovery"
+                           @bind="_useRecoveryCode" />
+                    <label class="form-check-label" for="cp-link-recovery">
+                        Use one of my recovery codes instead
+                    </label>
+                </div>
+            }
+
             @if (_error is not null)
             {
-                <div class="alert alert-danger py-2 mb-3">@_error</div>
+                <div class="alert alert-@(_needsTwoFactor ? "info" : "danger") py-2 mb-3">@_error</div>
             }
             @if (_linkSuccess)
             {
@@ -134,6 +159,12 @@
     private string   _displayName  = string.Empty;
     private string   _linkEmail    = string.Empty;
     private string   _linkPassword = string.Empty;
+
+    // Shown only once the server says the account has a second factor. The password is kept so the
+    // next attempt carries both, rather than making somebody retype it to answer a challenge.
+    private bool     _needsTwoFactor;
+    private bool     _useRecoveryCode;
+    private string   _twoFactorCode = string.Empty;
     private string?  _error;
     private bool     _saving;
     private bool     _linkSuccess;
@@ -192,16 +223,50 @@
             // Step 1: link the caller's Entra identity (proven by the Entra access token, sent
             // explicitly) to the target local account (proven by password, checked server-side).
             // No local session is needed yet — that's the whole point of this endpoint.
-            var linkPayload = new EntraLinkPayload(Email: _linkEmail, Password: _linkPassword);
-            var linkOk = await WebApiClient.EntraLinkAsync(EntraTokenHolder.AccessToken ?? string.Empty, linkPayload);
-            if (!linkOk)
+            var linkPayload = new EntraLinkPayload(
+                Email: _linkEmail,
+                Password: _linkPassword,
+                TwoFactorCode: _needsTwoFactor && !_useRecoveryCode ? _twoFactorCode.Trim() : null,
+                TwoFactorRecoveryCode: _needsTwoFactor && _useRecoveryCode ? _twoFactorCode.Trim() : null);
+
+            var link = await WebApiClient.EntraLinkAsync(EntraTokenHolder.AccessToken ?? string.Empty, linkPayload);
+
+            if (!link.Succeeded)
             {
-                _error = "Account linking failed. Check your email and password, or this Microsoft identity may already be linked elsewhere.";
+                // Being asked for a code is not a failure — the password was right. Linking a
+                // two-factor account on a password alone would not merely skip the second factor
+                // once: the Microsoft identity signs in on its own afterwards, so it would remove
+                // it for good.
+                if (link.RequiresTwoFactor)
+                {
+                    _needsTwoFactor = true;
+                    _twoFactorCode  = string.Empty;
+                }
+
+                _error = link.Message
+                         ?? "Account linking failed. Check your email and password, or this Microsoft identity may already be linked elsewhere.";
+                return;
+            }
+
+            // A RECOVERY CODE IS SINGLE USE, and the link just redeemed it. Presenting the same
+            // one again would be refused for a code that did its job, so the session is established
+            // the other way instead: the Microsoft identity is linked now, so the ordinary Entra
+            // bridge resolves it through /api/me on the next page load.
+            //
+            // An authenticator code is different — Identity's TOTP does not mark one spent, so it
+            // is still good inside its window and can be presented again below.
+            if (_needsTwoFactor && _useRecoveryCode)
+            {
+                _linkSuccess = true;
+                await Task.Delay(1200);
+                NavManager.NavigateTo("/", forceLoad: true);
                 return;
             }
 
             // Step 2: now establish the actual local session.
-            var loginOk = await AuthService.LoginAsync(_linkEmail, _linkPassword);
+            var loginOk = await AuthService.LoginAsync(
+                _linkEmail, _linkPassword,
+                twoFactorCode: _needsTwoFactor ? _twoFactorCode.Trim() : null);
             if (!loginOk)
             {
                 // Link succeeded but the follow-up sign-in didn't — shouldn't happen since Link

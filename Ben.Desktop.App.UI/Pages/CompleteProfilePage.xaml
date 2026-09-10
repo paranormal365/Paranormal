@@ -61,7 +61,17 @@
                         <Entry x:Name="LinkPasswordField" IsPassword="True" />
                     </VerticalStackLayout>
 
-                    <Button Text="Link it" Clicked="OnLink" />
+                    <!-- Only after the server says the account has a second factor. -->
+                    <VerticalStackLayout x:Name="LinkTwoFactorSection" Spacing="8" IsVisible="False">
+                        <Label x:Name="LinkCodeLabel" Text="Code from your authenticator app" />
+                        <Entry x:Name="LinkCodeField" TextChanged="OnLinkCodeChanged" />
+                        <HorizontalStackLayout Spacing="8">
+                            <CheckBox x:Name="LinkRecoveryToggle" CheckedChanged="OnRecoveryToggled" />
+                            <Label Text="Use one of my recovery codes instead" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+
+                    <Button x:Name="LinkButton" Text="Link it" Clicked="OnLink" />
                 </VerticalStackLayout>
 
                 <Label x:Name="MessageText" IsVisible="False" />

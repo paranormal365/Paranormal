@@ -38,15 +38,45 @@ public class EntraAuthControllerTests
             store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
     }
 
+    /// <summary>
+    /// A password that is accepted, through the manager the controller actually asks.
+    /// </summary>
+    /// <remarks>
+    /// It moved from <c>UserManager.CheckPasswordAsync</c> to
+    /// <c>SignInManager.CheckPasswordSignInAsync</c> so that a failed attempt counts toward a
+    /// lockout and an account that may not sign in is refused. A bare password check does neither.
+    /// </remarks>
+    private static Mock<SignInManager<AppUser>> PasswordAccepted(
+        Mock<UserManager<AppUser>> um, AppUser user, string password)
+    {
+        var sim = CreateSignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(user, password, true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+        // No second factor unless a test says otherwise.
+        um.Setup(m => m.GetTwoFactorEnabledAsync(user)).ReturnsAsync(false);
+        return sim;
+    }
+
+    private static Mock<SignInManager<AppUser>> CreateSignInManagerMock(Mock<UserManager<AppUser>> um)
+    {
+        var context = new Mock<IHttpContextAccessor>();
+        var claims  = new Mock<IUserClaimsPrincipalFactory<AppUser>>();
+        return new Mock<SignInManager<AppUser>>(
+            um.Object, context.Object, claims.Object, null!, null!, null!, null!);
+    }
+
     private static EntraAuthController BuildController(
         Mock<UserManager<AppUser>> umMock,
-        ClaimsPrincipal? principal = null)
+        ClaimsPrincipal? principal = null,
+        Mock<SignInManager<AppUser>>? simMock = null)
     {
         var factory = new PooledDbContextFactory<BenDataContext>(
             new DbContextOptionsBuilder<BenDataContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var controller = new EntraAuthController(
-            umMock.Object, new Ben.Data.WebApi.Services.UserHandleService(factory));
+            umMock.Object,
+            (simMock ?? CreateSignInManagerMock(umMock)).Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -275,12 +305,12 @@ public class EntraAuthControllerTests
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
+        var simMock = PasswordAccepted(umMock, localUser, "correct-password");
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"), simMock);
         var result = await controller.Link(
             new EntraLinkRequest("local@test.com", "correct-password"), default);
 
@@ -296,13 +326,13 @@ public class EntraAuthControllerTests
         UserLoginInfo? captured = null;
         var umMock = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
+        var simMock = PasswordAccepted(umMock, localUser, "correct-password");
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .Callback<AppUser, UserLoginInfo>((_, l) => captured = l)
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"), simMock);
         await controller.Link(new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.NotNull(captured);
@@ -354,9 +384,11 @@ public class EntraAuthControllerTests
         var localUser = new AppUser { Id = UserId, Email = "victim@test.com" };
         var umMock = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("victim@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "wrong-password")).ReturnsAsync(false);
+        var simMock = CreateSignInManagerMock(umMock);
+        simMock.Setup(s => s.CheckPasswordSignInAsync(localUser, "wrong-password", true))
+               .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Failed);
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "attacker@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "attacker@test.com"), simMock);
         var result = await controller.Link(
             new EntraLinkRequest("victim@test.com", "wrong-password"), default);
 
@@ -371,10 +403,10 @@ public class EntraAuthControllerTests
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
+        var simMock = PasswordAccepted(umMock, localUser, "correct-password");
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync(localUser);
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"), simMock);
         var result = await controller.Link(
             new EntraLinkRequest("local@test.com", "correct-password"), default);
 
@@ -391,10 +423,10 @@ public class EntraAuthControllerTests
 
         var umMock = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
+        var simMock = PasswordAccepted(umMock, localUser, "correct-password");
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync(otherUser);
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"), simMock);
         var result = await controller.Link(
             new EntraLinkRequest("local@test.com", "correct-password"), default);
 
@@ -407,15 +439,171 @@ public class EntraAuthControllerTests
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
         umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
-        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
+        var simMock = PasswordAccepted(umMock, localUser, "correct-password");
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Store error" }));
 
-        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"), simMock);
         var result = await controller.Link(
             new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    // ── Linking must not walk around a second factor ──────────────────────────
+
+    /// <summary>
+    /// A Microsoft identity is NOT attachable to a two-factor account on a password alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>The worst of the three holes this endpoint had, because the damage is permanent. Once
+    /// linked, that Microsoft identity signs in on its own: the password is never asked for again,
+    /// and neither is the code. So a link granted without the second factor does not skip it once,
+    /// it removes it for good, for whoever holds the Microsoft account.</para>
+    ///
+    /// <para>And the password guarding it was cheap. This controller carried no rate-limit
+    /// attribute, so it sat under the global 600-a-minute ceiling rather than the 20 that sign-in
+    /// uses, and <c>CheckPasswordAsync</c> counted none of those failures toward a lockout.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Link_TwoFactorAccountWithNoCode_IsRefused()
+    {
+        var (umMock, simMock, localUser) = TwoFactorAccount();
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "correct-password"), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
+        Assert.True(body.RequiresTwoFactor);
+
+        umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Link_TwoFactorAccountWithWrongCode_IsRefused()
+    {
+        var (umMock, simMock, localUser) = TwoFactorAccount();
+        umMock.Setup(m => m.VerifyTwoFactorTokenAsync(localUser, It.IsAny<string>(), "000000")).ReturnsAsync(false);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "correct-password", TwoFactorCode: "000000"), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Link_TwoFactorAccountWithValidCode_Links()
+    {
+        var (umMock, simMock, localUser) = TwoFactorAccount();
+        umMock.Setup(m => m.VerifyTwoFactorTokenAsync(localUser, It.IsAny<string>(), "123456")).ReturnsAsync(true);
+        umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>())).ReturnsAsync(IdentityResult.Success);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "correct-password", TwoFactorCode: "123 456"), default);
+
+        Assert.IsType<OkObjectResult>(result);
+        umMock.Verify(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()), Times.Once);
+    }
+
+    /// <summary>A recovery code is redeemed, not merely checked. One that survived would not be one.</summary>
+    [Fact]
+    public async Task Link_RecoveryCodeIsRedeemed()
+    {
+        var (umMock, simMock, localUser) = TwoFactorAccount();
+        umMock.Setup(m => m.RedeemTwoFactorRecoveryCodeAsync(localUser, "abcd1234"))
+              .ReturnsAsync(IdentityResult.Success);
+        umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>())).ReturnsAsync(IdentityResult.Success);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "correct-password", TwoFactorRecoveryCode: "abcd-1234"), default);
+
+        Assert.IsType<OkObjectResult>(result);
+        umMock.Verify(m => m.RedeemTwoFactorRecoveryCodeAsync(localUser, "abcd1234"), Times.Once);
+        umMock.Verify(m => m.VerifyTwoFactorTokenAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>Guesses must cost something. A bare password check counted none of them.</summary>
+    [Fact]
+    public async Task Link_LockedOutAccount_IsRefusedAndSaysWhy()
+    {
+        var localUser = new AppUser { Id = UserId, Email = "ben@test.com" };
+        var umMock = CreateUserManagerMock();
+        umMock.Setup(m => m.FindByEmailAsync("ben@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
+        var simMock = CreateSignInManagerMock(umMock);
+        simMock.Setup(s => s.CheckPasswordSignInAsync(localUser, It.IsAny<string>(), true))
+               .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.LockedOut);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "guess"), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
+        Assert.Contains("locked", body.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(body.RequiresTwoFactor);
+
+        // lockoutOnFailure: true is the whole point. The old bare check never counted a failure.
+        simMock.Verify(s => s.CheckPasswordSignInAsync(localUser, "guess", true), Times.Once);
+    }
+
+    /// <summary>
+    /// An unconfirmed account cannot sign in, so it must not be linkable either.
+    /// </summary>
+    /// <remarks>
+    /// Linking would hand somebody a way in that the confirmation requirement exists to withhold —
+    /// and afterwards the Microsoft identity signs in without ever meeting that requirement.
+    /// </remarks>
+    [Fact]
+    public async Task Link_UnconfirmedAccount_IsRefused()
+    {
+        var localUser = new AppUser { Id = UserId, Email = "ben@test.com" };
+        var umMock = CreateUserManagerMock();
+        umMock.Setup(m => m.FindByEmailAsync("ben@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
+        var simMock = CreateSignInManagerMock(umMock);
+        simMock.Setup(s => s.CheckPasswordSignInAsync(localUser, It.IsAny<string>(), true))
+               .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.NotAllowed);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
+            .Link(new EntraLinkRequest("ben@test.com", "correct-password"), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    /// <summary>An unknown address answers exactly as a wrong password does, in the same shape.</summary>
+    [Fact]
+    public async Task Link_UnknownAddress_AnswersLikeAWrongPassword()
+    {
+        var umMock = CreateUserManagerMock();
+        umMock.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser?)null);
+        umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
+
+        var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"))
+            .Link(new EntraLinkRequest("nobody@nowhere.test", "whatever"), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
+        Assert.Equal("Invalid email or password.", body.Message);
+        Assert.False(body.RequiresTwoFactor);
+    }
+
+    private static (Mock<UserManager<AppUser>> Um, Mock<SignInManager<AppUser>> Sim, AppUser User) TwoFactorAccount()
+    {
+        var localUser = new AppUser { Id = UserId, Email = "ben@test.com" };
+        var umMock = CreateUserManagerMock();
+        umMock.Setup(m => m.FindByEmailAsync("ben@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
+        umMock.Setup(m => m.GetTwoFactorEnabledAsync(localUser)).ReturnsAsync(true);
+
+        var simMock = CreateSignInManagerMock(umMock);
+        simMock.Setup(s => s.CheckPasswordSignInAsync(localUser, "correct-password", true))
+               .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        return (umMock, simMock, localUser);
     }
 }

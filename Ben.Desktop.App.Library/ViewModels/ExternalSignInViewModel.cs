@@ -91,6 +91,29 @@ public sealed class ExternalSignInViewModel : INotifyPropertyChanged
         set { _displayName = value; Raise(); Raise(nameof(CanSubmit)); }
     }
 
+    /// <summary>
+    /// Shown only once the server says the account has a second factor.
+    /// </summary>
+    /// <remarks>
+    /// Asking up front leaves most people wondering what to type, and sending an empty code spends
+    /// a failed attempt against an account that may not have one.
+    /// </remarks>
+    public bool LinkNeedsTwoFactor { get; private set; }
+
+    private bool _useRecoveryCode;
+    public bool UseRecoveryCode
+    {
+        get => _useRecoveryCode;
+        set { _useRecoveryCode = value; Raise(); }
+    }
+
+    private string _twoFactorCode = string.Empty;
+    public string TwoFactorCode
+    {
+        get => _twoFactorCode;
+        set { _twoFactorCode = value; Raise(); }
+    }
+
     private string _handle = string.Empty;
     public string Handle
     {
@@ -259,9 +282,22 @@ public sealed class ExternalSignInViewModel : INotifyPropertyChanged
                 // Apple's link answers with a full session, because an Apple identity token is not
                 // a credential the API accepts on ordinary requests — there is nothing to fall
                 // back on the way the Microsoft path has.
-                var apple = await _apple.LinkAsync(_appleIdentityToken, email, password);
+                var apple = await _apple.LinkAsync(
+                    _appleIdentityToken, email, password,
+                    twoFactorCode: LinkNeedsTwoFactor && !UseRecoveryCode ? TwoFactorCode.Trim() : null,
+                    recoveryCode: LinkNeedsTwoFactor && UseRecoveryCode ? TwoFactorCode.Trim() : null);
+
                 if (!apple.Succeeded)
                 {
+                    // The password was right; a code is simply needed. Reporting that as a failure
+                    // would leave somebody hunting for a mistake they did not make.
+                    if (apple.RequiresTwoFactor)
+                    {
+                        LinkNeedsTwoFactor = true;
+                        TwoFactorCode = string.Empty;
+                        Raise(nameof(LinkNeedsTwoFactor));
+                    }
+
                     Message = apple.Reason;
                     return;
                 }
@@ -270,9 +306,22 @@ public sealed class ExternalSignInViewModel : INotifyPropertyChanged
                 return;
             }
 
-            var result = await _entraAccounts.LinkAsync(email, password);
+            var result = await _entraAccounts.LinkAsync(
+                email, password,
+                twoFactorCode: LinkNeedsTwoFactor && !UseRecoveryCode ? TwoFactorCode.Trim() : null,
+                recoveryCode: LinkNeedsTwoFactor && UseRecoveryCode ? TwoFactorCode.Trim() : null);
+
             if (!result.Succeeded)
             {
+                // Linking attaches the Microsoft identity permanently, and it signs in on its own
+                // afterwards — so a link without the second factor would remove it for good.
+                if (result.RequiresTwoFactor)
+                {
+                    LinkNeedsTwoFactor = true;
+                    TwoFactorCode = string.Empty;
+                    Raise(nameof(LinkNeedsTwoFactor));
+                }
+
                 Message = result.Reason;
                 return;
             }
@@ -333,12 +382,16 @@ public sealed class ExternalSignInViewModel : INotifyPropertyChanged
         DisplayName = string.Empty;
         Handle = string.Empty;
         ShouldLinkInstead = false;
+        LinkNeedsTwoFactor = false;
+        UseRecoveryCode = false;
+        TwoFactorCode = string.Empty;
         Message = null;
 
         Raise(nameof(NeedsProfile));
         Raise(nameof(NeedsHandle));
         Raise(nameof(ShouldLinkInstead));
         Raise(nameof(CanLinkExistingAccount));
+        Raise(nameof(LinkNeedsTwoFactor));
     }
 
     private void Raise([CallerMemberName] string? name = null)

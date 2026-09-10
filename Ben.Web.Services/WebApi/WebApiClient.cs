@@ -641,13 +641,41 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
     }
 
-    public async Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
+    public async Task<EntraLinkOutcome> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
     {
         using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/link", entraAccessToken);
         req.Content = JsonContent.Create(request);
-        using var response = await _httpClient.SendAsync(req, token);
-        return response.IsSuccessStatusCode;
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(req, token);
+        }
+        catch (HttpRequestException)
+        {
+            return new EntraLinkOutcome(false, Message: "Couldn't reach the server. Nothing was linked.");
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode) return EntraLinkOutcome.Ok;
+
+            // The refusal carries a flag as well as a sentence, because "enter your code" and
+            // "your password is wrong" need different things from the page, and a sentence alone
+            // would leave it guessing which.
+            try
+            {
+                var refusal = await response.Content.ReadFromJsonAsync<EntraLinkRefusalBody>(cancellationToken: token);
+                return new EntraLinkOutcome(false, refusal?.RequiresTwoFactor ?? false, refusal?.Message);
+            }
+            catch
+            {
+                return new EntraLinkOutcome(false);
+            }
+        }
     }
+
+    private sealed record EntraLinkRefusalBody(string? Message, bool RequiresTwoFactor);
 
     /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead
     /// of reading <see cref="_tokenStore"/> — used only for the two Entra actions above, where the

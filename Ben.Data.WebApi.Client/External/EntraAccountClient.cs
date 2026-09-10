@@ -22,11 +22,16 @@ public sealed class EntraAccountClient
     /// The address already has an account here, so creating a second one is not the answer — they
     /// need to prove they own the existing one instead.
     /// </param>
-    public readonly record struct Result(bool Succeeded, string? Reason, bool ShouldLinkInstead = false)
+    /// <param name="RequiresTwoFactor">
+    /// The password was right and the account has a second factor. NOT a failure to report as one.
+    /// </param>
+    public readonly record struct Result(
+        bool Succeeded, string? Reason, bool ShouldLinkInstead = false, bool RequiresTwoFactor = false)
     {
         public static Result Ok() => new(true, null);
         public static Result Failed(string reason) => new(false, reason);
         public static Result LinkInstead(string reason) => new(false, reason, ShouldLinkInstead: true);
+        public static Result NeedsCode(string reason) => new(false, reason, RequiresTwoFactor: true);
     }
 
     /// <summary>Creates a new local account for the Microsoft identity the caller's token carries.</summary>
@@ -60,16 +65,31 @@ public sealed class EntraAccountClient
     /// token is not enough on its own, and the server is explicit about why: it would let anybody
     /// with any Microsoft account attach themselves to any address they could name.
     /// </remarks>
-    public async Task<Result> LinkAsync(string email, string password, CancellationToken token = default)
+    public async Task<Result> LinkAsync(
+        string email,
+        string password,
+        string? twoFactorCode = null,
+        string? recoveryCode = null,
+        CancellationToken token = default)
     {
         try
         {
             using var response = await _http.PostAsJsonAsync(
-                "api/auth/entra/link", new EntraLinkRequest(email, password), token);
+                "api/auth/entra/link",
+                new EntraLinkRequest(email, password, twoFactorCode, recoveryCode),
+                token);
 
             if (response.IsSuccessStatusCode) return Result.Ok();
 
-            var message = await ReadMessageAsync(response, token);
+            var refusal = await ReadRefusalAsync(response, token);
+            var message = refusal?.Message;
+
+            // Linking attaches a Microsoft identity permanently, and afterwards that identity signs
+            // in on its own — so a link granted without the second factor does not skip it once, it
+            // removes it for good.
+            if (refusal?.RequiresTwoFactor == true)
+                return Result.NeedsCode(message
+                    ?? "That account uses two-step verification. Enter the code from your authenticator app.");
 
             return response.StatusCode switch
             {
@@ -107,17 +127,35 @@ public sealed class EntraAccountClient
         }
     }
 
+    /// <summary>Reads a refusal, which carries a flag as well as a sentence.</summary>
+    private static async Task<ServerMessage?> ReadRefusalAsync(HttpResponseMessage response, CancellationToken token)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<ServerMessage>(cancellationToken: token);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string Unreadable(HttpResponseMessage response) =>
         $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).";
 
     private sealed record ServerMessage(
         [property: JsonPropertyName("message")] string? Message,
-        [property: JsonPropertyName("errors")] string[]? Errors);
+        [property: JsonPropertyName("errors")] string[]? Errors,
+        [property: JsonPropertyName("requiresTwoFactor")] bool RequiresTwoFactor = false);
 
     private sealed record EntraRegisterRequest(
         [property: JsonPropertyName("displayName")] string DisplayName);
 
     private sealed record EntraLinkRequest(
         [property: JsonPropertyName("email")] string Email,
-        [property: JsonPropertyName("password")] string Password);
+        [property: JsonPropertyName("password")] string Password,
+        [property: JsonPropertyName("twoFactorCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? TwoFactorCode = null,
+        [property: JsonPropertyName("twoFactorRecoveryCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? TwoFactorRecoveryCode = null);
 }

@@ -21,16 +21,24 @@ namespace Ben.Data.WebApi.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/auth/entra")]
+// Link takes a PASSWORD, so this belongs on the same limit /login carries. Without it these fell
+// under the global 600-a-minute ceiling instead of 20 — thirty times the guesses, at the one door
+// that also was not counting them toward a lockout.
+[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AuthPolicy)]
 public sealed class EntraAuthController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
+    private readonly SignInManager<AppUser> _signInManager;
     private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
 
     public EntraAuthController(
-        UserManager<AppUser> userManager, Ben.Data.WebApi.Services.UserHandleService handles)
+        UserManager<AppUser> userManager,
+        SignInManager<AppUser> signInManager,
+        Ben.Data.WebApi.Services.UserHandleService handles)
     {
-        _userManager = userManager;
-        _handles     = handles;
+        _userManager   = userManager;
+        _signInManager = signInManager;
+        _handles       = handles;
     }
 
     /// <summary>
@@ -112,8 +120,46 @@ public sealed class EntraAuthController : BenControllerBase
             return BadRequest("Email and password are required.");
 
         var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null || !await _userManager.CheckPasswordAsync(user, request.Password))
-            return Unauthorized(new { Message = "Invalid email or password." });
+
+        // One answer for "no such account" and "wrong password", in the same shape, so this cannot
+        // be used to ask whether an address has an account here.
+        if (user is null)
+            return Unauthorized(new EntraLinkRefusal("Invalid email or password."));
+
+        // CheckPasswordSignInAsync rather than CheckPasswordAsync. The bare check verifies the
+        // password and NOTHING else: it does not count a failure toward a lockout, and it does not
+        // ask whether the account may sign in at all. This endpoint takes a password from a caller
+        // holding nothing but a Microsoft account, which anyone can create in a minute, so a door
+        // where guesses are both unthrottled and uncounted is the weakest one in the building.
+        var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+
+        if (passwordCheck.IsLockedOut)
+            return Unauthorized(new EntraLinkRefusal(
+                "That account is locked after too many attempts. Waiting is the only thing that helps."));
+
+        // An unconfirmed account cannot sign in, so it must not be linkable either — linking would
+        // hand somebody a way in that the confirmation requirement exists to withhold.
+        if (passwordCheck.IsNotAllowed)
+            return Unauthorized(new EntraLinkRefusal(
+                "That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another."));
+
+        if (!passwordCheck.Succeeded)
+            return Unauthorized(new EntraLinkRefusal("Invalid email or password."));
+
+        // THE SECOND FACTOR, and this is the case that matters most here. Linking attaches a
+        // Microsoft identity permanently, and afterwards that identity signs in on its own — the
+        // password is never asked for again, and neither is the code. So a link granted on a
+        // password alone does not merely skip two-factor once; it removes it for good, for whoever
+        // holds the Microsoft account. CheckPasswordSignInAsync never reports this: that is
+        // PasswordSignInAsync's job, and this endpoint must not create a cookie sign-in.
+        if (await _userManager.GetTwoFactorEnabledAsync(user))
+        {
+            var verified = await VerifySecondFactorAsync(user, request.TwoFactorCode, request.TwoFactorRecoveryCode);
+            if (!verified)
+                return Unauthorized(new EntraLinkRefusal(
+                    "That account uses two-step verification. Enter the code from your authenticator app.",
+                    RequiresTwoFactor: true));
+        }
 
         // Check if this OID is already linked
         var oidString = entraOid.Value.ToString();
@@ -132,6 +178,32 @@ public sealed class EntraAuthController : BenControllerBase
         return result.Succeeded
             ? Ok(new { Message = "Microsoft account linked successfully." })
             : BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
+    }
+
+    /// <summary>
+    /// Checks a second factor without a sign-in context, which is what an unauthenticated-by-us
+    /// endpoint has to do.
+    /// </summary>
+    /// <remarks>
+    /// A recovery code is redeemed, not merely checked — one that survived being used would not be
+    /// a recovery code. The two are kept apart rather than guessed at by shape, because guessing
+    /// wrong spends a recovery code on a mistyped app code.
+    /// </remarks>
+    private async Task<bool> VerifySecondFactorAsync(AppUser user, string? code, string? recoveryCode)
+    {
+        // Spaces and hyphens are how these are printed and read aloud, and the rest of the site
+        // strips them.
+        static string Clean(string value) =>
+            value.Replace(" ", string.Empty).Replace("-", string.Empty).Trim();
+
+        if (!string.IsNullOrWhiteSpace(recoveryCode))
+            return await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, Clean(recoveryCode)) is { Succeeded: true };
+
+        if (string.IsNullOrWhiteSpace(code))
+            return false;
+
+        return await _userManager.VerifyTwoFactorTokenAsync(
+            user, TokenOptions.DefaultAuthenticatorProvider, Clean(code));
     }
 
     /// <summary>
@@ -161,4 +233,15 @@ public record EntraRegisterResult(Guid UserId, string Email);
 /// <summary>Identifies the target local account to link; ownership is proven by <see cref="Password"/>,
 /// checked server-side. The Entra identity being linked comes from the caller's validated token,
 /// not from this body.</summary>
-public record EntraLinkRequest(string Email, string Password);
+public record EntraLinkRequest(
+    string Email,
+    string Password,
+    string? TwoFactorCode = null,
+    string? TwoFactorRecoveryCode = null);
+
+/// <summary>Why a link was refused.</summary>
+/// <param name="RequiresTwoFactor">
+/// The password was right and a code is needed. NOT a failure to report as one, and the reason this
+/// carries a flag rather than only a sentence: a client has to know to show a code box.
+/// </param>
+public record EntraLinkRefusal(string Message, bool RequiresTwoFactor = false);
