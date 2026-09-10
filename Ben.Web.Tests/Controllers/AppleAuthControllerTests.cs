@@ -58,6 +58,8 @@ public class AppleAuthControllerTests
         mock.Setup(m => m.UpdateAsync(It.IsAny<AppUser>())).ReturnsAsync(IdentityResult.Success);
         // Most accounts have no second factor; the ones that do say so explicitly per test.
         mock.Setup(m => m.GetTwoFactorEnabledAsync(It.IsAny<AppUser>())).ReturnsAsync(false);
+        // And most are not locked out. The tests about an administrator's refusal say otherwise.
+        mock.Setup(m => m.IsLockedOutAsync(It.IsAny<AppUser>())).ReturnsAsync(false);
         return mock;
     }
 
@@ -69,6 +71,8 @@ public class AppleAuthControllerTests
             um.Object, context.Object, claims.Object, null!, null!, null!, null!);
         mock.Setup(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
+        // An ordinary account may sign in. A closed one may not, and those tests say so.
+        mock.Setup(s => s.CanSignInAsync(It.IsAny<AppUser>())).ReturnsAsync(true);
         return mock;
     }
 
@@ -829,5 +833,103 @@ public class AppleAuthControllerTests
 
         Assert.Equal(Ben.Data.Common.Enums.EmailAddressKind.Ordinary, mine.EmailKind);
         Assert.Equal("ben@ishaunted.com", mine.Email);
+    }
+
+    // ── A SuperAdmin's refusal has to hold on this door too ───────────────────
+
+    /// <summary>
+    /// A locked-out account cannot sign in with Apple.
+    /// </summary>
+    /// <remarks>
+    /// Lockout is the only lever an administrator has over an account short of closing it, and it
+    /// is set through the admin profile endpoint. If Apple ignores it, the lever does nothing to
+    /// anybody who has ever linked an Apple ID — which is the entire point of locking them.
+    /// </remarks>
+    [Fact]
+    public async Task AKnownIdentityOnALockedAccountIsRefused()
+    {
+        var locked = new AppUser { Id = Guid.NewGuid(), Email = "locked@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(locked);
+        um.Setup(m => m.IsLockedOutAsync(locked)).ReturnsAsync(true);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CanSignInAsync(locked)).ReturnsAsync(true);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .SignIn(Request(), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A CLOSED account cannot sign in with Apple either.
+    /// </summary>
+    /// <remarks>
+    /// RecordingSignInManager refuses a closed account through CanSignInAsync, and its own comment
+    /// says Identity calls that before every sign-in "including external providers". It does not:
+    /// SignInAsync mints a session unconditionally, and this endpoint called it directly. So the
+    /// closure held for passwords and not for Apple.
+    /// </remarks>
+    [Fact]
+    public async Task AKnownIdentityOnAClosedAccountIsRefused()
+    {
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(closed);
+        um.Setup(m => m.IsLockedOutAsync(closed)).ReturnsAsync(false);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CanSignInAsync(closed)).ReturnsAsync(false);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .SignIn(Request(), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The refusal says nothing about why.
+    /// </summary>
+    /// <remarks>
+    /// Naming a closed or locked account tells a stranger the address existed here, which is the
+    /// same reason every other refusal on this site is deliberately vague.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusedAccountIsNotNamedAsClosedOrLocked()
+    {
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(closed);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CanSignInAsync(closed)).ReturnsAsync(false);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .SignIn(Request(), default);
+
+        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
+        var text = refusal.Value!.ToString()!;
+        Assert.DoesNotContain("closed", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("locked", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Linking is a sign-in too, so a refused account cannot be linked into either.</summary>
+    [Fact]
+    public async Task LinkingIntoARefusedAccountIsAlsoRefused()
+    {
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("closed@test.com")).ReturnsAsync(closed);
+        var sim = SignInManagerMock(um);
+        // A closed account fails the password check as NotAllowed, which this already refuses -
+        // but assert it explicitly, because the closure must hold on every door.
+        sim.Setup(s => s.CheckPasswordSignInAsync(closed, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.NotAllowed);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "closed@test.com", "right"), default);
+
+        AssertRefusal(result, "NotAllowed");
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
 }

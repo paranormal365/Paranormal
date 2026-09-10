@@ -74,6 +74,21 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
             return principal;
         }
 
+        // MAY THIS ACCOUNT BE USED AT ALL. This is the choke point for every Entra request, and
+        // nothing downstream asks — a Microsoft token IS the credential, so there is no sign-in
+        // step to run the usual checks. Without this, closing an account or locking it stopped
+        // passwords and did nothing whatever to anybody holding a linked Microsoft identity.
+        //
+        // Refusing here means the principal keeps its Microsoft identity but gains no local one,
+        // so it resolves exactly as an unlinked Entra caller does. That is the honest outcome: the
+        // person really is signed in to Microsoft, and really has no account here they may use.
+        if (user.DateClosed is not null || await _userManager.IsLockedOutAsync(user))
+        {
+            _logger.LogWarning(
+                "EntraClaimsTransformation: refused {UserId} — the account may not sign in.", user.Id);
+            return principal;
+        }
+
         var identity = new ClaimsIdentity("EntraEnrichment");
         identity.AddClaim(new Claim(AppUserIdClaimType, user.Id.ToString()));
 

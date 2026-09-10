@@ -360,6 +360,24 @@ public sealed class AppleAuthController : BenControllerBase
     /// </summary>
     private async Task<IActionResult> IssueTokenAsync(AppUser user)
     {
+        // MAY THIS ACCOUNT SIGN IN AT ALL. Asked here because SignInAsync does not ask: it mints a
+        // session unconditionally, and only PasswordSignInAsync runs the checks around it. So every
+        // administrative refusal held for passwords and quietly did not hold for Apple.
+        //
+        // CanSignInAsync covers a CLOSED account (RecordingSignInManager's override) and the
+        // confirmed-account requirement. Lockout is separate — Identity checks it alongside, not
+        // inside — and lockout is the only lever an administrator has short of closing an account.
+        // Missing either one makes that lever do nothing to anybody who has linked an Apple ID.
+        if (await _userManager.IsLockedOutAsync(user) || !await _signInManager.CanSignInAsync(user))
+        {
+            _log.LogWarning("Refused an Apple sign-in for {UserId}: the account may not sign in.", user.Id);
+
+            // Deliberately says nothing about why. Naming a closed or locked account tells a
+            // stranger the address existed here, which is what every other refusal on this site
+            // avoids.
+            return Unauthorized("That sign-in couldn't be completed.");
+        }
+
         _signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
         await _signInManager.SignInAsync(user, isPersistent: false);
 
