@@ -112,6 +112,18 @@ public sealed class AppleWebHandshakeTests
 
         Assert.True(callback.Succeeded);
         Assert.Equal("the.id.token", callback.IdentityToken);
+        Assert.Null(callback.Code);
+    }
+
+    /// <summary>Apple posts the authorization code beside the identity token; it rides along for revocation later (item 229).</summary>
+    [Fact]
+    public void The_authorization_code_rides_along_when_apple_posts_one()
+    {
+        var callback = AppleWebAuthorizeRequest.ReadCallback(
+            Form(("state", "abc"), ("id_token", "the.id.token"), ("code", "c.abc")), "abc");
+
+        Assert.True(callback.Succeeded);
+        Assert.Equal("c.abc", callback.Code);
     }
 
     /// <summary>

@@ -106,6 +106,31 @@ struct AppleSignInTests {
             with: request?.httpBody ?? Data()) as? [String: Any]
         #expect(sent?["identityToken"] as? String == "a.b.c")
         #expect(sent?["handle"] as? String == "h")
+        // No code was held, so none is sent — not an empty one.
+        #expect(sent?["authorizationCode"] == nil)
+    }
+
+    /// Apple's one-shot authorization code rides along when the sheet gave one, on both doors:
+    /// it is what lets the server revoke this person's Apple tokens when they delete their
+    /// account (item 229). Absent when nil, never empty.
+    @Test func theAuthorizationCodeRidesAlongOnBothDoors() async {
+        let transport = MockTransport(status: 401, body: Data("no".utf8))
+        let (client, _) = await self.client(transport)
+
+        _ = await client.signIn(identityToken: "a.b.c", authorizationCode: "c-1")
+        let signIn = try? JSONSerialization.jsonObject(
+            with: transport.requests.last?.httpBody ?? Data()) as? [String: Any]
+        #expect(signIn?["authorizationCode"] as? String == "c-1")
+
+        _ = await client.link(identityToken: "a.b.c", email: "a@b.test", password: "pw", authorizationCode: "c-2")
+        let link = try? JSONSerialization.jsonObject(
+            with: transport.requests.last?.httpBody ?? Data()) as? [String: Any]
+        #expect(link?["authorizationCode"] as? String == "c-2")
+
+        _ = await client.link(identityToken: "a.b.c", email: "a@b.test", password: "pw")
+        let bare = try? JSONSerialization.jsonObject(
+            with: transport.requests.last?.httpBody ?? Data()) as? [String: Any]
+        #expect(bare?["authorizationCode"] == nil)
     }
 
     /// The server may APPEND fields to this body, and a shipped app must keep working.

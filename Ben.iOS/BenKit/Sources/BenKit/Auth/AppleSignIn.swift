@@ -47,17 +47,23 @@ public struct AppleSignInClient: Sendable {
 
     /// Posts Apple's identity token. `displayName` and `handle` are only read when an account
     /// has to be created, and are ignored entirely for anyone who already has one.
+    /// `authorizationCode` is Apple's one-shot code from the same sheet: the server exchanges it
+    /// for the token that lets this person's Apple tokens be revoked when they delete their
+    /// account (item 229). Omitted when nil.
     public func signIn(
-        identityToken: String, displayName: String? = nil, handle: String? = nil
+        identityToken: String, displayName: String? = nil, handle: String? = nil,
+        authorizationCode: String? = nil
     ) async -> AppleSignInOutcome {
         struct Body: Encodable {
             let identityToken: String
             let displayName: String?
             let handle: String?
+            let authorizationCode: String?
         }
         guard let endpoint = try? Endpoint.json(
             .post, "api/auth/apple",
-            payload: Body(identityToken: identityToken, displayName: displayName, handle: handle),
+            payload: Body(identityToken: identityToken, displayName: displayName, handle: handle,
+                          authorizationCode: authorizationCode),
             requiresAuth: false)
         else { return .failed(reason: "That sign-in couldn't be sent.") }
 
@@ -126,7 +132,8 @@ extension AppleSignInClient {
         email: String,
         password: String,
         twoFactorCode: String? = nil,
-        recoveryCode: String? = nil
+        recoveryCode: String? = nil,
+        authorizationCode: String? = nil
     ) async -> AppleSignInOutcome {
         struct Body: Encodable {
             let identityToken: String
@@ -134,10 +141,11 @@ extension AppleSignInClient {
             let password: String
             let twoFactorCode: String?
             let twoFactorRecoveryCode: String?
+            let authorizationCode: String?
 
             // Declared, because writing encode(to:) by hand suppresses the synthesised ones.
             enum CodingKeys: String, CodingKey {
-                case identityToken, email, password, twoFactorCode, twoFactorRecoveryCode
+                case identityToken, email, password, twoFactorCode, twoFactorRecoveryCode, authorizationCode
             }
 
             // Nil fields are OMITTED, not sent empty. Identity reads an empty string as an attempt
@@ -150,6 +158,7 @@ extension AppleSignInClient {
                 try container.encode(password, forKey: .password)
                 try container.encodeIfPresent(twoFactorCode, forKey: .twoFactorCode)
                 try container.encodeIfPresent(twoFactorRecoveryCode, forKey: .twoFactorRecoveryCode)
+                try container.encodeIfPresent(authorizationCode, forKey: .authorizationCode)
             }
         }
 
@@ -160,7 +169,8 @@ extension AppleSignInClient {
                 email: email,
                 password: password,
                 twoFactorCode: twoFactorCode,
-                twoFactorRecoveryCode: recoveryCode),
+                twoFactorRecoveryCode: recoveryCode,
+                          authorizationCode: authorizationCode),
             requiresAuth: false)
         else { return .failed(reason: "That sign-in couldn't be sent.") }
 

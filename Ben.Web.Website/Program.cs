@@ -457,7 +457,7 @@ app.MapPost("/auth/apple-callback", async (
     if (!callback.Succeeded)
         return Results.Redirect("/login?appleError=1");
 
-    var code = handoff.Stash(callback.IdentityToken!, callback.DisplayName);
+    var code = handoff.Stash(callback.IdentityToken!, callback.DisplayName, callback.Code);
     return Results.Redirect($"/apple/complete?code={Uri.EscapeDataString(code)}");
 }).AllowAnonymous().DisableAntiforgery();
 
