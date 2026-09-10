@@ -97,6 +97,8 @@ entry goes back to private — the new address has not been proven, only the old
 
 Your profile's **Where you've been** tab keeps a map of the places you have actually been; the
 same map appears on **My Investigations**. Clicking a pin opens the case that visit belonged to.
+Visits at one spot share a pin with a count; spots that only overlap at a distance gather into a
+count as well, and zooming in separates them.
 
 It shows visits you **attended** — not ones you were invited to, and not ones you said yes to. A
 map of places you might have gone is not a record of where you have been, and only the second is
@@ -125,6 +127,11 @@ with a **Send the link again** button if it never arrived. Signing in with Micro
 meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
 included.
 
+**Signed in with Apple.** The same applies: no password until you add one. If you chose Hide My
+Email, the profile says "Signed in with Apple, using Hide My Email" where an address would be; if
+you shared no address, it warns you and offers to add one, because until then Apple is the only
+way in and no reset link can reach you.
+
 **Two-step sign-in.** Optional, off unless you turn it on, and worth turning on. Scan the code
 with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
 Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
@@ -136,7 +143,8 @@ In the iPhone and iPad app, **Profile → Delete account**.
 
 **What goes:** you. Your name, email address, password, phone number, addresses, photos and any
 sign-in methods you connected — Microsoft, Apple — are destroyed, and the account can never sign
-in again by any route. There is no undo, no grace period and no reactivation, and your email
+in again by any route. If you signed in with Apple, we also tell Apple, so IsHaunted disappears
+from the list of apps using your Apple ID. There is no undo, no grace period and no reactivation, and your email
 address is freed for somebody to register with again.
 
 **What stays:** anything you wrote for a group. A case note, a report, a timeline entry or a

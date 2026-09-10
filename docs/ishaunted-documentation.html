@@ -186,6 +186,17 @@ replaced by whatever name they chose.</p>
 </tr>
 </tbody>
 </table>
+<h2>The map of published cases</h2>
+<p>Below the search on the home page, every case a group has published is on a map, with the same
+cases listed beneath it. Pins that sit close together at the zoom you are looking at gather into a
+single pin showing how many are there; zoom in and they separate. Click a pin to see the case, or
+the cases, at that spot. Pan or zoom and the list beneath follows the part of the map you are
+looking at.</p>
+<p><img alt="The map of published cases" src="../Ben.Web.Website/wwwroot/help/media/getting-started/public-map.png" />
+<em>Three cases near Nashville, gathered into one pin at this zoom.</em></p>
+<p>If your browser is allowed to say where you are, the map starts there; if not, it starts on the
+whole country and works just the same. A pin marks the area a case is in, not a front door — the
+site deliberately places it a little way off.</p>
 <h2>Voting on a published case</h2>
 <p>Anyone with an account can vote on a published case, and on individual pieces of evidence within
 it. There are three answers: <strong>confirms</strong>, <strong>inconclusive</strong>, and <strong>disputes</strong>. You get one vote,
@@ -310,6 +321,19 @@ real one would be a way to discover who has an account here. Check your spam fol
 carrying a link is exactly what filters are suspicious of.</p>
 <p>There is a minute's wait between requests, so pressing it repeatedly will not send more mail.</p>
 <p>If the link itself has expired, use the same button for a fresh one.</p>
+<h2>Signing in with Apple or Microsoft</h2>
+<p>The sign-in page also offers <strong>Sign in with Apple</strong> and <strong>Sign in with Microsoft</strong>. Either one
+signs you in with an account you already hold there, and no password of ours is involved.</p>
+<p>The first time, we need to know who you are here. You can <strong>make a new account</strong> — a display
+name and a permanent @name are all it asks — or, if you already have an account here under some
+other address, <strong>link it instead</strong>: give that account's email and password (and its code, if it
+has two-step sign-in). Linking is always offered, because the address Apple or Microsoft gives us
+is often not the one you signed up with, and we would rather join your accounts than make you a
+second one that has none of your history.</p>
+<p>Apple lets you <strong>hide your email</strong>. If you do, we receive a forwarding address that reaches you
+only while Apple allows it, and your profile says so rather than showing an address you would not
+recognise. If you give us no address at all, your profile warns you: Apple is then the only way
+into your account, and there is no reset link to fall back on until you add one.</p>
 <h2>Your first minute</h2>
 <p>Right after your first sign-in, a short welcome walks you through the basics: what people
 should call you, what brought you here (it drops you at the right door — requesting an
@@ -1379,7 +1403,12 @@ you can refer to an entry by position and have it still be there tomorrow.</p>
 lists: what is coming up, and what has already happened. Case-bound visits and ones with no client
 case sit together, because they are the same kind of work.</p>
 <p>Visits at the same spot share a single marker with a count on it — the same place accumulating
-visits over the years is the normal case, not an oddity.</p>
+visits over the years is the normal case, not an oddity. Spots that only overlap at the zoom you
+are looking at gather into a count as well; zoom in and they separate. A landmark anyone can
+visit is drawn in blue and says so when you select it; a visit that has already happened is
+dimmed.</p>
+<p><img alt="The group's investigations map" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/investigations-map.png" />
+<em>Two visits to the Bell Witch Cave, on one pin.</em></p>
 <p><strong>If something is missing from the map</strong>, look just beneath it. An investigation whose location
 could not be found on the map is listed there with the reason, rather than quietly leaving the map
 one pin short. Usually the address has a typo, and correcting it puts the pin back.</p>
@@ -1806,7 +1835,9 @@ retires the old one. If you later change the address text, the confirmation is c
 entry goes back to private — the new address has not been proven, only the old one had.</p>
 <h2>Your investigation map</h2>
 <p>Your profile's <strong>Where you've been</strong> tab keeps a map of the places you have actually been; the
-same map appears on <strong>My Investigations</strong>. Clicking a pin opens the case that visit belonged to.</p>
+same map appears on <strong>My Investigations</strong>. Clicking a pin opens the case that visit belonged to.
+Visits at one spot share a pin with a count; spots that only overlap at a distance gather into a
+count as well, and zooming in separates them.</p>
 <p>It shows visits you <strong>attended</strong> — not ones you were invited to, and not ones you said yes to. A
 map of places you might have gone is not a record of where you have been, and only the second is
 worth keeping.</p>
@@ -1827,6 +1858,10 @@ confirmation link when the account is made and the profile shows a notice until 
 with a <strong>Send the link again</strong> button if it never arrived. Signing in with Microsoft keeps working
 meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
 included.</p>
+<p><strong>Signed in with Apple.</strong> The same applies: no password until you add one. If you chose Hide My
+Email, the profile says "Signed in with Apple, using Hide My Email" where an address would be; if
+you shared no address, it warns you and offers to add one, because until then Apple is the only
+way in and no reset link can reach you.</p>
 <p><strong>Two-step sign-in.</strong> Optional, off unless you turn it on, and worth turning on. Scan the code
 with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
 Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
@@ -1835,7 +1870,8 @@ in when your phone is not to hand, and each one works once.</p>
 <p>In the iPhone and iPad app, <strong>Profile → Delete account</strong>.</p>
 <p><strong>What goes:</strong> you. Your name, email address, password, phone number, addresses, photos and any
 sign-in methods you connected — Microsoft, Apple — are destroyed, and the account can never sign
-in again by any route. There is no undo, no grace period and no reactivation, and your email
+in again by any route. If you signed in with Apple, we also tell Apple, so IsHaunted disappears
+from the list of apps using your Apple ID. There is no undo, no grace period and no reactivation, and your email
 address is freed for somebody to register with again.</p>
 <p><strong>What stays:</strong> anything you wrote for a group. A case note, a report, a timeline entry or a
 message on a group's board belongs to that group and often to a client who paid for the work, and
@@ -3999,7 +4035,9 @@ things happening.</p>
 <p><strong>Destroyed.</strong> Everything that is only ever theirs and that nobody else has a claim on: field
 sessions they recorded on their own rather than for an investigation, the files under those
 sessions, their memberships, sign-in history, messages received, follows, blocks, contact details
-and any external sign-in methods.</p>
+and any external sign-in methods. An Apple sign-in is also revoked with Apple, so IsHaunted
+disappears from the apps their Apple ID lists; if Apple cannot be reached at that moment the
+deletion still goes through and the revocation is retried later.</p>
 <p><strong>Kept, with their name removed.</strong> Anything they wrote for a group — case notes, timeline
 entries, group messages, evidence, and sessions recorded for an investigation. Those belong to the
 group and often to a paying client. One person leaving must not erase a group's record of its own

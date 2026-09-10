@@ -31,6 +31,21 @@ replaced by whatever name they chose.
 | A group member | Work cases, record findings, attend investigations. |
 | A group owner or administrator | Configure the group, manage members, accept or decline requests. |
 
+## The map of published cases
+
+Below the search on the home page, every case a group has published is on a map, with the same
+cases listed beneath it. Pins that sit close together at the zoom you are looking at gather into a
+single pin showing how many are there; zoom in and they separate. Click a pin to see the case, or
+the cases, at that spot. Pan or zoom and the list beneath follows the part of the map you are
+looking at.
+
+![The map of published cases](/help/media/getting-started/public-map.png)
+*Three cases near Nashville, gathered into one pin at this zoom.*
+
+If your browser is allowed to say where you are, the map starts there; if not, it starts on the
+whole country and works just the same. A pin marks the area a case is in, not a front door — the
+site deliberately places it a little way off.
+
 ## Voting on a published case
 
 Anyone with an account can vote on a published case, and on individual pieces of evidence within
@@ -163,6 +178,23 @@ carrying a link is exactly what filters are suspicious of.
 There is a minute's wait between requests, so pressing it repeatedly will not send more mail.
 
 If the link itself has expired, use the same button for a fresh one.
+
+## Signing in with Apple or Microsoft
+
+The sign-in page also offers **Sign in with Apple** and **Sign in with Microsoft**. Either one
+signs you in with an account you already hold there, and no password of ours is involved.
+
+The first time, we need to know who you are here. You can **make a new account** — a display
+name and a permanent @name are all it asks — or, if you already have an account here under some
+other address, **link it instead**: give that account's email and password (and its code, if it
+has two-step sign-in). Linking is always offered, because the address Apple or Microsoft gives us
+is often not the one you signed up with, and we would rather join your accounts than make you a
+second one that has none of your history.
+
+Apple lets you **hide your email**. If you do, we receive a forwarding address that reaches you
+only while Apple allows it, and your profile says so rather than showing an address you would not
+recognise. If you give us no address at all, your profile warns you: Apple is then the only way
+into your account, and there is no reset link to fall back on until you add one.
 
 ## Your first minute
 
