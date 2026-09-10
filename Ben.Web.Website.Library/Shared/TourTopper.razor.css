@@ -1,0 +1,15 @@
+/*
+    A card that is entirely a link needs its own hover, because the anchor carries no underline and
+    the card gives no other sign that it is clickable. Lifting it a pixel is enough, and it is the
+    same gesture the promoted-group card already uses.
+*/
+
+.tour-topper__card {
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.tour-topper__card:hover,
+.tour-topper__card:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+}

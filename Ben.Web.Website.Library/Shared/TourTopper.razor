@@ -1,0 +1,103 @@
+@namespace Ben.Web.Website.Library.Shared
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A strip of tours near the top of the home page (Ben, 2026-09-10), each card led by the tour's
+    own picture.
+
+    It renders NOTHING when there are no tours to show — not a heading, not an empty rail. A band
+    across the front page announcing that there is nothing here is worse than no band, and this is
+    the first thing a visitor sees.
+
+    Soonest first, and only tours with a date on the calendar: a walk somebody can actually turn up
+    to is the offer. A tour with no dates is still findable on its business's page and in search;
+    it just has nothing to advertise this week.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Events">
+@if (_tours.Count > 0)
+{
+    <div class="container-fluid px-3 mb-4" style="max-width:860px;margin:0 auto;">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h2 class="h5 mb-0">Tours you can walk</h2>
+            <a class="small text-decoration-none" href="/events">What's on</a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var tour in _tours)
+            {
+                <div class="col-6 col-lg-3">
+                    <a class="card h-100 text-decoration-none text-reset tour-topper__card"
+                       href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")">
+                        <div class="ratio ratio-4x3 bg-body-tertiary">
+                            @if (tour.CoverUploadFileId is { } cover)
+                            {
+                                <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
+                                     class="w-100 h-100 object-fit-cover" loading="lazy" />
+                            }
+                            else
+                            {
+                                @* No picture yet: a lantern rather than a broken frame. *@
+                                <span class="d-flex align-items-center justify-content-center fs-1">🏮</span>
+                            }
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="fw-semibold small text-truncate">@tour.Name</div>
+                            <div class="text-secondary" style="font-size:.78rem;">
+                                @if (!string.IsNullOrWhiteSpace(tour.City))
+                                {
+                                    <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                }
+                                @if (tour.Rating is { } rating)
+                                {
+                                    <text> · @rating.ToString("0.0") ★</text>
+                                }
+                            </div>
+                            @if (tour.NextDateStartUtc is { } next)
+                            {
+                                <div style="font-size:.8rem;">
+                                    @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")
+                                </div>
+                            }
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+}
+</FeatureGate>
+
+@code {
+    /// <summary>How many fit across without the strip becoming the page.</summary>
+    private const int MaxCards = 4;
+
+    private IReadOnlyList<PublicTourListItem> _tours = [];
+
+    // Loaded after the first render rather than during it: the front page is prerendered for
+    // people who are not signed in, and a strip that is absent for a moment is better than a
+    // page that waits on it.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        var found = await AdminClient.SearchToursAsync();
+        _tours =
+        [
+            .. found.Items
+                 .Where(t => t.NextDateStartUtc is not null)
+                 .OrderBy(t => t.NextDateStartUtc)
+                 .Take(MaxCards),
+        ];
+
+        StateHasChanged();
+    }
+}
