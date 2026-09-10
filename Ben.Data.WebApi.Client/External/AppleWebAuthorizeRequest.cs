@@ -68,7 +68,7 @@ public static class AppleWebAuthorizeRequest
     /// Assembled from Apple's <c>user</c> field, which arrives on a FIRST authorization only.
     /// </param>
     public readonly record struct Callback(
-        string? IdentityToken, string? DisplayName, string? Error, string? ErrorDescription)
+        string? IdentityToken, string? DisplayName, string? Error, string? ErrorDescription, string? Code = null)
     {
         public bool Succeeded => !string.IsNullOrWhiteSpace(IdentityToken);
 
@@ -102,7 +102,10 @@ public static class AppleWebAuthorizeRequest
         form.TryGetValue("id_token", out var idToken);
         form.TryGetValue("user", out var user);
 
-        return new Callback(idToken, ReadDisplayName(user), null, null);
+        // The authorization code rides along to the API, which exchanges it for the token that
+        // lets the person's Apple tokens be revoked when they delete their account (item 229).
+        form.TryGetValue("code", out var code);
+        return new Callback(idToken, ReadDisplayName(user), null, null, string.IsNullOrWhiteSpace(code) ? null : code);
     }
 
     /// <summary>

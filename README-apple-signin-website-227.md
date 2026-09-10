@@ -175,9 +175,9 @@ Ben created key "IsHaunted iOS Signin Key", Key ID `5VY456C8RR`, on 2026-09-10; 
 at `~/.ishaunted/AuthKey_5VY456C8RR.p8` (mode 600), outside the repository. Neither flow built
 here uses it: the iPhone app's identity token is verified against Apple's public keys, and the
 web flow asks for `id_token` in the form post precisely so that no client secret is needed. It
-will be needed for **token revocation** — App Review requires an app that offers Sign in with
-Apple to revoke the person's tokens when they delete their account (guideline 5.1.1(v)), and our
-account-deletion flow does not yet call Apple's revoke endpoint. That is its own backlog item.
+is used for **token revocation** — App Review requires an app that offers Sign in with Apple to
+revoke the person's tokens when they delete their account (guideline 5.1.1(v)). Built as item
+229 the same day: `README-apple-token-revocation-229.md`.
 
 ## Phase C, decided with Ben and built the same day
 

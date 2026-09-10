@@ -154,6 +154,7 @@
     // Held for the whole page: the create and link calls both need it, and there is no second
     // chance to ask Apple for another.
     private string? _identityToken;
+    private string? _authorizationCode;
     private string? _suggestedName;
 
     private string _displayName = string.Empty;
@@ -190,8 +191,9 @@
             return;
         }
 
-        _identityToken = pending.IdentityToken;
-        _suggestedName = pending.DisplayName;
+        _identityToken     = pending.IdentityToken;
+        _authorizationCode = pending.AuthorizationCode;
+        _suggestedName     = pending.DisplayName;
 
         // Apple gives a real name on the FIRST authorization only. Using it now is the only chance.
         if (!string.IsNullOrWhiteSpace(_suggestedName))
@@ -219,7 +221,7 @@
     {
         if (_identityToken is null) return;
 
-        var outcome = await AppleClient.SignInAsync(_identityToken, displayName, handle);
+        var outcome = await AppleClient.SignInAsync(_identityToken, displayName, handle, _authorizationCode);
 
         if (outcome.Succeeded)
         {
@@ -262,7 +264,8 @@
                 _linkEmail.Trim(),
                 _linkPassword,
                 twoFactorCode: _needsTwoFactor && !_useRecoveryCode ? _twoFactorCode.Trim() : null,
-                recoveryCode: _needsTwoFactor && _useRecoveryCode ? _twoFactorCode.Trim() : null);
+                recoveryCode: _needsTwoFactor && _useRecoveryCode ? _twoFactorCode.Trim() : null,
+                authorizationCode: _authorizationCode);
 
             if (outcome.Succeeded)
             {

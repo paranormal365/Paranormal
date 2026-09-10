@@ -51,6 +51,7 @@ public sealed class AppleAuthController : BenControllerBase
     private readonly ExternalSignInService _external;
     private readonly IAppleIdentityTokenValidator _validator;
     private readonly IConfiguration _config;
+    private readonly Services.Apple.AppleCredentialService _credentials;
     private readonly ILogger<AppleAuthController> _log;
 
     public AppleAuthController(
@@ -59,6 +60,7 @@ public sealed class AppleAuthController : BenControllerBase
         ExternalSignInService external,
         IAppleIdentityTokenValidator validator,
         IConfiguration config,
+        Services.Apple.AppleCredentialService credentials,
         ILogger<AppleAuthController> log)
     {
         _userManager   = userManager;
@@ -66,6 +68,7 @@ public sealed class AppleAuthController : BenControllerBase
         _external      = external;
         _validator     = validator;
         _config        = config;
+        _credentials   = credentials;
         _log           = log;
     }
 
@@ -111,7 +114,7 @@ public sealed class AppleAuthController : BenControllerBase
         switch (await _external.ResolveAsync(external, ct))
         {
             case ResolveResult.Found found:
-                return await IssueTokenAsync(found.User);
+                return await IssueTokenAsync(found.User, identity, request.AuthorizationCode, ct);
 
             case ResolveResult.Refused:
                 return RefusedAccount();
@@ -129,7 +132,7 @@ public sealed class AppleAuthController : BenControllerBase
         switch (await _external.RegisterAsync(external, request.DisplayName, request.Handle ?? string.Empty, ct))
         {
             case RegisterResult.Created created:
-                return await IssueTokenAsync(created.User);
+                return await IssueTokenAsync(created.User, identity, request.AuthorizationCode, ct);
 
             case RegisterResult.NeedsProfile needs:
                 return Conflict(NeedsProfile(identity, request.DisplayName, handleProblem: needs.HandleProblem));
@@ -204,7 +207,7 @@ public sealed class AppleAuthController : BenControllerBase
                 // Already on this account, or newly attached: either way, the person asked to sign
                 // in, and an Apple identity token is not a credential the API accepts on ordinary
                 // requests - so a session is issued here or they are left holding nothing.
-                return await IssueTokenAsync(linked.User);
+                return await IssueTokenAsync(linked.User, identity, request.AuthorizationCode, ct);
 
             case LinkResult.Refused refused:
                 // The same problem-detail shape /login answers with, carrying Identity's own word,
@@ -250,7 +253,8 @@ public sealed class AppleAuthController : BenControllerBase
     /// <summary>
     /// Writes the same bearer-token body <c>/login</c> writes, through Identity's own handler.
     /// </summary>
-    private async Task<IActionResult> IssueTokenAsync(AppUser user)
+    private async Task<IActionResult> IssueTokenAsync(
+        AppUser user, AppleIdentity identity, string? authorizationCode, CancellationToken ct)
     {
         // MAY THIS ACCOUNT SIGN IN AT ALL. Asked here because SignInAsync does not ask: it mints a
         // session unconditionally, and only PasswordSignInAsync runs the checks around it. So every
@@ -264,6 +268,12 @@ public sealed class AppleAuthController : BenControllerBase
             _log.LogWarning("Refused an Apple sign-in for {UserId}: the account may not sign in.", user.Id);
             return RefusedAccount();
         }
+
+        // The authorization code, if the client kept it, buys the refresh token that lets this
+        // person's Apple tokens be revoked when they delete the account (item 229). Best-effort,
+        // and before the session so a slow exchange is not a session that fails to arrive - the
+        // identity token above already proved who they are.
+        await _credentials.RememberAsync(user.Id, identity.Audience ?? "com.ishaunted.ios", authorizationCode, ct);
 
         _signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
         await _signInManager.SignInAsync(user, isPersistent: false);
@@ -287,7 +297,12 @@ public sealed class AppleAuthController : BenControllerBase
 /// <param name="DisplayName">Only used when creating an account. Apple supplies the real name
 /// once, on the first authorization, and never again — so the app has to pass it on.</param>
 /// <param name="Handle">Only used when creating an account. Permanent, so it is asked for.</param>
-public sealed record AppleSignInRequest(string IdentityToken, string? DisplayName, string? Handle);
+/// <param name="AuthorizationCode">
+/// Apple's one-shot authorization code from the same sign-in, if the client kept it. Exchanged
+/// for the refresh token that lets the person's Apple tokens be revoked when they delete their
+/// account (item 229). Optional: a client that sends none leaves nothing to revoke.
+/// </param>
+public sealed record AppleSignInRequest(string IdentityToken, string? DisplayName, string? Handle, string? AuthorizationCode = null);
 
 /// <summary>Claiming an account that already exists here for a verified Apple identity.</summary>
 /// <param name="IdentityToken">Apple's signed JWT, proving the Apple identity.</param>
@@ -307,7 +322,8 @@ public sealed record AppleLinkRequest(
     string Email,
     string Password,
     string? TwoFactorCode = null,
-    string? TwoFactorRecoveryCode = null);
+    string? TwoFactorRecoveryCode = null,
+    string? AuthorizationCode = null);
 
 /// <summary>Told to an app that must collect a name and handle before an account can exist.</summary>
 /// <param name="ShouldLinkInstead">
@@ -329,7 +345,8 @@ public sealed record AppleNeedsProfileResponse(
     string? EmailProblem = null);
 
 /// <summary>The bits of a validated Apple identity token this site acts on.</summary>
-public sealed record AppleIdentity(string Subject, string? Email, bool EmailVerified, bool IsPrivateEmail);
+/// <param name="Audience">The client id the token was minted for, when the validator read one.</param>
+public sealed record AppleIdentity(string Subject, string? Email, bool EmailVerified, bool IsPrivateEmail, string? Audience = null);
 
 public interface IAppleIdentityTokenValidator
 {
@@ -404,7 +421,11 @@ public sealed class AppleIdentityTokenValidator : IAppleIdentityTokenValidator
         static bool Flag(ClaimsPrincipal p, string name) =>
             string.Equals(p.FindFirst(name)?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
-        return new AppleIdentity(subject, email, Flag(result, "email_verified"), Flag(result, "is_private_email"));
+        // Which client Apple minted this for: the bundle id or the Services ID. The authorization
+        // code that came with it can only be exchanged by that client's secret (item 229).
+        var audience = result.FindFirst("aud")?.Value;
+
+        return new AppleIdentity(subject, email, Flag(result, "email_verified"), Flag(result, "is_private_email"), audience);
     }
 }
 

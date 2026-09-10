@@ -74,7 +74,7 @@ public sealed class AppUserPurgeBehaviourTests
     private static (AppUserPurge Purge, Mock<Ben.Data.Common.Interfaces.IFileStorageService> Storage) Build(Harness h)
     {
         var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
-        return (new AppUserPurge(h.Sqlite.Factory, storage.Object, NullLogger<AppUserPurge>.Instance), storage);
+        return (new AppUserPurge(h.Sqlite.Factory, storage.Object, Support.AppleTestSupport.Credentials(h.Sqlite.Factory), NullLogger<AppUserPurge>.Instance), storage);
     }
 
     /// <summary>Everything that is only ever this person's, so the "destroyed" half has substance.</summary>

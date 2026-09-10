@@ -2,6 +2,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Apple;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -87,7 +88,8 @@ public class AppleAuthControllerTests
         Mock<UserManager<AppUser>> um,
         IAppleIdentityTokenValidator validator,
         Mock<SignInManager<AppUser>>? sim = null,
-        string[]? clientIds = null)
+        string[]? clientIds = null,
+        Mock<Ben.Data.WebApi.Services.Apple.IAppleTokenClient>? apple = null)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(
             (clientIds ?? ["com.ishaunted.ios"])
@@ -100,6 +102,7 @@ public class AppleAuthControllerTests
         var external = new ExternalSignInService(um.Object, signIn, new UserHandleService(Factory()), new Mock<IConfirmationSender>().Object);
         var controller = new AppleAuthController(
             um.Object, signIn, external, validator, config,
+            Support.AppleTestSupport.Credentials(Factory(), apple),
             NullLogger<AppleAuthController>.Instance);
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         return controller;
@@ -107,6 +110,77 @@ public class AppleAuthControllerTests
 
     private static AppleSignInRequest Request(string? name = null, string? handle = null) =>
         new("a.signed.token", name, handle);
+
+    // ── The authorization code (item 229) ─────────────────────────────────────
+
+    /// <summary>
+    /// A code that came with the sign-in is exchanged for the token's own audience — the website's
+    /// Services ID here, not the app's bundle id — and only after the sign-in succeeded.
+    /// </summary>
+    [Fact]
+    public async Task ACodeIsExchangedForTheTokensOwnAudienceAfterASuccessfulSignIn()
+    {
+        var existing = new AppUser { Id = Guid.NewGuid(), Email = "known@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(existing);
+        var apple = Support.AppleTestSupport.TokenClient();
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, "known@test.com", true, false, "com.ishaunted.web")),
+                apple: apple, clientIds: ["com.ishaunted.ios", "com.ishaunted.web"])
+            .SignIn(new AppleSignInRequest("a.signed.token", null, null, "code-1"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        apple.Verify(c => c.ExchangeCodeAsync("code-1", "com.ishaunted.web", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>The identity token is the proof; a code Apple will not exchange changes nothing about the sign-in.</summary>
+    [Fact]
+    public async Task AFailingExchangeStillSignsIn()
+    {
+        var existing = new AppUser { Id = Guid.NewGuid(), Email = "known@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(existing);
+        var apple = Support.AppleTestSupport.TokenClient();
+        apple.Setup(c => c.ExchangeCodeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+             .ReturnsAsync(new AppleTokenExchange(null, null, "invalid_grant"));
+        var sim = SignInManagerMock(um);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, "known@test.com", true, false)), sim, apple: apple)
+            .SignIn(new AppleSignInRequest("a.signed.token", null, null, "spent-code"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        sim.Verify(s => s.SignInAsync(existing, false, null), Times.Once);
+    }
+
+    /// <summary>A client that predates the code sends none, and nothing is asked of Apple.</summary>
+    [Fact]
+    public async Task NoCodeMeansNoExchange()
+    {
+        var existing = new AppUser { Id = Guid.NewGuid(), Email = "known@test.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(existing);
+        var apple = Support.AppleTestSupport.TokenClient();
+
+        await Build(um, new FakeValidator(new AppleIdentity(Sub, "known@test.com", true, false)), apple: apple)
+            .SignIn(Request(), default);
+
+        apple.Verify(c => c.ExchangeCodeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>A refused sign-in exchanges nothing: there is no account to keep a token for.</summary>
+    [Fact]
+    public async Task ARefusedSignInExchangesNothing()
+    {
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com", DateClosed = DateTime.UtcNow };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(closed);
+        var apple = Support.AppleTestSupport.TokenClient();
+
+        await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), apple: apple)
+            .SignIn(new AppleSignInRequest("a.signed.token", null, null, "code-1"), default);
+
+        apple.Verify(c => c.ExchangeCodeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 
     // ── The three outcomes ────────────────────────────────────────────────────
 
