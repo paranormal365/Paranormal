@@ -99,12 +99,13 @@ public sealed class EntraAccountClientTests
     public async Task A_wrong_password_refuses_the_link()
     {
         var result = await Build(StubHandler.Always(HttpStatusCode.Unauthorized,
-            """{"message":"Invalid email or password."}"""))
+            """{"status":401,"detail":"Failed"}"""))
             .LinkAsync("a@b.test", "wrong");
 
         Assert.False(result.Succeeded);
         Assert.False(result.ShouldLinkInstead);
-        Assert.Contains("Invalid email or password", result.Reason);
+        Assert.False(result.RequiresTwoFactor);
+        Assert.Contains("don't match an account", result.Reason);
     }
 
     [Fact]
@@ -125,5 +126,28 @@ public sealed class EntraAccountClientTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("Nothing was created", result.Reason);
+    }
+
+    /// <summary>
+    /// The four refusals a 401 can mean arrive in /login's shape and are told apart the same way.
+    /// </summary>
+    /// <remarks>
+    /// This endpoint used to answer in a shape of its own, and this client mapped the same four
+    /// refusals a second time. Now one word, one mapping, every door.
+    /// </remarks>
+    [Theory]
+    [InlineData("RequiresTwoFactor", true,  "two-step")]
+    [InlineData("NotAllowed",        false, "hasn't been confirmed")]
+    [InlineData("LockedOut",         false, "locked")]
+    [InlineData("Failed",            false, "don't match")]
+    public async Task Each_link_refusal_is_named_for_what_it_is(string detail, bool needsCode, string fragment)
+    {
+        var result = await Build(StubHandler.Always(HttpStatusCode.Unauthorized,
+            $$"""{"status":401,"detail":"{{detail}}"}"""))
+            .LinkAsync("a@b.test", "pw");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(needsCode, result.RequiresTwoFactor);
+        Assert.Contains(fragment, result.Reason!, StringComparison.OrdinalIgnoreCase);
     }
 }

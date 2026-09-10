@@ -660,22 +660,43 @@ public sealed class WebApiClient : IWebApiClient
         {
             if (response.IsSuccessStatusCode) return EntraLinkOutcome.Ok;
 
-            // The refusal carries a flag as well as a sentence, because "enter your code" and
-            // "your password is wrong" need different things from the page, and a sentence alone
-            // would leave it guessing which.
-            try
+            // A 401 is /login's problem-detail - the SAME four words the Apple link and the password
+            // form use - so the failure mapping is shared rather than copied. A 409 still carries a
+            // sentence of its own.
+            var body = await response.Content.ReadAsStringAsync(token);
+            var detail = ReadJsonString(body, "detail");
+            if (detail is not null)
             {
-                var refusal = await response.Content.ReadFromJsonAsync<EntraLinkRefusalBody>(cancellationToken: token);
-                return new EntraLinkOutcome(false, refusal?.RequiresTwoFactor ?? false, refusal?.Message);
+                var failure = LoginFailureMapping.From(new LoginAttempt(null, (int)response.StatusCode, detail));
+                return new EntraLinkOutcome(false, failure == LoginFailure.RequiresTwoFactor, failure switch
+                {
+                    LoginFailure.RequiresTwoFactor => "That account uses two-step verification. Enter the code from your authenticator app.",
+                    LoginFailure.EmailNotConfirmed => "That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another.",
+                    LoginFailure.LockedOut => "That account is locked after too many attempts. Waiting is the only thing that helps.",
+                    LoginFailure.InvalidCredentials => "Invalid email or password.",
+                    _ => "That sign-in was refused without a reason. Try again - and if it keeps happening, it isn't your password.",
+                });
             }
-            catch
-            {
-                return new EntraLinkOutcome(false);
-            }
+
+            return new EntraLinkOutcome(false, false, ReadJsonString(body, "message"));
         }
     }
 
-    private sealed record EntraLinkRefusalBody(string? Message, bool RequiresTwoFactor);
+    /// <summary>One string-valued property out of a small JSON body, or null. Never throws.</summary>
+    private static string? ReadJsonString(string body, string property)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty(property, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead
     /// of reading <see cref="_tokenStore"/> — used only for the two Entra actions above, where the

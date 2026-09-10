@@ -81,19 +81,34 @@ public sealed class EntraAccountClient
 
             if (response.IsSuccessStatusCode) return Result.Ok();
 
-            var refusal = await ReadRefusalAsync(response, token);
-            var message = refusal?.Message;
+            // A 401 is /login's problem-detail, the same four words every door now uses, so the
+            // mapping is the one the password form uses rather than a second copy. Linking attaches
+            // a Microsoft identity permanently and it signs in on its own afterwards, so a link
+            // without the second factor would remove it for good - which is why the code case is
+            // told apart from a wrong password.
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var detail = (await ReadRefusalAsync(response, token))?.Detail;
+                var failure = Ben.Web.Services.WebApi.LoginFailureMapping.From(
+                    new Ben.Web.Services.WebApi.LoginAttempt(null, 401, detail));
 
-            // Linking attaches a Microsoft identity permanently, and afterwards that identity signs
-            // in on its own — so a link granted without the second factor does not skip it once, it
-            // removes it for good.
-            if (refusal?.RequiresTwoFactor == true)
-                return Result.NeedsCode(message
-                    ?? "That account uses two-step verification. Enter the code from your authenticator app.");
+                return failure switch
+                {
+                    Ben.Web.Services.WebApi.LoginFailure.RequiresTwoFactor =>
+                        Result.NeedsCode("That account uses two-step verification. Enter the code from your authenticator app."),
+                    Ben.Web.Services.WebApi.LoginFailure.EmailNotConfirmed =>
+                        Result.Failed("That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another."),
+                    Ben.Web.Services.WebApi.LoginFailure.LockedOut =>
+                        Result.Failed("That account is locked after too many attempts. Waiting is the only thing that helps."),
+                    Ben.Web.Services.WebApi.LoginFailure.InvalidCredentials =>
+                        Result.Failed("That email address and password don't match an account."),
+                    _ => Result.Failed("That sign-in was refused without a reason. Try again - and if it keeps happening, it isn't your password."),
+                };
+            }
 
+            var message = await ReadMessageAsync(response, token);
             return response.StatusCode switch
             {
-                HttpStatusCode.Unauthorized => Result.Failed(message ?? "That email address and password don't match an account."),
                 HttpStatusCode.Conflict => Result.Failed(message ?? "That Microsoft account is already linked to a different account here."),
                 _ => Result.Failed(message ?? Unreadable(response)),
             };
@@ -146,7 +161,7 @@ public sealed class EntraAccountClient
     private sealed record ServerMessage(
         [property: JsonPropertyName("message")] string? Message,
         [property: JsonPropertyName("errors")] string[]? Errors,
-        [property: JsonPropertyName("requiresTwoFactor")] bool RequiresTwoFactor = false);
+        [property: JsonPropertyName("detail")] string? Detail = null);
 
     private sealed record EntraRegisterRequest(
         [property: JsonPropertyName("displayName")] string DisplayName);

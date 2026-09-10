@@ -34,8 +34,13 @@ public class EntraAuthControllerTests
     private static Mock<UserManager<AppUser>> CreateUserManagerMock()
     {
         var store = new Mock<IUserStore<AppUser>>();
-        return new Mock<UserManager<AppUser>>(
+        var mock = new Mock<UserManager<AppUser>>(
             store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        // Defaults an ordinary account has. Tests about a refused account override them.
+        mock.Setup(m => m.IsLockedOutAsync(It.IsAny<AppUser>())).ReturnsAsync(false);
+        mock.Setup(m => m.GetTwoFactorEnabledAsync(It.IsAny<AppUser>())).ReturnsAsync(false);
+        mock.Setup(m => m.DeleteAsync(It.IsAny<AppUser>())).ReturnsAsync(IdentityResult.Success);
+        return mock;
     }
 
     /// <summary>
@@ -61,8 +66,10 @@ public class EntraAuthControllerTests
     {
         var context = new Mock<IHttpContextAccessor>();
         var claims  = new Mock<IUserClaimsPrincipalFactory<AppUser>>();
-        return new Mock<SignInManager<AppUser>>(
+        var mock = new Mock<SignInManager<AppUser>>(
             um.Object, context.Object, claims.Object, null!, null!, null!, null!);
+        mock.Setup(s => s.CanSignInAsync(It.IsAny<AppUser>())).ReturnsAsync(true);
+        return mock;
     }
 
     private static EntraAuthController BuildController(
@@ -73,10 +80,13 @@ public class EntraAuthControllerTests
         var factory = new PooledDbContextFactory<BenDataContext>(
             new DbContextOptionsBuilder<BenDataContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var controller = new EntraAuthController(
+        // The service is built from the SAME mocks, so every expectation set on the managers is
+        // seen by the decisions wherever they now live.
+        var external = new Ben.Data.WebApi.Services.ExternalSignInService(
             umMock.Object,
             (simMock ?? CreateSignInManagerMock(umMock)).Object,
             new Ben.Data.WebApi.Services.UserHandleService(factory));
+        var controller = new EntraAuthController(umMock.Object, external);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -372,7 +382,10 @@ public class EntraAuthControllerTests
         var result = await controller.Link(
             new EntraLinkRequest("nobody@test.com", "password"), default);
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        // 401 in /login's problem-detail shape, and the same word for an unknown address as
+        // for a wrong password - anything that told them apart would make this endpoint a
+        // way to ask whether an address has an account here.
+        AssertRefusal(result, "Failed");
     }
 
     [Fact]
@@ -392,7 +405,10 @@ public class EntraAuthControllerTests
         var result = await controller.Link(
             new EntraLinkRequest("victim@test.com", "wrong-password"), default);
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        // 401 in /login's problem-detail shape, and the same word for an unknown address as
+        // for a wrong password - anything that told them apart would make this endpoint a
+        // way to ask whether an address has an account here.
+        AssertRefusal(result, "Failed");
         umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
 
@@ -474,9 +490,7 @@ public class EntraAuthControllerTests
         var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
             .Link(new EntraLinkRequest("ben@test.com", "correct-password"), default);
 
-        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
-        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
-        Assert.True(body.RequiresTwoFactor);
+        AssertRefusal(result, "RequiresTwoFactor");
 
         umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
@@ -490,7 +504,7 @@ public class EntraAuthControllerTests
         var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
             .Link(new EntraLinkRequest("ben@test.com", "correct-password", TwoFactorCode: "000000"), default);
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        AssertRefusal(result, "RequiresTwoFactor");
         umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
 
@@ -541,10 +555,7 @@ public class EntraAuthControllerTests
         var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
             .Link(new EntraLinkRequest("ben@test.com", "guess"), default);
 
-        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
-        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
-        Assert.Contains("locked", body.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.False(body.RequiresTwoFactor);
+        AssertRefusal(result, "LockedOut");
 
         // lockoutOnFailure: true is the whole point. The old bare check never counted a failure.
         simMock.Verify(s => s.CheckPasswordSignInAsync(localUser, "guess", true), Times.Once);
@@ -571,7 +582,7 @@ public class EntraAuthControllerTests
         var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"), simMock)
             .Link(new EntraLinkRequest("ben@test.com", "correct-password"), default);
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        AssertRefusal(result, "NotAllowed");
         umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
 
@@ -586,10 +597,8 @@ public class EntraAuthControllerTests
         var result = await BuildController(umMock, EntraPrincipal(ValidOid, "ben@corp.com"))
             .Link(new EntraLinkRequest("nobody@nowhere.test", "whatever"), default);
 
-        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
-        var body = Assert.IsType<EntraLinkRefusal>(refusal.Value);
-        Assert.Equal("Invalid email or password.", body.Message);
-        Assert.False(body.RequiresTwoFactor);
+        // Byte for byte what a wrong password answers. Same status, same shape, same word.
+        AssertRefusal(result, "Failed");
     }
 
     private static (Mock<UserManager<AppUser>> Um, Mock<SignInManager<AppUser>> Sim, AppUser User) TwoFactorAccount()
@@ -605,5 +614,14 @@ public class EntraAuthControllerTests
                .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
 
         return (umMock, simMock, localUser);
+    }
+
+    /// <summary>A refusal carries Identity's own word, in the shape /login and the Apple link use.</summary>
+    private static void AssertRefusal(IActionResult result, string expectedDetail)
+    {
+        var problem = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status401Unauthorized, problem.StatusCode);
+        var details = Assert.IsType<Microsoft.AspNetCore.Mvc.ProblemDetails>(problem.Value);
+        Assert.Equal(expectedDetail, details.Detail);
     }
 }
