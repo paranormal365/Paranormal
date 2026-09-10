@@ -67,6 +67,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("EmailKind")
+                        .HasColumnType("int");
+
                     b.Property<string>("FirstName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");

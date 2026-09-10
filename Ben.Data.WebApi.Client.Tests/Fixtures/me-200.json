@@ -1,0 +1,9 @@
+{
+  "userId": "6b64ab13-fb6a-4e83-2eef-08df0f397c22",
+  "email": "captured@example.test",
+  "isSuperAdmin": true,
+  "isAdmin": false,
+  "isModerator": true,
+  "emailKind": 0,
+  "emailConfirmed": true
+}

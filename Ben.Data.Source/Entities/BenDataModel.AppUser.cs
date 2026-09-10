@@ -6,6 +6,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json.Serialization;
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Microsoft.AspNetCore.Identity;
 
@@ -31,6 +32,21 @@ namespace Ben.Data.Source.Entities
         /// distinction that was missing.</para>
         /// </remarks>
         public DateTime? DateConfirmationSent { get; set; }
+
+        /// <summary>
+        /// Whether <c>Email</c> is an address this person chose and can read.
+        /// </summary>
+        /// <remarks>
+        /// <para>Set once, when an account is created from a Sign in with Apple identity, out of
+        /// what Apple says in the token. Apple offers a relay address or lets somebody withhold
+        /// theirs entirely, and both arrive looking like an ordinary address — so without this the
+        /// site shows a machine-generated string as somebody's email and claims to have written to
+        /// them when Apple silently dropped it.</para>
+        ///
+        /// <para>Ordinary for every account made any other way, which is why it is the zero value:
+        /// existing rows are already correct.</para>
+        /// </remarks>
+        public EmailAddressKind EmailKind { get; set; } = EmailAddressKind.Ordinary;
 
         /// <summary>When the address was confirmed. Null while <c>EmailConfirmed</c> is false.</summary>
         /// <remarks>

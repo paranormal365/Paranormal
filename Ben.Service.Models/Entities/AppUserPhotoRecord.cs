@@ -1,4 +1,4 @@
-namespace Ben.Service.Models.Entities;
+﻿namespace Ben.Service.Models.Entities;
 
 /// <summary>
 /// One of a user's profile photos. <see cref="IsPublic"/> names the slot (public or private),
@@ -37,6 +37,29 @@ public record MyProfileRecord
     public string? LastName { get; init; }
 
     public string? Email { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="Email"/> is an address this person chose and can read.
+    /// </summary>
+    /// <remarks>
+    /// Sign in with Apple can leave an account holding a relay address or a placeholder, both of
+    /// which look ordinary. Presenting either as "your email" tells somebody something untrue about
+    /// themselves, and promising to write to one is a promise that cannot be kept.
+    /// </remarks>
+    public Ben.Data.Common.Enums.EmailAddressKind EmailKind { get; init; }
+        = Ben.Data.Common.Enums.EmailAddressKind.Ordinary;
+
+    /// <summary>
+    /// Whether this person has proved they can read <see cref="Email"/>.
+    /// </summary>
+    /// <remarks>
+    /// False only for an account created from a provider's unverified address claim (Microsoft's,
+    /// in practice), which is usable through that provider straight away but cannot reset a
+    /// password or be written to until the address is confirmed. A password sign-up cannot be
+    /// signed in unconfirmed at all, so for everybody else this is true. Defaults to true so an
+    /// older server that does not send it reads as it always did.
+    /// </remarks>
+    public bool EmailConfirmed { get; init; } = true;
 
     /// <summary>The active public photo, or null when none is set.</summary>
     public AppUserPhotoRecord? PublicPhoto { get; init; }
