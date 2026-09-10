@@ -52,6 +52,42 @@
     background: var(--bs-tertiary-bg, #1b1b1b);
 }
 
+/* Wider than 16:9 once there is room for it. At full width a 16:9 poster is over five hundred
+   pixels tall and pushes the dates — the thing the page is for — off the bottom of the screen.
+   A phone keeps 16:9, where the poster is the whole first impression and can afford the height. */
+@media (min-width: 992px) {
+    .tour-hero {
+        --bs-aspect-ratio: 42%;
+    }
+}
+
+/* No photograph in the gallery yet. The poster is drawn from the tour's name instead, in the
+   colour TourPlate gives it in the home strip and the nearby results, so the page a reader lands
+   on looks like the card they clicked. */
+.tour-hero--drawn {
+    background:
+        radial-gradient(ellipse 80% 60% at 50% 112%, hsl(var(--plate-hue) 55% 40% / .26), transparent 62%),
+        radial-gradient(circle at 76% 16%, hsl(var(--plate-hue) 60% 52% / .18), transparent 50%),
+        linear-gradient(150deg,
+            hsl(var(--plate-hue) 34% 12%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 7%) 100%);
+}
+
+.tour-hero__monogram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding-bottom: 2.5rem;   /* clear of the name below it */
+    font-size: clamp(3rem, 9vw, 6rem);
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-indent: .18em;
+    color: #fff;
+    opacity: .16;
+}
+
 .tour-hero__image {
     width: 100%;
     height: 100%;
@@ -81,4 +117,357 @@
 .tour-hero__by {
     font-size: .9rem;
     opacity: .85;
+}
+
+
+/* ── The rail of facts under the poster ─────────────────────────────────────
+   Labelled figures, not pills. Each one says what it is above the number, so the row reads as a
+   set of answers rather than a queue of unrelated phrases. The two that lead somewhere are links
+   and say so on hover; the rest are plain. */
+/* Flex rather than a grid of equal tracks: a tour with two facts to state would have had them
+   stretched to half the page each, which reads as two empty boxes rather than two answers. These
+   grow to share a row and stop at a width a short figure can fill. */
+.tour-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.tour-fact {
+    flex: 1 1 8.5rem;
+    max-width: 13rem;
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .16s ease, transform .16s ease;
+}
+
+a.tour-fact:hover,
+a.tour-fact:focus-visible {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+}
+
+/* The one that decides whether they read on. */
+.tour-fact--next {
+    border-color: color-mix(in srgb, var(--bs-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
+}
+
+.tour-fact__label {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.tour-fact__value {
+    font-size: 1.15rem;
+    font-weight: 650;
+    line-height: 1.15;
+}
+
+.tour-fact__sub {
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+}
+
+/* ── Section headings ───────────────────────────────────────────────────────
+   Five h5s down a page give it no rhythm — nothing tells the eye where one part ends. A rule that
+   runs out past the words does, and costs no vertical space. */
+.tour-h {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 0 0 .75rem;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: .01em;
+}
+
+.tour-h::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--bs-border-color);
+}
+
+/* A label inside a card, in the same voice as the rail's. */
+.tour-label {
+    display: block;
+    margin-bottom: .15rem;
+    margin-top: 0;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+/* A second label in the same card starts a new subject and needs the air to say so. */
+.tour-label ~ .tour-label {
+    margin-top: .9rem;
+}
+
+/* ── Where you meet ─────────────────────────────────────────────────────────
+   The map is flush to the edge of the card rather than boxed inside a second card: one object,
+   half of it a map. */
+.tour-meet__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 992px) {
+    .tour-meet__grid--map {
+        grid-template-columns: 1fr 22rem;
+    }
+}
+
+/* Centred against the map beside it: the map fixes the row's height, and text pinned to the top of
+   a taller row reads as content that ran out. */
+.tour-meet__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem 1.15rem;
+}
+
+.tour-meet__address {
+    margin: 0 0 .75rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.tour-meet__map {
+    display: flex;
+    align-items: stretch;
+    background: var(--bs-tertiary-bg);
+}
+
+.tour-meet__map ::deep .ben-map {
+    width: 100%;
+    border-radius: 0 !important;
+}
+
+/* ── Guides ─────────────────────────────────────────────────────────────────
+   Safety was the reason for the photograph (Ben, 2026-09-10), so it gets room instead of being an
+   avatar beside a line of text. Somebody about to meet a stranger on a dark street should be able
+   to recognise the face from this page. */
+.tour-guides {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
+.tour-guide {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .3rem;
+    width: 8.5rem;
+    padding: .85rem .5rem .7rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: var(--bs-body-bg);
+    text-align: center;
+}
+
+.tour-guide__photo {
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.tour-guide__photo--none {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-indent: .12em;
+    color: #fff;
+    background:
+        radial-gradient(circle at 50% 25%, hsl(var(--plate-hue) 60% 52% / .28), transparent 55%),
+        linear-gradient(150deg,
+            hsl(var(--plate-hue) 34% 18%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 10%) 100%);
+}
+
+.tour-guide__name {
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.tour-guide__role {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+/* ── The dates ──────────────────────────────────────────────────────────────
+   The point of the page. Each date is a card with the plate a ticket has, and the bar under the
+   time says how full it is — "19 left" is a number, a two-thirds-full bar is a reason to book
+   tonight. */
+.tour-datelist {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.tour-date {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.tour-date:hover,
+.tour-date:focus-visible {
+    border-color: var(--bs-primary);
+    transform: translateX(2px);
+    box-shadow: 0 .4rem 1rem rgba(0, 0, 0, .18);
+}
+
+.tour-date__plate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 3.4rem;
+    padding: .35rem 0;
+    border-radius: .45rem;
+    background: color-mix(in srgb, var(--bs-primary) 16%, var(--bs-body-bg));
+    line-height: 1.05;
+}
+
+.tour-date__dow,
+.tour-date__mon {
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.tour-date__day {
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+
+.tour-date__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tour-date__time {
+    display: block;
+    font-weight: 600;
+}
+
+.tour-date__seats {
+    display: block;
+    font-size: .8rem;
+    color: var(--bs-secondary-color);
+}
+
+.tour-date__bar {
+    display: block;
+    height: 4px;
+    max-width: 14rem;
+    margin-top: .35rem;
+    border-radius: 2px;
+    background: var(--bs-border-color);
+    overflow: hidden;
+}
+
+.tour-date__fill {
+    display: block;
+    height: 100%;
+    background: var(--bs-primary);
+}
+
+.tour-date__go {
+    flex: 0 0 auto;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--bs-primary);
+    white-space: nowrap;
+}
+
+/* A full walk is still worth opening — the date page carries the waiting list and the details —
+   but it must not read as an invitation to book. */
+.tour-date--full .tour-date__plate {
+    background: var(--bs-tertiary-bg);
+}
+
+.tour-date--full .tour-date__fill {
+    background: var(--bs-secondary-color);
+}
+
+.tour-date--full .tour-date__go {
+    color: var(--bs-secondary-color);
+}
+
+/* ── Reviews ────────────────────────────────────────────────────────────── */
+.tour-reviews {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.tour-review {
+    padding: .7rem .9rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: var(--bs-body-bg);
+}
+
+.tour-review__stars {
+    font-size: 1rem;
+    letter-spacing: .06em;
+    color: var(--bs-warning);
+}
+
+/* The stars they did not give, so five positions are always drawn and a three reads as a three
+   at a glance rather than being counted. */
+.tour-review__stars--spent {
+    color: var(--bs-border-color);
+}
+
+.tour-review__text {
+    margin: .35rem 0 0;
+    font-size: .92rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tour-fact,
+    .tour-date {
+        transition: none;
+    }
+
+    a.tour-fact:hover,
+    a.tour-fact:focus-visible,
+    .tour-date:hover,
+    .tour-date:focus-visible {
+        transform: none;
+    }
 }

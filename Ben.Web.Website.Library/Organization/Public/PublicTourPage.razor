@@ -46,69 +46,92 @@ else if (_tour is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:800px; margin:0 auto;">
+    <div class="container-fluid px-3 py-3 tour-page" style="max-width:960px; margin:0 auto;">
         <div class="mb-3">
             <a href="@($"/o/{_tour.OrganizationUrlName}")" class="text-decoration-none small">
                 &larr; @_tour.OrganizationName
             </a>
         </div>
 
-        @* A poster when there is a picture, a heading when there is not. A walk is sold on what
-           the street looks like after dark, and the name belongs ON that picture rather than
-           underneath it — with a scrim, so it stays legible over a photograph nobody has seen. *@
-        @if (_gallery.Count > 0)
-        {
-            <div class="tour-hero ratio ratio-16x9 rounded overflow-hidden mb-3">
-                <div>
+        @* A poster, always. A walk is sold on what the street looks like after dark, and the name
+           belongs ON that picture rather than underneath it — with a scrim, so it stays legible
+           over a photograph nobody has seen.
+
+           A tour whose gallery is still empty used to fall back to a bare heading, which is the
+           shape of a page with nothing to show. It now gets the same poster in its own colour,
+           the colour TourPlate gives it everywhere else on the site. *@
+        <div class="tour-hero ratio ratio-16x9 rounded overflow-hidden mb-3 @(_gallery.Count == 0 ? "tour-hero--drawn" : "")"
+             style="@(_gallery.Count == 0 ? TourPlate.HueStyle(_tour.Name) : "")">
+            <div>
+                @if (_gallery.Count > 0)
+                {
                     <img src="@MediaUrls.TourPhoto(_gallery[0].UploadFileId)"
                          alt="@(_gallery[0].Caption ?? _tour.Name)" class="tour-hero__image" />
-                    <div class="tour-hero__scrim"></div>
-                    <div class="tour-hero__text">
-                        <h1 class="tour-hero__name">@_tour.Name</h1>
-                        <div class="tour-hero__by">
-                            Run by @_tour.OrganizationName
-                            @if (_tour.Rating is { } heroRating)
-                            {
-                                <text> · @heroRating.ToString("0.0") ★ (@_tour.RatingCount)</text>
-                            }
-                        </div>
+                }
+                else
+                {
+                    <span class="tour-hero__monogram" aria-hidden="true">@TourPlate.Monogram(_tour.Name)</span>
+                }
+                <div class="tour-hero__scrim"></div>
+                <div class="tour-hero__text">
+                    <h1 class="tour-hero__name">@_tour.Name</h1>
+                    <div class="tour-hero__by">
+                        Run by
+                        <a class="tour-hero__link" href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
+                        @if (_tour.Rating is { } heroRating)
+                        {
+                            <text> · @heroRating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
+                        }
                     </div>
                 </div>
             </div>
-        }
-        else
-        {
-            <h1 class="mb-1">@_tour.Name</h1>
-            <p class="text-secondary mb-3">
-                Run by <a href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
-                @if (_tour.Rating is { } rating)
-                {
-                    <text> · @rating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
-                }
-            </p>
-        }
+        </div>
 
-        @* The three facts somebody decides on, before any prose. *@
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        @* The facts somebody decides on, before any prose. A rail of labelled figures rather than
+           a row of pills: a pill can hold a word, and "about 1 hour 30 minutes" beside "Up to 20
+           people" beside a date is three unlabelled phrases the reader has to sort out. The next
+           walk leads, because it is the one that decides whether they read on. *@
+        <div class="tour-facts mb-4">
             @if (_tour.UpcomingDates.Count > 0)
             {
-                <span class="badge rounded-pill text-bg-primary">
-                    Next @_tour.UpcomingDates[0].StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")
-                </span>
+                var soonest = _tour.UpcomingDates[0].StartDateTime.ToViewerLocalTime(UserState);
+                <a class="tour-fact tour-fact--next" href="#tour-dates">
+                    <span class="tour-fact__label">Next walk</span>
+                    <span class="tour-fact__value">@soonest.ToString("ddd MM/dd")</span>
+                    <span class="tour-fact__sub">@soonest.ToString("h:mm tt")</span>
+                </a>
             }
             @if (_tour.DurationMinutes is { } heroMinutes)
             {
-                <span class="badge rounded-pill text-bg-secondary">@Length(heroMinutes)</span>
+                <div class="tour-fact">
+                    <span class="tour-fact__label">How long</span>
+                    <span class="tour-fact__value">@Duration(heroMinutes)</span>
+                    <span class="tour-fact__sub">on your feet</span>
+                </div>
             }
             @if (_tour.DefaultCapacity is { } heroCapacity)
             {
-                <span class="badge rounded-pill text-bg-secondary">Up to @heroCapacity people</span>
+                <div class="tour-fact">
+                    <span class="tour-fact__label">Group size</span>
+                    <span class="tour-fact__value">Up to @heroCapacity</span>
+                    <span class="tour-fact__sub">people per walk</span>
+                </div>
+            }
+            @if (_tour.Rating is { } railRating)
+            {
+                <div class="tour-fact">
+                    <span class="tour-fact__label">Rated</span>
+                    <span class="tour-fact__value">@railRating.ToString("0.0") ★</span>
+                    <span class="tour-fact__sub">@_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</span>
+                </div>
             }
             @if (_gallery.Count + _guestPhotos.Count > 0)
             {
-                <span class="badge rounded-pill text-bg-secondary">
-                    @(_gallery.Count + _guestPhotos.Count) pictures
-                </span>
+                <a class="tour-fact" href="#tour-slideshow">
+                    <span class="tour-fact__label">Pictures</span>
+                    <span class="tour-fact__value">@(_gallery.Count + _guestPhotos.Count)</span>
+                    <span class="tour-fact__sub">from the walk</span>
+                </a>
             }
         </div>
 
@@ -127,60 +150,46 @@ else
            full-bleed hero, and the button hands the walk to whatever they navigate with — the
            functional answer, not a decorative one. Drawn only when the address geocoded; an
            empty grey box would be worse than the sentence alone. *@
-        <div class="row g-3 mb-3">
-            <div class="col-lg-@(HasMap ? "7" : "12")">
-        <div class="card h-100">
-            <div class="card-body">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Where you meet</dt>
-                    <dd class="col-sm-8" id="tour-meeting-point">
-                        @_tour.MeetingPoint
-                        @if (HasMap)
-                        {
-                            <div class="mt-2 d-flex gap-2 flex-wrap">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="tour-directions"
-                                        @onclick="ShowDirections">
-                                    <BenIcon Name="map" Class="me-1" />Directions
-                                </button>
-                                <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
-                                   href="@AppleMapsUrl">Open in Maps</a>
-                            </div>
-                        }
-                    </dd>
+        @* The address is the one line on this page a guest has to carry with them, so it is set
+           as an address and not as the second half of a definition list. How long and how many
+           moved up to the rail; what is left here is where to stand and who to ask. *@
+        <div class="tour-meet card mb-4 overflow-hidden">
+            <div class="tour-meet__grid @(HasMap ? "tour-meet__grid--map" : "")">
+                <div class="tour-meet__body">
+                    <span class="tour-label">Where you meet</span>
+                    <p class="tour-meet__address" id="tour-meeting-point">@_tour.MeetingPoint</p>
 
-                    @if (_tour.DurationMinutes is { } minutes)
+                    @if (HasMap)
                     {
-                        <dt class="col-sm-4">How long</dt>
-                        <dd class="col-sm-8">@Length(minutes)</dd>
-                    }
-
-                    @if (_tour.DefaultCapacity is { } capacity)
-                    {
-                        <dt class="col-sm-4">Group size</dt>
-                        <dd class="col-sm-8">Up to @capacity people</dd>
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <button type="button" class="btn btn-primary btn-sm" id="tour-directions"
+                                    @onclick="ShowDirections">
+                                <BenIcon Name="map" Class="me-1" />Directions
+                            </button>
+                            <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+                               href="@AppleMapsUrl">Open in Maps</a>
+                        </div>
                     }
 
                     @if (!string.IsNullOrWhiteSpace(_tour.ContactLine))
                     {
-                        <dt class="col-sm-4">Getting in touch</dt>
-                        <dd class="col-sm-8" id="tour-contact">@_tour.ContactLine</dd>
+                        <span class="tour-label">Getting in touch</span>
+                        <p class="mb-0" id="tour-contact">@_tour.ContactLine</p>
                     }
-                </dl>
-            </div>
-        </div>
-            </div>
+                </div>
 
-            @if (HasMap)
-            {
-                <div class="col-lg-5">
-                    <div class="card h-100 overflow-hidden">
-                        <BenMap Pins="@_mapPins" Height="260px" FitToPins="false"
+                @if (HasMap)
+                {
+                    <div class="tour-meet__map">
+                        @* A pixel height, not a percentage: the map sizes itself once at start-up and a
+                               percentage against a stretched grid cell is not a number it can use. *@
+                        <BenMap Pins="@_mapPins" Height="280px" FitToPins="false"
                                 CenterLatitude="@((double)_tour!.Latitude!.Value)"
                                 CenterLongitude="@((double)_tour!.Longitude!.Value)"
                                 Zoom="15" />
                     </div>
-                </div>
-            }
+                }
+            </div>
         </div>
 
         <DirectionsMapModal @ref="_directions" />
@@ -192,22 +201,28 @@ else
 
         @if (_tour.Guides.Count > 0)
         {
-            <h2 class="h5 mb-2">Who you'll be walking with</h2>
-            <div class="d-flex flex-wrap gap-3 mb-4">
+            <h2 class="tour-h">Who you'll be walking with</h2>
+            @* Named and pictured because Ben's reason was safety: somebody walking up to a
+               stranger on a dark street should already know that face. So the picture is given
+               room rather than set as an inline avatar beside a line of text. *@
+            <div class="tour-guides mb-4">
                 @foreach (var guide in _tour.Guides)
                 {
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="tour-guide">
                         @if (guide.PhotoUploadFileId is { } photoId)
                         {
                             <img src="@MediaUrls.GuidePhoto(photoId)" alt="@guide.DisplayName"
-                                 width="48" height="48" class="rounded-circle object-fit-cover" />
+                                 class="tour-guide__photo" loading="lazy" />
                         }
                         else
                         {
-                            <span class="rounded-circle bg-body-tertiary d-inline-flex align-items-center justify-content-center"
-                                  style="width:48px;height:48px;"><BenIcon Name="user" /></span>
+                            <span class="tour-guide__photo tour-guide__photo--none"
+                                  style="@TourPlate.HueStyle(guide.DisplayName)" aria-hidden="true">
+                                @TourPlate.Monogram(guide.DisplayName)
+                            </span>
                         }
-                        <span class="fw-semibold">@guide.DisplayName</span>
+                        <span class="tour-guide__name">@guide.DisplayName</span>
+                        <span class="tour-guide__role">Guide</span>
                     </div>
                 }
             </div>
@@ -220,7 +235,7 @@ else
         @* One picture is already the hero above, so the reel earns its place from two. *@
         @if (_slides.Count > 1)
         {
-            <h2 class="h5 mb-2">Pictures</h2>
+            <h2 class="tour-h">Pictures</h2>
             <div class="card mb-2 overflow-hidden" id="tour-slideshow">
                 <BenSlideshow Slides="@_slides" Height="360px" />
             </div>
@@ -292,7 +307,7 @@ else
         @if (_reviews is not null
              && (_reviews.Reviews.Count > 0 || _reviews.MayReview || _reviews.WhyNot is not null))
         {
-            <h2 class="h5 mb-2" id="tour-reviews">
+            <h2 class="tour-h" id="tour-reviews">
                 What people said
                 @if (_reviews.Average is { } avg)
                 {
@@ -351,34 +366,36 @@ else
                 </p>
             }
 
-            @foreach (var review in _reviews.Reviews)
-            {
-                <div class="border-bottom py-2">
-                    <div class="d-flex justify-content-between gap-2 flex-wrap">
-                        <div>
-                            @* Razor reads `@new` as the start of an expression it cannot parse;
-                               the stars are built in the code block instead. *@
-                            <span class="text-warning">@Stars(review.Stars)</span>
-                            <span class="text-secondary">@Stars(5 - review.Stars)</span>
-                            <span class="fw-semibold ms-1">@review.By</span>
-                            @if (review.IsHidden)
-                            {
-                                <span class="badge text-bg-secondary ms-1">Hidden by the business</span>
-                            }
+            <div class="tour-reviews mb-4">
+                @foreach (var review in _reviews.Reviews)
+                {
+                    <div class="tour-review">
+                        <div class="d-flex justify-content-between gap-2 flex-wrap align-items-baseline">
+                            <div>
+                                @* Razor reads `@new` as the start of an expression it cannot parse;
+                                   the stars are built in the code block instead. *@
+                                <span class="tour-review__stars">@Stars(review.Stars)</span>
+                                <span class="tour-review__stars tour-review__stars--spent">@Stars(5 - review.Stars)</span>
+                                <span class="fw-semibold ms-2">@review.By</span>
+                                @if (review.IsHidden)
+                                {
+                                    <span class="badge text-bg-secondary ms-1">Hidden by the business</span>
+                                }
+                            </div>
+                            <span class="text-secondary small">
+                                @review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                            </span>
                         </div>
-                        <span class="text-secondary small">
-                            @review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
-                        </span>
+                        @if (!string.IsNullOrWhiteSpace(review.Comment))
+                        {
+                            <p class="tour-review__text">@review.Comment</p>
+                        }
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(review.Comment))
-                    {
-                        <div class="small mt-1">@review.Comment</div>
-                    }
-                </div>
-            }
+                }
+            </div>
         }
 
-        <h2 class="h5 mb-2">When it runs</h2>
+        <h2 class="tour-h" id="tour-dates">When it runs</h2>
         @if (_tour.UpcomingDates.Count == 0)
         {
             <p class="text-secondary" id="tour-no-dates">
@@ -414,30 +431,44 @@ else
                     </p>
                 </div>
                 <div class="col-lg-7">
-            <div class="list-group" id="tour-dates">
+            @* Each date is the offer, so each date is a card with a plate a reader can find at a
+               glance — the same shape a ticket has. The bar under the time is how full it is:
+               "19 left" is a number, and a walk two thirds sold is a reason to book tonight. *@
+            <div class="tour-datelist">
                 @foreach (var date in _tour.UpcomingDates)
                 {
-                    <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3"
+                    var when = date.StartDateTime.ToViewerLocalTime(UserState);
+                    var cap = date.AttendeeCapacity;
+                    var left = cap is { } c ? Math.Max(0, c - date.AttendingCount) : (int?)null;
+                    var full = left == 0;
+                    <a class="tour-date @(full ? "tour-date--full" : "")"
                        href="@($"/o/{_tour.OrganizationUrlName}/events/{date.UrlName}")">
-                        <span>
-                            <span class="fw-semibold">
-                                @date.StartDateTime.ToViewerLocalTime(UserState).ToString("dddd, MM/dd/yyyy")
-                            </span>
-                            <span class="text-secondary ms-2">
-                                @date.StartDateTime.ToViewerLocalTime(UserState).ToString("h:mm tt")
-                            </span>
+                        <span class="tour-date__plate">
+                            <span class="tour-date__dow">@when.ToString("ddd")</span>
+                            <span class="tour-date__day">@when.Day</span>
+                            <span class="tour-date__mon">@when.ToString("MMM")</span>
                         </span>
-                        <span class="text-secondary small text-nowrap">
-                            @if (date.AttendeeCapacity is { } cap)
+                        <span class="tour-date__body">
+                            <span class="tour-date__time">@when.ToString("h:mm tt")</span>
+                            <span class="tour-date__seats">
+                                @if (cap is { } capacity)
+                                {
+                                    @(full ? "No spaces left" : $"{left} of {capacity} still open")
+                                }
+                                else
+                                {
+                                    @($"{date.AttendingCount} coming along")
+                                }
+                            </span>
+                            @if (cap is { } barCapacity && barCapacity > 0)
                             {
-                                var left = Math.Max(0, cap - date.AttendingCount);
-                                @(left == 0 ? "Full" : $"{left} left")
-                            }
-                            else
-                            {
-                                @($"{date.AttendingCount} coming")
+                                var taken = Math.Clamp(date.AttendingCount * 100 / barCapacity, 0, 100);
+                                <span class="tour-date__bar" role="presentation">
+                                    <span class="tour-date__fill" style="width:@(taken)%"></span>
+                                </span>
                             }
                         </span>
+                        <span class="tour-date__go">@(full ? "See the date" : "Sign up")</span>
                     </a>
                 }
             </div>
@@ -601,15 +632,20 @@ else
 
     private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
 
-    private static string Length(int minutes)
+    /// <summary>
+    /// The same length, short enough for a figure in the facts rail. "about 1 hour 30 minutes" is
+    /// a sentence; a rail wants a number.
+    /// </summary>
+    private static string Duration(int minutes)
     {
         var hours = minutes / 60;
         var rest = minutes % 60;
         return hours switch
         {
-            0 => $"about {rest} minutes",
-            _ when rest == 0 => $"about {hours} hour{(hours == 1 ? "" : "s")}",
-            _ => $"about {hours} hour{(hours == 1 ? "" : "s")} {rest} minutes",
+            0 => $"{rest} min",
+            _ when rest == 0 => $"{hours} hr",
+            _ => $"{hours} hr {rest} min",
         };
     }
+
 }
