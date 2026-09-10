@@ -201,7 +201,13 @@ lists: what is coming up, and what has already happened. Case-bound visits and o
 case sit together, because they are the same kind of work.
 
 Visits at the same spot share a single marker with a count on it — the same place accumulating
-visits over the years is the normal case, not an oddity.
+visits over the years is the normal case, not an oddity. Spots that only overlap at the zoom you
+are looking at gather into a count as well; zoom in and they separate. A landmark anyone can
+visit is drawn in blue and says so when you select it; a visit that has already happened is
+dimmed.
+
+![The group's investigations map](/help/media/working-a-case/investigations-map.png)
+*Two visits to the Bell Witch Cave, on one pin.*
 
 **If something is missing from the map**, look just beneath it. An investigation whose location
 could not be found on the map is listed there with the reason, rather than quietly leaving the map

@@ -519,7 +519,9 @@ things happening.
 **Destroyed.** Everything that is only ever theirs and that nobody else has a claim on: field
 sessions they recorded on their own rather than for an investigation, the files under those
 sessions, their memberships, sign-in history, messages received, follows, blocks, contact details
-and any external sign-in methods.
+and any external sign-in methods. An Apple sign-in is also revoked with Apple, so IsHaunted
+disappears from the apps their Apple ID lists; if Apple cannot be reached at that moment the
+deletion still goes through and the revocation is retried later.
 
 **Kept, with their name removed.** Anything they wrote for a group — case notes, timeline
 entries, group messages, evidence, and sessions recorded for an investigation. Those belong to the

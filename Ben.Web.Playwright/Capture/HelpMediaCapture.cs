@@ -237,6 +237,13 @@ public sealed class HelpMediaCapture : BenTestBase
         await GoAsync("/");
         await ShootAsync("getting-started", "home.png");
 
+        // The map of published cases, on its own: it sits below the fold, and the document's
+        // sentence about pins gathering into a count needs the picture to show one. Apple's
+        // tiles arrive after the page has gone quiet, so the map is given a moment to draw.
+        await Page.Locator(".ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
+        await Page.WaitForTimeoutAsync(4_000);
+        await ShootAsync("getting-started", "public-map.png", selector: ".ben-map");
+
         await GoAsync("/find");
         await ShootAsync("getting-started", "find-groups.png");
 
@@ -1092,6 +1099,14 @@ public sealed class HelpMediaCapture : BenTestBase
             Assert.Ignore("Seed org 'Paranormal365' not present.");
 
         await ShootAsync("working-a-case", "org-hub.png");
+
+        // The group's investigations map (item 228): the document explains pins that share a
+        // spot and pins that gather, and Paranormal365's two Bell Witch Cave visits show the first.
+        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).First);
+        await SkipAnyTourAsync();
+        await Page.Locator(".ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
+        await Page.WaitForTimeoutAsync(4_000);
+        await ShootAsync("working-a-case", "investigations-map.png", selector: ".ben-map");
 
         // The document is about a case, not about the hub that lists them, so the picture beside
         // "The case tabs" has to be a case that is actually open.
