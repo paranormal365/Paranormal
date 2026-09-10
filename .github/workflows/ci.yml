@@ -24,6 +24,10 @@ env:
   TELERIK_LICENSE: ${{ secrets.TELERIK_LICENSE }}
 
 jobs:
+  # Ben.Server.slnf, not Ben.slnx: this runner has no .NET MAUI workload and cannot get one on
+  # Linux, so the two desktop projects would fail with NETSDK1147 and take the whole job with them.
+  # The filter is everything EXCEPT those two, which is everything this runner can honestly build.
+  # The desktop projects are covered by the desktop-maccatalyst job below.
   build-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -46,19 +50,19 @@ jobs:
             --store-password-in-clear-text
 
       - name: Restore
-        run: dotnet restore Ben.slnx
+        run: dotnet restore Ben.Server.slnf
 
       - name: Build
         # Warnings are informative here rather than fatal: the solution builds at zero warnings
         # today, and -warnaserror would turn an SDK-version nit into a red build on work that is
         # otherwise fine. Worth revisiting once CI has been stable for a while.
-        run: dotnet build Ben.slnx --no-restore --configuration Release
+        run: dotnet build Ben.Server.slnf --no-restore --configuration Release
 
       - name: Test
         # No database and no ffmpeg binaries are needed: every suite uses the EF in-memory
         # provider, and the sidecar's tests run against Ben.Video.Sidecar.FakeFfmpeg. Verified by
         # deleting the (gitignored) ffmpeg directory locally — all 185 sidecar tests still passed.
-        run: dotnet test Ben.slnx --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory ./TestResults
+        run: dotnet test Ben.Server.slnf --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory ./TestResults
 
       - name: Upload test results
         if: always()
@@ -67,6 +71,48 @@ jobs:
           name: test-results
           path: ./TestResults
           retention-days: 7
+
+  desktop-maccatalyst:
+    # The only place the two MAUI projects are compiled at all. The Linux job above cannot: the
+    # .NET MAUI workload does not exist for Linux, so those projects are filtered out of
+    # Ben.Server.slnf and would otherwise never be built by anything.
+    #
+    # Mac Catalyst only. The Windows head needs a Windows runner, and nothing has built it by hand
+    # yet, so adding a windows job here would be claiming a check nobody has ever seen pass.
+    #
+    # Deliberately NOT gating develop yet: it installs a workload on every run and has not been
+    # watched for flakiness. Promote it once it has been green for a while.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/feature/')
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install the Mac Catalyst MAUI workload
+        # Not `maui`, which also pulls Android, iOS and Tizen for no benefit here. setup-dotnet
+        # installs the SDK per-user, so this needs no sudo — unlike a system-wide install.
+        run: dotnet workload install maui-maccatalyst
+
+      - name: Add the Telerik NuGet feed
+        if: ${{ secrets.TELERIK_NUGET_USERNAME != '' }}
+        run: |
+          dotnet nuget add source https://nuget.telerik.com/v3/index.json \
+            --name Telerik \
+            --username "${{ secrets.TELERIK_NUGET_USERNAME }}" \
+            --password "${{ secrets.TELERIK_NUGET_PASSWORD }}" \
+            --store-password-in-clear-text
+
+      - name: Build the desktop app
+        run: dotnet build Ben.Desktop.App.UI -f net10.0-maccatalyst --configuration Release
+
+      - name: Check for vulnerable packages
+        # Telerik.UI.for.Maui brings SkiaSharp and System.Security.Cryptography.Pkcs transitively,
+        # both of which shipped versions with known advisories. The csproj pins them forward; this
+        # is what notices when a Telerik upgrade brings a new one.
+        run: dotnet list Ben.Desktop.App.UI package --include-transitive --vulnerable
 
   smoke:
     # The check that would have caught the Serilog startup crash.

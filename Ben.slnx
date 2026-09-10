@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Api Layers/">
     <Project Path="Ben.Data.WebApi/Ben.Data.WebApi.csproj" />
+    <Project Path="Ben.Data.WebApi.Client/Ben.Data.WebApi.Client.csproj" />
   </Folder>
   <Folder Name="/Data Layers/">
     <Project Path="Ben.Data.Common/Ben.Data.Common.csproj" />
@@ -12,6 +13,7 @@
     <Project Path="Ben.Service.RepositoryService/Ben.Service.RepositoryService.csproj" Id="474ad301-93ce-4b4b-9d18-8fa044b8b20e" />
   </Folder>
   <Folder Name="/Testing Projects/">
+    <Project Path="Ben.Data.WebApi.Client.Tests/Ben.Data.WebApi.Client.Tests.csproj" />
     <Project Path="Ben.Service.RepositoryService.Tests/Ben.Service.RepositoryService.Tests.csproj" />
     <Project Path="Ben.Web.Playwright/Ben.Web.Playwright.csproj" />
     <Project Path="Ben.Video.Tests/Ben.Video.Tests.csproj" />
@@ -21,6 +23,10 @@
     <Project Path="Ben.Web.Services/Ben.Web.Services.csproj" />
     <Project Path="Ben.Web.Website.Library/Ben.Web.Website.Library.csproj" />
     <Project Path="Ben.Web.Website/Ben.Web.Website.csproj" />
+  </Folder>
+  <Folder Name="/Desktop Layer/">
+    <Project Path="Ben.Desktop.App.Library/Ben.Desktop.App.Library.csproj" />
+    <Project Path="Ben.Desktop.App.UI/Ben.Desktop.App.UI.csproj" />
   </Folder>
   <Folder Name="/Media Projects/">
     <Project Path="Ben.Video.Editor/Ben.Video.Editor.csproj" />

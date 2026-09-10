@@ -123,7 +123,19 @@ Ben.iOS/DerivedData/
 Ben.Data.WebApi/Models/nsfw/*.onnx
 
 .uploads-e2e/
-.uploads-IsHauntedDb_e2e*/
+# Any scratch database gets an uploads directory named after it (scripts/run-e2e.sh), so the
+# pattern has to be the shape, not one database's name — item 225 made a second one and it landed
+# in git status.
+.uploads-*/
 
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
+
+# ── .NET MAUI desktop (item 225) ──────────────────────────────────────────────
+# bin/ and obj/ are already covered above; these are the artefacts a MAUI build adds beside them.
+**/AppPackages/
+**/Platforms/Windows/*.pfx
+*.binlog
+*.publishsettings
+Ben.Desktop.App.UI/**/*.dmg
+Ben.Desktop.App.UI/**/*.pkg

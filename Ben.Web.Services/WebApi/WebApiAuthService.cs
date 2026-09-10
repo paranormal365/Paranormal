@@ -27,21 +27,10 @@ public sealed class WebApiAuthService : IWebApiAuthService
         {
             // Three refusals arrive as the same status and mean entirely different things to the
             // person: wait, enter your code, or go and confirm your email. Collapsing them into
-            // "invalid email or password" sends two of those three somewhere useless.
-            LastLoginFailure =
-                attempt.WasUnreachable          ? LoginFailure.Unreachable
-              : attempt.WasRateLimited          ? LoginFailure.RateLimited
-              : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
-              : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
-              : attempt.Detail == "LockedOut"   ? LoginFailure.LockedOut
-              // "Failed" is Identity's own word for a wrong email or password — SignInResult
-              // stringified. Anything ELSE, including a detail that could not be read at all,
-              // means the reason is genuinely unknown, and saying "invalid email or password"
-              // there is the mistake the three cases above exist to avoid. A full Playwright run
-              // caught it: an unconfirmed account with the RIGHT password was told the password
-              // was wrong, because the 401's problem-detail did not survive the read under load.
-              : attempt.Detail == "Failed"      ? LoginFailure.InvalidCredentials
-              :                                   LoginFailure.UnknownRefusal;
+            // "invalid email or password" sends two of those three somewhere useless. The ladder
+            // itself lives in LoginFailureMapping (item 225) so the desktop client cannot come to
+            // a different conclusion about the same 401.
+            LastLoginFailure = LoginFailureMapping.From(attempt);
             return false;
         }
 

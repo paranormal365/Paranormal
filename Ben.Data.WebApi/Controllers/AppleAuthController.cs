@@ -22,6 +22,11 @@ namespace Ben.Data.WebApi.Controllers;
 /// <see cref="EntraAuthController"/> does not: a body-supplied identifier would let any caller
 /// claim an identity it does not hold.</para>
 ///
+/// <para><b>Linking a mismatched address</b> is what <c>link</c> is for: an Apple relay address, or
+/// an Apple ID that is simply a different address from the one somebody signed up with, will never
+/// match by email, and without that door they would end up with a second account holding none of
+/// their history.</para>
+///
 /// <para><b>Three outcomes.</b> A known Apple identity signs in. An unknown Apple identity whose
 /// Apple-verified email matches an existing account is linked to it and signs in — that is what
 /// "verified email" means, and it is how somebody who signed up on the website later signs in on
@@ -196,6 +201,99 @@ public sealed class AppleAuthController : BenControllerBase
     }
 
     /// <summary>
+    /// Links a verified Apple identity to an account that already exists here, and signs in.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists.</b> <see cref="SignIn"/> only joins an Apple identity to an
+    /// existing account when Apple's own VERIFIED email happens to match one. Two very ordinary
+    /// situations defeat that: somebody using Apple's Hide My Email relay, whose address here will
+    /// never match anything, and somebody whose Apple ID is simply a different address from the one
+    /// they signed up with. Both used to end at "create an account", which silently produced a
+    /// SECOND account holding none of their cases, groups or history — and no way back.</para>
+    ///
+    /// <para><b>What proves what.</b> The Apple token proves they hold the Apple identity; the
+    /// password proves they hold the account being claimed. Neither alone is enough, and that is
+    /// the same bargain <see cref="EntraAuthController.Link"/> makes. Unlike that one, this issues
+    /// a session: there is no standing session to fall back on, because an Apple identity token is
+    /// not a credential this API accepts on ordinary requests.</para>
+    /// </remarks>
+    [HttpPost("link")]
+    public async Task<IActionResult> Link([FromBody] AppleLinkRequest request, CancellationToken ct)
+    {
+        var audiences = _config.GetSection("Apple:ClientIds").Get<string[]>() ?? [];
+        if (audiences.Length == 0)
+        {
+            _log.LogError("Sign in with Apple linking was called but Apple:ClientIds is not configured.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Signing in with Apple isn't set up on this server yet.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.IdentityToken))
+            return BadRequest("The Apple sign-in didn't complete. Try again.");
+
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest("Email and password are required.");
+
+        AppleIdentity identity;
+        try
+        {
+            identity = await _validator.ValidateAsync(request.IdentityToken, audiences, ct);
+        }
+        catch (SecurityTokenException ex)
+        {
+            _log.LogWarning(ex, "Rejected an Apple identity token while linking.");
+            return Unauthorized("That Apple sign-in couldn't be verified. Try again.");
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Could not reach Apple to verify a sign-in while linking.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "We couldn't reach Apple to check that sign-in. Try again in a moment.");
+        }
+
+        // Already linked somewhere. Answering before the password is checked is deliberate: it
+        // reveals nothing about the account being named, and it stops a second account quietly
+        // stealing an Apple identity that already belongs to a first.
+        var existingOwner = await _userManager.FindByLoginAsync(Provider, identity.Subject);
+
+        var user = await _userManager.FindByEmailAsync(request.Email);
+
+        // One answer for "no such account" and "wrong password", as everywhere else. Naming the
+        // difference turns this into a way to ask whether an address has an account here.
+        if (user is null)
+            return Unauthorized("That email address and password don't match an account.");
+
+        // CheckPasswordSignInAsync rather than CheckPasswordAsync: this endpoint takes a password
+        // from an unauthenticated caller, so it must honour lockout, and a bare password check
+        // does not. Without that, this would be the one door in the building where guesses are
+        // free.
+        var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+
+        if (passwordCheck.IsLockedOut)
+            return Unauthorized("This account is locked after too many attempts. Waiting is the only thing that helps.");
+
+        if (!passwordCheck.Succeeded)
+            return Unauthorized("That email address and password don't match an account.");
+
+        if (existingOwner is not null)
+        {
+            // Already theirs: linking again is not an error, and the person asked to sign in.
+            if (existingOwner.Id == user.Id)
+                return await IssueTokenAsync(user);
+
+            return Conflict(new { Message = "That Apple account is already linked to a different account here." });
+        }
+
+        var link = await _userManager.AddLoginAsync(
+            user, new UserLoginInfo(Provider, identity.Subject, identity.Email ?? request.Email));
+
+        if (!link.Succeeded)
+            return BadRequest(string.Join(" ", link.Errors.Select(e => e.Description)));
+
+        return await IssueTokenAsync(user);
+    }
+
+    /// <summary>
     /// Writes the same bearer-token body <c>/login</c> writes, through Identity's own handler.
     /// </summary>
     private async Task<IActionResult> IssueTokenAsync(AppUser user)
@@ -223,6 +321,12 @@ public sealed class AppleAuthController : BenControllerBase
 /// once, on the first authorization, and never again — so the app has to pass it on.</param>
 /// <param name="Handle">Only used when creating an account. Permanent, so it is asked for.</param>
 public sealed record AppleSignInRequest(string IdentityToken, string? DisplayName, string? Handle);
+
+/// <summary>Claiming an account that already exists here for a verified Apple identity.</summary>
+/// <param name="IdentityToken">Apple's signed JWT, proving the Apple identity.</param>
+/// <param name="Email">The account being claimed — NOT necessarily the address Apple gave.</param>
+/// <param name="Password">Proof that the account being claimed belongs to the caller.</param>
+public sealed record AppleLinkRequest(string IdentityToken, string Email, string Password);
 
 /// <summary>Told to an app that must collect a name and handle before an account can exist.</summary>
 public sealed record AppleNeedsProfileResponse(

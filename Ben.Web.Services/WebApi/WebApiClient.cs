@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
@@ -54,60 +54,8 @@ public sealed class WebApiClient : IWebApiClient
     /// straight out of <c>OnInitializedAsync</c> and kill the circuit; the list path has caught this
     /// since item 120 and the object path never did.</para>
     /// </remarks>
-    private async Task<ItemResult<T>> SendItemAsync<T>(HttpRequestMessage request, CancellationToken token)
-    {
-        using var req = request;
-
-        HttpResponseMessage response;
-        try
-        {
-            response = await _httpClient.SendAsync(req, token);
-        }
-        catch (HttpRequestException)
-        {
-            // The API is unreachable — emphatically not "this thing does not exist".
-            return ItemResult<T>.Failure();
-        }
-
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-            {
-                // 401 before anything else, and this is the case the whole type exists for: a dead
-                // token is not a missing record. On 2026-08-27 a restarted API had invalidated every
-                // bearer token and the profile page could only say the session "may" have expired,
-                // because null was all it was given. Now it is told.
-                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                    return ItemResult<T>.SessionEnded();
-
-                var body = await response.Content.ReadAsStringAsync(token);
-
-                // Same prose test as SendListAsync and SendExpectingReasonAsync: a refusal we wrote
-                // is a sentence, a framework error is a ProblemDetails blob or an HTML page, and
-                // showing either to a person is worse than saying nothing useful.
-                var looksLikeProse = !string.IsNullOrWhiteSpace(body)
-                                  && body.Length < 400
-                                  && !body.TrimStart().StartsWith('{')
-                                  && !body.TrimStart().StartsWith('<');
-
-                return ItemResult<T>.Failure(
-                    looksLikeProse
-                        ? body.Trim('"', ' ', '\n')
-                        : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).");
-            }
-
-            // Ok(null) from a controller becomes 204 WITH AN EMPTY BODY (HttpNoContentOutputFormatter),
-            // and ReadFromJsonAsync throws on an empty stream. That exception surfaced inside a page's
-            // OnInitializedAsync and killed the circuit — the Price Bands screen died on production
-            // precisely when the price list was HEALTHY, because healthy is when the endpoint answers
-            // "nothing to report". An empty success is a success with nothing in it.
-            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
-                || response.Content.Headers.ContentLength == 0)
-                return ItemResult<T>.Ok(default);
-
-            return ItemResult<T>.Ok(await response.Content.ReadFromJsonAsync<T>(cancellationToken: token));
-        }
-    }
+    private Task<ItemResult<T>> SendItemAsync<T>(HttpRequestMessage request, CancellationToken token)
+        => ApiResponseMapper.ReadItemAsync<T>(_httpClient, request, token);
 
     /// <inheritdoc />
     public Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default)
@@ -128,57 +76,8 @@ public sealed class WebApiClient : IWebApiClient
     /// no error and no reason to try again — the one audience least able to tell a broken page from
     /// an empty one.
     /// </remarks>
-    private async Task<LoadResult<T>> SendListAsync<T>(HttpRequestMessage request, CancellationToken token)
-    {
-        using var req = request;
-
-        HttpResponseMessage response;
-        try
-        {
-            response = await _httpClient.SendAsync(req, token);
-        }
-        catch (HttpRequestException)
-        {
-            // The API is unreachable. Emphatically not "there is nothing here" — this is the case
-            // that used to render as an empty group.
-            return LoadResult<T>.Failure();
-        }
-
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-            {
-                // 401 before anything else. A dead token is not a broken list: the page should say
-                // the session ended and offer a way back, not "couldn't load this — try again",
-                // which invites a retry that is certain to fail the same way. Item 133.
-                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                    return LoadResult<T>.SessionEnded();
-
-                var body = await response.Content.ReadAsStringAsync(token);
-
-                // Same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence,
-                // a framework error is a ProblemDetails blob or an HTML page, and showing either
-                // to a person is worse than saying nothing useful.
-                var looksLikeProse = !string.IsNullOrWhiteSpace(body)
-                                  && body.Length < 400
-                                  && !body.TrimStart().StartsWith('{')
-                                  && !body.TrimStart().StartsWith('<');
-
-                // Prose when the server wrote a sentence; otherwise the status itself, which is
-                // the single most useful thing a person debugging a deployment can be told. A
-                // blank page says nothing; "the server answered 404" says the path is wrong and
-                // "403" says the path is right and the caller is not allowed. That distinction
-                // cost a day of guessing on the ishaunted.com deploy (item 126).
-                return LoadResult<T>.Failure(
-                    looksLikeProse
-                        ? body.Trim('"', ' ', '\n')
-                        : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).");
-            }
-
-            var items = await response.Content.ReadFromJsonAsync<List<T>>(cancellationToken: token);
-            return LoadResult<T>.Ok(items);
-        }
-    }
+    private Task<LoadResult<T>> SendListAsync<T>(HttpRequestMessage request, CancellationToken token)
+        => ApiResponseMapper.ReadListAsync<T>(_httpClient, request, token);
 
     /// <inheritdoc />
     public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)

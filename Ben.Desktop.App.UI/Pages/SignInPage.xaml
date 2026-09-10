@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:kit="clr-namespace:Ben.Desktop.App.Library.Kit;assembly=Ben.Desktop.App.Library"
+             x:Class="Ben.Desktop.App.UI.Pages.SignInPage"
+             Title="Sign in">
+    <Grid>
+        <ScrollView>
+            <VerticalStackLayout Padding="32" Spacing="16" MaximumWidthRequest="420"
+                                 HorizontalOptions="Center" VerticalOptions="Center">
+
+                <Label Text="IsHaunted" FontSize="28" FontAttributes="Bold" HorizontalOptions="Center" />
+
+                <!-- A session that ended on its own is an interrupt, not a failure of this form.
+                     Saying so stops it reading as "your password stopped working". -->
+                <Border x:Name="SessionEndedBanner" IsVisible="False" Padding="12"
+                        BackgroundColor="{AppThemeBinding Light=#FEF3C7, Dark=#3F2D0B}">
+                    <Label x:Name="SessionEndedText"
+                           Text="Your session ended. Sign in again to pick up where you left off." />
+                </Border>
+
+                <VerticalStackLayout x:Name="CredentialsSection" Spacing="12">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Email address" />
+                        <Entry x:Name="EmailField" Keyboard="Email" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Password" />
+                        <Entry x:Name="PasswordField" IsPassword="True" />
+                    </VerticalStackLayout>
+
+                    <Button x:Name="SignInButton" Text="Sign in" Clicked="OnSignIn" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout x:Name="TwoFactorSection" Spacing="12" IsVisible="False">
+                    <Label Text="Two-step verification"
+                           FontSize="18" FontAttributes="Bold" />
+                    <Label Text="Your password was accepted. Enter the code from your authenticator app." />
+
+                    <kit:BenCodeEntry x:Name="CodeField" Label="Code"
+                                      Hint="Spaces and hyphens are fine — they are ignored." />
+
+                    <HorizontalStackLayout Spacing="8">
+                        <CheckBox x:Name="RecoveryToggle" />
+                        <Label Text="This is one of my recovery codes" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+
+                    <Button x:Name="SubmitCodeButton" Text="Verify" Clicked="OnSubmitCode" />
+                    <Button Text="Cancel" Clicked="OnCancelTwoFactor" />
+                </VerticalStackLayout>
+
+                <!-- Only rendered when a provider is actually usable here. A button that cannot
+                     work reads as a broken feature rather than an absent one. -->
+                <VerticalStackLayout x:Name="ExternalSection" Spacing="12" IsVisible="False">
+                    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+                        <BoxView VerticalOptions="Center" HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#E5E7EB, Dark=#374151}" />
+                        <Label Grid.Column="1" Text="or" VerticalOptions="Center" />
+                        <BoxView Grid.Column="2" VerticalOptions="Center" HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#E5E7EB, Dark=#374151}" />
+                    </Grid>
+
+                    <Button x:Name="MicrosoftButton" Text="Continue with Microsoft"
+                            IsVisible="False" Clicked="OnMicrosoft" />
+                    <Button x:Name="AppleButton" Text="Continue with Apple"
+                            IsVisible="False" Clicked="OnApple" />
+
+                    <Label x:Name="ExternalMessage" IsVisible="False" />
+                </VerticalStackLayout>
+
+                <Label x:Name="MessageText" IsVisible="False"
+                       TextColor="{AppThemeBinding Light=#B91C1C, Dark=#FCA5A5}" />
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <kit:BenBusyOverlay x:Name="Busy" />
+    </Grid>
+</ContentPage>

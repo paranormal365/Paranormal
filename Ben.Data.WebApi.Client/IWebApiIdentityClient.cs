@@ -36,7 +36,14 @@ public interface IWebApiIdentityClient
 }
 
 /// <summary>The outcome of one sign-in request: the token when it worked, and the status either way.</summary>
-public readonly record struct LoginAttempt(WebApiTokenResponse? Token, int StatusCode, string? Detail = null)
+/// <param name="RetryAfter">
+/// How long the server asked the caller to wait, from its <c>Retry-After</c> header. Only ever set
+/// alongside a 429. A rate-limited person can be shown a countdown instead of a button that is
+/// certain to be refused again — the server already says how long, and throwing that away means
+/// guessing at it or inviting a retry that burns the next window too.
+/// </param>
+public readonly record struct LoginAttempt(
+    WebApiTokenResponse? Token, int StatusCode, string? Detail = null, TimeSpan? RetryAfter = null)
 {
     /// <summary>The server refused the request rather than the credentials.</summary>
     public bool WasRateLimited => StatusCode == 429;

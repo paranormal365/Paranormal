@@ -29,12 +29,41 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
             // The problem-detail carries the reason, and "RequiresTwoFactor" arrives as a 401 —
             // the same status as a wrong password. Reading it is what lets the sign-in page ask
             // for a code instead of telling somebody their password is wrong.
-            return new LoginAttempt(null, (int)response.StatusCode, await ReadDetailAsync(response, token));
+            return new LoginAttempt(
+                null,
+                (int)response.StatusCode,
+                await ReadDetailAsync(response, token),
+                ReadRetryAfter(response));
         }
 
         return new LoginAttempt(
             await response.Content.ReadFromJsonAsync<WebApiTokenResponse>(cancellationToken: token),
             (int)response.StatusCode);
+    }
+
+    /// <summary>
+    /// How long the server said to wait, when it said so.
+    /// </summary>
+    /// <remarks>
+    /// The header comes in two shapes and both are legal: a number of seconds, or an HTTP date.
+    /// Ours sends seconds, but reading only that form would break silently behind any proxy that
+    /// rewrites it. A date already in the past yields null rather than a negative wait.
+    /// </remarks>
+    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter is null) return null;
+
+        if (retryAfter.Delta is { } delta)
+            return delta > TimeSpan.Zero ? delta : null;
+
+        if (retryAfter.Date is { } date)
+        {
+            var wait = date - DateTimeOffset.UtcNow;
+            return wait > TimeSpan.Zero ? wait : null;
+        }
+
+        return null;
     }
 
     private static async Task<string?> ReadDetailAsync(HttpResponseMessage response, CancellationToken token)

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the client half of Ben.Data.WebApi. Deliberately references ONLY
+    Ben.Data.WebApi.Client: everything under test is plain HttpClient code with a stub handler in
+    front of it, so this project needs no server, no database and no MAUI workload, and runs on the
+    Linux CI runner exactly as it runs here.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <!-- Skippable facts: the live-API tests must SKIP when no server is listening, not fail. A
+         failure would say "broken" about a machine that simply is not running one. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Data.WebApi.Client\Ben.Data.WebApi.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Answers captured from a real Ben.Data.WebApi, not written by hand. An invented fixture agrees
+    with whatever the client already believes, which is exactly the belief a test is supposed to
+    challenge; capturing them is how a contract drift shows up here rather than in somebody's app.
+    See Fixtures/README.md for how each one was produced and how to recapture them.
+  -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
