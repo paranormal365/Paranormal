@@ -129,7 +129,10 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
         var members = await db.OrganizationUserMemberships
             .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
 
-        var tier = SubscriptionTierResolver.Resolve(tiers, members);
+        // A tour or event business is priced flat, not by the size of its team (item 231).
+        var kind = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == organizationId).Select(o => o.Kind).FirstAsync(ct);
+        var tier = SubscriptionTierResolver.Resolve(tiers, members, kind);
 
         if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
             return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");

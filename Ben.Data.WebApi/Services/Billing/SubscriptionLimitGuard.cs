@@ -194,8 +194,10 @@ public sealed class SubscriptionLimitGuard
 
         var members = await db.OrganizationUserMemberships
             .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
+        var kind = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == organizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
 
-        return SubscriptionTierResolver.Resolve(tiers, members);
+        return SubscriptionTierResolver.Resolve(tiers, members, kind);
     }
 
     private static string Noun(SubscriptionLimit limit) => limit switch

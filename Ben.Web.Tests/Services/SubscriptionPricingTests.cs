@@ -32,6 +32,65 @@ public sealed class SubscriptionPricingTests
         Band("Large", 11, null, (BillingInterval.Monthly, 40m), (BillingInterval.Yearly, 400m)),
     ];
 
+    private static SubscriptionTier Flat(string name, int sort, bool active = true, params (BillingInterval, decimal)[] prices)
+    {
+        var tier = new SubscriptionTier { Name = name, MinMembers = 1, MaxMembers = null, SortOrder = sort, IsActive = active, IsBandedByMembers = false };
+        foreach (var (interval, price) in prices)
+            tier.Prices.Add(new SubscriptionTierPrice { Interval = interval, Price = price, IsActive = true });
+        return tier;
+    }
+
+    // ── a flat price for a kind of business (item 231) ───────────────────────
+
+    /// <summary>
+    /// A tour or event business is sold the flat business tier whatever the size of its team;
+    /// an investigation group of the same size is still priced by the band. Guides are not
+    /// investigators, and the tour offer says "bring every guide" for one price.
+    /// </summary>
+    [Theory]
+    [InlineData(OrganizationKind.GhostWalkingTour,    1,  "Tour & Event Business")]
+    [InlineData(OrganizationKind.GhostWalkingTour,    40, "Tour & Event Business")]
+    [InlineData(OrganizationKind.PublicEventProvider, 12, "Tour & Event Business")]
+    [InlineData(OrganizationKind.InvestigationGroup,  1,  "Free")]
+    [InlineData(OrganizationKind.InvestigationGroup,  12, "Large")]
+    public void A_business_kind_is_priced_flat_and_a_group_by_its_band(OrganizationKind kind, int members, string expected)
+    {
+        var tiers = SoundList();
+        tiers.Add(Flat("Tour & Event Business", 90, true, (BillingInterval.Monthly, 29m), (BillingInterval.Yearly, 290m)));
+
+        Assert.Equal(expected, SubscriptionTierResolver.Resolve(tiers, members, kind).Name);
+    }
+
+    /// <summary>With no flat tier on offer, a business is priced by the ladder like anyone — never refused.</summary>
+    [Fact]
+    public void A_business_with_no_flat_tier_on_offer_falls_back_to_the_band()
+    {
+        Assert.Equal("Small", SubscriptionTierResolver.Resolve(SoundList(), 5, OrganizationKind.GhostWalkingTour).Name);
+    }
+
+    /// <summary>A retired flat tier, or one with no live price, is not on offer.</summary>
+    [Fact]
+    public void A_retired_or_priceless_flat_tier_is_not_on_offer()
+    {
+        var tiers = SoundList();
+        tiers.Add(Flat("Old business plan", 10, active: false, (BillingInterval.Monthly, 19m)));
+        tiers.Add(Flat("Unpriced", 20, active: true));
+        Assert.Null(SubscriptionTierResolver.BusinessTier(tiers));
+        Assert.Equal("Small", SubscriptionTierResolver.Resolve(tiers, 5, OrganizationKind.GhostWalkingTour).Name);
+
+        tiers.Add(Flat("Tour & Event Business", 90, true, (BillingInterval.Monthly, 29m)));
+        Assert.Equal("Tour & Event Business", SubscriptionTierResolver.Resolve(tiers, 5, OrganizationKind.GhostWalkingTour).Name);
+    }
+
+    /// <summary>The flat tier never disturbs the ladder's own validation: it has no place to be contiguous with.</summary>
+    [Fact]
+    public void A_flat_tier_is_invisible_to_the_ladder_check()
+    {
+        var tiers = SoundList();
+        tiers.Add(Flat("Tour & Event Business", 90, true, (BillingInterval.Monthly, 29m)));
+        Assert.Null(SubscriptionTierResolver.Validate(tiers));
+    }
+
     // ── the price list ────────────────────────────────────────────────────────
 
     [Theory]

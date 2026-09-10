@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Entities;
 
 // Moved from Ben.Data.WebApi.Services.Billing (item 156 Phase D): the security service
@@ -86,6 +87,35 @@ public static class SubscriptionTierResolver
     /// almost certainly treat it as "free", which is the expensive direction to be wrong in and
     /// exactly what <see cref="Validate"/> exists to prevent reaching production.
     /// </remarks>
+    /// <summary>
+    /// A kind of organization that is sold a flat price for the business rather than a band for
+    /// the size of its team: a ghost walking tour, a public event provider. Their guides are not
+    /// investigators, and counting them would price the wrong thing.
+    /// </summary>
+    public static bool IsBusinessKind(OrganizationKind kind) =>
+        kind is OrganizationKind.GhostWalkingTour or OrganizationKind.PublicEventProvider;
+
+    /// <summary>
+    /// The tier a flat-priced business is sold, if one is on offer: the active tier that is not
+    /// banded by members, lowest sort order first. Null means the ladder prices them like anyone.
+    /// </summary>
+    public static SubscriptionTier? BusinessTier(IReadOnlyList<SubscriptionTier> tiers) =>
+        tiers.Where(t => t.IsActive && !t.IsBandedByMembers && t.Prices.Any(p => p.IsActive))
+             .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+             .FirstOrDefault();
+
+    /// <summary>
+    /// The tier that prices this organization: the flat business tier for a business kind when
+    /// one is on offer (item 231), otherwise the member band that covers its active members.
+    /// </summary>
+    public static SubscriptionTier Resolve(IReadOnlyList<SubscriptionTier> tiers, int memberCount, OrganizationKind kind)
+    {
+        if (IsBusinessKind(kind) && BusinessTier(tiers) is { } business)
+            return business;
+        return Resolve(tiers, memberCount);
+    }
+
+    /// <summary>The member band alone. Prefer the overload that knows the organization's kind.</summary>
     public static SubscriptionTier Resolve(IReadOnlyList<SubscriptionTier> tiers, int memberCount)
     {
         if (Validate(tiers) is { } problem)

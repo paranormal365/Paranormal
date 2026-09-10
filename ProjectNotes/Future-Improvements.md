@@ -11551,3 +11551,27 @@ Maps key the website uses, buys an access token, and answers forward, reverse an
 lookups in the shapes the callers already had. Fixtures captured from the real API; a live test
 proves the key. Details: `README-apple-geocoding-230.md`.
 
+---
+
+## 231. One flat price for tour and event businesses (BUILT 2026-09-10)
+
+Ben asked for the tour-business mailing to be re-verified, given the logo, and for tour groups to
+be billed monthly and yearly at the flat price it promises. Every claim held except the price:
+the tier resolver priced every organization by member count, so a tour with eight guides landed
+in a $60 band. `SubscriptionTierResolver` now takes the organization's kind and sells a business
+kind the flat tier when one is on offer. No schema change; the tier is data (Administration →
+Subscription Tiers, banded by members unticked, 29 / 290). Created on the testing copy;
+**production needs the same tier entered.** Mailing rebuilt with the logo. Details:
+`README-tour-business-billing-231.md`.
+
+---
+
+## 232. The ladder-reshape Playwright fixture cannot open its dialog (OPEN, found 2026-09-10)
+
+`LadderReshapeTests` (category Billing) fails on the testing copy: the **Reshape the ladder**
+button is visible, the click lands, and the dialog never appears — with the flat tour tier present
+or retired, so item 231 is not the cause, and the website logged no error. The opening click was
+changed to a retrying one on 2026-09-10 and that did not help, so this is not the usual Blazor
+attach race. Not chased further that day; the three other billing fixtures pass. Start by opening
+`/admin/subscription-tiers` as SuperAdmin on the testing copy and pressing the button by hand.
+

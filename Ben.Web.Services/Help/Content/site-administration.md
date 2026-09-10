@@ -388,6 +388,19 @@ for, and restricting it further would mean the person on call cannot see why the
 
 ## Billing
 
+### A flat price for tour and event businesses
+
+The price bands below price an **investigation group** by the size of its team. A **ghost
+walking tour** or a **public event provider** is not priced that way: a business pays one flat
+price whatever the size of its team, because guides are not investigators and counting them
+would price the wrong thing.
+
+To offer that price, add a tier under **Administration → Subscription Tiers** and untick
+**banded by members**; the pricing page labels it for tour and event businesses. Every business
+kind of group is quoted, billed and renewed on that tier, and its member count is ignored. With
+no such tier on offer a business is priced by the bands like anyone else, so the offer in the
+tour-business mailing is true only while that tier exists and is active.
+
 ### Role areas on a price band
 
 Each band carries a **Role areas** checklist — which parts of the site a group on that band may

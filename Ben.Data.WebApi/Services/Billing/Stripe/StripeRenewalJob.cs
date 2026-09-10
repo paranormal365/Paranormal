@@ -186,7 +186,9 @@ public sealed class StripeRenewalJob : IScheduledJob
 
         var members = await db.OrganizationUserMemberships
             .CountAsync(m => m.OrganizationId == sub.OrganizationId && m.IsActive, ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members);
+        var kind = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == sub.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
+        var tier = SubscriptionTierResolver.Resolve(tiers, members, kind);
 
         if (SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } listPrice)
         {
