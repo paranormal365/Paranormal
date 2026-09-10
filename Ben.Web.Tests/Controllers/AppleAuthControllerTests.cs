@@ -56,6 +56,8 @@ public class AppleAuthControllerTests
         mock.Setup(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()))
             .ReturnsAsync(IdentityResult.Success);
         mock.Setup(m => m.UpdateAsync(It.IsAny<AppUser>())).ReturnsAsync(IdentityResult.Success);
+        // Most accounts have no second factor; the ones that do say so explicitly per test.
+        mock.Setup(m => m.GetTwoFactorEnabledAsync(It.IsAny<AppUser>())).ReturnsAsync(false);
         return mock;
     }
 
@@ -375,7 +377,7 @@ public class AppleAuthControllerTests
         var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
             .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "wrong"), default);
 
-        Assert.IsType<UnauthorizedObjectResult>(result);
+        AssertRefusal(result, "Failed");
         um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
         sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
     }
@@ -396,8 +398,9 @@ public class AppleAuthControllerTests
         var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
             .Link(new AppleLinkRequest("a.signed.token", "nobody@nowhere.test", "whatever"), default);
 
-        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
-        Assert.Equal("That email address and password don't match an account.", refusal.Value);
+        // Byte for byte what a wrong password answers. Same status, same shape, same word — anything
+        // less makes this a way to ask whether an address has an account here.
+        AssertRefusal(result, "Failed");
     }
 
     /// <summary>Guesses must not be free on a door that takes a password from a stranger.</summary>
@@ -414,8 +417,7 @@ public class AppleAuthControllerTests
         var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
             .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "guess"), default);
 
-        var refusal = Assert.IsType<UnauthorizedObjectResult>(result);
-        Assert.Contains("locked", refusal.Value!.ToString(), StringComparison.OrdinalIgnoreCase);
+        AssertRefusal(result, "LockedOut");
 
         // lockoutOnFailure: true is what makes repeated guesses cost something. CheckPasswordAsync,
         // which the Entra link uses, does not count them at all.
@@ -562,5 +564,169 @@ public class AppleAuthControllerTests
 
         Assert.IsType<UnauthorizedObjectResult>(result);
         um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Never);
+    }
+
+    // ── Linking must not walk around a second factor ──────────────────────────
+
+    /// <summary>
+    /// An account with two-step verification is NOT joinable with a password alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is the hole this test exists for. <c>CheckPasswordSignInAsync</c> verifies the
+    /// password and the lockout and nothing else — it never returns <c>RequiresTwoFactor</c>,
+    /// because that is <c>PasswordSignInAsync</c>'s job, and this endpoint cannot use that one
+    /// without creating a cookie sign-in it has no business creating.</para>
+    ///
+    /// <para>So a first draft of this endpoint would link a two-factor account on a password, which
+    /// is a way around the exact protection its owner turned on. The second factor is checked
+    /// explicitly instead.</para>
+    /// </remarks>
+    [Fact]
+    public async Task LinkRefusesATwoFactorAccountWithNoCode()
+    {
+        var (um, sim, mine) = TwoFactorAccount();
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        AssertRefusal(result, "RequiresTwoFactor");
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+        sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    /// <summary>A wrong code is refused as firmly as no code.</summary>
+    [Fact]
+    public async Task LinkRefusesATwoFactorAccountWithAWrongCode()
+    {
+        var (um, sim, mine) = TwoFactorAccount();
+        um.Setup(m => m.VerifyTwoFactorTokenAsync(mine, It.IsAny<string>(), "000000")).ReturnsAsync(false);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right", TwoFactorCode: "000000"), default);
+
+        AssertRefusal(result, "RequiresTwoFactor");
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    /// <summary>The right code links and signs in.</summary>
+    [Fact]
+    public async Task LinkAcceptsAValidAuthenticatorCode()
+    {
+        var (um, sim, mine) = TwoFactorAccount();
+        um.Setup(m => m.VerifyTwoFactorTokenAsync(mine, It.IsAny<string>(), "123456")).ReturnsAsync(true);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right", TwoFactorCode: "123456"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.AddLoginAsync(mine, It.IsAny<UserLoginInfo>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A code typed the way it is displayed still works.
+    /// </summary>
+    /// <remarks>
+    /// People read these aloud in threes and authenticator apps print them spaced. Refusing a
+    /// correctly typed code would be a failure we caused.
+    /// </remarks>
+    [Fact]
+    public async Task LinkIgnoresSpacingInACode()
+    {
+        var (um, sim, mine) = TwoFactorAccount();
+        um.Setup(m => m.VerifyTwoFactorTokenAsync(mine, It.IsAny<string>(), "123456")).ReturnsAsync(true);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right", TwoFactorCode: "123 456"), default);
+
+        Assert.IsType<EmptyResult>(result);
+    }
+
+    /// <summary>
+    /// A recovery code is REDEEMED, not merely checked.
+    /// </summary>
+    /// <remarks>
+    /// One that survived being used would not be a recovery code. Verified through the redeeming
+    /// call rather than the checking one, because the difference is the whole point.
+    /// </remarks>
+    [Fact]
+    public async Task LinkRedeemsARecoveryCode()
+    {
+        var (um, sim, mine) = TwoFactorAccount();
+        um.Setup(m => m.RedeemTwoFactorRecoveryCodeAsync(mine, "abcd1234")).ReturnsAsync(IdentityResult.Success);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right",
+                TwoFactorRecoveryCode: "abcd-1234"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.RedeemTwoFactorRecoveryCodeAsync(mine, "abcd1234"), Times.Once);
+
+        // A recovery code is not an app code and must not be checked as one.
+        um.Verify(m => m.VerifyTwoFactorTokenAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>An account with no second factor is never asked for one.</summary>
+    [Fact]
+    public async Task LinkDoesNotAskForACodeWhenThereIsNoSecondFactor()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.VerifyTwoFactorTokenAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// An unconfirmed address is named as such, not reported as a wrong password.
+    /// </summary>
+    /// <remarks>
+    /// The mistake this avoids has its own comments elsewhere in this codebase: telling somebody
+    /// their password is wrong sends them to reset one that was always right.
+    /// </remarks>
+    [Fact]
+    public async Task LinkTellsAnUnconfirmedAccountWhatIsActuallyWrong()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.NotAllowed);
+
+        var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        AssertRefusal(result, "NotAllowed");
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    private static (Mock<UserManager<AppUser>> Um, Mock<SignInManager<AppUser>> Sim, AppUser User) TwoFactorAccount()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        um.Setup(m => m.GetTwoFactorEnabledAsync(mine)).ReturnsAsync(true);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+        return (um, sim, mine);
+    }
+
+    /// <summary>A refusal carries Identity's own word, in the shape /login uses.</summary>
+    private static void AssertRefusal(IActionResult result, string expectedDetail)
+    {
+        var problem = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status401Unauthorized, problem.StatusCode);
+        var details = Assert.IsType<Microsoft.AspNetCore.Mvc.ProblemDetails>(problem.Value);
+        Assert.Equal(expectedDetail, details.Detail);
     }
 }

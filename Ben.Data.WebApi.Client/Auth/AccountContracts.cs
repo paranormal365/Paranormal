@@ -66,7 +66,17 @@ public sealed record AppleSignInRequest(
 /// Email relay address matches nothing here, and an Apple ID is often simply a different address
 /// from the one somebody signed up with.
 /// </param>
+/// <remarks>
+/// The two-factor fields are omitted from the JSON when null, exactly as the sign-in request's are,
+/// and for the same reason: Identity treats an empty string as an attempt with a wrong code rather
+/// than as no attempt at all, which spends a failure against an account that may not even have a
+/// second factor.
+/// </remarks>
 public sealed record AppleLinkRequest(
     [property: JsonPropertyName("identityToken")] string IdentityToken,
     [property: JsonPropertyName("email")] string Email,
-    [property: JsonPropertyName("password")] string Password);
+    [property: JsonPropertyName("password")] string Password,
+    [property: JsonPropertyName("twoFactorCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TwoFactorCode = null,
+    [property: JsonPropertyName("twoFactorRecoveryCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TwoFactorRecoveryCode = null);

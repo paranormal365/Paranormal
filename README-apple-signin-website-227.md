@@ -55,7 +55,28 @@ Both already exist on the server. Nothing new is needed there for the button its
 | Door | Endpoint | Proves what |
 | --- | --- | --- |
 | Create an account | `POST api/auth/apple` | Apple token, plus a chosen display name and handle |
-| Claim one that exists | `POST api/auth/apple/link` | Apple token, plus that account's email and password |
+| Claim one that exists | `POST api/auth/apple/link` | Apple token, plus that account's **full sign-in**: email, password, and a second factor when the account has one |
+
+### Linking is a real sign-in, not a password check
+
+Ben, 2026-09-10: "we make them follow the normal login process with verified e-mail and password
+(and 2fa if configured)". Right, and the first version of this endpoint did not do it.
+
+`CheckPasswordSignInAsync` verifies the password and the lockout and **nothing else**. It never
+returns `RequiresTwoFactor` — that is `PasswordSignInAsync`'s job, and this endpoint cannot use that
+one without creating a cookie sign-in it has no business creating. So linking would have joined a
+two-factor account on a password alone: a way around the exact protection its owner turned on.
+
+The second factor is now checked explicitly, an authenticator code verified and a recovery code
+**redeemed** rather than merely checked. Refusals answer in the same problem-detail shape `/login`
+uses, carrying Identity's own word, so a client maps them with the same code rather than a second
+copy that would eventually disagree. An unconfirmed address now says so instead of being reported as
+a wrong password.
+
+One thing a test caught while this was being written: an unknown address and a wrong password have
+to answer in the same **shape**, not merely the same words. Answering one with prose and the other
+with a problem-detail tells them apart just as loudly, which would make this a way to ask whether
+any given address has an account here.
 
 **Offer the second one for the whole of that screen**, not only when Apple's address happens to
 match an existing account. The server can only detect a collision when the addresses already match,
@@ -184,6 +205,27 @@ The symptom would be somebody signing in on the web and finding a brand new empt
 used the app for months. **The link door on the completion page is what makes that recoverable** —
 they can claim their real account with its password — but it is a cure for something that need not
 happen.
+
+### What Apple actually gives us to build an account from
+
+Very little, and it is worth knowing before designing a form around it.
+
+| From Apple | When |
+| --- | --- |
+| `sub`, the identity | Always. This is what identifies somebody, forever. |
+| Email address | First authorization only. May be a relay. May be withheld entirely. |
+| `email_verified`, `is_private_email` | With the token |
+| The person's name | First authorization only, in a separate field, never in the token |
+
+Nothing else. No handle, and a handle is permanent — which is why the server refuses to invent one
+and asks instead.
+
+**Apple-created accounts are active immediately; there is no email to confirm.** Apple has already
+verified the address, so `EmailConfirmed` is set at creation. That is deliberate and it has to stay
+that way: somebody who withheld their address gets `{sub}@appleid.invalid`, which is not deliverable,
+so a confirmation requirement would lock them out permanently with no way to ask for another link.
+A relay address is only deliverable once the sending domain is registered with Apple, so it would
+lock those people out too until that is done.
 
 ### One more thing, if the site emails these people
 

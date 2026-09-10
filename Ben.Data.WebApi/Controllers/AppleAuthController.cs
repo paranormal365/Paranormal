@@ -258,10 +258,12 @@ public sealed class AppleAuthController : BenControllerBase
 
         var user = await _userManager.FindByEmailAsync(request.Email);
 
-        // One answer for "no such account" and "wrong password", as everywhere else. Naming the
-        // difference turns this into a way to ask whether an address has an account here.
+        // One answer for "no such account" and "wrong password", as everywhere else — and the same
+        // SHAPE too, not merely the same words. Answering a missing account with prose and a wrong
+        // password with a problem-detail would tell them apart just as loudly, which turns this into
+        // a way to ask whether any given address has an account here.
         if (user is null)
-            return Unauthorized("That email address and password don't match an account.");
+            return Problem(detail: "Failed", statusCode: StatusCodes.Status401Unauthorized);
 
         // CheckPasswordSignInAsync rather than CheckPasswordAsync: this endpoint takes a password
         // from an unauthenticated caller, so it must honour lockout, and a bare password check
@@ -269,11 +271,32 @@ public sealed class AppleAuthController : BenControllerBase
         // free.
         var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
 
+        // The refusals answer in the same shape /login uses — a problem-detail carrying Identity's
+        // own word — so a client maps them with the same code rather than a second copy that could
+        // disagree about what a 401 here means.
         if (passwordCheck.IsLockedOut)
-            return Unauthorized("This account is locked after too many attempts. Waiting is the only thing that helps.");
+            return Problem(detail: "LockedOut", statusCode: StatusCodes.Status401Unauthorized);
+
+        // An unconfirmed address is NOT a wrong password, and saying so sends somebody to reset a
+        // password that was always right. Three separate comments in this codebase exist because
+        // that mistake has been made before.
+        if (passwordCheck.IsNotAllowed)
+            return Problem(detail: "NotAllowed", statusCode: StatusCodes.Status401Unauthorized);
 
         if (!passwordCheck.Succeeded)
-            return Unauthorized("That email address and password don't match an account.");
+            return Problem(detail: "Failed", statusCode: StatusCodes.Status401Unauthorized);
+
+        // CheckPasswordSignInAsync verifies the PASSWORD. It never returns RequiresTwoFactor — that
+        // is PasswordSignInAsync's job, and this endpoint cannot use it because it must not create
+        // a cookie sign-in. So the second factor is checked here, explicitly. Without this, linking
+        // would be a door into a two-factor account that needs only the password: a way around the
+        // very protection its owner turned on.
+        if (await _userManager.GetTwoFactorEnabledAsync(user))
+        {
+            var verified = await VerifySecondFactorAsync(user, request.TwoFactorCode, request.TwoFactorRecoveryCode);
+            if (!verified)
+                return Problem(detail: "RequiresTwoFactor", statusCode: StatusCodes.Status401Unauthorized);
+        }
 
         if (existingOwner is not null)
         {
@@ -291,6 +314,35 @@ public sealed class AppleAuthController : BenControllerBase
             return BadRequest(string.Join(" ", link.Errors.Select(e => e.Description)));
 
         return await IssueTokenAsync(user);
+    }
+
+    /// <summary>
+    /// Checks a second factor without a sign-in context, which is what an unauthenticated endpoint
+    /// has to do.
+    /// </summary>
+    /// <remarks>
+    /// <para>Returns false when nothing was supplied, which is how the caller is told to ask —
+    /// the same 401 <c>/login</c> answers, so a client already knows what to do with it.</para>
+    ///
+    /// <para>A recovery code is redeemed, not merely checked: it is single use, and one that
+    /// survived being used would not be a recovery code. The two are kept apart rather than
+    /// guessed at by shape, because guessing wrong spends a recovery code on a mistyped app code.</para>
+    /// </remarks>
+    private async Task<bool> VerifySecondFactorAsync(AppUser user, string? code, string? recoveryCode)
+    {
+        // Spaces and hyphens are how these are printed and read aloud. The rest of the site strips
+        // them; refusing a comfortably typed code would be a failure we caused.
+        static string Clean(string value) =>
+            value.Replace(" ", string.Empty).Replace("-", string.Empty).Trim();
+
+        if (!string.IsNullOrWhiteSpace(recoveryCode))
+            return await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, Clean(recoveryCode)) is { Succeeded: true };
+
+        if (string.IsNullOrWhiteSpace(code))
+            return false;
+
+        return await _userManager.VerifyTwoFactorTokenAsync(
+            user, TokenOptions.DefaultAuthenticatorProvider, Clean(code));
     }
 
     /// <summary>
@@ -326,7 +378,21 @@ public sealed record AppleSignInRequest(string IdentityToken, string? DisplayNam
 /// <param name="IdentityToken">Apple's signed JWT, proving the Apple identity.</param>
 /// <param name="Email">The account being claimed — NOT necessarily the address Apple gave.</param>
 /// <param name="Password">Proof that the account being claimed belongs to the caller.</param>
-public sealed record AppleLinkRequest(string IdentityToken, string Email, string Password);
+/// <param name="TwoFactorCode">
+/// A code from the authenticator app, when a previous attempt answered <c>RequiresTwoFactor</c>.
+/// </param>
+/// <param name="TwoFactorRecoveryCode">One of the printed recovery codes, instead of an app code.</param>
+/// <remarks>
+/// The two-factor fields work exactly as <c>/login</c>'s do, and for the same reason: an account
+/// with a second factor turned on must not be joinable with a password alone, or linking becomes a
+/// way around the protection its owner chose.
+/// </remarks>
+public sealed record AppleLinkRequest(
+    string IdentityToken,
+    string Email,
+    string Password,
+    string? TwoFactorCode = null,
+    string? TwoFactorRecoveryCode = null);
 
 /// <summary>Told to an app that must collect a name and handle before an account can exist.</summary>
 public sealed record AppleNeedsProfileResponse(

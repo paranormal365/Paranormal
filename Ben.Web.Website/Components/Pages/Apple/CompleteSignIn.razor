@@ -98,9 +98,34 @@
                            @bind="_linkPassword" @bind:event="oninput" />
                 </div>
 
+                @*
+                    Only after the server has said the account has a second factor. Asking up front
+                    would have most people wondering what to type, and asking for a code the account
+                    does not use would spend a failed attempt against it.
+                *@
+                @if (_needsTwoFactor)
+                {
+                    <div class="mb-3">
+                        <label class="form-label" for="ac-2fa">
+                            @(_useRecoveryCode ? "Recovery code" : "Code from your authenticator app")
+                        </label>
+                        <input id="ac-2fa" class="form-control" autocomplete="one-time-code"
+                               @bind="_twoFactorCode" @bind:event="oninput" />
+                        <div class="form-text">Spaces and hyphens are fine — they're ignored.</div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="ac-recovery"
+                               @bind="_useRecoveryCode" />
+                        <label class="form-check-label" for="ac-recovery">
+                            Use one of my recovery codes instead
+                        </label>
+                    </div>
+                }
+
                 <button type="button" class="btn btn-outline-primary"
                         disabled="@(_busy || !CanLink)" @onclick="LinkAsync">
-                    @(_busy ? "Working…" : "Sign in and join them")
+                    @(_busy ? "Working…" : _needsTwoFactor ? "Verify and join them" : "Sign in and join them")
                 </button>
             </div>
         </div>
@@ -127,11 +152,19 @@
     private string _linkEmail = string.Empty;
     private string _linkPassword = string.Empty;
 
+    // Appears only once the server says the account has a second factor. The password is held so
+    // the second attempt can carry both, rather than making somebody type it again.
+    private bool _needsTwoFactor;
+    private bool _useRecoveryCode;
+    private string _twoFactorCode = string.Empty;
+
     private bool CanCreate =>
         _displayName.Trim().Length >= 2 && !string.IsNullOrWhiteSpace(_handle);
 
     private bool CanLink =>
-        !string.IsNullOrWhiteSpace(_linkEmail) && !string.IsNullOrWhiteSpace(_linkPassword);
+        !string.IsNullOrWhiteSpace(_linkEmail)
+        && !string.IsNullOrWhiteSpace(_linkPassword)
+        && (!_needsTwoFactor || !string.IsNullOrWhiteSpace(_twoFactorCode));
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -212,7 +245,11 @@
         try
         {
             var outcome = await AppleClient.LinkAsync(
-                _identityToken, _linkEmail.Trim(), _linkPassword);
+                _identityToken,
+                _linkEmail.Trim(),
+                _linkPassword,
+                twoFactorCode: _needsTwoFactor && !_useRecoveryCode ? _twoFactorCode.Trim() : null,
+                recoveryCode: _needsTwoFactor && _useRecoveryCode ? _twoFactorCode.Trim() : null);
 
             if (outcome.Succeeded)
             {
@@ -220,14 +257,25 @@
                 return;
             }
 
-            // Stay on this page. A wrong password is a thing to retype, not a dead end, and the
-            // Apple token is still good.
+            // Being asked for a code is not a failure: the password was right. Showing the form and
+            // saying so is the whole response.
+            if (outcome.RequiresTwoFactor)
+            {
+                _needsTwoFactor = true;
+                _twoFactorCode = string.Empty;
+            }
+
+            // Stay on this page either way. A wrong password is a thing to retype, not a dead end,
+            // and the Apple token is still good.
             _error = outcome.Reason;
         }
         finally
         {
             _busy = false;
-            _linkPassword = string.Empty;
+
+            // The password is NOT cleared while a code is outstanding — the next attempt sends both,
+            // and making somebody retype it to answer a challenge they just passed is needless.
+            if (!_needsTwoFactor) _linkPassword = string.Empty;
         }
     }
 }
