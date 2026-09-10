@@ -94,9 +94,12 @@ public class AppleAuthControllerTests
                 .Select((id, i) => new KeyValuePair<string, string?>($"Apple:ClientIds:{i}", id))
                 .ToArray()).Build();
 
+        // The service is built from the SAME mocks as the controller, so every expectation these
+        // tests set on the managers is seen by the decisions, wherever they now live.
+        var signIn = (sim ?? SignInManagerMock(um)).Object;
+        var external = new ExternalSignInService(um.Object, signIn, new UserHandleService(Factory()));
         var controller = new AppleAuthController(
-            um.Object, (sim ?? SignInManagerMock(um)).Object,
-            new UserHandleService(Factory()), validator, config,
+            um.Object, signIn, external, validator, config,
             NullLogger<AppleAuthController>.Instance);
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         return controller;

@@ -48,7 +48,7 @@ public sealed class AppleAuthController : BenControllerBase
     private const string Provider = "Apple";
     private readonly UserManager<AppUser> _userManager;
     private readonly SignInManager<AppUser> _signInManager;
-    private readonly UserHandleService _handles;
+    private readonly ExternalSignInService _external;
     private readonly IAppleIdentityTokenValidator _validator;
     private readonly IConfiguration _config;
     private readonly ILogger<AppleAuthController> _log;
@@ -56,14 +56,14 @@ public sealed class AppleAuthController : BenControllerBase
     public AppleAuthController(
         UserManager<AppUser> userManager,
         SignInManager<AppUser> signInManager,
-        UserHandleService handles,
+        ExternalSignInService external,
         IAppleIdentityTokenValidator validator,
         IConfiguration config,
         ILogger<AppleAuthController> log)
     {
         _userManager   = userManager;
         _signInManager = signInManager;
-        _handles       = handles;
+        _external      = external;
         _validator     = validator;
         _config        = config;
         _log           = log;
@@ -103,142 +103,46 @@ public sealed class AppleAuthController : BenControllerBase
                 "We couldn't reach Apple to check that sign-in. Try again in a moment.");
         }
 
-        // 1. A returning Apple identity.
-        var linked = await _userManager.FindByLoginAsync(Provider, identity.Subject);
-        if (linked is not null)
-            return await IssueTokenAsync(linked);
+        // Every decision from here is ExternalSignInService's, shared with Microsoft: resolve by
+        // subject, join a VERIFIED address, refuse an account that may not sign in, or say what an
+        // account still needs. This controller only turns those answers into HTTP.
+        var external = Identity(identity);
 
-        // 2. An Apple identity whose verified email is already an account here.
-        //    Only a VERIFIED email links — an unverified one proves nothing about ownership.
-        if (identity.EmailVerified && !string.IsNullOrWhiteSpace(identity.Email))
+        switch (await _external.ResolveAsync(external, ct))
         {
-            var byEmail = await _userManager.FindByEmailAsync(identity.Email);
-            if (byEmail is not null)
-            {
-                var link = await _userManager.AddLoginAsync(
-                    byEmail, new UserLoginInfo(Provider, identity.Subject, identity.Email));
-                if (!link.Succeeded)
-                    return BadRequest(string.Join(" ", link.Errors.Select(e => e.Description)));
+            case ResolveResult.Found found:
+                return await IssueTokenAsync(found.User);
 
-                // An Entra-born or website-born account that reaches us through Apple has now had
-                // its address proved by Apple; leaving it unconfirmed would lock them out of the
-                // website they can already use on the phone.
-                if (!byEmail.EmailConfirmed)
-                {
-                    byEmail.EmailConfirmed = true;
-                    await _userManager.UpdateAsync(byEmail);
-                }
+            case ResolveResult.Refused:
+                return RefusedAccount();
 
-                return await IssueTokenAsync(byEmail);
-            }
+            case ResolveResult.Failed failed:
+                return BadRequest(failed.Reason);
+
+            case ResolveResult.Unknown unknown when unknown.ShouldLinkInstead:
+                // The (unverified) address already belongs to somebody. Route, do not create.
+                return Conflict(NeedsProfile(identity, request.DisplayName, addressTaken: true));
         }
 
-        // 3. Nobody here yet. A handle is permanent, so it is asked for, never invented.
-        var displayName = request.DisplayName?.Trim() ?? string.Empty;
-        if (displayName.Length is < 2 or > 200 || string.IsNullOrWhiteSpace(request.Handle))
+        // Nobody here yet. A handle is permanent, so it is asked for, never invented — which is why
+        // the handle is passed through rather than null.
+        switch (await _external.RegisterAsync(external, request.DisplayName, request.Handle ?? string.Empty, ct))
         {
-            return Conflict(new AppleNeedsProfileResponse(
-                NeedsProfile: true,
-                SuggestedDisplayName: request.DisplayName?.Trim(),
-                Email: identity.Email,
-                IsPrivateEmail: identity.IsPrivateEmail));
+            case RegisterResult.Created created:
+                return await IssueTokenAsync(created.User);
+
+            case RegisterResult.NeedsProfile needs:
+                return Conflict(NeedsProfile(identity, request.DisplayName, handleProblem: needs.HandleProblem));
+
+            case RegisterResult.AddressTaken:
+                return Conflict(NeedsProfile(identity, request.DisplayName, addressTaken: true));
+
+            case RegisterResult.Failed failed:
+                return BadRequest(failed.Reason);
+
+            default:
+                return BadRequest("That sign-in couldn't be completed.");
         }
-
-        var (handleFree, handleReason) = await _handles.IsAvailableAsync(request.Handle, ct);
-        if (!handleFree)
-            return Conflict(new AppleNeedsProfileResponse(
-                NeedsProfile: true,
-                SuggestedDisplayName: displayName,
-                Email: identity.Email,
-                IsPrivateEmail: identity.IsPrivateEmail,
-                HandleProblem: handleReason ?? "Choose another name."));
-
-        // Apple only hands over the email on the FIRST authorization, and a user may withhold it
-        // entirely. A placeholder keeps Identity's uniqueness happy without ever pretending to be
-        // a reachable address — MeController's own "no email" handling covers the rest.
-        var withheld = string.IsNullOrWhiteSpace(identity.Email);
-        var email = withheld ? $"{identity.Subject}@appleid.invalid" : identity.Email!;
-
-        // Apple says which of the three this is exactly once, here. Recording it is the only way
-        // anything later can tell a real address from a relay or a placeholder — and without that,
-        // the site shows a machine-generated string as somebody's email and claims to have written
-        // to them when Apple quietly dropped it.
-        var emailKind =
-            withheld                 ? EmailAddressKind.Unreachable
-          : identity.IsPrivateEmail  ? EmailAddressKind.AppleRelay
-          :                            EmailAddressKind.Ordinary;
-
-        var user = new AppUser
-        {
-            Id                 = Guid.NewGuid(),
-            Email              = email,
-            UserName           = email,
-            NormalizedEmail    = email.ToUpperInvariant(),
-            NormalizedUserName = email.ToUpperInvariant(),
-            DisplayName        = displayName,
-            Handle             = UserHandle.Normalize(request.Handle),
-            EmailKind          = emailKind,
-            // Apple verified it; there is no second confirmation to send, and no address to send
-            // it to when the user withheld theirs.
-            EmailConfirmed     = true,
-            DateCreated        = DateTime.UtcNow,
-        };
-
-        // THE ADDRESS ALREADY BELONGS TO SOMEBODY HERE. Only reachable with an address Apple did
-        // NOT verify — a verified one would have linked further up — which is exactly the case
-        // where joining the two automatically would be wrong: an unverified claim on an address is
-        // not proof of holding it.
-        //
-        // So refuse, and say which door to use. Creating a second account would leave them holding
-        // none of their own history, and the previous code did something worse than either: it let
-        // CreateAsync fail and printed Identity's "Email is already taken" under the @NAME field,
-        // where it made no sense and offered no way forward.
-        var addressTaken = await _userManager.FindByEmailAsync(email);
-        if (addressTaken is not null)
-        {
-            return Conflict(new AppleNeedsProfileResponse(
-                NeedsProfile: true,
-                SuggestedDisplayName: displayName,
-                Email: identity.Email,
-                IsPrivateEmail: identity.IsPrivateEmail,
-                ShouldLinkInstead: true,
-                EmailProblem: "That email address already has an account here. Sign in to it once and we'll join the two."));
-        }
-
-        var created = await _userManager.CreateAsync(user);
-        if (!created.Succeeded)
-        {
-            var isHandleClash = created.Errors.Any(e =>
-                e.Description.Contains("Handle", StringComparison.OrdinalIgnoreCase));
-
-            // A race can still lose the address between the check above and here. Same answer, so
-            // the person is routed rather than shown Identity's wording.
-            var isEmailClash = created.Errors.Any(e =>
-                e.Description.Contains("Email", StringComparison.OrdinalIgnoreCase));
-
-            return Conflict(new AppleNeedsProfileResponse(
-                NeedsProfile: true,
-                SuggestedDisplayName: displayName,
-                Email: identity.Email,
-                IsPrivateEmail: identity.IsPrivateEmail,
-                HandleProblem: isHandleClash
-                    ? "That name was taken a moment ago. Try another."
-                    : isEmailClash ? null : string.Join(" ", created.Errors.Select(e => e.Description)),
-                ShouldLinkInstead: isEmailClash,
-                EmailProblem: isEmailClash
-                    ? "That email address already has an account here. Sign in to it once and we'll join the two."
-                    : null));
-        }
-
-        var addLogin = await _userManager.AddLoginAsync(
-            user, new UserLoginInfo(Provider, identity.Subject, identity.Email ?? email));
-        if (!addLogin.Succeeded)
-        {
-            await _userManager.DeleteAsync(user);   // rollback: an account nothing can sign into
-            return BadRequest(string.Join(" ", addLogin.Errors.Select(e => e.Description)));
-        }
-
-        return await IssueTokenAsync(user);
     }
 
     /// <summary>
@@ -292,99 +196,56 @@ public sealed class AppleAuthController : BenControllerBase
                 "We couldn't reach Apple to check that sign-in. Try again in a moment.");
         }
 
-        // Already linked somewhere. Answering before the password is checked is deliberate: it
-        // reveals nothing about the account being named, and it stops a second account quietly
-        // stealing an Apple identity that already belongs to a first.
-        var existingOwner = await _userManager.FindByLoginAsync(Provider, identity.Subject);
-
-        var user = await _userManager.FindByEmailAsync(request.Email);
-
-        // One answer for "no such account" and "wrong password", as everywhere else — and the same
-        // SHAPE too, not merely the same words. Answering a missing account with prose and a wrong
-        // password with a problem-detail would tell them apart just as loudly, which turns this into
-        // a way to ask whether any given address has an account here.
-        if (user is null)
-            return Problem(detail: "Failed", statusCode: StatusCodes.Status401Unauthorized);
-
-        // CheckPasswordSignInAsync rather than CheckPasswordAsync: this endpoint takes a password
-        // from an unauthenticated caller, so it must honour lockout, and a bare password check
-        // does not. Without that, this would be the one door in the building where guesses are
-        // free.
-        var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
-
-        // The refusals answer in the same shape /login uses — a problem-detail carrying Identity's
-        // own word — so a client maps them with the same code rather than a second copy that could
-        // disagree about what a 401 here means.
-        if (passwordCheck.IsLockedOut)
-            return Problem(detail: "LockedOut", statusCode: StatusCodes.Status401Unauthorized);
-
-        // An unconfirmed address is NOT a wrong password, and saying so sends somebody to reset a
-        // password that was always right. Three separate comments in this codebase exist because
-        // that mistake has been made before.
-        if (passwordCheck.IsNotAllowed)
-            return Problem(detail: "NotAllowed", statusCode: StatusCodes.Status401Unauthorized);
-
-        if (!passwordCheck.Succeeded)
-            return Problem(detail: "Failed", statusCode: StatusCodes.Status401Unauthorized);
-
-        // CheckPasswordSignInAsync verifies the PASSWORD. It never returns RequiresTwoFactor — that
-        // is PasswordSignInAsync's job, and this endpoint cannot use it because it must not create
-        // a cookie sign-in. So the second factor is checked here, explicitly. Without this, linking
-        // would be a door into a two-factor account that needs only the password: a way around the
-        // very protection its owner turned on.
-        if (await _userManager.GetTwoFactorEnabledAsync(user))
+        switch (await _external.LinkAsync(
+            Identity(identity), request.Email, request.Password,
+            request.TwoFactorCode, request.TwoFactorRecoveryCode, ct))
         {
-            var verified = await VerifySecondFactorAsync(user, request.TwoFactorCode, request.TwoFactorRecoveryCode);
-            if (!verified)
-                return Problem(detail: "RequiresTwoFactor", statusCode: StatusCodes.Status401Unauthorized);
+            case LinkResult.Linked linked:
+                // Already on this account, or newly attached: either way, the person asked to sign
+                // in, and an Apple identity token is not a credential the API accepts on ordinary
+                // requests - so a session is issued here or they are left holding nothing.
+                return await IssueTokenAsync(linked.User);
+
+            case LinkResult.Refused refused:
+                // The same problem-detail shape /login answers with, carrying Identity's own word,
+                // so a client maps it with the same code rather than a second copy that could
+                // disagree about what a 401 here means.
+                return Problem(detail: refused.Why.ToString(), statusCode: StatusCodes.Status401Unauthorized);
+
+            case LinkResult.HeldByAnotherAccount:
+                return Conflict(new { Message = "That Apple account is already linked to a different account here." });
+
+            case LinkResult.Failed failed:
+                return BadRequest(failed.Reason);
+
+            default:
+                return BadRequest("That account couldn't be linked.");
         }
-
-        if (existingOwner is not null)
-        {
-            // Already theirs: linking again is not an error, and the person asked to sign in.
-            if (existingOwner.Id == user.Id)
-                return await IssueTokenAsync(user);
-
-            return Conflict(new { Message = "That Apple account is already linked to a different account here." });
-        }
-
-        var link = await _userManager.AddLoginAsync(
-            user, new UserLoginInfo(Provider, identity.Subject, identity.Email ?? request.Email));
-
-        if (!link.Succeeded)
-            return BadRequest(string.Join(" ", link.Errors.Select(e => e.Description)));
-
-        return await IssueTokenAsync(user);
     }
+
+    /// <summary>The provider-neutral statement of who Apple says this is.</summary>
+    private static ExternalIdentity Identity(AppleIdentity identity) =>
+        new(Provider, identity.Subject, identity.Email, identity.EmailVerified, identity.IsPrivateEmail);
+
+    /// <summary>What the app is told when an account still needs something before it can exist.</summary>
+    private static AppleNeedsProfileResponse NeedsProfile(
+        AppleIdentity identity, string? displayName, string? handleProblem = null, bool addressTaken = false) =>
+        new(
+            NeedsProfile: true,
+            SuggestedDisplayName: displayName?.Trim(),
+            Email: identity.Email,
+            IsPrivateEmail: identity.IsPrivateEmail,
+            HandleProblem: handleProblem,
+            ShouldLinkInstead: addressTaken,
+            EmailProblem: addressTaken
+                ? "That email address already has an account here. Sign in to it once and we'll join the two."
+                : null);
 
     /// <summary>
-    /// Checks a second factor without a sign-in context, which is what an unauthenticated endpoint
-    /// has to do.
+    /// The one refusal for an account that may not sign in. Deliberately names nothing: telling a
+    /// stranger an account is closed or locked tells them the address existed here.
     /// </summary>
-    /// <remarks>
-    /// <para>Returns false when nothing was supplied, which is how the caller is told to ask —
-    /// the same 401 <c>/login</c> answers, so a client already knows what to do with it.</para>
-    ///
-    /// <para>A recovery code is redeemed, not merely checked: it is single use, and one that
-    /// survived being used would not be a recovery code. The two are kept apart rather than
-    /// guessed at by shape, because guessing wrong spends a recovery code on a mistyped app code.</para>
-    /// </remarks>
-    private async Task<bool> VerifySecondFactorAsync(AppUser user, string? code, string? recoveryCode)
-    {
-        // Spaces and hyphens are how these are printed and read aloud. The rest of the site strips
-        // them; refusing a comfortably typed code would be a failure we caused.
-        static string Clean(string value) =>
-            value.Replace(" ", string.Empty).Replace("-", string.Empty).Trim();
-
-        if (!string.IsNullOrWhiteSpace(recoveryCode))
-            return await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, Clean(recoveryCode)) is { Succeeded: true };
-
-        if (string.IsNullOrWhiteSpace(code))
-            return false;
-
-        return await _userManager.VerifyTwoFactorTokenAsync(
-            user, TokenOptions.DefaultAuthenticatorProvider, Clean(code));
-    }
+    private IActionResult RefusedAccount() => Unauthorized("That sign-in couldn't be completed.");
 
     /// <summary>
     /// Writes the same bearer-token body <c>/login</c> writes, through Identity's own handler.
@@ -399,14 +260,10 @@ public sealed class AppleAuthController : BenControllerBase
         // confirmed-account requirement. Lockout is separate — Identity checks it alongside, not
         // inside — and lockout is the only lever an administrator has short of closing an account.
         // Missing either one makes that lever do nothing to anybody who has linked an Apple ID.
-        if (await _userManager.IsLockedOutAsync(user) || !await _signInManager.CanSignInAsync(user))
+        if (!await _external.MaySignInAsync(user))
         {
             _log.LogWarning("Refused an Apple sign-in for {UserId}: the account may not sign in.", user.Id);
-
-            // Deliberately says nothing about why. Naming a closed or locked account tells a
-            // stranger the address existed here, which is what every other refusal on this site
-            // avoids.
-            return Unauthorized("That sign-in couldn't be completed.");
+            return RefusedAccount();
         }
 
         _signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
