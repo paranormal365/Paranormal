@@ -219,6 +219,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.ExternalSignInService>();
 // The create-and-confirm path shared by /signup and the signed-out request wizard (site
 // evaluation 2026-09-06, phase 1).
 builder.Services.AddScoped<Ben.Data.WebApi.Services.AccountCreationService>();
+// The same sender, under the one-method contract the external doors use when a provider hands
+// them an address it did not verify. Forwarded, not registered twice, so both callers stamp the
+// same DateConfirmationSent through the same instance in a request.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.IConfirmationSender>(
+    sp => sp.GetRequiredService<Ben.Data.WebApi.Services.AccountCreationService>());
 
 // Sign in with Apple. The validator holds a cached, self-refreshing copy of Apple's signing keys,
 // so it is a singleton — one key fetch for the process, not one per sign-in.

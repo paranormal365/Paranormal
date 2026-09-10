@@ -83,7 +83,8 @@ public sealed class EntraAuthController : BenControllerBase
         switch (await _external.RegisterAsync(identity, request.DisplayName, handle: null, cancellationToken))
         {
             case Ben.Data.WebApi.Services.RegisterResult.Created created:
-                return Ok(new EntraRegisterResult(created.User.Id, created.User.Email ?? string.Empty));
+                return Ok(new EntraRegisterResult(
+                    created.User.Id, created.User.Email ?? string.Empty, created.AwaitingConfirmation));
 
             case Ben.Data.WebApi.Services.RegisterResult.NeedsProfile:
                 return BadRequest("Display name is required.");
@@ -173,7 +174,12 @@ public sealed class EntraAuthController : BenControllerBase
 /// validated Entra token, not the body.</summary>
 public record EntraRegisterRequest(string DisplayName);
 
-public record EntraRegisterResult(Guid UserId, string Email);
+/// <param name="AwaitingConfirmation">
+/// The address came from a Microsoft claim this API does not treat as verified, so the account
+/// starts unconfirmed and a confirmation has been sent to it. Usable through Microsoft meanwhile;
+/// a password reset and being written to wait for the confirmation.
+/// </param>
+public record EntraRegisterResult(Guid UserId, string Email, bool AwaitingConfirmation = false);
 
 /// <summary>Identifies the target local account to link; ownership is proven by <see cref="Password"/>,
 /// checked server-side. The Entra identity being linked comes from the caller's validated token,

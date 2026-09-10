@@ -85,7 +85,8 @@ public class EntraAuthControllerTests
         var external = new Ben.Data.WebApi.Services.ExternalSignInService(
             umMock.Object,
             (simMock ?? CreateSignInManagerMock(umMock)).Object,
-            new Ben.Data.WebApi.Services.UserHandleService(factory));
+            new Ben.Data.WebApi.Services.UserHandleService(factory),
+            new Mock<Ben.Data.WebApi.Services.IConfirmationSender>().Object);
         var controller = new EntraAuthController(umMock.Object, external);
         controller.ControllerContext = new ControllerContext
         {
@@ -171,10 +172,20 @@ public class EntraAuthControllerTests
         Assert.Equal("danaholt", capturedUser.Handle);
     }
 
+    /// <summary>
+    /// An account created from a Microsoft address starts UNCONFIRMED, and the caller is told so.
+    /// </summary>
+    /// <remarks>
+    /// This test used to assert the opposite, on the belief that "Entra has already verified the
+    /// email". It has not: <c>preferred_username</c> is whatever the Microsoft account says it is,
+    /// and for a personal account nobody checked. Marking it confirmed let an address be squatted
+    /// here by whoever put it on a Microsoft account first. Decided with Ben 2026-09-10: confirm
+    /// only what the provider verified; the rest get the same confirmation a website sign-up gets,
+    /// and may use the site through Microsoft meanwhile.
+    /// </remarks>
     [Fact]
-    public async Task Register_NewUser_SetsEmailConfirmedTrue()
+    public async Task Register_NewUser_StartsUnconfirmedAndSaysSo()
     {
-        // Entra has already verified the email — EmailConfirmed should be true on creation.
         var umMock = CreateUserManagerMock();
         AppUser? capturedUser = null;
         umMock.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser?)null);
@@ -186,10 +197,12 @@ public class EntraAuthControllerTests
               .ReturnsAsync(IdentityResult.Success);
 
         var controller = BuildController(umMock, EntraPrincipal(ValidOid, "e@t.com"));
-        await controller.Register(new EntraRegisterRequest("Name"), default);
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.NotNull(capturedUser);
-        Assert.True(capturedUser!.EmailConfirmed);
+        Assert.False(capturedUser!.EmailConfirmed);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True(Assert.IsType<EntraRegisterResult>(ok.Value).AwaitingConfirmation);
     }
 
     [Fact]

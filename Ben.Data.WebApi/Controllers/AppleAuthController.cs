@@ -256,10 +256,9 @@ public sealed class AppleAuthController : BenControllerBase
         // session unconditionally, and only PasswordSignInAsync runs the checks around it. So every
         // administrative refusal held for passwords and quietly did not hold for Apple.
         //
-        // CanSignInAsync covers a CLOSED account (RecordingSignInManager's override) and the
-        // confirmed-account requirement. Lockout is separate — Identity checks it alongside, not
-        // inside — and lockout is the only lever an administrator has short of closing an account.
-        // Missing either one makes that lever do nothing to anybody who has linked an Apple ID.
+        // The gate is closure and lockout, and deliberately not the confirmed-account rule: see
+        // ExternalSignInService.MaySignInAsync for why an account created from an unverified
+        // address must still be able to come in through the provider that created it.
         if (!await _external.MaySignInAsync(user))
         {
             _log.LogWarning("Refused an Apple sign-in for {UserId}: the account may not sign in.", user.Id);

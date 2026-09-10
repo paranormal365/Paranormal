@@ -11466,3 +11466,29 @@ matches, and that is exactly the case that silently produces a second account.
 
 Do this alongside item 226 — they share the link endpoint, the one-shot-name rule and the
 account-merge screen, and doing them together means designing that screen once.
+
+### Built 2026-09-10, and what was decided afterwards (Phase C)
+
+Built as `README-apple-signin-website-227.md` describes; plan of record is
+`ProjectNotes/External-SignIn-Plan-2026-09-10.md`. Unverifiable here: the round trip through Apple,
+which refuses localhost. Phase D is Ben's portal work and a UAT round trip.
+
+Two rules were left as questions on the day and decided with Ben that evening:
+
+- **The Microsoft email fallback is gone.** `EntraClaimsTransformation` used to link an unknown
+  object id to whichever account held its email claim, with no proof of ownership. Removed rather
+  than narrowed; a rotated object id uses the link door once, with a password and second factor.
+  Production's one Microsoft login is linked by object id, so nobody is stranded.
+- **Only a verified address is confirmed at creation.** An account made from an unverified provider
+  address (Microsoft's always) starts unconfirmed and is sent the website's confirmation email.
+  It works through that provider straight away — the external gate is closure and lockout, not
+  the confirmed-account rule, because confirmation proves the address and the provider proves the
+  person — but a password reset and anything else we would email wait for the link. The profile
+  shows the address with **Send the link again**; `ActionNeededBanners` reminds once per sign-in;
+  the help pages say why a reset link may not arrive.
+
+**On Ben's question of who owns a Field Kit upload:** the bearer token's user id, on every path.
+An account cannot exist without a display name and a permanent, unique @name — the website sign-up
+validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
+— so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
+

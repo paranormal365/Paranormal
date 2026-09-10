@@ -83,6 +83,7 @@ public sealed class MyProfileController : BenControllerBase
             LastName     = user.LastName,
             Email        = user.Email,
             EmailKind    = user.EmailKind,
+            EmailConfirmed = user.EmailConfirmed,
             PublicPhoto  = photos.FirstOrDefault(p => p.IsPublic),
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
             SharePrivatePhotoWithClients    = user.SharePrivatePhotoWithClients,

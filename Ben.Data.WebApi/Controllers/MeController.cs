@@ -47,7 +47,7 @@ public sealed class MeController : BenControllerBase
                                   || await _userManager.IsInRoleAsync(linkedUser, RoleNames.Moderator);
                 return Ok(new MeResponse(
                     linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    linkedUser.EmailKind));
+                    linkedUser.EmailKind, linkedUser.EmailConfirmed));
             }
         }
 
@@ -63,7 +63,7 @@ public sealed class MeController : BenControllerBase
                                   || await _userManager.IsInRoleAsync(user, RoleNames.Moderator);
                 return Ok(new MeResponse(
                     user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    user.EmailKind));
+                    user.EmailKind, user.EmailConfirmed));
             }
         }
         catch (FormatException)
@@ -101,6 +101,11 @@ public sealed class MeController : BenControllerBase
 /// present an Apple relay or a placeholder as somebody's own address, and must not claim to have
 /// emailed one.
 /// </param>
+/// <param name="EmailConfirmed">
+/// Whether the person has proved they can read <paramref name="Email"/>. False only for an account
+/// created from a provider's unverified address claim, which may use the site through that provider
+/// but cannot reset a password or be written to until the address is confirmed.
+/// </param>
 public record MeResponse(
     Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false,
-    EmailAddressKind EmailKind = EmailAddressKind.Ordinary);
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary, bool EmailConfirmed = true);

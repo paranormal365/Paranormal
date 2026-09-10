@@ -97,7 +97,7 @@ public class AppleAuthControllerTests
         // The service is built from the SAME mocks as the controller, so every expectation these
         // tests set on the managers is seen by the decisions, wherever they now live.
         var signIn = (sim ?? SignInManagerMock(um)).Object;
-        var external = new ExternalSignInService(um.Object, signIn, new UserHandleService(Factory()));
+        var external = new ExternalSignInService(um.Object, signIn, new UserHandleService(Factory()), new Mock<IConfirmationSender>().Object);
         var controller = new AppleAuthController(
             um.Object, signIn, external, validator, config,
             NullLogger<AppleAuthController>.Instance);
@@ -888,12 +888,11 @@ public class AppleAuthControllerTests
     [Fact]
     public async Task AKnownIdentityOnAClosedAccountIsRefused()
     {
-        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com" };
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com", DateClosed = DateTime.UtcNow };
         var um = UserManagerMock();
         um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(closed);
         um.Setup(m => m.IsLockedOutAsync(closed)).ReturnsAsync(false);
         var sim = SignInManagerMock(um);
-        sim.Setup(s => s.CanSignInAsync(closed)).ReturnsAsync(false);
 
         var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
             .SignIn(Request(), default);
@@ -912,11 +911,10 @@ public class AppleAuthControllerTests
     [Fact]
     public async Task ARefusedAccountIsNotNamedAsClosedOrLocked()
     {
-        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com" };
+        var closed = new AppUser { Id = Guid.NewGuid(), Email = "closed@test.com", DateClosed = DateTime.UtcNow };
         var um = UserManagerMock();
         um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(closed);
         var sim = SignInManagerMock(um);
-        sim.Setup(s => s.CanSignInAsync(closed)).ReturnsAsync(false);
 
         var result = await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, true)), sim)
             .SignIn(Request(), default);

@@ -49,6 +49,18 @@ public record MyProfileRecord
     public Ben.Data.Common.Enums.EmailAddressKind EmailKind { get; init; }
         = Ben.Data.Common.Enums.EmailAddressKind.Ordinary;
 
+    /// <summary>
+    /// Whether this person has proved they can read <see cref="Email"/>.
+    /// </summary>
+    /// <remarks>
+    /// False only for an account created from a provider's unverified address claim (Microsoft's,
+    /// in practice), which is usable through that provider straight away but cannot reset a
+    /// password or be written to until the address is confirmed. A password sign-up cannot be
+    /// signed in unconfirmed at all, so for everybody else this is true. Defaults to true so an
+    /// older server that does not send it reads as it always did.
+    /// </remarks>
+    public bool EmailConfirmed { get; init; } = true;
+
     /// <summary>The active public photo, or null when none is set.</summary>
     public AppUserPhotoRecord? PublicPhoto { get; init; }
 

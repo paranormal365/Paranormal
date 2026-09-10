@@ -60,15 +60,32 @@ iPad Pro 13-inch simulators. Not verifiable here: the door against a real Apple 
    body while Apple's uses `/login`'s problem-detail. Two clients now map the same concept twice.
    I created this divergence today.
 
+## Decided with Ben and built (Phase C, 2026-09-10)
+
+- **Entra's email fallback is gone.** It auto-linked an unlinked object id to whatever account
+  held its `email` / `preferred_username` / `upn` claim, with no proof of ownership; Microsoft does
+  not vouch for a personal account's `email`, and this authority accepts personal accounts.
+  Removed, not narrowed: a rotated object id uses the link door once, with a password and second
+  factor. Production holds one Microsoft login and it is linked by object id, so nobody is
+  stranded. Pinned by `AnUnlinkedIdentityIsNotResolvedByItsAddressClaim` for all three claims.
+- **Only a verified address is confirmed at creation.** `ExternalSignInService.RegisterAsync` sets
+  `EmailConfirmed = withheld || EmailVerified`: an unverified real address (Microsoft's always;
+  Apple's rarely) starts unconfirmed and is sent the same confirmation a website sign-up gets,
+  through `IConfirmationSender` (implemented by `AccountCreationService`). A withheld Apple address
+  keeps its placeholder and stays usable — its account has nothing to confirm and no way to.
+- **The external gate is closure and lockout, not `CanSignInAsync`.** That method folds in the
+  confirmed-account rule, which would refuse the very account just created. Confirmation proves
+  the address; the provider's token proves the person. What confirmation still gates is what an
+  address is for: a password reset (`/forgotPassword` already refuses an unconfirmed address) and
+  being written to (`MeResponse.CanBeEmailed` is now false until confirmed). The Entra claims
+  transformation asks the same `MaySignInAsync`, so the two Microsoft doors cannot disagree.
+- **The UI path.** `MyProfile` shows the unconfirmed address with a **Send the link again**
+  button; `ActionNeededBanners` carries a once-per-sign-in reminder pointing there; help pages
+  `your-profile` and `getting-started` say why a reset link may not arrive. `MeResponse` and
+  `MyProfileRecord` gained `EmailConfirmed` (default true, so an older server reads as before).
+
 ## Still open — decisions, not oversights
 
-- **Entra's email fallback auto-links by claim** with no proof of ownership. Microsoft's `email` is
-  not guaranteed verified for personal accounts. Options: narrow to `upn`/`preferred_username`
-  (work accounts, verified), or remove and let the link door do it. Removing could strand anyone
-  whose object id rotated.
-- **Entra registration trusts an unverified address** and marks it confirmed. Cannot take over an
-  account (it refuses when the address exists) but can squat one.
-- **An unverified Apple address is also marked confirmed** at creation. Rare; same shape.
 - **Withheld-address Apple accounts have no recovery path.** Apple is their only key. The profile
   now says so and offers to add an address; nothing forces it.
 - **Relay mail is dropped** until `ishaunted.com` is registered under Apple's email-communication
@@ -111,7 +128,7 @@ works as it always has. Worth doing only if a second native client appears.
 | --- | --- | --- |
 | A | **Done.** 226 on the iPhone: BenKit `link()`, the sheet's second door, committed | 339 BenKit tests; Apple UI regression green on iPhone 17 Pro **and** iPad Pro 13-inch |
 | B | **Done.** `ExternalSignInService` (`ba74afca`, `81602335`); both controllers thin; one refusal shape; `EntraLinkRefusal` deleted; both clients read `/login`'s problem-detail through the one `LoginFailureMapping` | 20-case service matrix; all 45 Apple + 26 Entra controller tests unchanged in intent; suite 7,954 green |
-| C | Entra decisions with Ben: email fallback, unverified register. (`api/auth/entra/token` and the desktop renewal mode dropped out with the desktop app, shelved 2026-09-10.) | New tests per decision |
+| C | **Done.** Entra email fallback removed; unverified addresses start unconfirmed and are sent a confirmation; external gate is closure + lockout; profile notice, banner and help text. (`api/auth/entra/token` dropped out with the desktop app.) | 3 transformation cases + 5 service cases + 1 rewritten Entra controller case, each seen failing first; suite 7,866 green |
 | D | Portal work and UAT: Services ID grouped under the iOS App ID, domain file, `Apple:ClientIds`, email-communication registration; Entra redirect URI | A real Apple round trip on UAT; a real Microsoft one |
 | E | Merge to develop; production migration for `EmailKind` with an explicit `--connection` naming `IsHauntedDb` | Suite green on develop; migration applied to production only by that command |
 

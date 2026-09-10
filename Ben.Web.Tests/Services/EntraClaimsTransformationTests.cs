@@ -1,7 +1,11 @@
 using System.Security.Claims;
+using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
@@ -33,8 +37,19 @@ public class EntraClaimsTransformationTests
     private static ClaimsPrincipal EntraPrincipal() =>
         new(new ClaimsIdentity([new Claim("oid", Oid.ToString())], authenticationType: "Entra"));
 
-    private static EntraClaimsTransformation Build(Mock<UserManager<AppUser>> um) =>
-        new(um.Object, NullLogger<EntraClaimsTransformation>.Instance);
+    private static EntraClaimsTransformation Build(Mock<UserManager<AppUser>> um)
+    {
+        // The gate is the shared service's, built from the SAME user-manager mock, so what these
+        // tests say about lockout is what the decision sees.
+        var sim = new Mock<SignInManager<AppUser>>(
+            um.Object, new Mock<IHttpContextAccessor>().Object,
+            new Mock<IUserClaimsPrincipalFactory<AppUser>>().Object, null!, null!, null!, null!);
+        var factory = new PooledDbContextFactory<BenDataContext>(
+            new DbContextOptionsBuilder<BenDataContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var external = new ExternalSignInService(
+            um.Object, sim.Object, new UserHandleService(factory), new Mock<IConfirmationSender>().Object);
+        return new EntraClaimsTransformation(um.Object, external, NullLogger<EntraClaimsTransformation>.Instance);
+    }
 
     private static bool Resolved(ClaimsPrincipal principal) =>
         principal.HasClaim(c => c.Type == EntraClaimsTransformation.AppUserIdClaimType);
@@ -110,6 +125,52 @@ public class EntraClaimsTransformationTests
         var result = await Build(um).TransformAsync(EntraPrincipal());
 
         Assert.False(result.IsInRole("SuperAdmin"));
+    }
+
+    /// <summary>
+    /// An UNLINKED Microsoft identity does not become somebody here because its address matches.
+    /// </summary>
+    /// <remarks>
+    /// This was the email fallback: an object id nobody had linked was looked up by its
+    /// <c>email</c>, <c>preferred_username</c> or <c>upn</c> claim, and the account found was
+    /// linked to it for good. Microsoft does not vouch for the <c>email</c> claim of a personal
+    /// account, and this authority accepts personal accounts, so anybody could reach an account by
+    /// putting its address on a Microsoft account of their own. Decided with Ben 2026-09-10:
+    /// removed, not narrowed. A rotated object id uses the link door once, with a password.
+    /// </remarks>
+    [Theory]
+    [InlineData("email")]
+    [InlineData("preferred_username")]
+    [InlineData("upn")]
+    public async Task AnUnlinkedIdentityIsNotResolvedByItsAddressClaim(string claimType)
+    {
+        var theirs = new AppUser { Id = Guid.NewGuid(), Email = "victim@test.com", EmailConfirmed = true };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Microsoft", Oid.ToString())).ReturnsAsync((AppUser?)null);
+        um.Setup(m => m.FindByEmailAsync("victim@test.com")).ReturnsAsync(theirs);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("oid", Oid.ToString()), new Claim(claimType, "victim@test.com")], authenticationType: "Entra"));
+
+        var result = await Build(um).TransformAsync(principal);
+
+        Assert.False(Resolved(result));
+        um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+        um.Verify(m => m.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// An account that has not confirmed its address still resolves. Confirmation proves the
+    /// address; the Microsoft token proves the person, and an account created from an unverified
+    /// Microsoft address (see ExternalSignInServiceTests) is exactly one of these.
+    /// </summary>
+    [Fact]
+    public async Task AnUnconfirmedLinkedAccountStillResolves()
+    {
+        var user = new AppUser { Id = Guid.NewGuid(), Email = "new@test.com", EmailConfirmed = false };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Microsoft", Oid.ToString())).ReturnsAsync(user);
+
+        Assert.True(Resolved(await Build(um).TransformAsync(EntraPrincipal())));
     }
 
     /// <summary>A principal with no Microsoft identity at all is left alone.</summary>

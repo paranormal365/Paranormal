@@ -20,7 +20,8 @@ public sealed record MeResponse(
     bool IsSuperAdmin,
     bool IsAdmin,
     bool IsModerator = false,
-    EmailAddressKind EmailKind = EmailAddressKind.Ordinary)
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary,
+    bool EmailConfirmed = true)
 {
     /// <summary>Whether this address is one the person chose and reads as their own.</summary>
     /// <remarks>
@@ -35,7 +36,9 @@ public sealed record MeResponse(
     /// done Apple drops the message without a bounce. A placeholder can never be delivered to. So
     /// this answers "may we honestly say we have emailed them", and the answer for a relay depends
     /// on configuration this client cannot see — which is why a relay is treated as unreachable
-    /// here rather than optimistically.
+    /// here rather than optimistically. An address nobody has proved they can read is not one
+    /// either: an account created from a provider's unverified claim starts unconfirmed, and
+    /// until the confirmation link is followed nothing but that link should go to it.
     /// </remarks>
-    public bool CanBeEmailed => EmailKind == EmailAddressKind.Ordinary;
+    public bool CanBeEmailed => EmailKind == EmailAddressKind.Ordinary && EmailConfirmed;
 }

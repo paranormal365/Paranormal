@@ -38,6 +38,25 @@
     </div>
 }
 
+@* An account whose address is still only a claim (made from a Microsoft sign-in, usually). It
+   works through that provider, so nothing else on the site will ever say why a password reset
+   never arrives; this does, once per sign-in, until the link is followed or the banner is put
+   away for the session. *@
+@if (_unconfirmedAddress is { } address)
+{
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="status"
+         id="confirm-address-banner">
+        <span aria-hidden="true">✉️</span>
+        <div class="flex-grow-1">
+            Please confirm your email address. We sent a link to <strong>@address</strong> when this
+            account was made; until you follow it we can't email you, including a password reset.
+            <a href="/profile" class="ms-1">Send it again from your profile</a>.
+        </div>
+        <button type="button" class="btn-close" aria-label="Dismiss"
+                @onclick="DismissUnconfirmedAddressAsync"></button>
+    </div>
+}
+
 @foreach (var item in _visible)
 {
     <div class="alert alert-info d-flex align-items-start gap-2 mb-3 action-needed-banner" role="status">
@@ -97,6 +116,8 @@
             _loaded = false;
             _visible.Clear();
             _feedReminder = null;
+            _unconfirmedAddress = null;
+            _addressChecked = false;
             StateHasChanged();
             await LoadAsync();
         });
@@ -179,6 +200,7 @@
             }
 
             await LoadFeedReminderAsync();
+            await LoadUnconfirmedAddressAsync();
 
             if (generation != _generation) return;
             // Always re-render, including when the new viewer has NOTHING to show: the old
@@ -206,6 +228,42 @@
             }
         }
         catch { /* same rule as every banner here: never the reason a page errors */ }
+    }
+
+    // ── The unconfirmed-address reminder (external sign-in, Phase C 2026-09-10) ─────────────
+
+    private string? _unconfirmedAddress;
+    private bool _addressChecked;
+
+    /// <summary>
+    /// Asked once per viewer, not once per page: whether the address is confirmed changes only
+    /// when the person follows the link, and that lands on a page that signs them in again.
+    /// </summary>
+    private async Task LoadUnconfirmedAddressAsync()
+    {
+        if (_addressChecked) return;
+        _addressChecked = true;
+        try
+        {
+            var profile = await AdminClient.GetMyProfileAsync();
+            if (profile is { EmailKind: Ben.Data.Common.Enums.EmailAddressKind.Ordinary, EmailConfirmed: false }
+                && profile.Email is { Length: > 0 } email
+                && await JS.InvokeAsync<string?>("sessionStorage.getItem", UnconfirmedAddressKey(email)) is null)
+            {
+                _unconfirmedAddress = email;
+            }
+        }
+        catch { /* never the reason a page errors */ }
+    }
+
+    private static string UnconfirmedAddressKey(string email) => $"confirm-address:{email}";
+
+    private async Task DismissUnconfirmedAddressAsync()
+    {
+        if (_unconfirmedAddress is not { } email) return;
+        _unconfirmedAddress = null;
+        try { await JS.InvokeVoidAsync("sessionStorage.setItem", UnconfirmedAddressKey(email), "1"); }
+        catch { }
     }
 
     // Counts in the key, like the org banners: new content since the dismissal brings it back.

@@ -25,7 +25,8 @@ namespace Ben.Data.WebApi.Services;
 /// provider has <b>verified</b> joins the account holding that address; an unverified address
 /// proves nothing and routes to the link door instead. Claiming an account is a real sign-in:
 /// password, lockout, confirmed account, second factor. Creating one never invents a permanent
-/// handle unless the caller says so.</para>
+/// handle unless the caller says so, and confirms the address only when the provider did — an
+/// unverified one is sent a confirmation, as a website sign-up is.</para>
 ///
 /// <para>Controllers stay responsible for two things this class cannot do: validating the
 /// provider's token, and writing HTTP. Every decision in between is here, where one test matrix
@@ -36,31 +37,45 @@ public sealed class ExternalSignInService
     private readonly UserManager<AppUser> _userManager;
     private readonly SignInManager<AppUser> _signInManager;
     private readonly UserHandleService _handles;
+    private readonly IConfirmationSender _confirmations;
 
     public ExternalSignInService(
         UserManager<AppUser> userManager,
         SignInManager<AppUser> signInManager,
-        UserHandleService handles)
+        UserHandleService handles,
+        IConfirmationSender confirmations)
     {
         _userManager   = userManager;
         _signInManager = signInManager;
         _handles       = handles;
+        _confirmations = confirmations;
     }
 
     // ── May this account be used at all ───────────────────────────────────────
 
     /// <summary>
-    /// Whether a session may be minted for this account: not locked out, and permitted to sign in.
+    /// Whether a session may be minted for this account through an external provider: not closed,
+    /// and not locked out.
     /// </summary>
     /// <remarks>
-    /// Two calls, deliberately. Identity checks lockout <i>alongside</i> <c>CanSignInAsync</c>,
-    /// never inside it, so asking only the latter lets a locked account straight through.
-    /// <c>CanSignInAsync</c> is what covers a closed account (our sign-in manager's override) and
-    /// the confirmed-account requirement. Lockout is the only lever an administrator has short of
-    /// closing an account; a door that ignores it makes that lever do nothing.
+    /// <para>Two checks, deliberately, and neither is <c>CanSignInAsync</c>. Identity checks
+    /// lockout <i>alongside</i> that method, never inside it, so asking it alone lets a locked
+    /// account straight through — and lockout is the only lever an administrator has short of
+    /// closing an account. A door that ignores it makes that lever do nothing.</para>
+    ///
+    /// <para><c>CanSignInAsync</c> is not asked because it folds in the confirmed-account
+    /// requirement, and confirmation proves the <i>address</i>, not the person. On this door the
+    /// provider's token proves the person. The only way an account holding an external login is
+    /// unconfirmed is that it was created here from that provider's unverified address claim (a
+    /// website sign-up cannot link before confirming: the password check refuses it), and refusing
+    /// that account would strand the person it was just made for. What confirmation still gates
+    /// is what an address is for: a password reset, and being written to.</para>
+    ///
+    /// <para>This is also the gate the Entra claims transformation applies to every Microsoft
+    /// request, so the two Microsoft doors cannot disagree about who may come in.</para>
     /// </remarks>
     public async Task<bool> MaySignInAsync(AppUser user)
-        => !await _userManager.IsLockedOutAsync(user) && await _signInManager.CanSignInAsync(user);
+        => user.DateClosed is null && !await _userManager.IsLockedOutAsync(user);
 
     // ── Resolving a subject ───────────────────────────────────────────────────
 
@@ -227,6 +242,15 @@ public sealed class ExternalSignInService
         if (await _userManager.FindByEmailAsync(email) is not null)
             return new RegisterResult.AddressTaken();
 
+        // Confirmed only when the provider vouched for the address, or when there is no address to
+        // confirm. An unverified claim is a claim: marking it confirmed let anybody hold an address
+        // here that they do not own — not a takeover, since a taken address is refused above, but a
+        // squat that stops the real owner signing up under their own address. So it starts
+        // unconfirmed and is sent a confirmation, exactly as a website sign-up is. The placeholder
+        // behind a withheld address can never receive mail, and leaving that account unconfirmed
+        // would give it a state it could never leave.
+        var confirmed = withheld || identity.EmailVerified;
+
         var user = new AppUser
         {
             Id                 = Guid.NewGuid(),
@@ -237,9 +261,7 @@ public sealed class ExternalSignInService
             DisplayName        = name,
             Handle             = chosenHandle,
             EmailKind          = kind,
-            // The provider authenticated this person; there is no second confirmation to send, and
-            // no address to send one to when they withheld theirs.
-            EmailConfirmed     = true,
+            EmailConfirmed     = confirmed,
             DateCreated        = DateTime.UtcNow,
         };
 
@@ -265,7 +287,14 @@ public sealed class ExternalSignInService
             return new RegisterResult.Failed(Describe(attach));
         }
 
-        return new RegisterResult.Created(user);
+        // Sent after the login is attached, so a rollback above never leaves a confirmation link
+        // pointing at an account that no longer exists. A send that fails does not fail the
+        // creation: the account exists and its owner is signed in through their provider; the
+        // sender has logged it and the profile offers to send again.
+        if (!confirmed)
+            await _confirmations.SendConfirmationAsync(user, returnUrl: null, ct);
+
+        return new RegisterResult.Created(user, AwaitingConfirmation: !confirmed);
     }
 
     // ── The second factor, without a sign-in context ──────────────────────────
@@ -363,7 +392,11 @@ public abstract record LinkResult
 
 public abstract record RegisterResult
 {
-    public sealed record Created(AppUser User) : RegisterResult;
+    /// <param name="AwaitingConfirmation">
+    /// The address was not verified by the provider, so the account starts unconfirmed and a
+    /// confirmation has been sent (or attempted). Usable through the provider meanwhile.
+    /// </param>
+    public sealed record Created(AppUser User, bool AwaitingConfirmation = false) : RegisterResult;
 
     /// <summary>A name and handle are still needed, or the handle offered will not do.</summary>
     public sealed record NeedsProfile(string? HandleProblem) : RegisterResult;

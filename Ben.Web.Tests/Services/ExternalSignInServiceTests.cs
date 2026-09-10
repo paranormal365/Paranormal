@@ -55,11 +55,16 @@ public class ExternalSignInServiceTests
         return mock;
     }
 
-    private static ExternalSignInService Build(Mock<UserManager<AppUser>> um, Mock<SignInManager<AppUser>>? sim = null)
+    private static ExternalSignInService Build(
+        Mock<UserManager<AppUser>> um,
+        Mock<SignInManager<AppUser>>? sim = null,
+        Mock<IConfirmationSender>? confirmations = null)
     {
         var factory = new PooledDbContextFactory<BenDataContext>(
             new DbContextOptionsBuilder<BenDataContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        return new ExternalSignInService(um.Object, (sim ?? SignInManagerMock(um)).Object, new UserHandleService(factory));
+        return new ExternalSignInService(
+            um.Object, (sim ?? SignInManagerMock(um)).Object, new UserHandleService(factory),
+            (confirmations ?? new Mock<IConfirmationSender>()).Object);
     }
 
     private static AppUser Somebody(string email = "ben@ishaunted.com") =>
@@ -84,18 +89,42 @@ public class ExternalSignInServiceTests
 
     /// <summary>An administrator's refusal holds on this door. SignInAsync would not have asked.</summary>
     [Theory]
-    [InlineData(true,  true)]    // locked out
-    [InlineData(false, false)]   // closed / not allowed
-    public async Task AKnownSubjectOnAnAccountThatMayNotSignInIsRefused(bool lockedOut, bool canSignIn)
+    [InlineData(true,  false)]   // locked out
+    [InlineData(false, true)]    // closed
+    public async Task AKnownSubjectOnAnAccountThatMayNotSignInIsRefused(bool lockedOut, bool closed)
     {
         var mine = Somebody();
+        if (closed) mine.DateClosed = DateTime.UtcNow;
         var um = UserManagerMock();
         um.Setup(m => m.FindByLoginAsync("Apple", Apple.Subject)).ReturnsAsync(mine);
         um.Setup(m => m.IsLockedOutAsync(mine)).ReturnsAsync(lockedOut);
-        var sim = SignInManagerMock(um);
-        sim.Setup(s => s.CanSignInAsync(mine)).ReturnsAsync(canSignIn);
 
-        Assert.IsType<ResolveResult.Refused>(await Build(um, sim).ResolveAsync(Apple));
+        Assert.IsType<ResolveResult.Refused>(await Build(um).ResolveAsync(Apple));
+    }
+
+    /// <summary>
+    /// An account that has not confirmed its address may still sign in through its provider.
+    /// </summary>
+    /// <remarks>
+    /// Confirmation proves the ADDRESS; the provider's token proves the PERSON, and the only way an
+    /// account holding an external login is unconfirmed is that it was created from that very
+    /// provider's unverified address claim (a website sign-up cannot link before confirming: the
+    /// password check refuses it). Refusing here would strand the person the account was just
+    /// made for. What confirmation still gates is the address: a password reset, and being
+    /// written to. So this gate is closure and lockout, and deliberately not CanSignInAsync,
+    /// which would fold the confirmed-account requirement in.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnconfirmedProviderBornAccountMayStillSignInThroughItsProvider()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@corp.test", EmailConfirmed = false };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Microsoft", Entra.Subject)).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CanSignInAsync(mine)).ReturnsAsync(false);   // what Identity would say
+
+        Assert.IsType<ResolveResult.Found>(await Build(um, sim).ResolveAsync(Entra));
+        sim.Verify(s => s.CanSignInAsync(It.IsAny<AppUser>()), Times.Never);
     }
 
     /// <summary>A VERIFIED address joins the account that holds it, and confirms it.</summary>
@@ -292,6 +321,79 @@ public class ExternalSignInServiceTests
         Assert.IsType<RegisterResult.Created>(await service.RegisterAsync(Apple, "Ada Lovelace", "ada3"));
         Assert.Equal(EmailAddressKind.Ordinary, created!.EmailKind);
         Assert.True(created.EmailConfirmed);
+    }
+
+    /// <summary>
+    /// An address the provider did NOT verify starts unconfirmed and is sent a confirmation, exactly
+    /// as a website sign-up is.
+    /// </summary>
+    /// <remarks>
+    /// Marking it confirmed let anybody create an account here under an address they do not own —
+    /// not a takeover (a taken address is refused) but a squat: the real owner then finds their
+    /// address held and cannot sign up with it. Decided with Ben 2026-09-10. The account is still
+    /// usable through the provider that made it (see the gate test above); what it cannot do until
+    /// confirmed is reset a password or be written to.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnverifiedAddressStartsUnconfirmedAndIsSentAConfirmation()
+    {
+        AppUser? created = null;
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>())).Callback<AppUser>(u => created = u).ReturnsAsync(IdentityResult.Success);
+        var confirmations = new Mock<IConfirmationSender>();
+        confirmations.Setup(c => c.SendConfirmationAsync(It.IsAny<AppUser>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var result = await Build(um, confirmations: confirmations).RegisterAsync(Entra, "Ben Clark", handle: null);
+
+        var made = Assert.IsType<RegisterResult.Created>(result);
+        Assert.True(made.AwaitingConfirmation);
+        Assert.False(created!.EmailConfirmed);
+        Assert.Equal(EmailAddressKind.Ordinary, created.EmailKind);
+        confirmations.Verify(c => c.SendConfirmationAsync(created, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A verified address, and a withheld one, have nothing to confirm and are sent nothing.
+    /// </summary>
+    /// <remarks>
+    /// The placeholder behind a withheld address can never receive mail, and leaving that account
+    /// unconfirmed would give it a state it could never leave. Apple authenticated the person; the
+    /// account is complete.
+    /// </remarks>
+    [Theory]
+    [InlineData("verified")]
+    [InlineData("withheld")]
+    public async Task AVerifiedOrWithheldAddressIsConfirmedAndSentNothing(string which)
+    {
+        AppUser? created = null;
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>())).Callback<AppUser>(u => created = u).ReturnsAsync(IdentityResult.Success);
+        var confirmations = new Mock<IConfirmationSender>();
+
+        var result = await Build(um, confirmations: confirmations)
+            .RegisterAsync(which == "verified" ? Apple : AppleWithheld, "Ada Lovelace", "ada");
+
+        var made = Assert.IsType<RegisterResult.Created>(result);
+        Assert.False(made.AwaitingConfirmation);
+        Assert.True(created!.EmailConfirmed);
+        confirmations.Verify(c => c.SendConfirmationAsync(It.IsAny<AppUser>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A confirmation that could not be sent does not fail the creation. The account exists and the
+    /// person is signed in through their provider; the profile offers to resend.
+    /// </summary>
+    [Fact]
+    public async Task AConfirmationThatCouldNotBeSentDoesNotFailTheCreation()
+    {
+        var um = UserManagerMock();
+        var confirmations = new Mock<IConfirmationSender>();
+        confirmations.Setup(c => c.SendConfirmationAsync(It.IsAny<AppUser>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+
+        var made = Assert.IsType<RegisterResult.Created>(
+            await Build(um, confirmations: confirmations).RegisterAsync(Entra, "Ben Clark", handle: null));
+        Assert.True(made.AwaitingConfirmation);
+        um.Verify(m => m.DeleteAsync(It.IsAny<AppUser>()), Times.Never);
     }
 
     /// <summary>A handle is permanent, so a caller that can ask must ask; only one that cannot gets one allocated.</summary>

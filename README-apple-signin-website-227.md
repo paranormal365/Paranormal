@@ -166,7 +166,24 @@ and nothing today needs it.
 
 `EntraAuthController.Link` uses a bare `CheckPasswordAsync`, which does not count failed attempts.
 It is an unauthenticated door that takes a password, so guesses against it are free. The Apple link
-added in item 225 uses `CheckPasswordSignInAsync` with lockout; this should match.
+added in item 225 uses `CheckPasswordSignInAsync` with lockout; this should match. **Done** under
+Phase B of `ProjectNotes/External-SignIn-Plan-2026-09-10.md`.
+
+## Phase C, decided with Ben and built the same day
+
+Two rules that had been left as questions:
+
+- **Nothing auto-links on an unverified claim.** The Microsoft claims transformation used to link an
+  unknown object id to whichever account held its email claim. Removed; the link door, with a
+  password and second factor, is how a rotated object id gets back in.
+- **Only a verified address is confirmed at creation.** An account made from a Microsoft address
+  (or, rarely, an unverified Apple one) starts unconfirmed and gets the website's confirmation
+  email. It works through that provider straight away; a password reset and anything else we would
+  send wait for the link. The profile says so and can resend; a banner points there once per
+  sign-in; the help pages explain why a reset link may not arrive.
+
+Consequence for this branch's own flow: an Apple account created here is confirmed only when Apple's
+token says `email_verified`, which it does for every ordinary Apple ID and for every relay address.
 
 ## What Ben has to do in Apple's portal
 

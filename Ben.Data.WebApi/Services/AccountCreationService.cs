@@ -28,7 +28,7 @@ namespace Ben.Data.WebApi.Services;
 /// entry points both refuse to reveal whether an address is registered, and both owe the real
 /// account holder a word about it. The wording differs by what the stranger was doing.</para>
 /// </remarks>
-public sealed class AccountCreationService
+public sealed class AccountCreationService : IConfirmationSender
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly UserHandleService _handles;

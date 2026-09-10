@@ -118,6 +118,13 @@ you sign in either way from then on; Microsoft sign-in keeps working.
 Locked out entirely? **Forgot your password?** on the sign-in page emails you a link, and that
 same link is how a Microsoft-only account sets its first password.
 
+That link can only go to a **confirmed** address. An account made by signing in with Microsoft
+starts with the address Microsoft gave us, but Microsoft does not vouch for it, so we send a
+confirmation link when the account is made and the profile shows a notice until you follow it —
+with a **Send the link again** button if it never arrived. Signing in with Microsoft keeps working
+meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
+included.
+
 **Two-step sign-in.** Optional, off unless you turn it on, and worth turning on. Scan the code
 with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
 Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
