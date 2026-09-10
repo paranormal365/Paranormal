@@ -11540,3 +11540,14 @@ key (a bogus code answered `invalid_grant`). Merged to develop and master and th
 `AppleCredentials` migration applied to production the same day. Left for deploy time: the three
 `Apple:*` values plus the `.p8` on the server.
 
+---
+
+## 230. Geocoding on the Apple Maps Server API (BUILT 2026-09-10)
+
+Ben: "Move geocoding to apple." The last metered call after item 228: Geocodio is gone from the
+API, the deploy script, the secrets template and the setup script. `AddressGeocodingService`
+keeps its one static door and its eight callers; behind it `AppleMapsGeocoder` signs the same
+Maps key the website uses, buys an access token, and answers forward, reverse and free-text
+lookups in the shapes the callers already had. Fixtures captured from the real API; a live test
+proves the key. Details: `README-apple-geocoding-230.md`.
+

@@ -155,7 +155,8 @@ touches the database purely through Serilog's error sink.
 | Secret | Where it ends up | What breaks without it |
 |---|---|---|
 | `SmtpPassword` | environment variable `Smtp__Password` on the API's app pool — never a file | registration: accounts need a confirmed address, so people sign up and can never sign in |
-| `GeocodioApiKey` | API `appsettings.json` | address lookup silently returns nothing |
+| `AppleTeamId`, `AppleMapsKeyId`, `AppleMapsKeyPath` | API and website `appsettings.json` (`Maps:*`) | every map says it could not be loaded; address lookup answers nothing |
+| `AppleSignInKeyId`, `AppleSignInKeyPath` | API `appsettings.json` (`Apple:*`) | Apple tokens are never revoked when an account is deleted |
 | `SqlConnectionString` | both packages' `appsettings.json` — **normally left null** | nothing; the Integrated Security default applies. Set it only to reach a different server, and note that a password put here does land on disk |
 | `AzureAd` | API `appsettings.json` | nothing — Entra sign-in stays off until `ClientId` is a real GUID |
 | `SeedSuperAdmin` | API `appsettings.json` | nothing, if the database already has its administrator |

@@ -36,6 +36,7 @@
        decode path has no other way to be tested, and it was broken off Windows for as long as
        nothing decoded one in a unit test (2026-09-06 audio audit, phase 4). -->
   <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Ben.Web.Playwright\Fixtures\test-audio.mp3" Link="Fixtures\test-audio.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

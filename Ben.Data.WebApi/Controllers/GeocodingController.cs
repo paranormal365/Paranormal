@@ -12,8 +12,8 @@ namespace Ben.Data.WebApi.Controllers;
 /// </summary>
 /// <remarks>
 /// Rate-limited at the class level, not just on the anonymous action: every endpoint here forwards
-/// to geocod.io, which bills per lookup. An authenticated caller can run up the same bill as an
-/// anonymous one.
+/// to the Apple Maps Server API, whose daily quota is shared with every map on the website. An
+/// authenticated caller can spend it as fast as an anonymous one.
 /// </remarks>
 [ApiController]
 [Authorize]

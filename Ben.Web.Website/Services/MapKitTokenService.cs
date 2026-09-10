@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using Ben.Data.Common.Helpers;
 
 namespace Ben.Web.Website.Services;
 
@@ -30,9 +30,8 @@ public sealed record MapKitSigningOptions(string TeamId, string KeyId, string Pr
 /// worth having: a token naming <c>https://ishaunted.com</c> is refused by Apple on any other
 /// site, so a copied token spends nobody's quota but ours, and only from our pages.</para>
 ///
-/// <para>Written by hand rather than through a JWT library because the whole of it is forty
-/// lines and every line is a fact about what Apple checks; a library would hide the one that
-/// matters (the signature must be the raw <c>r||s</c> form, not DER).</para>
+/// <para>The signing itself is <see cref="Es256Jwt"/>, shared with the two Apple tokens the API
+/// signs; the claims here are what MapKit checks.</para>
 /// </remarks>
 public sealed class MapKitTokenService : IDisposable
 {
@@ -50,25 +49,7 @@ public sealed class MapKitTokenService : IDisposable
         _options = options;
         if (!options.IsConfigured) return;
 
-        _key = ECDsa.Create();
-        try
-        {
-            _key.ImportFromPem(options.PrivateKeyPem);
-        }
-        catch (Exception ex)
-        {
-            _key.Dispose();
-            throw new InvalidOperationException(
-                "Maps:PrivateKey is not a PKCS#8 EC private key. Apple's .p8 file is the whole "
-              + "text, BEGIN and END lines included.", ex);
-        }
-
-        if (_key.KeySize != 256)
-        {
-            _key.Dispose();
-            throw new InvalidOperationException(
-                $"Maps:PrivateKey is a {_key.KeySize}-bit key; Apple issues P-256 keys and MapKit JS requires ES256.");
-        }
+        _key = Es256Jwt.ImportP256(options.PrivateKeyPem, "Maps:PrivateKey");
     }
 
     public bool IsConfigured => _key is not null;
@@ -90,16 +71,8 @@ public sealed class MapKitTokenService : IDisposable
             origin = origin.TrimEnd('/'),
         });
 
-        var signingInput = $"{Base64Url(Encoding.UTF8.GetBytes(header))}.{Base64Url(Encoding.UTF8.GetBytes(claims))}";
-        var signature = _key.SignData(
-            Encoding.ASCII.GetBytes(signingInput), HashAlgorithmName.SHA256,
-            DSASignatureFormat.IeeeP1363FixedFieldConcatenation);   // r||s, what JOSE wants; DER is refused
-
-        return $"{signingInput}.{Base64Url(signature)}";
+        return Es256Jwt.Sign(_key, header, claims);
     }
-
-    internal static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public void Dispose() => _key?.Dispose();
 }
