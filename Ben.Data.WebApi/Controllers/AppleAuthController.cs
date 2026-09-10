@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Entities;
 using Ben.Data.Common.Helpers;
 using Ben.Data.WebApi.Services;
@@ -155,9 +156,17 @@ public sealed class AppleAuthController : BenControllerBase
         // Apple only hands over the email on the FIRST authorization, and a user may withhold it
         // entirely. A placeholder keeps Identity's uniqueness happy without ever pretending to be
         // a reachable address — MeController's own "no email" handling covers the rest.
-        var email = string.IsNullOrWhiteSpace(identity.Email)
-            ? $"{identity.Subject}@appleid.invalid"
-            : identity.Email;
+        var withheld = string.IsNullOrWhiteSpace(identity.Email);
+        var email = withheld ? $"{identity.Subject}@appleid.invalid" : identity.Email!;
+
+        // Apple says which of the three this is exactly once, here. Recording it is the only way
+        // anything later can tell a real address from a relay or a placeholder — and without that,
+        // the site shows a machine-generated string as somebody's email and claims to have written
+        // to them when Apple quietly dropped it.
+        var emailKind =
+            withheld                 ? EmailAddressKind.Unreachable
+          : identity.IsPrivateEmail  ? EmailAddressKind.AppleRelay
+          :                            EmailAddressKind.Ordinary;
 
         var user = new AppUser
         {
@@ -168,6 +177,7 @@ public sealed class AppleAuthController : BenControllerBase
             NormalizedUserName = email.ToUpperInvariant(),
             DisplayName        = displayName,
             Handle             = UserHandle.Normalize(request.Handle),
+            EmailKind          = emailKind,
             // Apple verified it; there is no second confirmation to send, and no address to send
             // it to when the user withheld theirs.
             EmailConfirmed     = true,

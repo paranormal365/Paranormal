@@ -729,4 +729,105 @@ public class AppleAuthControllerTests
         var details = Assert.IsType<Microsoft.AspNetCore.Mvc.ProblemDetails>(problem.Value);
         Assert.Equal(expectedDetail, details.Detail);
     }
+
+    // ── Recording what kind of address Apple actually gave ────────────────────
+
+    /// <summary>
+    /// Apple says whether the address is a relay exactly once, and it is recorded.
+    /// </summary>
+    /// <remarks>
+    /// It used to be read and thrown away. Nothing afterwards could tell a relay from a real
+    /// address, so the site printed a machine-generated string as somebody's own email and would
+    /// have claimed to write to one Apple silently drops.
+    /// </remarks>
+    [Fact]
+    public async Task ARelayAddressIsRecordedAsARelay()
+    {
+        AppUser? created = null;
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
+          .Callback<AppUser>(u => created = u).ReturnsAsync(IdentityResult.Success);
+
+        await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "x7k2@privaterelay.appleid.com", true, IsPrivateEmail: true)),
+            SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        Assert.NotNull(created);
+        Assert.Equal(Ben.Data.Common.Enums.EmailAddressKind.AppleRelay, created!.EmailKind);
+        Assert.Equal("x7k2@privaterelay.appleid.com", created.Email);
+    }
+
+    /// <summary>
+    /// A withheld address is recorded as unreachable, which is stronger than "a relay".
+    /// </summary>
+    /// <remarks>
+    /// The placeholder ends in <c>.invalid</c>, reserved so it can never resolve. Nothing will ever
+    /// be delivered to it — not a password reset, not a way back in — so the difference from a
+    /// relay is worth keeping: one is a configuration problem, the other is permanent.
+    /// </remarks>
+    [Fact]
+    public async Task AWithheldAddressIsRecordedAsUnreachable()
+    {
+        AppUser? created = null;
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
+          .Callback<AppUser>(u => created = u).ReturnsAsync(IdentityResult.Success);
+
+        await Build(um, new FakeValidator(new AppleIdentity(Sub, null, false, IsPrivateEmail: true)),
+            SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        Assert.NotNull(created);
+        Assert.Equal(Ben.Data.Common.Enums.EmailAddressKind.Unreachable, created!.EmailKind);
+        Assert.EndsWith("@appleid.invalid", created.Email);
+    }
+
+    /// <summary>A real address is recorded as one, so nothing is warned about that need not be.</summary>
+    [Fact]
+    public async Task ARealAddressIsRecordedAsOrdinary()
+    {
+        AppUser? created = null;
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
+          .Callback<AppUser>(u => created = u).ReturnsAsync(IdentityResult.Success);
+
+        await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "ada@example.test", true, IsPrivateEmail: false)),
+            SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        Assert.NotNull(created);
+        Assert.Equal(Ben.Data.Common.Enums.EmailAddressKind.Ordinary, created!.EmailKind);
+    }
+
+    /// <summary>
+    /// Linking to an existing account does NOT restamp its address.
+    /// </summary>
+    /// <remarks>
+    /// The account keeps its own real address; only the Apple identity is attached. Marking it as a
+    /// relay because Apple's was one would warn somebody about an address that is perfectly fine.
+    /// </remarks>
+    [Fact]
+    public async Task LinkingDoesNotRestampAnExistingAccountsAddress()
+    {
+        var mine = new AppUser
+        {
+            Id = Guid.NewGuid(),
+            Email = "ben@ishaunted.com",
+            EmailKind = Ben.Data.Common.Enums.EmailAddressKind.Ordinary,
+        };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+        sim.Setup(s => s.CheckPasswordSignInAsync(mine, "right", true))
+           .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+
+        await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "x7k2@privaterelay.appleid.com", true, true)), sim)
+            .Link(new AppleLinkRequest("a.signed.token", "ben@ishaunted.com", "right"), default);
+
+        Assert.Equal(Ben.Data.Common.Enums.EmailAddressKind.Ordinary, mine.EmailKind);
+        Assert.Equal("ben@ishaunted.com", mine.Email);
+    }
 }

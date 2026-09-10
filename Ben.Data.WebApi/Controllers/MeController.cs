@@ -1,4 +1,5 @@
 using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -45,7 +46,8 @@ public sealed class MeController : BenControllerBase
                 var isModerator = isSuperAdmin
                                   || await _userManager.IsInRoleAsync(linkedUser, RoleNames.Moderator);
                 return Ok(new MeResponse(
-                    linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator));
+                    linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
+                    linkedUser.EmailKind));
             }
         }
 
@@ -60,7 +62,8 @@ public sealed class MeController : BenControllerBase
                 var isModerator = isSuperAdmin
                                   || await _userManager.IsInRoleAsync(user, RoleNames.Moderator);
                 return Ok(new MeResponse(
-                    user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator));
+                    user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
+                    user.EmailKind));
             }
         }
         catch (FormatException)
@@ -93,5 +96,11 @@ public sealed class MeController : BenControllerBase
 /// ModeratorHandler on the server — two answers to "may this person moderate" would eventually
 /// disagree, and the visible symptom would be a menu item leading to a 403.
 /// </param>
+/// <param name="EmailKind">
+/// Whether <paramref name="Email"/> is an address this person chose and can read. A client must not
+/// present an Apple relay or a placeholder as somebody's own address, and must not claim to have
+/// emailed one.
+/// </param>
 public record MeResponse(
-    Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false);
+    Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false,
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary);
