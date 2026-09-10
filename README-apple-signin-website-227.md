@@ -21,6 +21,9 @@ the plan's Phase A. Only the Apple round trip itself remains unverifiable withou
 controllers are thin over it, and a refused link answers in the same shape from Apple and from
 Microsoft. Phase C — the Microsoft decisions — is waiting on Ben.
 
+**The desktop app was shelved on this branch** (item 225, kept as a future enhancement). Its
+removal commit is the way back; `Ben.Data.WebApi.Client` stays because this button runs on it.
+
 ## Why this closes the iPhone gap without touching the iPhone app
 
 The Apple sign-in endpoint has three outcomes, and the first is **this Apple identity is already

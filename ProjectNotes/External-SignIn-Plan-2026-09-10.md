@@ -100,10 +100,10 @@ service as `EmailVerified: false`, so the service's one rule — a verified addr
 unverified one routes to the link door — already governs Microsoft. Deciding to trust a Microsoft
 claim (work accounts via `upn`, or `xms_edov`) is a one-line change in one place.
 
-Its natural companion: **`api/auth/entra/token`**, exchanging a validated Microsoft token for our
-own session through the same issuing path. Then a Microsoft sign-in is an ordinary session, the
-per-request claims transformation stops being an authentication path, and the desktop's external
-renewal mode in `TokenSession` can go. One session type everywhere.
+Its natural companion was to be **`api/auth/entra/token`**, exchanging a validated Microsoft token
+for our own session so that one session type served everywhere. The desktop app — the client that
+needed that most — was shelved on 2026-09-10, so this is now optional: the website's Entra bridge
+works as it always has. Worth doing only if a second native client appears.
 
 ## The path
 
@@ -111,7 +111,7 @@ renewal mode in `TokenSession` can go. One session type everywhere.
 | --- | --- | --- |
 | A | **Done.** 226 on the iPhone: BenKit `link()`, the sheet's second door, committed | 339 BenKit tests; Apple UI regression green on iPhone 17 Pro **and** iPad Pro 13-inch |
 | B | **Done.** `ExternalSignInService` (`ba74afca`, `81602335`); both controllers thin; one refusal shape; `EntraLinkRefusal` deleted; both clients read `/login`'s problem-detail through the one `LoginFailureMapping` | 20-case service matrix; all 45 Apple + 26 Entra controller tests unchanged in intent; suite 7,954 green |
-| C | Entra decisions with Ben: email fallback, unverified register, `api/auth/entra/token`; then drop desktop external-renewal mode | New tests per decision; desktop `TokenSession` tests shrink |
+| C | Entra decisions with Ben: email fallback, unverified register. (`api/auth/entra/token` and the desktop renewal mode dropped out with the desktop app, shelved 2026-09-10.) | New tests per decision |
 | D | Portal work and UAT: Services ID grouped under the iOS App ID, domain file, `Apple:ClientIds`, email-communication registration; Entra redirect URI | A real Apple round trip on UAT; a real Microsoft one |
 | E | Merge to develop; production migration for `EmailKind` with an explicit `--connection` naming `IsHauntedDb` | Suite green on develop; migration applied to production only by that command |
 

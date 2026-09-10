@@ -1,5 +1,16 @@
 # Feature: a desktop client, and the client library both front ends share (item 225)
 
+> **SHELVED 2026-09-10.** Ben decided not to build a desktop version for now. The two MAUI projects,
+> the desktop-only client code and `Ben.Server.slnf` were deleted, and `dotnet build Ben.slnx` works
+> again without the MAUI workload. **What stayed:** `Ben.Data.WebApi.Client` (the website's Sign in
+> with Apple and the shared sign-in vocabulary now live there), and every server-side fix this work
+> exposed. **To bring the desktop back:** the last commit with it all present is `a2aaa511` on
+> `feature/apple-signin-website-227`; `git show a2aaa511:Ben.Desktop.App.UI/MauiProgram.cs` etc.,
+> or `git checkout a2aaa511 -- Ben.Desktop.App.Library Ben.Desktop.App.UI Ben.Server.slnf` plus the
+> fifteen `Ben.Data.WebApi.Client` files removed in the shelving commit. Rebuild against whatever
+> `ExternalSignInService` and the Apple contracts look like by then; the desktop had drifted from
+> neither yet. The rest of this document is left as it was, as a record.
+
 Branched from `develop` at `481abb91` (2026-09-10).
 
 > "I would like to create a plan for building two new projects inside my Ben solution called

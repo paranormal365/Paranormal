@@ -24,10 +24,6 @@
     <Project Path="Ben.Web.Website.Library/Ben.Web.Website.Library.csproj" />
     <Project Path="Ben.Web.Website/Ben.Web.Website.csproj" />
   </Folder>
-  <Folder Name="/Desktop Layer/">
-    <Project Path="Ben.Desktop.App.Library/Ben.Desktop.App.Library.csproj" />
-    <Project Path="Ben.Desktop.App.UI/Ben.Desktop.App.UI.csproj" />
-  </Folder>
   <Folder Name="/Media Projects/">
     <Project Path="Ben.Video.Editor/Ben.Video.Editor.csproj" />
     <Project Path="Ben.Video.Core/Ben.Video.Core.csproj" />

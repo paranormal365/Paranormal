@@ -54,7 +54,14 @@ public static class AppleWebAuthorizeRequest
 
     /// <summary>An unguessable value for <c>state</c> or <c>nonce</c>.</summary>
     public static string NewSecret() =>
-        EntraPkce.Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+        Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+
+    /// <summary>
+    /// Base64 with the URL-safe alphabet and no padding: '+' and '/' change meaning in a query
+    /// string, and '=' has no business in one.
+    /// </summary>
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>What Apple posted back.</summary>
     /// <param name="DisplayName">

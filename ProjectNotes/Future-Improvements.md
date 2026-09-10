@@ -11235,7 +11235,7 @@ first arrow press. That one was fixed by seeding every date field; this one surv
 
 ---
 
-## 225. A desktop client, and the client library both front ends share (IN PROGRESS 2026-09-10)
+## 225. A desktop client, and the client library both front ends share (SHELVED 2026-09-10 — kept as a future enhancement)
 
 Ben, 2026-09-10: two new C# projects, `Ben.Desktop.App.UI` (Telerik UI for .NET MAUI) and
 `Ben.Desktop.App.Library` (reusable components), talking to the database only through
@@ -11336,6 +11336,27 @@ assume it needs a signing identity.
 3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
 4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
 
+
+### Shelved 2026-09-10
+
+Ben: "I am not sure I want to create a desktop version. Just keep it as future enhancement."
+Deleted: `Ben.Desktop.App.Library`, `Ben.Desktop.App.UI`, `Ben.Server.slnf`, the macOS CI job,
+`com.ishaunted.desktop` from `Apple:ClientIds`, and the fifteen desktop-only types in
+`Ben.Data.WebApi.Client` (the token session and session store, the bearer handler, the Microsoft
+PKCE stack, the desktop Entra account client) with their tests. `dotnet build Ben.slnx` needs no
+MAUI workload again.
+
+**Kept, because the website now stands on it:** `Ben.Data.WebApi.Client` itself — `LoadResult`,
+`ItemResult`, `LoginFailureMapping`, `AppleSignInClient`, `AppleWebAuthorizeRequest` — and every
+server-side change this work exposed (the link endpoints, `ExternalSignInService`, `EmailKind`, the
+admin-refusal and second-factor fixes). None of that was desktop-specific; the desktop was merely
+where it was found.
+
+**To resurrect:** the last commit with everything present is `a2aaa511` on
+`feature/apple-signin-website-227`. `git checkout a2aaa511 -- Ben.Desktop.App.Library
+Ben.Desktop.App.UI Ben.Server.slnf` and the removed client files, then rebuild against
+`ExternalSignInService` and the Apple contracts as they stand. The user-local MAUI SDK at
+`~/.dotnet-maui` can be deleted or reused.
 ---
 
 ## 226. The iPhone app can still be given a second account by Sign in with Apple (BUILT 2026-09-10)
