@@ -302,6 +302,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
+// Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 // The most destructive operation in the product, and SuperAdmin-only at its controller.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();

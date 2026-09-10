@@ -399,6 +399,16 @@ public interface IBenOrganizationClient
     /// <summary>Every tour that can be drawn on a map.</summary>
     Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// The guest mail as it would go out, from what is in the editor right now.
+    /// </summary>
+    /// <remarks>
+    /// The point of a preview is to see a change before saving it, so what is posted is the
+    /// editor's contents rather than what the tour last stored.
+    /// </remarks>
+    Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default);
+
     /// <summary>The pictures on a tour's page.</summary>
     Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default);
 

@@ -281,6 +281,12 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Put, $"/api/organizations/{orgId}/tours/{tourId}/guides",
                new SetTourGuidesRequest(appUserIds), token);
 
+    public Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default)
+        => _api.PostAsync<TourMailPreviewRequest, TourMailPreviewRecord>(
+               $"/api/organizations/{orgId}/tours/{tourId}/mail-preview",
+               new TourMailPreviewRequest(subjectTemplate, bodyTemplate), token);
+
     public Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default)
         => _api.GetListAsync<TourImageRecord>($"/api/organizations/{orgId}/tours/{tourId}/gallery", token);
 

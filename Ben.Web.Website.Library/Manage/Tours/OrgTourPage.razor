@@ -5,6 +5,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IMediaUrlBuilder MediaUrls
+@inject IJSRuntime JS
 
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services.WebApi
@@ -70,6 +71,7 @@
         <nav class="d-flex flex-wrap gap-2 mb-3">
             <a class="btn btn-outline-secondary btn-sm" href="#tour-details">Details</a>
             <a class="btn btn-outline-secondary btn-sm" href="#tour-guides">Guides</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-mail">Guest email</a>
             <a class="btn btn-outline-secondary btn-sm" href="#tour-gallery">Pictures</a>
             <a class="btn btn-outline-secondary btn-sm" href="#tour-dates">Dates</a>
             <a class="btn btn-outline-secondary btn-sm" href="@PublicUrl" target="_blank">See the public page</a>
@@ -261,6 +263,90 @@
             </div>
         </div>
 
+        @* ── Guest email ─────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-mail">
+            <div class="card-body">
+                <h2 class="h6 card-title">The email your guests get</h2>
+                <p class="text-secondary small">
+                    Sent when somebody signs up, and again the night before as a reminder. The walk
+                    goes with it as a calendar file, so it lands in their diary with the meeting
+                    point. Leave this empty and we send a complete email of our own.
+                </p>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold" for="tour-mail-subject">Subject</label>
+                        <input id="tour-mail-subject" class="form-control" maxlength="200"
+                               placeholder="You're coming on {{tour.name}}"
+                               @bind="@_form.MailSubject" @bind:event="oninput" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold" for="tour-mail-body">What it says</label>
+                        <div id="tour-mail-body">
+                            <BenEditor @bind-Value="@_form.MailBody" Height="300px" />
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="fw-semibold small mb-1">Things you can drop in</div>
+                        <p class="text-secondary small">
+                            Click one to copy it, then paste it where you want it. Anything we don't
+                            recognise is simply left out.
+                        </p>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var (token, means) in TourMailTokens.All)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm font-monospace"
+                                        title="@means" @onclick="@(() => CopyTokenAsync(token))">@token</button>
+                            }
+                        </div>
+                        @if (_copied is not null)
+                        {
+                            <div class="form-text text-success">Copied @_copied</div>
+                        }
+                    </div>
+
+                    <div class="col-12 d-flex gap-2 align-items-center flex-wrap">
+                        <button type="button" class="btn btn-primary" id="tour-save-mail"
+                                disabled="@_saving" @onclick="SaveAsync">
+                            @(_saving ? "Saving…" : "Save the email")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="tour-preview-mail"
+                                disabled="@_previewing" @onclick="PreviewAsync">
+                            @(_previewing ? "Rendering…" : "See what it looks like")
+                        </button>
+                    </div>
+
+                    @if (_preview is not null)
+                    {
+                        <div class="col-12">
+                            <div class="border rounded p-3">
+                                <div class="text-secondary small">Subject</div>
+                                <div class="fw-semibold mb-2" id="tour-preview-subject">@_preview.Subject</div>
+                                @if (!_preview.UsesARealDate)
+                                {
+                                    <div class="text-secondary small mb-2">
+                                        You have no dates on the calendar yet, so the times here are
+                                        a sample.
+                                    </div>
+                                }
+                                @* An iframe with nothing granted to it: this is the business's own
+                                   markup, and a mail body rendered straight into the page would be
+                                   running inside the site's session. *@
+                                <iframe title="A preview of the email" id="tour-preview-body"
+                                        sandbox="" srcdoc="@_preview.HtmlBody"
+                                        style="width:100%;height:420px;border:1px solid var(--bs-border-color);border-radius:.375rem;background:#fff;"></iframe>
+                                <details class="mt-2">
+                                    <summary class="small text-secondary">The calendar file that goes with it</summary>
+                                    <pre class="small mt-2 mb-0" style="white-space:pre-wrap;">@_preview.CalendarFile</pre>
+                                </details>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
         @* ── Gallery ─────────────────────────────────────────────────────── *@
         <div class="card mb-3" id="tour-gallery">
             <div class="card-body">
@@ -408,6 +494,9 @@
     private HashSet<Guid> _guideIds = [];
     private List<TourImageRecord> _gallery = [];
     private bool _uploading;
+    private bool _previewing;
+    private TourMailPreviewRecord? _preview;
+    private string? _copied;
     private string? _galleryError;
 
     private const int MaxImages = 50;
@@ -462,6 +551,8 @@
             _form.ContactLine = _tour.ContactLine ?? "";
             _form.IsBookable = _tour.IsBookable;
             _form.AllowReviews = _tour.AllowReviews;
+            _form.MailSubject = _tour.MailSubjectTemplate ?? "";
+            _form.MailBody = _tour.MailBodyTemplate ?? "";
             _guideIds = [.. _tour.Guides.Select(g => g.AppUserId)];
         }
 
@@ -509,7 +600,8 @@
             addressId, _form.DurationMinutes, _form.DefaultCapacity, _form.TimeZoneId,
             _form.AllowReviews, _form.IsBookable,
             string.IsNullOrWhiteSpace(_form.ContactLine) ? null : _form.ContactLine.Trim(),
-            _tour?.MailSubjectTemplate, _tour?.MailBodyTemplate));
+            string.IsNullOrWhiteSpace(_form.MailSubject) ? null : _form.MailSubject.Trim(),
+            string.IsNullOrWhiteSpace(_form.MailBody) ? null : _form.MailBody.Trim()));
         _saving = false;
 
         if (saved is null) { _error = error ?? "That could not be saved."; return; }
@@ -537,6 +629,40 @@
         if (saved is null) { _error = error ?? "That could not be changed."; return; }
         _notice = saved.PlanNote;
         await LoadAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        _previewing = true; _error = null;
+        _preview = await AdminClient.PreviewTourMailAsync(
+            OrgId, TourId,
+            string.IsNullOrWhiteSpace(_form.MailSubject) ? null : _form.MailSubject.Trim(),
+            string.IsNullOrWhiteSpace(_form.MailBody) ? null : _form.MailBody.Trim());
+        if (_preview is null) _error = "That preview could not be rendered.";
+        _previewing = false;
+    }
+
+    /// <summary>
+    /// Puts a placeholder on the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// Copy rather than insert: the rich-text editor owns its own selection, and reaching into it
+    /// from outside is how a caret ends up somewhere nobody asked for. Paste is a gesture
+    /// everybody already has.
+    /// </remarks>
+    private async Task CopyTokenAsync(string token)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", token);
+            _copied = token;
+        }
+        catch (Exception)
+        {
+            // A browser that refuses the clipboard is not an error worth a banner; the token is
+            // on screen and can be typed.
+            _copied = null;
+        }
     }
 
     private async Task UploadAsync(InputFileChangeEventArgs e)
@@ -587,5 +713,7 @@
         public string ContactLine { get; set; } = "";
         public bool IsBookable { get; set; } = true;
         public bool AllowReviews { get; set; } = true;
+        public string MailSubject { get; set; } = "";
+        public string MailBody { get; set; } = "";
     }
 }

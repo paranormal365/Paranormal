@@ -221,6 +221,95 @@ public sealed class TourController : OrgCmsControllerBase
         return Ok((await LoadAsync(db, orgId, tourId, ct)).First() with { PlanNote = note });
     }
 
+    /// <summary>
+    /// Renders the guest mail as it would go out, without sending anything (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <para>Against the tour's next scheduled date where there is one, so a business sees its
+    /// own wording with its own times and its own guides in it. With no date on the calendar it
+    /// falls back to a sample evening a week out, clearly a sample, because a business writes the
+    /// mail before it schedules anything.</para>
+    ///
+    /// <para>The body posted here is what is <b>in the editor</b>, not what was last saved: the
+    /// point of a preview is to see a change before committing to it.</para>
+    /// </remarks>
+    [HttpPost("{tourId:guid}/mail-preview")]
+    public async Task<ActionResult<TourMailPreviewRecord>> PreviewMail(
+        Guid orgId, Guid tourId, [FromBody] TourMailPreviewRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var tour = await db.Tours.AsNoTracking()
+            .Include(t => t.StartOrganizationAddress)
+            .Include(t => t.Guides).ThenInclude(g => g.AppUser)
+            .Include(t => t.Organization)
+            .FirstOrDefaultAsync(t => t.Id == tourId && t.OrganizationId == orgId, ct);
+        if (tour is null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        var next = await db.OrgCalendarEvents.AsNoTracking()
+            .Where(e => e.TourId == tourId && e.StartDateTime >= now)
+            .OrderBy(e => e.StartDateTime)
+            .Select(e => new { e.Id, e.Title, e.StartDateTime, e.EndDateTime, e.AttendeeCapacity, e.UrlName })
+            .FirstOrDefaultAsync(ct);
+
+        var start = next?.StartDateTime ?? now.Date.AddDays(7).AddHours(1);
+        var end = next?.EndDateTime ?? start.AddMinutes(tour.DurationMinutes ?? 90);
+
+        var address = tour.StartOrganizationAddress;
+        var meetingPoint = Ben.Data.WebApi.Controllers.Public.PublicTourController.MeetingPointOf(address);
+
+        var guideIds = tour.Guides.Select(g => g.AppUserId).ToList();
+        var photos = await db.AppUserPhotos.AsNoTracking()
+            .Where(p => guideIds.Contains(p.AppUserId) && p.IsPublic && p.IsActive)
+            .Select(p => new { p.AppUserId, p.UploadFileId })
+            .ToListAsync(ct);
+
+        var me = await db.AppUsers.AsNoTracking()
+            .Where(u => u.Id == userId).Select(u => u.DisplayName).FirstOrDefaultAsync(ct);
+
+        var facts = new Services.Tours.TourMailRenderer.TourMailFacts(
+            tour.Name, tour.Description, meetingPoint,
+            address?.Latitude is { } lat && address.Longitude is { } lon
+                ? $"https://maps.apple.com/?ll={lat},{lon}" : null,
+            tour.DurationMinutes, start, end, tour.TimeZoneId,
+            next?.AttendeeCapacity ?? tour.DefaultCapacity,
+            next?.AttendeeCapacity ?? tour.DefaultCapacity,
+            next?.Title ?? tour.Name,
+            next?.UrlName is { Length: > 0 } slug
+                ? $"/o/{tour.Organization.UrlName}/events/{slug}" : null,
+            [.. tour.Guides.OrderBy(g => g.SortOrder)
+                 .Select(g => g.AppUser.DisplayName ?? g.AppUser.Email ?? "your guide")],
+            [.. tour.Guides.OrderBy(g => g.SortOrder)
+                 .Where(g => photos.Any(p => p.AppUserId == g.AppUserId))
+                 .Select(g => (g.AppUser.DisplayName ?? "your guide",
+                               $"/media/guide-photo/{photos.First(p => p.AppUserId == g.AppUserId).UploadFileId}"))],
+            me ?? "there",
+            tour.Organization.Name,
+            $"/o/{tour.Organization.UrlName}",
+            tour.ContactLine,
+            "IsHaunted.com");
+
+        var rendered = Services.Tours.TourMailRenderer.Render(
+            request.SubjectTemplate, request.BodyTemplate, facts);
+
+        var calendar = Ben.Data.Common.Helpers.IcsBuilder.Build(
+            new Ben.Data.Common.Helpers.IcsBuilder.IcsEvent(
+                Uid: $"{next?.Id ?? tourId}@ishaunted.com",
+                StartUtc: start, EndUtc: end, Summary: tour.Name,
+                Description: tour.ContactLine, Location: meetingPoint,
+                OrganizerName: tour.Organization.Name,
+                Latitude: address?.Latitude, Longitude: address?.Longitude));
+
+        return Ok(new TourMailPreviewRecord(
+            rendered.Subject, rendered.HtmlBody, calendar, next is not null));
+    }
+
     // ── guides ───────────────────────────────────────────────────────────────
 
     /// <summary>

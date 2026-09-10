@@ -566,6 +566,26 @@ A public date of a tour business has to name a tour. Without one there is nothin
 where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
 a guides' meeting, a rehearsal — needs no tour.
 
+### The email your guests get
+
+When somebody signs up for a date, and again the night before, they are sent an email about the
+walk with a **calendar file** attached, so it lands in their diary with the meeting point and their
+phone reminds them.
+
+You can write that email yourself under **Tours → the tour → Guest email**, or leave it empty and
+we send a complete one. Drop in the things that change per date by clicking a placeholder and
+pasting it: the tour's name and meeting point, the date and time in your tour's own time zone, who
+is guiding that night and their photograph, how many places are left, and your own contact line.
+Anything we do not recognise is simply left out, and **the meeting point is always included**
+whether or not you ask for it — a guest who cannot tell where to stand has not been told about the
+tour.
+
+**See what it looks like** renders it against your next scheduled date, with your times, your
+guides and your wording, and shows the calendar file that travels with it. Nothing is sent.
+
+Replies go to your group's public email address when you have set one, so a guest who hits reply
+reaches you rather than us.
+
 ### Pictures and the slideshow
 
 Each tour keeps up to 50 pictures. Add your own from **Tours → the tour → Pictures**; the first one

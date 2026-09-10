@@ -43,7 +43,9 @@ public sealed class EventReminderJobTests
     }
 
     private static EventReminderJob Build(IDbContextFactory<BenDataContext> factory, IEmailService email)
-        => new(factory, email,
+        // The tour mailer is silent here: these tests are about the ordinary event reminder, and
+        // a tour's own wording has its own suite.
+        => new(factory, email, Support.SilentTourMail.Instance,
                Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://ishaunted.com" }),
                NullLogger<EventReminderJob>.Instance);
 

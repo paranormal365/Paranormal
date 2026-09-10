@@ -38,17 +38,20 @@ public sealed class EventReminderJob : IScheduledJob
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IEmailService _email;
+    private readonly Tours.TourGuestMailer _tourMail;
     private readonly SiteIdentity _site;
     private readonly ILogger<EventReminderJob> _logger;
 
     public EventReminderJob(
         IDbContextFactory<BenDataContext> dbFactory,
         IEmailService email,
+        Tours.TourGuestMailer tourMail,
         IOptions<SiteIdentity> site,
         ILogger<EventReminderJob> logger)
     {
         _dbFactory = dbFactory;
         _email = email;
+        _tourMail = tourMail;
         _site = site.Value;
         _logger = logger;
     }
@@ -104,7 +107,12 @@ public sealed class EventReminderJob : IScheduledJob
 
             try
             {
-                await _email.SendAsync(item.Email, SubjectFor(item), BodyFor(item), ct);
+                // Item 233: a tour's own wording, in its own time zone, with the walk attached as
+                // a calendar file. The mailer answers only for a date that belongs to a tour, so
+                // every other event still gets the reminder below — which prints the time in raw
+                // UTC, and can stay that way until somebody decides what it should say instead.
+                if (!await _tourMail.SendReminderAsync(db, item.EventId, item.Email, item.DisplayName, ct))
+                    await _email.SendAsync(item.Email, SubjectFor(item), BodyFor(item), ct);
 
                 db.EventReminderSents.Add(new EventReminderSent
                 {

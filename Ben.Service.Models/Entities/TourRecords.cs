@@ -97,3 +97,54 @@ public sealed record TourImageRecord(
 
 /// <summary>Changing a picture's caption or where it sits.</summary>
 public sealed record UpdateTourImageRequest(string? Caption, int? SortOrder);
+
+/// <summary>Asking what the guest mail would look like, from what is in the editor right now.</summary>
+public sealed record TourMailPreviewRequest(string? SubjectTemplate, string? BodyTemplate);
+
+/// <summary>The mail as it would go out.</summary>
+/// <param name="CalendarFile">
+/// The .ics text, so a business can see what lands in a guest's diary rather than taking it on
+/// trust.
+/// </param>
+/// <param name="UsesARealDate">
+/// True when the preview was rendered against a date actually on the calendar; false means the
+/// times shown are a sample.
+/// </param>
+public sealed record TourMailPreviewRecord(
+    string Subject, string HtmlBody, string CalendarFile, bool UsesARealDate);
+
+/// <summary>
+/// The placeholders a tour business may use in its guest email (item 233).
+/// </summary>
+/// <remarks>
+/// Shared, because two things need it: the renderer that substitutes them, and the editor that
+/// lists them for somebody writing the mail. A second copy would drift within a month, and the
+/// symptom would be a business writing a placeholder that renders as nothing.
+/// </remarks>
+public static class TourMailTokens
+{
+    public static IReadOnlyList<(string Token, string Means)> All { get; } =
+    [
+        ("{{tour.name}}",           "The tour's name"),
+        ("{{tour.description}}",    "What you wrote about the tour"),
+        ("{{tour.meetingPoint}}",   "Where it starts, in full"),
+        ("{{tour.meetingPointMap}}","A link that opens the meeting point in Maps"),
+        ("{{tour.length}}",         "How long it runs — \"about 1 hour 30 minutes\""),
+        ("{{date.start}}",          "When this one starts, in your tour's time zone"),
+        ("{{date.end}}",            "When it is expected to finish"),
+        ("{{date.day}}",            "The day it runs — \"Saturday, 09/13/2026\""),
+        ("{{date.capacity}}",       "How many people this date takes"),
+        ("{{date.spacesLeft}}",     "How many places are still open"),
+        ("{{date.title}}",          "What the date is called on your calendar"),
+        ("{{date.url}}",            "A link to the date's page on this site"),
+        ("{{guide.names}}",         "Who is leading this one"),
+        ("{{guide.photos}}",        "Their photographs, where they have published one"),
+        ("{{guide.block}}",         "\"Your guide: Gale\" with their photograph — nothing when no guide is set"),
+        ("{{guest.name}}",          "Who you are writing to"),
+        ("{{business.name}}",       "Your business"),
+        ("{{business.url}}",        "A link to your public page"),
+        ("{{business.contact}}",    "Your contact line — how to reach you and how to pay"),
+        ("{{business.contactBlock}}","The same, as its own paragraph — nothing when you have not written one"),
+        ("{{site.name}}",           "IsHaunted.com"),
+    ];
+}

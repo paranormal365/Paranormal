@@ -56,9 +56,12 @@ public sealed class PublicEventController : BenControllerBase
     /// The same reasoning as asking publication rules per request instead of caching them.
     /// </remarks>
     private readonly ICmsMarkupSanitizer _sanitizer;
+    private readonly Services.Tours.TourGuestMailer _tourMail;
 
-    public PublicEventController(IDbContextFactory<BenDataContext> db, ICmsMarkupSanitizer sanitizer)
-    { _db = db; _sanitizer = sanitizer; }
+    public PublicEventController(
+        IDbContextFactory<BenDataContext> db, ICmsMarkupSanitizer sanitizer,
+        Services.Tours.TourGuestMailer tourMail)
+    { _db = db; _sanitizer = sanitizer; _tourMail = tourMail; }
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
@@ -346,6 +349,19 @@ public sealed class PublicEventController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Item 233: a tour date sends the business's own welcome, with the walk attached as a
+        // calendar file. This path sent NOTHING before — a signed-in guest pressed "I'm coming"
+        // and heard from us again only in the reminder the night before, if at all. Non-tour
+        // events are untouched: the mailer answers to a tour or does nothing.
+        if (await db.AppUsers.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Email, u.DisplayName })
+                .FirstOrDefaultAsync(ct) is { Email: { Length: > 0 } address } guest)
+        {
+            await _tourMail.SendSignUpAsync(db, eventId, address, guest.DisplayName, ct);
+        }
+
         return await GetEvent(eventId, ct);
     }
 

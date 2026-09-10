@@ -710,6 +710,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
+        // Item 233 deliberately does NOT send the tour's own welcome here, attachment and all.
+        // A guide typed this address on a pavement in the dark and nobody has proved it yet; the
+        // full details — meeting point, guide's face, how to pay — go out when the link is
+        // confirmed, which is the first moment there is somebody on the other end of it.
         if (_email.IsConfigured)
         {
             var link = _site.AbsoluteUrl($"/attending/{token}");

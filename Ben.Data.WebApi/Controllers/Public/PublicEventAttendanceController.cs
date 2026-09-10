@@ -45,6 +45,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     private readonly UserManager<AppUser> _users;
     private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly Ben.Data.Common.SiteIdentity _site;
+    private readonly Ben.Data.WebApi.Services.Tours.TourGuestMailer _tourMail;
     private readonly ILogger<PublicEventAttendanceController> _logger;
 
     /// <summary>A link is good for a fortnight — long enough to act on, short enough to expire.</summary>
@@ -74,8 +75,10 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     public PublicEventAttendanceController(
         IDbContextFactory<BenDataContext> db, IEmailService email, UserManager<AppUser> users,
         IOptions<Ben.Data.Common.SiteIdentity> site, ILogger<PublicEventAttendanceController> logger,
-        Ben.Data.WebApi.Services.UserHandleService handles)
+        Ben.Data.WebApi.Services.UserHandleService handles,
+        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail)
     {
+        _tourMail = tourMail;
         _handles = handles;
         _db     = db;
         _email  = email;
@@ -311,6 +314,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         invite.DateUpdated          = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
+
+        // Item 233: now that they are actually coming, the tour's own welcome — with the walk as
+        // a calendar file. The mail before this one was a one-line "confirm you're coming" sent
+        // to an address nobody had proved yet; this is the first point at which there is somebody
+        // to write to.
+        await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
 
         return Ok(new EventAttendanceConfirmation(
             ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName, ev.StartDateTime));
