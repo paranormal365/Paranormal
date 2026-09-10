@@ -1,90 +1,19 @@
 @namespace Ben.Web.Website.Library.Shared
-@implements IAsyncDisposable
-@inject IJSRuntime JS
+@using Ben.Web.Website.Library.Kit.Maps
 
 @*
    A map of where investigations happened. Reusable across the organization view, a person's own
-   list, and later the place pages, because all three ask the same question of different data.
+   list, and the place pages, because all three ask the same question of different data.
 
-   Pins that share a spot are clustered rather than stacked: the same place accumulating visits
-   over years is the normal case here, and forty markers on one pixel is not a map.
+   Since item 228 this is a thin adapter over Kit/Maps/BenMap, which owns the map library. What
+   stays here is the domain: pins that share a spot are gathered into one, because the same
+   place accumulating visits over years is the normal case and forty markers on one pixel is
+   not a map; a past visit is dimmed, not hidden; a known public landmark is marked out.
 *@
 
-<div id="@_containerId" style="height:@Height; border-radius:.5rem; overflow:hidden;">
-    @* Held back until the JS module has registered its template functions. Telerik resolves
-       UrlTemplate and Template by *name string* at the moment the map renders, so a map that
-       renders first gets neither: no tiles, and the marker's template name printed as literal
-       text where the pin should be. Interop cannot run before the first render, so the map has
-       to wait for it rather than the other way round. *@
-    @if (_ready)
-    {
-        <TelerikMap @ref="_mapRef" Center="@_center" Zoom="@_zoom" Height="@Height"
-                    OnPanEnd="@OnPanEnd" OnZoomEnd="@OnZoomEnd">
-            <MapLayers>
-                <MapLayer Type="@MapLayersType.Tile"
-                          Attribution="© OpenStreetMap contributors"
-                          Subdomains="@(new[] { "a", "b", "c" })"
-                          UrlTemplate="investigationMapTileTemplate" />
-
-                @if (_markers.Count > 0)
-                {
-                    <MapLayer Type="@MapLayersType.Marker"
-                              Data="@_markers"
-                              LocationField="@nameof(Marker.LatLng)"
-                              TitleField="@nameof(Marker.Title)">
-                        <MapLayerMarkerSettings Template="investigationMapMarkerTemplate" />
-                    </MapLayer>
-                }
-            </MapLayers>
-        </TelerikMap>
-    }
-</div>
+<BenMap Pins="@_mapPins" Height="@Height" OnPinClicked="@OnMapPinClicked" OnViewportChanged="@OnMapViewportChanged" />
 
 @code {
-
-    /// <summary>
-    /// The map's own handle. The redraw used to be attempted through a global <c>kendo</c>
-    /// object, which Telerik UI for Blazor does not define — so every call was a no-op and the
-    /// map kept whatever width it measured when it mounted.
-    /// </summary>
-    private TelerikMap? _mapRef;
-
-    /// <summary>
-    /// Raised when the person finishes a pan or a zoom, with the bounds now in view.
-    /// </summary>
-    /// <remarks>
-    /// This is the seam that lets a page load pins for the part of the world somebody is looking
-    /// at rather than everything at once. It fires on <i>end</i>, not on every frame of a drag, so
-    /// a caller sees one event per gesture; debouncing beyond that is the caller's business,
-    /// because only the caller knows what a request costs. Not raised for the map's own initial
-    /// centring — that is not something the person did.
-    /// </remarks>
-    [Parameter] public EventCallback<MapViewport> OnViewportChanged { get; set; }
-
-    // A pan does not change the zoom, and its event args do not carry one; the component's own
-    // tracked value is the right answer there. A zoom does, and says so.
-    private Task OnPanEnd(MapPanEndEventArgs args)  => RaiseViewportAsync(args.Extent, _zoom);
-    private Task OnZoomEnd(MapZoomEndEventArgs args) { _zoom = args.Zoom; return RaiseViewportAsync(args.Extent, args.Zoom); }
-
-    /// <summary>
-    /// Telerik hands the extent over as [north-west lat, north-west lng, south-east lat,
-    /// south-east lng]. Named here once so no caller has to remember which index is which.
-    /// </summary>
-    private Task RaiseViewportAsync(double[]? extent, double zoom)
-    {
-        if (!OnViewportChanged.HasDelegate || extent is not { Length: 4 }) return Task.CompletedTask;
-        return OnViewportChanged.InvokeAsync(new MapViewport(
-            North: extent[0], West: extent[1], South: extent[2], East: extent[3], Zoom: zoom));
-    }
-
-    /// <summary>Re-measures the map after its container changes size.</summary>
-    [JSInvokable]
-    public Task OnContainerResized()
-    {
-        _mapRef?.Refresh();
-        return Task.CompletedTask;
-    }
-
     /// <summary>The investigations to plot. Ones without coordinates are ignored here — see the remarks.</summary>
     /// <remarks>
     /// Silently dropping unplaceable rows would make the map disagree with the list beside it, so
@@ -95,62 +24,32 @@
 
     [Parameter] public string Height { get; set; } = "420px";
 
-    /// <summary>Raised with the pin's id when someone clicks a marker. Clusters raise the first pin at that spot.</summary>
+    /// <summary>Raised with the pin's id when someone clicks a marker. A shared spot raises the first pin at it.</summary>
     [Parameter] public EventCallback<Guid> OnPinClicked { get; set; }
 
-    /// <summary>Unique per instance so two maps on one page cannot drive each other's widget.</summary>
-    private readonly string _containerId = $"inv-map-{Guid.NewGuid():N}";
+    /// <summary>
+    /// Raised when the person finishes a pan or a zoom, with the bounds now in view.
+    /// </summary>
+    /// <remarks>
+    /// This is the seam that lets a page load pins for the part of the world somebody is looking
+    /// at rather than everything at once. One event per gesture; debouncing beyond that is the
+    /// caller's business, because only the caller knows what a request costs. Not raised for
+    /// the map's own framing — that is not something the person did.
+    /// </remarks>
+    [Parameter] public EventCallback<MapViewport> OnViewportChanged { get; set; }
 
-    private double[] _center = [39.8283, -98.5795]; // Geographic centre of the US, until there are pins.
-    private double _zoom = 4;
-
-    private List<Marker> _markers = [];
-    private List<List<InvestigationMapPin>> _clusters = [];
-
-    private IJSObjectReference? _module;
-    private DotNetObjectReference<InvestigationsMap>? _dotnetRef;
-    private bool _ready;
-    private bool _resized;
-    private int _renderedPinCount = -1;
+    private IReadOnlyList<BenMapPin> _mapPins = [];
+    private List<List<InvestigationMapPin>> _groups = [];
+    private int _builtFor = -1;
 
     protected override void OnParametersSet()
     {
         // Rebuilt only when the pin set actually changes: OnParametersSet runs on every parent
-        // render, and re-clustering on each one would move the map under the user's cursor.
-        if (Pins.Count == _renderedPinCount) return;
-        _renderedPinCount = Pins.Count;
-        BuildMarkers();
-    }
+        // render, and regrouping on each one would move the map under the person's cursor.
+        if (Pins.Count == _builtFor) return;
+        _builtFor = Pins.Count;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _module = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./_content/Ben.Web.Website.Library/Shared/InvestigationsMap.razor.js");
-            _dotnetRef = DotNetObjectReference.Create(this);
-            await _module.InvokeVoidAsync("init", _containerId, _dotnetRef);
-
-            // Only now can the map render with template names that resolve.
-            _ready = true;
-            StateHasChanged();
-            return;
-        }
-
-        // Kendo measures its container once, at mount. If that happened while the container was
-        // still inside a loading state it caches the wrong width and never corrects itself, so the
-        // first render with real pins is the moment to make it look again.
-        if (!_resized && _markers.Count > 0 && _module is not null)
-        {
-            _resized = true;
-            _mapRef?.Refresh();
-        }
-    }
-
-    /// <summary>Groups pins that sit on the same spot and centres the map on what it is showing.</summary>
-    private void BuildMarkers()
-    {
-        _clusters = Pins
+        _groups = Pins
             .Where(p => p.Latitude.HasValue && p.Longitude.HasValue)
             // Rounded to about eleven metres. Two visits to the same building should share a pin
             // even when their coordinates differ in the last decimal place.
@@ -158,64 +57,28 @@
             .Select(g => g.ToList())
             .ToList();
 
-        _markers = _clusters.Select((group, index) => new Marker
+        _mapPins = _groups.Select(group =>
         {
-            LatLng = [(double)group[0].Latitude!.Value, (double)group[0].Longitude!.Value],
-            Title = group.Count > 1
-                ? $"{group.Count} investigations here"
-                : group[0].Title,
-            Count = group.Count,
-            Index = index,
-            ContainerId = _containerId,
-            // A cluster reads as past only when every visit in it is.
-            IsPast = group.All(p => p.IsPast),
+            var first = group[0];
+            var shared = group.Count > 1;
+            return new BenMapPin(
+                (double)first.Latitude!.Value, (double)first.Longitude!.Value,
+                Title: shared ? $"{group.Count} investigations here" : first.Title,
+                // A landmark anyone can visit is told apart by colour AND by its subtitle, so the
+                // difference survives colour vision. Only a KNOWN landmark: null means nobody checked.
+                Subtitle: first.IsPublicPlace == true ? "A place anyone can visit" : null,
+                Glyph: shared ? group.Count.ToString() : "🔦",
+                Color: first.IsPublicPlace == true ? "#3f9fd6" : null,
+                // A group reads as past only when every visit in it is.
+                Dimmed: group.All(p => p.IsPast),
+                // Distinct spots that overlap at a low zoom gather into a count; zooming in separates them.
+                Cluster: "investigations");
         }).ToList();
-
-        if (_markers.Count == 0) return;
-
-        _center =
-        [
-            _markers.Average(m => m.LatLng![0]),
-            _markers.Average(m => m.LatLng![1]),
-        ];
-        // One pin can be looked at closely; a spread needs room. Deliberately coarse — a precise
-        // fit-to-bounds is a nicety this does not need yet.
-        _zoom = _markers.Count == 1 ? 12 : 6;
     }
 
-    [JSInvokable]
-    public async Task OnMarkerClicked(int index)
-    {
-        if (index < 0 || index >= _clusters.Count) return;
-        await OnPinClicked.InvokeAsync(_clusters[index][0].Id);
-    }
+    private Task OnMapPinClicked(int index) =>
+        index >= 0 && index < _groups.Count ? OnPinClicked.InvokeAsync(_groups[index][0].Id) : Task.CompletedTask;
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_module is not null)
-        {
-            try
-            {
-                await _module.InvokeVoidAsync("dispose", _containerId);
-                await _module.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-                // The circuit is already gone, so there is nothing left to tidy on the other side.
-                // Throwing here would surface as an unhandled error on ordinary page navigation.
-            }
-        }
-        _dotnetRef?.Dispose();
-    }
-
-    /// <summary>What Telerik's marker layer binds to. Kept internal to the component.</summary>
-    private sealed class Marker
-    {
-        public double[]? LatLng { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public int Count { get; set; } = 1;
-        public int Index { get; set; }
-        public bool IsPast { get; set; }
-        public string ContainerId { get; set; } = string.Empty;
-    }
+    private Task OnMapViewportChanged(BenMapViewport v) =>
+        OnViewportChanged.InvokeAsync(new MapViewport(v.North, v.South, v.East, v.West, v.Zoom));
 }

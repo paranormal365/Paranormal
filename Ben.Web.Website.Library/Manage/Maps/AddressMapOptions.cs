@@ -110,47 +110,6 @@ public static class AddressMapIconRegistry
 public static class MapGeoJsonHelper
 {
     /// <summary>
-    /// Computes a circle approximation as a GeoJSON Polygon FeatureCollection.
-    /// Pass the result directly to the Telerik Map Shape layer <c>Data</c> parameter.
-    /// </summary>
-    /// <param name="lat">Center latitude in decimal degrees.</param>
-    /// <param name="lon">Center longitude in decimal degrees.</param>
-    /// <param name="radiusMiles">Radius in statute miles.</param>
-    /// <param name="segments">Number of polygon vertices (default 64).</param>
-    public static object ComputeCircleGeoJson(
-        double lat, double lon, double radiusMiles, int segments = 64)
-    {
-        var ring = new List<double[]>(segments + 1);
-        double latRad = lat * Math.PI / 180.0;
-
-        for (int i = 0; i <= segments; i++)  // <= to close the ring
-        {
-            double angle = 2.0 * Math.PI * i / segments;
-            double dLat  = (radiusMiles / 69.0) * Math.Cos(angle);
-            double dLon  = (radiusMiles / (69.0 * Math.Cos(latRad))) * Math.Sin(angle);
-            ring.Add([lon + dLon, lat + dLat]);  // GeoJSON is [longitude, latitude]
-        }
-
-        return new
-        {
-            type = "FeatureCollection",
-            features = new[]
-            {
-                new
-                {
-                    type = "Feature",
-                    geometry = new
-                    {
-                        type = "Polygon",
-                        coordinates = new[] { ring }
-                    },
-                    properties = new { }
-                }
-            }
-        };
-    }
-
-    /// <summary>
     /// Computes the great-circle distance in statute miles between two lat/lng points
     /// using the Haversine formula.
     /// </summary>
@@ -184,14 +143,3 @@ public static class MapGeoJsonHelper
 }
 
 // ── Marker data model for the Telerik Map layer ───────────────────────────────
-
-/// <summary>Data model passed to the Telerik Map Marker layer.</summary>
-public class AddressMarkerModel
-{
-    public double[]? LatLng { get; set; }
-    public string Title { get; set; } = string.Empty;
-    /// <summary>CSS color for the marker template function.</summary>
-    public string Color { get; set; } = "#e63535";
-    /// <summary>SVG path data string for the selected icon.</summary>
-    public string IconSvgPath { get; set; } = AddressMapIconRegistry.PathMapMarkerTarget;
-}
