@@ -27,9 +27,17 @@ public record SubscriptionQuoteResponse(
     // Item 168: tax is its own line, computed on the payable amount from the group's state.
     // Zero when no rule matches — an honest zero, not an assumption hidden in the total.
     decimal TaxRatePercent = 0m,
-    decimal Tax = 0m)
+    decimal Tax = 0m,
+    // Item 233: the quantity behind the list price. A group is one unit of its band; a tour
+    // business is one unit per tour it runs. Defaulted so an older server reads as before.
+    int Units = 1,
+    decimal? UnitPrice = null,
+    string UnitsAre = "members")
 {
     public decimal TotalWithTax => Payable + Tax;
+
+    /// <summary>Whether the list price is a multiple worth showing — "3 tours × $29.00".</summary>
+    public bool IsPerUnit => UnitsAre == "tours";
 }
 
 /// <summary>Asking what a period would cost, optionally with a coupon code typed in.</summary>

@@ -324,6 +324,10 @@ public sealed class OrganizationPurge
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvestigationId, (Guid?)null), ct);
             await db.Investigations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgCalendarEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Tours (item 233) point at the group AND at one of its addresses, both NoAction, so
+            // they block the group's deletion twice over. They go after the dates that name them,
+            // which the line above has just taken, and before the addresses further down.
+            await db.Tours.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

@@ -37,6 +37,16 @@ namespace Ben.Data.Source.Entities
         /// <summary>Active members counted when the current period opened. See remarks.</summary>
         public int MemberCountAtPeriodStart { get; set; }
 
+        /// <summary>
+        /// Tours the period was priced for (item 233). Zero for anyone the ladder prices.
+        /// </summary>
+        /// <remarks>
+        /// A tour business pays per tour, so this is the period's quantity the way the member
+        /// count is the ladder's band. Raised mid-period when a tour is added and its remainder
+        /// paid; re-counted from the live tours at renewal.
+        /// </remarks>
+        public int TourCountAtPeriodStart { get; set; }
+
         /// <summary>How long each period lasts — the cadence the group chose and is billed on.</summary>
         /// <remarks>
         /// Stored here rather than read off the tier because the tier offers several cadences and

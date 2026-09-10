@@ -130,5 +130,19 @@ namespace Ben.Data.Source.Entities
         /// <summary>Where this event is, when it names a shared place.</summary>
         public virtual Place? Place { get; set; }
 
+        /// <summary>
+        /// The tour this date runs (item 233). Required for a public date of a business that runs
+        /// tours; meaningless for anyone else.
+        /// </summary>
+        /// <remarks>
+        /// The tour is what the business pays for; the date is the tour happening. A public date
+        /// with no tour would be a tour the business ran without paying for, so the calendar
+        /// controller refuses it for a tour business, in words.
+        /// </remarks>
+        public Guid? TourId { get; set; }
+
+        /// <summary>The tour this date runs, when it names one.</summary>
+        public virtual Tour? Tour { get; set; }
+
     }
 }

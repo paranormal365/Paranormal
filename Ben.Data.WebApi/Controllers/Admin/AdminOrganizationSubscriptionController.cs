@@ -189,9 +189,13 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         // first-paid exactly once. The provider webhook will call the same method; two copies of
         // this list would disagree within a month.
         sub.CancelAtPeriodEnd = request.CancelAtPeriodEnd;
+        // A business period is priced per tour (item 233); a hand-set one counts them the same way.
+        var tours = tier is { IsBandedByMembers: false } && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+            ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+            : 0;
         var snapshot = PeriodOpener.Open(
             sub, tier, request.Status, request.Interval,
-            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId);
+            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId, tours);
         sub.ProviderName = "Manual";
 
         if (snapshot is not null)

@@ -108,6 +108,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
+        public virtual DbSet<Tour> Tours { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
@@ -664,6 +665,32 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventReminderSent>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Tour (item 233) ─────────────────────────────────────────────
+            // The name is what tells two tours from the same corner apart, so it is unique per
+            // business; SQL Server's default collation makes that case-insensitive, which is the
+            // intent. The start address and the business are NoAction: an address in use by a
+            // tour must be re-pointed, not silently orphaned, and deleting a business goes through
+            // its own purge. A date keeps its tour on retirement (SetNull only on a hard delete).
+            modelBuilder.Entity<Tour>()
+                .HasIndex(t => new { t.OrganizationId, t.Name }).IsUnique();
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.Name).HasMaxLength(120);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.Organization).WithMany()
+                .HasForeignKey(t => t.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.StartOrganizationAddress).WithMany()
+                .HasForeignKey(t => t.StartOrganizationAddressId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.CreatedByAppUser).WithMany()
+                .HasForeignKey(t => t.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.UpdatedByAppUser).WithMany()
+                .HasForeignKey(t => t.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.Tour).WithMany(t => t.Dates)
+                .HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.SetNull);
 
             // ── AppleCredential (item 229) ───────────────────────────────────
             // One per person per Apple client; a new sign-in through the same client replaces it.
