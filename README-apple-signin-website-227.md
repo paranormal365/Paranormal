@@ -17,6 +17,10 @@ then UAT through the real providers.
 **Item 226 is built on this branch too** (the iPhone's link door), verified on both simulators; see
 the plan's Phase A. Only the Apple round trip itself remains unverifiable without a real Apple ID.
 
+**Phase B is done too:** every external door's decisions live once in `ExternalSignInService`, both
+controllers are thin over it, and a refused link answers in the same shape from Apple and from
+Microsoft. Phase C — the Microsoft decisions — is waiting on Ben.
+
 ## Why this closes the iPhone gap without touching the iPhone app
 
 The Apple sign-in endpoint has three outcomes, and the first is **this Apple identity is already
