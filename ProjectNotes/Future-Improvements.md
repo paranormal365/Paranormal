@@ -11575,3 +11575,39 @@ changed to a retrying one on 2026-09-10 and that did not help, so this is not th
 attach race. Not chased further that day; the three other billing fixtures pass. Start by opening
 `/admin/subscription-tiers` as SuperAdmin on the testing copy and pressing the button by hand.
 
+---
+
+## 233. The tour tier: what a tour business gets for its flat price (PLANNED 2026-09-10, awaiting Ben's go-ahead)
+
+Ben's brief, 2026-09-10, in his words and in order:
+
+- Photos stay on the site for a month unless the tour rep says to keep them. Video and audio the
+  same, but a week, and limited to five minutes each at 720p or 1080p. Field Kit submissions fall
+  under the same limits: unless marked to be kept they stay a week, so the end user can save or
+  download them.
+- The tour can schedule tours and people can sign up. Money collected is arranged by the tour
+  company or person — nothing through us.
+- We can email their information to the people who sign up: a template the business writes,
+  generated for each sign-up and again as the reminder, with an `.ics` file carrying the tour.
+- They can set the time and the number of people accepted for the tour.
+
+**What already exists** (checked the same day): public events with a time and a capacity cap
+(item 199), sign-up from the site and the app, walk-up sign-up by a guide, a confirmation link on
+sign-up, a generic reminder mail 24 hours before (`EventReminderJob`), the evidence review queue
+(item 111), and `UploadFileMetadata.DurationSeconds`. **What does not:** any `.ics` anywhere, any
+per-business email template, any retention or expiry on media (item: upload limits were removed
+sitewide), any duration or resolution limit, any "keep this" mark, any expiry warning to the
+person who uploaded.
+
+**Phases proposed**
+
+| Phase | Work |
+| --- | --- |
+| A | Retention rules as tier limits: new `SubscriptionLimit` kinds for photo retention days, audio/video retention days, media minutes and max resolution; the Tour & Event Business tier carries 30 / 7 / 5 min / 1080p; other tiers carry none (unlimited, as today) |
+| B | A **Kept** mark on uploaded files and Field Kit sessions, set by the business; a retention sweep job that deletes what is past its window and not kept, and tells the uploader by email seven days and one day before; a download affordance on the site and in the app while it lasts |
+| C | Duration and resolution enforced at upload for the business kinds: refused over five minutes; transcoded down to 1080p with ffmpeg (already on the server for screening) when larger |
+| D | The business's own email template: subject and body with placeholders (tour name, date, time, meeting point, what to bring, the business's own payment and contact lines), used for the sign-up confirmation and the reminder; an `.ics` attachment generated from the event, so the tour lands in the guest's calendar |
+| E | Help, screenshots, the product PDF and the tour mailing updated in the same branch; the tier row entered on production |
+
+Money stays with the business: the template is where they say how to pay them.
+
