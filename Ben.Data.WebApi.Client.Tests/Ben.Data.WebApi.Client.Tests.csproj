@@ -28,4 +28,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!--
+    Answers captured from a real Ben.Data.WebApi, not written by hand. An invented fixture agrees
+    with whatever the client already believes, which is exactly the belief a test is supposed to
+    challenge; capturing them is how a contract drift shows up here rather than in somebody's app.
+    See Fixtures/README.md for how each one was produced and how to recapture them.
+  -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
