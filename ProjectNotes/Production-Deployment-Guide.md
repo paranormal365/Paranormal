@@ -501,3 +501,29 @@ Start-Service BenWebApi, BenWebApp
 | `1433` | MS SQL Server | No — keep on the internal network; never expose SQL Server to the internet |
 
 If using IIS with TLS termination, only ports `80`/`443` need to be open in the Windows Firewall.
+
+## Apple keys on the server (items 228 and 229, 2026-09-10)
+
+Two `.p8` private keys from the Apple Developer portal, kept **beside the secrets file** at
+`C:\ishaunted-deploy\` - never inside `C:\Ben\WebApi` or `C:\Ben\WebApp`, which every deploy
+wipes and re-publishes - readable by Administrators, SYSTEM and the two application pools only:
+
+| File | Key ID | Used by | Setting the deploy script writes |
+| --- | --- | --- | --- |
+| `C:\ishaunted-deploy\AuthKey_5VY456C8RR.p8` | `5VY456C8RR` | the API, to revoke a person's Sign in with Apple tokens when they delete their account | `Apple:TeamId`, `Apple:KeyId`, `Apple:PrivateKeyPath` |
+| `C:\ishaunted-deploy\AuthKey_623JTDWHAQ.p8` | `623JTDWHAQ` | the website, to sign the token MapKit JS presents for every map | `Maps:TeamId`, `Maps:KeyId`, `Maps:PrivateKeyPath` |
+
+Add to `C:\ishaunted-deploy\secrets.json`:
+
+```json
+"AppleTeamId": "5778H75249",
+"AppleSignInKeyId": "5VY456C8RR",
+"AppleSignInKeyPath": "C:\\ishaunted-deploy\\AuthKey_5VY456C8RR.p8",
+"AppleMapsKeyId": "623JTDWHAQ",
+"AppleMapsKeyPath": "C:\\ishaunted-deploy\\AuthKey_623JTDWHAQ.p8"
+```
+
+`deploy-ishaunted.ps1` refuses to run when a named key file is missing. Without these settings
+the apps still start: every map says it could not be loaded, and Apple tokens are never
+revoked - the first is visible at once, the second only to App Review.
+

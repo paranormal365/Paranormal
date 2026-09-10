@@ -11522,7 +11522,7 @@ API, a separate decision.
 
 ---
 
-## 229. Revoke Apple tokens when an account is deleted (BUILT 2026-09-10 — production migration pending)
+## 229. Revoke Apple tokens when an account is deleted (BUILT and MERGED 2026-09-10)
 
 App Review guideline 5.1.1(v): an app offering Sign in with Apple that lets people delete their
 account must revoke their Sign in with Apple tokens as part of the deletion. Account deletion
@@ -11536,7 +11536,7 @@ Neither client sends the code today. Plan and phases: `README-apple-token-revoca
 The API signs Apple's client secret with the key, exchanges the authorization code every client
 now sends for a data-protected refresh token, and revokes every kept token before an account is
 anonymised — by its owner or by a SuperAdmin purge. Apple accepted a secret signed with the real
-key (a bogus code answered `invalid_grant`). Left: the `AppleCredentials` migration on production
-with an explicit `--connection` naming `IsHauntedDb`, merge, and the three `Apple:*` values plus
-the `.p8` on the server.
+key (a bogus code answered `invalid_grant`). Merged to develop and master and the
+`AppleCredentials` migration applied to production the same day. Left for deploy time: the three
+`Apple:*` values plus the `.p8` on the server.
 
