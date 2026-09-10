@@ -511,7 +511,7 @@ wipes and re-publishes - readable by Administrators, SYSTEM and the two applicat
 | File | Key ID | Used by | Setting the deploy script writes |
 | --- | --- | --- | --- |
 | `C:\ishaunted-deploy\AuthKey_5VY456C8RR.p8` | `5VY456C8RR` | the API, to revoke a person's Sign in with Apple tokens when they delete their account | `Apple:TeamId`, `Apple:KeyId`, `Apple:PrivateKeyPath` |
-| `C:\ishaunted-deploy\AuthKey_623JTDWHAQ.p8` | `623JTDWHAQ` | the website, to sign the token MapKit JS presents for every map | `Maps:TeamId`, `Maps:KeyId`, `Maps:PrivateKeyPath` |
+| `C:\ishaunted-deploy\AuthKey_623JTDWHAQ.p8` | `623JTDWHAQ` | the website, to sign the token MapKit JS presents for every map; **and the API**, for geocoding through the Apple Maps Server API (item 230) | `Maps:TeamId`, `Maps:KeyId`, `Maps:PrivateKeyPath` on both apps |
 
 Add to `C:\ishaunted-deploy\secrets.json`:
 
