@@ -45,12 +45,23 @@ public sealed record ConfirmEmailResponse(bool Succeeded, string Message, string
 /// May be one of Apple's private relay addresses. When <paramref name="IsPrivateEmail"/> is true,
 /// do not show it as though it were the person's own address.
 /// </param>
+/// <param name="ShouldLinkInstead">
+/// The address already has an account here. Offer the link door, not the create form: a second
+/// account would hold none of their history, and the server will refuse it anyway.
+/// </param>
+/// <param name="EmailProblem">
+/// What is wrong with the ADDRESS. Kept apart from <paramref name="HandleProblem"/> because they
+/// belong under different fields, and showing one under the other tells somebody to fix the wrong
+/// thing — which is precisely what the server used to do.
+/// </param>
 public sealed record AppleNeedsProfileResponse(
     [property: JsonPropertyName("needsProfile")] bool NeedsProfile,
     [property: JsonPropertyName("suggestedDisplayName")] string? SuggestedDisplayName,
     [property: JsonPropertyName("email")] string? Email,
     [property: JsonPropertyName("isPrivateEmail")] bool IsPrivateEmail,
-    [property: JsonPropertyName("handleProblem")] string? HandleProblem);
+    [property: JsonPropertyName("handleProblem")] string? HandleProblem,
+    [property: JsonPropertyName("shouldLinkInstead")] bool ShouldLinkInstead = false,
+    [property: JsonPropertyName("emailProblem")] string? EmailProblem = null);
 
 /// <summary>A Sign in with Apple attempt, in the shape <c>POST api/auth/apple</c> expects.</summary>
 public sealed record AppleSignInRequest(
@@ -66,7 +77,17 @@ public sealed record AppleSignInRequest(
 /// Email relay address matches nothing here, and an Apple ID is often simply a different address
 /// from the one somebody signed up with.
 /// </param>
+/// <remarks>
+/// The two-factor fields are omitted from the JSON when null, exactly as the sign-in request's are,
+/// and for the same reason: Identity treats an empty string as an attempt with a wrong code rather
+/// than as no attempt at all, which spends a failure against an account that may not even have a
+/// second factor.
+/// </remarks>
 public sealed record AppleLinkRequest(
     [property: JsonPropertyName("identityToken")] string IdentityToken,
     [property: JsonPropertyName("email")] string Email,
-    [property: JsonPropertyName("password")] string Password);
+    [property: JsonPropertyName("password")] string Password,
+    [property: JsonPropertyName("twoFactorCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TwoFactorCode = null,
+    [property: JsonPropertyName("twoFactorRecoveryCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TwoFactorRecoveryCode = null);

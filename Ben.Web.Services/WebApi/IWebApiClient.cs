@@ -259,7 +259,7 @@ public interface IWebApiClient
     // token happens to be sitting in the store at call time; the server validates it via the
     // "Entra" JWT scheme and reads OID/email from its own claims, never from the payload.
     Task<EntraRegisterResponse?> EntraRegisterAsync(string entraAccessToken, EntraRegisterPayload request, CancellationToken token = default);
-    Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default);
+    Task<EntraLinkOutcome> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default);
 }
 
 // ── Entra request/response records ───────────────────────────────────────────
@@ -271,10 +271,25 @@ public sealed record EntraRegisterPayload(string DisplayName);
 /// <summary>Response from POST /api/auth/entra/register.</summary>
 public sealed record EntraRegisterResponse(Guid UserId, string Email);
 
+/// <summary>What a link attempt did.</summary>
+/// <param name="RequiresTwoFactor">
+/// The password was right and the account has a second factor. NOT a failure to report as one: the
+/// caller should ask for a code, not tell somebody to check their password.
+/// </param>
+/// <param name="Message">The server's own sentence, when it wrote one.</param>
+public sealed record EntraLinkOutcome(bool Succeeded, bool RequiresTwoFactor = false, string? Message = null)
+{
+    public static readonly EntraLinkOutcome Ok = new(true);
+}
+
 /// <summary>Sent to POST /api/auth/entra/link — identifies the target local account to link the
 /// caller's (validated, token-derived) Entra identity to; ownership of that account is proven by
 /// <see cref="Password"/>, checked server-side.</summary>
-public sealed record EntraLinkPayload(string Email, string Password);
+public sealed record EntraLinkPayload(
+    string Email,
+    string Password,
+    string? TwoFactorCode = null,
+    string? TwoFactorRecoveryCode = null);
 
 // ── Sub-client invite accept-flow records (item #4) — mirrors api/case-invites' shapes; this
 // project has no reference to Ben.Data.WebApi (HTTP-only boundary), so the DTOs are duplicated

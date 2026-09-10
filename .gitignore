@@ -130,12 +130,3 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
-
-# ── .NET MAUI desktop (item 225) ──────────────────────────────────────────────
-# bin/ and obj/ are already covered above; these are the artefacts a MAUI build adds beside them.
-**/AppPackages/
-**/Platforms/Windows/*.pfx
-*.binlog
-*.publishsettings
-Ben.Desktop.App.UI/**/*.dmg
-Ben.Desktop.App.UI/**/*.pkg

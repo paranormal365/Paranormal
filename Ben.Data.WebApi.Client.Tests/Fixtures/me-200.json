@@ -3,5 +3,7 @@
   "email": "captured@example.test",
   "isSuperAdmin": true,
   "isAdmin": false,
-  "isModerator": true
+  "isModerator": true,
+  "emailKind": 0,
+  "emailConfirmed": true
 }

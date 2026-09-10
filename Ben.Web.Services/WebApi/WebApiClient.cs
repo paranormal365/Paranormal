@@ -641,12 +641,61 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
     }
 
-    public async Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
+    public async Task<EntraLinkOutcome> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
     {
         using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/link", entraAccessToken);
         req.Content = JsonContent.Create(request);
-        using var response = await _httpClient.SendAsync(req, token);
-        return response.IsSuccessStatusCode;
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(req, token);
+        }
+        catch (HttpRequestException)
+        {
+            return new EntraLinkOutcome(false, Message: "Couldn't reach the server. Nothing was linked.");
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode) return EntraLinkOutcome.Ok;
+
+            // A 401 is /login's problem-detail - the SAME four words the Apple link and the password
+            // form use - so the failure mapping is shared rather than copied. A 409 still carries a
+            // sentence of its own.
+            var body = await response.Content.ReadAsStringAsync(token);
+            var detail = ReadJsonString(body, "detail");
+            if (detail is not null)
+            {
+                var failure = LoginFailureMapping.From(new LoginAttempt(null, (int)response.StatusCode, detail));
+                return new EntraLinkOutcome(false, failure == LoginFailure.RequiresTwoFactor, failure switch
+                {
+                    LoginFailure.RequiresTwoFactor => "That account uses two-step verification. Enter the code from your authenticator app.",
+                    LoginFailure.EmailNotConfirmed => "That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another.",
+                    LoginFailure.LockedOut => "That account is locked after too many attempts. Waiting is the only thing that helps.",
+                    LoginFailure.InvalidCredentials => "Invalid email or password.",
+                    _ => "That sign-in was refused without a reason. Try again - and if it keeps happening, it isn't your password.",
+                });
+            }
+
+            return new EntraLinkOutcome(false, false, ReadJsonString(body, "message"));
+        }
+    }
+
+    /// <summary>One string-valued property out of a small JSON body, or null. Never throws.</summary>
+    private static string? ReadJsonString(string body, string property)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty(property, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead

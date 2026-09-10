@@ -75,7 +75,71 @@
 
                 <div class="min-w-0">
                     <h3 class="mb-1">@(string.IsNullOrWhiteSpace(_displayName) ? "Your profile" : _displayName)</h3>
-                    <div class="text-secondary small">@_profile.Email</div>
+                    @*
+                        An Apple relay address, or the placeholder a withheld address leaves behind,
+                        is not something this person recognises as their email. Printing it here as
+                        though they chose it tells them something untrue about themselves.
+                    *@
+                    @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                    {
+                        <div class="text-secondary small">@_profile.Email</div>
+                    }
+                    else if (_profile.EmailKind == EmailAddressKind.AppleRelay)
+                    {
+                        <div class="text-secondary small">
+                            Signed in with Apple, using Hide My Email
+                            <BenIcon Name="info-circle" Class="ms-1"
+                                     title="Apple gives us a forwarding address instead of your own. We never see your real one." />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-secondary small">Signed in with Apple, no email address</div>
+                    }
+
+                    @if (_profile.EmailKind == EmailAddressKind.Unreachable)
+                    {
+                        @*
+                            Worth a warning rather than a chip. This account has no address anyone
+                            can write to AND no password, so Apple is the only way in and there is
+                            no reset link to fall back on. Adding an address is what fixes it, and
+                            that is the one thing this page can offer.
+                        *@
+                        <div class="alert alert-warning py-2 small mt-2 mb-0">
+                            We have no email address for you, so we can't send you a way back in if
+                            you ever lose access to your Apple ID. Adding one below fixes that.
+                        </div>
+                    }
+                    else if (_profile.EmailKind == EmailAddressKind.Ordinary && !_profile.EmailConfirmed)
+                    {
+                        @*
+                            An account made from a Microsoft (or, rarely, Apple) address the provider
+                            never verified. It works through that provider today, but the address is
+                            only a claim until the link in the confirmation is followed, and until
+                            then a password reset cannot go to it and neither can anything else. The
+                            forgot-password page would say nothing useful — it refuses an
+                            unconfirmed address silently — so this is where the person learns why,
+                            and the one place that can send the link again.
+                        *@
+                        <div class="alert alert-warning py-2 small mt-2 mb-0" id="profile-confirm-address">
+                            <div>
+                                You haven't confirmed <strong>@_profile.Email</strong> yet. We sent a link
+                                there when this account was made. Until you follow it we can't email you
+                                — including a password reset if you ever lose your sign-in.
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        id="profile-resend-confirmation"
+                                        disabled="@_resending" @onclick="ResendConfirmationAsync">
+                                    @(_resending ? "Sending…" : "Send the link again")
+                                </button>
+                                @if (_resendResult is not null)
+                                {
+                                    <span class="text-secondary">@_resendResult</span>
+                                }
+                            </div>
+                        </div>
+                    }
 
                     <div class="d-flex flex-wrap gap-1 mt-2">
                         @* Chips, as the template's hero has — but each says something true about
@@ -111,7 +175,14 @@
                                 <h6 class="card-title">Name</h6>
                                 <p class="text-secondary small">
                                     Shown wherever your account appears — case notes, messages, member lists.
-                                    Your sign-in address (@_profile.Email) isn't changed by this.
+                                    @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                                    {
+                                        @:Your sign-in address (@_profile.Email) isn't changed by this.
+                                    }
+                                    else
+                                    {
+                                        @:You sign in with Apple, and that isn't changed by this.
+                                    }
                                 </p>
                                 <div class="d-flex gap-2 align-items-start">
                                     @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur here,
@@ -318,6 +389,8 @@
     private bool   _saving;
     private bool   _saved;
     private string? _error;
+    private bool    _resending;
+    private string? _resendResult;
 
     // Slot currently uploading, so only that card shows a spinner.
     private bool? _uploadingSlot;
@@ -472,6 +545,20 @@
         }
         catch { _error = "Couldn't load your profile. Please refresh."; }
         finally { _loadAttempted = true; }
+    }
+
+    /// <summary>
+    /// Sends the confirmation link again. The server answers the same neutral sentence whatever it
+    /// did (it will not say whether an address is registered, and it rate-limits repeats), and that
+    /// sentence is shown as it came.
+    /// </summary>
+    private async Task ResendConfirmationAsync()
+    {
+        if (_profile?.Email is not { Length: > 0 } email || _resending) return;
+        _resending = true; _resendResult = null;
+        try   { _resendResult = await AdminClient.ResendConfirmationAsync(email); }
+        catch { _resendResult = "Couldn't send it just now. Please try again in a minute."; }
+        finally { _resending = false; }
     }
 
     /// <summary>Try again without a full page reload.</summary>

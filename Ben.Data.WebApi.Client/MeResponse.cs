@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Web.Services.WebApi;
 
 /// <summary>
@@ -17,4 +19,26 @@ public sealed record MeResponse(
     string Email,
     bool IsSuperAdmin,
     bool IsAdmin,
-    bool IsModerator = false);
+    bool IsModerator = false,
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary,
+    bool EmailConfirmed = true)
+{
+    /// <summary>Whether this address is one the person chose and reads as their own.</summary>
+    /// <remarks>
+    /// False for an Apple relay and for the placeholder a withheld address leaves behind. Showing
+    /// either as "your email" is telling somebody something untrue about themselves.
+    /// </remarks>
+    public bool EmailIsTheirOwn => EmailKind == EmailAddressKind.Ordinary;
+
+    /// <summary>Whether anything sent to this address can arrive at all.</summary>
+    /// <remarks>
+    /// A relay is deliverable only from a sender domain registered with Apple, and until that is
+    /// done Apple drops the message without a bounce. A placeholder can never be delivered to. So
+    /// this answers "may we honestly say we have emailed them", and the answer for a relay depends
+    /// on configuration this client cannot see — which is why a relay is treated as unreachable
+    /// here rather than optimistically. An address nobody has proved they can read is not one
+    /// either: an account created from a provider's unverified claim starts unconfirmed, and
+    /// until the confirmation link is followed nothing but that link should go to it.
+    /// </remarks>
+    public bool CanBeEmailed => EmailKind == EmailAddressKind.Ordinary && EmailConfirmed;
+}

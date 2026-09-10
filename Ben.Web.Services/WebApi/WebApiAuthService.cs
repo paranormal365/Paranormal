@@ -1,6 +1,6 @@
 namespace Ben.Web.Services.WebApi;
 
-public sealed class WebApiAuthService : IWebApiAuthService
+public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Client.External.IExternalSignInAdopter
 {
     private readonly IWebApiIdentityClient _identityClient;
     private readonly IWebApiClient _apiClient;
@@ -58,6 +58,36 @@ public sealed class WebApiAuthService : IWebApiAuthService
 
         _tokenStore.NotifyStateChanged();
         return true;
+    }
+
+    /// <inheritdoc />
+    public async Task AdoptExternalSignInAsync(WebApiTokenResponse response, CancellationToken token = default)
+    {
+        LastLoginFailure = null;
+
+        ApplyTokenResponse(response);
+
+        // Not an Entra session: this one is our own bearer token, and it IS persisted the way a
+        // password sign-in is. Saying otherwise would drop it on the next page load.
+        _tokenStore.IsEntraSession = false;
+
+        // Roles never come from the token — Identity's are opaque. Same call the password path
+        // makes, and for the same reason: without it an administrator looks like an ordinary member.
+        try
+        {
+            var me = await _apiClient.GetAsync<MeResult>("/api/me", token);
+            if (me is not null)
+            {
+                _tokenStore.UserId = me.UserId;
+                _tokenStore.UserEmail = me.Email;
+                _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                _tokenStore.IsAdmin = me.IsAdmin;
+                _tokenStore.IsModerator = me.IsModerator;
+            }
+        }
+        catch { /* non-fatal — the session still works, roles stay false */ }
+
+        _tokenStore.NotifyStateChanged();
     }
 
     public async Task<bool> RefreshIfNeededAsync(CancellationToken token = default)

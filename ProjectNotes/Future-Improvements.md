@@ -11235,7 +11235,7 @@ first arrow press. That one was fixed by seeding every date field; this one surv
 
 ---
 
-## 225. A desktop client, and the client library both front ends share (IN PROGRESS 2026-09-10)
+## 225. A desktop client, and the client library both front ends share (SHELVED 2026-09-10 — kept as a future enhancement)
 
 Ben, 2026-09-10: two new C# projects, `Ben.Desktop.App.UI` (Telerik UI for .NET MAUI) and
 `Ben.Desktop.App.Library` (reusable components), talking to the database only through
@@ -11336,9 +11336,30 @@ assume it needs a signing identity.
 3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
 4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
 
+
+### Shelved 2026-09-10
+
+Ben: "I am not sure I want to create a desktop version. Just keep it as future enhancement."
+Deleted: `Ben.Desktop.App.Library`, `Ben.Desktop.App.UI`, `Ben.Server.slnf`, the macOS CI job,
+`com.ishaunted.desktop` from `Apple:ClientIds`, and the fifteen desktop-only types in
+`Ben.Data.WebApi.Client` (the token session and session store, the bearer handler, the Microsoft
+PKCE stack, the desktop Entra account client) with their tests. `dotnet build Ben.slnx` needs no
+MAUI workload again.
+
+**Kept, because the website now stands on it:** `Ben.Data.WebApi.Client` itself — `LoadResult`,
+`ItemResult`, `LoginFailureMapping`, `AppleSignInClient`, `AppleWebAuthorizeRequest` — and every
+server-side change this work exposed (the link endpoints, `ExternalSignInService`, `EmailKind`, the
+admin-refusal and second-factor fixes). None of that was desktop-specific; the desktop was merely
+where it was found.
+
+**To resurrect:** the last commit with everything present is `a2aaa511` on
+`feature/apple-signin-website-227`. `git checkout a2aaa511 -- Ben.Desktop.App.Library
+Ben.Desktop.App.UI Ben.Server.slnf` and the removed client files, then rebuild against
+`ExternalSignInService` and the Apple contracts as they stand. The user-local MAUI SDK at
+`~/.dotnet-maui` can be deleted or reused.
 ---
 
-## 226. The iPhone app can still be given a second account by Sign in with Apple (OPEN)
+## 226. The iPhone app can still be given a second account by Sign in with Apple (BUILT 2026-09-10)
 
 Found 2026-09-10 while building the desktop client's external sign-in (item 225). Ben asked whether
 the same gap existed elsewhere; it does, on iOS.
@@ -11377,9 +11398,31 @@ creating one, and call the new endpoint. `BenKit/Sources/BenKit/Auth/AppleSignIn
 not count failed attempts. It is an unauthenticated door that takes a password, so guesses against
 it are free. The new Apple link uses the lockout-honouring form; the Entra one should match.
 
+
+### Built 2026-09-10, on `feature/apple-signin-website-227`
+
+`BenKit/Auth/AppleSignIn.swift` gained `link(identityToken:email:password:twoFactorCode:recoveryCode:)`,
+and two outcomes: `.addressTaken(reason:)` when the server says the address already has an account
+here, and `.needsTwoFactor` when the account being claimed has a second factor. `AppleProfileSheet`
+now has two doors. "Already have an account here?" is offered **always** — the server can only spot
+a collision when Apple's address happens to match an existing one, which is the case that was never
+broken — and when the server says the address is taken, the create form is put away and the link
+door becomes the prominent one. A code field appears only after the server asks for one; an empty
+code is never sent, because Identity reads that as a wrong code and spends a failed attempt.
+
+The footer promise the UI test pins — "rather than making a second one" — is now true for a
+mismatched address too, so the wording changed and the test did not.
+
+**Verified:** 16 BenKit tests (all 339 in the package pass); the iPhone app builds; the Apple UI
+regression passes on **both** iPhone 17 Pro and iPad Pro 13-inch (M5), which are different element
+trees. **Not verified:** the door itself against a real Apple identity — the simulator has no Apple
+ID to sign in with. The server half was tested in C# against the real endpoint with a forged token.
+
+Still open from this item: `EntraAuthController.Link` lockout — now DONE under 225's branch (see
+the 2026-09-10 commits closing the Microsoft hole).
 ---
 
-## 227. Sign in with Apple on the website (OPEN)
+## 227. Sign in with Apple on the website (BUILT 2026-09-10 — unverified through Apple until a Services ID exists)
 
 Ben, 2026-09-10, alongside item 226: the site should offer a "Sign in with Apple" button that can
 either create a new account or link one that already exists — the same two doors the Microsoft
@@ -11423,3 +11466,29 @@ matches, and that is exactly the case that silently produces a second account.
 
 Do this alongside item 226 — they share the link endpoint, the one-shot-name rule and the
 account-merge screen, and doing them together means designing that screen once.
+
+### Built 2026-09-10, and what was decided afterwards (Phase C)
+
+Built as `README-apple-signin-website-227.md` describes; plan of record is
+`ProjectNotes/External-SignIn-Plan-2026-09-10.md`. Unverifiable here: the round trip through Apple,
+which refuses localhost. Phase D is Ben's portal work and a UAT round trip.
+
+Two rules were left as questions on the day and decided with Ben that evening:
+
+- **The Microsoft email fallback is gone.** `EntraClaimsTransformation` used to link an unknown
+  object id to whichever account held its email claim, with no proof of ownership. Removed rather
+  than narrowed; a rotated object id uses the link door once, with a password and second factor.
+  Production's one Microsoft login is linked by object id, so nobody is stranded.
+- **Only a verified address is confirmed at creation.** An account made from an unverified provider
+  address (Microsoft's always) starts unconfirmed and is sent the website's confirmation email.
+  It works through that provider straight away — the external gate is closure and lockout, not
+  the confirmed-account rule, because confirmation proves the address and the provider proves the
+  person — but a password reset and anything else we would email wait for the link. The profile
+  shows the address with **Send the link again**; `ActionNeededBanners` reminds once per sign-in;
+  the help pages say why a reset link may not arrive.
+
+**On Ben's question of who owns a Field Kit upload:** the bearer token's user id, on every path.
+An account cannot exist without a display name and a permanent, unique @name — the website sign-up
+validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
+— so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
+

@@ -22,9 +22,14 @@ namespace Ben.Data.WebApi.Client.External;
 public sealed class AppleSignInClient
 {
     private readonly HttpClient _http;
-    private readonly SessionStore _store;
+    private readonly IExternalSignInAdopter _store;
 
-    public AppleSignInClient(HttpClient http, SessionStore store)
+    /// <param name="store">
+    /// Where a successful sign-in lands. Deliberately an interface: the desktop app's session
+    /// machine and the website's per-circuit token store are nothing alike, but both do the same
+    /// thing with the token response this endpoint returns.
+    /// </param>
+    public AppleSignInClient(HttpClient http, IExternalSignInAdopter store)
     {
         _http = http;
         _store = store;
@@ -32,16 +37,28 @@ public sealed class AppleSignInClient
 
     /// <param name="NeedsProfile">Apple vouched for them; the account still has to be created.</param>
     /// <param name="Reason">A sentence to show, when it did not work.</param>
+    /// <param name="Failure">
+    /// Why a LINK was refused, in the same vocabulary a password sign-in uses. Null for every other
+    /// outcome.
+    /// </param>
     public readonly record struct Outcome(
         bool Succeeded,
         AppleNeedsProfileResponse? NeedsProfile = null,
-        string? Reason = null)
+        string? Reason = null,
+        LoginFailure? Failure = null)
     {
         public bool RequiresProfile => NeedsProfile is not null;
+
+        /// <summary>
+        /// The account has a second factor and a code is needed. NOT a failure to report as one —
+        /// the password was right.
+        /// </summary>
+        public bool RequiresTwoFactor => Failure == LoginFailure.RequiresTwoFactor;
 
         public static Outcome Ok() => new(true);
         public static Outcome Profile(AppleNeedsProfileResponse p) => new(false, p);
         public static Outcome Failed(string reason) => new(false, null, reason);
+        public static Outcome Refused(LoginFailure failure, string reason) => new(false, null, reason, failure);
     }
 
     /// <summary>
@@ -150,13 +167,20 @@ public sealed class AppleSignInClient
     /// fall back on.</para>
     /// </remarks>
     public async Task<Outcome> LinkAsync(
-        string identityToken, string email, string password, CancellationToken token = default)
+        string identityToken,
+        string email,
+        string password,
+        string? twoFactorCode = null,
+        string? recoveryCode = null,
+        CancellationToken token = default)
     {
         HttpResponseMessage response;
         try
         {
             response = await _http.PostAsJsonAsync(
-                "api/auth/apple/link", new AppleLinkRequest(identityToken, email, password), token);
+                "api/auth/apple/link",
+                new AppleLinkRequest(identityToken, email, password, twoFactorCode, recoveryCode),
+                token);
         }
         catch (HttpRequestException)
         {
@@ -184,13 +208,33 @@ public sealed class AppleSignInClient
                 return Outcome.Ok();
             }
 
+            // A 401 here means one of four completely different things, exactly as it does on
+            // /login: wait, enter your code, confirm your email, or fix your password. The endpoint
+            // answers in the same problem-detail shape so the SAME mapping decides, rather than a
+            // second copy that would eventually disagree.
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var detail = await ReadDetailAsync(response, token);
+                var failure = LoginFailureMapping.From(new LoginAttempt(null, 401, detail));
+
+                return Outcome.Refused(failure, failure switch
+                {
+                    LoginFailure.RequiresTwoFactor =>
+                        "That account uses two-step verification. Enter the code from your authenticator app.",
+                    LoginFailure.EmailNotConfirmed =>
+                        "That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another.",
+                    LoginFailure.LockedOut =>
+                        "That account is locked after too many attempts. Waiting is the only thing that helps.",
+                    LoginFailure.InvalidCredentials =>
+                        "That email address and password don't match an account.",
+                    _ => "That sign-in was refused without a reason. Try again — and if it keeps happening, it isn't your password.",
+                });
+            }
+
             var prose = await ReadProseAsync(response, token);
 
             return response.StatusCode switch
             {
-                HttpStatusCode.Unauthorized =>
-                    Outcome.Failed(prose ?? "That email address and password don't match an account."),
-
                 HttpStatusCode.Conflict =>
                     Outcome.Failed(await ReadConflictAsync(response, token)
                                    ?? "That Apple account is already linked to a different account here."),
@@ -205,6 +249,25 @@ public sealed class AppleSignInClient
             };
         }
     }
+
+    /// <summary>Identity's own word for why a refusal happened, out of a problem-details body.</summary>
+    private static async Task<string?> ReadDetailAsync(HttpResponseMessage response, CancellationToken token)
+    {
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetail>(cancellationToken: token);
+            return problem?.Detail;
+        }
+        catch
+        {
+            // Not every refusal is a problem-details document. No detail means the reason is
+            // genuinely unknown, which the mapping already handles honestly.
+            return null;
+        }
+    }
+
+    private sealed record ProblemDetail(
+        [property: System.Text.Json.Serialization.JsonPropertyName("detail")] string? Detail);
 
     /// <summary>The conflict body here is an object with a message, not a sentence.</summary>
     private static async Task<string?> ReadConflictAsync(HttpResponseMessage response, CancellationToken token)

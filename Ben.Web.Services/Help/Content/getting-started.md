@@ -225,6 +225,11 @@ signing in with Microsoft has no password**. Password sign-in against it says "i
 password", which is true but unhelpful — there is nothing to be wrong yet. Use the reset link to
 add a password, and both ways of signing in will work from then on.
 
+One thing first: the reset link only goes to a **confirmed** address, and a Microsoft-made account
+starts with its address unconfirmed — we sent a confirmation link when the account was made. If
+you never followed it, sign in with Microsoft, open your profile, and press **Send the link
+again** in the notice at the top.
+
 Already signed in? **Profile → Security → Password** does the same job without the email round
 trip: it offers *Add password* if your account has none, and an ordinary change-password form if
 it does.
