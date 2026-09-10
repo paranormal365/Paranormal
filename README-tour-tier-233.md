@@ -54,16 +54,52 @@ Media a tour business holds expires on a clock unless it is in a gallery (images
 
 | Phase | Work | Status |
 | --- | --- | --- |
-| 0 | `Tour` entity, `OrgCalendarEvent.TourId`, `OrganizationSubscription.TourCountAtPeriodStart`, `TourBilling` arithmetic, `BillableUnits` used by checkout, quote, renewal, admin; migration `Tours` on the testing copy; tests | in progress |
-| 1 | Tour API and add-on charge; tour and date guides; the calendar rule (a public date of a tour business belongs to a tour); tours page with a per-tour management page and switcher; scheduler and billing page; public tour page, org home, `/events`, home map pins, nearby search; iOS shows the tour name and guides | |
-| 2 | Guest mail: `IEmailService` attachments, `IcsBuilder`, `TourMailRenderer` placeholders (tour, date, guide names and photos, guest, business contact), the four send sites, editor with preview | |
-| 3 | Retention: four tier limits, `ExpiresAtUtc`/`KeptAtUtc` on files, `MediaRetentionPolicy` stamping at ingest, `MediaRetentionJob` (notices then deletion), the 50-image gallery as the keep for photos, keep for recordings, download while it lasts, five-minute and 1080p rules at the upload doors | |
-| 4 | Reviews: one per guest per tour, only after a date they attended has passed, hideable by the business | |
-| 5 | Help, screenshots, product PDF, the tour pitch PDF, deploy notes; production migrations and tier rows on Ben's say-so | |
+| 0 | `Tour` entity, `OrgCalendarEvent.TourId`, `OrganizationSubscription.TourCountAtPeriodStart`, `TourBilling` arithmetic, `BillableUnits` used by checkout, quote, renewal, admin; migration `Tours` | **done** |
+| 1 | Tour API and add-on charge; tour and date guides; the calendar rule; the tours page and a page per tour with a switcher; scheduler and billing page; public tour page, org home, `/events`, home-map pins, nearby search; the gallery, the slideshow, the meeting-point map, a participant's own uploads | **done**, except iOS |
+| 2 | Guest mail: attachments on `IEmailService`, `IcsBuilder`, `TourMailRenderer` placeholders, three send sites, the editor and its preview | **done** |
+| 3 | Retention: four tier limits, the clock on a file, stamping at ingest, the sweep with its warnings, both keeps, the five-minute refusal, the date shown wherever a file is listed | **done** |
+| 4 | Reviews: one per guest per tour, only after a date they came to has finished, hideable and never editable by the business | **done** |
+| 5 | Help, screenshots, the product and persona PDFs, the tour mailing; production migrations and tier rows on Ben's say-so | **done**, except the production data |
+
+## Not built
+
+- **The iPhone and iPad app knows nothing about tours.** Phase 1 promised the tour's name and its
+  guides on an event in the app; `Ben.iOS` is untouched on this branch. The public endpoints it
+  would read are all in place, and the shared records already carry the fields, so this is a
+  client-side piece of work rather than a design question. Item 234 is the larger version of it.
+- **1080p downscaling.** The five-minute refusal is enforced; resolution is not. `MediaTools`
+  carries an ffmpeg path used for stripping and frame sampling, and nothing yet re-encodes an
+  over-large recording. Refusing on length alone is the honest half: it is the one that costs
+  storage, and the phone can already trim.
 
 ## Verified, not assumed
 
-- (filled in as phases land)
+Everything below was watched happening on the running site, not inferred from a passing test.
+
+- A business registered through the wizard's own endpoint, given a meeting point, and quoted
+  1 × $29 on its billing page; a second tour moved it to 2 ×; a third with the same name was
+  refused in the words the controller writes.
+- A public date scheduled without a tour was refused; with one, it took the tour's meeting point,
+  length and capacity, and inherited its guides.
+- Apple geocoded the meeting point, so the tour drew a real pin on the home map, in nearby search,
+  and on its own page beside the directions button.
+- A 3000×2000 photograph came back 1620×1080 with its camera data gone, and served anonymously
+  through the site's proxy to a signed-out reader.
+- A real sign-up mail, read off the wire from a local SMTP sink: multipart, one `text/calendar`
+  attachment carrying the date's own uid, reply-to the business, the guide named, the meeting
+  point, the contact line, and the time in the tour's zone rather than UTC.
+- The calendar file was opened and read back; its escaping keeps an address with commas in one
+  piece.
+
+## Found by reading it afresh, after it worked
+
+A full audit of the branch turned up twelve defects that a green suite and a walk through the site
+had both missed — a cross-tenant delete in the gallery, two FK breaks, four money defects, a paused
+tour that still took sign-ups, a rescheduled walk that never corrected a guest's diary, a tour that
+vanished off the map when its address had no coordinates, guides that could not be removed, a photo
+route that served anybody's published photograph, and a meeting point printed twice. A second audit
+found the keystone of the retention design unreachable: nothing on any screen could keep a file, so
+a recording could not be kept at all. All are fixed and pinned; the commits name them one by one.
 
 ## Deliberately unchanged
 

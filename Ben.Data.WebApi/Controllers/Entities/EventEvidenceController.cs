@@ -78,7 +78,11 @@ public sealed class EventEvidenceController : BenControllerBase
         string? Note, EvidenceSubmissionStatus Status, string? RejectionReason,
         DateTime DateCreated,
         DateTime? PublishedToPlaceAtUtc = null,
-        bool PlaceAcceptsArchive = false);
+        bool PlaceAcceptsArchive = false,
+        /// <summary>When it comes off the site, or null when nothing is counting (item 233).</summary>
+        DateTime? ExpiresAtUtc = null,
+        /// <summary>Whether the business has kept it for good.</summary>
+        bool IsKept = false);
 
     // ── the visitor's door ────────────────────────────────────────────────────
 
@@ -537,7 +541,10 @@ public sealed class EventEvidenceController : BenControllerBase
             // because "is there an archive to contribute to" is a fact about the event, and a page
             // deciding it for itself is how a screen comes to offer what the server refuses.
             s.OrgCalendarEvent.PlaceId != null
-                && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation)).ToListAsync(ct);
+                && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation,
+            // Item 233: how long it has left, and whether somebody stopped the clock.
+            s.UploadFile.ExpiresAtUtc,
+            s.UploadFile.KeptAtUtc != null)).ToListAsync(ct);
 
     private static async Task<EvidenceSubmissionRecord> ToRecordAsync(
         BenDataContext db, Guid id, CancellationToken ct) =>

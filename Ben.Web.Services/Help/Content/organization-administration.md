@@ -628,9 +628,14 @@ week**, unless somebody keeps it. Recordings are limited to **five minutes** eac
 refused when it is sent, with the length said plainly, because the phone can trim before uploading
 and only the person who was there knows which five minutes matter.
 
-**Keeping a photograph means putting it in a tour's gallery.** That makes the business its own copy
-— fitted inside 1920 by 1080, with the camera data stripped — and the guest's original keeps its
-own clock and its own owner.
+**Keep it** on the submission itself stops the clock on anything — a recording you want to hold on
+to, a photograph you are not going to publish. **Put it on a tour** does the same for a picture and
+publishes it: the business gets its own copy, fitted inside 1920 by 1080 with the camera data
+stripped, while the guest's original keeps its own clock and its own owner. Both are on the
+evidence queue, beside Accept and Decline, along with the date each file comes off.
+
+Letting something go again puts it back on the clock from that day, not from when it was uploaded,
+and whoever sent it in is warned afresh.
 
 Everyone who sends something in is emailed before it goes, a week ahead and again the day before,
 so they can download it. Nothing is ever deleted that has not been warned about first.

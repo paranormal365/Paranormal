@@ -11,6 +11,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager NavManager
 
 @* One tour, for somebody deciding whether to come. The meeting point is given in full and the
    guides are named and pictured: Ben's reason was safety, and an address withheld from the person
@@ -250,6 +251,16 @@ else
                                 {
                                     <div class="small">@mine.Note</div>
                                 }
+                                @if (!mine.IsKept && mine.ExpiresAtUtc is { } goes)
+                                {
+                                    var days = (int)Math.Ceiling((goes - DateTime.UtcNow).TotalDays);
+                                    <div class="small @(days <= 3 ? "text-warning" : "text-secondary")">
+                                        @(days <= 0
+                                            ? "Coming off the site today."
+                                            : days == 1 ? "Comes off the site tomorrow."
+                                            : $"Comes off the site in {days} days.")
+                                    </div>
+                                }
                             </div>
                             <div class="text-nowrap small">
                                 @switch (mine.Status)
@@ -275,7 +286,11 @@ else
         }
 
         @* ── Reviews (item 233) ──────────────────────────────────────────── *@
-        @if (_reviews is not null && (_reviews.Reviews.Count > 0 || _reviews.MayReview))
+        @* Shown whenever there is something to say — a review, a form, or the sentence explaining
+           why there is no form. Gating the whole block on "has reviews or may review" left a
+           signed-out guest who walked the tour told nothing at all. *@
+        @if (_reviews is not null
+             && (_reviews.Reviews.Count > 0 || _reviews.MayReview || _reviews.WhyNot is not null))
         {
             <h2 class="h5 mb-2" id="tour-reviews">
                 What people said
@@ -325,9 +340,15 @@ else
                     </div>
                 </div>
             }
-            else if (_reviews.WhyNot is { } whyNot && _reviews.Reviews.Count > 0)
+            else if (_reviews.WhyNot is { } whyNot)
             {
-                <p class="text-secondary small">@whyNot</p>
+                <p class="text-secondary small">
+                    @whyNot
+                    @if (whyNot.StartsWith("Sign in", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a class="ms-1" href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}")">Sign in</a>
+                    }
+                </p>
             }
 
             @foreach (var review in _reviews.Reviews)

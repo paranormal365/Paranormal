@@ -399,17 +399,32 @@
                                                placeholder="Say what it shows"
                                                value="@image.Caption"
                                                @onchange="@(e => SaveCaptionAsync(image.Id, e.Value?.ToString()))" />
-                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <div class="d-flex justify-content-between align-items-center mt-2 gap-1">
                                             @if (image.FromAGuest)
                                             {
                                                 <span class="badge text-bg-secondary">From a guest</span>
+                                            }
+                                            else if (image.SortOrder == 0)
+                                            {
+                                                <span class="badge text-bg-primary">On the card</span>
                                             }
                                             else
                                             {
                                                 <span></span>
                                             }
-                                            <button type="button" class="btn btn-link btn-sm text-danger p-0"
-                                                    @onclick="@(() => DeleteImageAsync(image.Id))">Remove</button>
+                                            <div class="d-flex gap-1">
+                                                @* The card says the first picture is the cover, so
+                                                   there has to be a way to choose which one that
+                                                   is — the ordering field shipped with nothing
+                                                   able to set it. *@
+                                                @if (image.SortOrder != 0)
+                                                {
+                                                    <button type="button" class="btn btn-link btn-sm p-0"
+                                                            @onclick="@(() => MakeCoverAsync(image.Id))">Make it the cover</button>
+                                                }
+                                                <button type="button" class="btn btn-link btn-sm text-danger p-0"
+                                                        @onclick="@(() => DeleteImageAsync(image.Id))">Remove</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -757,6 +772,32 @@
         var (updated, error) = await AdminClient.UpdateTourImageAsync(OrgId, TourId, imageId, caption, null);
         if (updated is null) { _galleryError = error ?? "That caption could not be saved."; return; }
         _gallery = [.. updated];
+    }
+
+    /// <summary>
+    /// Moves one picture to the front, which is the tour's cover.
+    /// </summary>
+    /// <remarks>
+    /// Renumbered from the client rather than by a "move up" on the server: the order is a short
+    /// list the page already holds, and one round trip per picture is honest about what changed.
+    /// </remarks>
+    private async Task MakeCoverAsync(Guid imageId)
+    {
+        var order = _gallery.Select(g => g.Id).Where(id => id != imageId).ToList();
+        order.Insert(0, imageId);
+
+        for (var i = 0; i < order.Count; i++)
+        {
+            var image = _gallery.First(g => g.Id == order[i]);
+            if (image.SortOrder == i) continue;
+
+            var (updated, error) = await AdminClient.UpdateTourImageAsync(
+                OrgId, TourId, image.Id, image.Caption, i);
+            if (updated is null) { _galleryError = error ?? "Those pictures could not be reordered."; break; }
+            _gallery = [.. updated];
+        }
+
+        await LoadAsync();
     }
 
     private async Task DeleteImageAsync(Guid imageId)

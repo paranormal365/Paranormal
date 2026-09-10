@@ -322,6 +322,11 @@ public sealed partial class BenAdminClientAdapter
             $"/api/organizations/{orgId}/tours/{tourId}/gallery", form, token);
     }
 
+    public Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default)
+        => kept
+            ? _api.PostVoidAsync($"/api/organizations/{orgId}/kept-media/{uploadFileId}", new { }, token)
+            : _api.DeleteAsync($"/api/organizations/{orgId}/kept-media/{uploadFileId}", token);
+
     public Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
         Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, TourImageRecord>(

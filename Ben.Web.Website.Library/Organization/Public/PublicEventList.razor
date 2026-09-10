@@ -78,6 +78,21 @@
                                 <a href="@($"/o/{item.OrganizationUrlName}")" class="text-decoration-none">
                                     @item.OrganizationName
                                 </a>
+                                @* And which tour it is, when it is one (item 233): a business's
+                                   three walks look like three unrelated evenings otherwise. *@
+                                @if (item.TourName is { } tourName)
+                                {
+                                    <text> · </text>
+                                    @if (item.TourUrlName is { } tourSlug)
+                                    {
+                                        <a href="@($"/o/{item.OrganizationUrlName}/tours/{tourSlug}")"
+                                           class="text-decoration-none">@tourName</a>
+                                    }
+                                    else
+                                    {
+                                        @tourName
+                                    }
+                                }
                             </div>
 
                             <div class="text-secondary small">

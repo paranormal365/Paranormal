@@ -195,6 +195,16 @@ public sealed record EventEvidenceRecord(
     /// this is the photographer's decision about the place's public record.
     /// </summary>
     DateTime? PublishedToPlaceAtUtc = null,
+    /// <summary>
+    /// When this file comes off the site, or null when nothing is counting (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Carried so a screen can say the date. A guest is emailed before anything goes, but the
+    /// person who missed the mail had no other way to find out how long they had.
+    /// </remarks>
+    DateTime? ExpiresAtUtc = null,
+    /// <summary>Whether the business has kept it for good.</summary>
+    bool IsKept = false,
     /// <summary>Whether the event is at a public place, so there is an archive to contribute to.</summary>
     bool PlaceAcceptsArchive = false);
 

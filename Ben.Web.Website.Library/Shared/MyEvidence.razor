@@ -68,6 +68,21 @@
                                 <a href="@AdminClient.GetEventEvidenceFileUrl(row.OrgCalendarEventId, row.Id)"
                                    target="_blank" rel="noopener" class="text-truncate d-inline-block"
                                    style="max-width:180px;">@row.FileName</a>
+                                @* Item 233. A tour business's plan takes photographs off the site
+                                   after a month and recordings after a week; everybody is emailed
+                                   before it happens, and this is where somebody who missed the
+                                   email finds out how long they have. *@
+                                @if (!row.IsKept && row.ExpiresAtUtc is { } goes)
+                                {
+                                    var days = (int)Math.Ceiling((goes - DateTime.UtcNow).TotalDays);
+                                    <div class="small @(days <= 3 ? "text-warning" : "text-secondary")">
+                                        @(days <= 0
+                                            ? "Coming off the site today — download it now."
+                                            : days == 1
+                                                ? "Comes off the site tomorrow — download it to keep it."
+                                                : $"Comes off the site in {days} days — download it to keep it.")
+                                    </div>
+                                }
                             </td>
                             <td>
                                 @switch (row.Status)

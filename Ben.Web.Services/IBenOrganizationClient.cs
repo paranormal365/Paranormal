@@ -430,6 +430,16 @@ public interface IBenOrganizationClient
         Guid orgId, Guid tourId, Stream content, string fileName, string contentType,
         string? caption, CancellationToken token = default);
 
+    /// <summary>
+    /// Stops the clock on a file this business holds, or lets it run again (item 233).
+    /// </summary>
+    /// <remarks>
+    /// The keep for a RECORDING, and for a photograph the business wants to hold without
+    /// publishing. Putting a picture on a tour's page keeps it too, and is the better answer when
+    /// the picture is worth showing.
+    /// </remarks>
+    Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default);
+
     /// <summary>Keeps a guest's photograph by copying it onto the tour's page.</summary>
     Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
         Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default);
