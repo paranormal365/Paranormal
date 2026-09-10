@@ -295,7 +295,9 @@ export function route(containerId, req) {
             resolve({
                 distanceMeters: best.distance,
                 durationSeconds: best.expectedTravelTime,
-                steps: best.steps.map(s => ({ instructions: s.instructions, distanceMeters: s.distance })),
+                steps: best.steps
+                    .filter(s => s.instructions && s.instructions.trim().length)   // Apple's departure step has no words
+                    .map(s => ({ instructions: s.instructions, distanceMeters: s.distance })),
                 error: null,
             })
         })

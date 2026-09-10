@@ -1141,6 +1141,72 @@ public sealed class HelpMediaCapture : BenTestBase
 
     // ── Site administrators (gated) ───────────────────────────────────────────
 
+
+    /// <summary>
+    /// The directions window on a person's record (item 228, phase 5).
+    /// </summary>
+    /// <remarks>
+    /// No seeded address carries coordinates, and the Directions button does nothing without
+    /// them — so this adds one for the seeded user through the admin endpoint, which looks it
+    /// up on the way in, shoots the window with a real route drawn, and takes the address away
+    /// again whatever happened. Two Apple service calls: the lookup and the route.
+    /// </remarks>
+    [Test]
+    [Description("site-administration: the directions window on a person's addresses tab.")]
+    public async Task Capture_SiteAdministrationDirections()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
+        Assert.That(login.Ok, Is.True, "the admin seat should be able to sign in");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var authed = new APIRequestContextOptions { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } };
+
+        var users = await api.GetAsync("/api/admin/app-users", authed);
+        var list = (await users.JsonAsync())!.Value;
+        var rows = list.ValueKind == System.Text.Json.JsonValueKind.Array ? list : list.GetProperty("items");
+        var subject = rows.EnumerateArray().FirstOrDefault(u =>
+            string.Equals(u.GetProperty("email").GetString(), UserEmail, StringComparison.OrdinalIgnoreCase));
+        if (subject.ValueKind == System.Text.Json.JsonValueKind.Undefined) Assert.Ignore($"the seed has no account for {UserEmail}");
+        var userId = subject.GetProperty("id").GetString();
+
+        var types = await api.GetAsync("/api/admin/user-address-types", authed);
+        var typeId = (await types.JsonAsync())!.Value.EnumerateArray().First().GetProperty("id").GetString();
+
+        var created = await api.PostAsync("/api/admin/user-addresses", new()
+        {
+            Headers = authed.Headers,
+            DataObject = new
+            {
+                appUserId = userId, userAddressTypeId = typeId,
+                streetAddress1 = "430 Keysburg Rd", city = "Adams", state = "TN", zipCode = "37010", country = "US",
+                isPublic = false, sortOrder = 99,
+            },
+        });
+        Assert.That(created.Ok, Is.True, await created.TextAsync());
+        var addressId = (await created.JsonAsync())!.Value.GetProperty("id").GetString();
+
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/admin/users/{userId}");
+            await SkipAnyTourAsync();
+            await OpenTabAsync("Addresses", Page.GetByRole(AriaRole.Button, new() { Name = "Directions" }).First);
+            await ClickUntilAsync(Page.GetByRole(AriaRole.Button, new() { Name = "Directions" }).First,
+                Page.GetByPlaceholder("From address…"));
+
+            await Page.GetByPlaceholder("From address…").FillAsync("Nashville, TN");
+            await ClickUntilAsync(Page.GetByRole(AriaRole.Button, new() { Name = "Get Route" }),
+                Page.Locator("[data-testid='directions-summary']"));
+            await Page.WaitForTimeoutAsync(4_000);   // the route's framing and Apple's tiles
+            await ShootAsync("site-administration", "directions.png", gated: true, selector: ".modal-dialog");
+        }
+        finally
+        {
+            await api.DeleteAsync($"/api/admin/user-addresses/{addressId}", authed);
+            await api.DisposeAsync();
+        }
+    }
+
     [Test]
     [Description("site-administration: the admin screens. Gated.")]
     public async Task Capture_SiteAdministration()
