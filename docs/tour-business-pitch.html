@@ -16,7 +16,10 @@
     background: #171233; color: #f0eefc; margin: 0 -0.8in 0.25in;
     padding: 0.35in 0.8in 0.35in;
   }
+  .masthead { display: flex; align-items: center; gap: 0.3in; }
+  .masthead img { width: 1.15in; height: 1.15in; flex: 0 0 auto; }
   .masthead h1 { font-size: 24pt; margin: 0 0 4px; color: #fff; }
+  .masthead .brand { font-size: 10.5pt; color: #c9c4e8; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 6px; }
   .masthead .tagline { font-size: 12.5pt; color: #c9c4e8; font-style: italic; margin: 0; }
   h2 {
     font-size: 14pt; color: #171233; border-bottom: 2px solid #171233;
@@ -46,8 +49,12 @@
 <body>
 
 <div class="masthead">
-  <h1>Give every guest a ghost-hunting instrument.</h1>
-  <p class="tagline">IsHaunted.com for ghost tours, haunted events, and paranormal experiences</p>
+  <img src="assets/is-haunted-logo.svg" alt="IsHaunted.com">
+  <div>
+    <p class="brand">IsHaunted.com</p>
+    <h1>Give every guest a ghost-hunting instrument.</h1>
+    <p class="tagline">IsHaunted.com for ghost tours, haunted events, and paranormal experiences</p>
+  </div>
 </div>
 
 <p class="lead">
@@ -62,11 +69,15 @@ your page before they've finished telling the story.
   <li><b>The IsHaunted app for iPhone and iPad, free.</b> During your tour, any guest can open
       the Field Kit: a live magnetometer readout (the &ldquo;EMF meter&rdquo; of ghost-hunting
       television, honestly labeled), a sound-level meter, and an audio recorder that stamps every
-      capture with time, place, and the room or stop where it happened.</li>
+      capture with time, place, and the room or stop where it happened &mdash; and plays it all
+      back afterwards on one timeline.</li>
   <li><b>A place to put the evidence.</b> Photos and recordings from your event can be submitted
       to you on the spot. Nothing goes public unless <i>you</i> accept it.</li>
   <li><b>Your next dates, one tap away.</b> Your events appear in the app and on the site, with
-      RSVP built in — a guest who loved Friday's tour books the next one before they get home.</li>
+      RSVP built in — a guest who loved Friday's tour books the next one before they get home, and
+      gets a reminder the day before.</li>
+  <li><b>No account needed to come along.</b> A guide can sign up a walk-up guest on the spot,
+      and a guest without the app still counts.</li>
 </ul>
 
 <h2>What your business gets</h2>
@@ -75,13 +86,15 @@ your page before they've finished telling the story.
   <tr>
     <td><b>A tour-business listing</b></td>
     <td>Your own page on IsHaunted.com — story, photos, tour dates — listed as a
-        <i>ghost walking tour</i>, with a dedicated filter in the group finder and placement in
-        &ldquo;what's near you&rdquo; searches by people actively looking for exactly this.</td>
+        <i>ghost walking tour</i>, with a dedicated filter in the group finder, a pin on the map,
+        and placement in &ldquo;what's near you&rdquo; searches by people actively looking for
+        exactly this.</td>
   </tr>
   <tr>
     <td><b>Events with RSVP</b></td>
     <td>Publish each tour or hunt as a public event. Guests RSVP from the site or the app; you
-        see the list. No booking software to buy.</td>
+        see the list, cap the numbers when a night is full, and sign up walk-ups yourself. No
+        booking software to buy.</td>
   </tr>
   <tr>
     <td><b>Guest evidence, reviewed by you</b></td>
@@ -114,7 +127,8 @@ your page before they've finished telling the story.
   &nbsp;&nbsp;or&nbsp;&nbsp;
   <span class="price">$290<span class="per"> / year</span></span>
   <p style="margin:8px 0 0;">
-    One flat price for the business — bring every guide, run unlimited events. One extra ticket
+    One flat price for the business — bring every guide, run unlimited events; unlike a
+    paranormal group, a tour business is never priced by the size of its team. One extra ticket
     sold covers the month. <b>Your first three months are on us</b> while you see what it does
     for your bookings.
   </p>
@@ -123,7 +137,8 @@ your page before they've finished telling the story.
 <h2>Getting started</h2>
 <ul class="steps">
   <li><b>Reply to this email</b> — that's it. We set up your page, your listing, and your first
-      event with you.</li>
+      event with you. Or start it yourself: sign in, choose <b>Start a Group</b>, and pick
+      <i>ghost walking tour</i> — your page is public from the first minute.</li>
   <li><b>Tell your guests one sentence:</b> &ldquo;Download the free IsHaunted app — tonight,
       your phone is your instrument.&rdquo;</li>
   <li><b>Review what they caught.</b> Accept the best photo of the night and it's on your page
@@ -132,9 +147,9 @@ your page before they've finished telling the story.
 
 <p class="footer-note">
 IsHaunted.com &middot; Nashville, TN &middot; Every feature described here is live on the
-platform today. The iPhone and iPad apps are free for all users. Pricing shown is the
-introductory business rate and may change; the three-month trial applies to new business
-subscriptions.
+platform today; maps and directions on the site are Apple Maps. The iPhone and iPad apps are free
+for all users. Pricing shown is the introductory business rate and may change; the three-month
+trial applies to new business subscriptions and is limited to the first twenty-five.
 </p>
 
 </body>

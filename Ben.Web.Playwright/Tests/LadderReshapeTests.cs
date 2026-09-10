@@ -32,8 +32,12 @@ public class LadderReshapeTests : BenTestBase
 
         var open = Page.Locator("#reshape-ladder");
         await Expect(open).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        await open.ClickAsync();
 
+        // Retried, like every other click on a Blazor Server page here: the button is visible
+        // before the circuit has attached its handler, and a click that lands in that window is
+        // silently dropped — which is how this fixture failed twice in a row on 2026-09-10 with
+        // nothing wrong on the page.
+        await ClickUntilAsync(open, Page.GetByText("Every band, saved together"));
         await Expect(Page.GetByText("Every band, saved together")).ToBeVisibleAsync(new() { Timeout = 20_000 });
     }
 

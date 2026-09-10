@@ -76,7 +76,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         return Ok(rows.Select(r => ToRecord(
             r.Organization, r.Subscription, r.MemberCount,
             r.Subscription is null ? null : tiers.FirstOrDefault(t => t.Id == r.Subscription.SubscriptionTierId),
-            listIsUsable ? SubscriptionTierResolver.Resolve(tiers, r.MemberCount).Name : null)));
+            listIsUsable ? SubscriptionTierResolver.Resolve(tiers, r.MemberCount, r.Organization.Kind).Name : null)));
     }
 
     [HttpGet("{organizationId:guid}")]
@@ -97,7 +97,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         return Ok(ToRecord(org, sub, members,
             tiers.FirstOrDefault(t => t.Id == sub?.SubscriptionTierId),
             SubscriptionTierResolver.Validate(tiers) is null
-                ? SubscriptionTierResolver.Resolve(tiers, members).Name
+                ? SubscriptionTierResolver.Resolve(tiers, members, org.Kind).Name
                 : null));
     }
 
@@ -250,7 +250,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
 
         return Ok(ToRecord(org, sub, members, tier,
             SubscriptionTierResolver.Validate(tiers) is null
-                ? SubscriptionTierResolver.Resolve(tiers, members).Name
+                ? SubscriptionTierResolver.Resolve(tiers, members, org.Kind).Name
                 : null));
     }
 

@@ -71,7 +71,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
 
         var members = await db.OrganizationUserMemberships
             .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members);
+        var tier = SubscriptionTierResolver.Resolve(tiers, members, org.Kind);
 
         if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
             return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");

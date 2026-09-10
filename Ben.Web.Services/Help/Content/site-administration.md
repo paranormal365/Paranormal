@@ -146,6 +146,29 @@ somebody makes deliberately rather than a default they inherit.
   actually publishes something, so switching it on shows visitors an empty directory at worst, not
   an unfinished one.
 
+## A person's record
+
+**Administration → Users** lists every account; the view button on a row opens that person's
+record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
+files and site roles. Each tab edits directly, and every change is written to the audit log
+under your name.
+
+The **Addresses** tab has two buttons beside each address once it has been placed on the map:
+**Map** shows the address with its region circle, and **Directions** opens the directions
+window.
+
+![Driving directions to a person's address](help-media:site-administration/directions.png)
+*Directions from a typed starting point, drawn on the map and read out beneath it.*
+
+Type a starting address — a town is enough — or press **My Location** to use where your browser
+says you are, then **Get Route**. The route is drawn on the map with the start marked **A** and
+the address **B**, with the distance, the driving time and the turn-by-turn steps beneath.
+**Print** prints the window as it stands; **Open in Maps** hands the same route to Apple Maps,
+which on a phone opens the maps app. Nothing about the route is stored.
+
+An address that could not be placed on the map has neither button; correct it and save, and
+the lookup runs again.
+
 ## Impersonating a member
 
 **Administration → Users → the impersonate button** signs you in as that person, and what you
@@ -364,6 +387,19 @@ Administrators and SuperAdministrators can both open it. Diagnosing a fault is t
 for, and restricting it further would mean the person on call cannot see why the site is failing.
 
 ## Billing
+
+### A flat price for tour and event businesses
+
+The price bands below price an **investigation group** by the size of its team. A **ghost
+walking tour** or a **public event provider** is not priced that way: a business pays one flat
+price whatever the size of its team, because guides are not investigators and counting them
+would price the wrong thing.
+
+To offer that price, add a tier under **Administration → Subscription Tiers** and untick
+**banded by members**; the pricing page labels it for tour and event businesses. Every business
+kind of group is quoted, billed and renewed on that tier, and its member count is ignored. With
+no such tier on offer a business is priced by the bands like anyone else, so the offer in the
+tour-business mailing is true only while that tier exists and is active.
 
 ### Role areas on a price band
 
