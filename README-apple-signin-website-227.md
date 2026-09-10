@@ -70,17 +70,26 @@ the person knows they have an account, and the server cannot. Item 225 learned t
 
 ## Duplicates that already exist: none, measured 2026-09-10
 
-Counted read-only against both databases on the server, because guessing which one the deployed
-site uses would have made a wrong answer look like a clean one.
+Counted read-only against both databases on the server. Worth having done both: the first reading
+of which one was production was **wrong**, and Ben corrected it.
 
-| Database | Accounts | External logins | Apple-shaped accounts |
-| --- | --- | --- | --- |
-| `IsHauntedDb_player`, what the deployed site uses | 20 | 0 | 0 |
-| `IsHauntedDb`, the older one | 3 | 1, Microsoft | 0 |
+| Database | Role | Accounts | External logins | Apple-shaped accounts |
+| --- | --- | --- | --- | --- |
+| `IsHauntedDb` | **production** | 3 | 1, Microsoft | 0 |
+| `IsHauntedDb_player` | testing | 20 | 0 | 0 |
 
-**Nobody has ever signed in with Apple.** So there is no mess to clean up, and the re-point door
-below is insurance rather than remediation — worth building alongside the button, because the day
-the button ships is the day people start hitting the case it exists for.
+`IsHauntedDb_player` is the newer name and is what `appsettings.Development.json` points at, which
+is what made it look like the live one. It is not. **The `_player` suffix means testing.**
+
+**Nobody has ever signed in with Apple, on either.** Production carries a single external login, a
+Microsoft one, on `averageben`. So there is no mess to clean up, and the re-point door below is
+insurance rather than remediation — worth building alongside the button, because the day the button
+ships is the day people start hitting the case it exists for.
+
+Production does hold two accounts sharing the display name "AverageBen", `averageben` and
+`averageben2` at `admin@ishaunted.com`, created within the hour on 2026-08-27. Neither has an Apple
+login or an Apple-shaped address, so that pair is deliberate rather than a symptom of this defect.
+Noted only so a later reader does not mistake it for one.
 
 ### Re-point, decided with Ben
 
