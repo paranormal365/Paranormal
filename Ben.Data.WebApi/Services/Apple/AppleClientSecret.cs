@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using Ben.Data.Common.Helpers;
 
 namespace Ben.Data.WebApi.Services.Apple;
 
@@ -29,8 +29,8 @@ public sealed record AppleSigningOptions(string TeamId, string KeyId, string Pri
 /// authorization code was minted for (the app's bundle id, or the website's Services ID),
 /// <c>aud</c> Apple itself, <c>iat</c>/<c>exp</c>. Signed ES256 with the raw <c>r||s</c>
 /// signature JOSE specifies — .NET's default is DER, which Apple refuses as <c>invalid_client</c>
-/// and says nothing about why. Hand-rolled for the same reason as the MapKit token on the website:
-/// forty lines, each of them a fact Apple checks.</para>
+/// and says nothing about why. The signing itself is <see cref="Es256Jwt"/>, shared with the MapKit
+/// token on the website and the Maps Server API token behind geocoding.</para>
 /// </remarks>
 public sealed class AppleClientSecret : IDisposable
 {
@@ -45,24 +45,7 @@ public sealed class AppleClientSecret : IDisposable
         _options = options;
         if (!options.IsConfigured) return;
 
-        _key = ECDsa.Create();
-        try
-        {
-            _key.ImportFromPem(options.PrivateKeyPem);
-        }
-        catch (Exception ex)
-        {
-            _key.Dispose();
-            throw new InvalidOperationException(
-                "Apple:PrivateKey is not a PKCS#8 EC private key. Apple's .p8 file is the whole "
-              + "text, BEGIN and END lines included.", ex);
-        }
-        if (_key.KeySize != 256)
-        {
-            _key.Dispose();
-            throw new InvalidOperationException(
-                $"Apple:PrivateKey is a {_key.KeySize}-bit key; Apple issues P-256 keys and requires ES256.");
-        }
+        _key = Es256Jwt.ImportP256(options.PrivateKeyPem, "Apple:PrivateKey");
     }
 
     public bool IsConfigured => _key is not null;
@@ -82,15 +65,8 @@ public sealed class AppleClientSecret : IDisposable
             aud = Audience,
             sub = clientId,
         });
-        var signingInput = $"{Base64Url(Encoding.UTF8.GetBytes(header))}.{Base64Url(Encoding.UTF8.GetBytes(claims))}";
-        var signature = _key.SignData(
-            Encoding.ASCII.GetBytes(signingInput), HashAlgorithmName.SHA256,
-            DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
-        return $"{signingInput}.{Base64Url(signature)}";
+        return Es256Jwt.Sign(_key, header, claims);
     }
-
-    internal static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public void Dispose() => _key?.Dispose();
 }
