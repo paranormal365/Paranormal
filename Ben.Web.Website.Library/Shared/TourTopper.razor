@@ -47,8 +47,10 @@
                             }
                             else
                             {
-                                @* No picture yet: a lantern on a dark ground rather than a hole. *@
-                                <span class="tour-topper__lantern">🏮</span>
+                                @* No picture yet: a lantern on a wash in the tour's own colour
+                                   rather than a hole. The same colour the nearby results give this
+                                   tour, a screen further down — see TourPlate. *@
+                                <span class="tour-topper__lantern" style="@TourPlate.HueStyle(tour.Name)"><span class="tour-topper__glyph">🏮</span></span>
                             }
 
                             <span class="tour-topper__scrim"></span>

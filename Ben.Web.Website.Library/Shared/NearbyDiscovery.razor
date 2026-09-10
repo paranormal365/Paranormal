@@ -119,7 +119,7 @@
                                            from the tour's own name, so two tours never look alike and
                                            the same tour looks the same on every visit. *@
                                         <span class="nearby-card__frame @(tour.CoverUploadFileId is null ? "nearby-card__frame--drawn" : "")"
-                                              style="@(tour.CoverUploadFileId is null ? $"--plate-hue:{Hue(tour.Name)}deg;" : "")">
+                                              style="@(tour.CoverUploadFileId is null ? TourPlate.HueStyle(tour.Name) : "")">
                                             @if (tour.CoverUploadFileId is { } cover)
                                             {
                                                 <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
@@ -127,7 +127,7 @@
                                             }
                                             else
                                             {
-                                                <span class="nearby-card__monogram" aria-hidden="true">@Monogram(tour.Name)</span>
+                                                <span class="nearby-card__monogram" aria-hidden="true">@TourPlate.Monogram(tour.Name)</span>
                                             }
                                             @if (tour.NextDateStartUtc is { } soon)
                                             {
@@ -261,43 +261,6 @@
     private string? _resultTab;
 
     private double? _lat, _lon;
-
-    /// <summary>
-    /// A stable hue for a tour with no photograph yet. Deterministic on the name — the same walk
-    /// draws the same plate on every visit and on every device — and spread across the wheel so two
-    /// walks side by side do not land on the same colour.
-    /// </summary>
-    private static int Hue(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return 262;
-
-        // FNV-1a, written out rather than String.GetHashCode(): that one is randomised per process,
-        // so the plate would change colour every time the server restarted.
-        unchecked
-        {
-            var hash = 2166136261u;
-            foreach (var c in name)
-            {
-                hash ^= c;
-                hash *= 16777619u;
-            }
-            return (int)(hash % 360u);
-        }
-    }
-
-    /// <summary>Up to two initials from the tour's name, for the drawn plate.</summary>
-    private static string Monogram(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-
-        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return words.Length switch
-        {
-            0 => "?",
-            1 => words[0][..Math.Min(2, words[0].Length)].ToUpperInvariant(),
-            _ => $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[^1][0])}"
-        };
-    }
 
     // ── JS interop ───────────────────────────────────────────────────────────
     private IJSObjectReference? _module;

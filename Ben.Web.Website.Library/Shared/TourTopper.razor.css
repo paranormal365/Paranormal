@@ -49,12 +49,26 @@
     transform: scale(1.05);
 }
 
+/* The stand-in when a tour has no photograph: a low mist over a dark wash, in a hue taken from the
+   tour's own name (TourPlate), with the lantern hanging in it. Dim on purpose — it sits in a rail
+   beside real photographs of night walks and must not outshine them. */
 .tour-topper__lantern {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
+    background:
+        radial-gradient(ellipse 90% 45% at 50% 116%, hsl(var(--plate-hue) 55% 40% / .24), transparent 60%),
+        radial-gradient(circle at 50% 34%, hsl(var(--plate-hue) 60% 50% / .16), transparent 46%),
+        linear-gradient(165deg,
+            hsl(var(--plate-hue) 34% 11%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 6%) 100%);
+}
+
+/* The glyph carries its own transparency. Putting it on the parent faded the wash with it and left
+   the card looking like the hole the wash was there to fill. */
+.tour-topper__glyph {
     font-size: 2.5rem;
     opacity: .55;
 }
