@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>17 documents &middot; 6 sections</div>
-      <div>8 September 2026</div>
+      <div>10 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -376,6 +376,10 @@ can paste in by hand.</p>
 signing in with Microsoft has no password</strong>. Password sign-in against it says "invalid email or
 password", which is true but unhelpful — there is nothing to be wrong yet. Use the reset link to
 add a password, and both ways of signing in will work from then on.</p>
+<p>One thing first: the reset link only goes to a <strong>confirmed</strong> address, and a Microsoft-made account
+starts with its address unconfirmed — we sent a confirmation link when the account was made. If
+you never followed it, sign in with Microsoft, open your profile, and press <strong>Send the link
+again</strong> in the notice at the top.</p>
 <p>Already signed in? <strong>Profile → Security → Password</strong> does the same job without the email round
 trip: it offers <em>Add password</em> if your account has none, and an ordinary change-password form if
 it does.</p>
@@ -1383,6 +1387,17 @@ one pin short. Usually the address has a typo, and correcting it puts the pin ba
 investigation rather than by rank: the person who scheduled it, the case manager, whoever is
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.</p>
+<h2>How long a visit runs</h2>
+<p>Every investigation has a start and, if you want it, an end. <strong>Starts</strong> is a date and a time.
+<strong>Ends</strong> is a time, because the ordinary visit is one arrival and one departure — and it is
+allowed to cross midnight. Arriving at 3:00 PM and leaving at 8:00 AM is a single-day
+investigation: an end at or before the start is read as the next morning.</p>
+<p>For anything longer — a weekend, a week — tick <strong>Runs over more than one day</strong> and the end
+becomes a date and a time of its own. The visit then reads with both dates wherever it appears,
+so nobody mistakes a week on site for an evening.</p>
+<p>The end may not come before the start. Say so and the form refuses rather than booking a visit
+that finishes before anyone arrives.</p>
+<p>The same applies to <strong>Propose Dates</strong>, where you offer a client a choice of windows.</p>
 <h2>Scheduling a visit with no case</h2>
 <p><strong>Schedule an investigation</strong> on the group's Investigations tab books a visit that belongs to no
 client case — a landmark, a public building, or the group's own outing. Everything else about it
@@ -1806,6 +1821,12 @@ asks for no current password because being signed in already proves who you are.
 you sign in either way from then on; Microsoft sign-in keeps working.</p>
 <p>Locked out entirely? <strong>Forgot your password?</strong> on the sign-in page emails you a link, and that
 same link is how a Microsoft-only account sets its first password.</p>
+<p>That link can only go to a <strong>confirmed</strong> address. An account made by signing in with Microsoft
+starts with the address Microsoft gave us, but Microsoft does not vouch for it, so we send a
+confirmation link when the account is made and the profile shows a notice until you follow it —
+with a <strong>Send the link again</strong> button if it never arrived. Signing in with Microsoft keeps working
+meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
+included.</p>
 <p><strong>Two-step sign-in.</strong> Optional, off unless you turn it on, and worth turning on. Scan the code
 with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
 Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
