@@ -38,10 +38,10 @@ server into every app that ships it.
 | 1 | Ben.Data.Common stops declaring EF Core it never used | **done** — `118dbbe5` |
 | 2 | Extract `Ben.Data.WebApi.Client` from `Ben.Web.Services` | **done** — `346753e9` |
 | 3 | Session core: tokens, refresh, the sign-in state machine | **done** — `acb6509b` |
-| 4 | `Ben.Desktop.App.Library` — the `Kit/` controls and view models | blocked, see below |
-| 5 | `Ben.Desktop.App.UI` — shell and the Identity sign-in screens | blocked |
-| 6 | Microsoft Entra (MSAL) and Sign in with Apple | blocked |
-| 7 | Solution filter for CI, a macOS build job, docs | partly done |
+| 4 | `Ben.Desktop.App.Library` — the `Kit/` controls and view models | **done** — `e003cd99` |
+| 5 | `Ben.Desktop.App.UI` — shell and the Identity sign-in screens | **done** — `e003cd99` |
+| 6 | Microsoft Entra (MSAL) and Sign in with Apple | not started |
+| 7 | Solution filter for CI, a macOS build job, docs | **done** — `e003cd99` |
 
 ## Verified, not assumed
 
@@ -60,22 +60,67 @@ server into every app that ships it.
     have thrown away "That name is taken." and shown a paraphrase of the status code instead.
   - Two-factor was turned on for real to capture its challenge, and the second step was walked
     through to a token.
+- **The app builds, launches and stays running**, which means its whole graph resolved: both HTTP
+  pipelines, the token session, the session store, secure storage, Telerik and both pages.
+- **The same code path was driven end to end against a real API** by `LiveApiTests` — sign in,
+  roles from `api/me`, the bearer handler reaching an authenticated endpoint, a real refresh, and a
+  wrong password still mapping to invalid credentials. 103 tests pass against the live server with
+  nothing skipped. They skip, rather than fail, when no server is listening.
 - **Two tests were checked against the bug they exist to catch.** Reintroducing an unreadable
   refusal being reported as a wrong password fails three cases of `LoginFailureMappingTests`.
   Deleting the single-flight guard fails `Concurrent_callers_share_one_refresh` — but only after
   the test was fixed: its first draft slept on the thread inside the caller's own lock, so the
   callers never overlapped and it passed with the guard gone.
 
-## Blocked on one command
+## Building the desktop projects on this Mac
 
-Phases 4 to 6 need the .NET MAUI workload, and `/usr/local/share/dotnet` is root-owned:
+The MAUI workload cannot go into `/usr/local/share/dotnet` without `sudo`, so it went into a
+user-local SDK instead. Nothing about the system install changed, and `dotnet` on the PATH is still
+the same one it always was.
 
 ```bash
-sudo dotnet workload install maui-maccatalyst
+# once
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version 10.0.301 --install-dir ~/.dotnet-maui
+DOTNET_ROOT=~/.dotnet-maui ~/.dotnet-maui/dotnet workload install maui-maccatalyst
+
+# thereafter
+DOTNET_ROOT=~/.dotnet-maui ~/.dotnet-maui/dotnet build Ben.Desktop.App.UI -f net10.0-maccatalyst
 ```
 
-Not `maui`, which also pulls Android, iOS and Tizen. Not `maui-windows`, which is Windows-only and
-will refuse here. On the Windows machine the counterpart is `dotnet workload install maui-windows`.
+`maui-maccatalyst`, not `maui` — the latter also pulls Android, iOS and Tizen for no benefit here.
+`sudo dotnet workload install maui-maccatalyst` against the system SDK works too, if you would
+rather have one install than two.
+
+**Everything else still uses the ordinary `dotnet`.** `Ben.Server.slnf` is the whole solution minus
+the two MAUI projects, and it is what CI and an everyday build should use:
+
+```bash
+dotnet build Ben.Server.slnf && dotnet test Ben.Server.slnf
+```
+
+`dotnet build Ben.slnx` now fails on any machine without the MAUI workload (NETSDK1147). That is
+checked, not assumed, and it is why the filter exists.
+
+## Found only by running it
+
+Four things that a clean build said nothing about:
+
+1. An `x:Name` in XAML generates a field on the same partial class, so an element named `Hint` and
+   a bindable property named `Hint` collide at compile time. Elements carry a `Label` suffix now.
+2. The app compiled and then died inside `UseTelerik`: .NET 10 stopped including
+   `Microsoft.Maui.Controls.Compatibility` implicitly, and Telerik still needs it.
+3. Before that it would not launch at all — "Launchd job spawn failed", which names nothing. An
+   ad-hoc signature cannot carry `keychain-access-groups`, because `$(AppIdentifierPrefix)` expands
+   only from a provisioning profile. That entitlement is now in a separate plist used only when
+   there is a real signing identity.
+4. `Telerik.UI.for.Maui` 3.2.1 brings SkiaSharp 2.88.1 and `System.Security.Cryptography.Pkcs`
+   6.0.0 transitively, both with known HIGH severity advisories. Pinned forward; the macOS CI job
+   re-checks so a Telerik upgrade cannot quietly reintroduce them.
+
+**Still unverified on the Mac:** whether `SecureStorage` actually persists across a relaunch on an
+ad-hoc-signed Catalyst build. The iOS app hit exactly this — an unsigned build cannot use the
+simulator Keychain and persistence fails silently — so assume it needs a signing identity until
+somebody has watched a session survive a restart.
 
 ## Needs Windows
 

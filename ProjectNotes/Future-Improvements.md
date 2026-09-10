@@ -11276,14 +11276,28 @@ refresh — passed with the guard deleted. Its stub slept on the calling thread,
 "request" ran inside the caller's own lock and the callers never overlapped. A handler that yields
 instead of blocking is the difference between a concurrency test and a decoration.
 
-Shipped so far on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the extraction
-(`346753e9`), and the session core (`acb6509b`) — `TokenSession` with single-flight refresh,
-`SessionStore`, `BearerTokenHandler`, `AccountClient`, ten captured fixtures and 98 tests. Suite
-7,785 passing.
+**Four things a clean build said nothing about, all found by launching the app.** An `x:Name` in
+XAML generates a field on the same partial class, so an element and a bindable property of the same
+name collide. .NET 10 stopped including `Microsoft.Maui.Controls.Compatibility` implicitly and
+Telerik still needs it, so the app compiled and died inside `UseTelerik`. Before that it would not
+launch at all — "Launchd job spawn failed", naming nothing — because an ad-hoc signature cannot
+carry `keychain-access-groups`: `$(AppIdentifierPrefix)` expands only from a provisioning profile.
+And `Telerik.UI.for.Maui` 3.2.1 brings SkiaSharp and `System.Security.Cryptography.Pkcs`
+transitively at versions with known HIGH severity advisories, now pinned forward.
 
-**Still to build:** the two MAUI projects and their sign-in screens, Entra through MSAL, and Sign
-in with Apple on the Mac head. Blocked on `sudo dotnet workload install maui-maccatalyst` —
-`/usr/local/share/dotnet` is root-owned.
+**`dotnet build Ben.slnx` no longer works without the MAUI workload** (NETSDK1147), so
+`Ben.Server.slnf` is the whole solution minus the two desktop projects and is what CI and an
+everyday build should use. A `macos-15` job compiles the desktop app so it is not left unbuilt by
+everything. No Windows job: nobody has built that head by hand yet, and adding one would claim a
+check that has never passed.
+
+Shipped on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the extraction
+(`346753e9`), the session core (`acb6509b`), and the two MAUI projects with CI (`e003cd99`).
+103 client tests, all passing against a live API with nothing skipped; suite 7,790.
+
+**Still to build:** Entra through MSAL, and Sign in with Apple on the Mac head. Also unverified:
+whether `SecureStorage` persists across a relaunch on an ad-hoc-signed Catalyst build — the iOS app
+hit exactly that and it fails silently, so assume it needs a signing identity.
 
 **Follow-ups this surfaced, none of them this item's job:**
 
