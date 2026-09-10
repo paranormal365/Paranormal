@@ -1,0 +1,156 @@
+/*
+    Result cards for "What's near you".
+
+    A card that is entirely a link needs to look like one without an underline, and a card with a
+    photograph needs the photograph to lead. Both shapes share the same frame so the three tabs
+    read as one set of results rather than three designs.
+
+    The lift and the slow zoom are the only motion here, and both stop for a reader whose system
+    asks for less of it.
+*/
+
+.nearby-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+a.nearby-card:hover,
+a.nearby-card:focus-visible {
+    transform: translateY(-3px);
+    border-color: var(--bs-primary);
+    box-shadow: 0 .75rem 1.5rem rgba(0, 0, 0, .25);
+}
+
+.nearby-card__frame {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: var(--bs-tertiary-bg, #1b1b1b);
+    overflow: hidden;
+}
+
+.nearby-card__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .5s ease;
+}
+
+a.nearby-card:hover .nearby-card__image,
+a.nearby-card:focus-visible .nearby-card__image {
+    transform: scale(1.04);
+}
+
+/* The stand-in for a tour with no photograph yet: a low mist over a dark wash, in a hue taken from
+   the tour's own name, with its initials sitting quietly in the middle. Enough of a composition to
+   sit in a grid beside a real photograph, dim enough not to compete with one. */
+.nearby-card__frame--drawn {
+    /* Deliberately dim. It sits beside real photographs of night walks, and a bright plate would
+       pull the eye away from the one card that actually has a picture. */
+    background:
+        radial-gradient(ellipse 90% 55% at 50% 120%, hsl(var(--plate-hue) 55% 40% / .22), transparent 60%),
+        radial-gradient(circle at 80% 12%, hsl(var(--plate-hue) 60% 50% / .14), transparent 48%),
+        linear-gradient(150deg,
+            hsl(var(--plate-hue) 34% 10%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 6%) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nearby-card__monogram {
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: .22em;
+    /* The tracking above adds a trailing gap after the last letter; this takes it back so the
+       initials sit on the centre line rather than a little left of it. */
+    text-indent: .22em;
+    line-height: 1;
+    color: #fff;
+    opacity: .34;
+}
+
+/* On a photograph, so it is drawn light on a dark plate rather than in the theme's colours. */
+.nearby-card__when {
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    padding: .15rem .45rem;
+    border-radius: .3rem;
+    background: rgba(0, 0, 0, .68);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
+}
+
+.nearby-card__body {
+    display: block;
+    padding: .65rem .75rem;
+    flex: 1 1 auto;
+}
+
+/* The date leads an event card the way the picture leads a tour's. */
+.nearby-card__date {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--bs-primary);
+}
+
+.nearby-card__time {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: .8;
+}
+
+.nearby-card__title {
+    display: block;
+    margin-top: .1rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.nearby-card__meta,
+.nearby-card__by {
+    display: block;
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+}
+
+.nearby-card__line {
+    display: block;
+    font-size: .85rem;
+    margin-top: .15rem;
+}
+
+.nearby-card__actions {
+    display: flex;
+    gap: .5rem;
+    padding: 0 .75rem .65rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nearby-card,
+    .nearby-card__image {
+        transition: none;
+    }
+
+    a.nearby-card:hover,
+    a.nearby-card:focus-visible {
+        transform: none;
+    }
+
+    a.nearby-card:hover .nearby-card__image,
+    a.nearby-card:focus-visible .nearby-card__image {
+        transform: none;
+    }
+}

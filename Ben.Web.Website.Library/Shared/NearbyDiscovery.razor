@@ -1,8 +1,11 @@
+@using Ben.Web.Website.Library.Kit
 @namespace Ben.Web.Website.Library.Shared
 @using Ben.Web.Website.Library.Organization
 @implements IAsyncDisposable
 
 @inject IBenAdminClient  AdminClient
+@inject IMediaUrlBuilder MediaUrls
+@inject IBenUserState    UserState
 @inject IJSRuntime       JS
 @using Ben.Web.Services
 @inject SiteFeaturesProvider Features
@@ -90,115 +93,149 @@
         }
         else if (_hasSearched)
         {
-            @* ── Tours (item 233) ─────────────────────────────────────────────── *@
-            @* Ben: "Tours are public so, they show up on the map and are searchable." First in
-               the list, because a walk with a date on it is the most actionable thing here. *@
-            @if (_tours.Count > 0)
-            {
-                <h5 class="mb-2">Tours you can walk</h5>
-                <div class="row g-3 mb-4">
-                    @foreach (var tour in _tours)
-                    {
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h6 class="card-title mb-1">@tour.Name</h6>
-                                    <p class="card-text text-muted mb-1" style="font-size:.8rem;">
-                                        @if (!string.IsNullOrWhiteSpace(tour.City))
-                                        {
-                                            <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
-                                        }
-                                        @if (tour.DistanceMiles is { } miles)
-                                        {
-                                            <text> · @miles.ToString("F0") mi</text>
-                                        }
-                                        @if (tour.Rating is { } rating)
-                                        {
-                                            <text> · @rating.ToString("0.0") ★</text>
-                                        }
-                                    </p>
-                                    <p class="card-text mb-0" style="font-size:.85rem;">
-                                        @if (tour.NextDateStartUtc is { } next)
-                                        {
-                                            <text>Next @next.ToDisplayDateTime()</text>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-secondary">No dates up yet</span>
-                                        }
-                                    </p>
-                                    <p class="card-text text-muted mb-0" style="font-size:.78rem;">
-                                        Run by @tour.OrganizationName
-                                    </p>
-                                </div>
-                                <div class="card-footer bg-transparent pt-2">
-                                    <a href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")"
-                                       class="btn btn-sm btn-outline-primary">See this tour</a>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
+            @* Three lists stacked down the page read as one long scroll, and nobody is still
+               reading by the third heading (Ben, 2026-09-10: "it looks too busy"). One strip of
+               tabs instead, each carrying its own count, so the shape of what was found is
+               readable before anything is clicked — and an empty one is not offered at all, so
+               the strip can never send somebody to a blank panel.
 
-            @* ── Public events ────────────────────────────────────────────────── *@
-            @if (_events.Count > 0)
-            {
-                <h5 class="mb-2">Upcoming Events</h5>
-                <p class="text-secondary small mb-3">
-                    Locations shown here are approximate — an area several miles across, not an address.
-                </p>
-                <div class="row g-3 mb-4">
-                    @foreach (var ev in _events)
-                    {
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h6 class="card-title mb-1">@ev.Title</h6>
-                                    <p class="card-text text-secondary mb-1" style="font-size:.85rem;">
-                                        @ev.StartDateTime.ToDisplayDateTime()
-                                    </p>
-                                    @if (!string.IsNullOrWhiteSpace(ev.City))
-                                    {
-                                        <p class="card-text text-muted mb-1" style="font-size:.8rem;">
-                                            Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")
-                                            · @ev.DistanceMiles.ToString("F0") mi
-                                        </p>
-                                    }
-                                    <p class="card-text text-muted mb-0" style="font-size:.78rem;">Hosted by @ev.OrgName</p>
-                                </div>
-                                <div class="card-footer bg-transparent d-flex gap-2 pt-2">
-                                    @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                    {
-                                        <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
-                                           class="btn btn-sm btn-outline-primary">View Event</a>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                    {
-                                        <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
+               Tours first where there are any: a walk with a date on it is the most actionable
+               thing this page can hand somebody. *@
+            <BenTabs @bind-ActiveId="_resultTab">
 
-            @* ── Groups ────────────────────────────────────────────────────────── *@
-            @if (_groups.Count > 0)
-            {
-                <h5 class="mb-2">Groups Nearby</h5>
-                <div class="row g-3 mb-4">
-                    @foreach (var org in _groups)
-                    {
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
-                                <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
-                            </OrgCard>
+                @if (_tours.Count > 0)
+                {
+                    <BenTab Title="Tours" Id="tours" Badge="@_tours.Count">
+                        <div class="row g-3">
+                            @foreach (var tour in _tours)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <a class="nearby-card h-100 d-flex flex-column text-decoration-none text-reset"
+                                       href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")">
+                                        @* Every tour leads with a plate, photograph or not. A tour
+                                           whose gallery is still empty used to render as text alone
+                                           and then be stretched to the height of its neighbour, so a
+                                           row of results was mostly dead space. The stand-in is drawn
+                                           from the tour's own name, so two tours never look alike and
+                                           the same tour looks the same on every visit. *@
+                                        <span class="nearby-card__frame @(tour.CoverUploadFileId is null ? "nearby-card__frame--drawn" : "")"
+                                              style="@(tour.CoverUploadFileId is null ? $"--plate-hue:{Hue(tour.Name)}deg;" : "")">
+                                            @if (tour.CoverUploadFileId is { } cover)
+                                            {
+                                                <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
+                                                     class="nearby-card__image" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <span class="nearby-card__monogram" aria-hidden="true">@Monogram(tour.Name)</span>
+                                            }
+                                            @if (tour.NextDateStartUtc is { } soon)
+                                            {
+                                                <span class="nearby-card__when">
+                                                    @soon.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
+                                                </span>
+                                            }
+                                        </span>
+                                        <span class="nearby-card__body">
+                                            <span class="nearby-card__title">@tour.Name</span>
+                                            <span class="nearby-card__meta">
+                                                @if (!string.IsNullOrWhiteSpace(tour.City))
+                                                {
+                                                    <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                                }
+                                                @if (tour.DistanceMiles is { } miles)
+                                                {
+                                                    <text> · @miles.ToString("F0") mi</text>
+                                                }
+                                                @if (tour.Rating is { } rating)
+                                                {
+                                                    <text> · @rating.ToString("0.0") ★</text>
+                                                }
+                                            </span>
+                                            <span class="nearby-card__line">
+                                                @if (tour.NextDateStartUtc is { } next)
+                                                {
+                                                    <text>Next @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")</text>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-secondary">No dates up yet</span>
+                                                }
+                                            </span>
+                                            <span class="nearby-card__by">Run by @tour.OrganizationName</span>
+                                        </span>
+                                    </a>
+                                </div>
+                            }
                         </div>
-                    }
-                </div>
-            }
+                    </BenTab>
+                }
+
+                @if (_events.Count > 0)
+                {
+                    <BenTab Title="Events" Id="events" Badge="@_events.Count">
+                        <p class="text-secondary small mb-3">
+                            Locations here are approximate — an area several miles across, not an
+                            address.
+                        </p>
+                        <div class="row g-3">
+                            @foreach (var ev in _events)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <div class="nearby-card h-100 d-flex flex-column">
+                                        <span class="nearby-card__body">
+                                            <span class="nearby-card__date">
+                                                @ev.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
+                                                <span class="nearby-card__time">
+                                                    @ev.StartDateTime.ToViewerLocalTime(UserState).ToString("h:mm tt")
+                                                </span>
+                                            </span>
+                                            <span class="nearby-card__title">@ev.Title</span>
+                                            <span class="nearby-card__meta">
+                                                @if (!string.IsNullOrWhiteSpace(ev.City))
+                                                {
+                                                    <text>Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")</text>
+                                                    <text> · </text>
+                                                }
+                                                @ev.DistanceMiles.ToString("F0") mi
+                                            </span>
+                                            <span class="nearby-card__by">Hosted by @ev.OrgName</span>
+                                        </span>
+                                        <span class="nearby-card__actions">
+                                            @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                            {
+                                                <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
+                                                   class="btn btn-sm btn-outline-primary">See this event</a>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                            {
+                                                <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </BenTab>
+                }
+
+                @if (_groups.Count > 0)
+                {
+                    <BenTab Title="Groups" Id="groups" Badge="@_groups.Count">
+                        <div class="row g-3">
+                            @foreach (var org in _groups)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
+                                        <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
+                                    </OrgCard>
+                                </div>
+                            }
+                        </div>
+                    </BenTab>
+                }
+
+            </BenTabs>
         }
     </div>
 
@@ -220,7 +257,47 @@
     private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyOrgResult>   _groups = [];
 
+    /// <summary>Which tab opens. Set from what was actually found, never to an empty one.</summary>
+    private string? _resultTab;
+
     private double? _lat, _lon;
+
+    /// <summary>
+    /// A stable hue for a tour with no photograph yet. Deterministic on the name — the same walk
+    /// draws the same plate on every visit and on every device — and spread across the wheel so two
+    /// walks side by side do not land on the same colour.
+    /// </summary>
+    private static int Hue(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return 262;
+
+        // FNV-1a, written out rather than String.GetHashCode(): that one is randomised per process,
+        // so the plate would change colour every time the server restarted.
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var c in name)
+            {
+                hash ^= c;
+                hash *= 16777619u;
+            }
+            return (int)(hash % 360u);
+        }
+    }
+
+    /// <summary>Up to two initials from the tour's name, for the drawn plate.</summary>
+    private static string Monogram(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return words.Length switch
+        {
+            0 => "?",
+            1 => words[0][..Math.Min(2, words[0].Length)].ToUpperInvariant(),
+            _ => $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[^1][0])}"
+        };
+    }
 
     // ── JS interop ───────────────────────────────────────────────────────────
     private IJSObjectReference? _module;
@@ -298,8 +375,16 @@
 
         _events = results?.Events ?? [];
         _groups = results?.Organizations ?? [];
+        _resultTab = null;   // chosen below, once the counts are known
         _tours  = (await AdminClient.SearchToursAsync(
             latitude: _lat.Value, longitude: _lon.Value, radiusMiles: _radiusMiles)).Items;
+        // Tours, then events, then groups: most actionable first, and never a tab with nothing
+        // behind it.
+        _resultTab = _tours.Count > 0 ? "tours"
+                   : _events.Count > 0 ? "events"
+                   : _groups.Count > 0 ? "groups"
+                   : null;
+
         _hasSearched = true;
         _searching   = false;
         StateHasChanged();
