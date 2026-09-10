@@ -11233,3 +11233,63 @@ typing behaviour were wrong on the day this was found:
 **Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
 first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
 
+---
+
+## 225. A desktop client, and the client library both front ends share (IN PROGRESS 2026-09-10)
+
+Ben, 2026-09-10: two new C# projects, `Ben.Desktop.App.UI` (Telerik UI for .NET MAUI) and
+`Ben.Desktop.App.Library` (reusable components), talking to the database only through
+`Ben.Data.WebApi`, with sign-in following the Identity rules the website already enforces.
+
+**It needed a third project, and finding out why was the useful part.** Everything the desktop app
+wanted — sending a request, reading the answer, holding a session — already existed, in
+`Ben.Web.Services`. That project carries a `FrameworkReference` to `Microsoft.AspNetCore.App` and a
+reference to the Razor-and-Telerik `Ben.Video.Editor`, so a MAUI app cannot reference it at all.
+The code it actually wanted was plain `HttpClient` work with nothing Blazor about it. So
+`Ben.Data.WebApi.Client` is that code, with no packages and one reference to the DTOs, sitting in
+`/Api Layers/` beside the API whose client half it is. Both front ends use it, which is the point:
+two clients that each decide for themselves what a refusal means will eventually disagree.
+
+Underneath that, `Ben.Data.Common` had been declaring EF Core, its SQL Server provider and
+Identity.EntityFrameworkCore and using none of them. Nothing in its 99 files references an EF or
+Identity type. The cost was paid downstream: `Ben.Service.Models` is pure records with no packages
+of its own, so every consumer of the DTOs inherited a database provider. Invisible on the server;
+fatal for an app that has no business shipping one.
+
+**What capturing real answers settled.** The rule about never inventing a fixture earned itself
+again. Against an API on a scratch database:
+
+- The three `/login` refusals really are one status separated only by a string. `Failed`,
+  `NotAllowed` and `RequiresTwoFactor` all arrive as 401. Wait, confirm your email, enter your code
+  and fix your password are four different instructions, and three of them waste somebody's time if
+  the fourth is guessed.
+- The 429 carries `Retry-After: 60`, and every client had been throwing it away. A rate-limited
+  person was left guessing, or pressing a button certain to be refused — which spends the next
+  window too.
+- **Registration answers a refusal as JSON**, not prose: `{"succeeded":false,"message":"That name
+  is taken.","field":"Handle"}` with a 400. The ordinary refusal handling discards any body
+  starting with a brace, so the one sentence telling somebody what to change would have been
+  replaced by a paraphrase of the status code.
+
+**A test that proved nothing.** The single-flight refresh test — eight callers must produce one
+refresh — passed with the guard deleted. Its stub slept on the calling thread, so the whole
+"request" ran inside the caller's own lock and the callers never overlapped. A handler that yields
+instead of blocking is the difference between a concurrency test and a decoration.
+
+Shipped so far on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the extraction
+(`346753e9`), and the session core (`acb6509b`) — `TokenSession` with single-flight refresh,
+`SessionStore`, `BearerTokenHandler`, `AccountClient`, ten captured fixtures and 98 tests. Suite
+7,785 passing.
+
+**Still to build:** the two MAUI projects and their sign-in screens, Entra through MSAL, and Sign
+in with Apple on the Mac head. Blocked on `sudo dotnet workload install maui-maccatalyst` —
+`/usr/local/share/dotnet` is root-owned.
+
+**Follow-ups this surfaced, none of them this item's job:**
+
+1. Nothing exchanges a Microsoft Entra token for an Identity session. The website gets away with it
+   through its OIDC cookie; a desktop client has no cookie.
+2. There is no sign-out, revoke or device registry for any client. Sign-out is local everywhere, so
+   "sign out my other machine" is not possible for anybody today.
+3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
+4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
