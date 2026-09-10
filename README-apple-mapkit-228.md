@@ -10,7 +10,7 @@ site uses today is one whose usage policy tolerates us rather than serves us.
 **A Maps ID and a key with the Maps service enabled. Not a Services ID.** A Services ID is Sign in
 with Apple's identity for the web (item 227); MapKit JS never sees it.
 
-1. **Identifiers → Maps IDs → +**: `maps.com.ishaunted.web`. This is the `id` the token names.
+1. **Identifiers → Maps IDs → +**: `maps.com.ishaunted` — created 2026-09-10, name "AppleMaps". This is the `id` the token names.
 2. **Keys → +**: name it for the website, tick **Maps**, choose that Maps ID, download the `.p8`.
    Apple hands the file over once. Note the **Key ID** shown next to it.
 3. Nothing else: no redirect URLs, no domain file, no App ID grouping. Team ID stays `5778H75249`.
