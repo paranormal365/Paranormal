@@ -1139,6 +1139,129 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("organization-administration", "cms.png", gated: true);
     }
 
+    /// <summary>
+    /// The tour screens a business runs its walks from (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <para>Registers a throwaway ghost walk of its own rather than borrowing a seeded group:
+    /// the help pictures have to show a business with a tour, a meeting point and a date on the
+    /// calendar, and no seed carries one. Everything it makes is deleted afterwards whatever
+    /// happened.</para>
+    ///
+    /// <para>Each shot names text it must contain. A screenshot of an empty tours page teaches
+    /// nobody anything and is exactly the failure this fixture hits silently.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: tours, the guest email, and a tour's public page.")]
+    public async Task Capture_Tours()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = UserEmail, password = UserPassword } });
+        Assert.That(login.Ok, Is.True, "the seeded member should be able to sign in");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var authed = new APIRequestContextOptions
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        };
+
+        var slug = $"help-tour-{Guid.NewGuid():N}"[..18];
+        var register = await api.PostAsync("/api/security/organizations/register", new()
+        {
+            Headers = authed.Headers,
+            DataObject = new { name = "Printers Alley Walks", urlName = slug, kind = 1 },
+        });
+        if (!register.Ok) Assert.Ignore("New tour businesses are not being accepted on this deployment.");
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString();
+
+        try
+        {
+            var types = await api.GetAsync("/api/organization-address-types", authed);
+            var typeId = (await types.JsonAsync())!.Value.EnumerateArray().First().GetProperty("id").GetString();
+
+            var address = await api.PostAsync($"/api/organizations/{orgId}/addresses", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    organizationAddressTypeId = typeId, streetAddress1 = "1 Printers Alley",
+                    city = "Nashville", state = "TN", zipCode = "37201", country = "US",
+                    sortOrder = 0, visibility = 2, publicDisplayMode = 2, isSearchable = true,
+                },
+            });
+            var addressId = (await address.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var tour = await api.PostAsync($"/api/organizations/{orgId}/tours", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    name = "Printers Alley Ghost Walk",
+                    description = "<p>An hour and a half through the oldest alley in Nashville, "
+                                + "with the stories the daylight version leaves out.</p>",
+                    startOrganizationAddressId = addressId,
+                    durationMinutes = 90, defaultCapacity = 20, timeZoneId = "America/Chicago",
+                    contactLine = "Cash on the night, or call 555-0100.",
+                },
+            });
+            var tourId = (await tour.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var start = DateTime.UtcNow.AddDays(6).Date.AddHours(1);
+            await api.PostAsync($"/api/organizations/{orgId}/calendar", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    title = "Saturday walk", description = (string?)null, location = (string?)null,
+                    startDateTime = start, endDateTime = start, isAllDay = false, isPublic = true,
+                    eventTypeId = (Guid?)null, caseId = (Guid?)null, recurrenceRule = (string?)null,
+                    tourId,
+                },
+            });
+
+            await LoginAsync(UserEmail, UserPassword);
+
+            await GoAsync($"/organizations/{orgId}/tours");
+            await ShootAsync("organization-administration", "tours.png",
+                gated: true, proves: "Printers Alley Ghost Walk");
+
+            await GoAsync($"/organizations/{orgId}/tours/{tourId}");
+            await ShootAsync("organization-administration", "tour-details.png",
+                gated: true, proves: "Where it starts");
+
+            await Page.Locator("#tour-mail").ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "tour-guest-email.png",
+                gated: true, selector: "#tour-mail", proves: "The email your guests get");
+
+            // The public page as a VISITOR sees it, which is the rule for a public-facing
+            // feature. Clearing the cookies is not enough on its own: the Blazor circuit is
+            // already up and keeps rendering the signed-in shell until the page is reloaded from
+            // scratch, so the first version of this shot came out with somebody's sidebar,
+            // their groups and their notification banners in it.
+            // Signed out through the site's own door. Clearing cookies is not enough — the
+            // session is a bearer token the browser holds, so the first two versions of this
+            // shot came out with somebody's sidebar, their groups and their banners in it.
+            await LogoutAsync();
+            await GoAsync($"/o/{slug}/tours/printers-alley-ghost-walk");
+            await ShootAsync("getting-started", "tour-page.png", proves: "Where you meet");
+        }
+        finally
+        {
+            var admin = await api.PostAsync("/login", new()
+            {
+                DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+            });
+            if (admin.Ok)
+            {
+                var adminToken = (await admin.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+                await api.DeleteAsync($"/api/organizations/{orgId}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {adminToken}" },
+                });
+            }
+            await api.DisposeAsync();
+        }
+    }
+
     // ── Site administrators (gated) ───────────────────────────────────────────
 
 

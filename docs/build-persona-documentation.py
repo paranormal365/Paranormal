@@ -195,6 +195,8 @@ documents for what the same page looks like without those grants.</p>
             "55-events": "Events the group runs, public and private.",
             "56-org-subscriptions": "The subscription: what the plan covers and what it costs.",
             "57-profile": "Their own account.",
+            "58-tours": "Tours, for a business that runs walks — the product the tour plan is "
+                        "priced on, and the door to each tour's guides, guest email and gallery.",
         },
     },
     "superadmin": {

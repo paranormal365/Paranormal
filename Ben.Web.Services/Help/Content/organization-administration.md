@@ -532,6 +532,13 @@ A tour also carries how long it runs, how many people a date takes, its time zon
 how to reach you and how to pay, and a description. Nothing about money passes through this site:
 that line is where you tell your guests what to bring and what it costs.
 
+![Your tours](help-media:organization-administration/tours.png)
+
+Opening one gives you everything about it on a page of its own — and a picker at the top for
+switching between them when you run more than one.
+
+![One tour](help-media:organization-administration/tour-details.png)
+
 ### Adding a tour, and what it costs
 
 Your plan covers one tour. Adding another is charged for the part of your current period that is
@@ -582,6 +589,8 @@ tour.
 
 **See what it looks like** renders it against your next scheduled date, with your times, your
 guides and your wording, and shows the calendar file that travels with it. Nothing is sent.
+
+![The guest email](help-media:organization-administration/tour-guest-email.png)
 
 Replies go to your group's public email address when you have set one, so a guest who hits reply
 reaches you rather than us.

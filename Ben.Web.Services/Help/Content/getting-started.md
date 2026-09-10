@@ -378,3 +378,19 @@ Afterwards, if you captured something, the event's page lets you **offer it to t
 member reviews every submission. If yours is accepted it becomes part of that event's public
 record, credited to you; if it's declined you're told why, and your file stays private. You can
 see where each of your submissions stands on the same page.
+
+## Ghost walks and tours
+
+A tour is a walk somebody sells: it has a meeting point, a length, and dates you can sign up for.
+They show up on the map on the front page, in **What's near you**, and on the business's own page,
+and each has a page of its own with its pictures, its guides, and when it runs.
+
+![A tour's page](/help/media/getting-started/tour-page.png)
+
+Signing up gets you an email with the meeting point, the time in the tour's own zone, who is
+leading it and what they look like, and a calendar file so your phone reminds you. You get the same
+again the night before. **Money is arranged with the business** — nothing is taken through this
+site, and the email says how they want to be paid.
+
+Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
+night is on the tour's page for you to download.
