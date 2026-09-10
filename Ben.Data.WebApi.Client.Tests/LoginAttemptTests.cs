@@ -1,7 +1,6 @@
 using Ben.Web.Services.WebApi;
-using Xunit;
 
-namespace Ben.Web.Tests.Services;
+namespace Ben.Data.WebApi.Client.Tests;
 
 /// <summary>
 /// Reading a refused sign-in correctly.

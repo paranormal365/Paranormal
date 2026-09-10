@@ -11144,9 +11144,7 @@ you click a day, so changing your mind about the date cost a trip back through t
 
 ### Still open: an impossible day is silently taken as its second digit
 
-Typing `31` into a September date gives you the **1st**. Telerik rejects the day that cannot exist
-and keeps the `1`, with no indication. It is inside `AutoCorrectParts` and no call site can reach
-it, so it needs either a Telerik change or a date control of our own. Recorded, not fixed.
+Typing `31` into a September date gives you the **1st**. Promoted to its own entry — see item 224.
 
 ## 222. Viewport loading for the three maps that were deliberately left without it
 
@@ -11201,4 +11199,296 @@ One thing the Playwright work taught: **a bounding box is in viewport coordinate
 the fold hands back a y the mouse cannot reach and the drags land on whatever is on screen instead.
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
+
+## 224. A date field silently takes an impossible day as its second digit (OPEN)
+
+Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
+
+**The defect.** With `09/__/2026` in the field, select the day and type `3` then `1`. You get
+**09/01**, not the 31st and not a refusal. Telerik rejects the day that cannot exist in September
+and falls back to treating the `1` as a fresh first digit. Nothing on screen says so.
+
+It is worse than it first sounds because it is **inconsistent**: the same keystrokes in a 31-day
+month give you the 31st. So the field works until the month it does not, and the failure is silent
+in both directions — you get a real date, just not the one you typed.
+
+**Why it is not a one-liner.** The behaviour lives inside Telerik's `AutoCorrectParts`, and no
+parameter on the call sites reaches the decision. There are **34 picker call sites across 17 files**
+and no `BenDatePicker` wrapper, unlike `BenModal`, `BenSelect` and `BenContentPicker`.
+
+**The decision tree when it is picked up** — measure, do not guess; three guesses about Telerik's
+typing behaviour were wrong on the day this was found:
+
+1. Probe a real picker with `AutoCorrectParts` off. It may leave `31` standing and mark the value
+   invalid, which is honest, or it may do something worse.
+2. Control: type `31` into a month that has one, so "rejects impossible days" can be told from
+   "rejects the second digit".
+3. If a parameter combination behaves, wrap it **once** in `Kit/BenDatePicker` and migrate the 34
+   sites, then add a source-scan guard banning the raw Telerik picker — the habit this codebase
+   already has for exactly this shape.
+4. If nothing behaves, fall back to the native `<input type="date">` for date-only fields. Browsers
+   handle this sanely, and `NewInvestigationWindow` already uses one. Telerik would stay only where
+   a calendar popup genuinely earns its place.
+
+**Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
+first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
+
+---
+
+## 225. A desktop client, and the client library both front ends share (SHELVED 2026-09-10 — kept as a future enhancement)
+
+Ben, 2026-09-10: two new C# projects, `Ben.Desktop.App.UI` (Telerik UI for .NET MAUI) and
+`Ben.Desktop.App.Library` (reusable components), talking to the database only through
+`Ben.Data.WebApi`, with sign-in following the Identity rules the website already enforces.
+
+**It needed a third project, and finding out why was the useful part.** Everything the desktop app
+wanted — sending a request, reading the answer, holding a session — already existed, in
+`Ben.Web.Services`. That project carries a `FrameworkReference` to `Microsoft.AspNetCore.App` and a
+reference to the Razor-and-Telerik `Ben.Video.Editor`, so a MAUI app cannot reference it at all.
+The code it actually wanted was plain `HttpClient` work with nothing Blazor about it. So
+`Ben.Data.WebApi.Client` is that code, with no packages and one reference to the DTOs, sitting in
+`/Api Layers/` beside the API whose client half it is. Both front ends use it, which is the point:
+two clients that each decide for themselves what a refusal means will eventually disagree.
+
+Underneath that, `Ben.Data.Common` had been declaring EF Core, its SQL Server provider and
+Identity.EntityFrameworkCore and using none of them. Nothing in its 99 files references an EF or
+Identity type. The cost was paid downstream: `Ben.Service.Models` is pure records with no packages
+of its own, so every consumer of the DTOs inherited a database provider. Invisible on the server;
+fatal for an app that has no business shipping one.
+
+**What capturing real answers settled.** The rule about never inventing a fixture earned itself
+again. Against an API on a scratch database:
+
+- The three `/login` refusals really are one status separated only by a string. `Failed`,
+  `NotAllowed` and `RequiresTwoFactor` all arrive as 401. Wait, confirm your email, enter your code
+  and fix your password are four different instructions, and three of them waste somebody's time if
+  the fourth is guessed.
+- The 429 carries `Retry-After: 60`, and every client had been throwing it away. A rate-limited
+  person was left guessing, or pressing a button certain to be refused — which spends the next
+  window too.
+- **Registration answers a refusal as JSON**, not prose: `{"succeeded":false,"message":"That name
+  is taken.","field":"Handle"}` with a 400. The ordinary refusal handling discards any body
+  starting with a brace, so the one sentence telling somebody what to change would have been
+  replaced by a paraphrase of the status code.
+
+**A test that proved nothing.** The single-flight refresh test — eight callers must produce one
+refresh — passed with the guard deleted. Its stub slept on the calling thread, so the whole
+"request" ran inside the caller's own lock and the callers never overlapped. A handler that yields
+instead of blocking is the difference between a concurrency test and a decoration.
+
+**Four things a clean build said nothing about, all found by launching the app.** An `x:Name` in
+XAML generates a field on the same partial class, so an element and a bindable property of the same
+name collide. .NET 10 stopped including `Microsoft.Maui.Controls.Compatibility` implicitly and
+Telerik still needs it, so the app compiled and died inside `UseTelerik`. Before that it would not
+launch at all — "Launchd job spawn failed", naming nothing — because an ad-hoc signature cannot
+carry `keychain-access-groups`: `$(AppIdentifierPrefix)` expands only from a provisioning profile.
+And `Telerik.UI.for.Maui` 3.2.1 brings SkiaSharp and `System.Security.Cryptography.Pkcs`
+transitively at versions with known HIGH severity advisories, now pinned forward.
+
+**`dotnet build Ben.slnx` no longer works without the MAUI workload** (NETSDK1147), so
+`Ben.Server.slnf` is the whole solution minus the two desktop projects and is what CI and an
+everyday build should use. A `macos-15` job compiles the desktop app so it is not left unbuilt by
+everything. No Windows job: nobody has built that head by hand yet, and adding one would claim a
+check that has never passed.
+
+Shipped on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the extraction
+(`346753e9`), the session core (`acb6509b`), and the two MAUI projects with CI (`e003cd99`).
+103 client tests, all passing against a live API with nothing skipped; suite 7,790.
+
+### External sign-in (2026-09-10)
+
+Both providers, plus an account-merge door that was missing.
+
+**Microsoft is not one of our sessions; Apple is.** A Microsoft sign-in leaves the client holding a
+token Microsoft issued, which the API validates under its second scheme — so it renews at Microsoft,
+not at `/refresh`, which has never seen it and would refuse it about an hour in. Apple's endpoint
+signs the person in under our own scheme and answers a body identical to `/login`'s, so it is an
+ordinary session.
+
+**MSAL was dropped.** It has no Mac Catalyst asset — Catalyst resolves its plain desktop build — so
+it would need a loopback listener and a `network.server` sandbox entitlement, and would still only
+serve Windows properly. One authorization-code flow with PKCE behind a small browser seam covers
+both, and everything either side of the browser is testable without a browser.
+
+**The duplicate-account gap.** Sign-in only joins an external identity to an existing account when
+the provider's verified email happens to equal one. Apple's Hide My Email relay never will, and an
+Apple ID or work Microsoft account is often simply at a different address from the one somebody
+signed up with. All of those ended at "create an account" and quietly produced a SECOND account
+holding none of their cases, groups or history. Microsoft already had a link endpoint taking an
+arbitrary email and password; Apple had no door at all, so `api/auth/apple/link` is new — and it
+must issue a session, because an Apple identity token is not a credential this API accepts on
+ordinary requests. It honours lockout, unlike the Entra link's bare password check.
+
+The client now offers "I already have an account" for the whole of that screen, not only after the
+server spots a matching address — the server can only spot one in the case that was never broken.
+
+**Still unverified:** neither interactive round trip has been run; that needs a tenant, a browser
+and an Apple App ID, plus portal work. Nor is it known whether `SecureStorage` persists across a
+relaunch on an ad-hoc-signed Catalyst build — the iOS app hit exactly that and it fails silently, so
+assume it needs a signing identity.
+
+**Follow-ups this surfaced, none of them this item's job:**
+
+1. Nothing exchanges a Microsoft Entra token for an Identity session. The website gets away with it
+   through its OIDC cookie; a desktop client has no cookie.
+2. There is no sign-out, revoke or device registry for any client. Sign-out is local everywhere, so
+   "sign out my other machine" is not possible for anybody today.
+3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
+4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
+
+
+### Shelved 2026-09-10
+
+Ben: "I am not sure I want to create a desktop version. Just keep it as future enhancement."
+Deleted: `Ben.Desktop.App.Library`, `Ben.Desktop.App.UI`, `Ben.Server.slnf`, the macOS CI job,
+`com.ishaunted.desktop` from `Apple:ClientIds`, and the fifteen desktop-only types in
+`Ben.Data.WebApi.Client` (the token session and session store, the bearer handler, the Microsoft
+PKCE stack, the desktop Entra account client) with their tests. `dotnet build Ben.slnx` needs no
+MAUI workload again.
+
+**Kept, because the website now stands on it:** `Ben.Data.WebApi.Client` itself — `LoadResult`,
+`ItemResult`, `LoginFailureMapping`, `AppleSignInClient`, `AppleWebAuthorizeRequest` — and every
+server-side change this work exposed (the link endpoints, `ExternalSignInService`, `EmailKind`, the
+admin-refusal and second-factor fixes). None of that was desktop-specific; the desktop was merely
+where it was found.
+
+**To resurrect:** the last commit with everything present is `a2aaa511` on
+`feature/apple-signin-website-227`. `git checkout a2aaa511 -- Ben.Desktop.App.Library
+Ben.Desktop.App.UI Ben.Server.slnf` and the removed client files, then rebuild against
+`ExternalSignInService` and the Apple contracts as they stand. The user-local MAUI SDK at
+`~/.dotnet-maui` can be deleted or reused.
+---
+
+## 226. The iPhone app can still be given a second account by Sign in with Apple (BUILT 2026-09-10)
+
+Found 2026-09-10 while building the desktop client's external sign-in (item 225). Ben asked whether
+the same gap existed elsewhere; it does, on iOS.
+
+**The defect.** `api/auth/apple` joins an Apple identity to an existing account only when Apple's
+own VERIFIED email equals one already here. Two ordinary situations defeat that:
+
+- **Hide My Email.** Apple hands over `something@privaterelay.appleid.com`, which will never equal
+  an address anybody signed up with.
+- **A different address.** Plenty of people have an Apple ID at one address and an account here at
+  another.
+
+Both fall through to "choose a display name and a handle", which creates a **second account**
+holding none of their cases, groups, equipment or history — and nothing offers to join the two.
+Worse than it sounds because it is silent: the person is signed in, everything works, and it is
+simply not their account.
+
+**Already fixed for the desktop client**, and the server half is done: `POST api/auth/apple/link`
+takes the Apple identity token plus the email and password of the account being claimed, adds the
+external login and issues a session. It honours lockout (`CheckPasswordSignInAsync` with
+`lockoutOnFailure`), because it takes a password from an unauthenticated caller.
+
+**What iOS needs:** on the needs-profile screen, offer "I already have an account" alongside
+creating one, and call the new endpoint. `BenKit/Sources/BenKit/Auth/AppleSignIn.swift` handles the
+409 today and only ever routes to the create path.
+
+**Checked and NOT affected:**
+
+- **The website's Microsoft flow.** `Ben.Web.Website/Components/Pages/Entra/CompleteProfile.razor`
+  already offers "I already have an account — link it" as a first-class choice with an arbitrary
+  address, which is exactly the right shape.
+- **The website's Apple flow.** There isn't one — the site has never offered the button, so there is
+  nothing to fix.
+
+**Worth doing at the same time:** `EntraAuthController.Link` uses `CheckPasswordAsync`, which does
+not count failed attempts. It is an unauthenticated door that takes a password, so guesses against
+it are free. The new Apple link uses the lockout-honouring form; the Entra one should match.
+
+
+### Built 2026-09-10, on `feature/apple-signin-website-227`
+
+`BenKit/Auth/AppleSignIn.swift` gained `link(identityToken:email:password:twoFactorCode:recoveryCode:)`,
+and two outcomes: `.addressTaken(reason:)` when the server says the address already has an account
+here, and `.needsTwoFactor` when the account being claimed has a second factor. `AppleProfileSheet`
+now has two doors. "Already have an account here?" is offered **always** — the server can only spot
+a collision when Apple's address happens to match an existing one, which is the case that was never
+broken — and when the server says the address is taken, the create form is put away and the link
+door becomes the prominent one. A code field appears only after the server asks for one; an empty
+code is never sent, because Identity reads that as a wrong code and spends a failed attempt.
+
+The footer promise the UI test pins — "rather than making a second one" — is now true for a
+mismatched address too, so the wording changed and the test did not.
+
+**Verified:** 16 BenKit tests (all 339 in the package pass); the iPhone app builds; the Apple UI
+regression passes on **both** iPhone 17 Pro and iPad Pro 13-inch (M5), which are different element
+trees. **Not verified:** the door itself against a real Apple identity — the simulator has no Apple
+ID to sign in with. The server half was tested in C# against the real endpoint with a forged token.
+
+Still open from this item: `EntraAuthController.Link` lockout — now DONE under 225's branch (see
+the 2026-09-10 commits closing the Microsoft hole).
+---
+
+## 227. Sign in with Apple on the website (BUILT 2026-09-10 — unverified through Apple until a Services ID exists)
+
+Ben, 2026-09-10, alongside item 226: the site should offer a "Sign in with Apple" button that can
+either create a new account or link one that already exists — the same two doors the Microsoft
+button already has at `Entra/CompleteProfile.razor`.
+
+Nothing here is broken today; the website has simply never offered the button. The server work is
+mostly done: `api/auth/apple` creates or signs in, and `api/auth/apple/link` (added under item 225)
+claims an existing account with its email and password. What is missing is the web half of Apple's
+own flow, and it is **not** the flow the phone and desktop apps use.
+
+**The web flow differs in ways that matter.**
+
+1. **A Services ID, not a bundle id.** Apple's web sign-in identifies the caller by a Services ID
+   configured against the App ID. That value becomes the token's audience, so it has to be added to
+   `Apple:ClientIds` in `Ben.Data.WebApi/appsettings.json` — the comment there has anticipated this
+   from the start. `com.ishaunted.ios` and `com.ishaunted.desktop` will not do.
+
+2. **No native sheet.** The browser is redirected to Apple, and Apple answers with a `form_post`
+   back to a registered `https` URL — so this needs a real endpoint on `Ben.Web.Website` that
+   accepts a POST, not a Blazor page callback.
+
+3. **Check whether a client secret is needed before designing around one.** Apple's web flow can
+   return the identity token directly in the form post when `id_token` is part of the requested
+   response type, which is all our API needs. Exchanging the authorization code at Apple's token
+   endpoint instead requires a client secret that is itself a JWT signed with a downloaded `.p8`
+   key and expires within six months — an operational burden worth avoiding if the first option
+   works. **Verify against Apple's current documentation rather than either assumption.**
+
+4. **No localhost.** Apple refuses non-`https` redirect URLs, so this cannot be exercised on
+   `127.0.0.1:5078` the way everything else here is. Expect to need the UAT host, and budget for
+   that being the only place it can be tested.
+
+5. **The name arrives once, in the form post.** Apple includes it in a `user` field on the FIRST
+   authorization only and never again — same rule as the native flow, same consequence for getting
+   it wrong: the account ends up named whatever we invented.
+
+**The two doors, once the token is in hand,** are the same ones the desktop client now has, and the
+lesson from item 226 applies directly: offer "I already have an account" for the whole of that
+screen, not only when Apple's address happens to match one. A Hide My Email relay address never
+matches, and that is exactly the case that silently produces a second account.
+
+Do this alongside item 226 — they share the link endpoint, the one-shot-name rule and the
+account-merge screen, and doing them together means designing that screen once.
+
+### Built 2026-09-10, and what was decided afterwards (Phase C)
+
+Built as `README-apple-signin-website-227.md` describes; plan of record is
+`ProjectNotes/External-SignIn-Plan-2026-09-10.md`. Unverifiable here: the round trip through Apple,
+which refuses localhost. Phase D is Ben's portal work and a UAT round trip.
+
+Two rules were left as questions on the day and decided with Ben that evening:
+
+- **The Microsoft email fallback is gone.** `EntraClaimsTransformation` used to link an unknown
+  object id to whichever account held its email claim, with no proof of ownership. Removed rather
+  than narrowed; a rotated object id uses the link door once, with a password and second factor.
+  Production's one Microsoft login is linked by object id, so nobody is stranded.
+- **Only a verified address is confirmed at creation.** An account made from an unverified provider
+  address (Microsoft's always) starts unconfirmed and is sent the website's confirmation email.
+  It works through that provider straight away — the external gate is closure and lockout, not
+  the confirmed-account rule, because confirmation proves the address and the provider proves the
+  person — but a password reset and anything else we would email wait for the link. The profile
+  shows the address with **Send the link again**; `ActionNeededBanners` reminds once per sign-in;
+  the help pages say why a reset link may not arrive.
+
+**On Ben's question of who owns a Field Kit upload:** the bearer token's user id, on every path.
+An account cannot exist without a display name and a permanent, unique @name — the website sign-up
+validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
+— so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
 

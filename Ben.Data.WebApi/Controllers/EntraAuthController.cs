@@ -21,16 +21,22 @@ namespace Ben.Data.WebApi.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/auth/entra")]
+// Link takes a PASSWORD, so this belongs on the same limit /login carries. Without it these fell
+// under the global 600-a-minute ceiling instead of 20 — thirty times the guesses, at the one door
+// that also was not counting them toward a lockout.
+[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AuthPolicy)]
 public sealed class EntraAuthController : BenControllerBase
 {
+    private const string Provider = "Microsoft";
     private readonly UserManager<AppUser> _userManager;
-    private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
+    private readonly Ben.Data.WebApi.Services.ExternalSignInService _external;
 
     public EntraAuthController(
-        UserManager<AppUser> userManager, Ben.Data.WebApi.Services.UserHandleService handles)
+        UserManager<AppUser> userManager,
+        Ben.Data.WebApi.Services.ExternalSignInService external)
     {
         _userManager = userManager;
-        _handles     = handles;
+        _external    = external;
     }
 
     /// <summary>
@@ -50,45 +56,48 @@ public sealed class EntraAuthController : BenControllerBase
         if (string.IsNullOrWhiteSpace(request.DisplayName))
             return BadRequest("Display name is required.");
 
-        // Guard: if email already exists, the user should use the link flow instead
-        var existing = await _userManager.FindByEmailAsync(entraEmail);
-        if (existing is not null)
-            return Conflict(new { Message = "An account with this email already exists. Please use the 'Link existing account' option." });
+        // Microsoft's address claim is NOT treated as verified: for a personal account it may not
+        // be, and the service auto-links only a verified address. So an existing address routes to
+        // the link door rather than being joined on a claim - which is what this endpoint always
+        // did, now for the reason written down once in ExternalSignInService.
+        var identity = new Ben.Data.WebApi.Services.ExternalIdentity(
+            Provider, entraOid.Value.ToString(), entraEmail, EmailVerified: false);
 
-        // Guard: if this OID is already linked (e.g., duplicate register attempt), return that user
-        var oidString = entraOid.Value.ToString();
-        var alreadyLinked = await _userManager.FindByLoginAsync("Microsoft", oidString);
-        if (alreadyLinked is not null)
-            return Ok(new EntraRegisterResult(alreadyLinked.Id, alreadyLinked.Email ?? string.Empty));
-
-        var user = new AppUser
+        switch (await _external.ResolveAsync(identity, cancellationToken))
         {
-            Id                 = Guid.NewGuid(),
-            Email              = entraEmail,
-            UserName           = entraEmail,
-            NormalizedEmail    = entraEmail.ToUpperInvariant(),
-            NormalizedUserName = entraEmail.ToUpperInvariant(),
-            EmailConfirmed     = true,  // Entra has verified the email
-            DisplayName        = request.DisplayName,
-            // C1: allocated here rather than left for the restart backfill — an account with no
-            // @name cannot be mentioned and is invisible to the feed until that job next runs.
-            Handle             = await _handles.AllocateAsync(request.DisplayName, entraEmail, cancellationToken),
-            DateCreated        = DateTime.UtcNow
-        };
+            case Ben.Data.WebApi.Services.ResolveResult.Found found:
+                // A duplicate register attempt for an identity already linked: answer with that
+                // account rather than complaining.
+                return Ok(new EntraRegisterResult(found.User.Id, found.User.Email ?? string.Empty));
 
-        var createResult = await _userManager.CreateAsync(user);
-        if (!createResult.Succeeded)
-            return BadRequest(new { Errors = createResult.Errors.Select(e => e.Description) });
+            case Ben.Data.WebApi.Services.ResolveResult.Refused:
+                return Unauthorized("That sign-in couldn't be completed.");
 
-        var loginInfo = new UserLoginInfo("Microsoft", oidString, entraEmail);
-        var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
-        if (!linkResult.Succeeded)
-        {
-            await _userManager.DeleteAsync(user); // rollback
-            return BadRequest(new { Errors = linkResult.Errors.Select(e => e.Description) });
+            case Ben.Data.WebApi.Services.ResolveResult.Unknown unknown when unknown.ShouldLinkInstead:
+                return Conflict(new { Message = "An account with this email already exists. Please use the 'Link existing account' option." });
         }
 
-        return Ok(new EntraRegisterResult(user.Id, user.Email ?? string.Empty));
+        // Handle null: this flow has no way to ask for one, so one is allocated - here rather than
+        // left for the restart backfill, because an account with no @name cannot be mentioned and
+        // is invisible to the feed until that job next runs.
+        switch (await _external.RegisterAsync(identity, request.DisplayName, handle: null, cancellationToken))
+        {
+            case Ben.Data.WebApi.Services.RegisterResult.Created created:
+                return Ok(new EntraRegisterResult(
+                    created.User.Id, created.User.Email ?? string.Empty, created.AwaitingConfirmation));
+
+            case Ben.Data.WebApi.Services.RegisterResult.NeedsProfile:
+                return BadRequest("Display name is required.");
+
+            case Ben.Data.WebApi.Services.RegisterResult.AddressTaken:
+                return Conflict(new { Message = "An account with this email already exists. Please use the 'Link existing account' option." });
+
+            case Ben.Data.WebApi.Services.RegisterResult.Failed failed:
+                return BadRequest(new { Errors = new[] { failed.Reason } });
+
+            default:
+                return BadRequest("That sign-in couldn't be completed.");
+        }
     }
 
     /// <summary>
@@ -111,27 +120,36 @@ public sealed class EntraAuthController : BenControllerBase
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
             return BadRequest("Email and password are required.");
 
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null || !await _userManager.CheckPasswordAsync(user, request.Password))
-            return Unauthorized(new { Message = "Invalid email or password." });
+        var identity = new Ben.Data.WebApi.Services.ExternalIdentity(
+            Provider, entraOid.Value.ToString(), entraEmail, EmailVerified: false);
 
-        // Check if this OID is already linked
-        var oidString = entraOid.Value.ToString();
-        var existingOwner = await _userManager.FindByLoginAsync("Microsoft", oidString);
-        if (existingOwner is not null)
+        switch (await _external.LinkAsync(
+            identity, request.Email, request.Password,
+            request.TwoFactorCode, request.TwoFactorRecoveryCode, cancellationToken))
         {
-            if (existingOwner.Id == user.Id)
-                return Ok(new { Message = "This Microsoft account is already linked to your account." });
+            case Ben.Data.WebApi.Services.LinkResult.Linked linked:
+                return Ok(new
+                {
+                    Message = linked.AlreadyWas
+                        ? "This Microsoft account is already linked to your account."
+                        : "Microsoft account linked successfully.",
+                });
 
-            return Conflict(new { Message = "This Microsoft account is already linked to a different local account." });
+            case Ben.Data.WebApi.Services.LinkResult.Refused refused:
+                // The SAME problem-detail shape /login and the Apple link answer with, carrying
+                // Identity's own word. Until today this door answered in its own shape, and two
+                // clients mapped the same four refusals twice.
+                return Problem(detail: refused.Why.ToString(), statusCode: StatusCodes.Status401Unauthorized);
+
+            case Ben.Data.WebApi.Services.LinkResult.HeldByAnotherAccount:
+                return Conflict(new { Message = "This Microsoft account is already linked to a different local account." });
+
+            case Ben.Data.WebApi.Services.LinkResult.Failed failed:
+                return BadRequest(new { Errors = new[] { failed.Reason } });
+
+            default:
+                return BadRequest("That account couldn't be linked.");
         }
-
-        var loginInfo = new UserLoginInfo("Microsoft", oidString, entraEmail ?? request.Email);
-        var result = await _userManager.AddLoginAsync(user, loginInfo);
-
-        return result.Succeeded
-            ? Ok(new { Message = "Microsoft account linked successfully." })
-            : BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
     }
 
     /// <summary>
@@ -156,9 +174,20 @@ public sealed class EntraAuthController : BenControllerBase
 /// validated Entra token, not the body.</summary>
 public record EntraRegisterRequest(string DisplayName);
 
-public record EntraRegisterResult(Guid UserId, string Email);
+/// <param name="AwaitingConfirmation">
+/// The address came from a Microsoft claim this API does not treat as verified, so the account
+/// starts unconfirmed and a confirmation has been sent to it. Usable through Microsoft meanwhile;
+/// a password reset and being written to wait for the confirmation.
+/// </param>
+public record EntraRegisterResult(Guid UserId, string Email, bool AwaitingConfirmation = false);
 
 /// <summary>Identifies the target local account to link; ownership is proven by <see cref="Password"/>,
 /// checked server-side. The Entra identity being linked comes from the caller's validated token,
 /// not from this body.</summary>
-public record EntraLinkRequest(string Email, string Password);
+public record EntraLinkRequest(
+    string Email,
+    string Password,
+    string? TwoFactorCode = null,
+    string? TwoFactorRecoveryCode = null);
+
+

@@ -1,7 +1,6 @@
 using Ben.Web.Services.WebApi;
-using Xunit;
 
-namespace Ben.Web.Tests.Services;
+namespace Ben.Data.WebApi.Client.Tests;
 
 /// <summary>
 /// A refusal whose reason cannot be read must not be reported as a wrong password.
@@ -44,19 +43,13 @@ public class LoginFailureMappingTests
     }
 
     /// <summary>
-    /// Mirrors WebApiAuthService's ladder exactly.
+    /// The real ladder, not a copy of it.
     /// </summary>
     /// <remarks>
-    /// Restated rather than invoked because the real method needs an HTTP client, a token store
-    /// and an API client to reach the two lines under test. The ladder is short and its ORDER is
-    /// the whole point — a copy that drifts fails the table above, which is the alarm.
+    /// This used to restate the conditional, because reaching the real one meant constructing
+    /// <c>WebApiAuthService</c> with an HTTP client, a token store and an API client. Item 225 gave
+    /// the ladder its own type in Ben.Data.WebApi.Client so every client shares one answer, and a
+    /// restated copy would now be able to drift from the code two front ends actually run.
     /// </remarks>
-    private static LoginFailure Map(LoginAttempt attempt) =>
-        attempt.WasUnreachable          ? LoginFailure.Unreachable
-      : attempt.WasRateLimited          ? LoginFailure.RateLimited
-      : attempt.RequiresTwoFactor       ? LoginFailure.RequiresTwoFactor
-      : attempt.Detail == "NotAllowed"  ? LoginFailure.EmailNotConfirmed
-      : attempt.Detail == "LockedOut"   ? LoginFailure.LockedOut
-      : attempt.Detail == "Failed"      ? LoginFailure.InvalidCredentials
-      :                                   LoginFailure.UnknownRefusal;
+    private static LoginFailure Map(LoginAttempt attempt) => LoginFailureMapping.From(attempt);
 }

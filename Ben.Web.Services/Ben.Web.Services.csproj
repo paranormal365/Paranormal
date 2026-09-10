@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
+    <ProjectReference Include="..\Ben.Data.WebApi.Client\Ben.Data.WebApi.Client.csproj" />
     <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
     <!-- VideoExportPublisher, BenMediaLibraryProvider and SidecarPairingReporter implement
          Ben.Video.Editor service contracts. -->

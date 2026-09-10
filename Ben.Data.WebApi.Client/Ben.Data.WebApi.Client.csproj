@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Item 225: the client half of Ben.Data.WebApi, extracted from Ben.Web.Services. It began as the
+    foundation for a .NET MAUI desktop app, which was shelved on 2026-09-10 (see item 225 in
+    ProjectNotes/Future-Improvements.md for how to bring it back). The extraction outlived it: the
+    website's own Sign in with Apple, the sign-in failure vocabulary every front end shares, and
+    LoadResult/ItemResult all live here, and anything that is NOT an ASP.NET app can reference it —
+    Ben.Web.Services cannot be, because it carries a FrameworkReference to Microsoft.AspNetCore.App
+    and a ProjectReference to the Razor/Telerik Ben.Video.Editor.
+
+    Deliberately keeps the ORIGINAL Ben.Web.Services.WebApi namespace on every moved type, exactly
+    as Ben.Video.Core does. Namespace is independent of assembly in C#, so the ~150 Razor files and
+    both _Imports.razor that already `@using Ben.Web.Services.WebApi` are untouched. The only
+    externally visible change is where these types are compiled.
+
+    Types written FOR this project (nothing was moved) live in Ben.Data.WebApi.Client.Auth.
+
+    Zero PackageReferences by design — the point of this assembly is to be embeddable in a process
+    that is not a web app. Ben.Service.Models is the only project reference, and it is DTOs only.
+    If a future change needs a package here, treat that as a signal the code belongs elsewhere.
+
+    NOT a reference to Ben.Data.WebApi: a client that references its server compiles the server
+    into every app that ships it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ben.Data.WebApi.Client.Tests" />
+  </ItemGroup>
+
+</Project>

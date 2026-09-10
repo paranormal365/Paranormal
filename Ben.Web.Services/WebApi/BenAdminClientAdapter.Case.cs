@@ -75,7 +75,10 @@ public sealed partial class BenAdminClientAdapter
         if (bounds is not null)
             url += $"&north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
                  + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
-        return _api.GetAnonymousAsync<PublicCaseDiscoveryPagedResponse>(url, token);
+        // Authenticated when there is a token and anonymous when there is not — Auth() attaches
+        // the header only if one exists. The endpoint stays [AllowAnonymous]; sending the token is
+        // what lets a signed-in person see their own cases on the map beside the public ones.
+        return _api.GetAsync<PublicCaseDiscoveryPagedResponse>(url, token);
     }
 
     // ── Case votes ────────────────────────────────────────────────────────────
