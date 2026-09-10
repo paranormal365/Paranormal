@@ -1,6 +1,9 @@
 @page "/o/{UrlName}/events/{EventSlug}"
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Maps
+@using Ben.Web.Website.Library.Manage.Maps
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -41,164 +44,93 @@ else if (_event is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:800px; margin:0 auto;">
+    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
         <div class="mb-3">
             <a href="@($"/o/{_event.OrganizationUrlName}")" class="text-decoration-none small">
                 &larr; @_event.OrganizationName
             </a>
         </div>
 
-        @if (_event.TourName is { } tourName)
-        {
-            <div class="text-secondary small mb-1">
-                @if (_event.TourUrlName is { } tourSlug)
-                {
-                    <a href="@($"/o/{_event.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
-                }
-                else
-                {
-                    @tourName
-                }
-                @if (_event.TourRating is { } rating)
-                {
-                    <text> · @rating.ToString("0.0") ★ (@_event.TourRatingCount)</text>
-                }
+        @* A banner, not a heading. This page is one date, and the date is the fact somebody is
+           looking for — so it is drawn as a plate the eye finds before it reads anything, the same
+           plate the tour's own list of dates uses.
+
+           The wash behind it takes its colour from the tour when this date runs one, and from the
+           host otherwise (TourPlate), so every event page has a character of its own without
+           needing a photograph nobody uploaded. *@
+        <div class="event-head mb-4" style="@TourPlate.HueStyle(_event.TourName ?? _event.OrganizationName)">
+            <div class="event-head__plate">
+                <span class="event-head__dow">@Local(_event.StartDateTime).ToString("ddd")</span>
+                <span class="event-head__day">@Local(_event.StartDateTime).Day</span>
+                <span class="event-head__mon">@Local(_event.StartDateTime).ToString("MMM")</span>
             </div>
-        }
-
-        <h1 class="mb-1">@_event.Title</h1>
-        <p class="text-secondary mb-4">
-            Hosted by <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
-        </p>
-
-        @* Ben asked for the guide's name and face to reach a guest "for safety" — so it is on the
-           page as well as in the email, for anybody who never opens the email. A guide with no
-           public photograph is still named; the picture was always optional. *@
-        @if (_event.Guides is { Count: > 0 } guides)
-        {
-            <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
-                @foreach (var guide in guides)
+            <div class="event-head__text">
+                @if (_event.TourName is { } tourName)
                 {
-                    <div class="d-flex align-items-center gap-2">
-                        @if (guide.PhotoUploadFileId is not null)
+                    <div class="event-head__tour">
+                        @if (_event.TourUrlName is { } tourSlug)
                         {
-                            <img src="@MediaUrls.GuidePhoto(guide.PhotoUploadFileId!.Value)"
-                                 alt="@guide.DisplayName" width="40" height="40"
-                                 class="rounded-circle object-fit-cover" />
+                            <a href="@($"/o/{_event.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
                         }
                         else
                         {
-                            <span class="rounded-circle bg-body-tertiary d-inline-flex align-items-center justify-content-center"
-                                  style="width:40px;height:40px;">
-                                <BenIcon Name="user" />
-                            </span>
+                            @tourName
                         }
-                        <div class="small">
-                            <div class="fw-semibold">@guide.DisplayName</div>
-                            <div class="text-secondary">Your guide</div>
-                        </div>
+                        @if (_event.TourRating is { } rating)
+                        {
+                            <text> · @rating.ToString("0.0") ★ (@_event.TourRatingCount)</text>
+                        }
                     </div>
                 }
+                <h1 class="event-head__title">@_event.Title</h1>
+                <div class="event-head__by">
+                    Hosted by
+                    <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
+                </div>
             </div>
-        }
+        </div>
 
         @if (_error is not null)
         {
             <div class="alert alert-danger py-2">@_error</div>
         }
 
-        <div class="card mb-3">
+        @* The facts of the night, stated the way the tour's own page states them. *@
+        <BenFactRail Facts="@Facts" Class="mb-4" />
+
+        @* The point of the page, put where the eye lands rather than under a paragraph of
+           description. Every state of it is one card: coming, may come, cannot come and why, or
+           has never been here before.
+
+           A stranger giving an address is not yet coming — the link we send is what confirms
+           anything, because an address typed into a box proves nothing, and an event that hides
+           its street until you are coming would be protecting nothing if it did. *@
+        <div class="event-act card mb-4">
             <div class="card-body">
-                <dl class="row mb-0">
-                    <dt class="col-sm-3">When</dt>
-                    <dd class="col-sm-9">
-                        @_event.StartDateTime.ToLocalTime().ToDisplayDate()
-                        @if (!_event.IsAllDay)
-                        {
-                            <span>, @_event.StartDateTime.ToLocalTime().ToDisplayTime()</span>
-                            <span>&ndash; @_event.EndDateTime.ToLocalTime().ToDisplayTime()</span>
-                        }
-                    </dd>
-
-                    <dt class="col-sm-3">Where</dt>
-                    <dd class="col-sm-9">
-                        @if (_event.Location.ExactAddress is string address)
-                        {
-                            <span>@address</span>
-                        }
-                        else if (_event.Location.IsExactAddressHidden)
-                        {
-                            @* Said plainly, before anyone commits, so nobody feels tricked into
-                               identifying themselves to find out where they are going. *@
-                            <span>
-                                @(_event.Location.City ?? "Location") @(_event.Location.State)
-                                <span class="d-block text-secondary small">
-                                    The exact address is shared with people who are coming.
-                                </span>
-                            </span>
-                        }
-                        else
-                        {
-                            <span class="text-secondary">@(_event.Location.City ?? "To be announced")</span>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(_event.MeetingUrl) && _event.Flags.HasRsvpd)
-                        {
-                            <span class="d-block mt-1">
-                                <a href="@_event.MeetingUrl" target="_blank" rel="noopener noreferrer">Join online</a>
-                            </span>
-                        }
-                    </dd>
-
-                    <dt class="col-sm-3">Coming</dt>
-                    <dd class="col-sm-9">
-                        @_event.AttendingCount
-                        @if (_event.AttendeeCapacity is int cap)
-                        {
-                            <span class="text-secondary"> of @cap places</span>
-                        }
-                    </dd>
-                </dl>
-            </div>
-        </div>
-
-        @if (!string.IsNullOrWhiteSpace(_event.Description))
-        {
-            @* The description is authored in a rich-text editor, so it IS markup and was being
-               shown as its own source — a visitor read a literal "<p>". Rendered as HTML here and
-               sanitized twice on the way: once when saved, and again by the public endpoint that
-               serves it, which is what makes the rows written before that rule safe. *@
-            <div class="event-description">@((MarkupString)(_event.Description ?? ""))</div>
-        }
-
-        @* Rendered from the server's verdict, never worked out here. *@
-        <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
-            @if (_event.Flags.HasRsvpd)
-            {
-                <span class="badge bg-success">You're coming</span>
-                <button type="button" class="btn btn-secondary" @onclick="CancelAsync" disabled="@(!(!_busy))">I can't make it</button>
-            }
-            else if (_event.Flags.CanRsvp)
-            {
-                <button type="button" class="btn btn-primary" @onclick="RsvpAsync" disabled="@(!(!_busy))">I'm coming</button>
-            }
-            else if (_event.Flags.RsvpBlockedReason is string reason)
-            {
-                <span class="text-secondary">@reason</span>
-            }
-        </div>
-
-        @* Somebody who has never been here can still come. They give an address, we send a link,
-           and clicking it is what actually confirms anything — an email typed into a box proves
-           nothing, and events that hide their address until you are coming would be protecting
-           nothing if it did. *@
-        @if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
-        {
-            <div class="card mt-3">
-                <div class="card-body">
+                @if (_event.Flags.HasRsvpd)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="badge text-bg-success">You're coming</span>
+                        <span class="text-secondary small flex-grow-1">
+                            We'll send you a reminder before the night.
+                        </span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="CancelAsync" disabled="@_busy">I can't make it</button>
+                    </div>
+                }
+                else if (_event.Flags.CanRsvp)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="event-act__ask flex-grow-1">Coming along?</span>
+                        <button type="button" class="btn btn-primary"
+                                @onclick="RsvpAsync" disabled="@_busy">I'm coming</button>
+                    </div>
+                }
+                else if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
+                {
                     @if (_emailSent)
                     {
-                        <h6 class="mb-1">Check your email</h6>
+                        <div class="event-act__ask mb-1">Check your email</div>
                         <p class="text-secondary small mb-0">
                             If that address can come along, there's a link on its way. Click it to
                             confirm — it works once, and it's good for two weeks.
@@ -206,7 +138,7 @@ else
                     }
                     else
                     {
-                        <h6 class="mb-1">Coming along?</h6>
+                        <div class="event-act__ask mb-1">Coming along?</div>
                         <p class="text-secondary small">
                             You don't need an account. Give us an email address and we'll send you a
                             link to confirm — no password to invent.
@@ -229,7 +161,9 @@ else
                                        @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
                             </div>
                             <div class="col-md-3">
-                                <button type="button" class="btn btn-primary" @onclick="RequestAttendanceAsync" disabled="@(!(!_busy && _attendEmail.Contains('@')))">Send me the link</button>
+                                <button type="button" class="btn btn-primary w-100"
+                                        @onclick="RequestAttendanceAsync"
+                                        disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
                             </div>
                         </div>
 
@@ -238,15 +172,117 @@ else
                             coming in one click.
                         </p>
                     }
-                </div>
+                }
+                else if (_event.Flags.RsvpBlockedReason is string reason)
+                {
+                    <span class="text-secondary">@reason</span>
+                }
+                else
+                {
+                    @* Signed out, and the door is shut. Saying nothing here left the page looking
+                       as though the sign-up had failed to load. *@
+                    <span class="text-secondary">
+                        @(_event.Flags.IsFull
+                            ? "This one is full."
+                            : "Sign-ups for this one have closed.")
+                    </span>
+                }
             </div>
+        </div>
+
+        @* Where to stand, given the room it needs. The map is drawn ONLY for a tour date: those
+           coordinates are the tour's own meeting point, exact by construction, while every other
+           event's are deliberately rounded before they leave the server. A rounded point under a
+           precise-looking pin would be a lie the reader has no way to spot. *@
+        <div class="event-meet card mb-4 overflow-hidden">
+            <div class="event-meet__grid @(HasMap ? "event-meet__grid--map" : "")">
+                <div class="event-meet__body">
+                    @* "Where you meet" is a promise about a street corner, and a tour date can
+                       make it. An ordinary event often carries only a town, so it says "Where"
+                       and does not pretend the line under it is a meeting point. *@
+                    <span class="event-label">@(_event.TourName is null ? "Where" : "Where you meet")</span>
+                    @if (_event.Location.ExactAddress is string address)
+                    {
+                        <p class="event-meet__address">@address</p>
+                        @if (HasMap)
+                        {
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-primary btn-sm" id="event-directions"
+                                        @onclick="ShowDirections">
+                                    <BenIcon Name="map" Class="me-1" />Directions
+                                </button>
+                                <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+                                   href="@AppleMapsUrl">Open in Maps</a>
+                            </div>
+                        }
+                    }
+                    else if (_event.Location.IsExactAddressHidden)
+                    {
+                        @* Said plainly, before anyone commits, so nobody feels tricked into
+                           identifying themselves to find out where they are going. *@
+                        <p class="event-meet__address">
+                            @(_event.Location.City ?? "Location") @(_event.Location.State)
+                        </p>
+                        <p class="text-secondary small mb-0">
+                            The exact address is shared with people who are coming.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="event-meet__address text-secondary">
+                            @(_event.Location.City ?? "To be announced")
+                        </p>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_event.MeetingUrl) && _event.Flags.HasRsvpd)
+                    {
+                        <span class="event-label">Online</span>
+                        <p class="mb-0">
+                            <a href="@_event.MeetingUrl" target="_blank" rel="noopener noreferrer">Join online</a>
+                        </p>
+                    }
+                </div>
+
+                @if (HasMap)
+                {
+                    @* A pixel height, not a percentage: the map sizes itself once at start-up and
+                       a percentage against a stretched grid cell is not a number it can use. *@
+                    <div class="event-meet__map">
+                        <BenMap Pins="@_mapPins" Height="280px" FitToPins="false"
+                                CenterLatitude="@((double)_event.Location.ApproximateLatitude!.Value)"
+                                CenterLongitude="@((double)_event.Location.ApproximateLongitude!.Value)"
+                                Zoom="15" />
+                    </div>
+                }
+            </div>
+        </div>
+
+        <DirectionsMapModal @ref="_directions" />
+
+        @if (_event.Guides is { Count: > 0 } guides)
+        {
+            @* Ben asked for the guide's name and face to reach a guest "for safety" — so it is on
+               the page as well as in the email, for anybody who never opens the email. *@
+            <BenSectionHeading Text="Who you'll be walking with" />
+            <BenGuideStrip Guides="@guides" Role="Your guide" Class="mb-4" />
         }
+
+        @if (!string.IsNullOrWhiteSpace(_event.Description))
+        {
+            @* The description is authored in a rich-text editor, so it IS markup and was being
+               shown as its own source — a visitor read a literal "<p>". Rendered as HTML here and
+               sanitized twice on the way: once when saved, and again by the public endpoint that
+               serves it, which is what makes the rows written before that rule safe. *@
+            <BenSectionHeading Text="About the night" />
+            <div class="event-description mb-4">@((MarkupString)(_event.Description ?? ""))</div>
+        }
+
 
         @* ── Evidence from the night (item 111) ────────────────────────────── *@
         @if (_acceptedEvidence.Items.Count > 0)
         {
-            <div class="card mt-3">
-                <div class="card-header"><strong>Evidence from attendees</strong></div>
+            <BenSectionHeading Text="What people caught" />
+            <div class="card mb-4">
                 <div class="card-body">
                     @foreach (var ev in _acceptedEvidence.Items)
                     {
@@ -269,8 +305,8 @@ else
 
         @if (_isAuthenticated && _event is not null)
         {
-            <div class="card mt-3">
-                <div class="card-header"><strong>Were you there? Share what you captured</strong></div>
+            <BenSectionHeading Text="Were you there?" />
+            <div class="card mb-4">
                 <div class="card-body">
                     @* The bargain, stated BEFORE the button — item 87's rule is that evidence at
                        an open investigation is public, and nobody should learn that after
@@ -354,6 +390,94 @@ else
     private PublicEventRecord? _event;
     private bool _loading = true, _busy, _isAuthenticated;
     private string? _error;
+
+    private DirectionsMapModal? _directions;
+    private IReadOnlyList<BenMapPin> _mapPins = [];
+
+    /// <summary>
+    /// Whether a map may be drawn for this event.
+    /// </summary>
+    /// <remarks>
+    /// Only for a tour date. Those coordinates are the tour's own start address, exact by
+    /// construction and already printed in full a line above; every other event's are rounded
+    /// before they leave the server, on purpose. A rounded point under a precise-looking pin would
+    /// claim an accuracy the reader has no way to check.
+    /// </remarks>
+    private bool HasMap => _event is
+    {
+        TourName: not null,
+        Location: { ApproximateLatitude: not null, ApproximateLongitude: not null, ExactAddress: not null },
+    };
+
+    /// <summary>The meeting point handed to whatever the reader navigates with.</summary>
+    private string AppleMapsUrl => _event?.Location is
+        { ApproximateLatitude: { } lat, ApproximateLongitude: { } lon }
+        ? $"https://maps.apple.com/?ll={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},"
+          + $"{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+          + $"&q={Uri.EscapeDataString(_event.TourName ?? _event.Title)}"
+        : "#";
+
+    private void ShowDirections()
+    {
+        if (_event?.Location is not { ApproximateLatitude: { } lat, ApproximateLongitude: { } lon }) return;
+        if (_event.Location.ExactAddress is not { } address) return;
+        _directions?.Show(address, (double)lat, (double)lon);
+    }
+
+    /// <summary>This event's times in the reader's own clock, in one place.</summary>
+    private static DateTime Local(DateTime utc) => utc.ToLocalTime();
+
+    /// <summary>
+    /// The rail under the banner: when it starts, how long it runs, and how full it is. Built here
+    /// so the order is one list to read, and shared with the tour's page through BenFactRail.
+    /// </summary>
+    private IReadOnlyList<BenFactItem> Facts
+    {
+        get
+        {
+            if (_event is null) return [];
+
+            var facts = new List<BenFactItem>();
+            var start = Local(_event.StartDateTime);
+
+            facts.Add(_event.IsAllDay
+                ? new BenFactItem("When", start.ToString("ddd MM/dd"), "all day", Emphasis: true)
+                : new BenFactItem("Starts", start.ToString("ddd MM/dd"),
+                      start.ToString("h:mm tt"), Emphasis: true));
+
+            if (!_event.IsAllDay)
+            {
+                var minutes = (int)(_event.EndDateTime - _event.StartDateTime).TotalMinutes;
+                if (minutes > 0)
+                    facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+            }
+
+            facts.Add(_event.AttendeeCapacity is { } cap
+                ? new BenFactItem("Coming", $"{_event.AttendingCount} of {cap}",
+                      _event.Flags.IsFull ? "no spaces left" : $"{Math.Max(0, cap - _event.AttendingCount)} still open")
+                : new BenFactItem("Coming", _event.AttendingCount.ToString(),
+                      _event.AttendingCount == 1 ? "person" : "people"));
+
+            if (_event.RsvpClosesAt is { } closes)
+                facts.Add(new BenFactItem("Sign-ups close", Local(closes).ToString("ddd MM/dd"),
+                    Local(closes).ToString("h:mm tt")));
+
+            return facts;
+        }
+    }
+
+    /// <summary>A length short enough to be a figure in the rail.</summary>
+    private static string Duration(int minutes)
+    {
+        var hours = minutes / 60;
+        var rest = minutes % 60;
+        return hours switch
+        {
+            0 => $"{rest} min",
+            _ when rest == 0 => $"{hours} hr",
+            _ => $"{hours} hr {rest} min",
+        };
+    }
 
     private string _attendEmail = "", _attendName = "";
     private bool _emailSent;
@@ -460,6 +584,16 @@ else
 
         if (_event is not null)
         {
+            // Only a tour date earns a pin — see HasMap for why.
+            _mapPins = HasMap
+                ? [new BenMapPin(
+                       (double)_event.Location.ApproximateLatitude!.Value,
+                       (double)_event.Location.ApproximateLongitude!.Value,
+                       Title: _event.TourName ?? _event.Title,
+                       Subtitle: "Where you meet",
+                       Glyph: "🚶")]
+                : [];
+
             _acceptedEvidence = await AdminClient.GetAcceptedEventEvidenceAsync(_event.Id);
             if (_isAuthenticated)
                 _myEvidence = await AdminClient.GetMyEventEvidenceAsync(_event.Id);
