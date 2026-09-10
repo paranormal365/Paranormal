@@ -544,10 +544,27 @@ if (corsOrigins.Length == 0)
 else
     Log.Information("CORS: allowing browser origins {Origins}", (object)corsOrigins);
 
-// Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
-Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
-    builder.Configuration["Geocodio:ApiKey"] ?? string.Empty,
-    builder.Configuration["Geocodio:BaseUrl"]);
+// Geocoding through the Apple Maps Server API (item 230), signed with the same Maps key the
+// website's maps use, read from a FILE named in configuration and never from configuration
+// itself. No path means "not configured": every lookup answers nothing, which the address forms
+// already explain. A malformed key throws here, at startup, as a deployment mistake should.
+{
+    var maps = builder.Configuration.GetSection("Maps");
+    var keyPath = maps["PrivateKeyPath"];
+    var teamId = maps["TeamId"]; var keyId = maps["KeyId"];
+    if (!string.IsNullOrWhiteSpace(keyPath) && !string.IsNullOrWhiteSpace(teamId) && !string.IsNullOrWhiteSpace(keyId))
+    {
+        if (!File.Exists(keyPath))
+            throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {keyPath}");
+        Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
+            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(teamId, keyId, File.ReadAllText(keyPath), maps["BaseUrl"]));
+        Log.Information("Geocoding: Apple Maps Server API, key {KeyId}", keyId);
+    }
+    else
+    {
+        Log.Warning("Geocoding: no Maps key configured; address lookups will answer nothing");
+    }
+}
 
 app.UseExceptionHandler(handler =>
 {

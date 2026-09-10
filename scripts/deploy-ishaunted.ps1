@@ -97,7 +97,7 @@ function Write-Detail ([string]$m) { Write-Host "   $m" }
 function Write-Warn   ([string]$m) { Write-Host "   WARNING: $m" -ForegroundColor Yellow }
 
 # ---- JSON helpers -----------------------------------------------------------
-# Configuration paths use the .NET colon notation ("Geocodio:ApiKey") so they read the same here as
+# Configuration paths use the .NET colon notation ("Maps:KeyId") so they read the same here as
 # they do in the C# that consumes them.
 
 function Read-JsonFile ([string]$path) {
@@ -473,12 +473,15 @@ if ($Apps -contains 'webapi') {
     Set-SerilogConnectionString $cfg $sqlConn
 
     # Carried from the secrets file. Each of these turns a feature off SILENTLY when absent, which
-    # is worse than failing loudly: geocoding returns nothing, and Entra sign-in disappears from
-    # the UI because Program.cs only wires it up when ClientId parses as a GUID.
+    # is worse than failing loudly: Entra sign-in disappears from the UI because Program.cs only
+    # wires it up when ClientId parses as a GUID.
     $carry = [ordered]@{
         'TelerikKey'                      = (Get-JsonValue $secrets 'TelerikKey')
-        'Geocodio:ApiKey'                 = (Get-JsonValue $secrets 'GeocodioApiKey')
-        'Geocodio:BaseUrl'                = (Get-JsonValue $secrets 'GeocodioBaseUrl')
+        # Geocoding through the Apple Maps Server API (item 230): the SAME Maps key the website
+        # signs MapKit tokens with. Absent, address lookups answer nothing - the forms say so.
+        'Maps:TeamId'                     = (Get-JsonValue $secrets 'AppleTeamId')
+        'Maps:KeyId'                      = (Get-JsonValue $secrets 'AppleMapsKeyId')
+        'Maps:PrivateKeyPath'             = (Get-JsonValue $secrets 'AppleMapsKeyPath')
         'AzureAd:TenantId'                = (Get-JsonValue $secrets 'AzureAd:TenantId')
         'AzureAd:ClientId'                = (Get-JsonValue $secrets 'AzureAd:ClientId')
         # No Audience key. Program.cs derives ValidAudiences from ClientId as api://<id> and <id>,
