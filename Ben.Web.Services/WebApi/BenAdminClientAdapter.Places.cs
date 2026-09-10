@@ -217,15 +217,6 @@ public sealed partial class BenAdminClientAdapter
             $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
             new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
 
-    // ── Directions ────────────────────────────────────────────────────────────
-    public Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default)
-    {
-        var fLat = fromLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var fLon = fromLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var tLat = toLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var tLon = toLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        return _api.GetAsync<DirectionsResult>($"/api/directions?fromLat={fLat}&fromLon={fLon}&toLat={tLat}&toLon={tLon}", token);
-    }
 
     /// <inheritdoc />
     public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)

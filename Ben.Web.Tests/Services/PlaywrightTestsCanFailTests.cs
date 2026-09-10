@@ -65,7 +65,6 @@ public sealed class PlaywrightTestsCanFailTests
         ["InvestigationPanelTests.cs"]       = 5,
         ["NavigationTests.cs"]               = 4,
         ["InvestigationReportTests.cs"]      = 4,
-        ["HomeMapTests.cs"]                  = 4,
         ["PublishLeakWarningTests.cs"]       = 3,
         ["OrganizationTests.cs"]             = 3,
         ["CaseMessageBoardTests.cs"]         = 3,

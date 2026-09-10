@@ -11492,3 +11492,31 @@ An account cannot exist without a display name and a permanent, unique @name —
 validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
 — so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
 
+---
+
+## 228. Apple Maps (MapKit JS) instead of OpenStreetMap tiles (BUILT 2026-09-10)
+
+Ben asked whether the website could use Apple Maps instead of OpenStreetMap, and whether that costs
+money. It does not: MapKit JS comes with the Developer Program membership (250,000 map views and
+25,000 service calls a day, and a request to Apple rather than a bill past that). What the site
+uses today is OpenStreetMap's public tile server, whose usage policy tolerates small sites and
+throttles without notice, and the public OSRM demo server over plain http for driving directions.
+
+**Not a URL swap.** Apple serves no raster tiles, so `TelerikMap`'s tile layer cannot point at it.
+The four map components are rebuilt on a `Kit/BenMap` wrapper over MapKit JS, one component per
+phase behind a provider switch, with the Telerik path removed at the end. Directions move to
+MapKit's own service; geocoding stays on Geocodio for now.
+
+Plan of record: `README-apple-mapkit-228.md` on `feature/apple-mapkit-228`. Portal work needed
+first: a **Maps ID** and a key with the Maps service enabled — not a Services ID, which belongs to
+Sign in with Apple (item 227).
+
+### Built 2026-09-10, all six phases
+
+Every map on the website is Apple MapKit JS through `Kit/Maps/BenMap`, authorised by a
+thirty-minute token the website signs with the key for Maps ID `maps.com.ishaunted`. The Telerik
+map, the OpenStreetMap tile server, the OSRM demo server and the modal's metered Geocodio lookup
+are gone; a guard test refuses their return. Details, verification and the two wrapper races
+found along the way: `README-apple-mapkit-228.md`. Left open: geocoding on the Apple Maps Server
+API, a separate decision.
+

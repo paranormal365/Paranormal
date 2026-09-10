@@ -779,7 +779,7 @@ Contains three types:
 
 ### `AddressMapPlayer.razor`
 
-Interactive map component wrapping `TelerikMap` with Tile (OpenStreetMap), Shape (GeoJSON polygon region), and Marker layers.
+Interactive map component over `Kit/Maps/BenMap` (Apple MapKit JS since item 228, 2026-09-10): a marker with the chosen colour and icon, and a region circle of a real radius.
 
 | Parameter | Type | Description |
 |---|---|---|

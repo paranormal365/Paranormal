@@ -140,6 +140,25 @@ builder.Services.AddSingleton(sp =>
 // different scopes. See the class for why the token travels as an opaque code.
 builder.Services.AddSingleton<Ben.Web.Website.Services.AppleSignInHandoff>();
 
+// Apple Maps (item 228). The private key is read from a FILE named in configuration, never from
+// configuration itself: the repository is public and the development settings sit beside it.
+// A missing or empty path means "not configured": every map on the site then says it could not
+// be loaded, which is the honest state of a deployment with no key. A malformed key, by contrast,
+// throws at startup — that is a deployment mistake and should stop the deploy.
+builder.Services.AddSingleton(sp =>
+{
+    var section = sp.GetRequiredService<IConfiguration>().GetSection("Maps");
+    var path = section["PrivateKeyPath"];
+    var pem = string.IsNullOrWhiteSpace(path) ? string.Empty
+            : File.Exists(path) ? File.ReadAllText(path)
+            : throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {path}");
+    return new Ben.Web.Website.Services.MapKitSigningOptions(
+        section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
+});
+builder.Services.AddSingleton<Ben.Web.Website.Services.MapKitTokenService>();
+builder.Services.AddSingleton(sp => new Ben.Web.Website.Library.Kit.Maps.MapsOptions(
+    sp.GetRequiredService<Ben.Web.Website.Services.MapKitTokenService>().IsConfigured));
+
 // The client itself is shared with the desktop app. It adopts through IExternalSignInAdopter,
 // which WebApiAuthService implements, so a website Apple sign-in lands exactly where a password
 // one does.
@@ -490,6 +509,20 @@ app.MapGet("/.well-known/apple-developer-domain-association.txt", (IConfiguratio
     return string.IsNullOrWhiteSpace(association)
         ? Results.NotFound()
         : Results.Text(association, "text/plain");
+}).AllowAnonymous();
+
+// The token MapKit JS presents to Apple (item 228). Anonymous, because the map on the home page
+// is; same-origin, because the token names the origin it was minted for and Apple refuses it
+// anywhere else. 404 when unconfigured, for the same reason as the files above: a page that
+// fetches this and gets nothing useful should fail the way an absent feature fails.
+app.MapGet(Ben.Web.Website.Library.Kit.Maps.MapsOptions.TokenPath,
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens) =>
+{
+    if (!tokens.IsConfigured) return Results.NotFound();
+
+    var origin = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    ctx.Response.Headers.CacheControl = "no-store";
+    return Results.Text(tokens.Issue(origin, DateTimeOffset.UtcNow), "text/plain");
 }).AllowAnonymous();
 
 app.MapGet("/.well-known/apple-app-site-association", (IConfiguration config) =>
