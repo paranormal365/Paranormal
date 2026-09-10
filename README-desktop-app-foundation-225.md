@@ -40,7 +40,7 @@ server into every app that ships it.
 | 3 | Session core: tokens, refresh, the sign-in state machine | **done** — `acb6509b` |
 | 4 | `Ben.Desktop.App.Library` — the `Kit/` controls and view models | **done** — `e003cd99` |
 | 5 | `Ben.Desktop.App.UI` — shell and the Identity sign-in screens | **done** — `e003cd99` |
-| 6 | Microsoft Entra (MSAL) and Sign in with Apple | not started |
+| 6 | Microsoft and Apple sign-in, and the account-merge door | **done** — `d071d993` |
 | 7 | Solution filter for CI, a macOS build job, docs | **done** — `e003cd99` |
 
 ## Verified, not assumed
@@ -101,6 +101,37 @@ dotnet build Ben.Server.slnf && dotnet test Ben.Server.slnf
 `dotnet build Ben.slnx` now fails on any machine without the MAUI workload (NETSDK1147). That is
 checked, not assumed, and it is why the filter exists.
 
+## External sign-in
+
+**Microsoft is not one of our sessions. Apple is.** A Microsoft sign-in leaves the client holding a
+token Microsoft issued, which the API validates under its second scheme, so it renews at Microsoft
+rather than at our own endpoint. Apple's endpoint signs the person in under our scheme and answers
+a body identical to what a password sign-in returns.
+
+**MSAL was considered and dropped.** It has no Mac Catalyst asset — Catalyst resolves its plain
+desktop build — so it would mean a loopback listener and a network-server sandbox entitlement, and
+would still only serve Windows properly. One authorization-code flow with proof key, behind a small
+browser seam, covers both. Everything either side of the browser is ordinary testable code.
+
+### The duplicate-account gap Ben spotted
+
+Sign-in only joins an external identity to an existing account when the provider's verified email
+happens to equal one. Two ordinary situations defeat that: Apple's Hide My Email relay, whose
+address never matches anything here, and an Apple ID or work Microsoft account simply being at a
+different address from the one somebody signed up with. Both ended at "create an account" and
+quietly produced a **second** account holding none of their cases, groups or history.
+
+- Microsoft already had a link endpoint taking an arbitrary email and password.
+- **Apple had no such door**, so `api/auth/apple/link` is new. It must issue a session, because an
+  Apple identity token is not a credential the API accepts on ordinary requests. It honours lockout,
+  since it takes a password from an unauthenticated caller.
+- The client now offers "I already have an account" for the **whole** of that screen, not only when
+  the server spots a matching address — the server can only spot one in the case that was never
+  broken.
+
+Where else this gap lives is recorded as items 226 and 227: the iPhone app has it, the website's
+Microsoft flow does not, and the website has no Apple button at all yet.
+
 ## Found only by running it
 
 Four things that a clean build said nothing about:
@@ -117,6 +148,12 @@ Four things that a clean build said nothing about:
    6.0.0 transitively, both with known HIGH severity advisories. Pinned forward; the macOS CI job
    re-checks so a Telerik upgrade cannot quietly reintroduce them.
 
+**Neither interactive sign-in has been run.** Nothing in this branch should be read as claiming
+otherwise. What was checked is that both Microsoft endpoints refuse an unauthenticated caller, that
+both Apple doors refuse a token Apple did not sign, and that a forged redirect is rejected — the
+last proved by deleting the state comparison and watching the test fail. The round trip itself needs
+a tenant, a browser and an Apple App ID.
+
 **Still unverified on the Mac:** whether `SecureStorage` actually persists across a relaunch on an
 ad-hoc-signed Catalyst build. The iOS app hit exactly this — an unsigned build cannot use the
 simulator Keychain and persistence fails silently — so assume it needs a signing identity until
@@ -127,7 +164,9 @@ somebody has watched a session survive a restart.
 Nothing below can be checked on this Mac, and none of it should be claimed until it has been:
 
 - `net10.0-windows10.0.19041.0` restores and builds at all.
-- The WAM broker sign-in flow and its `ms-appx-web://` redirect URI.
+- Whether MAUI's WebAuthenticator can receive the callback at all in an **unpackaged** Windows app.
+  It wants the operating system to route a registered protocol back to the app, which normally means
+  packaging. Expect to either package the Windows head or use a loopback redirect there instead.
 - `SecureStorage` on an unpackaged Windows app.
 - Telerik UI for .NET MAUI rendering on WinUI.
 - Whether `WindowsPackageType=None` is the right call, or whether it should ship as MSIX.
@@ -149,11 +188,19 @@ apply — one container, one signed-in person.
 
 ## Follow-ups this work surfaced
 
-1. **There is no endpoint that exchanges an Entra token for an Identity session.** The website gets
-   away with it through its OIDC cookie. A desktop client has no cookie, so it either keeps using
-   the Entra JWT directly or the server grows an `api/auth/entra/token`.
-2. **There is no sign-out or revoke endpoint, and no device registry, for any client.** Sign-out is
+1. **There is no endpoint that exchanges a Microsoft token for an Identity session.** The desktop
+   client uses the Microsoft token directly, which works because the API accepts both schemes. An
+   `api/auth/entra/token` would let a Microsoft sign-in become an ordinary session and is worth
+   considering, but nothing needs it today.
+2. **`EntraAuthController.Link` does not honour lockout.** It uses a bare password check, so guesses
+   against an unauthenticated door are free. The new Apple link uses the lockout-honouring form; the
+   Microsoft one should match. Recorded in item 226.
+3. **Portal work, before either provider can actually be used.** Microsoft: a "Mobile and desktop
+   applications" platform carrying `msauth.com.ishaunted.desktop://auth`, with public client flows
+   enabled. Apple: an App ID for `com.ishaunted.desktop` with the Sign in with Apple capability.
+4. **There is no sign-out or revoke endpoint, and no device registry, for any client.** Sign-out is
    local everywhere. "Sign out my other machine" is not currently possible for anyone.
-3. **Central package management.** Two Telerik product lines (Blazor 14.1.0 and MAUI) now have to
+5. **Central package management.** Two Telerik product lines (Blazor 14.1.0 and MAUI) now have to
    move together by hand, and there is no `Directory.Packages.props`.
-4. **`Apple:ClientIds` needs the desktop bundle id** before Sign in with Apple can work there.
+6. **A Services ID** will be needed in `Apple:ClientIds` if the website ever offers the button —
+   item 227. The desktop bundle id is already there.

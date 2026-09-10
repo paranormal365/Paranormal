@@ -11295,9 +11295,37 @@ Shipped on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the e
 (`346753e9`), the session core (`acb6509b`), and the two MAUI projects with CI (`e003cd99`).
 103 client tests, all passing against a live API with nothing skipped; suite 7,790.
 
-**Still to build:** Entra through MSAL, and Sign in with Apple on the Mac head. Also unverified:
-whether `SecureStorage` persists across a relaunch on an ad-hoc-signed Catalyst build — the iOS app
-hit exactly that and it fails silently, so assume it needs a signing identity.
+### External sign-in (2026-09-10)
+
+Both providers, plus an account-merge door that was missing.
+
+**Microsoft is not one of our sessions; Apple is.** A Microsoft sign-in leaves the client holding a
+token Microsoft issued, which the API validates under its second scheme — so it renews at Microsoft,
+not at `/refresh`, which has never seen it and would refuse it about an hour in. Apple's endpoint
+signs the person in under our own scheme and answers a body identical to `/login`'s, so it is an
+ordinary session.
+
+**MSAL was dropped.** It has no Mac Catalyst asset — Catalyst resolves its plain desktop build — so
+it would need a loopback listener and a `network.server` sandbox entitlement, and would still only
+serve Windows properly. One authorization-code flow with PKCE behind a small browser seam covers
+both, and everything either side of the browser is testable without a browser.
+
+**The duplicate-account gap.** Sign-in only joins an external identity to an existing account when
+the provider's verified email happens to equal one. Apple's Hide My Email relay never will, and an
+Apple ID or work Microsoft account is often simply at a different address from the one somebody
+signed up with. All of those ended at "create an account" and quietly produced a SECOND account
+holding none of their cases, groups or history. Microsoft already had a link endpoint taking an
+arbitrary email and password; Apple had no door at all, so `api/auth/apple/link` is new — and it
+must issue a session, because an Apple identity token is not a credential this API accepts on
+ordinary requests. It honours lockout, unlike the Entra link's bare password check.
+
+The client now offers "I already have an account" for the whole of that screen, not only after the
+server spots a matching address — the server can only spot one in the case that was never broken.
+
+**Still unverified:** neither interactive round trip has been run; that needs a tenant, a browser
+and an Apple App ID, plus portal work. Nor is it known whether `SecureStorage` persists across a
+relaunch on an ad-hoc-signed Catalyst build — the iOS app hit exactly that and it fails silently, so
+assume it needs a signing identity.
 
 **Follow-ups this surfaced, none of them this item's job:**
 
@@ -11307,3 +11335,91 @@ hit exactly that and it fails silently, so assume it needs a signing identity.
    "sign out my other machine" is not possible for anybody today.
 3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
 4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
+
+---
+
+## 226. The iPhone app can still be given a second account by Sign in with Apple (OPEN)
+
+Found 2026-09-10 while building the desktop client's external sign-in (item 225). Ben asked whether
+the same gap existed elsewhere; it does, on iOS.
+
+**The defect.** `api/auth/apple` joins an Apple identity to an existing account only when Apple's
+own VERIFIED email equals one already here. Two ordinary situations defeat that:
+
+- **Hide My Email.** Apple hands over `something@privaterelay.appleid.com`, which will never equal
+  an address anybody signed up with.
+- **A different address.** Plenty of people have an Apple ID at one address and an account here at
+  another.
+
+Both fall through to "choose a display name and a handle", which creates a **second account**
+holding none of their cases, groups, equipment or history — and nothing offers to join the two.
+Worse than it sounds because it is silent: the person is signed in, everything works, and it is
+simply not their account.
+
+**Already fixed for the desktop client**, and the server half is done: `POST api/auth/apple/link`
+takes the Apple identity token plus the email and password of the account being claimed, adds the
+external login and issues a session. It honours lockout (`CheckPasswordSignInAsync` with
+`lockoutOnFailure`), because it takes a password from an unauthenticated caller.
+
+**What iOS needs:** on the needs-profile screen, offer "I already have an account" alongside
+creating one, and call the new endpoint. `BenKit/Sources/BenKit/Auth/AppleSignIn.swift` handles the
+409 today and only ever routes to the create path.
+
+**Checked and NOT affected:**
+
+- **The website's Microsoft flow.** `Ben.Web.Website/Components/Pages/Entra/CompleteProfile.razor`
+  already offers "I already have an account — link it" as a first-class choice with an arbitrary
+  address, which is exactly the right shape.
+- **The website's Apple flow.** There isn't one — the site has never offered the button, so there is
+  nothing to fix.
+
+**Worth doing at the same time:** `EntraAuthController.Link` uses `CheckPasswordAsync`, which does
+not count failed attempts. It is an unauthenticated door that takes a password, so guesses against
+it are free. The new Apple link uses the lockout-honouring form; the Entra one should match.
+
+---
+
+## 227. Sign in with Apple on the website (OPEN)
+
+Ben, 2026-09-10, alongside item 226: the site should offer a "Sign in with Apple" button that can
+either create a new account or link one that already exists — the same two doors the Microsoft
+button already has at `Entra/CompleteProfile.razor`.
+
+Nothing here is broken today; the website has simply never offered the button. The server work is
+mostly done: `api/auth/apple` creates or signs in, and `api/auth/apple/link` (added under item 225)
+claims an existing account with its email and password. What is missing is the web half of Apple's
+own flow, and it is **not** the flow the phone and desktop apps use.
+
+**The web flow differs in ways that matter.**
+
+1. **A Services ID, not a bundle id.** Apple's web sign-in identifies the caller by a Services ID
+   configured against the App ID. That value becomes the token's audience, so it has to be added to
+   `Apple:ClientIds` in `Ben.Data.WebApi/appsettings.json` — the comment there has anticipated this
+   from the start. `com.ishaunted.ios` and `com.ishaunted.desktop` will not do.
+
+2. **No native sheet.** The browser is redirected to Apple, and Apple answers with a `form_post`
+   back to a registered `https` URL — so this needs a real endpoint on `Ben.Web.Website` that
+   accepts a POST, not a Blazor page callback.
+
+3. **Check whether a client secret is needed before designing around one.** Apple's web flow can
+   return the identity token directly in the form post when `id_token` is part of the requested
+   response type, which is all our API needs. Exchanging the authorization code at Apple's token
+   endpoint instead requires a client secret that is itself a JWT signed with a downloaded `.p8`
+   key and expires within six months — an operational burden worth avoiding if the first option
+   works. **Verify against Apple's current documentation rather than either assumption.**
+
+4. **No localhost.** Apple refuses non-`https` redirect URLs, so this cannot be exercised on
+   `127.0.0.1:5078` the way everything else here is. Expect to need the UAT host, and budget for
+   that being the only place it can be tested.
+
+5. **The name arrives once, in the form post.** Apple includes it in a `user` field on the FIRST
+   authorization only and never again — same rule as the native flow, same consequence for getting
+   it wrong: the account ends up named whatever we invented.
+
+**The two doors, once the token is in hand,** are the same ones the desktop client now has, and the
+lesson from item 226 applies directly: offer "I already have an account" for the whole of that
+screen, not only when Apple's address happens to match one. A Hide My Email relay address never
+matches, and that is exactly the case that silently produces a second account.
+
+Do this alongside item 226 — they share the link endpoint, the one-shot-name rule and the
+account-merge screen, and doing them together means designing that screen once.
