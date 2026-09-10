@@ -113,15 +113,4 @@ public class MapKitTokenServiceTests
             new MapKitTokenService(new MapKitSigningOptions("T", "K", "not a key at all")));
         Assert.Contains("PKCS#8 EC private key", ex2.Message);
     }
-
-    /// <summary>The provider switch never hands a page a map that cannot initialise.</summary>
-    [Theory]
-    [InlineData(Ben.Web.Website.Library.Kit.Maps.MapProvider.Apple,   true,  Ben.Web.Website.Library.Kit.Maps.MapProvider.Apple)]
-    [InlineData(Ben.Web.Website.Library.Kit.Maps.MapProvider.Apple,   false, Ben.Web.Website.Library.Kit.Maps.MapProvider.Telerik)]
-    [InlineData(Ben.Web.Website.Library.Kit.Maps.MapProvider.Telerik, true,  Ben.Web.Website.Library.Kit.Maps.MapProvider.Telerik)]
-    public void AppleIsUsedOnlyWhenChosenAndConfigured(
-        Ben.Web.Website.Library.Kit.Maps.MapProvider chosen, bool configured, Ben.Web.Website.Library.Kit.Maps.MapProvider expected)
-    {
-        Assert.Equal(expected, new Ben.Web.Website.Library.Kit.Maps.MapsOptions(chosen, configured).Effective);
-    }
 }

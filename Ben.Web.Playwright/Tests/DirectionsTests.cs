@@ -45,10 +45,23 @@ public class DirectionsTests : BenTestBase
             for (let i = 0; i < 40 && !mod.describe(id); i++) await new Promise(r => setTimeout(r, 250));
             const r = await mod.route(id, { originAddress: 'Nashville, TN', originLatitude: null, originLongitude: null,
                                             destinationLatitude: 36.5893, destinationLongitude: -87.0625 });
-            const after = mod.describe(id).overlays;
-            mod.clearRoute(id);
             return { DistanceMeters: r.distanceMeters, DurationSeconds: r.durationSeconds, Steps: r.steps.length,
-                     Error: r.error, OverlaysAfter: after, OverlaysCleared: mod.describe(id).overlays };
+                     Error: r.error, OverlaysAfter: mod.describe(id).overlays, OverlaysCleared: -1 };
+        }", MapModule);
+
+        // Opt-in proof for a reviewer: BEN_MAP_SHOT=/some/dir writes the drawn route as a PNG.
+        if (Environment.GetEnvironmentVariable("BEN_MAP_SHOT") is { Length: > 0 } dir)
+        {
+            await Page.WaitForTimeoutAsync(4_000);   // tiles and the framing animation
+            Directory.CreateDirectory(dir);
+            await map.ScreenshotAsync(new() { Path = Path.Combine(dir, "directions-route.png") });
+        }
+
+        result.OverlaysCleared = await Page.EvaluateAsync<int>(@"async (path) => {
+            const mod = await import(path);
+            const id = document.querySelector('.ben-map').id;
+            mod.clearRoute(id);
+            return mod.describe(id).overlays;
         }", MapModule);
 
         Assert.That(result.Error, Is.Null, "the provider should find a route from Nashville to the cave");

@@ -10,23 +10,15 @@ namespace Ben.Web.Tests.Website;
 /// Before this, four components each carried their own tile URL, marker template and resize
 /// plumbing, and the second, third and fourth were copies of the first with the names changed.
 /// Swapping the provider meant swapping it four times. <c>Kit/Maps/</c> is the only folder that
-/// may mention MapKit JS or the OpenStreetMap tile server; a page that wants a map takes a
-/// <c>BenMap</c>. Matched on content, not on one spelling, because a guard that reads one file
-/// name is defeated by a rename (see the source-scan-guard lesson).
+/// may mention MapKit JS; the Telerik map and the OpenStreetMap tile server are gone from the
+/// site altogether and may come back nowhere. A page that wants a map takes a <c>BenMap</c>.
+/// Matched on content, not on one spelling, because a guard that reads one file name is
+/// defeated by a rename (see the source-scan-guard lesson).
 /// </remarks>
 public class MapProviderGuardTests
 {
-    private static readonly Regex ProviderMention = new(
-        @"mapkit\.|apple-mapkit|tile\.openstreetmap\.org|<TelerikMap\b",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    /// <summary>
-    /// Components still on the Telerik path, one per remaining phase of item 228. Each line goes
-    /// when its phase lands; the test then refuses a new one.
-    /// </summary>
-    private static readonly HashSet<string> StillCrossing = new(StringComparer.Ordinal)
-    {
-    };
+    private static readonly Regex AppleMention = new(@"mapkit\.|apple-mapkit", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex RetiredMention = new(@"tile\.openstreetmap\.org|<TelerikMap\b|MapLayersType\.", RegexOptions.Compiled);
 
     /// <summary>The signer that gives MapKit JS its token. About the provider by definition, and not a map.</summary>
     private static readonly HashSet<string> Allowed = new(StringComparer.Ordinal)
@@ -42,11 +34,9 @@ public class MapProviderGuardTests
         return dir ?? throw new InvalidOperationException("repo root not found");
     }
 
-    [Fact]
-    public void OnlyKitMapsKnowsTheMapProvider()
+    private static IEnumerable<(string Rel, string Text)> SiteSources()
     {
         var root = RepoRoot();
-        var offenders = new List<string>();
         foreach (var project in new[] { "Ben.Web.Website.Library", "Ben.Web.Website" })
         {
             var dir = new DirectoryInfo(Path.Combine(root.FullName, project));
@@ -55,21 +45,29 @@ public class MapProviderGuardTests
                 if (file.Extension is not (".razor" or ".js" or ".cs")) continue;
                 var rel = Path.GetRelativePath(root.FullName, file.FullName).Replace('\\', '/');
                 if (rel.Contains("/bin/") || rel.Contains("/obj/") || rel.Contains("/wwwroot/lib/")) continue;
-                if (rel.StartsWith("Ben.Web.Website.Library/Kit/Maps/", StringComparison.Ordinal)) continue;
-                if (StillCrossing.Contains(rel) || Allowed.Contains(rel)) continue;
-                if (ProviderMention.IsMatch(File.ReadAllText(file.FullName))) offenders.Add(rel);
+                yield return (rel, File.ReadAllText(file.FullName));
             }
         }
-        Assert.True(offenders.Count == 0,
-            "These files mention a map provider directly; they should take a BenMap instead:\n  " + string.Join("\n  ", offenders));
     }
 
-    /// <summary>The allow-list only shrinks. A file on it that no longer exists is a line to delete.</summary>
     [Fact]
-    public void TheCrossingListNamesOnlyFilesThatStillExist()
+    public void OnlyKitMapsKnowsTheMapProvider()
     {
-        var root = RepoRoot();
-        var stale = StillCrossing.Where(rel => !File.Exists(Path.Combine(root.FullName, rel))).ToList();
-        Assert.True(stale.Count == 0, "Remove from StillCrossing:\n  " + string.Join("\n  ", stale));
+        var offenders = SiteSources()
+            .Where(f => !f.Rel.StartsWith("Ben.Web.Website.Library/Kit/Maps/", StringComparison.Ordinal))
+            .Where(f => !Allowed.Contains(f.Rel))
+            .Where(f => AppleMention.IsMatch(f.Text))
+            .Select(f => f.Rel).ToList();
+        Assert.True(offenders.Count == 0,
+            "These files mention MapKit directly; they should take a BenMap instead:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The Telerik map and the OpenStreetMap tile server are retired, everywhere — Kit/Maps included.</summary>
+    [Fact]
+    public void TheRetiredMapLibrariesAreGoneForGood()
+    {
+        var offenders = SiteSources().Where(f => RetiredMention.IsMatch(f.Text)).Select(f => f.Rel).ToList();
+        Assert.True(offenders.Count == 0,
+            "These files bring back a retired map library:\n  " + string.Join("\n  ", offenders));
     }
 }

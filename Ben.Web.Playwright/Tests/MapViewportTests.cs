@@ -62,7 +62,7 @@ public class MapViewportTests : BenTestBase
         await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).First);
         await SkipAnyTourAsync();
 
-        var map = Page.Locator(".ben-map, .k-map").First;
+        var map = Page.Locator(".ben-map").First;
         try { await Expect(map).ToBeVisibleAsync(new() { Timeout = 15_000 }); }
         catch { Assert.Ignore("no investigation on this org has coordinates, so there is no map to pan"); }
 
@@ -118,7 +118,7 @@ public class MapViewportTests : BenTestBase
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var map = Page.Locator(".ben-map, .k-map").First;
+        var map = Page.Locator(".ben-map").First;
         try { await Expect(map).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
         catch { Assert.Ignore("no public cases on this deployment, so the discovery map is absent"); }
 

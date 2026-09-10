@@ -66,7 +66,7 @@ category against the running site, and its own commit. No `git add -A`.
 | 3 | **Done.** `PublicCaseDiscovery` on `BenMap` with the view as the caller's (`FitToPins` off; the person's own location moves it through Center/Zoom); the ~1 km grouping stays, MapKit gathers overlapping groups further; a haunted case is gold and says so in its subtitle; the module keeps only geolocation. Two races in `BenMap` found and fixed here: a parent re-render during the wrapper's async first render used to mark pins drawn before the map existed (a recreated map came up empty), and a tear-down during that first render used to throw a disposed reference into the circuit (the sort buttons showed "An unhandled error") | Playwright `HomeMap` (10, rewritten for canvas pins through the module's `pins`/`selectPin`) + `MapViewport` (3), all green; browser: the home map recentres on the person and survives a sort |
 | 4 | **Done.** `AddressMapPlayer` on `BenMap`: the marker keeps the person's colour and chosen icon (an SVG path drawn white into the pin through `glyphImage`); the region is a `CircleOverlay` of a real radius in metres; a click on empty map reaches `OnMapClicked` as a ground coordinate, and "click to set the edge" works as before. The Telerik fallback draws the same circle from the old GeoJSON helper. `AddressMarkerModel` and the component's `.razor.js` are gone | Playwright `AddressMap` (1 case, through the profile's Add-address editor): one pin on a zoom-2 world view, a circle drawn and removed, a click reported as a coordinate; `HomeMap` + `MapViewport` still green (14). Not covered: the Field Kit player's region circle from a saved config — same code path, no seeded session with one |
 | 5 | **Done.** `BenMap.RouteAsync` asks `mapkit.Directions` for a driving route — from an address in words, which the provider looks up itself, or from the person's own location — draws it with A and B pins, and returns distance, time and turn-by-turn steps. `DirectionsMapModal` keeps its form, summary, printable steps and "Open in Maps" (now an Apple Maps link). **Retired:** `DirectionsController` and its call to the public OSRM demo server over plain http, the client's `GetDirectionsAsync`, the three route records, and the modal's metered Geocodio lookup of the starting address | Playwright `Directions` (1 case, a real route asked of Apple: Nashville → the Bell Witch Cave, ~40 miles, steps, drawn then cleared) plus the other three map categories (16 in all). Not covered: the admin Directions button itself — no seeded address carries coordinates, so it does nothing there |
-| 6 | Remove the Telerik path and the provider switch; delete the four `.razor.js` tile templates and every OSM attribution string; help documents that mention maps re-read and their screenshots recaptured; item 228 closed in the backlog | Full suite; `HelpMediaCapture`; a grep proving `tile.openstreetmap.org` is gone |
+| 6 | **Done.** The Telerik path is gone from `BenMap` (its markup, marker model, GeoJSON circle and template functions), `MapsOptions` is one flag (`Configured`), `Maps:Provider` is no longer a setting, `MapGeoJsonHelper.ComputeCircleGeoJson` and its tests went with the shape layer, and the guard now bans `<TelerikMap`, `MapLayersType.` and the tile server everywhere, `Kit/Maps` included. With no key, every map says "The map could not be loaded" without asking Apple. The six help documents that mention maps say nothing provider-specific and needed no change; the two analysis documents that named OpenStreetMap were corrected | Guard `TheRetiredMapLibrariesAreGoneForGood`; all four Playwright map categories (16); full suite |
 
 Phase 0 and 1 land before anything visible changes. Phases 2–5 are one component each and can
 ship separately behind the switch. Phase 6 is when the old path goes.
@@ -82,3 +82,26 @@ ship separately behind the switch. Phase 6 is when the old path goes.
 MapKit JS refuses to initialise without a real key, so Phase 0's browser check waits on the
 portal step above. Everything from Phase 1 on can be exercised locally once the key exists;
 `localhost` is an acceptable origin for a MapKit token.
+
+## Where it ended, 2026-09-10
+
+All six phases built and verified the same day the plan was written. What a reviewer should know:
+
+- **One component, one library.** `Kit/Maps/BenMap` is the only place the site knows MapKit JS;
+  `MapProviderGuardTests` keeps it that way and refuses the retired libraries anywhere.
+- **What a test can and cannot see.** MapKit draws pins and tiles on canvas. The module exports
+  `pins`, `selectPin`, `describe`, `setCircle`, `route` and `clearRoute` for tests, which import
+  the very module instance the page holds. Every Playwright map test works that way.
+- **Two races found and fixed in the wrapper**, both by the home page swapping its map for a
+  loader on every reload: a re-render during the first render marking pins drawn before the map
+  existed, and a tear-down during it throwing into the circuit.
+- **Retired:** the OSRM demo server call, the OpenStreetMap tile server, the Telerik map, four
+  colocated JS modules of template functions, and one metered Geocodio call.
+- **Not covered by a test:** the admin Directions button (no seeded address has coordinates) and
+  the Field Kit player's saved region circle (no seeded session has one). Both go through code
+  paths the tests do cover.
+- **For production:** the same three `Maps:*` values and the `.p8` on the server. Until then
+  every map on the site says it could not be loaded, which is the honest state.
+- **Left for another day:** geocoding on the Apple Maps Server API (the last metered call), and
+  the pre-made Apple Maps token, kept unused.
+

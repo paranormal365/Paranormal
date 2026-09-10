@@ -129,6 +129,16 @@ public class HomeMapTests : BenTestBase
         Assert.That(state.Span[1], Is.EqualTo(expectedLon).Within(expectedLon * 0.35),
             $"longitude span {state.Span[1]:F1}° for a {state.Size[0]}px map is not zoom 4");
         Assert.That(await Page.InnerTextAsync("body"), Does.Not.Contain("An unhandled error has occurred"));
+
+        // Opt-in proof for a reviewer: BEN_MAP_SHOT=/some/dir writes the home map as a PNG.
+        if (Environment.GetEnvironmentVariable("BEN_MAP_SHOT") is { Length: > 0 } dir)
+        {
+            var map = Page.Locator(".ben-map").First;
+            await map.ScrollIntoViewIfNeededAsync();
+            await Page.WaitForTimeoutAsync(4_000);
+            Directory.CreateDirectory(dir);
+            await map.ScreenshotAsync(new() { Path = Path.Combine(dir, "home-map.png") });
+        }
     }
 
     [Test]

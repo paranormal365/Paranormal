@@ -142,9 +142,9 @@ builder.Services.AddSingleton<Ben.Web.Website.Services.AppleSignInHandoff>();
 
 // Apple Maps (item 228). The private key is read from a FILE named in configuration, never from
 // configuration itself: the repository is public and the development settings sit beside it.
-// A missing or empty path means "not configured", which the provider switch below turns into the
-// Telerik map rather than a map that cannot initialise. A malformed key, by contrast, throws at
-// startup — that is a deployment mistake and should stop the deploy, not hide behind a fallback.
+// A missing or empty path means "not configured": every map on the site then says it could not
+// be loaded, which is the honest state of a deployment with no key. A malformed key, by contrast,
+// throws at startup — that is a deployment mistake and should stop the deploy.
 builder.Services.AddSingleton(sp =>
 {
     var section = sp.GetRequiredService<IConfiguration>().GetSection("Maps");
@@ -156,14 +156,8 @@ builder.Services.AddSingleton(sp =>
         section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
 });
 builder.Services.AddSingleton<Ben.Web.Website.Services.MapKitTokenService>();
-builder.Services.AddSingleton(sp =>
-{
-    var provider = Enum.TryParse<Ben.Web.Website.Library.Kit.Maps.MapProvider>(
-        sp.GetRequiredService<IConfiguration>()["Maps:Provider"], ignoreCase: true, out var chosen)
-        ? chosen : Ben.Web.Website.Library.Kit.Maps.MapProvider.Telerik;
-    return new Ben.Web.Website.Library.Kit.Maps.MapsOptions(
-        provider, sp.GetRequiredService<Ben.Web.Website.Services.MapKitTokenService>().IsConfigured);
-});
+builder.Services.AddSingleton(sp => new Ben.Web.Website.Library.Kit.Maps.MapsOptions(
+    sp.GetRequiredService<Ben.Web.Website.Services.MapKitTokenService>().IsConfigured));
 
 // The client itself is shared with the desktop app. It adopts through IExternalSignInAdopter,
 // which WebApiAuthService implements, so a website Apple sign-in lands exactly where a password

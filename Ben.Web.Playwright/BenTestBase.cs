@@ -902,7 +902,7 @@ public abstract class BenTestBase : PageTest
     {
         await Page.GotoAsync(BaseUrl);
         // NOT NetworkIdle. This navigates to the HOME page, and the home page carries a map
-        // that streams OpenStreetMap tiles for as long as it is displayed — so "no network
+        // that streams map tiles for as long as it is displayed — so "no network
         // activity for 500ms" is a condition it may never reach. Under the full suite's load it
         // did not: AVisitorOpensAThreadAndAProfile died here on a bare 30s timeout that named
         // this helper and nothing about what was wrong.

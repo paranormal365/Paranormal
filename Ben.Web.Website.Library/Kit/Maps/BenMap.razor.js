@@ -5,7 +5,6 @@
  * its annotations by container id so two on one page cannot drive each other. The token comes
  * from the website's own endpoint and MapKit asks for a fresh one as each expires.
  *
- * The Telerik functions at the bottom serve the fallback path and go when it does.
  */
 
 const MAPKIT_SRC = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js'
@@ -88,13 +87,15 @@ export async function create(containerId, dotnetRef, options) {
     }
     _maps.set(containerId, entry)
 
-    try { await ensureMapKit(options.tokenPath) }
-    catch (err) {
-        // A map that cannot initialise says so where the map would be, rather than staying blank.
-        console.warn('MapKit JS unavailable:', err)
+    // A map that cannot initialise says so where the map would be, rather than staying blank —
+    // and a deployment with no key says so without asking Apple first.
+    const unavailable = why => {
+        console.warn('MapKit JS unavailable:', why)
         container.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-secondary small">The map could not be loaded.</div>'
-        return
     }
+    if (options.configured === false) { unavailable('no Maps key configured'); return }
+    try { await ensureMapKit(options.tokenPath) }
+    catch (err) { unavailable(err); return }
     if (!_maps.has(containerId)) return   // disposed while the script loaded
 
     const map = new mapkit.Map(container, {
@@ -385,54 +386,4 @@ export function dispose(containerId) {
     entry.observer?.disconnect()
     try { entry.map?.destroy() } catch { /* already gone with its container */ }
     _maps.delete(containerId)
-    if (_maps.size === 0) telerikTeardown()
-}
-
-// ── The Telerik fallback ─────────────────────────────────────────────────────
-// Telerik resolves template functions by NAME STRING, so these hang off window. They are keyed
-// by container id and stateless, so several maps registering them is harmless.
-
-const _telerikRefs = new Map()
-
-function benMapTileTemplate(ctx) {
-    return `https://${ctx.subdomain}.tile.openstreetmap.org/${ctx.zoom}/${ctx.x}/${ctx.y}.png`
-}
-function benMapMarkerTemplate(ctx) {
-    const title = (ctx.Title || '').replace(/"/g, '&quot;')
-    const dim = ctx.Dimmed ? 'opacity:.55;' : ''
-    const color = ctx.Color ? `color:${ctx.Color};` : ''
-    if (ctx.IconSvgPath) {
-        return `<span class="k-svg-icon k-icon-xl" onclick="benMapMarkerClick('${ctx.ContainerId}', ${ctx.Index})" title="${title}"
-            style="cursor:pointer;${dim}${color}filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));" aria-hidden="true">
-            <svg viewBox="0 0 512 512" focusable="false"><path d="${ctx.IconSvgPath}"></path></svg></span>`
-    }
-    const glyph = ctx.Glyph || '📍'
-    return `<span onclick="benMapMarkerClick('${ctx.ContainerId}', ${ctx.Index})" title="${title}"
-        style="font-size:1.5rem;cursor:pointer;${dim}${color}filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));">${glyph}</span>`
-}
-function benMapMarkerClick(containerId, index) {
-    _telerikRefs.get(containerId)?.invokeMethodAsync('OnPinSelected', index)
-}
-
-export function initTelerik(containerId, dotnetRef) {
-    _telerikRefs.set(containerId, dotnetRef)
-    const entry = { map: null, annotations: [], dotnetRef, options: {}, observer: null }
-    _maps.set(containerId, entry)
-    window.benMapTileTemplate = benMapTileTemplate
-    window.benMapMarkerTemplate = benMapMarkerTemplate
-    window.benMapMarkerClick = benMapMarkerClick
-    // Telerik's map measures its container once; the component re-measures it on our word.
-    let timeout
-    entry.observer = new ResizeObserver(() => {
-        clearTimeout(timeout)
-        timeout = setTimeout(() => dotnetRef.invokeMethodAsync('OnContainerResized'), 150)
-    })
-    entry.observer.observe(document.getElementById(containerId))
-}
-
-function telerikTeardown() {
-    _telerikRefs.clear()
-    delete window.benMapTileTemplate
-    delete window.benMapMarkerTemplate
-    delete window.benMapMarkerClick
 }
