@@ -9,18 +9,84 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Controllers.Public;
 
 /// <summary>
-/// Cross-org public case discovery. No authentication required.
-/// Returns all public/haunted cases with city-level coordinates and vote aggregates.
+/// Cross-org case discovery: every public case, plus any this caller may already see.
 /// </summary>
+/// <remarks>
+/// <para><b>Anonymous is still the default.</b> The route stays <c>[AllowAnonymous]</c> and a
+/// visitor with no token gets exactly what it always returned. A signed-in caller additionally
+/// gets the cases they could already open elsewhere, because a discovery map that is empty for a
+/// member whose group has work on it is a poor front door.</para>
+///
+/// <para><b>Coordinates are approximated for everybody, including for your own cases.</b> One code
+/// path, so there is no branch on which a real address could escape. A member who needs the
+/// address has the case page; a map is for finding, not for navigating to somebody's door.</para>
+/// </remarks>
 [ApiController]
 [Route("api/public/cases")]
 [AllowAnonymous]
 public sealed class PublicCaseDiscoveryController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public PublicCaseDiscoveryController(IDbContextFactory<BenDataContext> db)
-    { _db = db; }
+    public PublicCaseDiscoveryController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _security = security; }
+
+    /// <summary>
+    /// The cases this caller may see beyond the public ones, or an empty set for a visitor.
+    /// </summary>
+    /// <remarks>
+    /// Three doors, and each is the one the owning screen already uses rather than a looser
+    /// restatement: the org-side gate is <c>HasAccessAsync(Case, Read)</c> — the same call
+    /// <c>CaseController</c> makes, so a member without the cases grant gains nothing here — and
+    /// the client-side pair is the union <c>MyCaseController</c> builds, the originating request
+    /// and any co-client access row.
+    /// </remarks>
+    private async Task<HashSet<Guid>> AlreadyVisibleToCallerAsync(BenDataContext db, CancellationToken ct)
+    {
+        var visible = new HashSet<Guid>();
+
+        var userId = Guid.TryParse(
+            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var parsed)
+            ? parsed : Guid.Empty;
+        if (userId == Guid.Empty) return visible;
+
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin))
+        {
+            visible.UnionWith(await db.Cases.AsNoTracking().Select(c => c.Id).ToListAsync(ct));
+            return visible;
+        }
+
+        // Their own memberships first, so HasAccessAsync is asked about a handful of orgs rather
+        // than every organization on the site.
+        var orgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        foreach (var orgId in orgIds)
+        {
+            if (!await _security.HasAccessAsync(userId, orgId,
+                    OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct))
+                continue;
+
+            visible.UnionWith(await db.Cases.AsNoTracking()
+                .Where(c => c.OrganizationId == orgId)
+                .Select(c => c.Id).ToListAsync(ct));
+        }
+
+        visible.UnionWith(await db.Cases.AsNoTracking()
+            .Where(c => c.ClientRequest != null && c.ClientRequest.AppUserId == userId)
+            .Select(c => c.Id).ToListAsync(ct));
+        visible.UnionWith(await db.CaseClientAccesses.AsNoTracking()
+            .Where(a => a.AppUserId == userId)
+            .Select(a => a.CaseId).ToListAsync(ct));
+
+        return visible;
+    }
 
     /// <summary>
     /// Returns paginated public cases across all organizations.
@@ -59,10 +125,15 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Public, plus whatever this caller could already open. Proposed is excluded on both
+        // sides: a case nobody has agreed to yet is not a place, and MyCases hides it too.
+        var mine = await AlreadyVisibleToCallerAsync(db, ct);
+
         var query = db.Cases.AsNoTracking()
             .Include(c => c.Organization)
-            .Where(c => c.IsPublic
-                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted));
+            .Where(c => c.Status != CaseStatus.Proposed
+                     && ((c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+                         || mine.Contains(c.Id)));
 
         if (bounded)
         {

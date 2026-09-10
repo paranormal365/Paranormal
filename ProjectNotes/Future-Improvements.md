@@ -11144,9 +11144,7 @@ you click a day, so changing your mind about the date cost a trip back through t
 
 ### Still open: an impossible day is silently taken as its second digit
 
-Typing `31` into a September date gives you the **1st**. Telerik rejects the day that cannot exist
-and keeps the `1`, with no indication. It is inside `AutoCorrectParts` and no call site can reach
-it, so it needs either a Telerik change or a date control of our own. Recorded, not fixed.
+Typing `31` into a September date gives you the **1st**. Promoted to its own entry — see item 224.
 
 ## 222. Viewport loading for the three maps that were deliberately left without it
 
@@ -11201,4 +11199,37 @@ One thing the Playwright work taught: **a bounding box is in viewport coordinate
 the fold hands back a y the mouse cannot reach and the drags land on whatever is on screen instead.
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
+
+## 224. A date field silently takes an impossible day as its second digit (OPEN)
+
+Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
+
+**The defect.** With `09/__/2026` in the field, select the day and type `3` then `1`. You get
+**09/01**, not the 31st and not a refusal. Telerik rejects the day that cannot exist in September
+and falls back to treating the `1` as a fresh first digit. Nothing on screen says so.
+
+It is worse than it first sounds because it is **inconsistent**: the same keystrokes in a 31-day
+month give you the 31st. So the field works until the month it does not, and the failure is silent
+in both directions — you get a real date, just not the one you typed.
+
+**Why it is not a one-liner.** The behaviour lives inside Telerik's `AutoCorrectParts`, and no
+parameter on the call sites reaches the decision. There are **34 picker call sites across 17 files**
+and no `BenDatePicker` wrapper, unlike `BenModal`, `BenSelect` and `BenContentPicker`.
+
+**The decision tree when it is picked up** — measure, do not guess; three guesses about Telerik's
+typing behaviour were wrong on the day this was found:
+
+1. Probe a real picker with `AutoCorrectParts` off. It may leave `31` standing and mark the value
+   invalid, which is honest, or it may do something worse.
+2. Control: type `31` into a month that has one, so "rejects impossible days" can be told from
+   "rejects the second digit".
+3. If a parameter combination behaves, wrap it **once** in `Kit/BenDatePicker` and migrate the 34
+   sites, then add a source-scan guard banning the raw Telerik picker — the habit this codebase
+   already has for exactly this shape.
+4. If nothing behaves, fall back to the native `<input type="date">` for date-only fields. Browsers
+   handle this sanely, and `NewInvestigationWindow` already uses one. Telerik would stay only where
+   a calendar popup genuinely earns its place.
+
+**Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
+first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
 

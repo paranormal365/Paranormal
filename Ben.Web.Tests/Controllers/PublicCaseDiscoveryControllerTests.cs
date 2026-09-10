@@ -24,8 +24,29 @@ public class PublicCaseDiscoveryControllerTests
         return new PooledDbContextFactory<BenDataContext>(opts);
     }
 
-    private static PublicCaseDiscoveryController Build(IDbContextFactory<BenDataContext> factory)
-        => new(factory);
+    private static PublicCaseDiscoveryController Build(
+        IDbContextFactory<BenDataContext> factory, Guid? asUser = null, bool superAdmin = false)
+    {
+        var claims = new List<System.Security.Claims.Claim>();
+        if (asUser is { } id)
+            claims.Add(new System.Security.Claims.Claim(
+                System.Security.Claims.ClaimTypes.NameIdentifier, id.ToString()));
+        if (superAdmin)
+            claims.Add(new System.Security.Claims.Claim(
+                System.Security.Claims.ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
+
+        return new(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
+        {
+            ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+                {
+                    User = new System.Security.Claims.ClaimsPrincipal(
+                        new System.Security.Claims.ClaimsIdentity(claims, asUser is null ? null : "Bearer"))
+                }
+            }
+        };
+    }
 
     private static Organization MakeOrg() => new()
     {
@@ -363,5 +384,169 @@ public class PublicCaseDiscoveryControllerTests
 
         var inView = await GetAsync(factory, north: 90, south: -90, east: 180, west: -180);
         Assert.Empty(inView.Items);
+    }
+
+    // ── Cases the caller can already see (2026-09-09) ────────────────────────
+    //
+    // Ben: "plot the viewer's cases on the home map. plot ones where the end user has access to
+    // them or they are already public." The map was empty for a member whose group had work on it,
+    // because only IsPublic cases were ever returned.
+    //
+    // The gates are the ones the owning screens already use, not looser restatements: org-side is
+    // HasAccessAsync(Case, Read), the same call CaseController makes, and client-side is the union
+    // MyCaseController builds.
+
+    private sealed record Seeded(
+        IDbContextFactory<BenDataContext> Factory, Guid OrgId, Guid MemberId, Guid PrivateCaseId);
+
+    private static async Task<Seeded> SeedAPrivateCaseAsync()
+    {
+        var factory = TestDbFactory.Create();
+        var org = MakeOrg();
+        var memberId = Guid.NewGuid();
+        var privateCase = MakeCase(org.Id, "Not for the world", 36.16m, -86.78m,
+                                   isPublic: false, status: CaseStatus.Active);
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Organizations.Add(org);
+        db.Cases.Add(privateCase);
+        db.Cases.Add(MakeCase(org.Id, "Public one", 36.20m, -86.80m));
+        db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = memberId,
+            Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        return new Seeded(factory, org.Id, memberId, privateCase.Id);
+    }
+
+    private static async Task<PublicCaseDiscoveryPagedResponse> AsAsync(
+        IDbContextFactory<BenDataContext> factory, Guid? user = null, bool superAdmin = false)
+    {
+        var result = await Build(factory, user, superAdmin).GetAll(1, 50, "date", null, null, null, null, default);
+        return Assert.IsType<PublicCaseDiscoveryPagedResponse>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    [Fact]
+    public async Task A_visitor_still_sees_only_the_public_ones()
+    {
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var page = await AsAsync(seeded.Factory);
+
+        Assert.Equal("Public one", Assert.Single(page.Items).Title);
+    }
+
+    [Fact]
+    public async Task An_owner_sees_their_groups_case_as_well()
+    {
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var page = await AsAsync(seeded.Factory, seeded.MemberId);
+
+        Assert.Equal(2, page.Items.Count);
+        Assert.Contains(page.Items, i => i.CaseId == seeded.PrivateCaseId);
+    }
+
+    [Fact]
+    public async Task Somebody_elses_account_gains_nothing()
+    {
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var page = await AsAsync(seeded.Factory, Guid.NewGuid());
+
+        Assert.Equal("Public one", Assert.Single(page.Items).Title);
+    }
+
+    [Fact]
+    public async Task A_co_client_sees_the_case_they_were_given_access_to()
+    {
+        var seeded = await SeedAPrivateCaseAsync();
+        var clientId = Guid.NewGuid();
+        await using (var db = await seeded.Factory.CreateDbContextAsync())
+        {
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = seeded.PrivateCaseId, AppUserId = clientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = seeded.MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await AsAsync(seeded.Factory, clientId);
+
+        Assert.Contains(page.Items, i => i.CaseId == seeded.PrivateCaseId);
+    }
+
+    [Fact]
+    public async Task Your_own_case_is_approximated_like_everybody_elses()
+    {
+        // One code path, so there is no branch on which a real address could escape. A member who
+        // needs the address has the case page.
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var mine = (await AsAsync(seeded.Factory, seeded.MemberId))
+            .Items.Single(i => i.CaseId == seeded.PrivateCaseId);
+
+        Assert.NotEqual(36.16m, mine.ApproxLatitude);
+        Assert.NotEqual(-86.78m, mine.ApproxLongitude);
+    }
+
+    [Fact]
+    public async Task Membership_alone_is_not_enough_the_cases_grant_is_what_counts()
+    {
+        // The discriminating case, and the reason the org side calls HasAccessAsync rather than
+        // asking "are they a member". A plain Member with no grant on Cases can open none of the
+        // group's cases, so the map must not hand them one.
+        var factory = TestDbFactory.Create();
+        var org = MakeOrg();
+        var plainMember = Guid.NewGuid();
+        var privateCase = MakeCase(org.Id, "Not for the world", 36.16m, -86.78m,
+                                   isPublic: false, status: CaseStatus.Active);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(org);
+            db.Cases.Add(privateCase);
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = plainMember,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty((await AsAsync(factory, plainMember)).Items);
+
+        // Grant the read and the same person sees it — so the emptiness above was the gate doing
+        // its job, not the seed being wrong.
+        await TestSeeds.GrantAsync(factory, org.Id, plainMember,
+            OrganizationSecurityTable.Case, OrganizationSecurityAction.Read);
+
+        Assert.Contains((await AsAsync(factory, plainMember)).Items, i => i.CaseId == privateCase.Id);
+    }
+
+    [Fact]
+    public async Task A_proposed_case_is_nobodys_pin()
+    {
+        var factory = TestDbFactory.Create();
+        var org = MakeOrg();
+        var memberId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(org);
+            db.Cases.Add(MakeCase(org.Id, "Only proposed", 36.16m, -86.78m,
+                                  isPublic: false, status: CaseStatus.Proposed));
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = memberId,
+                Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty((await AsAsync(factory, memberId)).Items);
     }
 }
