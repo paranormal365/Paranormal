@@ -184,11 +184,38 @@ public sealed class AppleAuthController : BenControllerBase
             DateCreated        = DateTime.UtcNow,
         };
 
+        // THE ADDRESS ALREADY BELONGS TO SOMEBODY HERE. Only reachable with an address Apple did
+        // NOT verify — a verified one would have linked further up — which is exactly the case
+        // where joining the two automatically would be wrong: an unverified claim on an address is
+        // not proof of holding it.
+        //
+        // So refuse, and say which door to use. Creating a second account would leave them holding
+        // none of their own history, and the previous code did something worse than either: it let
+        // CreateAsync fail and printed Identity's "Email is already taken" under the @NAME field,
+        // where it made no sense and offered no way forward.
+        var addressTaken = await _userManager.FindByEmailAsync(email);
+        if (addressTaken is not null)
+        {
+            return Conflict(new AppleNeedsProfileResponse(
+                NeedsProfile: true,
+                SuggestedDisplayName: displayName,
+                Email: identity.Email,
+                IsPrivateEmail: identity.IsPrivateEmail,
+                ShouldLinkInstead: true,
+                EmailProblem: "That email address already has an account here. Sign in to it once and we'll join the two."));
+        }
+
         var created = await _userManager.CreateAsync(user);
         if (!created.Succeeded)
         {
             var isHandleClash = created.Errors.Any(e =>
                 e.Description.Contains("Handle", StringComparison.OrdinalIgnoreCase));
+
+            // A race can still lose the address between the check above and here. Same answer, so
+            // the person is routed rather than shown Identity's wording.
+            var isEmailClash = created.Errors.Any(e =>
+                e.Description.Contains("Email", StringComparison.OrdinalIgnoreCase));
+
             return Conflict(new AppleNeedsProfileResponse(
                 NeedsProfile: true,
                 SuggestedDisplayName: displayName,
@@ -196,7 +223,11 @@ public sealed class AppleAuthController : BenControllerBase
                 IsPrivateEmail: identity.IsPrivateEmail,
                 HandleProblem: isHandleClash
                     ? "That name was taken a moment ago. Try another."
-                    : string.Join(" ", created.Errors.Select(e => e.Description))));
+                    : isEmailClash ? null : string.Join(" ", created.Errors.Select(e => e.Description)),
+                ShouldLinkInstead: isEmailClash,
+                EmailProblem: isEmailClash
+                    ? "That email address already has an account here. Sign in to it once and we'll join the two."
+                    : null));
         }
 
         var addLogin = await _userManager.AddLoginAsync(
@@ -423,12 +454,23 @@ public sealed record AppleLinkRequest(
     string? TwoFactorRecoveryCode = null);
 
 /// <summary>Told to an app that must collect a name and handle before an account can exist.</summary>
+/// <param name="ShouldLinkInstead">
+/// The address already has an account here, so creating a second one is not the answer. The caller
+/// should offer the link door rather than the create form.
+/// </param>
+/// <param name="EmailProblem">
+/// What is wrong with the ADDRESS, kept apart from <paramref name="HandleProblem"/> because they
+/// belong under different fields and putting one under the other tells somebody to fix the wrong
+/// thing.
+/// </param>
 public sealed record AppleNeedsProfileResponse(
     bool NeedsProfile,
     string? SuggestedDisplayName,
     string? Email,
     bool IsPrivateEmail,
-    string? HandleProblem = null);
+    string? HandleProblem = null,
+    bool ShouldLinkInstead = false,
+    string? EmailProblem = null);
 
 /// <summary>The bits of a validated Apple identity token this site acts on.</summary>
 public sealed record AppleIdentity(string Subject, string? Email, bool EmailVerified, bool IsPrivateEmail);

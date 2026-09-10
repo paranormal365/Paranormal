@@ -49,7 +49,7 @@
             <div class="alert alert-warning">@_error</div>
         }
 
-        <div class="card mb-4">
+        <div class="card mb-4" hidden="@_addressTaken">
             <div class="card-body">
                 <h2 class="h5">Create an account</h2>
 
@@ -80,10 +80,15 @@
         *@
         <div class="card">
             <div class="card-body">
-                <h2 class="h5">Already have an account here?</h2>
+                <h2 class="h5">
+                    @(_addressTaken ? "That address already has an account" : "Already have an account here?")
+                </h2>
                 <p class="text-body-secondary">
                     Sign in to it once and we'll join the two, so you keep everything that's already
                     yours. It doesn't matter if it's under a different email address from your Apple ID.
+                    <br />
+                    <a href="/forgot-password">Forgotten the password?</a> Reset it, then come back
+                    and sign in with Apple again.
                 </p>
 
                 <div class="mb-3">
@@ -139,6 +144,10 @@
     private string? Code { get; set; }
 
     private Stage _stage = Stage.Working;
+
+    // Set when the server says the address already has an account. Creating a second one is then
+    // not an option, and the server would refuse it.
+    private bool _addressTaken;
     private string? _error;
     private bool _busy;
 
@@ -226,9 +235,13 @@
                 && !string.IsNullOrWhiteSpace(outcome.NeedsProfile!.SuggestedDisplayName))
                 _displayName = outcome.NeedsProfile.SuggestedDisplayName!;
 
+            // The address already belongs to somebody here. Put the create form away and point at
+            // the door that works, rather than complaining about a handle that is fine.
+            _addressTaken = outcome.NeedsProfile!.ShouldLinkInstead;
+
             // Only speak up once there is something to fix. The first pass through here is
             // expected to need a profile, and announcing that as a problem would be noise.
-            _error = outcome.NeedsProfile!.HandleProblem;
+            _error = outcome.NeedsProfile!.EmailProblem ?? outcome.NeedsProfile!.HandleProblem;
             return;
         }
 

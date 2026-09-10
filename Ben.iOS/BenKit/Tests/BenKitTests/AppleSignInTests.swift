@@ -107,4 +107,29 @@ struct AppleSignInTests {
         #expect(sent?["identityToken"] as? String == "a.b.c")
         #expect(sent?["handle"] as? String == "h")
     }
+
+    /// The server may APPEND fields to this body, and a shipped app must keep working.
+    ///
+    /// `AppleNeedsProfile` is a plain `Decodable` with synthesised keys, so Swift ignores keys it
+    /// does not know — but that is a property worth proving rather than assuming, because the
+    /// failure mode if it were ever wrong is every Apple sign-up on every installed build breaking
+    /// at once, from a server change that looked additive.
+    ///
+    /// `shouldLinkInstead` and `emailProblem` were added when a taken email address stopped being
+    /// reported under the @name field. This app does not act on them yet; item 226 is where it will.
+    @Test func aNeedsProfileBodyWithNewerFieldsStillDecodes() async throws {
+        let body = """
+        {"needsProfile":true,"suggestedDisplayName":"New Person","email":"new@test.com",\
+        "isPrivateEmail":false,"handleProblem":null,\
+        "shouldLinkInstead":true,"emailProblem":"That email address already has an account here."}
+        """
+
+        let decoded = try BenJSON.decoder.decode(
+            AppleNeedsProfile.self, from: Data(body.utf8))
+
+        #expect(decoded.needsProfile)
+        #expect(decoded.suggestedDisplayName == "New Person")
+        #expect(decoded.email == "new@test.com")
+        #expect(decoded.handleProblem == nil)
+    }
 }

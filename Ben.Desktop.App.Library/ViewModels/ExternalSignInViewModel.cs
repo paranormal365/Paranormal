@@ -361,11 +361,20 @@ public sealed class ExternalSignInViewModel : INotifyPropertyChanged
             if (string.IsNullOrWhiteSpace(DisplayName))
                 DisplayName = outcome.NeedsProfile!.SuggestedDisplayName ?? _appleSuggestedName ?? string.Empty;
 
+            // The address already belongs to somebody. Put the create form away and point at the
+            // door that actually works, rather than complaining about a handle that is fine.
+            if (outcome.NeedsProfile!.ShouldLinkInstead)
+            {
+                ShouldLinkInstead = true;
+                Raise(nameof(ShouldLinkInstead));
+            }
+
             Raise(nameof(NeedsProfile));
             Raise(nameof(NeedsHandle));
             Raise(nameof(CanLinkExistingAccount));
 
-            Message = outcome.NeedsProfile!.HandleProblem
+            Message = outcome.NeedsProfile!.EmailProblem
+                      ?? outcome.NeedsProfile!.HandleProblem
                       ?? "Almost there — choose a name and an @name to finish setting up your account.";
             return;
         }

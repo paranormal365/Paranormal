@@ -312,6 +312,11 @@ public class AppleAuthControllerTests
         // else connects the two, so this literal is the contract: change the record and this
         // test fails HERE, next to the change, instead of the app silently reading nothing.
         // The matching Swift test (BenKitTests/AppleSignInTests) uses this same string.
+        //
+        // shouldLinkInstead and emailProblem were added when a taken address stopped being
+        // reported under the @name field. APPENDED, and both optional: Swift's Codable ignores
+        // keys it does not know, so the app keeps decoding this unchanged and simply does not act
+        // on the new routing until item 226 teaches it to.
         var json = System.Text.Json.JsonSerializer.Serialize(
             new AppleNeedsProfileResponse(true, "New Person", "new@test.com", false, null),
             new System.Text.Json.JsonSerializerOptions
@@ -321,8 +326,14 @@ public class AppleAuthControllerTests
 
         Assert.Equal(
             "{\"needsProfile\":true,\"suggestedDisplayName\":\"New Person\"," +
-            "\"email\":\"new@test.com\",\"isPrivateEmail\":false,\"handleProblem\":null}",
+            "\"email\":\"new@test.com\",\"isPrivateEmail\":false,\"handleProblem\":null," +
+            "\"shouldLinkInstead\":false,\"emailProblem\":null}",
             json);
+
+        // The keys the app actually reads are untouched and still in place, which is the part
+        // that decides whether a shipped build keeps working.
+        foreach (var key in new[] { "needsProfile", "suggestedDisplayName", "email", "isPrivateEmail", "handleProblem" })
+            Assert.Contains($"\"{key}\":", json);
     }
 
     // ── Claiming an account whose address Apple never mentioned ───────────────
@@ -931,5 +942,107 @@ public class AppleAuthControllerTests
 
         AssertRefusal(result, "NotAllowed");
         um.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
+    }
+
+    // ── An address that already belongs to somebody ───────────────────────────
+
+    /// <summary>
+    /// A taken address routes to the link door, and complains about the ADDRESS.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only reachable with an address Apple did NOT verify — a verified one links further up
+    /// — which is exactly when joining the two automatically would be wrong. An unverified claim
+    /// on an address is not proof of holding it, so the password is what settles it.</para>
+    ///
+    /// <para>What this replaces was worse than either outcome: CreateAsync was allowed to fail and
+    /// Identity's "Email is already taken" was printed under the @name field, where it made no
+    /// sense and offered nothing to do about it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ATakenAddressRoutesToLinkingAndNamesTheRightField()
+    {
+        var theirs = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ben@ishaunted.com")).ReturnsAsync(theirs);
+
+        var result = await Build(um, new FakeValidator(
+            // Unverified, so it did not auto-link above.
+            new AppleIdentity(Sub, "ben@ishaunted.com", EmailVerified: false, false)), SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var body = Assert.IsType<AppleNeedsProfileResponse>(conflict.Value);
+
+        Assert.True(body.ShouldLinkInstead);
+        Assert.Contains("already has an account", body.EmailProblem);
+
+        // The @name was never the problem, so nothing is said about it.
+        Assert.Null(body.HandleProblem);
+
+        // And emphatically no second account.
+        um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Never);
+    }
+
+    /// <summary>A free address still creates the account, so nothing is blocked that need not be.</summary>
+    [Fact]
+    public async Task AFreeAddressStillCreatesTheAccount()
+    {
+        var um = UserManagerMock();   // FindByEmailAsync answers null by default
+
+        var result = await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "nobody@example.test", true, false)), SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        Assert.IsType<EmptyResult>(result);
+        um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Losing the address to a race between the check and the insert answers the same way.
+    /// </summary>
+    /// <remarks>
+    /// Two sign-ups a moment apart is the ordinary case for this, and the person should be routed
+    /// rather than shown Identity's wording under whichever field it lands on.
+    /// </remarks>
+    [Fact]
+    public async Task LosingTheAddressToARaceStillRoutesToLinking()
+    {
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>())).ReturnsAsync(
+            IdentityResult.Failed(new IdentityError
+            {
+                Code = "DuplicateEmail",
+                Description = "Email 'ben@ishaunted.com' is already taken.",
+            }));
+
+        var result = await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "ben@ishaunted.com", false, false)), SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var body = Assert.IsType<AppleNeedsProfileResponse>(conflict.Value);
+
+        Assert.True(body.ShouldLinkInstead);
+        Assert.Null(body.HandleProblem);
+        Assert.DoesNotContain("already taken", body.EmailProblem ?? string.Empty);
+    }
+
+    /// <summary>A taken HANDLE is still reported as a handle problem, under its own field.</summary>
+    [Fact]
+    public async Task ATakenHandleIsStillAHandleProblem()
+    {
+        var um = UserManagerMock();
+        um.Setup(m => m.CreateAsync(It.IsAny<AppUser>())).ReturnsAsync(
+            IdentityResult.Failed(new IdentityError { Description = "Handle 'ada' is already taken." }));
+
+        var result = await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "free@example.test", true, false)), SignInManagerMock(um))
+            .SignIn(Request("Ada Lovelace", "ada"), default);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var body = Assert.IsType<AppleNeedsProfileResponse>(conflict.Value);
+
+        Assert.False(body.ShouldLinkInstead);
+        Assert.Contains("Try another", body.HandleProblem);
     }
 }
