@@ -1,9 +1,11 @@
 ﻿using Ben.Data.Common;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.HttpOverrides;
 using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
 using Ben.Web.Website.Components;
+using Ben.Web.Website.Services;
 using Ben.Web.Services.Help;
 using Ben.Video.Editor.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -328,6 +330,32 @@ app.Use(async (context, next) =>
     // purpose - see the note above about why a full policy is a separate piece of work.
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+    await next();
+});
+
+// -- One canonical host -----------------------------------------------------
+//
+// See CanonicalHost for why this exists: www serves this same site, and a sign-in begun there
+// fails its state check because Apple posts back to the bare name. Runs after the forwarded
+// headers so the scheme is the one the person actually used, and before anything that does work
+// on a request that is about to be moved.
+app.Use(async (context, next) =>
+{
+    var apex = CanonicalHost.ApexFor(context.Request.Host.Host, context.Request.Path.Value);
+    if (apex is not null)
+    {
+        var host = context.Request.Host.Port is int port
+            ? new HostString(apex, port)
+            : new HostString(apex);
+
+        context.Response.Redirect(
+            UriHelper.BuildAbsolute(
+                context.Request.Scheme, host, context.Request.PathBase,
+                context.Request.Path, context.Request.QueryString),
+            permanent: true);
+        return;
+    }
+
     await next();
 });
 
