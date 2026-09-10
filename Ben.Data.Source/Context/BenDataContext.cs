@@ -109,6 +109,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<Tour> Tours { get; set; }
+        public virtual DbSet<TourGuide> TourGuides { get; set; }
+        public virtual DbSet<TourReview> TourReviews { get; set; }
+        public virtual DbSet<OrgCalendarEventGuide> OrgCalendarEventGuides { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
@@ -691,6 +694,66 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgCalendarEvent>()
                 .HasOne(e => e.Tour).WithMany(t => t.Dates)
                 .HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Tour>()
+                .HasIndex(t => new { t.OrganizationId, t.UrlName }).IsUnique();
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.UrlName).HasMaxLength(120);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.TimeZoneId).HasMaxLength(64);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.ContactLine).HasMaxLength(500);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.MailSubjectTemplate).HasMaxLength(200);
+
+            // Guides: one row per person per tour, and per person per date. Cascade from the
+            // thing they guide, NoAction on the person — deleting an account must not cascade
+            // into a business's schedule, which is the rule every user FK here follows.
+            modelBuilder.Entity<TourGuide>()
+                .HasIndex(g => new { g.TourId, g.AppUserId }).IsUnique();
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.Tour).WithMany(t => t.Guides)
+                .HasForeignKey(g => g.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasIndex(g => new { g.OrgCalendarEventId, g.AppUserId }).IsUnique();
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.OrgCalendarEvent).WithMany(e => e.Guides)
+                .HasForeignKey(g => g.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One review per guest per tour: the same person walking it three times has one
+            // opinion of it. Cascade from the tour; NoAction everywhere else, so deleting an
+            // account never quietly rewrites a business's rating.
+            modelBuilder.Entity<TourReview>()
+                .HasIndex(r => new { r.TourId, r.AppUserId }).IsUnique();
+            modelBuilder.Entity<TourReview>()
+                .Property(r => r.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.Tour).WithMany()
+                .HasForeignKey(r => r.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.OrgCalendarEvent).WithMany()
+                .HasForeignKey(r => r.OrgCalendarEventId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.AppUser).WithMany()
+                .HasForeignKey(r => r.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── AppleCredential (item 229) ───────────────────────────────────
             // One per person per Apple client; a new sign-in through the same client replaces it.

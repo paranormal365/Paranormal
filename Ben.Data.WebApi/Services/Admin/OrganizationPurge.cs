@@ -323,6 +323,10 @@ public sealed class OrganizationPurge
             await db.CaseTimelineEntries.Where(x => x.InvestigationId != null && investigationIds.Contains(x.InvestigationId.Value))
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvestigationId, (Guid?)null), ct);
             await db.Investigations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Reviews cite the date they were written after, so they go before both the dates
+            // and the tours they belong to.
+            await db.TourReviews
+                .Where(x => x.Tour.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgCalendarEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             // Tours (item 233) point at the group AND at one of its addresses, both NoAction, so
             // they block the group's deletion twice over. They go after the dates that name them,

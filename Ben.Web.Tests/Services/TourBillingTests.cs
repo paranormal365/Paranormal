@@ -105,7 +105,7 @@ public sealed class TourBillingTests
         for (var i = 0; i < tours + retiredTours; i++)
             db.Tours.Add(new Tour
             {
-                Id = Guid.NewGuid(), OrganizationId = orgId, Name = $"Walk {i}",
+                Id = Guid.NewGuid(), OrganizationId = orgId, Name = $"Walk {i}", UrlName = $"walk-{i}",
                 StartOrganizationAddressId = addressId,
                 RetiredAtUtc = i < tours ? null : now.AddDays(-1),
                 DateCreated = now, CreatedByAppUserId = userId,

@@ -1017,7 +1017,10 @@ public sealed record UpsertCalendarEventRequest(
     Guid? PlaceId = null,
     bool HideExactLocation = false,
     int? AttendeeCapacity = null,
-    DateTime? RsvpClosesAt = null);
+    DateTime? RsvpClosesAt = null,
+    // Tours (item 233): a public date of a tour business belongs to a tour, and names its guides.
+    Guid? TourId = null,
+    IReadOnlyList<Guid>? GuideAppUserIds = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 

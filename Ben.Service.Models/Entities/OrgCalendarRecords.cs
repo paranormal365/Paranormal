@@ -150,6 +150,23 @@ public record OrgCalendarEventRecord
     /// <summary>The readable slug this event is public at, or null while it is private.</summary>
     public string? UrlName { get; init; }
 
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+
+    /// <summary>The tour this date runs, when it is a tour business's date.</summary>
+    public Guid? TourId { get; init; }
+
+    /// <summary>That tour's name, so a calendar row need not look it up.</summary>
+    public string? TourName { get; init; }
+
+    /// <summary>
+    /// Who is leading this date.
+    /// </summary>
+    /// <remarks>
+    /// Per date rather than per tour because a tour led by two people is not the same person each
+    /// night, and the guest mail names and pictures whoever will actually be there.
+    /// </remarks>
+    public IReadOnlyList<EventGuideRecord> Guides { get; init; } = [];
+
     public string? RecurrenceRule { get; init; }
     public int AttendeeCount { get; init; }
     public DateTime DateCreated { get; init; }
@@ -157,6 +174,13 @@ public record OrgCalendarEventRecord
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
 }
+
+/// <summary>One guide on one date (item 233).</summary>
+public sealed record EventGuideRecord(
+    Guid AppUserId,
+    string DisplayName,
+    string? Handle,
+    Guid? PhotoUploadFileId);
 
 public record OrgCalendarEventAttendeeRecord
 {

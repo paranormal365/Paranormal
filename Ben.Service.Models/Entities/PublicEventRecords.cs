@@ -54,7 +54,28 @@ public sealed record PublicEventRecord(
     int AttendingCount,
     int? AttendeeCapacity,
     DateTime? RsvpClosesAt,
-    PublicEventFlags Flags);
+    PublicEventFlags Flags,
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+    // Appended with defaults so an older client reads this exactly as it did before.
+    /// <summary>The tour this date runs, when it is one.</summary>
+    string? TourName = null,
+    /// <summary>Its slug, for the link to the tour's own page.</summary>
+    string? TourUrlName = null,
+    /// <summary>
+    /// Who is leading it.
+    /// </summary>
+    /// <remarks>
+    /// Ben asked for the guide's name and picture in what a guest is sent, "for safety" — the
+    /// person walking into the dark should know who they are meeting. The same facts are on the
+    /// page, so a guest who never opens the mail still knows.
+    /// </remarks>
+    IReadOnlyList<PublicGuideRecord>? Guides = null,
+    /// <summary>Average stars out of five, when anyone has rated the tour.</summary>
+    decimal? TourRating = null,
+    int TourRatingCount = 0);
+
+/// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
+public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);
 
 /// <summary>One public event as it appears in a list.</summary>
 public sealed record PublicEventListItem(
@@ -77,7 +98,11 @@ public sealed record PublicEventListItem(
     decimal? ApproximateLongitude,
     int AttendingCount,
     int? AttendeeCapacity,
-    bool IsOnline);
+    bool IsOnline,
+    // Item 233, appended with defaults: a card that does not say which tour it is makes a
+    // business's three walks look like three unrelated evenings.
+    string? TourName = null,
+    string? TourUrlName = null);
 
 
 // ── Coming along without an account (item #87b) ──────────────────────────────
@@ -172,3 +197,69 @@ public sealed record EventEvidenceRecord(
     DateTime? PublishedToPlaceAtUtc = null,
     /// <summary>Whether the event is at a public place, so there is an archive to contribute to.</summary>
     bool PlaceAcceptsArchive = false);
+
+// ── Tours (item 233) ─────────────────────────────────────────────────────────
+// Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." A tour is
+// the product a business sells; these are the shapes a visitor reads it in.
+
+/// <summary>A tour on a list or a search result.</summary>
+public sealed record PublicTourListItem(
+    Guid Id,
+    string Name,
+    string UrlName,
+    Guid OrganizationId,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string? City,
+    string? State,
+    decimal? Latitude,
+    decimal? Longitude,
+    int? DurationMinutes,
+    DateTime? NextDateStartUtc,
+    int UpcomingDateCount,
+    decimal? Rating,
+    int RatingCount,
+    double? DistanceMiles = null);
+
+/// <summary>
+/// One tour's own page.
+/// </summary>
+/// <remarks>
+/// The meeting point is given in full, unlike a case or a private investigation: a tour exists to
+/// be turned up to, and an address withheld from the person deciding whether to come is an
+/// address withheld from the wrong reader.
+/// </remarks>
+public sealed record PublicTourRecord(
+    Guid Id,
+    string Name,
+    string UrlName,
+    string? Description,
+    Guid OrganizationId,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string MeetingPoint,
+    string? City,
+    string? State,
+    decimal? Latitude,
+    decimal? Longitude,
+    int? DurationMinutes,
+    int? DefaultCapacity,
+    string TimeZoneId,
+    string? ContactLine,
+    bool IsBookable,
+    bool AllowReviews,
+    IReadOnlyList<PublicGuideRecord> Guides,
+    IReadOnlyList<PublicEventListItem> UpcomingDates,
+    decimal? Rating,
+    int RatingCount);
+
+/// <summary>A tour as a pin: the least a map needs, and nothing a map does not.</summary>
+public sealed record PublicTourMapPin(
+    Guid Id,
+    string Name,
+    string UrlName,
+    string OrganizationName,
+    string OrganizationUrlName,
+    decimal Latitude,
+    decimal Longitude,
+    DateTime? NextDateStartUtc);

@@ -144,5 +144,8 @@ namespace Ben.Data.Source.Entities
         /// <summary>The tour this date runs, when it names one.</summary>
         public virtual Tour? Tour { get; set; }
 
+        /// <summary>Who is leading this date (item 233).</summary>
+        public virtual ICollection<OrgCalendarEventGuide> Guides { get; set; } = new List<OrgCalendarEventGuide>();
+
     }
 }
