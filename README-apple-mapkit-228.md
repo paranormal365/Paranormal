@@ -22,6 +22,11 @@ configuration, let alone the repository, which is public. A missing path means "
 and the Telerik map; a malformed key throws at startup, because that is a deployment mistake.
 Production needs the same three values and the file placed on the server.
 
+Apple's portal also offers a **pre-made "Maps token"** (a CSV holding a non-expiring JWT bound to
+`*.ishaunted.com`). Ben downloaded one on 2026-09-10; it is kept beside the keys and **not used**:
+the token the site signs itself lives thirty minutes and names the exact origin, which is strictly
+better, and the pre-made one would not work on `localhost` anyway.
+
 ## What is there today, exactly
 
 | Component | Hosts | What it draws | Provider |
@@ -56,8 +61,8 @@ category against the running site, and its own commit. No `git add -A`.
 | Phase | Work | Verified by |
 | --- | --- | --- |
 | 0 | **Done.** `MapKitSigningOptions` + `MapKitTokenService` (hand-rolled ES256, 30-minute life, `origin` claim, raw r‖s signature); `GET /auth/mapkit-token` (404 until configured, `no-store`); `Kit/Maps/MapsOptions` with `Provider` and `Effective`, Apple honoured only when a token can be signed | 9 unit tests; a token fetched from the running site decoded to the expected header and claims; **Apple accepted it**: `mapkit.init` reported `Initialized` and a map of Nashville with a marker drew over the home page (MapKit JS 5.81.65) |
-| 1 | `Kit/BenMap`: loads `mapkit.js` once, initialises with the token endpoint, exposes Center/Zoom/Height, Pins (with a per-pin template and click callback to .NET), FitToPins, Resize, Dispose, theme-following colour scheme. Source-scan guard: `mapkit.` appears nowhere outside `Kit/` | Guard test; a Playwright page with the component alone; the pin click reaches .NET |
-| 2 | `InvestigationsMap` on `BenMap`, behind the provider switch | Playwright on OrgInvestigations, PlaceView and the profile map tab; the pin click still navigates |
+| 1 | **Done.** `Kit/Maps/BenMap` (+ `BenMapPin`, `BenMapViewport`): one `mapkit.js` load and one `init` per page, pins as `MarkerAnnotation`s with glyph/colour/dim/cluster, select → .NET, fit, resize, viewport reporting once per burst of drags, colour scheme following `data-bs-theme` live. The Telerik fallback lives inside it. `MapProviderGuardTests` refuses any provider mention outside `Kit/Maps/`, with a shrinking allow-list for the three components still to cross | Guard test (2); verified through phase 2 rather than a throwaway page — a page that exists only to be tested would have tripped the route crawl |
+| 2 | **Done.** `InvestigationsMap` is a thin adapter over `BenMap`: same-spot grouping, dimmed past visits and the public-landmark mark stay here; its `.razor.js` is gone | Playwright `MapViewport` (3): three drags on the group map produce one bounded request (needed the burst rule above — MapKit reports a drag only when its momentum settles); selecting a pin opens the investigation; the home map still narrows its list. Browser: the Bell Witch Cave place page draws Apple's dark map with its one dimmed pin |
 | 3 | `PublicCaseDiscovery` on `BenMap`: MapKit's `clusteringIdentifier` replaces the hand-rolled clusters; browser geolocation as today | Playwright `HomeMap` category; declined geolocation still shows the map (the NearbyDiscovery lesson) |
 | 4 | `AddressMapPlayer` on `BenMap`: `CircleOverlay` for the radius, single-tap moves the pin, coordinates flow back as they do now | Playwright on the address editor and the Field Kit player; a placed pin saves the same coordinates |
 | 5 | Directions on `mapkit.Directions`: route, ETA and steps drawn client-side; `DirectionsController` and the OSRM dependency retired; print view kept | Playwright on AdminUserDetail; no request leaves for `router.project-osrm.org` |

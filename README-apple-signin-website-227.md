@@ -169,6 +169,16 @@ It is an unauthenticated door that takes a password, so guesses against it are f
 added in item 225 uses `CheckPasswordSignInAsync` with lockout; this should match. **Done** under
 Phase B of `ProjectNotes/External-SignIn-Plan-2026-09-10.md`.
 
+## A Sign in with Apple key exists, and is not yet needed
+
+Ben created key "IsHaunted iOS Signin Key", Key ID `5VY456C8RR`, on 2026-09-10; the `.p8` is kept
+at `~/.ishaunted/AuthKey_5VY456C8RR.p8` (mode 600), outside the repository. Neither flow built
+here uses it: the iPhone app's identity token is verified against Apple's public keys, and the
+web flow asks for `id_token` in the form post precisely so that no client secret is needed. It
+will be needed for **token revocation** — App Review requires an app that offers Sign in with
+Apple to revoke the person's tokens when they delete their account (guideline 5.1.1(v)), and our
+account-deletion flow does not yet call Apple's revoke endpoint. That is its own backlog item.
+
 ## Phase C, decided with Ben and built the same day
 
 Two rules that had been left as questions:

@@ -1,0 +1,189 @@
+@namespace Ben.Web.Website.Library.Kit.Maps
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject MapsOptions Maps
+
+@*
+    The one place the site knows how to draw a map (item 228).
+
+    Every map page passes pins and listens for a click; this component decides what draws them.
+    Today that is Apple MapKit JS when the website can sign a token for it, and Telerik's map over
+    OpenStreetMap tiles when it cannot. The Telerik path is the one being retired, kept only so a
+    deployment with no key still has a map, and it goes when the last page has crossed.
+
+    Pins are Apple's own marker annotations rather than HTML: they cluster, select, and follow the
+    theme without any of the template-by-name-string plumbing the Telerik path needed.
+*@
+
+<div id="@_containerId" class="ben-map" style="height:@Height; border-radius:.5rem; overflow:hidden; position:relative;">
+    @if (Maps.Effective == MapProvider.Telerik && _telerikReady)
+    {
+        <TelerikMap @ref="_telerikMap" Center="@_telerikCenter" Zoom="@_telerikZoom" Height="@Height"
+                    OnPanEnd="@OnTelerikPanEnd" OnZoomEnd="@OnTelerikZoomEnd">
+            <MapLayers>
+                <MapLayer Type="@MapLayersType.Tile"
+                          Attribution="© OpenStreetMap contributors"
+                          Subdomains="@(new[] { "a", "b", "c" })"
+                          UrlTemplate="benMapTileTemplate" />
+                @if (_telerikMarkers.Count > 0)
+                {
+                    <MapLayer Type="@MapLayersType.Marker"
+                              Data="@_telerikMarkers"
+                              LocationField="@nameof(TelerikMarker.LatLng)"
+                              TitleField="@nameof(TelerikMarker.Title)">
+                        <MapLayerMarkerSettings Template="benMapMarkerTemplate" />
+                    </MapLayer>
+                }
+            </MapLayers>
+        </TelerikMap>
+    }
+</div>
+
+@code {
+    /// <summary>The pins to draw. Replace the list to change them; the map redraws only when it differs.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<BenMapPin> Pins { get; set; } = [];
+
+    [Parameter] public string Height { get; set; } = "420px";
+
+    /// <summary>Where to look when there are no pins, or when <see cref="FitToPins"/> is off.</summary>
+    [Parameter] public double CenterLatitude { get; set; } = 39.8283;   // the geographic centre of the US
+    [Parameter] public double CenterLongitude { get; set; } = -98.5795;
+    [Parameter] public double Zoom { get; set; } = 4;
+
+    /// <summary>Frame every pin on load and whenever the pins change. Off when the caller drives the view.</summary>
+    [Parameter] public bool FitToPins { get; set; } = true;
+
+    /// <summary>Raised with the pin's index in <see cref="Pins"/> when somebody selects it.</summary>
+    [Parameter] public EventCallback<int> OnPinClicked { get; set; }
+
+    /// <summary>Raised when a pan or zoom ends, with what is now in view. Not raised for the map's own framing.</summary>
+    [Parameter] public EventCallback<BenMapViewport> OnViewportChanged { get; set; }
+
+    private readonly string _containerId = $"ben-map-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<BenMap>? _self;
+    private IReadOnlyList<BenMapPin>? _drawnPins;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js");
+
+            if (Maps.Effective == MapProvider.Apple)
+            {
+                await _module.InvokeVoidAsync("create", _containerId, _self, new
+                {
+                    tokenPath = MapsOptions.TokenPath,
+                    centerLatitude = CenterLatitude, centerLongitude = CenterLongitude, zoom = Zoom,
+                    fitToPins = FitToPins,
+                });
+            }
+            else
+            {
+                // Telerik resolves template functions by name string at render time, so the map
+                // waits for the module that registers them. See the retired InvestigationsMap.
+                await _module.InvokeVoidAsync("initTelerik", _containerId, _self);
+                _telerikReady = true;
+                StateHasChanged();
+            }
+        }
+
+        if (!ReferenceEquals(_drawnPins, Pins))
+        {
+            _drawnPins = Pins;
+            if (Maps.Effective == MapProvider.Apple)
+            {
+                if (_module is not null && !firstRender)
+                    await _module.InvokeVoidAsync("setPins", _containerId, Pins);
+                else if (_module is not null)
+                    await _module.InvokeVoidAsync("setPins", _containerId, Pins);
+            }
+            else
+            {
+                BuildTelerikMarkers();
+                if (_telerikReady) { StateHasChanged(); _telerikMap?.Refresh(); }
+            }
+        }
+    }
+
+    [JSInvokable]
+    public Task OnPinSelected(int index) =>
+        index >= 0 && index < Pins.Count ? OnPinClicked.InvokeAsync(index) : Task.CompletedTask;
+
+    [JSInvokable]
+    public Task OnRegionChanged(double north, double south, double east, double west, double zoom) =>
+        OnViewportChanged.HasDelegate
+            ? OnViewportChanged.InvokeAsync(new BenMapViewport(north, south, east, west, zoom))
+            : Task.CompletedTask;
+
+    /// <summary>Re-measures the map after its container changes size.</summary>
+    [JSInvokable]
+    public Task OnContainerResized()
+    {
+        _telerikMap?.Refresh();
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _containerId);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { /* the circuit is gone; nothing to tidy on the other side */ }
+        }
+        _self?.Dispose();
+    }
+
+    // ── The Telerik path, kept until the last page crosses ───────────────────
+
+    private TelerikMap? _telerikMap;
+    private bool _telerikReady;
+    private double[] _telerikCenter = [39.8283, -98.5795];
+    private double _telerikZoom = 4;
+    private List<TelerikMarker> _telerikMarkers = [];
+
+    private void BuildTelerikMarkers()
+    {
+        _telerikMarkers = Pins.Select((p, i) => new TelerikMarker
+        {
+            LatLng = [p.Latitude, p.Longitude],
+            Title = p.Title, Glyph = p.Glyph, Color = p.Color, Dimmed = p.Dimmed,
+            Index = i, ContainerId = _containerId,
+        }).ToList();
+
+        if (_telerikMarkers.Count == 0 || !FitToPins)
+        {
+            _telerikCenter = [CenterLatitude, CenterLongitude];
+            _telerikZoom = Zoom;
+            return;
+        }
+        _telerikCenter = [Pins.Average(p => p.Latitude), Pins.Average(p => p.Longitude)];
+        _telerikZoom = Pins.Count == 1 ? 12 : 6;   // coarse, as the old map was; Apple fits exactly
+    }
+
+    private Task OnTelerikPanEnd(MapPanEndEventArgs a)  => RaiseTelerikViewport(a.Extent, _telerikZoom);
+    private Task OnTelerikZoomEnd(MapZoomEndEventArgs a) { _telerikZoom = a.Zoom; return RaiseTelerikViewport(a.Extent, a.Zoom); }
+
+    private Task RaiseTelerikViewport(double[]? extent, double zoom) =>
+        OnViewportChanged.HasDelegate && extent is { Length: 4 }
+            ? OnViewportChanged.InvokeAsync(new BenMapViewport(extent[0], extent[2], extent[3], extent[1], zoom))
+            : Task.CompletedTask;
+
+    private sealed class TelerikMarker
+    {
+        public double[]? LatLng { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Glyph { get; set; }
+        public string? Color { get; set; }
+        public bool Dimmed { get; set; }
+        public int Index { get; set; }
+        public string ContainerId { get; set; } = string.Empty;
+    }
+}
