@@ -7,6 +7,7 @@
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
 @inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
@@ -82,6 +83,10 @@ else
             <a href="/o/@_org.OrgUrlName" class="btn btn-sm btn-outline-primary">Home</a>
             <a href="/o/@_org.OrgUrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
             <a href="/o/@_org.OrgUrlName/events" class="btn btn-sm btn-outline-secondary">Events</a>
+            @if (_tours.Count > 0)
+            {
+                <a href="#org-tours" class="btn btn-sm btn-outline-secondary">Tours</a>
+            }
             @foreach (var navPage in _org.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
             {
                 <a href="/o/@_org.OrgUrlName/@navPage.UrlName" class="btn btn-sm btn-outline-secondary">
@@ -157,6 +162,57 @@ else
             </div>
         }
 
+        @* Item 233: Ben, "Tours are public so, they show up on the map and are searchable."
+           A business's own page is the first place somebody looks for them. *@
+        @if (_tours.Count > 0)
+        {
+            <div class="mt-4" id="org-tours">
+                <h2 class="h4 mb-3">Tours</h2>
+                <div class="row g-3">
+                    @foreach (var tour in _tours)
+                    {
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                @if (tour.CoverUploadFileId is { } cover)
+                                {
+                                    <div class="ratio ratio-16x9 bg-body-tertiary">
+                                        <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
+                                             class="w-100 h-100 object-fit-cover card-img-top" loading="lazy" />
+                                    </div>
+                                }
+                                <div class="card-body">
+                                    <h3 class="h6 card-title mb-1">
+                                        <a class="text-decoration-none"
+                                           href="@($"/o/{_org.OrgUrlName}/tours/{tour.UrlName}")">@tour.Name</a>
+                                    </h3>
+                                    <div class="text-secondary small">
+                                        @if (!string.IsNullOrWhiteSpace(tour.City))
+                                        {
+                                            <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                        }
+                                        @if (tour.Rating is { } rating)
+                                        {
+                                            <text> · @rating.ToString("0.0") ★</text>
+                                        }
+                                    </div>
+                                    <div class="small mt-1">
+                                        @if (tour.NextDateStartUtc is { } next)
+                                        {
+                                            <text>Next: @next.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</text>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-secondary">No dates on the calendar yet</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <OrgApplyPanel OrgId="@_org.OrgId" OrgName="@_org.OrgName" />
     </div>
 }
@@ -167,6 +223,7 @@ else
     [Parameter] public string UrlName { get; set; } = "";
 
     private OrgPublicHomeResponse? _org;
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
     private bool _loading = true;
 
     protected override async Task OnParametersSetAsync()
@@ -174,6 +231,9 @@ else
         _loading = true;
         StateHasChanged();
         _org     = await AdminClient.GetPublicOrgAsync(UrlName);
+        // A group that runs none simply gets an empty list, so nothing needs to know in advance
+        // which kind of business this is.
+        _tours   = (await AdminClient.GetPublicToursAsync(UrlName)).Items;
         _loading = false;
 
         // Arrived on an address the group has since changed. The page loads either way — an old

@@ -1,0 +1,591 @@
+@page "/organizations/{OrgId:guid}/tours/{TourId:guid}"
+@namespace Ben.Web.Website.Library.Manage.Tours
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Microsoft.AspNetCore.Components.Forms
+
+@* One tour, everything about it. An anchor index rather than tabs, the same shape the settings
+   page settled on: tabs would hide five sections to show one, and an owner setting a tour up
+   reads straight down. *@
+
+<PageTitle>@(_tour?.Name ?? "Tour")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    @if (_loading)
+    {
+        <div class="text-secondary">Loading…</div>
+    }
+    else if (_tour is null)
+    {
+        <div class="alert alert-warning">
+            That tour could not be found. <a href="@($"/organizations/{OrgId}/tours")">Back to your tours</a>.
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div>
+                <a class="small text-secondary text-decoration-none" href="@($"/organizations/{OrgId}/tours")">
+                    <BenIcon Name="arrow-left" Class="me-1" />All your tours
+                </a>
+                <h1 class="h3 mb-1 mt-1">
+                    @_tour.Name
+                    @if (!_tour.IsActive)
+                    {
+                        <span class="badge text-bg-secondary align-middle ms-1">Retired</span>
+                    }
+                    else if (!_tour.IsBookable)
+                    {
+                        <span class="badge text-bg-warning align-middle ms-1">Paused</span>
+                    }
+                </h1>
+                <div class="text-secondary small">Meets at @_tour.StartAddressLabel</div>
+            </div>
+
+            @if (_others.Count > 1)
+            {
+                @* Ben asked for this by name: an owner with more than one tour picks which. *@
+                <div>
+                    <label class="form-label fw-semibold small mb-1" for="tour-switcher">Another tour</label>
+                    <select id="tour-switcher" class="form-select"
+                            @onchange="@(e => SwitchTo(e.Value?.ToString()))">
+                        @foreach (var other in _others)
+                        {
+                            <option value="@other.Id" selected="@(other.Id == TourId)">@other.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+
+        <nav class="d-flex flex-wrap gap-2 mb-3">
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-details">Details</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-guides">Guides</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-gallery">Pictures</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#tour-dates">Dates</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@PublicUrl" target="_blank">See the public page</a>
+        </nav>
+
+        @if (_notice is not null)
+        {
+            <div class="alert alert-info" id="tour-plan-note">@_notice</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger" id="tour-error">@_error</div>
+        }
+
+        @* ── Details ─────────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-details">
+            <div class="card-body">
+                <h2 class="h6 card-title">Details</h2>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="tour-edit-name">Name</label>
+                        <input id="tour-edit-name" class="form-control" maxlength="120"
+                               @bind="@_form.Name" @bind:event="oninput" />
+                        <div class="form-text">The link people have already shared keeps working.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="tour-edit-address">Where it starts</label>
+                        @if (_addressResult.Failed)
+                        {
+                            <BenListState TItem="OrganizationAddressRecord" Result="@_addressResult" OnRetry="@LoadAsync" />
+                        }
+                        <select id="tour-edit-address" class="form-select"
+                                @onchange="@(e => _form.StartOrganizationAddressId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : _form.StartOrganizationAddressId)">
+                            @foreach (var address in _addresses)
+                            {
+                                <option value="@address.Id" selected="@(address.Id == _form.StartOrganizationAddressId)">
+                                    @address.StreetAddress1, @address.City @address.State
+                                </option>
+                            }
+                        </select>
+                        <div class="form-text">This is the meeting point your guests are sent.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" for="tour-edit-length">How long it runs</label>
+                        <div class="input-group">
+                            <input id="tour-edit-length" type="number" class="form-control" min="15" max="720" step="5"
+                                   @bind="@_form.DurationMinutes" @bind:event="oninput" />
+                            <span class="input-group-text">minutes</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" for="tour-edit-capacity">People per date</label>
+                        <input id="tour-edit-capacity" type="number" class="form-control" min="1" max="500"
+                               @bind="@_form.DefaultCapacity" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" for="tour-edit-zone">Time zone</label>
+                        <select id="tour-edit-zone" class="form-select"
+                                @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? _form.TimeZoneId)">
+                            @foreach (var zone in Zones)
+                            {
+                                <option value="@zone.Id" selected="@(zone.Id == _form.TimeZoneId)">@zone.Label</option>
+                            }
+                        </select>
+                        <div class="form-text">Times your guests are told are in this zone.</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold" for="tour-edit-description">What it is</label>
+                        @* The site's rich-text box (item 233, Ben: the page should not look plain).
+                           Headings, lists and emphasis, so a tour can read like a page rather than
+                           a paragraph — the same editor a publication uses, so the typography on
+                           the public page is the typography here. *@
+                        <div id="tour-edit-description">
+                            <BenEditor @bind-Value="@_form.Description" Height="320px" />
+                        </div>
+                        <div class="form-text">
+                            This is the main text on your tour's public page. Pictures go in the
+                            gallery below.
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold" for="tour-edit-contact">How to reach you, and how to pay</label>
+                        <input id="tour-edit-contact" class="form-control" maxlength="500"
+                               placeholder="Call 555-0100, or pay the guide in cash on the night."
+                               @bind="@_form.ContactLine" @bind:event="oninput" />
+                        <div class="form-text">
+                            Money is arranged between you and your guests — nothing is taken through
+                            this site. This line goes in the email they get.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="tour-edit-bookable"
+                                   @bind="@_form.IsBookable" />
+                            <label class="form-check-label" for="tour-edit-bookable">Taking sign-ups</label>
+                        </div>
+                        <div class="form-text">Turn this off for a closed season. Dates already set stand.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="tour-edit-reviews"
+                                   @bind="@_form.AllowReviews" />
+                            <label class="form-check-label" for="tour-edit-reviews">Let guests rate this tour</label>
+                        </div>
+                        <div class="form-text">Only people who came to a date that has finished.</div>
+                    </div>
+                    <div class="col-12 d-flex gap-2">
+                        <button type="button" class="btn btn-primary" id="tour-save"
+                                disabled="@_saving" @onclick="SaveAsync">
+                            @(_saving ? "Saving…" : "Save")
+                        </button>
+                        @if (_tour.IsActive)
+                        {
+                            <button type="button" class="btn btn-outline-danger" id="tour-retire"
+                                    disabled="@_saving" @onclick="@(() => SetRetiredAsync(true))">
+                                Retire this tour
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-primary" id="tour-restore"
+                                    disabled="@_saving" @onclick="@(() => SetRetiredAsync(false))">
+                                Run this tour again
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── Guides ──────────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-guides">
+            <div class="card-body">
+                <h2 class="h6 card-title">Guides</h2>
+                <p class="text-secondary small">
+                    Who walks this tour. Their name, and their photograph when they have made one
+                    public, go to every guest who signs up — so they know who they are meeting.
+                    You do not have to be a guide yourself.
+                </p>
+
+                @if (_memberResult.Failed)
+                {
+                    <BenListState TItem="OrgMembershipItem" Result="@_memberResult" OnRetry="@LoadAsync" />
+                }
+                else if (_members.Count == 0)
+                {
+                    <div class="text-secondary small">
+                        This group has no other members yet. Invite your guides under
+                        <a href="@($"/organizations/{OrgId}/members")">Members</a>, then come back.
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        @foreach (var member in _members)
+                        {
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input"
+                                           id="@($"guide-{member.AppUserId}")"
+                                           checked="@_guideIds.Contains(member.AppUserId)"
+                                           @onchange="@(e => ToggleGuide(member.AppUserId, (bool?)e.Value == true))" />
+                                    <label class="form-check-label" for="@($"guide-{member.AppUserId}")">
+                                        @(member.DisplayName ?? "A member")
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <button type="button" class="btn btn-primary mt-3" id="tour-save-guides"
+                            disabled="@_saving" @onclick="SaveGuidesAsync">
+                        @(_saving ? "Saving…" : "Save who guides this tour")
+                    </button>
+                }
+
+                @if (_tour.Guides.Count > 0)
+                {
+                    <div class="mt-3 small text-secondary">
+                        Guests are told: @string.Join(", ", _tour.Guides.Select(g => g.DisplayName)).
+                        @if (_tour.Guides.Any(g => g.PhotoUploadFileId is null))
+                        {
+                            <text>
+                                @string.Join(", ", _tour.Guides.Where(g => g.PhotoUploadFileId is null).Select(g => g.DisplayName))
+                                has no public photograph, so guests will see the name only.
+                            </text>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ── Gallery ─────────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-gallery">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h2 class="h6 card-title">Pictures</h2>
+                        <p class="text-secondary small mb-0">
+                            The first one is the picture on your tour's card. Up to
+                            @MaxImages pictures; @_gallery.Count used.
+                            Photographs a guest sent in can be kept here too, which is what stops
+                            them expiring.
+                        </p>
+                    </div>
+                    <label class="btn btn-outline-primary btn-sm mb-0">
+                        <BenIcon Name="plus" Class="me-1" />Add a picture
+                        <InputFile OnChange="@UploadAsync" accept="image/*" style="display:none;"
+                                   id="tour-image-upload" disabled="@(_uploading || _gallery.Count >= MaxImages)" />
+                    </label>
+                </div>
+
+                @if (_uploading)
+                {
+                    <div class="text-secondary small mt-2">Adding…</div>
+                }
+                @if (_galleryError is not null)
+                {
+                    <div class="alert alert-warning py-2 small mt-2 mb-0" id="tour-gallery-error">@_galleryError</div>
+                }
+
+                @if (_gallery.Count == 0)
+                {
+                    <div class="text-secondary small mt-3">
+                        No pictures yet. A tour with a photograph of the street it walks reads very
+                        differently from one without.
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3 mt-1">
+                        @foreach (var image in _gallery)
+                        {
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <div class="card h-100">
+                                    <img src="@MediaUrls.TourPhoto(image.UploadFileId)"
+                                         alt="@(image.Caption ?? "A picture of this tour")"
+                                         class="card-img-top object-fit-cover" style="height:140px;" />
+                                    <div class="card-body p-2">
+                                        <input class="form-control form-control-sm"
+                                               placeholder="Say what it shows"
+                                               value="@image.Caption"
+                                               @onchange="@(e => SaveCaptionAsync(image.Id, e.Value?.ToString()))" />
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            @if (image.FromAGuest)
+                                            {
+                                                <span class="badge text-bg-secondary">From a guest</span>
+                                            }
+                                            else
+                                            {
+                                                <span></span>
+                                            }
+                                            <button type="button" class="btn btn-link btn-sm text-danger p-0"
+                                                    @onclick="@(() => DeleteImageAsync(image.Id))">Remove</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ── Dates ───────────────────────────────────────────────────────── *@
+        <div class="card mb-3" id="tour-dates">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h2 class="h6 card-title">Dates</h2>
+                        <p class="text-secondary small mb-0">
+                            When this tour runs. Scheduling it again costs nothing — the plan counts
+                            tours, not nights.
+                        </p>
+                    </div>
+                    <a class="btn btn-outline-primary btn-sm text-nowrap" id="tour-schedule"
+                       href="@($"/organizations/{OrgId}/calendar?tour={TourId}")">
+                        <BenIcon Name="plus" Class="me-1" />Schedule a date
+                    </a>
+                </div>
+
+                @if (_dateResult.Failed)
+                {
+                    <div class="mt-3">
+                        <BenListState TItem="OrgCalendarEventRecord" Result="@_dateResult" OnRetry="@LoadAsync" />
+                    </div>
+                }
+                else if (_dates.Count == 0)
+                {
+                    <div class="text-secondary small mt-3">
+                        No dates yet. Nobody can sign up until this tour is on the calendar.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr><th>When</th><th>Guides</th><th class="text-end">Coming</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var date in _dates)
+                                {
+                                    <tr class="@(date.StartDateTime < DateTime.UtcNow ? "text-secondary" : "")">
+                                        <td>@date.StartDateTime.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</td>
+                                        <td class="small">
+                                            @(date.Guides.Count == 0
+                                                ? "—"
+                                                : string.Join(", ", date.Guides.Select(g => g.DisplayName)))
+                                        </td>
+                                        <td class="text-end">
+                                            @date.AttendeeCount@(date.AttendeeCapacity is { } cap ? $" of {cap}" : "")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid TourId { get; set; }
+
+    private TourRecord? _tour;
+    private List<TourRecord> _others = [];
+    private LoadResult<OrganizationAddressRecord> _addressResult = LoadResult<OrganizationAddressRecord>.Ok([]);
+    private LoadResult<OrgMembershipItem> _memberResult = LoadResult<OrgMembershipItem>.Ok([]);
+    private LoadResult<OrgCalendarEventRecord> _dateResult = LoadResult<OrgCalendarEventRecord>.Ok([]);
+    private List<OrganizationAddressRecord> _addresses = [];
+    private List<OrgMembershipItem> _members = [];
+    private List<OrgCalendarEventRecord> _dates = [];
+    private HashSet<Guid> _guideIds = [];
+    private List<TourImageRecord> _gallery = [];
+    private bool _uploading;
+    private string? _galleryError;
+
+    private const int MaxImages = 50;
+    private readonly FormModel _form = new();
+    private string? _orgUrlName;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _notice;
+
+    private static readonly (string Id, string Label)[] Zones =
+    [
+        ("America/New_York",    "Eastern"),
+        ("America/Chicago",     "Central"),
+        ("America/Denver",      "Mountain"),
+        ("America/Phoenix",     "Arizona (no daylight saving)"),
+        ("America/Los_Angeles", "Pacific"),
+        ("America/Anchorage",   "Alaska"),
+        ("Pacific/Honolulu",    "Hawaii"),
+    ];
+
+    private string PublicUrl => _orgUrlName is null || _tour is null
+        ? "#"
+        : $"/o/{_orgUrlName}/tours/{_tour.UrlName}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Awaiting AuthReady on its own hangs the static prerender; the interactive check is what
+        // makes a hard navigation render at all. See the Blazor-server interactivity rule.
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var tours = await AdminClient.GetToursAsync(OrgId);
+        _others = [.. tours.Items];
+        _tour = _others.FirstOrDefault(t => t.Id == TourId);
+
+        if (_tour is not null)
+        {
+            _form.Name = _tour.Name;
+            _form.Description = _tour.Description ?? "";
+            _form.StartOrganizationAddressId = _tour.StartOrganizationAddressId;
+            _form.DurationMinutes = _tour.DurationMinutes;
+            _form.DefaultCapacity = _tour.DefaultCapacity;
+            _form.TimeZoneId = _tour.TimeZoneId;
+            _form.ContactLine = _tour.ContactLine ?? "";
+            _form.IsBookable = _tour.IsBookable;
+            _form.AllowReviews = _tour.AllowReviews;
+            _guideIds = [.. _tour.Guides.Select(g => g.AppUserId)];
+        }
+
+        // Each refusal is kept, not flattened into an empty list: an address list that was
+        // refused and one that is genuinely empty read the same on screen, and the empty reading
+        // is the one that sends somebody off to add an address they already have.
+        _addressResult = await AdminClient.GetOrgAddressesAsync(OrgId);
+        _addresses = [.. _addressResult.Items];
+
+        _memberResult = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        _members = [.. _memberResult.Items.Where(m => m.IsActive).OrderBy(m => m.DisplayName)];
+
+        // The calendar in one call, then narrowed here: a per-tour date endpoint would be a
+        // second way to ask the same question, and the two would disagree within a month.
+        _dateResult = await AdminClient.GetCalendarEventsAsync(OrgId);
+        _dates = [.. _dateResult.Items.Where(e => e.TourId == TourId).OrderByDescending(e => e.StartDateTime)];
+
+        _gallery = [.. (await AdminClient.GetTourGalleryAsync(OrgId, TourId)).Items];
+
+        var org = await AdminClient.GetOrganizationAsync(OrgId);
+        _orgUrlName = org?.UrlName;
+
+        _loading = false;
+    }
+
+    private void SwitchTo(string? id)
+    {
+        if (Guid.TryParse(id, out var tourId) && tourId != TourId)
+            NavManager.NavigateTo($"/organizations/{OrgId}/tours/{tourId}");
+    }
+
+    private void ToggleGuide(Guid appUserId, bool on)
+    {
+        if (on) _guideIds.Add(appUserId); else _guideIds.Remove(appUserId);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_form.StartOrganizationAddressId is not { } addressId) return;
+
+        _saving = true; _error = null; _notice = null;
+        var (saved, error) = await AdminClient.SaveTourAsync(OrgId, TourId, new UpsertTourRequest(
+            _form.Name.Trim(),
+            string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+            addressId, _form.DurationMinutes, _form.DefaultCapacity, _form.TimeZoneId,
+            _form.AllowReviews, _form.IsBookable,
+            string.IsNullOrWhiteSpace(_form.ContactLine) ? null : _form.ContactLine.Trim(),
+            _tour?.MailSubjectTemplate, _tour?.MailBodyTemplate));
+        _saving = false;
+
+        if (saved is null) { _error = error ?? "That could not be saved."; return; }
+        _notice = "Saved.";
+        await LoadAsync();
+    }
+
+    private async Task SaveGuidesAsync()
+    {
+        _saving = true; _error = null; _notice = null;
+        var (saved, error) = await AdminClient.SetTourGuidesAsync(OrgId, TourId, [.. _guideIds]);
+        _saving = false;
+
+        if (saved is null) { _error = error ?? "Those guides could not be saved."; return; }
+        _notice = "Saved who guides this tour.";
+        await LoadAsync();
+    }
+
+    private async Task SetRetiredAsync(bool retired)
+    {
+        _saving = true; _error = null; _notice = null;
+        var (saved, error) = await AdminClient.SetTourRetiredAsync(OrgId, TourId, retired);
+        _saving = false;
+
+        if (saved is null) { _error = error ?? "That could not be changed."; return; }
+        _notice = saved.PlanNote;
+        await LoadAsync();
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        if (e.File is not { } file) return;
+
+        _uploading = true; _galleryError = null;
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: long.MaxValue);
+            var (added, error) = await AdminClient.AddTourImageAsync(
+                OrgId, TourId, stream, file.Name, file.ContentType, caption: null);
+            if (added is null) _galleryError = error ?? "That picture could not be added.";
+        }
+        catch (Exception ex)
+        {
+            _galleryError = $"That picture could not be added: {ex.Message}";
+        }
+        _uploading = false;
+        await LoadAsync();
+    }
+
+    private async Task SaveCaptionAsync(Guid imageId, string? caption)
+    {
+        var (updated, error) = await AdminClient.UpdateTourImageAsync(OrgId, TourId, imageId, caption, null);
+        if (updated is null) { _galleryError = error ?? "That caption could not be saved."; return; }
+        _gallery = [.. updated];
+    }
+
+    private async Task DeleteImageAsync(Guid imageId)
+    {
+        if (!await AdminClient.DeleteTourImageAsync(OrgId, TourId, imageId))
+        {
+            _galleryError = "That picture could not be removed.";
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private sealed class FormModel
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public Guid? StartOrganizationAddressId { get; set; }
+        public int? DurationMinutes { get; set; }
+        public int? DefaultCapacity { get; set; }
+        public string TimeZoneId { get; set; } = "America/Chicago";
+        public string ContactLine { get; set; } = "";
+        public bool IsBookable { get; set; } = true;
+        public bool AllowReviews { get; set; } = true;
+    }
+}

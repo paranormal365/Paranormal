@@ -516,6 +516,63 @@ timeline entry private, or the case is unpublished, the photos come off every pa
 themselves. You do not have to remember which pages they were on. The same is true of the direct
 image links — a link copied out of the page stops working at the same moment.
 
+## Tours
+
+If you run ghost walks, a **tour** is the thing you sell and the thing your plan is priced on. The
+walk down Printers Alley is one tour whether you run it twice a year or four nights a week; a
+second walk down a different street is a second tour. **Administration → Tours** is where they
+live, and each one has its own page.
+
+Two things tell your tours apart. The **meeting point** is required and must be one of your own
+addresses, so it can be corrected in one place and every date follows. The **name** is what
+separates two tours that leave from the same corner, so it has to be different from your other
+tours — and it is what a guest will look for, so use what is on your leaflet.
+
+A tour also carries how long it runs, how many people a date takes, its time zone, a line about
+how to reach you and how to pay, and a description. Nothing about money passes through this site:
+that line is where you tell your guests what to bring and what it costs.
+
+### Adding a tour, and what it costs
+
+Your plan covers one tour. Adding another is charged for the part of your current period that is
+left, on the card you already have on file, and after that every renewal counts the tours you are
+running. If there is no card on file the tour is still yours to run and simply gets counted at
+your next renewal. The Tours page tells you which of those is about to happen before you press
+the button.
+
+**Retiring** a tour stops it taking new dates and drops it from your next renewal. It refunds
+nothing for the period you have already paid for, and it leaves everything the tour has already
+run exactly where it is. **Pausing** — turning off *Taking sign-ups* — is the lighter version for
+a closed season.
+
+### Guides
+
+You do not have to be a guide yourself. Add the people who actually walk it from your members, and
+each date starts with those guides on it — then change them per date, because a tour led by two
+people is not the same person every night.
+
+Every guest who signs up is told who is leading their walk, by name, with their photograph when
+they have made one public on their profile. That is a safety thing: somebody meeting a stranger
+after dark should know who they are looking for. The photograph is optional and always theirs to
+publish or not; a guide who has not published one is simply named.
+
+### Dates
+
+A date is the tour happening, and it goes on the **calendar** like anything else — pick the tour,
+set the time, and the meeting point, length and group size come from the tour unless you say
+otherwise. Scheduling a tour again costs nothing; the plan counts tours, not nights.
+
+A public date of a tour business has to name a tour. Without one there is nothing to tell a guest
+where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
+a guides' meeting, a rehearsal — needs no tour.
+
+### Where your tours show up
+
+Tours are public. They appear on your own public page, on the map on the front page, and in the
+nearby search, with the meeting point given in full — an address held back from somebody deciding
+whether to come is held back from the wrong person. Each tour also has a page of its own at
+`/o/your-group/tours/the-tour-name`, which is the link worth sharing.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

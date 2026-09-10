@@ -219,7 +219,9 @@ public sealed record PublicTourListItem(
     int UpcomingDateCount,
     decimal? Rating,
     int RatingCount,
-    double? DistanceMiles = null);
+    double? DistanceMiles = null,
+    /// <summary>The tour's first picture, for the card. Null when it has none.</summary>
+    Guid? CoverUploadFileId = null);
 
 /// <summary>
 /// One tour's own page.
@@ -251,7 +253,13 @@ public sealed record PublicTourRecord(
     IReadOnlyList<PublicGuideRecord> Guides,
     IReadOnlyList<PublicEventListItem> UpcomingDates,
     decimal? Rating,
-    int RatingCount);
+    int RatingCount,
+    /// <summary>The tour's own pictures, in the order the business put them.</summary>
+    IReadOnlyList<PublicTourImage>? Gallery = null);
+
+/// <summary>A picture on a tour's public page.</summary>
+/// <param name="Caption">Also the alt text, so a picture here is never mute.</param>
+public sealed record PublicTourImage(Guid UploadFileId, string? Caption);
 
 /// <summary>A tour as a pin: the least a map needs, and nothing a map does not.</summary>
 public sealed record PublicTourMapPin(

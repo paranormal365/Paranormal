@@ -81,7 +81,7 @@
                 <BenLoaderOverlay Visible="true" Text="Looking nearby…" />
             </div>
         }
-        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0)
+        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0 && _tours.Count == 0)
         {
             <div class="alert alert-light text-muted text-center py-4">
                 Nothing found within @_radiusMiles miles.
@@ -90,6 +90,57 @@
         }
         else if (_hasSearched)
         {
+            @* ── Tours (item 233) ─────────────────────────────────────────────── *@
+            @* Ben: "Tours are public so, they show up on the map and are searchable." First in
+               the list, because a walk with a date on it is the most actionable thing here. *@
+            @if (_tours.Count > 0)
+            {
+                <h5 class="mb-2">Tours you can walk</h5>
+                <div class="row g-3 mb-4">
+                    @foreach (var tour in _tours)
+                    {
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1">@tour.Name</h6>
+                                    <p class="card-text text-muted mb-1" style="font-size:.8rem;">
+                                        @if (!string.IsNullOrWhiteSpace(tour.City))
+                                        {
+                                            <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                        }
+                                        @if (tour.DistanceMiles is { } miles)
+                                        {
+                                            <text> · @miles.ToString("F0") mi</text>
+                                        }
+                                        @if (tour.Rating is { } rating)
+                                        {
+                                            <text> · @rating.ToString("0.0") ★</text>
+                                        }
+                                    </p>
+                                    <p class="card-text mb-0" style="font-size:.85rem;">
+                                        @if (tour.NextDateStartUtc is { } next)
+                                        {
+                                            <text>Next @next.ToDisplayDateTime()</text>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-secondary">No dates up yet</span>
+                                        }
+                                    </p>
+                                    <p class="card-text text-muted mb-0" style="font-size:.78rem;">
+                                        Run by @tour.OrganizationName
+                                    </p>
+                                </div>
+                                <div class="card-footer bg-transparent pt-2">
+                                    <a href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")"
+                                       class="btn btn-sm btn-outline-primary">See this tour</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
             @* ── Public events ────────────────────────────────────────────────── *@
             @if (_events.Count > 0)
             {
@@ -166,6 +217,7 @@
     private string? _manualError;
 
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyEventResult> _events = [];
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyOrgResult>   _groups = [];
 
     private double? _lat, _lon;
@@ -246,6 +298,8 @@
 
         _events = results?.Events ?? [];
         _groups = results?.Organizations ?? [];
+        _tours  = (await AdminClient.SearchToursAsync(
+            latitude: _lat.Value, longitude: _lon.Value, radiusMiles: _radiusMiles)).Items;
         _hasSearched = true;
         _searching   = false;
         StateHasChanged();

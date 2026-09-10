@@ -89,6 +89,11 @@ public sealed class PublicTourController : BenControllerBase
         var guides = await GuidesOfAsync(db, tour, ct);
         var (rating, ratingCount) = await PublicEventController.TourRatingAsync(db, tour.Id, ct);
 
+        var gallery = await db.TourGalleryImages.AsNoTracking()
+            .Where(g => g.TourId == tour.Id).OrderBy(g => g.SortOrder)
+            .Select(g => new PublicTourImage(g.UploadFileId, g.Caption))
+            .ToListAsync(ct);
+
         return Ok(new PublicTourRecord(
             tour.Id, tour.Name, tour.UrlName, _sanitizer.SanitizeHtml(tour.Description),
             org.Id, org.Name, org.UrlName,
@@ -96,7 +101,7 @@ public sealed class PublicTourController : BenControllerBase
             address?.City, address?.State, address?.Latitude, address?.Longitude,
             tour.DurationMinutes, tour.DefaultCapacity, tour.TimeZoneId,
             tour.ContactLine, tour.IsBookable, tour.AllowReviews,
-            guides, dates, rating, ratingCount));
+            guides, dates, rating, ratingCount, gallery));
     }
 
     /// <summary>Every tour that can be drawn on a map.</summary>
@@ -220,6 +225,14 @@ public sealed class PublicTourController : BenControllerBase
             .Select(r => new { r.TourId, r.Stars })
             .ToListAsync(ct);
 
+        // The first picture only: a card shows one, and pulling every gallery for a list of
+        // forty tours would download a brochure to draw forty thumbnails.
+        var covers = await db.TourGalleryImages.AsNoTracking()
+            .Where(g => ids.Contains(g.TourId))
+            .GroupBy(g => g.TourId)
+            .Select(g => new { TourId = g.Key, UploadFileId = g.OrderBy(x => x.SortOrder).First().UploadFileId })
+            .ToListAsync(ct);
+
         var addresses = await db.OrganizationAddresses.AsNoTracking()
             .Where(a => tours.Select(t => t.StartOrganizationAddressId).Contains(a.Id))
             .ToListAsync(ct);
@@ -245,7 +258,8 @@ public sealed class PublicTourController : BenControllerBase
                 stars.Count,
                 from is { } f && address?.Latitude is { } alat && address.Longitude is { } alon
                     ? Distance.Miles(f.Lat, f.Lon, (double)alat, (double)alon)
-                    : null);
+                    : null,
+                covers.FirstOrDefault(c => c.TourId == t.Id)?.UploadFileId);
         })];
     }
 

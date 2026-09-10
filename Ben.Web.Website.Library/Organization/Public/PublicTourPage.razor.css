@@ -1,0 +1,41 @@
+/*
+    The month beside the list of dates (item 233).
+
+    Two things went wrong the first time it was drawn, both reported by Ben while looking at a
+    real tour: the calendar ran outside its card, and the day that was selected had its number
+    hidden.
+
+    The width: Telerik's calendar lays itself out from a fixed cell size and does not shrink to
+    its container, so on a narrow column it simply overflowed. It is allowed to scroll sideways
+    inside its own box rather than pushing the page around it — the page must never scroll
+    sideways, whatever a widget inside it wants.
+
+    The number: the marker for "this tour runs today" was coloured blue, and the SELECTED day is
+    already painted blue, so on that one day the number vanished into its own highlight. The
+    marker is now a dot under the number, drawn in currentColor — so it takes the cell's own text
+    colour and stays legible on the ordinary background, on today's, and on the selected one.
+*/
+
+.tour-calendar {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.tour-calendar ::deep .k-calendar {
+    max-width: 100%;
+}
+
+.tour-cell {
+    display: inline-block;
+    line-height: 1.1;
+}
+
+.tour-cell--runs::after {
+    content: "";
+    display: block;
+    width: 5px;
+    height: 5px;
+    margin: 2px auto 0;
+    border-radius: 50%;
+    background: currentColor;
+}

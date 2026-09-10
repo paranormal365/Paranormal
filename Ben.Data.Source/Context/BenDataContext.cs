@@ -111,6 +111,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Tour> Tours { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourReview> TourReviews { get; set; }
+        public virtual DbSet<TourGalleryImage> TourGalleryImages { get; set; }
         public virtual DbSet<OrgCalendarEventGuide> OrgCalendarEventGuides { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<Investigation> Investigations { get; set; }
@@ -731,6 +732,25 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgCalendarEventGuide>()
                 .HasOne(g => g.CreatedByAppUser).WithMany()
                 .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // A picture belongs to one tour once. Cascade from the tour; NoAction on the file, so
+            // removing a picture from a page never reaches into the file table on its own.
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasIndex(g => new { g.TourId, g.UploadFileId }).IsUnique();
+            modelBuilder.Entity<TourGalleryImage>()
+                .Property(g => g.Caption).HasMaxLength(300);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.Tour).WithMany()
+                .HasForeignKey(g => g.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.UploadFile).WithMany()
+                .HasForeignKey(g => g.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.UpdatedByAppUser).WithMany()
+                .HasForeignKey(g => g.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // One review per guest per tour: the same person walking it three times has one
             // opinion of it. Cascade from the tour; NoAction everywhere else, so deleting an

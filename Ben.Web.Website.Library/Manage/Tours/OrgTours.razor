@@ -1,0 +1,293 @@
+@page "/organizations/{OrgId:guid}/tours"
+@namespace Ben.Web.Website.Library.Manage.Tours
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Ben, 2026-09-10: "The tour owner would need to be able to manage their tours from the web they
+   would need to be able to select which one if they have more than one tour." This page is the
+   list and the front door; each tour has its own page behind it, because a tour carries its
+   guides, its dates, its email, its gallery and its reviews, and none of that fits in a row. *@
+
+<PageTitle>Tours</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">Tours<HelpLink Slug="organization-administration" Anchor="tours" /></h1>
+            <p class="text-secondary mb-0">
+                A tour is a walk you sell. Schedule it as often as you like — the dates are when it
+                happens, and this is what it is.
+            </p>
+        </div>
+        <a class="btn btn-outline-secondary" href="@($"/organizations/{OrgId}/calendar")">
+            <BenIcon Name="calendar" Class="me-1" />The calendar
+        </a>
+    </div>
+
+    @if (_plan is { IsPerTour: true })
+    {
+        <div class="alert alert-secondary d-flex flex-wrap gap-3 align-items-center" id="tours-plan-note">
+            <div>
+                <strong>@_plan.TierName</strong> — @($"{_plan.UnitPrice:C}") per tour, billed @Cadence(_plan.Interval).
+            </div>
+            <div class="text-secondary small">
+                You run @Count(_plan.ActiveTours, "tour").
+                @if (_plan.CoveredTours > 0)
+                {
+                    <text>Your plan is paid for @Count(_plan.CoveredTours, "tour") this period.</text>
+                }
+                @if (_plan.NextTourCostsToday is { } cost && cost > 0m)
+                {
+                    <text>One more would be @($"{cost:C}") for the rest of this period.</text>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" id="tours-error">@_error</div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h6 card-title">Add a tour</h2>
+            <p class="text-secondary small">
+                Two tours that leave from the same place are told apart by their names, so give this
+                one the name your guests will look for.
+            </p>
+
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold" for="tour-name">Name</label>
+                    <input id="tour-name" class="form-control" maxlength="120"
+                           placeholder="Printers Alley Ghost Walk"
+                           @bind="@_form.Name" @bind:event="oninput" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold" for="tour-address">Where it starts</label>
+                    @* A plain select: Telerik dropdowns have repeatedly failed to push their
+                       selection in this codebase. *@
+                    <select id="tour-address" class="form-select"
+                            @onchange="@(e => _form.StartOrganizationAddressId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                        <option value="" selected="@(_form.StartOrganizationAddressId is null)">Choose an address…</option>
+                        @foreach (var address in _addresses)
+                        {
+                            <option value="@address.Id" selected="@(address.Id == _form.StartOrganizationAddressId)">
+                                @address.StreetAddress1, @address.City @address.State
+                            </option>
+                        }
+                    </select>
+                    @if (_addresses.Count == 0)
+                    {
+                        <div class="form-text">
+                            You have no addresses yet. Add your meeting point under
+                            <a href="@($"/organizations/{OrgId}")">Addresses</a> first.
+                        </div>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold" for="tour-zone">Time zone</label>
+                    <select id="tour-zone" class="form-select"
+                            @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? _form.TimeZoneId)">
+                        @foreach (var zone in Zones)
+                        {
+                            <option value="@zone.Id" selected="@(zone.Id == _form.TimeZoneId)">@zone.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold" for="tour-length">How long it runs</label>
+                    <div class="input-group">
+                        <input id="tour-length" type="number" class="form-control" min="15" max="720" step="5"
+                               @bind="@_form.DurationMinutes" @bind:event="oninput" />
+                        <span class="input-group-text">minutes</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold" for="tour-capacity">People per date</label>
+                    <input id="tour-capacity" type="number" class="form-control" min="1" max="500"
+                           @bind="@_form.DefaultCapacity" @bind:event="oninput" />
+                    <div class="form-text">A date can take a different number.</div>
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-primary" id="tour-add"
+                            disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Name) || _form.StartOrganizationAddressId is null)"
+                            @onclick="CreateAsync">
+                        @(_saving ? "Adding…" : "Add this tour")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-secondary">Loading…</div>
+    }
+    else if (_tours.Failed)
+    {
+        <BenListState TItem="TourRecord" Result="@_tours" OnRetry="@LoadAsync" />
+    }
+    else if (_tours.Items.Count == 0)
+    {
+        <div class="text-secondary">No tours yet. The one you add above is the one your plan covers.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Tour</th>
+                        <th>Starts at</th>
+                        <th>Next date</th>
+                        <th class="text-end">Dates</th>
+                        <th>Guides</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tour in _tours.Items)
+                    {
+                        <tr class="@(tour.IsActive ? "" : "text-secondary")">
+                            <td>
+                                <a href="@($"/organizations/{OrgId}/tours/{tour.Id}")">@tour.Name</a>
+                                @if (!tour.IsActive)
+                                {
+                                    <span class="badge text-bg-secondary ms-1">Retired</span>
+                                }
+                                else if (!tour.IsBookable)
+                                {
+                                    <span class="badge text-bg-warning ms-1">Paused</span>
+                                }
+                            </td>
+                            <td class="small">@tour.StartAddressLabel</td>
+                            <td class="small">
+                                @(tour.NextDateStartUtc is { } next
+                                    ? next.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")
+                                    : "—")
+                            </td>
+                            <td class="text-end">@tour.TotalDateCount</td>
+                            <td class="small">
+                                @(tour.Guides.Count == 0
+                                    ? "Nobody yet"
+                                    : string.Join(", ", tour.Guides.Select(g => g.DisplayName)))
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-outline-secondary btn-sm text-nowrap"
+                                   href="@($"/organizations/{OrgId}/tours/{tour.Id}")">Open</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private LoadResult<TourRecord> _tours = LoadResult<TourRecord>.Ok([]);
+    private List<OrganizationAddressRecord> _addresses = [];
+    private TourPlanRecord? _plan;
+    private readonly FormModel _form = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    /// <summary>
+    /// The zones a US tour actually runs in, plus the two outside the mainland.
+    /// </summary>
+    /// <remarks>
+    /// A full IANA list is 600 rows and none of the extra 590 is a ghost walk. A business
+    /// somewhere else says so and we widen this — a short honest list beats a long one nobody
+    /// can find their city in.
+    /// </remarks>
+    private static readonly (string Id, string Label)[] Zones =
+    [
+        ("America/New_York",    "Eastern"),
+        ("America/Chicago",     "Central"),
+        ("America/Denver",      "Mountain"),
+        ("America/Phoenix",     "Arizona (no daylight saving)"),
+        ("America/Los_Angeles", "Pacific"),
+        ("America/Anchorage",   "Alaska"),
+        ("Pacific/Honolulu",    "Hawaii"),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Awaiting AuthReady on its own hangs the static prerender; the interactive check is what
+        // makes a hard navigation render at all. See the Blazor-server interactivity rule.
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tours = await AdminClient.GetToursAsync(OrgId);
+
+        var addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+        _addresses = [.. addresses.Items];
+        if (_form.StartOrganizationAddressId is null && _addresses.Count == 1)
+            _form.StartOrganizationAddressId = _addresses[0].Id;
+
+        // The plan is money, so a member who cannot read billing simply does not get this line.
+        _plan = await AdminClient.GetTourPlanAsync(OrgId);
+
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_form.StartOrganizationAddressId is not { } addressId) return;
+
+        _saving = true;
+        _error = null;
+        var (created, error) = await AdminClient.SaveTourAsync(OrgId, null, new UpsertTourRequest(
+            _form.Name.Trim(), null, addressId,
+            _form.DurationMinutes, _form.DefaultCapacity, _form.TimeZoneId));
+        _saving = false;
+
+        if (created is null)
+        {
+            _error = error ?? "That tour could not be added.";
+            return;
+        }
+
+        // Straight to its page: guides, the guest email and the dates all live there, and a
+        // business that has just defined a tour is about to want them.
+        NavManager.NavigateTo($"/organizations/{OrgId}/tours/{created.Id}");
+    }
+
+    private static string Count(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
+
+    private static string Cadence(Ben.Data.Common.Enums.BillingInterval interval) => interval switch
+    {
+        Ben.Data.Common.Enums.BillingInterval.Monthly    => "monthly",
+        Ben.Data.Common.Enums.BillingInterval.Quarterly  => "quarterly",
+        Ben.Data.Common.Enums.BillingInterval.HalfYearly => "every six months",
+        _                                                => "yearly",
+    };
+
+    private sealed class FormModel
+    {
+        public string Name { get; set; } = "";
+        public Guid? StartOrganizationAddressId { get; set; }
+        public int? DurationMinutes { get; set; } = 90;
+        public int? DefaultCapacity { get; set; } = 20;
+        public string TimeZoneId { get; set; } = "America/Chicago";
+    }
+}

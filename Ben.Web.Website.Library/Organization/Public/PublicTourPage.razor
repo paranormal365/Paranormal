@@ -1,0 +1,293 @@
+@page "/o/{UrlName}/tours/{TourSlug}"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@using Ben.Web.Services
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@* One tour, for somebody deciding whether to come. The meeting point is given in full and the
+   guides are named and pictured: Ben's reason was safety, and an address withheld from the person
+   deciding whether to turn up is withheld from the wrong reader. *@
+
+<FeatureGate Flag="@SiteFeatures.Events">
+<PageTitle>@(_tour?.Name ?? "Tour") — @(_tour?.OrganizationName ?? UrlName)</PageTitle>
+
+@if (_tour is not null)
+{
+    <Ben.Web.Website.Library.Shared.SocialCard Title="@($"{_tour.Name} — {_tour.OrganizationName}")"
+                                               Description="@SocialSummary"
+                                               RelativeUrl="@($"/o/{UrlName}/tours/{TourSlug}")"
+                                               Type="article" />
+}
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    </div>
+}
+else if (_tour is null)
+{
+    <div class="container py-5 text-center">
+        <h2 class="text-muted">Tour not found</h2>
+        <p class="text-secondary">
+            This tour is no longer running, or the link is wrong.
+            <a href="/o/@UrlName">← Back to @UrlName</a>
+        </p>
+    </div>
+}
+else
+{
+    <div class="container-fluid px-3 py-3" style="max-width:800px; margin:0 auto;">
+        <div class="mb-3">
+            <a href="@($"/o/{_tour.OrganizationUrlName}")" class="text-decoration-none small">
+                &larr; @_tour.OrganizationName
+            </a>
+        </div>
+
+        @* The picture first, when there is one: a walk is sold on what the street looks like
+           after dark, and a page of grey text sells nothing. *@
+        @if (_gallery.Count > 0)
+        {
+            <div class="ratio ratio-21x9 rounded overflow-hidden mb-3 bg-body-tertiary">
+                <img src="@MediaUrls.TourPhoto(_gallery[0].UploadFileId)"
+                     alt="@(_gallery[0].Caption ?? _tour.Name)"
+                     class="w-100 h-100 object-fit-cover" />
+            </div>
+        }
+
+        <h1 class="mb-1">@_tour.Name</h1>
+        <p class="text-secondary mb-3">
+            Run by <a href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
+            @if (_tour.Rating is { } rating)
+            {
+                <text> · @rating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
+            }
+        </p>
+
+        @if (!_tour.IsBookable)
+        {
+            <div class="alert alert-warning" id="tour-paused">
+                This tour isn't taking sign-ups just now.
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Where you meet</dt>
+                    <dd class="col-sm-9" id="tour-meeting-point">@_tour.MeetingPoint</dd>
+
+                    @if (_tour.DurationMinutes is { } minutes)
+                    {
+                        <dt class="col-sm-3">How long</dt>
+                        <dd class="col-sm-9">@Length(minutes)</dd>
+                    }
+
+                    @if (_tour.DefaultCapacity is { } capacity)
+                    {
+                        <dt class="col-sm-3">Group size</dt>
+                        <dd class="col-sm-9">Up to @capacity people</dd>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_tour.ContactLine))
+                    {
+                        <dt class="col-sm-3">Getting in touch</dt>
+                        <dd class="col-sm-9" id="tour-contact">@_tour.ContactLine</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_tour.Description))
+        {
+            <div class="mb-4">@((MarkupString)_tour.Description!)</div>
+        }
+
+        @if (_tour.Guides.Count > 0)
+        {
+            <h2 class="h5 mb-2">Who you'll be walking with</h2>
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                @foreach (var guide in _tour.Guides)
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        @if (guide.PhotoUploadFileId is { } photoId)
+                        {
+                            <img src="@MediaUrls.GuidePhoto(photoId)" alt="@guide.DisplayName"
+                                 width="48" height="48" class="rounded-circle object-fit-cover" />
+                        }
+                        else
+                        {
+                            <span class="rounded-circle bg-body-tertiary d-inline-flex align-items-center justify-content-center"
+                                  style="width:48px;height:48px;"><BenIcon Name="user" /></span>
+                        }
+                        <span class="fw-semibold">@guide.DisplayName</span>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (_gallery.Count > 1)
+        {
+            <h2 class="h5 mb-2">Pictures</h2>
+            <div class="row g-2 mb-4" id="tour-gallery">
+                @foreach (var picture in _gallery.Skip(1))
+                {
+                    <div class="col-6 col-md-4">
+                        <figure class="mb-0">
+                            <div class="ratio ratio-4x3 rounded overflow-hidden bg-body-tertiary">
+                                <img src="@MediaUrls.TourPhoto(picture.UploadFileId)"
+                                     alt="@(picture.Caption ?? _tour.Name)"
+                                     class="w-100 h-100 object-fit-cover" loading="lazy" />
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(picture.Caption))
+                            {
+                                <figcaption class="small text-secondary mt-1">@picture.Caption</figcaption>
+                            }
+                        </figure>
+                    </div>
+                }
+            </div>
+        }
+
+        <h2 class="h5 mb-2">When it runs</h2>
+        @if (_tour.UpcomingDates.Count == 0)
+        {
+            <p class="text-secondary" id="tour-no-dates">
+                Nothing on the calendar just now. @_tour.OrganizationName will put the next dates up here.
+            </p>
+        }
+        else
+        {
+            @* A month at a glance beside the list: somebody deciding whether to come is asking
+               "is there one on a Saturday?", and a list of eight dates answers that badly. The
+               calendar marks the days this tour runs and selecting one scrolls the list. *@
+            <div class="row g-3 mb-4">
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-body p-2 tour-calendar">
+                            <TelerikCalendar Value="@_selectedDate"
+                                             ValueChanged="@((DateTime d) => _selectedDate = d)"
+                                             Min="@_calendarMin"
+                                             Max="@_calendarMax"
+                                             ShowOtherMonthDays="false">
+                                <MonthCellTemplate>
+                                    @{ var day = ((DateTime)context).Date; }
+                                    @* A dot under the number, not a colour on it: the selected day
+                                       is already painted, and a blue number on a blue cell is a
+                                       day nobody can read. *@
+                                    <span class="tour-cell @(RunsOn(day) ? "tour-cell--runs" : "")">@day.Day</span>
+                                </MonthCellTemplate>
+                            </TelerikCalendar>
+                        </div>
+                    </div>
+                    <p class="text-secondary small mt-2 mb-0">
+                        A dot marks a day this tour runs.
+                    </p>
+                </div>
+                <div class="col-lg-7">
+            <div class="list-group" id="tour-dates">
+                @foreach (var date in _tour.UpcomingDates)
+                {
+                    <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3"
+                       href="@($"/o/{_tour.OrganizationUrlName}/events/{date.UrlName}")">
+                        <span>
+                            <span class="fw-semibold">
+                                @date.StartDateTime.ToViewerLocalTime(UserState).ToString("dddd, MM/dd/yyyy")
+                            </span>
+                            <span class="text-secondary ms-2">
+                                @date.StartDateTime.ToViewerLocalTime(UserState).ToString("h:mm tt")
+                            </span>
+                        </span>
+                        <span class="text-secondary small text-nowrap">
+                            @if (date.AttendeeCapacity is { } cap)
+                            {
+                                var left = Math.Max(0, cap - date.AttendingCount);
+                                @(left == 0 ? "Full" : $"{left} left")
+                            }
+                            else
+                            {
+                                @($"{date.AttendingCount} coming")
+                            }
+                        </span>
+                    </a>
+                }
+            </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+</FeatureGate>
+
+@code {
+    [Parameter] public string UrlName { get; set; } = "";
+    [Parameter] public string TourSlug { get; set; } = "";
+
+    private PublicTourRecord? _tour;
+    private bool _loading = true;
+
+    private IReadOnlyList<PublicTourImage> _gallery = [];
+
+    /// <summary>The day the calendar is showing. Starts on the next date this tour runs.</summary>
+    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _calendarMin = DateTime.Today.AddYears(-1);
+    private DateTime _calendarMax = DateTime.Today.AddYears(1);
+    private HashSet<DateTime> _dateDays = [];
+
+    /// <summary>Whether this tour runs on that day, in the reader's own zone.</summary>
+    private bool RunsOn(DateTime day) => _dateDays.Contains(day.Date);
+
+    private string SocialSummary => _tour is null
+        ? ""
+        : $"{_tour.Name}, meeting at {_tour.MeetingPoint}. Run by {_tour.OrganizationName}.";
+
+    // Loaded during prerender so a link shared into a group chat has something to show, then
+    // again once the circuit knows who is reading.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _tour = await AdminClient.GetPublicTourAsync(UrlName, TourSlug);
+        _gallery = _tour?.Gallery ?? [];
+
+        // The dates in the reader's zone, so the bold days on the calendar match the times in
+        // the list beside it.
+        _dateDays = [.. (_tour?.UpcomingDates ?? [])
+            .Select(d => d.StartDateTime.ToViewerLocalTime(UserState).Date)];
+
+        if (_dateDays.Count > 0)
+        {
+            _selectedDate = _dateDays.Min();
+            _calendarMin = _dateDays.Min().AddMonths(-1);
+            _calendarMax = _dateDays.Max().AddMonths(1);
+        }
+
+        _loading = false;
+    }
+
+    private static string Length(int minutes)
+    {
+        var hours = minutes / 60;
+        var rest = minutes % 60;
+        return hours switch
+        {
+            0 => $"about {rest} minutes",
+            _ when rest == 0 => $"about {hours} hour{(hours == 1 ? "" : "s")}",
+            _ => $"about {hours} hour{(hours == 1 ? "" : "s")} {rest} minutes",
+        };
+    }
+}

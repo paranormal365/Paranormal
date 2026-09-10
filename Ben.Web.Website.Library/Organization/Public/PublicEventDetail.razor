@@ -4,6 +4,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
@@ -47,10 +48,59 @@ else
             </a>
         </div>
 
+        @if (_event.TourName is { } tourName)
+        {
+            <div class="text-secondary small mb-1">
+                @if (_event.TourUrlName is { } tourSlug)
+                {
+                    <a href="@($"/o/{_event.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
+                }
+                else
+                {
+                    @tourName
+                }
+                @if (_event.TourRating is { } rating)
+                {
+                    <text> · @rating.ToString("0.0") ★ (@_event.TourRatingCount)</text>
+                }
+            </div>
+        }
+
         <h1 class="mb-1">@_event.Title</h1>
         <p class="text-secondary mb-4">
             Hosted by <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
         </p>
+
+        @* Ben asked for the guide's name and face to reach a guest "for safety" — so it is on the
+           page as well as in the email, for anybody who never opens the email. A guide with no
+           public photograph is still named; the picture was always optional. *@
+        @if (_event.Guides is { Count: > 0 } guides)
+        {
+            <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+                @foreach (var guide in guides)
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        @if (guide.PhotoUploadFileId is not null)
+                        {
+                            <img src="@MediaUrls.GuidePhoto(guide.PhotoUploadFileId!.Value)"
+                                 alt="@guide.DisplayName" width="40" height="40"
+                                 class="rounded-circle object-fit-cover" />
+                        }
+                        else
+                        {
+                            <span class="rounded-circle bg-body-tertiary d-inline-flex align-items-center justify-content-center"
+                                  style="width:40px;height:40px;">
+                                <BenIcon Name="user" />
+                            </span>
+                        }
+                        <div class="small">
+                            <div class="fw-semibold">@guide.DisplayName</div>
+                            <div class="text-secondary">Your guide</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
 
         @if (_error is not null)
         {

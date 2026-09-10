@@ -58,6 +58,10 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
     public string SharedFieldSessionFile(string shareToken, Guid fileId) =>
         $"/media/shared/{Uri.EscapeDataString(shareToken)}/files/{fileId}";
 
+    public string GuidePhoto(Guid uploadFileId) => $"/media/guide-photo/{uploadFileId}";
+
+    public string TourPhoto(Guid uploadFileId) => $"/media/tour-photo/{uploadFileId}";
+
     private string Build(Guid fileId, string kind)
     {
         var cacheKey = $"{kind}:{fileId}";

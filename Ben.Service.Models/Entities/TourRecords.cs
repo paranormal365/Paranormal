@@ -86,3 +86,14 @@ public sealed record TourPlanRecord(
     decimal? NextTourCostsToday,
     DateTime? CurrentPeriodEndUtc,
     bool HasCardOnFile);
+
+/// <summary>One picture on a tour's page.</summary>
+/// <param name="FromAGuest">
+/// True when it was kept from something a guest sent in, so the business can tell its own
+/// photographs from the ones it was given.
+/// </param>
+public sealed record TourImageRecord(
+    Guid Id, Guid UploadFileId, int SortOrder, string? Caption, bool FromAGuest);
+
+/// <summary>Changing a picture's caption or where it sits.</summary>
+public sealed record UpdateTourImageRequest(string? Caption, int? SortOrder);
