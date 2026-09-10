@@ -490,4 +490,77 @@ public class AppleAuthControllerTests
         var refusal = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, refusal.StatusCode);
     }
+
+    // ── The email identifies nobody ───────────────────────────────────────────
+
+    /// <summary>
+    /// A returning Apple identity signs into the same account even when the address has changed
+    /// completely.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what makes Hide My Email survivable. The identity is Apple's <c>sub</c>, a
+    /// stable identifier for this person in this app group; the address is decoration. Somebody can
+    /// rotate their relay, turn the relay off, or move to a different Apple ID address, and still be
+    /// the same person here.</para>
+    ///
+    /// <para>Pinned because the tempting "improvement" is to look an Apple user up by email. That
+    /// would sign a relay user into nothing, or worse, into whatever account happened to hold a
+    /// matching address.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AReturningIdentityIsFoundBySubjectWhateverTheEmailSays()
+    {
+        var mine = new AppUser { Id = Guid.NewGuid(), Email = "ben@ishaunted.com" };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByLoginAsync("Apple", Sub)).ReturnsAsync(mine);
+        var sim = SignInManagerMock(um);
+
+        // A relay address that matches no account here, and never will.
+        var result = await Build(um, new FakeValidator(
+            new AppleIdentity(Sub, "xyz789@privaterelay.appleid.com", true, true)), sim)
+            .SignIn(Request(), default);
+
+        Assert.IsType<EmptyResult>(result);
+        sim.Verify(s => s.SignInAsync(mine, false, null), Times.Once);
+
+        // The address was never even consulted: the subject already answered the question.
+        um.Verify(m => m.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A DIFFERENT Apple identity is a different person, even at the same address.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of the test above, and the reason the subject lookup comes first. Matching on
+    /// address alone would let one Apple ID sign in as whoever else happened to use that address.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnknownSubjectIsNotTreatedAsAReturningUser()
+    {
+        var um = UserManagerMock();   // FindByLoginAsync answers null for every subject
+        var sim = SignInManagerMock(um);
+
+        var result = await Build(um, new FakeValidator(
+            new AppleIdentity("a.completely.different.sub", null, false, true)), sim)
+            .SignIn(Request(), default);
+
+        // No account, no name, no handle: it asks rather than guessing.
+        Assert.IsType<ConflictObjectResult>(result);
+        sim.Verify(s => s.SignInAsync(It.IsAny<AppUser>(), It.IsAny<bool>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    /// <summary>A token carrying no subject is refused; there is nothing to identify.</summary>
+    [Fact]
+    public async Task ATokenWithNoSubjectIsRefused()
+    {
+        var um = UserManagerMock();
+        var sim = SignInManagerMock(um);
+
+        // The validator throws for a token it cannot read a subject from - see its own guard.
+        var result = await Build(um, new FakeValidator(null), sim).SignIn(Request(), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        um.Verify(m => m.CreateAsync(It.IsAny<AppUser>()), Times.Never);
+    }
 }

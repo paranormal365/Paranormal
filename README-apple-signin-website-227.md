@@ -148,8 +148,8 @@ against Apple's published keys for the iPhone app.
 
 1. **Create a Services ID.** Identifiers, then Services IDs. Something like `com.ishaunted.web`. It
    is not a bundle id and the existing app ids will not work.
-2. **Enable Sign in with Apple on it, and Configure.** Primary App ID is the existing
-   `com.ishaunted.ios`. Team `5778H75249`.
+2. **Enable Sign in with Apple on it, and Configure. Group it with `com.ishaunted.ios` as the
+   primary App ID — do NOT let it become a primary App ID of its own.** Team `5778H75249`.
    - Domains and Subdomains: `ishaunted.com`, plus `www.ishaunted.com` if that is used.
    - Return URLs: `https://ishaunted.com/auth/apple-callback`, exactly.
 3. **Verify the domain.** Apple issues a verification file. Paste its contents into
@@ -161,6 +161,29 @@ against Apple's published keys for the iPhone app.
    `com.ishaunted.ios` and `com.ishaunted.desktop`. It becomes the token's audience, so without it a
    perfectly valid token is refused with a 401 that names nothing.
 5. **Fill in `Apple:ServicesId` and `Apple:RedirectUri`** in `Ben.Web.Website/appsettings.json`.
+
+### The one setting that decides whether this works at all
+
+**Group every identifier under one primary App ID.** `com.ishaunted.ios`, `com.ishaunted.desktop`
+and the new Services ID must all name the same primary App ID in their Sign in with Apple
+configuration.
+
+Here is why it matters more than anything else on this page. **Nothing identifies an Apple user by
+their email address.** The identity is the `sub` claim in Apple's token, and the server looks a
+returning person up by exactly that, never by address — which is what makes Hide My Email
+survivable at all, and is pinned by
+`AppleAuthControllerTests.AReturningIdentityIsFoundBySubjectWhateverTheEmailSays`.
+
+But **Apple issues `sub` per app group, not per person.** Two identifiers in the same group see the
+same `sub` for the same person; identifiers in different groups see different ones. So a Services ID
+set up as its own primary App ID would give somebody a different `sub` on the website than on their
+phone, and the site would see two unrelated people. The relay address cannot rescue that either,
+because Apple issues a different relay address per group too.
+
+The symptom would be somebody signing in on the web and finding a brand new empty account, having
+used the app for months. **The link door on the completion page is what makes that recoverable** —
+they can claim their real account with its password — but it is a cure for something that need not
+happen.
 
 ### One more thing, if the site emails these people
 
