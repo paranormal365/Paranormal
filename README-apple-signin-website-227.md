@@ -68,26 +68,30 @@ the person knows they have an account, and the server cannot. Item 225 learned t
 
 `Ben.Web.Website/Components/Pages/Login.razor`, alongside whatever Microsoft offers today.
 
-## Open question, to settle before building
+## Duplicates that already exist: none, measured 2026-09-10
 
-**What happens to a duplicate account somebody already has.** Linking later does not merge anything,
-and it is worse than it sounds: the Apple identity is attached to the wrong account, so a later link
-attempt hits the "already linked to a different account" refusal, and they are stuck. The duplicate
-has also taken a permanent handle.
+Counted read-only against both databases on the server, because guessing which one the deployed
+site uses would have made a wrong answer look like a clean one.
 
-Two very different sizes of answer:
+| Database | Accounts | External logins | Apple-shaped accounts |
+| --- | --- | --- | --- |
+| `IsHauntedDb_player`, what the deployed site uses | 20 | 0 | 0 |
+| `IsHauntedDb`, the older one | 3 | 1, Microsoft | 0 |
 
-- **Re-point.** Take the Apple identity off the duplicate, attach it to the real account, close the
-  duplicate. Small, and it covers the common case where the duplicate is empty because the person
-  noticed straight away. `AccountClosureService` already closes an account safely and already
-  refuses when the person owns a group, so the guard exists.
-- **A real merge**, moving data across. **367 columns across 153 entity files** point at an
-  `AppUser`. Account closure anonymises rather than deletes for exactly this reason. This is a
-  project, not a task.
+**Nobody has ever signed in with Apple.** So there is no mess to clean up, and the re-point door
+below is insurance rather than remediation — worth building alongside the button, because the day
+the button ships is the day people start hitting the case it exists for.
 
-**Measure before choosing.** Apple-created accounts with no usable address carry
-`{sub}@appleid.invalid`, and relay ones carry `@privaterelay.appleid.com`. Counting those on
-production says whether any duplicates exist yet.
+### Re-point, decided with Ben
+
+Take the Apple identity off a duplicate, attach it to the real account, close the duplicate. It must
+**refuse** when the duplicate holds anything worth keeping. `AccountClosureService` already closes an
+account safely and already refuses when the person owns a group, so that guard exists and should be
+reused rather than rewritten.
+
+**A real merge is deliberately not in scope.** `367` columns across `153` entity files point at an
+`AppUser`, which is why account closure anonymises rather than deletes. That is a project of its own,
+and nothing today needs it.
 
 ## Also in scope, small
 
