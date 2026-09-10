@@ -1,15 +1,127 @@
 /*
-    A card that is entirely a link needs its own hover, because the anchor carries no underline and
-    the card gives no other sign that it is clickable. Lifting it a pixel is enough, and it is the
-    same gesture the promoted-group card already uses.
+    Poster cards for the tours strip.
+
+    The picture IS the card and the words sit on it, which is how a walk is sold everywhere else in
+    the world. Two things make that safe rather than pretty-but-illegible: a scrim that darkens the
+    bottom of every photograph whatever it happens to be, and text drawn in a fixed light colour
+    rather than the theme's, because the ground behind it is a photograph in both themes.
+
+    The lift and the slow zoom are the only motion, and both stop for a reader who has asked their
+    system for less of it.
 */
 
+/*
+    Its own aspect ratio rather than Bootstrap's helper: the framework ships 1x1, 4x3, 16x9 and
+    21x9, and a class it does not know — `ratio-3x4` — leaves the variable unset, the padding at
+    zero, and the whole card nought pixels tall. Which is exactly what happened: the strip rendered
+    its heading and nothing else.
+*/
 .tour-topper__card {
-    transition: transform .12s ease, box-shadow .12s ease;
+    display: block;
+    position: relative;
+    aspect-ratio: 3 / 4;
+    background: var(--bs-tertiary-bg, #1b1b1b);
+    box-shadow: 0 .125rem .35rem rgba(0, 0, 0, .25);
+    transition: transform .16s ease, box-shadow .16s ease;
+}
+
+.tour-topper__inner {
+    position: absolute;
+    inset: 0;
+    display: block;
 }
 
 .tour-topper__card:hover,
 .tour-topper__card:focus-visible {
-    transform: translateY(-2px);
-    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    transform: translateY(-3px);
+    box-shadow: 0 .75rem 1.5rem rgba(0, 0, 0, .35);
+}
+
+.tour-topper__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .5s ease;
+}
+
+.tour-topper__card:hover .tour-topper__image,
+.tour-topper__card:focus-visible .tour-topper__image {
+    transform: scale(1.05);
+}
+
+.tour-topper__lantern {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-size: 2.5rem;
+    opacity: .55;
+}
+
+/* Bottom two-thirds, so a light photograph cannot swallow the name. */
+.tour-topper__scrim {
+    position: absolute;
+    inset: 33% 0 0 0;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .82) 78%);
+    pointer-events: none;
+}
+
+.tour-topper__when {
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    display: inline-flex;
+    flex-direction: column;
+    padding: .2rem .45rem;
+    border-radius: .3rem;
+    background: rgba(0, 0, 0, .68);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: .01em;
+}
+
+.tour-topper__time {
+    font-weight: 400;
+    opacity: .8;
+}
+
+.tour-topper__text {
+    position: absolute;
+    inset: auto .55rem .5rem .55rem;
+    display: block;
+    color: #fff;
+}
+
+.tour-topper__name {
+    display: block;
+    font-weight: 600;
+    font-size: .85rem;
+    line-height: 1.2;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+}
+
+.tour-topper__where {
+    display: block;
+    font-size: .73rem;
+    opacity: .82;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tour-topper__card,
+    .tour-topper__image {
+        transition: none;
+    }
+
+    .tour-topper__card:hover,
+    .tour-topper__card:focus-visible {
+        transform: none;
+    }
+
+    .tour-topper__card:hover .tour-topper__image,
+    .tour-topper__card:focus-visible .tour-topper__image {
+        transform: none;
+    }
 }

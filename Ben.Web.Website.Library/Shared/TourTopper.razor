@@ -34,39 +34,53 @@
             @foreach (var tour in _tours)
             {
                 <div class="col-6 col-lg-3">
-                    <a class="card h-100 text-decoration-none text-reset tour-topper__card"
+                    @* A poster, not a form: the picture is the card, and everything a passer-by
+                       needs sits on top of it. The scrim under the text is what keeps it readable
+                       over a photograph nobody has seen yet. *@
+                    <a class="tour-topper__card rounded overflow-hidden text-decoration-none text-reset"
                        href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")">
-                        <div class="ratio ratio-4x3 bg-body-tertiary">
+                        <span class="tour-topper__inner">
                             @if (tour.CoverUploadFileId is { } cover)
                             {
                                 <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
-                                     class="w-100 h-100 object-fit-cover" loading="lazy" />
+                                     class="tour-topper__image" loading="lazy" />
                             }
                             else
                             {
-                                @* No picture yet: a lantern rather than a broken frame. *@
-                                <span class="d-flex align-items-center justify-content-center fs-1">🏮</span>
+                                @* No picture yet: a lantern on a dark ground rather than a hole. *@
+                                <span class="tour-topper__lantern">🏮</span>
                             }
-                        </div>
-                        <div class="card-body p-2">
-                            <div class="fw-semibold small text-truncate">@tour.Name</div>
-                            <div class="text-secondary" style="font-size:.78rem;">
-                                @if (!string.IsNullOrWhiteSpace(tour.City))
-                                {
-                                    <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
-                                }
-                                @if (tour.Rating is { } rating)
-                                {
-                                    <text> · @rating.ToString("0.0") ★</text>
-                                }
-                            </div>
+
+                            <span class="tour-topper__scrim"></span>
+
                             @if (tour.NextDateStartUtc is { } next)
                             {
-                                <div style="font-size:.8rem;">
-                                    @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")
-                                </div>
+                                <span class="tour-topper__when">
+                                    @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
+                                    <span class="tour-topper__time">
+                                        @next.ToViewerLocalTime(UserState).ToString("h:mm tt")
+                                    </span>
+                                </span>
                             }
-                        </div>
+
+                            <span class="tour-topper__text">
+                                <span class="tour-topper__name">@tour.Name</span>
+                                <span class="tour-topper__where">
+                                    @if (!string.IsNullOrWhiteSpace(tour.City))
+                                    {
+                                        <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                    }
+                                    else
+                                    {
+                                        @tour.OrganizationName
+                                    }
+                                    @if (tour.Rating is { } rating)
+                                    {
+                                        <text> · @rating.ToString("0.0") ★</text>
+                                    }
+                                </span>
+                            </span>
+                        </span>
                     </a>
                 </div>
             }
